@@ -1,9 +1,12 @@
 This directory contains examples of client code that uses kafka.
 
-To run the demo: 
+To run the demo:
 
    1. Start Zookeeper and the Kafka server
-   2. For simple consumer demo, `run bin/java-simple-consumer-demo.sh`
-   3. For unlimited sync-producer-consumer run, `run bin/java-producer-consumer-demo.sh sync`
-   4. For unlimited async-producer-consumer run, `run bin/java-producer-consumer-demo.sh`
-
+   2. For unlimited sync-producer-consumer run, `run bin/java-producer-consumer-demo.sh sync`
+   3. For unlimited async-producer-consumer run, `run bin/java-producer-consumer-demo.sh`
+   4. For exactly once demo run, `run bin/exactly-once-demo.sh 6 3 50000`,
+      this means we are starting 3 EOS instances with 6 topic partitions and 50000 pre-populated records.
+   5. Some notes for exactly once demo:
+      5.1. The Kafka server has to be on broker version 2.5 or higher.
+      5.2. You could also use Intellij to run the example directly by configuring parameters as "Program arguments"

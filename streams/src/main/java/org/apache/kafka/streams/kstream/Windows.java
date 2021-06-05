@@ -17,12 +17,8 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
-import java.time.Duration;
 import java.util.Map;
-
-import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
 
 /**
  * The window specification for fixed size windows that is used to define window boundaries and grace period.
@@ -42,65 +38,11 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  */
 public abstract class Windows<W extends Window> {
 
-    private long maintainDurationMs = DEFAULT_RETENTION_MS;
-    @Deprecated public int segments = 3;
+    // By default grace period is 24 hours for all windows,
+    // in other words we allow out-of-order data for up to a day
+    protected static final long DEFAULT_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000L;
 
     protected Windows() {}
-
-    @Deprecated // remove this constructor when we remove segments.
-    Windows(final int segments) {
-        this.segments = segments;
-    }
-
-    /**
-     * Set the window maintain duration (retention time) in milliseconds.
-     * This retention time is a guaranteed <i>lower bound</i> for how long a window will be maintained.
-     *
-     * @param durationMs the window retention time in milliseconds
-     * @return itself
-     * @throws IllegalArgumentException if {@code durationMs} is negative
-     * @deprecated since 2.1. Use {@link Materialized#withRetention(Duration)}
-     *             or directly configure the retention in a store supplier and use {@link Materialized#as(WindowBytesStoreSupplier)}.
-     */
-    @Deprecated
-    public Windows<W> until(final long durationMs) throws IllegalArgumentException {
-        if (durationMs < 0) {
-            throw new IllegalArgumentException("Window retention time (durationMs) cannot be negative.");
-        }
-        maintainDurationMs = durationMs;
-
-        return this;
-    }
-
-    /**
-     * Return the window maintain duration (retention time) in milliseconds.
-     *
-     * @return the window maintain duration
-     * @deprecated since 2.1. Use {@link Materialized#retention} instead.
-     */
-    @Deprecated
-    public long maintainMs() {
-        return maintainDurationMs;
-    }
-
-    /**
-     * Set the number of segments to be used for rolling the window store.
-     * This function is not exposed to users but can be called by developers that extend this class.
-     *
-     * @param segments the number of segments to be used
-     * @return itself
-     * @throws IllegalArgumentException if specified segments is small than 2
-     * @deprecated since 2.1 Override segmentInterval() instead.
-     */
-    @Deprecated
-    protected Windows<W> segments(final int segments) throws IllegalArgumentException {
-        if (segments < 2) {
-            throw new IllegalArgumentException("Number of segments must be at least 2.");
-        }
-        this.segments = segments;
-
-        return this;
-    }
 
     /**
      * Create all windows that contain the provided timestamp, indexed by non-negative window start timestamps.

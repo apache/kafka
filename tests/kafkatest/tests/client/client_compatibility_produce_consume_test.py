@@ -13,16 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import parametrize
+from ducktape.mark import matrix, parametrize
+from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int_with_prefix
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, KafkaVersion
 
 class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     """
@@ -34,7 +35,7 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
         super(ClientCompatibilityProduceConsumeTest, self).__init__(test_context=test_context)
 
         self.topic = "test_topic"
-        self.zk = ZookeeperService(test_context, num_nodes=3)
+        self.zk = ZookeeperService(test_context, num_nodes=3) if quorum.for_test(test_context) == quorum.zk else None
         self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics={self.topic:{
                                                                     "partitions": 10,
                                                                     "replication-factor": 2}})
@@ -46,13 +47,15 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
         self.num_consumers = 1
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
 
     def min_cluster_size(self):
         # Override this since we're adding services outside of the constructor
         return super(ClientCompatibilityProduceConsumeTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
-    @parametrize(broker_version=str(DEV_BRANCH))
+    @cluster(num_nodes=9)
+    @matrix(broker_version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_non_upgrade)
     @parametrize(broker_version=str(LATEST_0_10_0))
     @parametrize(broker_version=str(LATEST_0_10_1))
     @parametrize(broker_version=str(LATEST_0_10_2))
@@ -63,8 +66,12 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     @parametrize(broker_version=str(LATEST_2_1))
     @parametrize(broker_version=str(LATEST_2_2))
     @parametrize(broker_version=str(LATEST_2_3))
-    def test_produce_consume(self, broker_version):
-        print("running producer_consumer_compat with broker_version = %s" % broker_version)
+    @parametrize(broker_version=str(LATEST_2_4))
+    @parametrize(broker_version=str(LATEST_2_5))
+    @parametrize(broker_version=str(LATEST_2_6))
+    @parametrize(broker_version=str(LATEST_2_7))
+    def test_produce_consume(self, broker_version, metadata_quorum=quorum.zk):
+        print("running producer_consumer_compat with broker_version = %s" % broker_version, flush=True)
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.security_protocol = "PLAINTEXT"
         self.kafka.interbroker_security_protocol = self.kafka.security_protocol

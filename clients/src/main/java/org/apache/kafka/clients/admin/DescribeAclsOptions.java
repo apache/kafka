@@ -29,7 +29,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 public class DescribeAclsOptions extends AbstractOptions<DescribeAclsOptions> {
 
     /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * Set the timeout in milliseconds for this operation or {@code null} if the default api timeout for the
      * AdminClient should be used.
      *
      */

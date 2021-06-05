@@ -17,8 +17,11 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
+import org.slf4j.Logger;
 
 /**
  * A helper class for managing the heartbeat to the coordinator
@@ -30,8 +33,10 @@ public final class Heartbeat {
     private final Timer heartbeatTimer;
     private final Timer sessionTimer;
     private final Timer pollTimer;
+    private final Logger log;
 
     private volatile long lastHeartbeatSend = 0L;
+    private volatile boolean heartbeatInFlight = false;
 
     public Heartbeat(GroupRebalanceConfig config,
                      Time time) {
@@ -43,6 +48,9 @@ public final class Heartbeat {
         this.sessionTimer = time.timer(config.sessionTimeoutMs);
         this.maxPollIntervalMs = config.rebalanceTimeoutMs;
         this.pollTimer = time.timer(maxPollIntervalMs);
+
+        final LogContext logContext = new LogContext("[Heartbeat groupID=" + config.groupId + "] ");
+        this.log = logContext.logger(getClass());
     }
 
     private void update(long now) {
@@ -56,60 +64,72 @@ public final class Heartbeat {
         pollTimer.reset(maxPollIntervalMs);
     }
 
-    public void sentHeartbeat(long now) {
-        this.lastHeartbeatSend = now;
+    boolean hasInflight() {
+        return heartbeatInFlight;
+    }
+
+    void sentHeartbeat(long now) {
+        lastHeartbeatSend = now;
+        heartbeatInFlight = true;
         update(now);
         heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
+
+        if (log.isTraceEnabled()) {
+            log.trace("Sending heartbeat request with {}ms remaining on timer", heartbeatTimer.remainingMs());
+        }
     }
 
-    public void failHeartbeat() {
+    void failHeartbeat() {
         update(time.milliseconds());
+        heartbeatInFlight = false;
         heartbeatTimer.reset(rebalanceConfig.retryBackoffMs);
+
+        log.trace("Heartbeat failed, reset the timer to {}ms remaining", heartbeatTimer.remainingMs());
     }
 
-    public void receiveHeartbeat() {
+    void receiveHeartbeat() {
         update(time.milliseconds());
+        heartbeatInFlight = false;
         sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
     }
 
-    public boolean shouldHeartbeat(long now) {
+    boolean shouldHeartbeat(long now) {
         update(now);
         return heartbeatTimer.isExpired();
     }
     
-    public long lastHeartbeatSend() {
+    long lastHeartbeatSend() {
         return this.lastHeartbeatSend;
     }
 
-    public long timeToNextHeartbeat(long now) {
+    long timeToNextHeartbeat(long now) {
         update(now);
         return heartbeatTimer.remainingMs();
     }
 
-    public boolean sessionTimeoutExpired(long now) {
+    boolean sessionTimeoutExpired(long now) {
         update(now);
         return sessionTimer.isExpired();
     }
 
-    public void resetTimeouts() {
+    void resetTimeouts() {
         update(time.milliseconds());
         sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
         pollTimer.reset(maxPollIntervalMs);
         heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
     }
 
-    public void resetSessionTimeout() {
+    void resetSessionTimeout() {
         update(time.milliseconds());
         sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
     }
 
-    public boolean pollTimeoutExpired(long now) {
+    boolean pollTimeoutExpired(long now) {
         update(now);
         return pollTimer.isExpired();
     }
 
-    public long lastPollTime() {
+    long lastPollTime() {
         return pollTimer.currentTimeMs();
     }
-
 }

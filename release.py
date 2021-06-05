@@ -60,6 +60,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import re
 
 PROJECT_NAME = "kafka"
@@ -96,10 +97,11 @@ def print_output(output):
     for line in output.split('\n'):
         print(">", line)
 
-def cmd(action, cmd, *args, **kwargs):
-    if isinstance(cmd, basestring) and not kwargs.get("shell", False):
-        cmd = cmd.split()
+def cmd(action, cmd_arg, *args, **kwargs):
+    if isinstance(cmd_arg, basestring) and not kwargs.get("shell", False):
+        cmd_arg = cmd_arg.split()
     allow_failure = kwargs.pop("allow_failure", False)
+    num_retries = kwargs.pop("num_retries", 0)
 
     stdin_log = ""
     if "stdin" in kwargs and isinstance(kwargs["stdin"], basestring):
@@ -109,12 +111,19 @@ def cmd(action, cmd, *args, **kwargs):
         stdin.seek(0)
         kwargs["stdin"] = stdin
 
-    print(action, cmd, stdin_log)
+    print(action, cmd_arg, stdin_log)
     try:
-        output = subprocess.check_output(cmd, *args, stderr=subprocess.STDOUT, **kwargs)
+        output = subprocess.check_output(cmd_arg, *args, stderr=subprocess.STDOUT, **kwargs)
         print_output(output)
     except subprocess.CalledProcessError as e:
         print_output(e.output)
+
+        if num_retries > 0:
+            kwargs['num_retries'] = num_retries - 1
+            kwargs['allow_failure'] = allow_failure
+            print("Retrying... %d remaining retries" % (num_retries - 1))
+            time.sleep(4. / (num_retries + 1)) # e.g., if retries=3, sleep for 1s, 1.3s, 2s
+            return cmd(action, cmd_arg, *args, **kwargs)
 
         if allow_failure:
             return
@@ -153,7 +162,7 @@ def regexReplace(path, pattern, replacement):
 
 def user_ok(msg):
     ok = raw_input(msg)
-    return ok.lower() == 'y'
+    return ok.strip().lower() == 'y'
 
 def sftp_mkdir(dir):
     basedir, dirname = os.path.split(dir)
@@ -164,7 +173,7 @@ def sftp_mkdir(dir):
 cd %s
 -mkdir %s
 """ % (basedir, dirname)
-       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True)
+       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True, num_retries=3)
     except subprocess.CalledProcessError:
         # This is ok. The command fails if the directory already exists
         pass
@@ -198,8 +207,11 @@ def get_jdk(prefs, version):
     jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: raw_input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
     jdk_env = dict(os.environ) if jdk_java_home.strip() else None
     if jdk_env is not None: jdk_env['JAVA_HOME'] = jdk_java_home
-    if "1.%d.0" % version not in cmd_output("java -version", env=jdk_env):
-        fail("JDK %s is required" % version)
+    javaVersion = cmd_output("%s/bin/java -version" % jdk_java_home, env=jdk_env)
+    if version == 8 and "1.8.0" not in javaVersion:
+      fail("JDK 8 is required")
+    elif "%d.0" % version not in javaVersion:
+      fail("JDK %s is required" % version)
     return jdk_env
 
 def get_version(repo=REPO_HOME):
@@ -244,7 +256,7 @@ def command_stage_docs():
         sys.exit("%s doesn't exist or does not appear to be the kafka-site repository" % kafka_site_repo_path)
 
     prefs = load_prefs()
-    jdk8_env = get_jdk(prefs, 8)
+    jdk15_env = get_jdk(prefs, 15)
     save_prefs(prefs)
 
     version = get_version()
@@ -253,9 +265,9 @@ def command_stage_docs():
     # version due to already having bumped the bugfix version number.
     gradle_version_override = docs_release_version(version)
 
-    cmd("Building docs", "./gradlew -Pversion=%s clean releaseTarGzAll aggregatedJavadoc" % gradle_version_override, cwd=REPO_HOME, env=jdk8_env)
+    cmd("Building docs", "./gradlew -Pversion=%s clean siteDocsTar aggregatedJavadoc" % gradle_version_override, cwd=REPO_HOME, env=jdk15_env)
 
-    docs_tar = os.path.join(REPO_HOME, 'core', 'build', 'distributions', 'kafka_2.12-%s-site-docs.tgz' % gradle_version_override)
+    docs_tar = os.path.join(REPO_HOME, 'core', 'build', 'distributions', 'kafka_2.13-%s-site-docs.tgz' % gradle_version_override)
 
     versioned_docs_path = os.path.join(kafka_site_repo_path, docs_version(version))
     if not os.path.exists(versioned_docs_path):
@@ -334,7 +346,7 @@ https://kafka.apache.org/downloads#%(release_version)s
 Apache Kafka is a distributed streaming platform with four core APIs:
 
 
-** The Producer API allows an application to publish a stream records to
+** The Producer API allows an application to publish a stream of records to
 one or more Kafka topics.
 
 ** The Consumer API allows an application to subscribe to one or more
@@ -414,7 +426,7 @@ prefs = load_prefs()
 
 if not user_ok("""Requirements:
 1. Updated docs to reference the new release version where appropriate.
-2. JDK8 compilers and libraries
+2. JDK8 and JDK15 compilers and libraries
 3. Your Apache ID, already configured with SSH keys on id.apache.org and SSH keys available in this shell session
 4. All issues in the target release resolved with valid resolutions (if not, this script will report the problematic JIRAs)
 5. A GPG key used for signing the release. This key should have been added to public Apache servers and the KEYS file on the Kafka site
@@ -435,7 +447,7 @@ if not user_ok("""Requirements:
         </server>
         <server>
             <id>your-gpgkeyId</id>
-            <passphrase>your-gpg-passphase</passphrase>
+            <passphrase>your-gpg-passphrase</passphrase>
         </server>
         <profile>
             <id>gpg-signing</id>
@@ -499,7 +511,7 @@ if not rc:
 apache_id = get_pref(prefs, 'apache_id', lambda: raw_input("Enter your apache username: "))
 
 jdk8_env = get_jdk(prefs, 8)
-
+jdk15_env = get_jdk(prefs, 15)
 
 def select_gpg_key():
     print("Here are the available GPG keys:")
@@ -541,8 +553,6 @@ regexReplace("streams/quickstart/java/src/main/resources/archetype-resources/pom
 print("updating ducktape version.py")
 regexReplace("./tests/kafkatest/version.py", "^DEV_VERSION =.*",
     "DEV_VERSION = KafkaVersion(\"%s-SNAPSHOT\")" % release_version)
-print("updating ducktape __init__.py")
-regexReplace("./tests/kafkatest/__init__.py", ".dev.*", "")
 # Command in explicit list due to messages with spaces
 cmd("Committing version number updates", ["git", "commit", "-a", "-m", "Bump version to %s" % release_version])
 # Command in explicit list due to messages with spaces
@@ -560,8 +570,9 @@ print("Temporary build working director:", work_dir)
 kafka_dir = os.path.join(work_dir, 'kafka')
 streams_quickstart_dir = os.path.join(kafka_dir, 'streams/quickstart')
 print("Streams quickstart dir", streams_quickstart_dir)
-cmd("Creating staging area for release artifacts", "mkdir kafka-" + rc_tag, cwd=work_dir)
-artifacts_dir = os.path.join(work_dir, "kafka-" + rc_tag)
+artifact_name = "kafka-" + rc_tag
+cmd("Creating staging area for release artifacts", "mkdir " + artifact_name, cwd=work_dir)
+artifacts_dir = os.path.join(work_dir, artifact_name)
 cmd("Cloning clean copy of repo", "git clone %s kafka" % REPO_HOME, cwd=work_dir)
 cmd("Checking out RC tag", "git checkout -b %s %s" % (release_version, rc_tag), cwd=kafka_dir)
 current_year = datetime.datetime.now().year
@@ -587,10 +598,10 @@ params = { 'release_version': release_version,
            }
 cmd("Creating source archive", "git archive --format tar.gz --prefix kafka-%(release_version)s-src/ -o %(artifacts_dir)s/kafka-%(release_version)s-src.tgz %(rc_tag)s" % params)
 
-cmd("Building artifacts", "gradle", cwd=kafka_dir, env=jdk8_env)
-cmd("Building artifacts", "./gradlew clean releaseTarGzAll aggregatedJavadoc", cwd=kafka_dir, env=jdk8_env)
+cmd("Building artifacts", "./gradlew clean && ./gradlewAll releaseTarGz", cwd=kafka_dir, env=jdk8_env, shell=True)
 cmd("Copying artifacts", "cp %s/core/build/distributions/* %s" % (kafka_dir, artifacts_dir), shell=True)
-cmd("Copying artifacts", "cp -R %s/build/docs/javadoc %s" % (kafka_dir, artifacts_dir))
+cmd("Building docs", "./gradlew clean aggregatedJavadoc", cwd=kafka_dir, env=jdk15_env)
+cmd("Copying docs", "cp -R %s/build/docs/javadoc %s" % (kafka_dir, artifacts_dir))
 
 for filename in os.listdir(artifacts_dir):
     full_path = os.path.join(artifacts_dir, filename)
@@ -610,32 +621,21 @@ for filename in os.listdir(artifacts_dir):
 cmd("Listing artifacts to be uploaded:", "ls -R %s" % artifacts_dir)
 if not user_ok("Going to upload the artifacts in %s, listed above, to your Apache home directory. Ok (y/n)?): " % artifacts_dir):
     fail("Quitting")
-sftp_mkdir("public_html")
-kafka_output_dir = "kafka-" + rc_tag
-sftp_mkdir(os.path.join("public_html", kafka_output_dir))
-public_release_dir = os.path.join("public_html", kafka_output_dir)
-# The sftp -r option doesn't seem to work as would be expected, at least with the version shipping on OS X. To work around this we process all the files and directories manually...
-sftp_cmds = ""
-for root, dirs, files in os.walk(artifacts_dir):
-    assert root.startswith(artifacts_dir)
 
-    for dir in dirs:
-        sftp_mkdir(os.path.join("public_html", kafka_output_dir, root[len(artifacts_dir)+1:], dir))
-
-    for file in files:
-        local_path = os.path.join(root, file)
-        remote_path = os.path.join("public_html", kafka_output_dir, root[len(artifacts_dir)+1:], file)
-        sftp_cmds = """
-put %s %s
-""" % (local_path, remote_path)
-        cmd("Uploading artifacts in %s to your Apache home directory" % root, "sftp -b - %s@home.apache.org" % apache_id, stdin=sftp_cmds)
+cmd("Zipping artifacts", "tar -czf %s.tar.gz %s" % (artifact_name, artifact_name), cwd=work_dir)
+cmd("Uploading artifacts in %s to your Apache home directory" % artifacts_dir, "rsync %s.tar.gz %s@home.apache.org:%s.tar.gz" % (artifact_name, apache_id, artifact_name), cwd=work_dir)
+cmd("Extracting artifacts in Apache public_html directory",
+    ["ssh",
+     "%s@home.apache.org" % (apache_id),
+     "mkdir -p public_html && rm -rf public_html/%s && mv %s.tar.gz public_html/ && cd public_html/ && tar -xf %s.tar.gz && rm %s.tar.gz" % (artifact_name, artifact_name, artifact_name, artifact_name)
+     ])
 
 with open(os.path.expanduser("~/.gradle/gradle.properties")) as f:
     contents = f.read()
 if not user_ok("Going to build and upload mvn artifacts based on these settings:\n" + contents + '\nOK (y/n)?: '):
     fail("Retry again later")
-cmd("Building and uploading archives", "./gradlew uploadArchivesAll", cwd=kafka_dir, env=jdk8_env)
-cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=streams_quickstart_dir, env=jdk8_env)
+cmd("Building and uploading archives", "./gradlewAll publish", cwd=kafka_dir, env=jdk8_env, shell=True)
+cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=streams_quickstart_dir, env=jdk8_env, shell=True)
 
 release_notification_props = { 'release_version': release_version,
                                'rc': rc,
@@ -656,8 +656,8 @@ Now you should sanity check it before proceeding. All subsequent steps start mak
 Some suggested steps:
 
  * Grab the source archive and make sure it compiles: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz
- * Grab one of the binary distros and run the quickstarts against them: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka_2.12-%(release_version)s.tgz
- * Extract and verify one of the site docs jars: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka_2.12-%(release_version)s-site-docs.tgz
+ * Grab one of the binary distros and run the quickstarts against them: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka_2.13-%(release_version)s.tgz
+ * Extract and verify one of the site docs jars: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka_2.13-%(release_version)s-site-docs.tgz
  * Build a sample against jars in the staging repo: (TODO: Can we get a temporary URL before "closing" the staged artifacts?)
  * Validate GPG signatures on at least one file:
       wget https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz &&
@@ -681,6 +681,8 @@ if not user_ok("Have you sufficiently verified the release artifacts (y/n)?: "):
 print("Next, we need to get the Maven artifacts we published into the staging repository.")
 # TODO: Can we get this closed via a REST API since we already need to collect credentials for this repo?
 print("Go to https://repository.apache.org/#stagingRepositories and hit 'Close' for the new repository that was created by uploading artifacts.")
+print("If this is not the first RC, you need to 'Drop' the previous artifacts.")
+print("Confirm the correct artifacts are visible at https://repository.apache.org/content/groups/staging/org/apache/kafka/")
 if not user_ok("Have you successfully deployed the artifacts (y/n)?: "):
     fail("Ok, giving up")
 if not user_ok("Ok to push RC tag %s (y/n)?: " % rc_tag):
@@ -729,7 +731,7 @@ https://kafka.apache.org/%(docs_version)s/documentation.html
 https://kafka.apache.org/%(docs_version)s/protocol.html
 
 * Successful Jenkins builds for the %(dev_branch)s branch:
-Unit/integration tests: https://builds.apache.org/job/kafka-%(dev_branch)s-jdk8/<BUILD NUMBER>/
+Unit/integration tests: https://ci-builds.apache.org/job/Kafka/job/kafka/job/%(dev_branch)s/<BUILD NUMBER>/
 System tests: https://jenkins.confluent.io/job/system-test-kafka/job/%(dev_branch)s/<BUILD_NUMBER>/
 
 /**************************************

@@ -29,14 +29,16 @@ class ReplicaVerificationTool(KafkaPathResolverMixin, BackgroundThreadService):
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, report_interval_ms, security_protocol="PLAINTEXT", stop_timeout_sec=30):
+    def __init__(self, context, num_nodes, kafka, topic, report_interval_ms, security_protocol="PLAINTEXT",
+                 stop_timeout_sec=30, tls_version=None):
         super(ReplicaVerificationTool, self).__init__(context, num_nodes)
 
         self.kafka = kafka
         self.topic = topic
         self.report_interval_ms = report_interval_ms
         self.security_protocol = security_protocol
-        self.security_config = SecurityConfig(self.context, security_protocol)
+        self.tls_version = tls_version
+        self.security_config = SecurityConfig(self.context, security_protocol, tls_version=tls_version)
         self.partition_lag = {}
         self.stop_timeout_sec = stop_timeout_sec
 

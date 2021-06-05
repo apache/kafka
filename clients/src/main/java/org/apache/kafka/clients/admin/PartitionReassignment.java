@@ -57,4 +57,13 @@ public class PartitionReassignment {
     public List<Integer> removingReplicas() {
         return removingReplicas;
     }
+
+    @Override
+    public String toString() {
+        return "PartitionReassignment(" +
+                "replicas=" + replicas +
+                ", addingReplicas=" + addingReplicas +
+                ", removingReplicas=" + removingReplicas +
+                ')';
+    }
 }

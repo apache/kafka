@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.expiring;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -45,7 +45,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.expiring.ExpiringC
 import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
@@ -368,6 +368,7 @@ public class ExpiringCredentialRefreshingLoginTest {
                         inOrder.verify(mockLoginContext).login();
                     }
                 }
+                testExpiringCredentialRefreshingLogin.close();
             }
         }
     }

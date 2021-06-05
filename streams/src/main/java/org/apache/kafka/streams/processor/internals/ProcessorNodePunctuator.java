@@ -21,6 +21,6 @@ import org.apache.kafka.streams.processor.Punctuator;
 
 public interface ProcessorNodePunctuator {
 
-    void punctuate(ProcessorNode node, long streamTime, PunctuationType type, Punctuator punctuator);
+    void punctuate(ProcessorNode<?, ?, ?, ?> node, long timestamp, PunctuationType type, Punctuator punctuator);
 
 }

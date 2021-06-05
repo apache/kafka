@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.internals.metrics;
 
 import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -25,6 +26,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.util.Properties;
+
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_LEVEL_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addSumMetricToSensor;
 
 public class ClientMetrics {
     private ClientMetrics() {}
@@ -35,9 +39,11 @@ public class ClientMetrics {
     private static final String APPLICATION_ID = "application-id";
     private static final String TOPOLOGY_DESCRIPTION = "topology-description";
     private static final String STATE = "state";
+    private static final String ALIVE_STREAM_THREADS = "alive-stream-threads";
     private static final String VERSION_FROM_FILE;
     private static final String COMMIT_ID_FROM_FILE;
     private static final String DEFAULT_VALUE = "unknown";
+    private static final String FAILED_STREAM_THREADS = "failed-stream-threads";
 
     static {
         final Properties props = new Properties();
@@ -58,6 +64,8 @@ public class ClientMetrics {
     private static final String TOPOLOGY_DESCRIPTION_DESCRIPTION =
         "The description of the topology executed in the Kafka Streams client";
     private static final String STATE_DESCRIPTION = "The state of the Kafka Streams client";
+    private static final String ALIVE_STREAM_THREADS_DESCRIPTION = "The current number of alive stream threads that are running or participating in rebalance";
+    private static final String FAILED_STREAM_THREADS_DESCRIPTION = "The number of failed stream threads since the start of the Kafka Streams client";
 
     public static String version() {
         return VERSION_FROM_FILE;
@@ -112,5 +120,28 @@ public class ClientMetrics {
             RecordingLevel.INFO,
             stateProvider
         );
+    }
+
+    public static void addNumAliveStreamThreadMetric(final StreamsMetricsImpl streamsMetrics,
+                                                     final Gauge<Integer> stateProvider) {
+        streamsMetrics.addClientLevelMutableMetric(
+            ALIVE_STREAM_THREADS,
+            ALIVE_STREAM_THREADS_DESCRIPTION,
+            RecordingLevel.INFO,
+            stateProvider
+        );
+    }
+
+    public static Sensor failedStreamThreadSensor(final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor = streamsMetrics.clientLevelSensor(FAILED_STREAM_THREADS, RecordingLevel.INFO);
+        addSumMetricToSensor(
+            sensor,
+            CLIENT_LEVEL_GROUP,
+            streamsMetrics.clientLevelTagMap(),
+            FAILED_STREAM_THREADS,
+            false,
+            FAILED_STREAM_THREADS_DESCRIPTION
+        );
+        return sensor;
     }
 }

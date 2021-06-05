@@ -18,6 +18,7 @@ package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.connect.runtime.ConnectorStatus;
 import org.apache.kafka.connect.runtime.TaskStatus;
+import org.apache.kafka.connect.runtime.TopicStatus;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -67,6 +68,12 @@ public interface StatusBackingStore {
     void putSafe(TaskStatus status);
 
     /**
+     * Set the state of a connector's topic to the given value.
+     * @param status the status of the topic used by a connector
+     */
+    void put(TopicStatus status);
+
+    /**
      * Get the current state of the task.
      * @param id the id of the task
      * @return the state or null if there is none
@@ -86,6 +93,28 @@ public interface StatusBackingStore {
      * @return a map from task ids to their respective status
      */
     Collection<TaskStatus> getAll(String connector);
+
+    /**
+     * Get the status of a connector's topic if the connector is actively using this topic
+     * @param connector the connector name; never null
+     * @param topic the topic name; never null
+     * @return the state or null if there is none
+     */
+    TopicStatus getTopic(String connector, String topic);
+
+    /**
+     * Get the states of all topics that a connector is using.
+     * @param connector the connector name; never null
+     * @return a collection of topic states or an empty collection if there is none
+     */
+    Collection<TopicStatus> getAllTopics(String connector);
+
+    /**
+     * Delete this topic from the connector's set of active topics
+     * @param connector the connector name; never null
+     * @param topic the topic name; never null
+     */
+    void deleteTopic(String connector, String topic);
 
     /**
      * Get all cached connectors.

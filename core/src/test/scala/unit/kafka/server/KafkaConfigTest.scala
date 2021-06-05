@@ -17,10 +17,9 @@
 
 package kafka.server
 
-import java.util.Properties
-
 import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.cluster.EndPoint
+import kafka.log.LogConfig
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
@@ -28,9 +27,18 @@ import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert._
-import org.junit.Test
-import org.scalatest.Assertions.intercept
+import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UNKNOWN_ADDRESS_SPEC_INSTANCE}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
+import java.net.InetSocketAddress
+import java.util
+import java.util.{Collections, Properties}
+
+import org.apache.kafka.common.Node
+import org.junit.jupiter.api.function.Executable
+
+import scala.jdk.CollectionConverters._
 
 class KafkaConfigTest {
 
@@ -104,21 +112,19 @@ class KafkaConfigTest {
     val cfg1 = KafkaConfig.fromProps(props1)
     val cfg2 = KafkaConfig.fromProps(props2)
     val cfg3 = KafkaConfig.fromProps(props3)
-    assertEquals("Should be -1", -1, cfg1.logRetentionTimeMillis)
-    assertEquals("Should be -1", -1, cfg2.logRetentionTimeMillis)
-    assertEquals("Should be -1", -1, cfg3.logRetentionTimeMillis)
+    assertEquals(-1, cfg1.logRetentionTimeMillis, "Should be -1")
+    assertEquals(-1, cfg2.logRetentionTimeMillis, "Should be -1")
+    assertEquals(-1, cfg3.logRetentionTimeMillis, "Should be -1")
 
     props4.put("log.retention.ms", "-1")
     props4.put("log.retention.minutes", "30")
 
     val cfg4 = KafkaConfig.fromProps(props4)
-    assertEquals("Should be -1", -1, cfg4.logRetentionTimeMillis)
+    assertEquals(-1, cfg4.logRetentionTimeMillis, "Should be -1")
 
     props5.put("log.retention.ms", "0")
 
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props5)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props5))
   }
 
   @Test
@@ -131,15 +137,9 @@ class KafkaConfigTest {
     props2.put("log.retention.minutes", "0")
     props3.put("log.retention.hours", "0")
 
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props1)
-    }
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props2)
-    }
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props3)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props1))
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props2))
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props3))
 
   }
 
@@ -217,16 +217,26 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
 
     // listeners with duplicate port
-    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,TRACE://localhost:9091")
-    assertFalse(isValidKafkaConfig(props))
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,SSL://localhost:9091")
+    var caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("Each listener must have a different port"))
 
-    // listeners with duplicate protocol
+    // listeners with duplicate name
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,PLAINTEXT://localhost:9092")
-    assertFalse(isValidKafkaConfig(props))
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("Each listener must have a different name"))
 
-    // advertised listeners with duplicate port
-    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9091,TRACE://localhost:9091")
-    assertFalse(isValidKafkaConfig(props))
+    // advertised listeners can have duplicate ports
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "HOST:SASL_SSL,LB:SASL_SSL")
+    props.put(KafkaConfig.InterBrokerListenerNameProp, "HOST")
+    props.put(KafkaConfig.ListenersProp, "HOST://localhost:9091,LB://localhost:9092")
+    props.put(KafkaConfig.AdvertisedListenersProp, "HOST://localhost:9091,LB://localhost:9091")
+    assertTrue(isValidKafkaConfig(props))
+
+    // but not duplicate names
+    props.put(KafkaConfig.AdvertisedListenersProp, "HOST://localhost:9091,HOST://localhost:9091")
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("Each listener must have a different name"))
   }
 
   @Test
@@ -252,6 +262,30 @@ class KafkaConfigTest {
     // interBrokerListener name should be different from control-plane listener name
     val interBrokerListenerName = serverConfig.interBrokerListenerName
     assertFalse(interBrokerListenerName.value().equals(controlEndpoint.listenerName.value()))
+  }
+
+  @Test
+  def testControllerListenerName() = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:0,CONTROLPLANE://localhost:4000,CONTROLLER://localhost:5000")
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,CONTROLPLANE:SSL,CONTROLLER:SASL_SSL")
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLPLANE://localhost:4000")
+    props.put(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLPLANE")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    assertTrue(isValidKafkaConfig(props))
+
+    val serverConfig = KafkaConfig.fromProps(props)
+    val controlPlaneEndpoint = serverConfig.controlPlaneListener.get
+    assertEquals("localhost", controlPlaneEndpoint.host)
+    assertEquals(4000, controlPlaneEndpoint.port)
+    assertEquals(SecurityProtocol.SSL, controlPlaneEndpoint.securityProtocol)
+
+    val controllerEndpoints = serverConfig.controllerListeners
+    assertEquals(1, controllerEndpoints.size)
+    val controllerEndpoint = controllerEndpoints.iterator.next()
+    assertEquals("localhost", controllerEndpoint.host)
+    assertEquals(5000, controllerEndpoint.port)
+    assertEquals(SecurityProtocol.SASL_SSL, controllerEndpoint.securityProtocol)
   }
 
   @Test
@@ -387,7 +421,7 @@ class KafkaConfigTest {
     val conf2 = KafkaConfig.fromProps(props)
     assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
     assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.advertisedListeners)
-    assertEquals(null, conf2.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
+    assertNull(conf2.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
 
     // configuration with advertised host and port, and no advertised listeners
     props.put(KafkaConfig.AdvertisedHostNameProp, "otherhost")
@@ -462,9 +496,7 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.UncleanLeaderElectionEnableProp, "invalid")
 
-    intercept[ConfigException] {
-      KafkaConfig.fromProps(props)
-    }
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
   @Test
@@ -515,9 +547,7 @@ class KafkaConfigTest {
   def testInvalidCompressionType(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.CompressionTypeProp, "abc")
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 
   @Test
@@ -525,9 +555,7 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
     props.put(KafkaConfig.InterBrokerSecurityProtocolProp, SecurityProtocol.PLAINTEXT.toString)
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 
   @Test
@@ -543,9 +571,12 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.ListenersProp, "TRACE://localhost:9091,SSL://localhost:9093")
     props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092")
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props)
-    }
+    var caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("No security protocol defined for listener TRACE"))
+
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,TRACE:PLAINTEXT,SSL:SSL")
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("advertised.listeners listener names must be equal to or a subset of the ones defined in listeners"))
   }
 
   @Test
@@ -564,9 +595,7 @@ class KafkaConfigTest {
           assertEquals(messageFormatVersion, config.logMessageFormatVersion)
           assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
         } else {
-          intercept[IllegalArgumentException] {
-            buildConfig(interBrokerVersion, messageFormatVersion)
-          }
+          assertThrows(classOf[IllegalArgumentException], () => buildConfig(interBrokerVersion, messageFormatVersion))
         }
       }
     }
@@ -574,129 +603,152 @@ class KafkaConfigTest {
 
   @Test
   def testFromPropsInvalid(): Unit = {
-    def getBaseProperties(): Properties = {
+    def baseProperties: Properties = {
       val validRequiredProperties = new Properties()
       validRequiredProperties.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
       validRequiredProperties
     }
     // to ensure a basis is valid - bootstraps all needed validation
-    KafkaConfig.fromProps(getBaseProperties())
+    KafkaConfig.fromProps(baseProperties)
 
-    KafkaConfig.configNames().foreach(name => {
+    KafkaConfig.configNames.foreach { name =>
       name match {
         case KafkaConfig.ZkConnectProp => // ignore string
-        case KafkaConfig.ZkSessionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ZkConnectionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ZkSyncTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ZkEnableSecureAclsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
-        case KafkaConfig.ZkMaxInFlightRequestsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.ZkSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ZkConnectionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ZkSyncTimeMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ZkEnableSecureAclsProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
+        case KafkaConfig.ZkMaxInFlightRequestsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.ZkSslClientEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
+        case KafkaConfig.ZkClientCnxnSocketProp =>  //ignore string
+        case KafkaConfig.ZkSslKeyStoreLocationProp =>  //ignore string
+        case KafkaConfig.ZkSslKeyStorePasswordProp =>  //ignore string
+        case KafkaConfig.ZkSslKeyStoreTypeProp =>  //ignore string
+        case KafkaConfig.ZkSslTrustStoreLocationProp =>  //ignore string
+        case KafkaConfig.ZkSslTrustStorePasswordProp =>  //ignore string
+        case KafkaConfig.ZkSslTrustStoreTypeProp =>  //ignore string
+        case KafkaConfig.ZkSslProtocolProp =>  //ignore string
+        case KafkaConfig.ZkSslEnabledProtocolsProp =>  //ignore string
+        case KafkaConfig.ZkSslCipherSuitesProp =>  //ignore string
+        case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => //ignore string
+        case KafkaConfig.ZkSslCrlEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
+        case KafkaConfig.ZkSslOcspEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
 
-        case KafkaConfig.BrokerIdProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.NumNetworkThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.NumIoThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.BackgroundThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.QueuedMaxRequestsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.NumReplicaAlterLogDirsThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.QueuedMaxBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.RequestTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.BrokerIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.NumNetworkThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.NumIoThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.BackgroundThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.QueuedMaxRequestsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.NumReplicaAlterLogDirsThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.QueuedMaxBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.RequestTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ConnectionSetupTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ConnectionSetupTimeoutMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+
+        // KRaft mode configs
+        case KafkaConfig.ProcessRolesProp => // ignore
+        case KafkaConfig.InitialBrokerRegistrationTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.BrokerHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.BrokerSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.NodeIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.MetadataLogDirProp => // ignore string
+        case KafkaConfig.ControllerListenerNamesProp => // ignore string
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
         case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
 
-        case KafkaConfig.PortProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.PortProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.HostNameProp => // ignore string
         case KafkaConfig.AdvertisedHostNameProp => //ignore string
-        case KafkaConfig.AdvertisedPortProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.SocketSendBufferBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.SocketReceiveBufferBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.AdvertisedPortProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.SocketSendBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.SocketReceiveBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.MaxConnectionsPerIpOverridesProp =>
-          assertPropertyInvalid(getBaseProperties(), name, "127.0.0.1:not_a_number")
-        case KafkaConfig.ConnectionsMaxIdleMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.FailedAuthenticationDelayMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
+          assertPropertyInvalid(baseProperties, name, "127.0.0.1:not_a_number")
+        case KafkaConfig.ConnectionsMaxIdleMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.FailedAuthenticationDelayMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
 
-        case KafkaConfig.NumPartitionsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.NumPartitionsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.LogDirsProp => // ignore string
         case KafkaConfig.LogDirProp => // ignore string
-        case KafkaConfig.LogSegmentBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", Records.LOG_OVERHEAD - 1)
+        case KafkaConfig.LogSegmentBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", Records.LOG_OVERHEAD - 1)
 
-        case KafkaConfig.LogRollTimeMillisProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.LogRollTimeHoursProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.LogRollTimeMillisProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.LogRollTimeHoursProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
 
-        case KafkaConfig.LogRetentionTimeMillisProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.LogRetentionTimeMinutesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.LogRetentionTimeHoursProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.LogRetentionTimeMillisProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.LogRetentionTimeMinutesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.LogRetentionTimeHoursProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
 
-        case KafkaConfig.LogRetentionBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.LogCleanupIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.LogCleanupPolicyProp => assertPropertyInvalid(getBaseProperties(), name, "unknown_policy", "0")
-        case KafkaConfig.LogCleanerIoMaxBytesPerSecondProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.LogCleanerDedupeBufferSizeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "1024")
-        case KafkaConfig.LogCleanerDedupeBufferLoadFactorProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.LogCleanerEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
-        case KafkaConfig.LogCleanerDeleteRetentionMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.LogCleanerMinCompactionLagMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.LogCleanerMaxCompactionLagMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.LogCleanerMinCleanRatioProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.LogIndexSizeMaxBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "3")
-        case KafkaConfig.LogFlushIntervalMessagesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.LogFlushSchedulerIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.LogFlushIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.LogMessageTimestampDifferenceMaxMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.LogFlushStartOffsetCheckpointIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.NumRecoveryThreadsPerDataDirProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.AutoCreateTopicsEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
-        case KafkaConfig.MinInSyncReplicasProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.ControllerSocketTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.DefaultReplicationFactorProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ReplicaLagTimeMaxMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ReplicaSocketTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-2")
-        case KafkaConfig.ReplicaSocketReceiveBufferBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ReplicaFetchMaxBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ReplicaFetchWaitMaxMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ReplicaFetchMinBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ReplicaFetchResponseMaxBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.LogRetentionBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LogCleanupIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.LogCleanupPolicyProp => assertPropertyInvalid(baseProperties, name, "unknown_policy", "0")
+        case KafkaConfig.LogCleanerIoMaxBytesPerSecondProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LogCleanerDedupeBufferSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "1024")
+        case KafkaConfig.LogCleanerDedupeBufferLoadFactorProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LogCleanerEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
+        case KafkaConfig.LogCleanerDeleteRetentionMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LogCleanerMinCompactionLagMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LogCleanerMaxCompactionLagMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LogCleanerMinCleanRatioProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LogIndexSizeMaxBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "3")
+        case KafkaConfig.LogFlushIntervalMessagesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.LogFlushSchedulerIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LogFlushIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LogMessageTimestampDifferenceMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LogFlushStartOffsetCheckpointIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.NumRecoveryThreadsPerDataDirProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.AutoCreateTopicsEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
+        case KafkaConfig.MinInSyncReplicasProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.ControllerSocketTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.DefaultReplicationFactorProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ReplicaLagTimeMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ReplicaSocketTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-2")
+        case KafkaConfig.ReplicaSocketReceiveBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ReplicaFetchMaxBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ReplicaFetchWaitMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ReplicaFetchMinBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ReplicaFetchResponseMaxBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ReplicaSelectorClassProp => // Ignore string
-        case KafkaConfig.NumReplicaFetchersProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.FetchPurgatoryPurgeIntervalRequestsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ProducerPurgatoryPurgeIntervalRequestsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.DeleteRecordsPurgatoryPurgeIntervalRequestsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.AutoLeaderRebalanceEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
-        case KafkaConfig.LeaderImbalancePerBrokerPercentageProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.UncleanLeaderElectionEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
-        case KafkaConfig.ControlledShutdownMaxRetriesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ControlledShutdownRetryBackoffMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ControlledShutdownEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
-        case KafkaConfig.GroupMinSessionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.GroupMaxSessionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.GroupInitialRebalanceDelayMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.GroupMaxSizeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0", "-1")
-        case KafkaConfig.OffsetMetadataMaxSizeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.OffsetsLoadBufferSizeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.OffsetsTopicReplicationFactorProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.OffsetsTopicPartitionsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.OffsetsTopicSegmentBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.OffsetsTopicCompressionCodecProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
-        case KafkaConfig.OffsetsRetentionMinutesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.OffsetsRetentionCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.OffsetCommitTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.OffsetCommitRequiredAcksProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-2")
-        case KafkaConfig.TransactionalIdExpirationMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0", "-2")
-        case KafkaConfig.TransactionsMaxTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0", "-2")
-        case KafkaConfig.TransactionsTopicMinISRProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0", "-2")
-        case KafkaConfig.TransactionsLoadBufferSizeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0", "-2")
-        case KafkaConfig.TransactionsTopicPartitionsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0", "-2")
-        case KafkaConfig.TransactionsTopicSegmentBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0", "-2")
-        case KafkaConfig.TransactionsTopicReplicationFactorProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0", "-2")
-        case KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.NumQuotaSamplesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.QuotaWindowSizeSecondsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.DeleteTopicEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
+        case KafkaConfig.NumReplicaFetchersProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.FetchPurgatoryPurgeIntervalRequestsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ProducerPurgatoryPurgeIntervalRequestsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.DeleteRecordsPurgatoryPurgeIntervalRequestsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.AutoLeaderRebalanceEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
+        case KafkaConfig.LeaderImbalancePerBrokerPercentageProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.UncleanLeaderElectionEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
+        case KafkaConfig.ControlledShutdownMaxRetriesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ControlledShutdownRetryBackoffMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ControlledShutdownEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
+        case KafkaConfig.GroupMinSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.GroupMaxSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.GroupInitialRebalanceDelayMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.GroupMaxSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-1")
+        case KafkaConfig.OffsetMetadataMaxSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.OffsetsLoadBufferSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.OffsetsTopicReplicationFactorProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.OffsetsTopicPartitionsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.OffsetsTopicSegmentBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.OffsetsTopicCompressionCodecProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case KafkaConfig.OffsetsRetentionMinutesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.OffsetsRetentionCheckIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.OffsetCommitTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.OffsetCommitRequiredAcksProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-2")
+        case KafkaConfig.TransactionalIdExpirationMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case KafkaConfig.TransactionsMaxTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case KafkaConfig.TransactionsTopicMinISRProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case KafkaConfig.TransactionsLoadBufferSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case KafkaConfig.TransactionsTopicPartitionsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case KafkaConfig.TransactionsTopicSegmentBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case KafkaConfig.TransactionsTopicReplicationFactorProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case KafkaConfig.NumQuotaSamplesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.QuotaWindowSizeSecondsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.DeleteTopicEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
 
-        case KafkaConfig.MetricNumSamplesProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
-        case KafkaConfig.MetricSampleWindowMsProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
+        case KafkaConfig.MetricNumSamplesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
+        case KafkaConfig.MetricSampleWindowMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricReporterClassesProp => // ignore string
         case KafkaConfig.MetricRecordingLevelProp => // ignore string
         case KafkaConfig.RackProp => // ignore string
@@ -710,9 +762,12 @@ class KafkaConfigTest {
         case KafkaConfig.SslKeystoreLocationProp => // ignore string
         case KafkaConfig.SslKeystorePasswordProp => // ignore string
         case KafkaConfig.SslKeyPasswordProp => // ignore string
+        case KafkaConfig.SslKeystoreCertificateChainProp => // ignore string
+        case KafkaConfig.SslKeystoreKeyProp => // ignore string
         case KafkaConfig.SslTruststoreTypeProp => // ignore string
         case KafkaConfig.SslTruststorePasswordProp => // ignore string
         case KafkaConfig.SslTruststoreLocationProp => // ignore string
+        case KafkaConfig.SslTruststoreCertificatesProp => // ignore string
         case KafkaConfig.SslKeyManagerAlgorithmProp =>
         case KafkaConfig.SslTrustManagerAlgorithmProp =>
         case KafkaConfig.SslClientAuthProp => // ignore string
@@ -722,6 +777,7 @@ class KafkaConfigTest {
         case KafkaConfig.SslPrincipalMappingRulesProp => // ignore string
 
         //Sasl Configs
+        case KafkaConfig.SaslMechanismControllerProtocolProp => // ignore
         case KafkaConfig.SaslMechanismInterBrokerProtocolProp => // ignore
         case KafkaConfig.SaslEnabledMechanismsProp =>
         case KafkaConfig.SaslClientCallbackHandlerClassProp =>
@@ -748,22 +804,114 @@ class KafkaConfigTest {
         case KafkaConfig.PasswordEncoderOldSecretProp =>
         case KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp =>
         case KafkaConfig.PasswordEncoderCipherAlgorithmProp =>
-        case KafkaConfig.PasswordEncoderKeyLengthProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
-        case KafkaConfig.PasswordEncoderIterationsProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
+        case KafkaConfig.PasswordEncoderKeyLengthProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
+        case KafkaConfig.PasswordEncoderIterationsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
 
         //delegation token configs
-        case KafkaConfig.DelegationTokenMasterKeyProp => // ignore
-        case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.DelegationTokenSecretKeyAliasProp => // ignore
+        case KafkaConfig.DelegationTokenSecretKeyProp => // ignore
+        case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
 
         //Kafka Yammer metrics reporter configs
         case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
         case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
 
-        case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
+        // Raft Quorum Configs
+        case RaftConfig.QUORUM_VOTERS_CONFIG => // ignore string
+        case RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+
+        case _ => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
       }
-    })
+    }
+  }
+
+  @Test
+  def testDynamicLogConfigs(): Unit = {
+    def baseProperties: Properties = {
+      val validRequiredProperties = new Properties()
+      validRequiredProperties.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
+      validRequiredProperties
+    }
+
+    val props = baseProperties
+    val config = KafkaConfig.fromProps(props)
+
+    def assertDynamic(property: String, value: Any, accessor: () => Any): Unit = {
+      val initial = accessor()
+      props.put(property, value.toString)
+      config.updateCurrentConfig(new KafkaConfig(props))
+      assertNotEquals(initial, accessor())
+    }
+
+    // Test dynamic log config values can be correctly passed through via KafkaConfig to LogConfig
+    // Every log config prop must be explicitly accounted for here.
+    // A value other than the default value for this config should be set to ensure that we can check whether
+    // the value is dynamically updatable.
+    LogConfig.TopicConfigSynonyms.foreach { case (logConfig, kafkaConfigProp) =>
+      logConfig match {
+        case LogConfig.CleanupPolicyProp =>
+          assertDynamic(kafkaConfigProp, Defaults.Compact, () => config.logCleanupPolicy)
+        case LogConfig.CompressionTypeProp =>
+          assertDynamic(kafkaConfigProp, "lz4", () => config.compressionType)
+        case LogConfig.SegmentBytesProp =>
+          assertDynamic(kafkaConfigProp, 10000, () => config.logSegmentBytes)
+        case LogConfig.SegmentMsProp =>
+          assertDynamic(kafkaConfigProp, 10001L, () => config.logRollTimeMillis)
+        case LogConfig.DeleteRetentionMsProp =>
+          assertDynamic(kafkaConfigProp, 10002L, () => config.logCleanerDeleteRetentionMs)
+        case LogConfig.FileDeleteDelayMsProp =>
+          assertDynamic(kafkaConfigProp, 10003L, () => config.logDeleteDelayMs)
+        case LogConfig.FlushMessagesProp =>
+          assertDynamic(kafkaConfigProp, 10004L, () => config.logFlushIntervalMessages)
+        case LogConfig.FlushMsProp =>
+          assertDynamic(kafkaConfigProp, 10005L, () => config.logFlushIntervalMs)
+        case LogConfig.MaxCompactionLagMsProp =>
+          assertDynamic(kafkaConfigProp, 10006L, () => config.logCleanerMaxCompactionLagMs)
+        case LogConfig.IndexIntervalBytesProp =>
+          assertDynamic(kafkaConfigProp, 10007, () => config.logIndexIntervalBytes)
+        case LogConfig.MaxMessageBytesProp =>
+          assertDynamic(kafkaConfigProp, 10008, () => config.messageMaxBytes)
+        case LogConfig.MessageDownConversionEnableProp =>
+          assertDynamic(kafkaConfigProp, false, () => config.logMessageDownConversionEnable)
+        case LogConfig.MessageTimestampDifferenceMaxMsProp =>
+          assertDynamic(kafkaConfigProp, 10009, () => config.logMessageTimestampDifferenceMaxMs)
+        case LogConfig.MessageTimestampTypeProp =>
+          assertDynamic(kafkaConfigProp, "LogAppendTime", () => config.logMessageTimestampType.name)
+        case LogConfig.MinCleanableDirtyRatioProp =>
+          assertDynamic(kafkaConfigProp, 0.01, () => config.logCleanerMinCleanRatio)
+        case LogConfig.MinCompactionLagMsProp =>
+          assertDynamic(kafkaConfigProp, 10010L, () => config.logCleanerMinCompactionLagMs)
+        case LogConfig.MinInSyncReplicasProp =>
+          assertDynamic(kafkaConfigProp, 4, () => config.minInSyncReplicas)
+        case LogConfig.PreAllocateEnableProp =>
+          assertDynamic(kafkaConfigProp, true, () => config.logPreAllocateEnable)
+        case LogConfig.RetentionBytesProp =>
+          assertDynamic(kafkaConfigProp, 10011L, () => config.logRetentionBytes)
+        case LogConfig.RetentionMsProp =>
+          assertDynamic(kafkaConfigProp, 10012L, () => config.logRetentionTimeMillis)
+        case LogConfig.SegmentIndexBytesProp =>
+          assertDynamic(kafkaConfigProp, 10013, () => config.logIndexSizeMaxBytes)
+        case LogConfig.SegmentJitterMsProp =>
+          assertDynamic(kafkaConfigProp, 10014L, () => config.logRollTimeJitterMillis)
+        case LogConfig.UncleanLeaderElectionEnableProp =>
+          assertDynamic(kafkaConfigProp, true, () => config.uncleanLeaderElectionEnable)
+        case LogConfig.MessageFormatVersionProp =>
+        // not dynamically updatable
+        case LogConfig.FollowerReplicationThrottledReplicasProp =>
+        // topic only config
+        case LogConfig.LeaderReplicationThrottledReplicasProp =>
+        // topic only config
+        case prop =>
+          fail(prop + " must be explicitly checked for dynamic updatability. Note that LogConfig(s) require that KafkaConfig value lookups are dynamic and not static values.")
+      }
+    }
   }
 
   @Test
@@ -810,7 +958,7 @@ class KafkaConfigTest {
     assertEquals(24 * 60L * 60L * 1000L, config.delegationTokenExpiryTimeMs)
     assertEquals(1 * 60L * 1000L * 60, config.delegationTokenExpiryCheckIntervalMs)
 
-    defaults.put(KafkaConfig.DelegationTokenMasterKeyProp, "1234567890")
+    defaults.put(KafkaConfig.DelegationTokenSecretKeyProp, "1234567890")
     val config1 = KafkaConfig.fromProps(defaults)
     assertEquals(true, config1.tokenAuthEnabled)
   }
@@ -835,13 +983,260 @@ class KafkaConfigTest {
   }
 
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*): Unit = {
-    values.foreach((value) => {
+    values.foreach { value =>
       val props = validRequiredProps
       props.setProperty(name, value.toString)
-      intercept[Exception] {
-        KafkaConfig.fromProps(props)
-      }
-    })
+
+      val buildConfig: Executable = () => KafkaConfig.fromProps(props)
+      assertThrows(classOf[Exception], buildConfig,
+      s"Expected exception for property `$name` with invalid value `$value` was not thrown")
+    }
+  }
+
+  def assertDistinctControllerAndAdvertisedListeners(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://A:9092,SSL://B:9093")
+    // Valid now
+    assertTrue(isValidKafkaConfig(props))
+
+    // Still valid
+    val controllerListeners = "SASL_SSL"
+    props.put(KafkaConfig.ControllerListenerNamesProp, controllerListeners)
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def assertAllControllerListenerCannotBeAdvertised(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    // Valid now
+    assertTrue(isValidKafkaConfig(props))
+
+    // Invalid now
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT,SSL,SASL_SSL")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def assertEvenOneControllerListenerCannotBeAdvertised(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    // Valid now
+    assertTrue(isValidKafkaConfig(props))
+
+    // Invalid now
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testControllerQuorumVoterStringsToNodes(): Unit = {
+    assertThrows(classOf[ConfigException], () => RaftConfig.quorumVoterStringsToNodes(Collections.singletonList("")))
+    assertEquals(Seq(new Node(3000, "example.com", 9093)),
+      RaftConfig.quorumVoterStringsToNodes(util.Arrays.asList("3000@example.com:9093")).asScala.toSeq)
+    assertEquals(Seq(new Node(3000, "example.com", 9093),
+      new Node(3001, "example.com", 9094)),
+      RaftConfig.quorumVoterStringsToNodes(util.Arrays.asList("3000@example.com:9093","3001@example.com:9094")).asScala.toSeq)
+  }
+
+  @Test
+  def testInvalidQuorumVoterConfig(): Unit = {
+    assertInvalidQuorumVoters("1")
+    assertInvalidQuorumVoters("1@")
+    assertInvalidQuorumVoters("1:")
+    assertInvalidQuorumVoters("blah@")
+    assertInvalidQuorumVoters("1@kafka1")
+    assertInvalidQuorumVoters("1@kafka1:9092,")
+    assertInvalidQuorumVoters("1@kafka1:9092,")
+    assertInvalidQuorumVoters("1@kafka1:9092,2")
+    assertInvalidQuorumVoters("1@kafka1:9092,2@")
+    assertInvalidQuorumVoters("1@kafka1:9092,2@blah")
+    assertInvalidQuorumVoters("1@kafka1:9092,2@blah,")
+    assertInvalidQuorumVoters("1@kafka1:9092:1@kafka2:9092")
+  }
+
+  private def assertInvalidQuorumVoters(value: String): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testValidQuorumVotersConfig(): Unit = {
+    val expected = new util.HashMap[Integer, AddressSpec]()
+    assertValidQuorumVoters("", expected)
+
+    expected.put(1, new InetAddressSpec(new InetSocketAddress("127.0.0.1", 9092)))
+    assertValidQuorumVoters("1@127.0.0.1:9092", expected)
+
+    expected.clear()
+    expected.put(1, UNKNOWN_ADDRESS_SPEC_INSTANCE)
+    assertValidQuorumVoters("1@0.0.0.0:0", expected)
+
+    expected.clear()
+    expected.put(1, new InetAddressSpec(new InetSocketAddress("kafka1", 9092)))
+    expected.put(2, new InetAddressSpec(new InetSocketAddress("kafka2", 9092)))
+    expected.put(3, new InetAddressSpec(new InetSocketAddress("kafka3", 9092)))
+    assertValidQuorumVoters("1@kafka1:9092,2@kafka2:9092,3@kafka3:9092", expected)
+  }
+
+  private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, AddressSpec]): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
+    val raftConfig = new RaftConfig(KafkaConfig.fromProps(props))
+    assertEquals(expectedVoters, raftConfig.quorumVoterConnections())
+  }
+
+  @Test
+  def testAcceptsLargeNodeIdForRaftBasedCase(): Unit = {
+    // Generation of Broker IDs is not supported when using Raft-based controller quorums,
+    // so pick a broker ID greater than reserved.broker.max.id, which defaults to 1000,
+    // and make sure it is allowed despite broker.id.generation.enable=true (true is the default)
+    val largeBrokerId = 2000
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.NodeIdProp, largeBrokerId.toString)
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsNegativeNodeIdForRaftBasedBrokerCaseWithAutoGenEnabled(): Unit = {
+    // -1 is the default for both node.id and broker.id
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsNegativeNodeIdForRaftBasedControllerCaseWithAutoGenEnabled(): Unit = {
+    // -1 is the default for both node.id and broker.id
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "controller")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsNegativeNodeIdForRaftBasedCaseWithAutoGenDisabled(): Unit = {
+    // -1 is the default for both node.id and broker.id
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsLargeNodeIdForZkBasedCaseWithAutoGenEnabled(): Unit = {
+    // Generation of Broker IDs is supported when using ZooKeeper-based controllers,
+    // so pick a broker ID greater than reserved.broker.max.id, which defaults to 1000,
+    // and make sure it is not allowed with broker.id.generation.enable=true (true is the default)
+    val largeBrokerId = 2000
+    val props = TestUtils.createBrokerConfig(largeBrokerId, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testAcceptsNegativeOneNodeIdForZkBasedCaseWithAutoGenEnabled(): Unit = {
+    // -1 is the default for both node.id and broker.id; it implies "auto-generate" and should succeed
+    val props = TestUtils.createBrokerConfig(-1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsNegativeTwoNodeIdForZkBasedCaseWithAutoGenEnabled(): Unit = {
+    // -1 implies "auto-generate" and should succeed, but -2 does not and should fail
+    val negativeTwoNodeId = -2
+    val props = TestUtils.createBrokerConfig(negativeTwoNodeId, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    props.put(KafkaConfig.NodeIdProp, negativeTwoNodeId.toString)
+    props.put(KafkaConfig.BrokerIdProp, negativeTwoNodeId.toString)
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testAcceptsLargeNodeIdForZkBasedCaseWithAutoGenDisabled(): Unit = {
+    // Ensure a broker ID greater than reserved.broker.max.id, which defaults to 1000,
+    // is allowed with broker.id.generation.enable=false
+    val largeBrokerId = 2000
+    val props = TestUtils.createBrokerConfig(largeBrokerId, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    props.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsNegativeNodeIdForZkBasedCaseWithAutoGenDisabled(): Unit = {
+    // -1 is the default for both node.id and broker.id
+    val props = TestUtils.createBrokerConfig(-1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testZookeeperConnectRequiredIfEmptyProcessRoles(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testZookeeperConnectNotRequiredIfNonEmptyProcessRoles(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    props.put(KafkaConfig.NodeIdProp, "1")
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testCustomMetadataLogDir(): Unit = {
+    val metadataDir = "/path/to/metadata/dir"
+    val dataDir = "/path/to/data/dir"
+
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.MetadataLogDirProp, metadataDir)
+    props.put(KafkaConfig.LogDirProp, dataDir)
+    props.put(KafkaConfig.NodeIdProp, "1")
+    assertTrue(isValidKafkaConfig(props))
+
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(metadataDir, config.metadataLogDir)
+    assertEquals(Seq(dataDir), config.logDirs)
+  }
+
+  @Test
+  def testDefaultMetadataLogDir(): Unit = {
+    val dataDir1 = "/path/to/data/dir/1"
+    val dataDir2 = "/path/to/data/dir/2"
+
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.LogDirProp, s"$dataDir1,$dataDir2")
+    props.put(KafkaConfig.NodeIdProp, "1")
+    assertTrue(isValidKafkaConfig(props))
+
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(dataDir1, config.metadataLogDir)
+    assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
   }
 
 }

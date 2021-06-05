@@ -18,11 +18,19 @@
 package kafka.server
 
 import kafka.utils._
+import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.message.CreateTopicsRequestData
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
-import org.junit.Assert._
-import org.junit.Test
+import org.apache.kafka.common.requests.CreateTopicsRequest
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
+
+import scala.jdk.CollectionConverters._
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
+
   @Test
   def testValidCreateTopicsRequests(): Unit = {
     // Generated assignments
@@ -104,9 +112,9 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       topicReq("error-timeout-negative", numPartitions = 10, replicationFactor = 3)), timeout = -1),
       Map("error-timeout-negative" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
     // The topics should still get created eventually
-    TestUtils.waitUntilMetadataIsPropagated(servers, "error-timeout", 0)
-    TestUtils.waitUntilMetadataIsPropagated(servers, "error-timeout-zero", 0)
-    TestUtils.waitUntilMetadataIsPropagated(servers, "error-timeout-negative", 0)
+    TestUtils.waitForPartitionMetadata(servers, "error-timeout", 0)
+    TestUtils.waitForPartitionMetadata(servers, "error-timeout-zero", 0)
+    TestUtils.waitForPartitionMetadata(servers, "error-timeout-negative", 0)
     validateTopicExists("error-timeout")
     validateTopicExists("error-timeout-zero")
     validateTopicExists("error-timeout-negative")
@@ -131,5 +139,43 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     val req = topicsReq(Seq(topicReq("topic1")))
     val response = sendCreateTopicRequest(req, notControllerSocketServer)
     assertEquals(1, response.errorCounts().get(Errors.NOT_CONTROLLER))
+  }
+
+  @Test
+  def testCreateTopicsRequestVersions(): Unit = {
+    for (version <- ApiKeys.CREATE_TOPICS.oldestVersion to ApiKeys.CREATE_TOPICS.latestVersion) {
+      val topic = s"topic_$version"
+      val data = new CreateTopicsRequestData()
+      data.setTimeoutMs(10000)
+      data.setValidateOnly(false)
+      data.setTopics(new CreatableTopicCollection(List(
+        topicReq(topic, numPartitions = 1, replicationFactor = 1,
+          config = Map("min.insync.replicas" -> "2"))
+      ).asJava.iterator()))
+
+      val request = new CreateTopicsRequest.Builder(data).build(version.asInstanceOf[Short])
+      val response = sendCreateTopicRequest(request)
+
+      val topicResponse = response.data.topics.find(topic)
+      assertNotNull(topicResponse)
+      assertEquals(topic, topicResponse.name)
+      assertEquals(Errors.NONE.code, topicResponse.errorCode)
+      if (version >= 5) {
+        assertEquals(1, topicResponse.numPartitions)
+        assertEquals(1, topicResponse.replicationFactor)
+        val config = topicResponse.configs().asScala.find(_.name == "min.insync.replicas")
+        assertTrue(config.isDefined)
+        assertEquals("2", config.get.value)
+      } else {
+        assertEquals(-1, topicResponse.numPartitions)
+        assertEquals(-1, topicResponse.replicationFactor)
+        assertTrue(topicResponse.configs.isEmpty)
+      }
+
+      if (version >= 7)
+        assertNotEquals(Uuid.ZERO_UUID, topicResponse.topicId())
+      else
+        assertEquals(Uuid.ZERO_UUID, topicResponse.topicId())
+    }
   }
 }

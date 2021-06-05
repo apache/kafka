@@ -19,7 +19,7 @@ package kafka.log
 
 import java.util.{Collections, Locale, Properties}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import kafka.api.{ApiVersion, ApiVersionValidator}
 import kafka.message.BrokerCompressionCodec
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
@@ -48,11 +48,6 @@ object Defaults {
   val MinCompactionLagMs = kafka.server.Defaults.LogCleanerMinCompactionLagMs
   val MaxCompactionLagMs = kafka.server.Defaults.LogCleanerMaxCompactionLagMs
   val MinCleanableDirtyRatio = kafka.server.Defaults.LogCleanerMinCleanRatio
-
-  @deprecated(message = "This is a misleading variable name as it actually refers to the 'delete' cleanup policy. Use " +
-                        "`CleanupPolicy` instead.", since = "1.0.0")
-  val Compact = kafka.server.Defaults.LogCleanupPolicy
-
   val CleanupPolicy = kafka.server.Defaults.LogCleanupPolicy
   val UncleanLeaderElectionEnable = kafka.server.Defaults.UncleanLeaderElectionEnable
   val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
@@ -71,7 +66,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   extends AbstractConfig(LogConfig.configDef, props, false) {
   /**
    * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
-   * should also go in [[kafka.server.KafkaServer.copyKafkaConfigToLog]].
+   * should also go in [[LogConfig.extractLogConfigMap()]].
    */
   val segmentSize = getInt(LogConfig.SegmentBytesProp)
   val segmentMs = getLong(LogConfig.SegmentMsProp)
@@ -108,12 +103,19 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
     if (compact && maxCompactionLagMs > 0) math.min(maxCompactionLagMs, segmentMs)
     else segmentMs
   }
+
+  def initFileSize: Int = {
+    if (preallocate)
+      segmentSize
+    else
+      0
+  }
 }
 
 object LogConfig {
 
   def main(args: Array[String]): Unit = {
-    println(configDef.toHtml)
+    println(configDef.toHtml(4, (config: String) => "topicconfigs_" + config))
   }
 
   val SegmentBytesProp = TopicConfig.SEGMENT_BYTES_CONFIG
@@ -228,7 +230,7 @@ object LogConfig {
   }
 
   // Package private for testing, return a copy since it's a mutable global variable
-  private[log] def configDefCopy: LogConfigDef = new LogConfigDef(configDef)
+  private[kafka] def configDefCopy: LogConfigDef = new LogConfigDef(configDef)
 
   private val configDef: LogConfigDef = {
     import org.apache.kafka.common.config.ConfigDef.Importance._
@@ -299,12 +301,16 @@ object LogConfig {
 
   def serverConfigName(configName: String): Option[String] = configDef.serverConfigName(configName)
 
+  def configType(configName: String): Option[ConfigDef.Type] = {
+    Option(configDef.configKeys.get(configName)).map(_.`type`)
+  }
+
   /**
    * Create a log config instance using the given properties and defaults
    */
   def fromProps(defaults: java.util.Map[_ <: Object, _ <: Object], overrides: Properties): LogConfig = {
     val props = new Properties()
-    defaults.asScala.foreach { case (k, v) => props.put(k, v) }
+    defaults.forEach { (k, v) => props.put(k, v) }
     props ++= overrides
     val overriddenKeys = overrides.keySet.asScala.map(_.asInstanceOf[String]).toSet
     new LogConfig(props, overriddenKeys)
@@ -371,4 +377,39 @@ object LogConfig {
     MessageDownConversionEnableProp -> KafkaConfig.LogMessageDownConversionEnableProp
   )
 
+
+  /**
+   * Copy the subset of properties that are relevant to Logs. The individual properties
+   * are listed here since the names are slightly different in each Config class...
+   */
+  def extractLogConfigMap(
+    kafkaConfig: KafkaConfig
+  ): java.util.Map[String, Object] = {
+    val logProps = new java.util.HashMap[String, Object]()
+    logProps.put(SegmentBytesProp, kafkaConfig.logSegmentBytes)
+    logProps.put(SegmentMsProp, kafkaConfig.logRollTimeMillis)
+    logProps.put(SegmentJitterMsProp, kafkaConfig.logRollTimeJitterMillis)
+    logProps.put(SegmentIndexBytesProp, kafkaConfig.logIndexSizeMaxBytes)
+    logProps.put(FlushMessagesProp, kafkaConfig.logFlushIntervalMessages)
+    logProps.put(FlushMsProp, kafkaConfig.logFlushIntervalMs)
+    logProps.put(RetentionBytesProp, kafkaConfig.logRetentionBytes)
+    logProps.put(RetentionMsProp, kafkaConfig.logRetentionTimeMillis: java.lang.Long)
+    logProps.put(MaxMessageBytesProp, kafkaConfig.messageMaxBytes)
+    logProps.put(IndexIntervalBytesProp, kafkaConfig.logIndexIntervalBytes)
+    logProps.put(DeleteRetentionMsProp, kafkaConfig.logCleanerDeleteRetentionMs)
+    logProps.put(MinCompactionLagMsProp, kafkaConfig.logCleanerMinCompactionLagMs)
+    logProps.put(MaxCompactionLagMsProp, kafkaConfig.logCleanerMaxCompactionLagMs)
+    logProps.put(FileDeleteDelayMsProp, kafkaConfig.logDeleteDelayMs)
+    logProps.put(MinCleanableDirtyRatioProp, kafkaConfig.logCleanerMinCleanRatio)
+    logProps.put(CleanupPolicyProp, kafkaConfig.logCleanupPolicy)
+    logProps.put(MinInSyncReplicasProp, kafkaConfig.minInSyncReplicas)
+    logProps.put(CompressionTypeProp, kafkaConfig.compressionType)
+    logProps.put(UncleanLeaderElectionEnableProp, kafkaConfig.uncleanLeaderElectionEnable)
+    logProps.put(PreAllocateEnableProp, kafkaConfig.logPreAllocateEnable)
+    logProps.put(MessageFormatVersionProp, kafkaConfig.logMessageFormatVersion.version)
+    logProps.put(MessageTimestampTypeProp, kafkaConfig.logMessageTimestampType.name)
+    logProps.put(MessageTimestampDifferenceMaxMsProp, kafkaConfig.logMessageTimestampDifferenceMaxMs: java.lang.Long)
+    logProps.put(MessageDownConversionEnableProp, kafkaConfig.logMessageDownConversionEnable: java.lang.Boolean)
+    logProps
+  }
 }

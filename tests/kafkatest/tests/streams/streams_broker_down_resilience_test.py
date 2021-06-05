@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import time
+from ducktape.mark.resource import cluster
 from kafkatest.services.streams import StreamsBrokerDownResilienceService
 from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 
@@ -28,7 +29,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     outputTopic = "streamsResilienceSink"
     client_id = "streams-broker-resilience-verify-consumer"
     num_messages = 10000
-    message = "processed[0-9]*messages"
+    message = "processed [0-9]* messages"
     connected_message = "Discovered group coordinator"
 
     def __init__(self, test_context):
@@ -40,6 +41,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     def setUp(self):
         self.zk.start()
 
+    @cluster(num_nodes=7)
     def test_streams_resilient_to_broker_down(self):
         self.kafka.start()
 
@@ -75,6 +77,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
         self.kafka.stop()
 
+    @cluster(num_nodes=7)
     def test_streams_runs_with_broker_down_initially(self):
         self.kafka.start()
         node = self.kafka.leader(self.inputTopic)
@@ -141,10 +144,15 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
         self.kafka.stop()
 
+    @cluster(num_nodes=9)
     def test_streams_should_scale_in_while_brokers_down(self):
         self.kafka.start()
 
-        configs = self.get_configs(extra_configs=",application.id=shutdown_with_broker_down")
+        # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
+        configs = self.get_configs(
+            extra_configs=",application.id=shutdown_with_broker_down" +
+                          ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor"
+        )
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor.start()
@@ -214,10 +222,15 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
         self.kafka.stop()
 
+    @cluster(num_nodes=9)
     def test_streams_should_failover_while_brokers_down(self):
         self.kafka.start()
 
-        configs = self.get_configs(extra_configs=",application.id=failover_with_broker_down")
+        # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
+        configs = self.get_configs(
+            extra_configs=",application.id=failover_with_broker_down" +
+                          ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor"
+        )
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor.start()

@@ -20,6 +20,9 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+
+import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;

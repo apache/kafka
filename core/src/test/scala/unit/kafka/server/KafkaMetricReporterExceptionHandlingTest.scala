@@ -18,15 +18,15 @@ import java.net.Socket
 import java.util.{Collections, Properties}
 
 import kafka.utils.TestUtils
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.requests.{ListGroupsRequest, ListGroupsResponse}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.junit.Assert._
-import org.junit.{Before, Test}
-import org.junit.After
+import org.apache.kafka.common.protocol.Errors
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import java.util.concurrent.atomic.AtomicInteger
 
 import org.apache.kafka.common.message.ListGroupsRequestData
@@ -43,17 +43,17 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
     properties.put(KafkaConfig.MetricReporterClassesProp, classOf[KafkaMetricReporterExceptionHandlingTest.BadReporter].getName + "," + classOf[KafkaMetricReporterExceptionHandlingTest.GoodReporter].getName)
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
     // need a quota prop to register a "throttle-time" metrics after server startup
     val quotaProps = new Properties()
-    quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.1")
+    quotaProps.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "0.1")
     adminZkClient.changeClientIdConfig("<default>", quotaProps)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.set(0)
     KafkaMetricReporterExceptionHandlingTest.badReporterRegistered.set(0)
@@ -69,10 +69,10 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
 
     try {
       TestUtils.retry(10000) {
-        val error = new ListGroupsResponse(
-          requestResponse(socket, "clientId", 0, new ListGroupsRequest.Builder(new ListGroupsRequestData)), ApiKeys.LIST_GROUPS.latestVersion)
-          .errorCounts()
-        assertEquals(Collections.singletonMap(Errors.NONE, 1), error)
+        val listGroupsRequest = new ListGroupsRequest.Builder(new ListGroupsRequestData).build()
+        val listGroupsResponse = sendAndReceive[ListGroupsResponse](listGroupsRequest, socket)
+        val errors = listGroupsResponse.errorCounts()
+        assertEquals(Collections.singletonMap(Errors.NONE, 1), errors)
         assertEquals(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get, KafkaMetricReporterExceptionHandlingTest.badReporterRegistered.get)
         assertTrue(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get > 0)
       }

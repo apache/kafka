@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -55,14 +55,15 @@ public class KeyValueSegmentsTest {
     @Before
     public void createContext() {
         stateDirectory = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             stateDirectory,
             Serdes.String(),
             Serdes.Long(),
-            new NoOpRecordCollector(),
+            new MockRecordCollector(),
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
         );
         segments = new KeyValueSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
+        segments.openExisting(context, -1L);
     }
 
     @After
@@ -154,6 +155,7 @@ public class KeyValueSegmentsTest {
     @Test
     public void shouldOpenExistingSegments() {
         segments = new KeyValueSegments("test",  METRICS_SCOPE, 4, 1);
+        segments.openExisting(context, -1L);
         segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.getOrCreateSegmentIfLive(1, context, -1L);
         segments.getOrCreateSegmentIfLive(2, context, -1L);
@@ -185,11 +187,31 @@ public class KeyValueSegmentsTest {
         segments.getOrCreateSegmentIfLive(3, context, streamTime);
         segments.getOrCreateSegmentIfLive(4, context, streamTime);
 
-        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL);
+        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
         assertEquals(3, segments.size());
         assertEquals(0, segments.get(0).id);
         assertEquals(1, segments.get(1).id);
         assertEquals(2, segments.get(2).id);
+    }
+
+    @Test
+    public void shouldGetSegmentsWithinBackwardTimeRange() {
+        updateStreamTimeAndCreateSegment(0);
+        updateStreamTimeAndCreateSegment(1);
+        updateStreamTimeAndCreateSegment(2);
+        updateStreamTimeAndCreateSegment(3);
+        final long streamTime = updateStreamTimeAndCreateSegment(4);
+        segments.getOrCreateSegmentIfLive(0, context, streamTime);
+        segments.getOrCreateSegmentIfLive(1, context, streamTime);
+        segments.getOrCreateSegmentIfLive(2, context, streamTime);
+        segments.getOrCreateSegmentIfLive(3, context, streamTime);
+        segments.getOrCreateSegmentIfLive(4, context, streamTime);
+
+        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, false);
+        assertEquals(3, segments.size());
+        assertEquals(0, segments.get(2).id);
+        assertEquals(1, segments.get(1).id);
+        assertEquals(2, segments.get(0).id);
     }
 
     @Test
@@ -200,11 +222,26 @@ public class KeyValueSegmentsTest {
         updateStreamTimeAndCreateSegment(1);
         updateStreamTimeAndCreateSegment(3);
 
-        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL);
+        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
         assertEquals(3, segments.size());
         assertEquals(0, segments.get(0).id);
         assertEquals(1, segments.get(1).id);
         assertEquals(2, segments.get(2).id);
+    }
+
+    @Test
+    public void shouldGetSegmentsWithinTimeBackwardRangeOutOfOrder() {
+        updateStreamTimeAndCreateSegment(4);
+        updateStreamTimeAndCreateSegment(2);
+        updateStreamTimeAndCreateSegment(0);
+        updateStreamTimeAndCreateSegment(1);
+        updateStreamTimeAndCreateSegment(3);
+
+        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, false);
+        assertEquals(3, segments.size());
+        assertEquals(2, segments.get(0).id);
+        assertEquals(1, segments.get(1).id);
+        assertEquals(0, segments.get(2).id);
     }
 
     @Test
@@ -307,7 +344,7 @@ public class KeyValueSegmentsTest {
     }
 
     private void verifyCorrectSegments(final long first, final int numSegments) {
-        final List<KeyValueSegment> result = this.segments.segments(0, Long.MAX_VALUE);
+        final List<KeyValueSegment> result = this.segments.segments(0, Long.MAX_VALUE, true);
         assertEquals(numSegments, result.size());
         for (int i = 0; i < numSegments; i++) {
             assertEquals(i + first, result.get(i).id);

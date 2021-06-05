@@ -14,31 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-public class GlobalStoreNode extends StateStoreNode {
+import java.util.Properties;
 
+public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreNode<S> {
 
     private final String sourceName;
     private final String topic;
-    private final ConsumedInternal consumed;
+    private final ConsumedInternal<KIn, VIn> consumed;
     private final String processorName;
-    private final ProcessorSupplier stateUpdateSupplier;
+    private final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier;
 
 
-    public GlobalStoreNode(final StoreBuilder<KeyValueStore> storeBuilder,
+    public GlobalStoreNode(final StoreBuilder<S> storeBuilder,
                            final String sourceName,
                            final String topic,
-                           final ConsumedInternal consumed,
+                           final ConsumedInternal<KIn, VIn> consumed,
                            final String processorName,
-                           final ProcessorSupplier stateUpdateSupplier) {
+                           final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
 
         super(storeBuilder);
         this.sourceName = sourceName;
@@ -48,10 +48,8 @@ public class GlobalStoreNode extends StateStoreNode {
         this.stateUpdateSupplier = stateUpdateSupplier;
     }
 
-
     @Override
-    @SuppressWarnings("unchecked")
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
         storeBuilder.withLoggingDisabled();
         topologyBuilder.addGlobalStore(storeBuilder,
                                        sourceName,
@@ -63,7 +61,6 @@ public class GlobalStoreNode extends StateStoreNode {
                                        stateUpdateSupplier);
 
     }
-
 
     @Override
     public String toString() {

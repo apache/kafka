@@ -39,18 +39,14 @@ public class KTableMaterializedValueGetterSupplier<K, V> implements KTableValueG
     private class KTableMaterializedValueGetter implements KTableValueGetter<K, V> {
         private TimestampedKeyValueStore<K, V> store;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (TimestampedKeyValueStore<K, V>) context.getStateStore(storeName);
+            store = context.getStateStore(storeName);
         }
 
         @Override
         public ValueAndTimestamp<V> get(final K key) {
             return store.get(key);
         }
-
-        @Override
-        public void close() {}
     }
 }

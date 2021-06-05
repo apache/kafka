@@ -20,58 +20,67 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.util.Map;
 import java.util.regex.Pattern;
 
-/** Uses a blacklist of property names or regexes. */
+/** Filters excluded property names or regexes. */
 public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
     
-    public static final String CONFIG_PROPERTIES_BLACKLIST_CONFIG = "config.properties.blacklist";
-    private static final String CONFIG_PROPERTIES_BLACKLIST_DOC = "List of topic configuration properties and/or regexes "
-        + "that should not be replicated.";
-    public static final String CONFIG_PROPERTIES_BLACKLIST_DEFAULT = "follower\\.replication\\.throttled\\.replicas, "
-        + "leader\\.replication\\.throttled\\.replicas, "
-        + "message\\.timestamp\\.difference\\.max\\.ms, "
-        + "message\\.timestamp\\.type, "
-        + "unclean\\.leader\\.election\\.enable, "
-        + "min\\.insync\\.replicas";
-    private Pattern blacklistPattern = MirrorUtils.compilePatternList(CONFIG_PROPERTIES_BLACKLIST_DEFAULT);
+    public static final String CONFIG_PROPERTIES_EXCLUDE_CONFIG = "config.properties.exclude";
+    public static final String CONFIG_PROPERTIES_EXCLUDE_ALIAS_CONFIG = "config.properties.blacklist";
+
+    private static final String CONFIG_PROPERTIES_EXCLUDE_DOC = "List of topic configuration properties and/or regexes "
+                                                                + "that should not be replicated.";
+    public static final String CONFIG_PROPERTIES_EXCLUDE_DEFAULT = "follower\\.replication\\.throttled\\.replicas, "
+                                                                   + "leader\\.replication\\.throttled\\.replicas, "
+                                                                   + "message\\.timestamp\\.difference\\.max\\.ms, "
+                                                                   + "message\\.timestamp\\.type, "
+                                                                   + "unclean\\.leader\\.election\\.enable, "
+                                                                   + "min\\.insync\\.replicas";
+    private Pattern excludePattern = MirrorUtils.compilePatternList(CONFIG_PROPERTIES_EXCLUDE_DEFAULT);
 
     @Override
     public void configure(Map<String, ?> props) {
         ConfigPropertyFilterConfig config = new ConfigPropertyFilterConfig(props);
-        blacklistPattern = config.blacklistPattern();
+        excludePattern = config.excludePattern();
     }
 
     @Override
     public void close() {
     }
 
-    private boolean blacklisted(String prop) {
-        return blacklistPattern != null && blacklistPattern.matcher(prop).matches();
+    private boolean excluded(String prop) {
+        return excludePattern != null && excludePattern.matcher(prop).matches();
     }
 
     @Override
     public boolean shouldReplicateConfigProperty(String prop) {
-        return !blacklisted(prop);
+        return !excluded(prop);
     }
 
     static class ConfigPropertyFilterConfig extends AbstractConfig {
 
         static final ConfigDef DEF = new ConfigDef()
-            .define(CONFIG_PROPERTIES_BLACKLIST_CONFIG,
-                Type.LIST,
-                CONFIG_PROPERTIES_BLACKLIST_DEFAULT,
-                Importance.HIGH,
-                CONFIG_PROPERTIES_BLACKLIST_DOC);
+            .define(CONFIG_PROPERTIES_EXCLUDE_CONFIG,
+                    Type.LIST,
+                    CONFIG_PROPERTIES_EXCLUDE_DEFAULT,
+                    Importance.HIGH,
+                    CONFIG_PROPERTIES_EXCLUDE_DOC)
+            .define(CONFIG_PROPERTIES_EXCLUDE_ALIAS_CONFIG,
+                    Type.LIST,
+                    null,
+                    Importance.HIGH,
+                    "Deprecated. Use " + CONFIG_PROPERTIES_EXCLUDE_CONFIG + " instead.");
 
-        ConfigPropertyFilterConfig(Map<?, ?> props) {
-            super(DEF, props, false);
+        ConfigPropertyFilterConfig(Map<String, ?> props) {
+            super(DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
+                {CONFIG_PROPERTIES_EXCLUDE_CONFIG, CONFIG_PROPERTIES_EXCLUDE_ALIAS_CONFIG}}), false);
         }
 
-        Pattern blacklistPattern() {
-            return MirrorUtils.compilePatternList(getList(CONFIG_PROPERTIES_BLACKLIST_CONFIG));
+        Pattern excludePattern() {
+            return MirrorUtils.compilePatternList(getList(CONFIG_PROPERTIES_EXCLUDE_CONFIG));
         }
     }
 }

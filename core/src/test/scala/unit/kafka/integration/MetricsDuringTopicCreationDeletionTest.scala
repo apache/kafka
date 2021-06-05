@@ -18,14 +18,14 @@
 package kafka.integration
 
 import java.util.Properties
+
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
-import scala.collection.JavaConverters.mapAsScalaMapConverter
-import org.scalatest.Assertions.fail
 
-import org.junit.{Before, Test}
-import com.yammer.metrics.Metrics
+import scala.jdk.CollectionConverters._
+import org.junit.jupiter.api.{BeforeEach, Test}
 import com.yammer.metrics.core.Gauge
+import kafka.metrics.KafkaYammerMetrics
 
 class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with Logging {
 
@@ -51,17 +51,17 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   override def generateConfigs = TestUtils.createBrokerConfigs(nodesNum, zkConnect)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
-  @Before
-  override def setUp: Unit = {
+  @BeforeEach
+  override def setUp(): Unit = {
     // Do some Metrics Registry cleanup by removing the metrics that this test checks.
     // This is a test workaround to the issue that prior harness runs may have left a populated registry.
     // see https://issues.apache.org/jira/browse/KAFKA-4605
     for (m <- testedMetrics) {
-        val metricName = Metrics.defaultRegistry.allMetrics.asScala.keys.find(_.getName.endsWith(m))
-        metricName.foreach(Metrics.defaultRegistry.removeMetric)
+        val metricName = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.keys.find(_.getName.endsWith(m))
+        metricName.foreach(KafkaYammerMetrics.defaultRegistry.removeMetric)
     }
 
-    super.setUp
+    super.setUp()
   }
 
   /*
@@ -87,25 +87,23 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
 
     // Thread checking the metric continuously
     running = true
-    val thread = new Thread(new Runnable {
-      def run(): Unit = {
-        while (running) {
-          for ( s <- servers if running) {
-            underReplicatedPartitionCount = s.replicaManager.underReplicatedPartitionCount
-            if (underReplicatedPartitionCount > 0) {
-              running = false
-            }
+    val thread = new Thread(() => {
+      while (running) {
+        for (s <- servers if running) {
+          underReplicatedPartitionCount = s.replicaManager.underReplicatedPartitionCount
+          if (underReplicatedPartitionCount > 0) {
+            running = false
           }
+        }
 
-          preferredReplicaImbalanceCount = preferredReplicaImbalanceCountGauge.value
-          if (preferredReplicaImbalanceCount > 0) {
-             running = false
-          }
+        preferredReplicaImbalanceCount = preferredReplicaImbalanceCountGauge.value
+        if (preferredReplicaImbalanceCount > 0) {
+          running = false
+        }
 
-          offlinePartitionsCount = offlinePartitionsCountGauge.value
-          if (offlinePartitionsCount > 0) {
-             running = false
-          }
+        offlinePartitionsCount = offlinePartitionsCountGauge.value
+        if (offlinePartitionsCount > 0) {
+          running = false
         }
       }
     })
@@ -124,11 +122,10 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   }
 
   private def getGauge(metricName: String) = {
-    Metrics.defaultRegistry.allMetrics.asScala
-           .filterKeys(k => k.getName.endsWith(metricName))
-           .headOption
-           .getOrElse { fail( "Unable to find metric " + metricName ) }
-           ._2.asInstanceOf[Gauge[Int]]
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .find { case (k, _) => k.getName.endsWith(metricName) }
+      .getOrElse(throw new AssertionError( "Unable to find metric " + metricName))
+      ._2.asInstanceOf[Gauge[Int]]
   }
 
   private def createDeleteTopics(): Unit = {

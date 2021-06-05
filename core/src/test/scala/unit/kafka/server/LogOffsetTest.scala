@@ -17,22 +17,22 @@
 
 package kafka.server
 
+import kafka.log.{ClientRecordDeletion, Log, LogSegment}
+import kafka.utils.{MockTime, TestUtils}
+import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
+import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
+import org.apache.kafka.common.{IsolationLevel, TopicPartition}
+import org.easymock.{EasyMock, IAnswer}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
+
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties, Random}
-
-import kafka.log.{Log, LogSegment}
-import kafka.network.SocketServer
-import kafka.utils.{MockTime, TestUtils}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, IsolationLevel, ListOffsetRequest, ListOffsetResponse}
-import org.easymock.{EasyMock, IAnswer}
-import org.junit.Assert._
-import org.junit.Test
-
-import scala.collection.JavaConverters._
+import scala.collection.mutable.Buffer
+import scala.jdk.CollectionConverters._
 
 class LogOffsetTest extends BaseRequestTest {
 
@@ -54,11 +54,10 @@ class LogOffsetTest extends BaseRequestTest {
   @Test
   def testGetOffsetsForUnknownTopic(): Unit = {
     val topicPartition = new TopicPartition("foo", 0)
-    val request = ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
-      .setTargetTimes(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 10)).asJava).build(0)
+    val request = ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+      .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.LATEST_TIMESTAMP, 10).asJava).build(0)
     val response = sendListOffsetsRequest(request)
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.responseData.get(topicPartition).error)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, findPartition(response.topics.asScala, topicPartition).errorCode)
   }
 
   @deprecated("ListOffsetsRequest V0", since = "")
@@ -79,18 +78,17 @@ class LogOffsetTest extends BaseRequestTest {
     log.flush()
 
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(3)
+    log.maybeIncrementLogStartOffset(3, ClientRecordDeletion)
     log.deleteOldSegments()
 
-    val offsets = log.legacyFetchOffsetsBefore(ListOffsetRequest.LATEST_TIMESTAMP, 15)
+    val offsets = log.legacyFetchOffsetsBefore(ListOffsetsRequest.LATEST_TIMESTAMP, 15)
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 3L), offsets)
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
       "Leader should be elected")
-    val request = ListOffsetRequest.Builder.forReplica(0, 0)
-      .setTargetTimes(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 15)).asJava).build()
-    val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
+    val request = ListOffsetsRequest.Builder.forReplica(0, 0)
+      .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.LATEST_TIMESTAMP, 15).asJava).build()
+    val consumerOffsets = findPartition(sendListOffsetsRequest(request).topics.asScala, topicPartition).oldStyleOffsets.asScala
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 3L), consumerOffsets)
   }
 
@@ -110,15 +108,14 @@ class LogOffsetTest extends BaseRequestTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()
 
-    val offsets = log.legacyFetchOffsetsBefore(ListOffsetRequest.LATEST_TIMESTAMP, 15)
+    val offsets = log.legacyFetchOffsetsBefore(ListOffsetsRequest.LATEST_TIMESTAMP, 15)
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), offsets)
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
       "Leader should be elected")
-    val request = ListOffsetRequest.Builder.forReplica(0, 0)
-      .setTargetTimes(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 15)).asJava).build()
-    val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
+    val request = ListOffsetsRequest.Builder.forReplica(0, 0)
+      .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.LATEST_TIMESTAMP, 15).asJava).build()
+    val consumerOffsets = findPartition(sendListOffsetsRequest(request).topics.asScala, topicPartition).oldStyleOffsets.asScala
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), consumerOffsets)
 
     // try to fetch using latest offset
@@ -126,7 +123,7 @@ class LogOffsetTest extends BaseRequestTest {
       Map(topicPartition -> new FetchRequest.PartitionData(consumerOffsets.head, FetchRequest.INVALID_LOG_START_OFFSET,
         300 * 1024, Optional.empty())).asJava).build()
     val fetchResponse = sendFetchRequest(fetchRequest)
-    assertFalse(fetchResponse.responseData.get(topicPartition).records.batches.iterator.hasNext)
+    assertFalse(FetchResponse.recordsOrFail(fetchResponse.responseData.get(topicPartition)).batches.iterator.hasNext)
   }
 
   @Test
@@ -143,10 +140,9 @@ class LogOffsetTest extends BaseRequestTest {
     var offsetChanged = false
     for (_ <- 1 to 14) {
       val topicPartition = new TopicPartition(topic, 0)
-      val request = ListOffsetRequest.Builder.forReplica(0, 0)
-        .setTargetTimes(Map(topicPartition ->
-          new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP, 1)).asJava).build()
-      val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
+      val request = ListOffsetsRequest.Builder.forReplica(0, 0)
+        .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.EARLIEST_TIMESTAMP, 1).asJava).build()
+      val consumerOffsets = findPartition(sendListOffsetsRequest(request).topics.asScala, topicPartition).oldStyleOffsets.asScala
       if (consumerOffsets.head == 1)
         offsetChanged = true
     }
@@ -163,7 +159,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topicPartition, logManager.initialDefaultConfig)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
@@ -176,10 +172,9 @@ class LogOffsetTest extends BaseRequestTest {
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
       "Leader should be elected")
-    val request = ListOffsetRequest.Builder.forReplica(0, 0)
-      .setTargetTimes(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(now, 15)).asJava).build()
-    val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
+    val request = ListOffsetsRequest.Builder.forReplica(0, 0)
+      .setTargetTimes(buildTargetTimes(topicPartition, now, 15).asJava).build()
+    val consumerOffsets = findPartition(sendListOffsetsRequest(request).topics.asScala, topicPartition).oldStyleOffsets.asScala
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), consumerOffsets)
   }
 
@@ -193,21 +188,20 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topicPartition, logManager.initialDefaultConfig)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()
 
-    val offsets = log.legacyFetchOffsetsBefore(ListOffsetRequest.EARLIEST_TIMESTAMP, 10)
+    val offsets = log.legacyFetchOffsetsBefore(ListOffsetsRequest.EARLIEST_TIMESTAMP, 10)
 
     assertEquals(Seq(0L), offsets)
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
       "Leader should be elected")
-    val request = ListOffsetRequest.Builder.forReplica(0, 0)
-      .setTargetTimes(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP, 10)).asJava).build()
-    val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
+    val request = ListOffsetsRequest.Builder.forReplica(0, 0)
+      .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.EARLIEST_TIMESTAMP, 10).asJava).build()
+    val consumerOffsets = findPartition(sendListOffsetsRequest(request).topics.asScala, topicPartition).oldStyleOffsets.asScala
     assertEquals(Seq(0L), consumerOffsets)
   }
 
@@ -249,14 +243,27 @@ class LogOffsetTest extends BaseRequestTest {
 
   private def server: KafkaServer = servers.head
 
-  private def sendListOffsetsRequest(request: ListOffsetRequest, destination: Option[SocketServer] = None): ListOffsetResponse = {
-    val response = connectAndSend(request, ApiKeys.LIST_OFFSETS, destination = destination.getOrElse(anySocketServer))
-    ListOffsetResponse.parse(response, request.version)
+  private def sendListOffsetsRequest(request: ListOffsetsRequest): ListOffsetsResponse = {
+    connectAndReceive[ListOffsetsResponse](request)
   }
 
-  private def sendFetchRequest(request: FetchRequest, destination: Option[SocketServer] = None): FetchResponse[MemoryRecords] = {
-    val response = connectAndSend(request, ApiKeys.FETCH, destination = destination.getOrElse(anySocketServer))
-    FetchResponse.parse(response, request.version)
+  private def sendFetchRequest(request: FetchRequest): FetchResponse = {
+    connectAndReceive[FetchResponse](request)
+  }
+
+  private def buildTargetTimes(tp: TopicPartition, timestamp: Long, maxNumOffsets: Int): List[ListOffsetsTopic] = {
+    List(new ListOffsetsTopic()
+      .setName(tp.topic)
+      .setPartitions(List(new ListOffsetsPartition()
+        .setPartitionIndex(tp.partition)
+        .setTimestamp(timestamp)
+        .setMaxNumOffsets(maxNumOffsets)).asJava)
+    )
+  }
+
+  private def findPartition(topics: Buffer[ListOffsetsTopicResponse], tp: TopicPartition): ListOffsetsPartitionResponse = {
+    topics.find(_.name == tp.topic).get
+      .partitions.asScala.find(_.partitionIndex == tp.partition).get
   }
 
 }

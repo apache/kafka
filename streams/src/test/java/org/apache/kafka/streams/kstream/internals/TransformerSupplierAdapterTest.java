@@ -17,11 +17,13 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import java.util.Iterator;
+import java.util.Set;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.junit.Before;
@@ -38,6 +40,7 @@ public class TransformerSupplierAdapterTest extends EasyMockSupport {
     private ProcessorContext context;
     private Transformer<String, String, KeyValue<Integer, Integer>> transformer;
     private TransformerSupplier<String, String, KeyValue<Integer, Integer>> transformerSupplier;
+    private Set<StoreBuilder<?>> stores;
 
     final String key = "Hello";
     final String value = "World";
@@ -47,6 +50,7 @@ public class TransformerSupplierAdapterTest extends EasyMockSupport {
         context = mock(ProcessorContext.class);
         transformer = mock(Transformer.class);
         transformerSupplier = mock(TransformerSupplier.class);
+        stores = mock(Set.class);
     }
 
     @Test
@@ -74,6 +78,17 @@ public class TransformerSupplierAdapterTest extends EasyMockSupport {
         final Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adaptedTransformer = adapter.get();
         adaptedTransformer.close();
 
+        verifyAll();
+    }
+
+    @Test
+    public void shouldCallStoresOfAdapteeTransformerSupplier() {
+        EasyMock.expect(transformerSupplier.stores()).andReturn(stores);
+        replayAll();
+
+        final TransformerSupplierAdapter<String, String, Integer, Integer> adapter =
+            new TransformerSupplierAdapter<>(transformerSupplier);
+        adapter.stores();
         verifyAll();
     }
 

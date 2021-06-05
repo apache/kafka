@@ -16,38 +16,44 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.List;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 
-class KStreamBranch<K, V> implements ProcessorSupplier<K, V> {
+class KStreamBranch<K, V> implements ProcessorSupplier<K, V, K, V> {
 
-    private final Predicate<K, V>[] predicates;
-    private final String[] childNodes;
+    private final List<Predicate<? super K, ? super V>> predicates;
+    private final List<String> childNodes;
 
-    KStreamBranch(final Predicate<K, V>[] predicates,
-                  final String[] childNodes) {
+    KStreamBranch(final List<Predicate<? super K, ? super V>> predicates,
+        final List<String> childNodes) {
         this.predicates = predicates;
         this.childNodes = childNodes;
     }
 
     @Override
-    public Processor<K, V> get() {
+    public Processor<K, V, K, V> get() {
         return new KStreamBranchProcessor();
     }
 
-    private class KStreamBranchProcessor extends AbstractProcessor<K, V> {
+    private class KStreamBranchProcessor extends ContextualProcessor<K, V, K, V> {
+
         @Override
-        public void process(final K key, final V value) {
-            for (int i = 0; i < predicates.length; i++) {
-                if (predicates[i].test(key, value)) {
+        public void process(final Record<K, V> record) {
+            for (int i = 0; i < predicates.size(); i++) {
+                if (predicates.get(i).test(record.key(), record.value())) {
                     // use forward with child here and then break the loop
                     // so that no record is going to be piped to multiple streams
-                    context().forward(key, value, To.child(childNodes[i]));
-                    break;
+                    context().forward(record, childNodes.get(i));
+                    return;
                 }
+            }
+            // using default child node if supplied
+            if (childNodes.size() > predicates.size()) {
+                context().forward(record, childNodes.get(predicates.size()));
             }
         }
     }

@@ -30,7 +30,7 @@ import java.util.Objects;
 public class UnwindowedChangelogTopicConfig extends InternalTopicConfig {
     private static final Map<String, String> UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
     static {
-        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
+        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>(INTERNAL_TOPIC_DEFAULT_OVERRIDES);
         tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
         UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
     }
@@ -46,6 +46,7 @@ public class UnwindowedChangelogTopicConfig extends InternalTopicConfig {
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
      * @return Properties to be used when creating the topic
      */
+    @Override
     public Map<String, String> getProperties(final Map<String, String> defaultProperties, final long additionalRetentionMs) {
         // internal topic config overridden rule: library overrides < global config overrides < per-topic config overrides
         final Map<String, String> topicConfig = new HashMap<>(UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
@@ -67,12 +68,13 @@ public class UnwindowedChangelogTopicConfig extends InternalTopicConfig {
         }
         final UnwindowedChangelogTopicConfig that = (UnwindowedChangelogTopicConfig) o;
         return Objects.equals(name, that.name) &&
-               Objects.equals(topicConfigs, that.topicConfigs);
+               Objects.equals(topicConfigs, that.topicConfigs) &&
+               Objects.equals(enforceNumberOfPartitions, that.enforceNumberOfPartitions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, topicConfigs);
+        return Objects.hash(name, topicConfigs, enforceNumberOfPartitions);
     }
 
     @Override
@@ -80,6 +82,7 @@ public class UnwindowedChangelogTopicConfig extends InternalTopicConfig {
         return "UnwindowedChangelogTopicConfig(" +
                 "name=" + name +
                 ", topicConfigs=" + topicConfigs +
+                ", enforceNumberOfPartitions=" + enforceNumberOfPartitions +
                 ")";
     }
 }

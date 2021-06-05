@@ -30,9 +30,9 @@ import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.junit.{After, Before}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 
 class ConsumerGroupCommandTest extends KafkaServerTestHarness {
@@ -51,32 +51,36 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
     }
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     createTopic(topic, 1, 1)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     consumerGroupService.foreach(_.close())
     consumerGroupExecutors.foreach(_.shutdown())
     super.tearDown()
   }
 
-  def committedOffsets(topic: String = topic, group: String = group): Map[TopicPartition, Long] = {
-    val props = new Properties
-    props.put("bootstrap.servers", brokerList)
-    props.put("group.id", group)
-    val consumer = new KafkaConsumer(props, new StringDeserializer, new StringDeserializer)
+  def committedOffsets(topic: String = topic, group: String = group): collection.Map[TopicPartition, Long] = {
+    val consumer = createNoAutoCommitConsumer(group)
     try {
       val partitions: Set[TopicPartition] = consumer.partitionsFor(topic)
         .asScala.toSet.map {partitionInfo : PartitionInfo => new TopicPartition(partitionInfo.topic, partitionInfo.partition)}
-
-      consumer.committed(partitions.asJava).asScala.mapValues(_.offset()).toMap
+      consumer.committed(partitions.asJava).asScala.filter(_._2 != null).map { case (k, v) => k -> v.offset }
     } finally {
       consumer.close()
     }
+  }
+
+  def createNoAutoCommitConsumer(group: String): KafkaConsumer[String, String] = {
+    val props = new Properties
+    props.put("bootstrap.servers", brokerList)
+    props.put("group.id", group)
+    props.put("enable.auto.commit", "false")
+    new KafkaConsumer(props, new StringDeserializer, new StringDeserializer)
   }
 
   def getConsumerGroupService(args: Array[String]): ConsumerGroupService = {

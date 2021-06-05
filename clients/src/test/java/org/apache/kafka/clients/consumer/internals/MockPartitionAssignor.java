@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.List;
@@ -25,10 +26,13 @@ public class MockPartitionAssignor extends AbstractPartitionAssignor {
 
     private final List<RebalanceProtocol> supportedProtocols;
 
+    private int numAssignment;
+
     private Map<String, List<TopicPartition>> result = null;
 
     MockPartitionAssignor(final List<RebalanceProtocol> supportedProtocols) {
         this.supportedProtocols = supportedProtocols;
+        numAssignment = 0;
     }
 
     @Override
@@ -57,4 +61,12 @@ public class MockPartitionAssignor extends AbstractPartitionAssignor {
         this.result = result;
     }
 
+    @Override
+    public void onAssignment(Assignment assignment, ConsumerGroupMetadata metadata) {
+        numAssignment += 1;
+    }
+
+    int numAssignment() {
+        return numAssignment;
+    }
 }

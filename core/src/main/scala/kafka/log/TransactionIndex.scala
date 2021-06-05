@@ -20,10 +20,9 @@ import java.io.{File, IOException}
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
-
 import kafka.utils.{Logging, nonthreadsafe}
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable.ListBuffer
@@ -42,12 +41,13 @@ private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTx
  * order to find the start of the transactions.
  */
 @nonthreadsafe
-class TransactionIndex(val startOffset: Long, @volatile var file: File) extends Logging {
+class TransactionIndex(val startOffset: Long, @volatile private var _file: File) extends Logging {
+
   // note that the file is not created until we need it
   @volatile private var maybeChannel: Option[FileChannel] = None
   private var lastOffset: Option[Long] = None
 
-  if (file.exists)
+  if (_file.exists)
     openChannel()
 
   def append(abortedTxn: AbortedTxn): Unit = {
@@ -61,6 +61,10 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
   }
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
+
+  def file: File = _file
+
+  def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
 
   /**
    * Delete this index.
@@ -105,8 +109,8 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
   def renameTo(f: File): Unit = {
     try {
       if (file.exists)
-        Utils.atomicMoveWithFallback(file.toPath, f.toPath)
-    } finally file = f
+        Utils.atomicMoveWithFallback(file.toPath, f.toPath, false)
+    } finally _file = f
   }
 
   def truncateTo(offset: Long): Unit = {
@@ -240,7 +244,9 @@ private[log] class AbortedTxn(val buffer: ByteBuffer) {
 
   def lastStableOffset: Long = buffer.getLong(LastStableOffsetOffset)
 
-  def asAbortedTransaction: AbortedTransaction = new AbortedTransaction(producerId, firstOffset)
+  def asAbortedTransaction: FetchResponseData.AbortedTransaction = new FetchResponseData.AbortedTransaction()
+    .setProducerId(producerId)
+    .setFirstOffset(firstOffset)
 
   override def toString: String =
     s"AbortedTxn(version=$version, producerId=$producerId, firstOffset=$firstOffset, " +

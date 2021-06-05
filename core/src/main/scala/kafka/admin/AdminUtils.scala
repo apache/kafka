@@ -211,7 +211,7 @@ object AdminUtils extends Logging {
     */
   private[admin] def getRackAlternatedBrokerList(brokerRackMap: Map[Int, String]): IndexedSeq[Int] = {
     val brokersIteratorByRack = getInverseMap(brokerRackMap).map { case (rack, brokers) =>
-      (rack, brokers.toIterator)
+      (rack, brokers.iterator)
     }
     val racks = brokersIteratorByRack.keys.toArray.sorted
     val result = new mutable.ArrayBuffer[Int]

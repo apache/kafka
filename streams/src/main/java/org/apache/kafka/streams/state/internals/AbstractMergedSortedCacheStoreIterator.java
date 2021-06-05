@@ -31,11 +31,14 @@ import java.util.NoSuchElementException;
 abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements KeyValueIterator<K, V> {
     private final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator;
     private final KeyValueIterator<KS, VS> storeIterator;
+    private final boolean forward;
 
     AbstractMergedSortedCacheStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                                           final KeyValueIterator<KS, VS> storeIterator) {
+                                           final KeyValueIterator<KS, VS> storeIterator,
+                                           final boolean forward) {
         this.cacheIterator = cacheIterator;
         this.storeIterator = storeIterator;
+        this.forward = forward;
     }
 
     abstract int compare(final Bytes cacheKey, final KS storeKey);
@@ -87,14 +90,32 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
         }
 
         final int comparison = compare(nextCacheKey, nextStoreKey);
-        if (comparison > 0) {
-            return nextStoreValue(nextStoreKey);
-        } else if (comparison < 0) {
-            return nextCacheValue(nextCacheKey);
+        return chooseNextValue(nextCacheKey, nextStoreKey, comparison);
+    }
+
+    private KeyValue<K, V> chooseNextValue(final Bytes nextCacheKey,
+                                           final KS nextStoreKey,
+                                           final int comparison) {
+        if (forward) {
+            if (comparison > 0) {
+                return nextStoreValue(nextStoreKey);
+            } else if (comparison < 0) {
+                return nextCacheValue(nextCacheKey);
+            } else {
+                // skip the same keyed element
+                storeIterator.next();
+                return nextCacheValue(nextCacheKey);
+            }
         } else {
-            // skip the same keyed element
-            storeIterator.next();
-            return nextCacheValue(nextCacheKey);
+            if (comparison < 0) {
+                return nextStoreValue(nextStoreKey);
+            } else if (comparison > 0) {
+                return nextCacheValue(nextCacheKey);
+            } else {
+                // skip the same keyed element
+                storeIterator.next();
+                return nextCacheValue(nextCacheKey);
+            }
         }
     }
 
@@ -136,14 +157,32 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
         }
 
         final int comparison = compare(nextCacheKey, nextStoreKey);
-        if (comparison > 0) {
-            return deserializeStoreKey(nextStoreKey);
-        } else if (comparison < 0) {
-            return deserializeCacheKey(nextCacheKey);
+        return chooseNextKey(nextCacheKey, nextStoreKey, comparison);
+    }
+
+    private K chooseNextKey(final Bytes nextCacheKey,
+                            final KS nextStoreKey,
+                            final int comparison) {
+        if (forward) {
+            if (comparison > 0) {
+                return deserializeStoreKey(nextStoreKey);
+            } else if (comparison < 0) {
+                return deserializeCacheKey(nextCacheKey);
+            } else {
+                // skip the same keyed element
+                storeIterator.next();
+                return deserializeCacheKey(nextCacheKey);
+            }
         } else {
-            // skip the same keyed element
-            storeIterator.next();
-            return deserializeCacheKey(nextCacheKey);
+            if (comparison < 0) {
+                return deserializeStoreKey(nextStoreKey);
+            } else if (comparison > 0) {
+                return deserializeCacheKey(nextCacheKey);
+            } else {
+                // skip the same keyed element
+                storeIterator.next();
+                return deserializeCacheKey(nextCacheKey);
+            }
         }
     }
 
@@ -153,4 +192,3 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
         storeIterator.close();
     }
 }
-

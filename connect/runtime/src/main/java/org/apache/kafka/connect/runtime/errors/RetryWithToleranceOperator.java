@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -50,8 +51,11 @@ import java.util.concurrent.ThreadLocalRandom;
  * set appropriate error reason in the {@link ProcessingContext} and return null, or (2) if the exception is not tolerated,
  * then it is wrapped into a ConnectException and rethrown to the caller.
  * <p>
+ *
+ * Instances of this class are thread safe.
+ * <p>
  */
-public class RetryWithToleranceOperator {
+public class RetryWithToleranceOperator implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(RetryWithToleranceOperator.class);
 
@@ -73,14 +77,38 @@ public class RetryWithToleranceOperator {
     private final Time time;
     private ErrorHandlingMetrics errorHandlingMetrics;
 
-    protected ProcessingContext context = new ProcessingContext();
+    protected final ProcessingContext context;
 
     public RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
                                       ToleranceType toleranceType, Time time) {
+        this(errorRetryTimeout, errorMaxDelayInMillis, toleranceType, time, new ProcessingContext());
+    }
+
+    RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
+                               ToleranceType toleranceType, Time time,
+                               ProcessingContext context) {
         this.errorRetryTimeout = errorRetryTimeout;
         this.errorMaxDelayInMillis = errorMaxDelayInMillis;
         this.errorToleranceType = toleranceType;
         this.time = time;
+        this.context = context;
+    }
+
+    public synchronized Future<Void> executeFailed(Stage stage, Class<?> executingClass,
+                                      ConsumerRecord<byte[], byte[]> consumerRecord,
+                                      Throwable error) {
+
+        markAsFailed();
+        context.consumerRecord(consumerRecord);
+        context.currentContext(stage, executingClass);
+        context.error(error);
+        errorHandlingMetrics.recordFailure();
+        Future<Void> errantRecordFuture = context.report();
+        if (!withinToleranceLimits()) {
+            errorHandlingMetrics.recordError();
+            throw new ConnectException("Tolerance exceeded in error handler", error);
+        }
+        return errantRecordFuture;
     }
 
     /**
@@ -91,7 +119,7 @@ public class RetryWithToleranceOperator {
      * @param <V> return type of the result of the operation.
      * @return result of the operation
      */
-    public <V> V execute(Operation<V> operation, Stage stage, Class<?> executingClass) {
+    public synchronized <V> V execute(Operation<V> operation, Stage stage, Class<?> executingClass) {
         context.currentContext(stage, executingClass);
 
         if (context.failed()) {
@@ -189,9 +217,8 @@ public class RetryWithToleranceOperator {
         totalFailures++;
     }
 
-    // Visible for testing
     @SuppressWarnings("fallthrough")
-    boolean withinToleranceLimits() {
+    public synchronized boolean withinToleranceLimits() {
         switch (errorToleranceType) {
             case NONE:
                 if (totalFailures > 0) return false;
@@ -221,7 +248,7 @@ public class RetryWithToleranceOperator {
         time.sleep(delay);
     }
 
-    public void metrics(ErrorHandlingMetrics errorHandlingMetrics) {
+    public synchronized void metrics(ErrorHandlingMetrics errorHandlingMetrics) {
         this.errorHandlingMetrics = errorHandlingMetrics;
     }
 
@@ -242,7 +269,7 @@ public class RetryWithToleranceOperator {
      *
      * @param reporters the error reporters (should not be null).
      */
-    public void reporters(List<ErrorReporter> reporters) {
+    public synchronized void reporters(List<ErrorReporter> reporters) {
         this.context.reporters(reporters);
     }
 
@@ -251,7 +278,7 @@ public class RetryWithToleranceOperator {
      *
      * @param preTransformRecord the source record
      */
-    public void sourceRecord(SourceRecord preTransformRecord) {
+    public synchronized void sourceRecord(SourceRecord preTransformRecord) {
         this.context.sourceRecord(preTransformRecord);
     }
 
@@ -260,14 +287,28 @@ public class RetryWithToleranceOperator {
      *
      * @param consumedMessage the record
      */
-    public void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
+    public synchronized void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
         this.context.consumerRecord(consumedMessage);
     }
 
     /**
      * @return true, if the last operation encountered an error; false otherwise
      */
-    public boolean failed() {
+    public synchronized boolean failed() {
         return this.context.failed();
+    }
+
+    /**
+     * Returns the error encountered when processing the current stage.
+     *
+     * @return the error encountered when processing the current stage
+     */
+    public synchronized Throwable error() {
+        return this.context.error();
+    }
+
+    @Override
+    public synchronized void close() {
+        this.context.close();
     }
 }

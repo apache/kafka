@@ -34,11 +34,11 @@ class ConnectRestApiTest(KafkaTest):
 
     FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'batch.size',
                            'topic', 'file', 'transforms', 'config.action.reload', 'errors.retry.timeout', 'errors.retry.delay.max.ms',
-                           'errors.tolerance', 'errors.log.enable', 'errors.log.include.messages'}
+                           'errors.tolerance', 'errors.log.enable', 'errors.log.include.messages', 'predicates', 'topic.creation.groups'}
     FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'topics',
                          'file', 'transforms', 'topics.regex', 'config.action.reload', 'errors.retry.timeout', 'errors.retry.delay.max.ms',
                          'errors.tolerance', 'errors.log.enable', 'errors.log.include.messages', 'errors.deadletterqueue.topic.name',
-                         'errors.deadletterqueue.topic.replication.factor', 'errors.deadletterqueue.context.headers.enable'}
+                         'errors.deadletterqueue.topic.replication.factor', 'errors.deadletterqueue.context.headers.enable', 'predicates'}
 
     INPUT_FILE = "/mnt/connect.input"
     INPUT_FILE2 = "/mnt/connect.input2"
@@ -91,7 +91,10 @@ class ConnectRestApiTest(KafkaTest):
 
         assert self.cc.list_connectors() == []
 
-        assert set([connector_plugin['class'] for connector_plugin in self.cc.list_connector_plugins()]) == {self.FILE_SOURCE_CONNECTOR, self.FILE_SINK_CONNECTOR}
+        # After MM2 and the connector classes that it added, the assertion here checks that the registered
+        # Connect plugins are a superset of the connectors expected to be present.
+        assert set([connector_plugin['class'] for connector_plugin in self.cc.list_connector_plugins()]).issuperset(
+            {self.FILE_SOURCE_CONNECTOR, self.FILE_SINK_CONNECTOR})
 
         source_connector_props = self.render("connect-file-source.properties")
         sink_connector_props = self.render("connect-file-sink.properties")

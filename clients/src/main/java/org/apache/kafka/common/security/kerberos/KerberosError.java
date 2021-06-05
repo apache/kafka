@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.kerberos;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.utils.Java;
+import org.ietf.jgss.GSSException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +50,10 @@ public enum KerberosError {
 
     static {
         try {
-            if (Java.isIbmJdk()) {
+            // different IBM JDKs versions include different security implementations
+            if (Java.isIbmJdk() && canLoad("com.ibm.security.krb5.KrbException")) {
+                KRB_EXCEPTION_CLASS = Class.forName("com.ibm.security.krb5.KrbException");
+            } else if (Java.isIbmJdk() && canLoad("com.ibm.security.krb5.internal.KrbException")) {
                 KRB_EXCEPTION_CLASS = Class.forName("com.ibm.security.krb5.internal.KrbException");
             } else {
                 KRB_EXCEPTION_CLASS = Class.forName("sun.security.krb5.KrbException");
@@ -57,6 +61,15 @@ public enum KerberosError {
             KRB_EXCEPTION_RETURN_CODE_METHOD = KRB_EXCEPTION_CLASS.getMethod("returnCode");
         } catch (Exception e) {
             throw new KafkaException("Kerberos exceptions could not be initialized", e);
+        }
+    }
+
+    private static boolean canLoad(String clazz) {
+        try {
+            Class.forName(clazz);
+            return true;
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -96,5 +109,23 @@ public enum KerberosError {
                 return error;
         }
         return null;
+    }
+
+    /**
+     * Returns true if the exception should be handled as a transient failure on clients.
+     * We handle GSSException.NO_CRED as retriable on the client-side since this may
+     * occur during re-login if a clients attempts to authentication after logout, but
+     * before the subsequent login.
+     */
+    public static boolean isRetriableClientGssException(Exception exception) {
+        Throwable cause = exception.getCause();
+        while (cause != null && !(cause instanceof GSSException)) {
+            cause = cause.getCause();
+        }
+        if (cause != null) {
+            GSSException gssException = (GSSException) cause;
+            return gssException.getMajor() == GSSException.NO_CRED;
+        }
+        return false;
     }
 }

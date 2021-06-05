@@ -18,11 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -35,11 +34,8 @@ public class SaslHandshakeResponse extends AbstractResponse {
     private final SaslHandshakeResponseData data;
 
     public SaslHandshakeResponse(SaslHandshakeResponseData data) {
+        super(ApiKeys.SASL_HANDSHAKE);
         this.data = data;
-    }
-
-    public SaslHandshakeResponse(Struct struct, short version) {
-        this.data = new SaslHandshakeResponseData(struct, version);
     }
 
     /*
@@ -53,12 +49,17 @@ public class SaslHandshakeResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+        return errorCounts(Errors.forCode(data.errorCode()));
     }
 
     @Override
-    public Struct toStruct(short version) {
-        return data.toStruct(version);
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
+    }
+
+    @Override
+    public SaslHandshakeResponseData data() {
+        return data;
     }
 
     public List<String> enabledMechanisms() {
@@ -66,6 +67,6 @@ public class SaslHandshakeResponse extends AbstractResponse {
     }
 
     public static SaslHandshakeResponse parse(ByteBuffer buffer, short version) {
-        return new SaslHandshakeResponse(ApiKeys.SASL_HANDSHAKE.parseResponse(version, buffer), version);
+        return new SaslHandshakeResponse(new SaslHandshakeResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

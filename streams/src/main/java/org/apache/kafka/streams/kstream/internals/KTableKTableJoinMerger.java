@@ -70,17 +70,19 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
                     final Set<String> stores = new HashSet<>(storeNames1.length + storeNames2.length);
                     Collections.addAll(stores, storeNames1);
                     Collections.addAll(stores, storeNames2);
-                    return stores.toArray(new String[stores.size()]);
+                    return stores.toArray(new String[0]);
                 }
             };
         }
     }
 
     @Override
-    public void enableSendingOldValues() {
-        parent1.enableSendingOldValues();
-        parent2.enableSendingOldValues();
+    public boolean enableSendingOldValues(final boolean forceMaterialization) {
+        // Table-table joins require upstream materialization:
+        parent1.enableSendingOldValues(true);
+        parent2.enableSendingOldValues(true);
         sendOldValues = true;
+        return true;
     }
 
     public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, V> parent1,

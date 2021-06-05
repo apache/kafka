@@ -28,12 +28,14 @@ import java.util.StringJoiner;
 
 /**
  * {@code TestOutputTopic} is used to read records from a topic in {@link TopologyTestDriver}.
- * To use {@code TestOutputTopic} create a new instance via {@link TopologyTestDriver#createOutputTopic(String, Deserializer, Deserializer)}
+ * To use {@code TestOutputTopic} create a new instance via
+ * {@link TopologyTestDriver#createOutputTopic(String, Deserializer, Deserializer)}.
  * In actual test code, you can read record values, keys, {@link KeyValue} or {@link TestRecord}
  * If you have multiple source topics, you need to create a {@code TestOutputTopic} for each.
  * <p>
  * If you need to test key, value and headers, use {@link #readRecord()} methods.
- * Using {@link #readKeyValue()} you get a {@link KeyValue} pair, and thus, don't get access to the record's timestamp or headers.
+ * Using {@link #readKeyValue()} you get a {@link KeyValue} pair, and thus, don't get access to the record's
+ * timestamp or headers.
  * Similarly using {@link #readValue()} you only get the value of a record.
  *
  * <h2>Processing records</h2>
@@ -69,11 +71,10 @@ public class TestOutputTopic<K, V> {
         this.valueDeserializer = valueDeserializer;
     }
 
-
     /**
      * Read one record from the output topic and return record's value.
      *
-     * @return Next value for output topic
+     * @return Next value for output topic.
      */
     public V readValue() {
         final TestRecord<K, V> record = readRecord();
@@ -83,7 +84,7 @@ public class TestOutputTopic<K, V> {
     /**
      * Read one record from the output topic and return its key and value as pair.
      *
-     * @return Next output as {@link KeyValue}
+     * @return Next output as {@link KeyValue}.
      */
     public KeyValue<K, V> readKeyValue() {
         final TestRecord<K, V> record = readRecord();
@@ -93,7 +94,7 @@ public class TestOutputTopic<K, V> {
     /**
      * Read one Record from output topic.
      *
-     * @return Next output as {@link TestRecord}
+     * @return Next output as {@link TestRecord}.
      */
     public TestRecord<K, V> readRecord() {
         return driver.readRecord(topic, keyDeserializer, valueDeserializer);
@@ -101,10 +102,12 @@ public class TestOutputTopic<K, V> {
 
     /**
      * Read output to List.
-     * This method can be used if the result is considered a stream. If the result is considered a table, the list will
-     * contain all updated, ie, a key might be contained multiple times. If you are only interested in the last table update (ie, the final table state), you can use {@link #readKeyValuesToMap()} instead.
+     * This method can be used if the result is considered a stream.
+     * If the result is considered a table, the list will contain all updated, ie, a key might be contained multiple times.
+     * If you are only interested in the last table update (ie, the final table state),
+     * you can use {@link #readKeyValuesToMap()} instead.
      *
-     * @return List of output
+     * @return List of output.
      */
     public List<TestRecord<K, V>> readRecordsToList() {
         final List<TestRecord<K, V>> output = new LinkedList<>();
@@ -117,13 +120,13 @@ public class TestOutputTopic<K, V> {
 
     /**
      * Read output to map.
-     * This method can be used if the result is considered a table, when
-     * you are only interested in the last table update (ie, the final table state).
+     * This method can be used if the result is considered a table,
+     * when you are only interested in the last table update (ie, the final table state).
      * If the result is considered a stream, you can use {@link #readRecordsToList()} instead.
      * The list will contain all updated, ie, a key might be contained multiple times.
      * If the last update to a key is a delete/tombstone, the key will still be in the map (with null-value).
      *
-     * @return Map of output by key
+     * @return Map of output by key.
      */
     public Map<K, V> readKeyValuesToMap() {
         final Map<K, V> output = new HashMap<>();
@@ -141,7 +144,7 @@ public class TestOutputTopic<K, V> {
     /**
      * Read all KeyValues from topic to List.
      *
-     * @return List of output KeyValues
+     * @return List of output KeyValues.
      */
     public List<KeyValue<K, V>> readKeyValuesToList() {
         final List<KeyValue<K, V>> output = new LinkedList<>();
@@ -156,7 +159,7 @@ public class TestOutputTopic<K, V> {
     /**
      * Read all values from topic to List.
      *
-     * @return List of output values
+     * @return List of output values.
      */
     public List<V> readValuesToList() {
         final List<V> output = new LinkedList<>();
@@ -171,7 +174,7 @@ public class TestOutputTopic<K, V> {
     /**
      * Get size of unread record in the topic queue.
      *
-     * @return size of topic queue
+     * @return size of topic queue.
      */
     public final long getQueueSize() {
         return driver.getQueueSize(topic);
@@ -180,7 +183,7 @@ public class TestOutputTopic<K, V> {
     /**
      * Verify if the topic queue is empty.
      *
-     * @return true if no more record in the topic queue
+     * @return {@code true} if no more record in the topic queue.
      */
     public final boolean isEmpty() {
         return driver.isEmpty(topic);

@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -29,7 +30,7 @@ import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
 
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientCallbackHandler;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class OAuthBearerSaslClienCallbackHandlerTest {
     private static OAuthBearerToken createTokenWithLifetimeMillis(final long lifetimeMillis) {
@@ -61,18 +62,17 @@ public class OAuthBearerSaslClienCallbackHandlerTest {
         };
     }
 
-    @Test(expected = IOException.class)
-    public void testWithZeroTokens() throws Throwable {
+    @Test
+    public void testWithZeroTokens() {
         OAuthBearerSaslClientCallbackHandler handler = createCallbackHandler();
-        try {
-            Subject.doAs(new Subject(), (PrivilegedExceptionAction<Void>) () -> {
+        PrivilegedActionException e = assertThrows(PrivilegedActionException.class, () -> Subject.doAs(new Subject(),
+            (PrivilegedExceptionAction<Void>) () -> {
                 OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
                 handler.handle(new Callback[] {callback});
                 return null;
-            });
-        } catch (PrivilegedActionException e) {
-            throw e.getCause();
-        }
+            }
+        ));
+        assertEquals(IOException.class, e.getCause().getClass());
     }
 
     @Test()

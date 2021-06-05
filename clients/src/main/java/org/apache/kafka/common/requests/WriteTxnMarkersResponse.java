@@ -17,150 +17,110 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
+import org.apache.kafka.common.message.WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult;
+import org.apache.kafka.common.message.WriteTxnMarkersResponseData.WritableTxnMarkerResult;
+import org.apache.kafka.common.message.WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
-import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.INT64;
-
+/**
+ * Possible error codes:
+ *
+ *   - {@link Errors#CORRUPT_MESSAGE}
+ *   - {@link Errors#INVALID_PRODUCER_EPOCH}
+ *   - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
+ *   - {@link Errors#NOT_LEADER_OR_FOLLOWER}
+ *   - {@link Errors#MESSAGE_TOO_LARGE}
+ *   - {@link Errors#RECORD_LIST_TOO_LARGE}
+ *   - {@link Errors#NOT_ENOUGH_REPLICAS}
+ *   - {@link Errors#NOT_ENOUGH_REPLICAS_AFTER_APPEND}
+ *   - {@link Errors#INVALID_REQUIRED_ACKS}
+ *   - {@link Errors#TRANSACTION_COORDINATOR_FENCED}
+ *   - {@link Errors#REQUEST_TIMED_OUT}
+ *   - {@link Errors#CLUSTER_AUTHORIZATION_FAILED}
+ */
 public class WriteTxnMarkersResponse extends AbstractResponse {
-    private static final String TXN_MARKERS_KEY_NAME = "transaction_markers";
 
-    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
-    private static final String TOPICS_KEY_NAME = "topics";
-    private static final String PARTITIONS_KEY_NAME = "partitions";
-
-    private static final Schema WRITE_TXN_MARKERS_PARTITION_ERROR_RESPONSE_V0 = new Schema(
-            PARTITION_ID,
-            ERROR_CODE);
-
-    private static final Schema WRITE_TXN_MARKERS_ENTRY_V0 = new Schema(
-            new Field(PRODUCER_ID_KEY_NAME, INT64, "Current producer id in use by the transactional id."),
-            new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
-                    TOPIC_NAME,
-                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(WRITE_TXN_MARKERS_PARTITION_ERROR_RESPONSE_V0)))),
-                    "Errors per partition from writing markers."));
-
-    private static final Schema WRITE_TXN_MARKERS_RESPONSE_V0 = new Schema(
-            new Field(TXN_MARKERS_KEY_NAME, new ArrayOf(WRITE_TXN_MARKERS_ENTRY_V0), "Errors per partition from " +
-                    "writing markers."));
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{WRITE_TXN_MARKERS_RESPONSE_V0};
-    }
-
-    // Possible error codes:
-    //   CorruptRecord
-    //   InvalidProducerEpoch
-    //   UnknownTopicOrPartition
-    //   NotLeaderForPartition
-    //   MessageTooLarge
-    //   RecordListTooLarge
-    //   NotEnoughReplicas
-    //   NotEnoughReplicasAfterAppend
-    //   InvalidRequiredAcks
-    //   TransactionCoordinatorFenced
-    //   RequestTimeout
-    //   ClusterAuthorizationFailed
-
-    private final Map<Long, Map<TopicPartition, Errors>> errors;
+    private final WriteTxnMarkersResponseData data;
 
     public WriteTxnMarkersResponse(Map<Long, Map<TopicPartition, Errors>> errors) {
-        this.errors = errors;
+        super(ApiKeys.WRITE_TXN_MARKERS);
+        List<WritableTxnMarkerResult> markers = new ArrayList<>();
+        for (Map.Entry<Long, Map<TopicPartition, Errors>> markerEntry : errors.entrySet()) {
+            Map<String, WritableTxnMarkerTopicResult> responseTopicDataMap = new HashMap<>();
+            for (Map.Entry<TopicPartition, Errors> topicEntry : markerEntry.getValue().entrySet()) {
+                TopicPartition topicPartition = topicEntry.getKey();
+                String topicName = topicPartition.topic();
+
+                WritableTxnMarkerTopicResult topic =
+                    responseTopicDataMap.getOrDefault(topicName, new WritableTxnMarkerTopicResult().setName(topicName));
+                topic.partitions().add(new WritableTxnMarkerPartitionResult()
+                                           .setErrorCode(topicEntry.getValue().code())
+                                           .setPartitionIndex(topicPartition.partition())
+                );
+                responseTopicDataMap.put(topicName, topic);
+            }
+
+            markers.add(new WritableTxnMarkerResult()
+                            .setProducerId(markerEntry.getKey())
+                            .setTopics(new ArrayList<>(responseTopicDataMap.values()))
+            );
+        }
+        this.data = new WriteTxnMarkersResponseData()
+                        .setMarkers(markers);
     }
 
-    public WriteTxnMarkersResponse(Struct struct) {
-        Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>();
-
-        Object[] responseArray = struct.getArray(TXN_MARKERS_KEY_NAME);
-        for (Object responseObj : responseArray) {
-            Struct responseStruct = (Struct) responseObj;
-
-            long producerId = responseStruct.getLong(PRODUCER_ID_KEY_NAME);
-
-            Map<TopicPartition, Errors> errorPerPartition = new HashMap<>();
-            Object[] topicPartitionsArray = responseStruct.getArray(TOPICS_KEY_NAME);
-            for (Object topicPartitionObj : topicPartitionsArray) {
-                Struct topicPartitionStruct = (Struct) topicPartitionObj;
-                String topic = topicPartitionStruct.get(TOPIC_NAME);
-                for (Object partitionObj : topicPartitionStruct.getArray(PARTITIONS_KEY_NAME)) {
-                    Struct partitionStruct = (Struct) partitionObj;
-                    Integer partition = partitionStruct.get(PARTITION_ID);
-                    Errors error = Errors.forCode(partitionStruct.get(ERROR_CODE));
-                    errorPerPartition.put(new TopicPartition(topic, partition), error);
-                }
-            }
-            errors.put(producerId, errorPerPartition);
-        }
-
-        this.errors = errors;
+    public WriteTxnMarkersResponse(WriteTxnMarkersResponseData data) {
+        super(ApiKeys.WRITE_TXN_MARKERS);
+        this.data = data;
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.WRITE_TXN_MARKERS.responseSchema(version));
-
-        Object[] responsesArray = new Object[errors.size()];
-        int k = 0;
-        for (Map.Entry<Long, Map<TopicPartition, Errors>> responseEntry : errors.entrySet()) {
-            Struct responseStruct = struct.instance(TXN_MARKERS_KEY_NAME);
-            responseStruct.set(PRODUCER_ID_KEY_NAME, responseEntry.getKey());
-
-            Map<TopicPartition, Errors> partitionAndErrors = responseEntry.getValue();
-            Map<String, Map<Integer, Errors>> mappedPartitions = CollectionUtils.groupPartitionDataByTopic(partitionAndErrors);
-            Object[] partitionsArray = new Object[mappedPartitions.size()];
-            int i = 0;
-            for (Map.Entry<String, Map<Integer, Errors>> topicAndPartitions : mappedPartitions.entrySet()) {
-                Struct topicPartitionsStruct = responseStruct.instance(TOPICS_KEY_NAME);
-                topicPartitionsStruct.set(TOPIC_NAME, topicAndPartitions.getKey());
-                Map<Integer, Errors> partitionIdAndErrors = topicAndPartitions.getValue();
-
-                Object[] partitionAndErrorsArray = new Object[partitionIdAndErrors.size()];
-                int j = 0;
-                for (Map.Entry<Integer, Errors> partitionAndError : partitionIdAndErrors.entrySet()) {
-                    Struct partitionAndErrorStruct = topicPartitionsStruct.instance(PARTITIONS_KEY_NAME);
-                    partitionAndErrorStruct.set(PARTITION_ID, partitionAndError.getKey());
-                    partitionAndErrorStruct.set(ERROR_CODE, partitionAndError.getValue().code());
-                    partitionAndErrorsArray[j++] = partitionAndErrorStruct;
-                }
-                topicPartitionsStruct.set(PARTITIONS_KEY_NAME, partitionAndErrorsArray);
-                partitionsArray[i++] = topicPartitionsStruct;
-            }
-            responseStruct.set(TOPICS_KEY_NAME, partitionsArray);
-
-            responsesArray[k++] = responseStruct;
-        }
-
-        struct.set(TXN_MARKERS_KEY_NAME, responsesArray);
-        return struct;
+    public WriteTxnMarkersResponseData data() {
+        return data;
     }
 
-    public Map<TopicPartition, Errors> errors(long producerId) {
-        return errors.get(producerId);
+    public Map<Long, Map<TopicPartition, Errors>> errorsByProducerId() {
+        Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>();
+        for (WritableTxnMarkerResult marker : data.markers()) {
+            Map<TopicPartition, Errors> topicPartitionErrorsMap = new HashMap<>();
+            for (WritableTxnMarkerTopicResult topic : marker.topics()) {
+                for (WritableTxnMarkerPartitionResult partitionResult : topic.partitions()) {
+                    topicPartitionErrorsMap.put(new TopicPartition(topic.name(), partitionResult.partitionIndex()),
+                            Errors.forCode(partitionResult.errorCode()));
+                }
+            }
+            errors.put(marker.producerId(), topicPartitionErrorsMap);
+        }
+        return errors;
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (Map<TopicPartition, Errors> allErrors : errors.values()) {
-            for (Errors error : allErrors.values())
-                updateErrorCounts(errorCounts, error);
+        for (WritableTxnMarkerResult marker : data.markers()) {
+            for (WritableTxnMarkerTopicResult topic : marker.topics()) {
+                for (WritableTxnMarkerPartitionResult partitionResult : topic.partitions())
+                    updateErrorCounts(errorCounts, Errors.forCode(partitionResult.errorCode()));
+            }
         }
         return errorCounts;
     }
 
     public static WriteTxnMarkersResponse parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkersResponse(ApiKeys.WRITE_TXN_MARKERS.parseResponse(version, buffer));
+        return new WriteTxnMarkersResponse(new WriteTxnMarkersResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

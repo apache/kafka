@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
@@ -46,16 +46,11 @@ public class DeleteGroupsRequest extends AbstractRequest {
         }
     }
 
-    public final DeleteGroupsRequestData data;
+    private final DeleteGroupsRequestData data;
 
     public DeleteGroupsRequest(DeleteGroupsRequestData data, short version) {
         super(ApiKeys.DELETE_GROUPS, version);
         this.data = data;
-    }
-
-    public DeleteGroupsRequest(Struct struct, short version) {
-        super(ApiKeys.DELETE_GROUPS, version);
-        this.data = new DeleteGroupsRequestData(struct, version);
     }
 
     @Override
@@ -76,11 +71,11 @@ public class DeleteGroupsRequest extends AbstractRequest {
     }
 
     public static DeleteGroupsRequest parse(ByteBuffer buffer, short version) {
-        return new DeleteGroupsRequest(ApiKeys.DELETE_GROUPS.parseRequest(version, buffer), version);
+        return new DeleteGroupsRequest(new DeleteGroupsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public DeleteGroupsRequestData data() {
+        return data;
     }
 }

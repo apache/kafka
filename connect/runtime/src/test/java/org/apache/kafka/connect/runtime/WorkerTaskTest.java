@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerTask.TaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.common.utils.MockTime;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.easymock.Mock;
 import org.junit.After;
 import org.junit.Before;
@@ -59,6 +60,8 @@ public class WorkerTaskTest {
     @Mock private TaskStatus.Listener statusListener;
     @Mock private ClassLoader loader;
     RetryWithToleranceOperator retryWithToleranceOperator;
+    @Mock
+    StatusBackingStore statusBackingStore;
 
     @Before
     public void setup() {
@@ -82,9 +85,12 @@ public class WorkerTaskTest {
                         TargetState.class,
                         ClassLoader.class,
                         ConnectMetrics.class,
-                        RetryWithToleranceOperator.class
+                        RetryWithToleranceOperator.class,
+                        Time.class,
+                        StatusBackingStore.class
                 )
-                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics, retryWithToleranceOperator)
+                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics,
+                        retryWithToleranceOperator, Time.SYSTEM, statusBackingStore)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -101,9 +107,6 @@ public class WorkerTaskTest {
 
         workerTask.close();
         expectLastCall();
-
-        workerTask.releaseResources();
-        EasyMock.expectLastCall();
 
         statusListener.onShutdown(taskId);
         expectLastCall();
@@ -129,9 +132,12 @@ public class WorkerTaskTest {
                         TargetState.class,
                         ClassLoader.class,
                         ConnectMetrics.class,
-                        RetryWithToleranceOperator.class
+                        RetryWithToleranceOperator.class,
+                        Time.class,
+                        StatusBackingStore.class
                 )
-                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics, retryWithToleranceOperator)
+                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics,
+                        retryWithToleranceOperator, Time.SYSTEM, statusBackingStore)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -141,9 +147,6 @@ public class WorkerTaskTest {
         EasyMock.expectLastCall();
 
         workerTask.close();
-        EasyMock.expectLastCall();
-
-        workerTask.releaseResources();
         EasyMock.expectLastCall();
 
         replay(workerTask);
@@ -169,35 +172,32 @@ public class WorkerTaskTest {
                         TargetState.class,
                         ClassLoader.class,
                         ConnectMetrics.class,
-                        RetryWithToleranceOperator.class
+                        RetryWithToleranceOperator.class,
+                        Time.class,
+                        StatusBackingStore.class
                 )
-                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics, retryWithToleranceOperator)
+                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics,
+                        retryWithToleranceOperator, Time.SYSTEM, statusBackingStore)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
                 .createStrictMock();
 
         final CountDownLatch stopped = new CountDownLatch(1);
-        final Thread thread = new Thread() {
-            @Override
-            public void run() {
-                try {
-                    stopped.await();
-                } catch (Exception e) {
-                }
+        final Thread thread = new Thread(() -> {
+            try {
+                stopped.await();
+            } catch (Exception e) {
             }
-        };
+        });
 
         workerTask.initialize(TASK_CONFIG);
         EasyMock.expectLastCall();
 
         workerTask.execute();
-        expectLastCall().andAnswer(new IAnswer<Void>() {
-            @Override
-            public Void answer() throws Throwable {
-                thread.start();
-                return null;
-            }
+        expectLastCall().andAnswer(() -> {
+            thread.start();
+            return null;
         });
 
         statusListener.onStartup(taskId);
@@ -205,9 +205,6 @@ public class WorkerTaskTest {
 
         workerTask.close();
         expectLastCall();
-
-        workerTask.releaseResources();
-        EasyMock.expectLastCall();
 
         // there should be no call to onShutdown()
 

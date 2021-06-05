@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import matrix, ignore
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -69,19 +69,14 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
     def run_zk_migration(self):
         # change zk config (auth provider + jaas login)
-        self.zk.kafka_opts = self.zk.security_system_properties
         self.zk.zk_sasl = True
         if self.no_sasl:
-            self.kafka.start_minikdc(self.zk.zk_principals)
+            self.kafka.start_minikdc_if_necessary(self.zk.zk_principals)
         # restart zk
-        for node in self.zk.nodes:
-            self.zk.stop_node(node)
-            self.zk.start_node(node)
+        self.zk.restart_cluster()
 
         # restart broker with jaas login
-        for node in self.kafka.nodes:
-            self.kafka.stop_node(node)
-            self.kafka.start_node(node)
+        self.kafka.restart_cluster()
 
         # run migration tool
         for node in self.zk.nodes:
@@ -89,9 +84,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
         # restart broker with zookeeper.set.acl=true and acls
         self.kafka.zk_set_acl = True
-        for node in self.kafka.nodes:
-            self.kafka.stop_node(node)
-            self.kafka.start_node(node)
+        self.kafka.restart_cluster()
 
     @cluster(num_nodes=9)
     @matrix(security_protocol=["PLAINTEXT", "SSL", "SASL_SSL", "SASL_PLAINTEXT"])
@@ -103,7 +96,9 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         # set acls
         if self.is_secure:
             self.kafka.authorizer_class_name = KafkaService.ACL_AUTHORIZER
-            self.acls.set_acls(security_protocol, self.kafka, self.topic, self.group)
+            # Force use of direct ZooKeeper access because Kafka is not yet started
+            self.acls.set_acls(security_protocol, self.kafka, self.topic, self.group, force_use_zk_connection=True,
+                               additional_cluster_operations_to_grant=['Create'])
 
         if self.no_sasl:
             self.kafka.start()

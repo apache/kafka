@@ -168,7 +168,7 @@ object TestLinearWriteSpeed {
       }
     }
     val elapsedSecs = (System.nanoTime - beginTest) / (1000.0*1000.0*1000.0)
-    println(bytesToWrite / (1024.0 * 1024.0 * elapsedSecs) + " MB per sec")
+    println((bytesToWrite / (1024.0 * 1024.0 * elapsedSecs)).toString + " MB per sec")
     scheduler.shutdown()
   }
 
@@ -211,7 +211,7 @@ object TestLinearWriteSpeed {
   class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: MemoryRecords) extends Writable {
     Utils.delete(dir)
     val log = Log(dir, config, 0L, 0L, scheduler, new BrokerTopicStats, Time.SYSTEM, 60 * 60 * 1000,
-      LogManager.ProducerIdExpirationCheckIntervalMs, new LogDirFailureChannel(10))
+      LogManager.ProducerIdExpirationCheckIntervalMs, new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
     def write(): Int = {
       log.appendAsLeader(messages, leaderEpoch = 0)
       messages.sizeInBytes

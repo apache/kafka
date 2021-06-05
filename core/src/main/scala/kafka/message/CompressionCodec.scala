@@ -47,7 +47,7 @@ object CompressionCodec {
 object BrokerCompressionCodec {
 
   val brokerCompressionCodecs = List(UncompressedCodec, ZStdCompressionCodec, LZ4CompressionCodec, SnappyCompressionCodec, GZIPCompressionCodec, ProducerCompressionCodec)
-  val brokerCompressionOptions = brokerCompressionCodecs.map(codec => codec.name)
+  val brokerCompressionOptions: List[String] = brokerCompressionCodecs.map(codec => codec.name)
 
   def isValid(compressionType: String): Boolean = brokerCompressionOptions.contains(compressionType.toLowerCase(Locale.ROOT))
 
@@ -70,8 +70,8 @@ sealed trait CompressionCodec { def codec: Int; def name: String }
 sealed trait BrokerCompressionCodec { def name: String }
 
 case object DefaultCompressionCodec extends CompressionCodec with BrokerCompressionCodec {
-  val codec = GZIPCompressionCodec.codec
-  val name = GZIPCompressionCodec.name
+  val codec: Int = GZIPCompressionCodec.codec
+  val name: String = GZIPCompressionCodec.name
 }
 
 case object GZIPCompressionCodec extends CompressionCodec with BrokerCompressionCodec {

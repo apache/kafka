@@ -22,10 +22,11 @@ import java.util.Arrays.asList
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
-import org.easymock.{EasyMock, IAnswer}
-import org.junit.Assert._
-import org.junit.Test
+import org.easymock.EasyMock
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.collection.mutable
 
@@ -36,6 +37,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val transactionalId = "txnId1"
   private val producerId = 0.asInstanceOf[Long]
   private val producerEpoch = 0.asInstanceOf[Short]
+  private val lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
   private val txnTimeoutMs = 0
   private val coordinatorEpoch = 0
   private val txnResult = TransactionResult.COMMIT
@@ -43,8 +45,8 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val txnIdAndMarkers = asList(
       TxnIdAndMarkerEntry(transactionalId, new WriteTxnMarkersRequest.TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, txnResult, asList(topicPartition))))
 
-  private val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerEpoch, txnTimeoutMs,
-    PrepareCommit, mutable.Set[TopicPartition](topicPartition), 0L, 0L)
+  private val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, producerEpoch, lastProducerEpoch,
+    txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](topicPartition), 0L, 0L)
 
   private val markerChannelManager: TransactionMarkerChannelManager =
     EasyMock.createNiceMock(classOf[TransactionMarkerChannelManager])
@@ -84,13 +86,8 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     val response = new WriteTxnMarkersResponse(new java.util.HashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]())
 
-    try {
-      handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
-        null, null, 0, 0, false, null, null, response))
-      fail("should have thrown illegal argument exception")
-    } catch {
-      case _: IllegalStateException => // ok
-    }
+    assertThrows(classOf[IllegalStateException], () => handler.onComplete(new ClientResponse(new RequestHeader(
+      ApiKeys.PRODUCE, 0, "client", 1), null, null, 0, 0, false, null, null, response)))
   }
 
   @Test
@@ -175,8 +172,8 @@ class TransactionMarkerRequestCompletionHandlerTest {
   }
 
   @Test
-  def shouldRetryPartitionWhenNotLeaderForPartitionError(): Unit = {
-    verifyRetriesPartitionOnError(Errors.NOT_LEADER_FOR_PARTITION)
+  def shouldRetryPartitionWhenNotLeaderOrFollowerError(): Unit = {
+    verifyRetriesPartitionOnError(Errors.NOT_LEADER_OR_FOLLOWER)
   }
 
   @Test
@@ -187,6 +184,11 @@ class TransactionMarkerRequestCompletionHandlerTest {
   @Test
   def shouldRetryPartitionWhenNotEnoughReplicasAfterAppendError(): Unit = {
     verifyRetriesPartitionOnError(Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND)
+  }
+
+  @Test
+  def shouldRetryPartitionWhenKafkaStorageError(): Unit = {
+    verifyRetriesPartitionOnError(Errors.KAFKA_STORAGE_ERROR)
   }
 
   @Test
@@ -214,24 +216,15 @@ class TransactionMarkerRequestCompletionHandlerTest {
     mockCache()
 
     val response = new WriteTxnMarkersResponse(createProducerIdErrorMap(error))
-    try {
-      handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
-        null, null, 0, 0, false, null, null, response))
-      fail("should have thrown illegal state exception")
-    } catch {
-      case _: IllegalStateException => // ok
-    }
+    assertThrows(classOf[IllegalStateException], () => handler.onComplete(new ClientResponse(new RequestHeader(
+      ApiKeys.PRODUCE, 0, "client", 1), null, null, 0, 0, false, null, null, response)))
   }
 
   private def verifyCompleteDelayedOperationOnError(error: Errors): Unit = {
 
     var completed = false
-    EasyMock.expect(markerChannelManager.completeSendMarkersForTxnId(transactionalId))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          completed = true
-        }
-      })
+    EasyMock.expect(markerChannelManager.maybeWriteTxnCompletion(transactionalId))
+      .andAnswer(() => completed = true)
       .once()
     EasyMock.replay(markerChannelManager)
 
@@ -247,11 +240,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     var removed = false
     EasyMock.expect(markerChannelManager.removeMarkersForTxnId(transactionalId))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          removed = true
-        }
-      })
+      .andAnswer(() => removed = true)
       .once()
     EasyMock.replay(markerChannelManager)
 

@@ -18,10 +18,12 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
+import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -57,11 +59,13 @@ public interface Herder {
 
     void stop();
 
+    boolean isRunning();
+
     /**
      * Get a list of connectors currently running in this cluster. This is a full list of connectors in the cluster gathered
      * from the current configuration. However, note
      *
-     * @returns A list of connector names
+     * @return A list of connector names
      * @throws org.apache.kafka.connect.runtime.distributed.RequestTargetException if this node can not resolve the request
      *         (e.g., because it has not joined the cluster or does not have configs in sync with the group) and it is
      *         not the leader or the task owner (e.g., task restart must be handled by the worker which owns the task)
@@ -81,6 +85,13 @@ public interface Herder {
      * @param callback callback to invoke with the configuration
      */
     void connectorConfig(String connName, Callback<Map<String, String>> callback);
+
+    /**
+     * Get the configuration for all tasks.
+     * @param connName name of the connector
+     * @param callback callback to invoke with the configuration
+     */
+    void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback);
 
     /**
      * Set the configuration for a connector. This supports creation and updating.
@@ -128,7 +139,7 @@ public interface Herder {
 
     /**
      * Get a list of connectors currently running in this cluster.
-     * @returns A list of connector names
+     * @return A list of connector names
      */
     Collection<String> connectors();
 
@@ -145,6 +156,28 @@ public interface Herder {
     ConnectorStateInfo connectorStatus(String connName);
 
     /**
+     * Lookup the set of topics currently used by a connector.
+     *
+     * @param connName name of the connector
+     * @return the set of active topics
+     */
+    ActiveTopicsInfo connectorActiveTopics(String connName);
+
+    /**
+     * Request to asynchronously reset the active topics for the named connector.
+     *
+     * @param connName name of the connector
+     */
+    void resetConnectorActiveTopics(String connName);
+
+    /**
+     * Return a reference to the status backing store used by this herder.
+     *
+     * @return the status backing store used by this herder
+     */
+    StatusBackingStore statusBackingStore();
+
+    /**
      * Lookup the status of the a task.
      * @param id id of the task
      */
@@ -153,8 +186,20 @@ public interface Herder {
     /**
      * Validate the provided connector config values against the configuration definition.
      * @param connectorConfig the provided connector config values
+     * @param callback the callback to invoke after validation has completed (successfully or not)
      */
-    ConfigInfos validateConnectorConfig(Map<String, String> connectorConfig);
+    void validateConnectorConfig(Map<String, String> connectorConfig, Callback<ConfigInfos> callback);
+
+    /**
+     * Validate the provided connector config values against the configuration definition.
+     * @param connectorConfig the provided connector config values
+     * @param callback the callback to invoke after validation has completed (successfully or not)
+     * @param doLog if true log all the connector configurations at INFO level; if false, no connector configurations are logged.
+     *              Note that logging of configuration is not necessary in every endpoint that uses this method.
+     */
+    default void validateConnectorConfig(Map<String, String> connectorConfig, Callback<ConfigInfos> callback, boolean doLog) {
+        validateConnectorConfig(connectorConfig, callback);
+    }
 
     /**
      * Restart the task with the given id.
@@ -175,7 +220,7 @@ public interface Herder {
      * @param delayMs delay before restart
      * @param connName name of the connector
      * @param cb callback to invoke upon completion
-     * @returns The id of the request
+     * @return The id of the request
      */
     HerderRequest restartConnector(long delayMs, String connName, Callback<Void> cb);
 
@@ -199,7 +244,6 @@ public interface Herder {
      * @return a reference to the plugin factory.
      */
     Plugins plugins();
-
 
     /**
      * Get the cluster ID of the Kafka cluster backing this Connect cluster.

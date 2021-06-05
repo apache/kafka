@@ -17,6 +17,10 @@
 
 package org.apache.kafka.connect.health;
 
+import java.util.Objects;
+
+import org.apache.kafka.common.utils.Utils;
+
 /**
  * Provides the current status along with identifier for Connect worker and tasks.
  */
@@ -34,10 +38,10 @@ public abstract class AbstractState {
      * @param traceMessage  any error trace message associated with the connector or the task; may be null or empty
      */
     public AbstractState(String state, String workerId, String traceMessage) {
-        if (state != null && !state.trim().isEmpty()) {
+        if (Utils.isBlank(state)) {
             throw new IllegalArgumentException("State must not be null or empty");
         }
-        if (workerId != null && !workerId.trim().isEmpty()) {
+        if (Utils.isBlank(workerId)) {
             throw new IllegalArgumentException("Worker ID must not be null or empty");
         }
         this.state = state;
@@ -70,5 +74,22 @@ public abstract class AbstractState {
      */
     public String traceMessage() {
         return traceMessage;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        AbstractState that = (AbstractState) o;
+        return state.equals(that.state)
+            && Objects.equals(traceMessage, that.traceMessage)
+            && workerId.equals(that.workerId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(state, traceMessage, workerId);
     }
 }

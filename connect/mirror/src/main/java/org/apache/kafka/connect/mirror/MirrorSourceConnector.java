@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.Map.Entry;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
-import org.apache.kafka.connect.util.ConnectorUtils;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.acl.AclBinding;
@@ -44,10 +44,12 @@ import org.apache.kafka.clients.admin.CreateTopicsOptions;
 
 import java.util.Map;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.concurrent.ExecutionException;
@@ -72,8 +74,8 @@ public class MirrorSourceConnector extends SourceConnector {
     private String connectorName;
     private TopicFilter topicFilter;
     private ConfigPropertyFilter configPropertyFilter;
-    private List<TopicPartition> knownTopicPartitions = Collections.emptyList();
-    private Set<String> knownTargetTopics = Collections.emptySet();
+    private List<TopicPartition> knownSourceTopicPartitions = Collections.emptyList();
+    private List<TopicPartition> knownTargetTopicPartitions = Collections.emptyList();
     private ReplicationPolicy replicationPolicy;
     private int replicationFactor;
     private AdminClient sourceAdminClient;
@@ -84,13 +86,19 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     // visible for testing
+    MirrorSourceConnector(List<TopicPartition> knownSourceTopicPartitions, MirrorConnectorConfig config) {
+        this.knownSourceTopicPartitions = knownSourceTopicPartitions;
+        this.config = config;
+    }
+
+    // visible for testing
     MirrorSourceConnector(SourceAndTarget sourceAndTarget, ReplicationPolicy replicationPolicy,
             TopicFilter topicFilter, ConfigPropertyFilter configPropertyFilter) {
         this.sourceAndTarget = sourceAndTarget;
         this.replicationPolicy = replicationPolicy;
         this.topicFilter = topicFilter;
         this.configPropertyFilter = configPropertyFilter;
-    } 
+    }
 
     @Override
     public void start(Map<String, String> props) {
@@ -110,14 +118,14 @@ public class MirrorSourceConnector extends SourceConnector {
         scheduler = new Scheduler(MirrorSourceConnector.class, config.adminTimeout());
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
-        scheduler.execute(this::createTopicPartitions, "creating downstream topic-partitions");
+        scheduler.execute(this::computeAndCreateTopicPartitions, "creating downstream topic-partitions");
         scheduler.execute(this::refreshKnownTargetTopics, "refreshing known target topics");
         scheduler.scheduleRepeating(this::syncTopicAcls, config.syncTopicAclsInterval(), "syncing topic ACLs");
         scheduler.scheduleRepeating(this::syncTopicConfigs, config.syncTopicConfigsInterval(),
             "syncing topic configs");
         scheduler.scheduleRepeatingDelayed(this::refreshTopicPartitions, config.refreshTopicsInterval(),
             "refreshing topics");
-        log.info("Started {} with {} topic-partitions.", connectorName, knownTopicPartitions.size());
+        log.info("Started {} with {} topic-partitions.", connectorName, knownSourceTopicPartitions.size());
         log.info("Starting {} took {} ms.", connectorName, System.currentTimeMillis() - start);
     }
 
@@ -141,14 +149,32 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     // divide topic-partitions among tasks
+    // since each mirrored topic has different traffic and number of partitions, to balance the load
+    // across all mirrormaker instances (workers), 'roundrobin' helps to evenly assign all
+    // topic-partition to the tasks, then the tasks are further distributed to workers.
+    // For example, 3 tasks to mirror 3 topics with 8, 2 and 2 partitions respectively.
+    // 't1' denotes 'task 1', 't0p5' denotes 'topic 0, partition 5'
+    // t1 -> [t0p0, t0p3, t0p6, t1p1]
+    // t2 -> [t0p1, t0p4, t0p7, t2p0]
+    // t3 -> [t0p2, t0p5, t1p0, t2p1]
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-        if (!config.enabled() || knownTopicPartitions.isEmpty()) {
+        if (!config.enabled() || knownSourceTopicPartitions.isEmpty()) {
             return Collections.emptyList();
         }
-        int numTasks = Math.min(maxTasks, knownTopicPartitions.size());
-        return ConnectorUtils.groupPartitions(knownTopicPartitions, numTasks).stream()
-            .map(config::taskConfigForTopicPartitions)
+        int numTasks = Math.min(maxTasks, knownSourceTopicPartitions.size());
+        List<List<TopicPartition>> roundRobinByTask = new ArrayList<>(numTasks);
+        for (int i = 0; i < numTasks; i++) {
+            roundRobinByTask.add(new ArrayList<>());
+        }
+        int count = 0;
+        for (TopicPartition partition : knownSourceTopicPartitions) {
+            int index = count % numTasks;
+            roundRobinByTask.get(index).add(partition);
+            count++;
+        }
+
+        return roundRobinByTask.stream().map(config::taskConfigForTopicPartitions)
             .collect(Collectors.toList());
     }
 
@@ -162,61 +188,99 @@ public class MirrorSourceConnector extends SourceConnector {
         return "1";
     }
 
-    private List<TopicPartition> findTopicPartitions()
+    // visible for testing
+    List<TopicPartition> findSourceTopicPartitions()
             throws InterruptedException, ExecutionException {
         Set<String> topics = listTopics(sourceAdminClient).stream()
             .filter(this::shouldReplicateTopic)
             .collect(Collectors.toSet());
-        return describeTopics(topics).stream()
+        return describeTopics(sourceAdminClient, topics).stream()
             .flatMap(MirrorSourceConnector::expandTopicDescription)
             .collect(Collectors.toList());
     }
 
-    private void refreshTopicPartitions()
+    // visible for testing
+    List<TopicPartition> findTargetTopicPartitions()
             throws InterruptedException, ExecutionException {
-        List<TopicPartition> topicPartitions = findTopicPartitions();
-        Set<TopicPartition> newTopicPartitions = new HashSet<>();
-        newTopicPartitions.addAll(topicPartitions);
-        newTopicPartitions.removeAll(knownTopicPartitions);
-        Set<TopicPartition> deadTopicPartitions = new HashSet<>();
-        deadTopicPartitions.addAll(knownTopicPartitions);
-        deadTopicPartitions.removeAll(topicPartitions);
-        if (!newTopicPartitions.isEmpty() || !deadTopicPartitions.isEmpty()) {
-            log.info("Found {} topic-partitions on {}. {} are new. {} were removed. Previously had {}.",
-                    topicPartitions.size(), sourceAndTarget.source(), newTopicPartitions.size(), 
-                    deadTopicPartitions.size(), knownTopicPartitions.size());
-            log.trace("Found new topic-partitions: {}", newTopicPartitions);
-            knownTopicPartitions = topicPartitions;
-            knownTargetTopics = findExistingTargetTopics(); 
-            createTopicPartitions();
+        Set<String> topics = listTopics(targetAdminClient).stream()
+            .filter(t -> sourceAndTarget.source().equals(replicationPolicy.topicSource(t)))
+            .filter(t -> !t.equals(config.checkpointsTopic()))
+            .collect(Collectors.toSet());
+        return describeTopics(targetAdminClient, topics).stream()
+                .flatMap(MirrorSourceConnector::expandTopicDescription)
+                .collect(Collectors.toList());
+    }
+
+    // visible for testing
+    void refreshTopicPartitions()
+            throws InterruptedException, ExecutionException {
+
+        List<TopicPartition> sourceTopicPartitions = findSourceTopicPartitions();
+        List<TopicPartition> targetTopicPartitions = findTargetTopicPartitions();
+
+        Set<TopicPartition> sourceTopicPartitionsSet = new HashSet<>(sourceTopicPartitions);
+        Set<TopicPartition> knownSourceTopicPartitionsSet = new HashSet<>(knownSourceTopicPartitions);
+
+        Set<TopicPartition> upstreamTargetTopicPartitions = targetTopicPartitions.stream()
+                .map(x -> new TopicPartition(replicationPolicy.upstreamTopic(x.topic()), x.partition()))
+                .collect(Collectors.toSet());
+
+        Set<TopicPartition> missingInTarget = new HashSet<>(sourceTopicPartitions);
+        missingInTarget.removeAll(upstreamTargetTopicPartitions);
+
+        knownTargetTopicPartitions = targetTopicPartitions;
+
+        // Detect if topic-partitions were added or deleted from the source cluster
+        // or if topic-partitions are missing from the target cluster
+        if (!knownSourceTopicPartitionsSet.equals(sourceTopicPartitionsSet) || !missingInTarget.isEmpty()) {
+
+            Set<TopicPartition> newTopicPartitions = sourceTopicPartitionsSet;
+            newTopicPartitions.removeAll(knownSourceTopicPartitions);
+
+            Set<TopicPartition> deletedTopicPartitions = knownSourceTopicPartitionsSet;
+            deletedTopicPartitions.removeAll(sourceTopicPartitions);
+
+            log.info("Found {} new topic-partitions on {}. " +
+                     "Found {} deleted topic-partitions on {}. " +
+                     "Found {} topic-partitions missing on {}.",
+                     newTopicPartitions.size(), sourceAndTarget.source(),
+                     deletedTopicPartitions.size(), sourceAndTarget.source(),
+                     missingInTarget.size(), sourceAndTarget.target());
+
+            log.trace("Found new topic-partitions on {}: {}", sourceAndTarget.source(), newTopicPartitions);
+            log.trace("Found deleted topic-partitions on {}: {}", sourceAndTarget.source(), deletedTopicPartitions);
+            log.trace("Found missing topic-partitions on {}: {}", sourceAndTarget.target(), missingInTarget);
+
+            knownSourceTopicPartitions = sourceTopicPartitions;
+            computeAndCreateTopicPartitions();
             context.requestTaskReconfiguration();
         }
     }
 
     private void loadTopicPartitions()
             throws InterruptedException, ExecutionException {
-        knownTopicPartitions = findTopicPartitions();
-        knownTargetTopics = findExistingTargetTopics(); 
+        knownSourceTopicPartitions = findSourceTopicPartitions();
+        knownTargetTopicPartitions = findTargetTopicPartitions();
     }
 
     private void refreshKnownTargetTopics()
             throws InterruptedException, ExecutionException {
-        knownTargetTopics = findExistingTargetTopics();
-    }
-
-    private Set<String> findExistingTargetTopics()
-            throws InterruptedException, ExecutionException {
-        return listTopics(targetAdminClient).stream()
-            .filter(x -> sourceAndTarget.source().equals(replicationPolicy.topicSource(x)))
-            .collect(Collectors.toSet());
+        knownTargetTopicPartitions = findTargetTopicPartitions();
     }
 
     private Set<String> topicsBeingReplicated() {
-        return knownTopicPartitions.stream()
-            .map(x -> x.topic())
+        Set<String> knownTargetTopics = toTopics(knownTargetTopicPartitions);
+        return knownSourceTopicPartitions.stream()
+            .map(TopicPartition::topic)
             .distinct()
             .filter(x -> knownTargetTopics.contains(formatRemoteTopic(x)))
             .collect(Collectors.toSet());
+    }
+
+    private Set<String> toTopics(Collection<TopicPartition> tps) {
+        return tps.stream()
+                .map(TopicPartition::topic)
+                .collect(Collectors.toSet());
     }
 
     private void syncTopicAcls()
@@ -243,32 +307,82 @@ public class MirrorSourceConnector extends SourceConnector {
         MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(), config.offsetSyncsTopicReplicationFactor(), config.sourceAdminConfig());
     }
 
-    private void createTopicPartitions()
-            throws InterruptedException, ExecutionException {
-        Map<String, Long> partitionCounts = knownTopicPartitions.stream()
-            .collect(Collectors.groupingBy(x -> x.topic(), Collectors.counting())).entrySet().stream()
-            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> x.getValue()));
-        List<NewTopic> newTopics = partitionCounts.entrySet().stream()
-            .filter(x -> !knownTargetTopics.contains(x.getKey()))
-            .map(x -> new NewTopic(x.getKey(), x.getValue().intValue(), (short) replicationFactor))
-            .collect(Collectors.toList());
-        Map<String, NewPartitions> newPartitions = partitionCounts.entrySet().stream()
-            .filter(x -> knownTargetTopics.contains(x.getKey()))
-            .collect(Collectors.toMap(x -> x.getKey(), x -> NewPartitions.increaseTo(x.getValue().intValue())));
-        targetAdminClient.createTopics(newTopics, new CreateTopicsOptions()).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+    void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {
+        // get source and target topics with respective partition counts
+        Map<String, Long> sourceTopicToPartitionCounts = knownSourceTopicPartitions.stream()
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
+                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+        Map<String, Long> targetTopicToPartitionCounts = knownTargetTopicPartitions.stream()
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
+                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+
+        Set<String> knownSourceTopics = sourceTopicToPartitionCounts.keySet();
+        Set<String> knownTargetTopics = targetTopicToPartitionCounts.keySet();
+        Map<String, String> sourceToRemoteTopics = knownSourceTopics.stream()
+                .collect(Collectors.toMap(Function.identity(), sourceTopic -> formatRemoteTopic(sourceTopic)));
+
+        // compute existing and new source topics
+        Map<Boolean, Set<String>> partitionedSourceTopics = knownSourceTopics.stream()
+                .collect(Collectors.partitioningBy(sourceTopic -> knownTargetTopics.contains(sourceToRemoteTopics.get(sourceTopic)),
+                        Collectors.toSet()));
+        Set<String> existingSourceTopics = partitionedSourceTopics.get(true);
+        Set<String> newSourceTopics = partitionedSourceTopics.get(false);
+
+        // create new topics
+        if (!newSourceTopics.isEmpty())
+            createNewTopics(newSourceTopics, sourceTopicToPartitionCounts);
+
+        // compute topics with new partitions
+        Map<String, Long> sourceTopicsWithNewPartitions = existingSourceTopics.stream()
+                .filter(sourceTopic -> {
+                    String targetTopic = sourceToRemoteTopics.get(sourceTopic);
+                    return sourceTopicToPartitionCounts.get(sourceTopic) > targetTopicToPartitionCounts.get(targetTopic);
+                })
+                .collect(Collectors.toMap(Function.identity(), sourceTopicToPartitionCounts::get));
+
+        // create new partitions
+        if (!sourceTopicsWithNewPartitions.isEmpty()) {
+            Map<String, NewPartitions> newTargetPartitions = sourceTopicsWithNewPartitions.entrySet().stream()
+                    .collect(Collectors.toMap(sourceTopicAndPartitionCount -> sourceToRemoteTopics.get(sourceTopicAndPartitionCount.getKey()),
+                        sourceTopicAndPartitionCount -> NewPartitions.increaseTo(sourceTopicAndPartitionCount.getValue().intValue())));
+            createNewPartitions(newTargetPartitions);
+        }
+    }
+
+    private void createNewTopics(Set<String> newSourceTopics, Map<String, Long> sourceTopicToPartitionCounts)
+            throws ExecutionException, InterruptedException {
+        Map<String, Config> sourceTopicToConfig = describeTopicConfigs(newSourceTopics);
+        Map<String, NewTopic> newTopics = newSourceTopics.stream()
+                .map(sourceTopic -> {
+                    String remoteTopic = formatRemoteTopic(sourceTopic);
+                    int partitionCount = sourceTopicToPartitionCounts.get(sourceTopic).intValue();
+                    Map<String, String> configs = configToMap(sourceTopicToConfig.get(sourceTopic));
+                    return new NewTopic(remoteTopic, partitionCount, (short) replicationFactor)
+                            .configs(configs);
+                })
+                .collect(Collectors.toMap(NewTopic::name, Function.identity()));
+        createNewTopics(newTopics);
+    }
+
+    // visible for testing
+    void createNewTopics(Map<String, NewTopic> newTopics) {
+        targetAdminClient.createTopics(newTopics.values(), new CreateTopicsOptions()).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
                 log.warn("Could not create topic {}.", k, e);
             } else {
-                log.info("Created remote topic {} with {} partitions.", k, partitionCounts.get(k));
+                log.info("Created remote topic {} with {} partitions.", k, newTopics.get(k).numPartitions());
             }
         }));
+    }
+
+    void createNewPartitions(Map<String, NewPartitions> newPartitions) {
         targetAdminClient.createPartitions(newPartitions).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e instanceof InvalidPartitionsException) {
                 // swallow, this is normal
             } else if (e != null) {
                 log.warn("Could not create topic-partitions for {}.", k, e);
             } else {
-                log.info("Increased size of {} to {} partitions.", k, partitionCounts.get(k));
+                log.info("Increased size of {} to {} partitions.", k, newPartitions.get(k).totalCount());
             }
         }));
     }
@@ -283,18 +397,22 @@ public class MirrorSourceConnector extends SourceConnector {
         return sourceAdminClient.describeAcls(ANY_TOPIC_ACL).values().get();
     }
 
-    private Collection<TopicDescription> describeTopics(Collection<String> topics)
+    private static Collection<TopicDescription> describeTopics(AdminClient adminClient, Collection<String> topics)
             throws InterruptedException, ExecutionException {
-        return sourceAdminClient.describeTopics(topics).all().get().values();
+        return adminClient.describeTopics(topics).all().get().values();
+    }
+
+    static Map<String, String> configToMap(Config config) {
+        return config.entries().stream()
+                .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
     }
 
     @SuppressWarnings("deprecation")
     // use deprecated alterConfigs API for broker compatibility back to 0.11.0
-    private void updateTopicConfigs(Map<String, Config> topicConfigs)
-            throws InterruptedException, ExecutionException {
+    private void updateTopicConfigs(Map<String, Config> topicConfigs) {
         Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()
             .collect(Collectors.toMap(x ->
-                new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), x -> x.getValue()));
+                new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), Entry::getValue));
         log.trace("Syncing configs for {} topics.", configs.size());
         targetAdminClient.alterConfigs(configs).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
@@ -303,8 +421,7 @@ public class MirrorSourceConnector extends SourceConnector {
         }));
     }
 
-    private void updateTopicAcls(List<AclBinding> bindings)
-            throws InterruptedException, ExecutionException {
+    private void updateTopicAcls(List<AclBinding> bindings) {
         log.trace("Syncing {} topic ACL bindings.", bindings.size());
         targetAdminClient.createAcls(bindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
@@ -319,13 +436,13 @@ public class MirrorSourceConnector extends SourceConnector {
             .map(x -> new TopicPartition(topic, x.partition()));
     }
 
-    private Map<String, Config> describeTopicConfigs(Set<String> topics)
+    Map<String, Config> describeTopicConfigs(Set<String> topics)
             throws InterruptedException, ExecutionException {
         Set<ConfigResource> resources = topics.stream()
             .map(x -> new ConfigResource(ConfigResource.Type.TOPIC, x))
             .collect(Collectors.toSet());
         return sourceAdminClient.describeConfigs(resources).all().get().entrySet().stream()
-            .collect(Collectors.toMap(x -> x.getKey().name(), x -> x.getValue()));
+            .collect(Collectors.toMap(x -> x.getKey().name(), Entry::getValue));
     }
 
     Config targetConfig(Config sourceConfig) {

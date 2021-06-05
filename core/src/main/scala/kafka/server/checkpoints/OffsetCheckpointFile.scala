@@ -50,8 +50,16 @@ trait OffsetCheckpoint {
 }
 
 /**
-  * This class persists a map of (Partition => Offsets) to a file (for a certain replica)
-  */
+ * This class persists a map of (Partition => Offsets) to a file (for a certain replica)
+ *
+ * The format in the offset checkpoint file is like this:
+ *  -----checkpoint file begin------
+ *  0                <- OffsetCheckpointFile.currentVersion
+ *  2                <- following entries size
+ *  tp1  par1  1     <- the format is: TOPIC  PARTITION  OFFSET
+ *  tp1  par2  2
+ *  -----checkpoint file end----------
+ */
 class OffsetCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureChannel = null) {
   val checkpoint = new CheckpointFile[(TopicPartition, Long)](file, OffsetCheckpointFile.CurrentVersion,
     OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)

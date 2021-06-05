@@ -24,7 +24,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse
 
 import scala.collection.mutable
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                                                 txnStateManager: TransactionStateManager,
@@ -89,10 +89,11 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
       val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkersResponse]
 
+      val responseErrors = writeTxnMarkerResponse.errorsByProducerId;
       for (txnIdAndMarker <- txnIdAndMarkerEntries.asScala) {
         val transactionalId = txnIdAndMarker.txnId
         val txnMarker = txnIdAndMarker.txnMarkerEntry
-        val errors = writeTxnMarkerResponse.errors(txnMarker.producerId)
+        val errors = responseErrors.get(txnMarker.producerId)
 
         if (errors == null)
           throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for producer id ${txnMarker.producerId}")
@@ -143,10 +144,11 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                       throw new IllegalStateException(s"Received fatal error ${error.exceptionName} while sending txn marker for $transactionalId")
 
                     case Errors.UNKNOWN_TOPIC_OR_PARTITION |
-                         Errors.NOT_LEADER_FOR_PARTITION |
+                         Errors.NOT_LEADER_OR_FOLLOWER |
                          Errors.NOT_ENOUGH_REPLICAS |
                          Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND |
-                         Errors.REQUEST_TIMED_OUT => // these are retriable errors
+                         Errors.REQUEST_TIMED_OUT |
+                         Errors.KAFKA_STORAGE_ERROR => // these are retriable errors
 
                       info(s"Sending $transactionalId's transaction marker for partition $topicPartition has failed with error ${error.exceptionName}, retrying " +
                         s"with current coordinator epoch ${epochAndMetadata.coordinatorEpoch}")
@@ -192,7 +194,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                   txnMarker.coordinatorEpoch,
                   retryPartitions.toSet)
               } else {
-                txnMarkerChannelManager.completeSendMarkersForTxnId(transactionalId)
+                txnMarkerChannelManager.maybeWriteTxnCompletion(transactionalId)
               }
             }
         }

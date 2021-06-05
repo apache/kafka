@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.time.Duration;
 import kafka.log.LogConfig;
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.admin.Admin;
@@ -33,7 +34,9 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -42,9 +45,9 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -59,6 +62,8 @@ import java.util.concurrent.TimeUnit;
 
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -68,20 +73,27 @@ import static org.junit.Assert.assertTrue;
  */
 @Category({IntegrationTest.class})
 public class InternalTopicIntegrationTest {
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+
+    @BeforeClass
+    public static void startCluster() throws IOException, InterruptedException {
+        CLUSTER.start();
+        CLUSTER.createTopics(DEFAULT_INPUT_TOPIC, DEFAULT_INPUT_TABLE_TOPIC);
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
 
     private static final String APP_ID = "internal-topics-integration-test";
     private static final String DEFAULT_INPUT_TOPIC = "inputTopic";
+    private static final String DEFAULT_INPUT_TABLE_TOPIC = "inputTable";
 
     private final MockTime mockTime = CLUSTER.time;
 
     private Properties streamsProp;
-
-    @BeforeClass
-    public static void startKafkaCluster() throws InterruptedException {
-        CLUSTER.createTopics(DEFAULT_INPUT_TOPIC);
-    }
 
     @Before
     public void before() {
@@ -90,7 +102,7 @@ public class InternalTopicIntegrationTest {
         streamsProp.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsProp.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsProp.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsProp.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsProp.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsProp.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsProp.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
     }
@@ -101,11 +113,10 @@ public class InternalTopicIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsProp);
     }
 
-    private void produceData(final List<String> inputValues) throws Exception {
+    private void produceData(final List<String> inputValues) {
         final Properties producerProp = new Properties();
         producerProp.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerProp.put(ProducerConfig.ACKS_CONFIG, "all");
-        producerProp.put(ProducerConfig.RETRIES_CONFIG, 0);
         producerProp.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerProp.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
@@ -136,8 +147,39 @@ public class InternalTopicIntegrationTest {
         return Admin.create(adminClientConfig);
     }
 
+    /*
+     * This test just ensures that that the assignor does not get stuck during partition number resolution
+     * for internal repartition topics. See KAFKA-10689
+     */
     @Test
-    public void shouldCompactTopicsForKeyValueStoreChangelogs() throws Exception {
+    public void shouldGetToRunningWithWindowedTableInFKJ() throws Exception {
+        final String appID = APP_ID + "-windowed-FKJ";
+        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
+
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+        final KStream<String, String> inputTopic = streamsBuilder.stream(DEFAULT_INPUT_TOPIC);
+        final KTable<String, String> inputTable = streamsBuilder.table(DEFAULT_INPUT_TABLE_TOPIC);
+        inputTopic
+            .groupBy(
+                (k, v) -> k,
+                Grouped.with("GroupName", Serdes.String(), Serdes.String())
+            )
+            .windowedBy(TimeWindows.of(Duration.ofMinutes(10)))
+            .aggregate(
+                () -> "",
+                (k, v, a) -> a + k)
+            .leftJoin(
+                inputTable,
+                v -> v,
+                (x, y) -> x + y
+            );
+
+        final KafkaStreams streams = new KafkaStreams(streamsBuilder.build(), streamsProp);
+        startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(60));
+    }
+
+    @Test
+    public void shouldCompactTopicsForKeyValueStoreChangelogs() {
         final String appID = APP_ID + "-compact";
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
@@ -162,7 +204,7 @@ public class InternalTopicIntegrationTest {
         //
         // Step 3: Verify the state changelog topics are compact
         //
-        waitForCompletion(streams, 2, 30000);
+        waitForCompletion(streams, 2, 30000L);
         streams.close();
 
         final Properties changelogProps = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "Counts"));
@@ -170,11 +212,11 @@ public class InternalTopicIntegrationTest {
 
         final Properties repartitionProps = getTopicProperties(appID + "-Counts-repartition");
         assertEquals(LogConfig.Delete(), repartitionProps.getProperty(LogConfig.CleanupPolicyProp()));
-        assertEquals(3, repartitionProps.size());
+        assertEquals(4, repartitionProps.size());
     }
 
     @Test
-    public void shouldCompactAndDeleteTopicsForWindowStoreChangelogs() throws Exception {
+    public void shouldCompactAndDeleteTopicsForWindowStoreChangelogs() {
         final String appID = APP_ID + "-compact-delete";
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
@@ -202,7 +244,7 @@ public class InternalTopicIntegrationTest {
         //
         // Step 3: Verify the state changelog topics are compact
         //
-        waitForCompletion(streams, 2, 30000);
+        waitForCompletion(streams, 2, 30000L);
         streams.close();
         final Properties properties = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "CountWindows"));
         final List<String> policies = Arrays.asList(properties.getProperty(LogConfig.CleanupPolicyProp()).split(","));
@@ -215,6 +257,6 @@ public class InternalTopicIntegrationTest {
 
         final Properties repartitionProps = getTopicProperties(appID + "-CountWindows-repartition");
         assertEquals(LogConfig.Delete(), repartitionProps.getProperty(LogConfig.CleanupPolicyProp()));
-        assertEquals(3, repartitionProps.size());
+        assertEquals(4, repartitionProps.size());
     }
 }

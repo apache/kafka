@@ -95,13 +95,6 @@ public class StoresTest {
         assertEquals("retentionPeriod cannot be negative", e.getMessage());
     }
 
-    @Deprecated
-    @Test
-    public void shouldThrowIfIPersistentWindowStoreIfNumberOfSegmentsSmallerThanOne() {
-        final Exception e = assertThrows(IllegalArgumentException.class, () -> Stores.persistentWindowStore("anyName", 0L, 1, 0L, false));
-        assertEquals("numSegments cannot be smaller than 2", e.getMessage());
-    }
-
     @Test
     public void shouldThrowIfIPersistentWindowStoreIfWindowSizeIsNegative() {
         final Exception e = assertThrows(IllegalArgumentException.class, () -> Stores.persistentWindowStore("anyName", ofMillis(0L), ofMillis(-1L), false));
@@ -259,7 +252,7 @@ public class StoresTest {
     }
 
     @Test
-    public void shouldBuildTimestampedWindowStoreThatWrapsInMemroyWindowStore() {
+    public void shouldBuildTimestampedWindowStoreThatWrapsInMemoryWindowStore() {
         final TimestampedWindowStore<String, String> store = Stores.timestampedWindowStoreBuilder(
             Stores.inMemoryWindowStore("store", ofMillis(3L), ofMillis(3L), true),
             Serdes.String(),

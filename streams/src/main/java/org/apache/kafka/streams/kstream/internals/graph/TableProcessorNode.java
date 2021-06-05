@@ -22,21 +22,24 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 import java.util.Arrays;
+import java.util.Objects;
+import java.util.Properties;
 
-public class TableProcessorNode<K, V> extends StreamsGraphNode {
+public class TableProcessorNode<K, V> extends GraphNode {
 
-    private final ProcessorParameters<K, V> processorParameters;
+    private final ProcessorParameters<K, V, ?, ?> processorParameters;
     private final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder;
     private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
-                              final ProcessorParameters<K, V> processorParameters,
+                              final ProcessorParameters<K, V, ?, ?> processorParameters,
                               final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder) {
         this(nodeName, processorParameters, storeBuilder, null);
     }
 
     public TableProcessorNode(final String nodeName,
-                              final ProcessorParameters<K, V> processorParameters,
+                              final ProcessorParameters<K, V, ?, ?> processorParameters,
+                              // TODO KIP-300: we are enforcing this as a keyvalue store, but it should go beyond any type of stores
                               final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder,
                               final String[] storeNames) {
         super(nodeName);
@@ -56,7 +59,7 @@ public class TableProcessorNode<K, V> extends StreamsGraphNode {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
         final String processorName = processorParameters.processorName();
         topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNodeNames());
 
@@ -64,8 +67,12 @@ public class TableProcessorNode<K, V> extends StreamsGraphNode {
             topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
         }
 
-        // TODO: we are enforcing this as a keyvalue store, but it should go beyond any type of stores
-        if (storeBuilder != null) {
+        if (processorParameters.kTableSourceSupplier() != null) {
+            if (processorParameters.kTableSourceSupplier().materialized()) {
+                topologyBuilder.addStateStore(Objects.requireNonNull(storeBuilder, "storeBuilder was null"),
+                                              processorName);
+            }
+        } else if (storeBuilder != null) {
             topologyBuilder.addStateStore(storeBuilder, processorName);
         }
     }

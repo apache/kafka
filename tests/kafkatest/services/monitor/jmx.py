@@ -17,6 +17,8 @@ import os
 
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.utils.util import wait_until
+
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.version import get_version, V_0_11_0_0, DEV_BRANCH
 
 class JmxMixin(object):
@@ -41,10 +43,11 @@ class JmxMixin(object):
         self.jmx_tool_log = os.path.join(root, "jmx_tool.log")
         self.jmx_tool_err_log = os.path.join(root, "jmx_tool.err.log")
 
-    def clean_node(self, node):
+    def clean_node(self, node, idx=None):
         node.account.kill_java_processes(self.jmx_class_name(), clean_shutdown=False,
                                          allow_fail=True)
-        idx = self.idx(node)
+        if idx is None:
+            idx = self.idx(node)
         self.started[idx-1] = False
         node.account.ssh("rm -f -- %s %s" % (self.jmx_tool_log, self.jmx_tool_err_log), allow_fail=False)
 
@@ -125,7 +128,7 @@ class JmxMixin(object):
 
         for name in object_attribute_names:
             aggregates_per_time = []
-            for time_sec in xrange(start_time_sec, end_time_sec + 1):
+            for time_sec in range(start_time_sec, end_time_sec + 1):
                 # assume that value is 0 if it is not read by jmx tool at the given time. This is appropriate for metrics such as bandwidth
                 values_per_node = [time_to_stats.get(time_sec, {}).get(name, 0) for time_to_stats in self.jmx_stats]
                 # assume that value is aggregated across nodes by sum. This is appropriate for metrics such as bandwidth
@@ -139,3 +142,15 @@ class JmxMixin(object):
 
     def jmx_class_name(self):
         return "kafka.tools.JmxTool"
+
+class JmxTool(JmxMixin, KafkaPathResolverMixin):
+    """
+    Simple helper class for using the JmxTool directly instead of as a mix-in
+    """
+    def __init__(self, text_context, *args, **kwargs):
+        JmxMixin.__init__(self, num_nodes=1, *args, **kwargs)
+        self.context = text_context
+
+    @property
+    def logger(self):
+        return self.context.logger

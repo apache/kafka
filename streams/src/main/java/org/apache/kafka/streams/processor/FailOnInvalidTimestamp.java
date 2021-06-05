@@ -41,7 +41,7 @@ import org.slf4j.LoggerFactory;
  * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
  *
  * @see LogAndSkipOnInvalidTimestamp
- * @see UsePreviousTimeOnInvalidTimestamp
+ * @see UsePartitionTimeOnInvalidTimestamp
  * @see WallclockTimestampExtractor
  */
 public class FailOnInvalidTimestamp extends ExtractRecordMetadataTimestamp {

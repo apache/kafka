@@ -25,9 +25,7 @@ import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.time.Duration;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
- 
+
 /** Convenience methods for multi-cluster environments. Wraps MirrorClient (@see MirrorClient).
  *  <p>
  *  Properties passed to these methods are used to construct internal Admin and Consumer clients.
@@ -42,7 +40,6 @@ import org.slf4j.LoggerFactory;
  *  </p>
  */
 public final class RemoteClusterUtils {
-    private static final Logger log = LoggerFactory.getLogger(RemoteClusterUtils.class);
 
     // utility class
     private RemoteClusterUtils() {}

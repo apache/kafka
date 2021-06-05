@@ -1,5 +1,3 @@
-# Copyright 2015 Confluent Inc.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,12 +10,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import parametrize
+from ducktape.mark import matrix
 from ducktape.utils.util import wait_until
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
@@ -32,9 +30,10 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
 
     def setUp(self):
         self.topic = "test_topic"
-        self.zk = ZookeeperService(self.test_context, num_nodes=1)
-            
-        self.zk.start()
+        self.zk = ZookeeperService(self.test_context, num_nodes=1) if quorum.for_test(self.test_context) == quorum.zk else None
+
+        if self.zk:
+            self.zk.start()
 
         # Producer and consumer
         self.producer_throughput = 10000
@@ -58,10 +57,10 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
             err_msg="Producer did not produce all messages in reasonable amount of time"))
 
     @cluster(num_nodes=12)
-    @parametrize(producer_version=str(DEV_BRANCH), consumer_version=str(DEV_BRANCH))
-    @parametrize(producer_version=str(LATEST_0_10), consumer_version=str(LATEST_0_10))
-    @parametrize(producer_version=str(LATEST_0_9), consumer_version=str(LATEST_0_9))
-    def test_compatibility(self, producer_version, consumer_version):
+    @matrix(producer_version=[str(DEV_BRANCH)], consumer_version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_non_upgrade)
+    @matrix(producer_version=[str(LATEST_0_10)], consumer_version=[str(LATEST_0_10)], metadata_quorum=quorum.all_non_upgrade)
+    @matrix(producer_version=[str(LATEST_0_9)], consumer_version=[str(LATEST_0_9)], metadata_quorum=quorum.all_non_upgrade)
+    def test_compatibility(self, producer_version, consumer_version, metadata_quorum=quorum.zk):
         """ This tests performs the following checks:
         The workload is a mix of 0.9.x, 0.10.x and 0.11.x producers and consumers
         that produce to and consume from a DEV_BRANCH cluster
@@ -81,8 +80,9 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, version=DEV_BRANCH, topics={self.topic: {
                                                                     "partitions": 3,
                                                                     "replication-factor": 3,
-                                                                    'configs': {"min.insync.replicas": 2}}})
-       
+                                                                    'configs': {"min.insync.replicas": 2}}},
+                                                                    controller_num_nodes_override=1)
+
         self.kafka.start()
         self.logger.info("First format change to 0.9.0")
         self.kafka.alter_message_format(self.topic, str(LATEST_0_9))

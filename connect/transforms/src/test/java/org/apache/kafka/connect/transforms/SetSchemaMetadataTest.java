@@ -21,20 +21,21 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertSame;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 public class SetSchemaMetadataTest {
     private final SetSchemaMetadata<SinkRecord> xform = new SetSchemaMetadata.Value<>();
 
-    @After
+    @AfterEach
     public void teardown() {
         xform.close();
     }
@@ -52,7 +53,7 @@ public class SetSchemaMetadataTest {
         xform.configure(Collections.singletonMap("schema.version", 42));
         final SinkRecord record = new SinkRecord("", 0, null, null, SchemaBuilder.struct().build(), null, 0);
         final SinkRecord updatedRecord = xform.apply(record);
-        assertEquals(new Integer(42), updatedRecord.valueSchema().version());
+        assertEquals(Integer.valueOf(42), updatedRecord.valueSchema().version());
     }
 
     @Test
@@ -68,7 +69,7 @@ public class SetSchemaMetadataTest {
         final SinkRecord updatedRecord = xform.apply(record);
 
         assertEquals("foo", updatedRecord.valueSchema().name());
-        assertEquals(new Integer(42), updatedRecord.valueSchema().version());
+        assertEquals(Integer.valueOf(42), updatedRecord.valueSchema().version());
     }
 
     @Test
@@ -94,7 +95,7 @@ public class SetSchemaMetadataTest {
         final SinkRecord updatedRecord = xform.apply(record);
 
         assertEquals("foo", updatedRecord.valueSchema().name());
-        assertEquals(new Integer(42), updatedRecord.valueSchema().version());
+        assertEquals(Integer.valueOf(42), updatedRecord.valueSchema().version());
 
         // Make sure the struct's schema and fields all point to the new schema
         assertMatchingSchema((Struct) updatedRecord.value(), updatedRecord.valueSchema());
@@ -125,7 +126,7 @@ public class SetSchemaMetadataTest {
 
     @Test
     public void updateSchemaOfNonStruct() {
-        Object value = new Integer(1);
+        Object value = 1;
         Object updatedValue = SetSchemaMetadata.updateSchemaIn(value, Schema.INT32_SCHEMA);
         assertSame(value, updatedValue);
     }
@@ -133,7 +134,7 @@ public class SetSchemaMetadataTest {
     @Test
     public void updateSchemaOfNull() {
         Object updatedValue = SetSchemaMetadata.updateSchemaIn(null, Schema.INT32_SCHEMA);
-        assertEquals(null, updatedValue);
+        assertNull(updatedValue);
     }
 
     protected void assertMatchingSchema(Struct value, Schema schema) {

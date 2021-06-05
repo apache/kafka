@@ -17,25 +17,39 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.state.internals.KeyAndJoinSide;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.internals.KeyAndJoinSideSerde;
+import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.TimeOrderedWindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 
 class KStreamImplJoin {
 
@@ -43,6 +57,17 @@ class KStreamImplJoin {
     private final boolean leftOuter;
     private final boolean rightOuter;
 
+    static class MaxObservedStreamTime {
+        private long maxObservedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+
+        public void advance(final long streamTime) {
+            maxObservedStreamTime = Math.max(streamTime, maxObservedStreamTime);
+        }
+
+        public long get() {
+            return maxObservedStreamTime;
+        }
+    }
 
     KStreamImplJoin(final InternalStreamsBuilder builder,
                     final boolean leftOuter,
@@ -54,7 +79,7 @@ class KStreamImplJoin {
 
     public <K1, R, V1, V2> KStream<K1, R> join(final KStream<K1, V1> lhs,
                                                final KStream<K1, V2> other,
-                                               final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
+                                               final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner,
                                                final JoinWindows windows,
                                                final StreamJoined<K1, V1, V2> streamJoined) {
 
@@ -77,8 +102,8 @@ class KStreamImplJoin {
         final String joinMergeName = renamed.suffixWithOrElseGet(
             "-merge", builder, KStreamImpl.MERGE_NAME);
 
-        final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream) lhs).streamsGraphNode;
-        final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
+        final GraphNode thisGraphNode = ((AbstractStream<?, ?>) lhs).graphNode;
+        final GraphNode otherGraphNode = ((AbstractStream<?, ?>) other).graphNode;
 
         final StoreBuilder<WindowStore<K1, V1>> thisWindowStore;
         final StoreBuilder<WindowStore<K1, V2>> otherWindowStore;
@@ -91,7 +116,7 @@ class KStreamImplJoin {
 
         if (thisStoreSupplier == null) {
             final String thisJoinStoreName = userProvidedBaseStoreName == null ? joinThisGeneratedName : userProvidedBaseStoreName + joinThisSuffix;
-            thisWindowStore = joinWindowStoreBuilder(thisJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
+            thisWindowStore = joinWindowStoreBuilder(thisJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde(), streamJoinedInternal.loggingEnabled(), streamJoinedInternal.logConfig());
         } else {
             assertWindowSettings(thisStoreSupplier, windows);
             thisWindowStore = joinWindowStoreBuilderFromSupplier(thisStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
@@ -99,7 +124,7 @@ class KStreamImplJoin {
 
         if (otherStoreSupplier == null) {
             final String otherJoinStoreName = userProvidedBaseStoreName == null ? joinOtherGeneratedName : userProvidedBaseStoreName + joinOtherSuffix;
-            otherWindowStore = joinWindowStoreBuilder(otherJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
+            otherWindowStore = joinWindowStoreBuilder(otherJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde(), streamJoinedInternal.loggingEnabled(), streamJoinedInternal.logConfig());
         } else {
             assertWindowSettings(otherStoreSupplier, windows);
             otherWindowStore = joinWindowStoreBuilderFromSupplier(otherStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
@@ -107,39 +132,55 @@ class KStreamImplJoin {
 
         final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.name());
 
-        final ProcessorParameters<K1, V1> thisWindowStreamProcessorParams = new ProcessorParameters<>(thisWindowedStream, thisWindowStreamProcessorName);
+        final ProcessorParameters<K1, V1, ?, ?> thisWindowStreamProcessorParams = new ProcessorParameters<>(thisWindowedStream, thisWindowStreamProcessorName);
         final ProcessorGraphNode<K1, V1> thisWindowedStreamsNode = new ProcessorGraphNode<>(thisWindowStreamProcessorName, thisWindowStreamProcessorParams);
-        builder.addGraphNode(thisStreamsGraphNode, thisWindowedStreamsNode);
+        builder.addGraphNode(thisGraphNode, thisWindowedStreamsNode);
 
         final KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindowStore.name());
 
-        final ProcessorParameters<K1, V2> otherWindowStreamProcessorParams = new ProcessorParameters<>(otherWindowedStream, otherWindowStreamProcessorName);
+        final ProcessorParameters<K1, V2, ?, ?> otherWindowStreamProcessorParams = new ProcessorParameters<>(otherWindowedStream, otherWindowStreamProcessorName);
         final ProcessorGraphNode<K1, V2> otherWindowedStreamsNode = new ProcessorGraphNode<>(otherWindowStreamProcessorName, otherWindowStreamProcessorParams);
-        builder.addGraphNode(otherStreamsGraphNode, otherWindowedStreamsNode);
+        builder.addGraphNode(otherGraphNode, otherWindowedStreamsNode);
+
+        Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K1>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStore = Optional.empty();
+        if (leftOuter) {
+            outerJoinWindowStore = Optional.of(sharedOuterJoinWindowStoreBuilder(windows, streamJoinedInternal, joinThisGeneratedName));
+        }
+
+        // Time shared between joins to keep track of the maximum stream time
+        final MaxObservedStreamTime maxObservedStreamTime = new MaxObservedStreamTime();
 
         final KStreamKStreamJoin<K1, R, V1, V2> joinThis = new KStreamKStreamJoin<>(
+            true,
             otherWindowStore.name(),
             windows.beforeMs,
             windows.afterMs,
+            windows.gracePeriodMs(),
             joiner,
-            leftOuter
+            leftOuter,
+            outerJoinWindowStore.map(StoreBuilder::name),
+            maxObservedStreamTime
         );
 
         final KStreamKStreamJoin<K1, R, V2, V1> joinOther = new KStreamKStreamJoin<>(
+            false,
             thisWindowStore.name(),
             windows.afterMs,
             windows.beforeMs,
-            AbstractStream.reverseJoiner(joiner),
-            rightOuter
+            windows.gracePeriodMs(),
+            AbstractStream.reverseJoinerWithKey(joiner),
+            rightOuter,
+            outerJoinWindowStore.map(StoreBuilder::name),
+            maxObservedStreamTime
         );
 
-        final KStreamPassThrough<K1, R> joinMerge = new KStreamPassThrough<>();
+        final PassThrough<K1, R> joinMerge = new PassThrough<>();
 
         final StreamStreamJoinNode.StreamStreamJoinNodeBuilder<K1, V1, V2, R> joinBuilder = StreamStreamJoinNode.streamStreamJoinNodeBuilder();
 
-        final ProcessorParameters<K1, V1> joinThisProcessorParams = new ProcessorParameters<>(joinThis, joinThisName);
-        final ProcessorParameters<K1, V2> joinOtherProcessorParams = new ProcessorParameters<>(joinOther, joinOtherName);
-        final ProcessorParameters<K1, R> joinMergeProcessorParams = new ProcessorParameters<>(joinMerge, joinMergeName);
+        final ProcessorParameters<K1, V1, ?, ?> joinThisProcessorParams = new ProcessorParameters<>(joinThis, joinThisName);
+        final ProcessorParameters<K1, V2, ?, ?> joinOtherProcessorParams = new ProcessorParameters<>(joinOther, joinOtherName);
+        final ProcessorParameters<K1, R, ?, ?> joinMergeProcessorParams = new ProcessorParameters<>(joinMerge, joinMergeName);
 
         joinBuilder.withJoinMergeProcessorParameters(joinMergeProcessorParams)
                    .withJoinThisProcessorParameters(joinThisProcessorParams)
@@ -148,15 +189,16 @@ class KStreamImplJoin {
                    .withOtherWindowStoreBuilder(otherWindowStore)
                    .withThisWindowedStreamProcessorParameters(thisWindowStreamProcessorParams)
                    .withOtherWindowedStreamProcessorParameters(otherWindowStreamProcessorParams)
+                   .withOuterJoinWindowStoreBuilder(outerJoinWindowStore)
                    .withValueJoiner(joiner)
                    .withNodeName(joinMergeName);
 
-        final StreamsGraphNode joinGraphNode = joinBuilder.build();
+        final GraphNode joinGraphNode = joinBuilder.build();
 
-        builder.addGraphNode(Arrays.asList(thisStreamsGraphNode, otherStreamsGraphNode), joinGraphNode);
+        builder.addGraphNode(Arrays.asList(thisGraphNode, otherGraphNode), joinGraphNode);
 
-        final Set<String> allSourceNodes = new HashSet<>(((KStreamImpl<K1, V1>) lhs).sourceNodes);
-        allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);
+        final Set<String> allSourceNodes = new HashSet<>(((KStreamImpl<K1, V1>) lhs).subTopologySourceNodes);
+        allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).subTopologySourceNodes);
 
         // do not have serde for joined result;
         // also for key serde we do not inherit from either since we cannot tell if these two serdes are different
@@ -170,7 +212,8 @@ class KStreamImplJoin {
         final boolean allMatch = supplier.retentionPeriod() == (joinWindows.size() + joinWindows.gracePeriodMs()) &&
             supplier.windowSize() == joinWindows.size();
         if (!allMatch) {
-            throw new StreamsException(String.format("Window settings mismatch. WindowBytesStoreSupplier settings %s must match JoinWindows settings %s", supplier, joinWindows));
+            throw new StreamsException(String.format("Window settings mismatch. WindowBytesStoreSupplier settings %s must match JoinWindows settings %s" +
+                                                         " for the window size and retention period", supplier, joinWindows));
         }
     }
 
@@ -184,12 +227,13 @@ class KStreamImplJoin {
         }
     }
 
-    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilder(final String storeName,
                                                                                  final JoinWindows windows,
                                                                                  final Serde<K> keySerde,
-                                                                                 final Serde<V> valueSerde) {
-        return Stores.windowStoreBuilder(
+                                                                                 final Serde<V> valueSerde,
+                                                                                 final boolean loggingEnabled,
+                                                                                 final Map<String, String> logConfig) {
+        final StoreBuilder<WindowStore<K, V>> builder = Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
                 storeName + "-store",
                 Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
@@ -199,9 +243,112 @@ class KStreamImplJoin {
             keySerde,
             valueSerde
         );
+        if (loggingEnabled) {
+            builder.withLoggingEnabled(logConfig);
+        } else {
+            builder.withLoggingDisabled();
+        }
+
+        return builder;
     }
 
-    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
+    private <K, V1, V2> String buildOuterJoinWindowStoreName(final StreamJoinedInternal<K, V1, V2> streamJoinedInternal, final String joinThisGeneratedName) {
+        final String outerJoinSuffix = rightOuter ? "-outer-shared-join" : "-left-shared-join";
+
+        if (streamJoinedInternal.thisStoreSupplier() != null && !streamJoinedInternal.thisStoreSupplier().name().isEmpty()) {
+            return streamJoinedInternal.thisStoreSupplier().name() + outerJoinSuffix;
+        } else if (streamJoinedInternal.storeName() != null) {
+            return streamJoinedInternal.storeName() + outerJoinSuffix;
+        } else {
+            return KStreamImpl.OUTERSHARED_NAME
+                + joinThisGeneratedName.substring(
+                rightOuter
+                    ? KStreamImpl.OUTERTHIS_NAME.length()
+                    : KStreamImpl.JOINTHIS_NAME.length());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private <K, V1, V2> StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> sharedOuterJoinWindowStoreBuilder(final JoinWindows windows,
+                                                                                                                                 final StreamJoinedInternal<K, V1, V2> streamJoinedInternal,
+                                                                                                                                 final String joinThisGeneratedName) {
+        final boolean persistent = streamJoinedInternal.thisStoreSupplier() == null || streamJoinedInternal.thisStoreSupplier().get().persistent();
+        final String storeName = buildOuterJoinWindowStoreName(streamJoinedInternal, joinThisGeneratedName);
+
+        final KeyAndJoinSideSerde keyAndJoinSideSerde = new KeyAndJoinSideSerde<>(streamJoinedInternal.keySerde());
+        final LeftOrRightValueSerde leftOrRightValueSerde = new LeftOrRightValueSerde(streamJoinedInternal.valueSerde(), streamJoinedInternal.otherValueSerde());
+
+        final StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> builder;
+        if (persistent) {
+            builder = new TimeOrderedWindowStoreBuilder<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>(
+                persistentTimeOrderedWindowStore(
+                    storeName + "-store",
+                    Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                    Duration.ofMillis(windows.size())
+                ),
+                keyAndJoinSideSerde,
+                leftOrRightValueSerde,
+                Time.SYSTEM
+            );
+        } else {
+            builder = Stores.windowStoreBuilder(
+                Stores.inMemoryWindowStore(
+                    storeName + "-store",
+                    Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                    Duration.ofMillis(windows.size()),
+                    false
+                ),
+                keyAndJoinSideSerde,
+                leftOrRightValueSerde
+            );
+        }
+
+        if (streamJoinedInternal.loggingEnabled()) {
+            builder.withLoggingEnabled(streamJoinedInternal.logConfig());
+        } else {
+            builder.withLoggingDisabled();
+        }
+
+        return builder;
+    }
+
+    // This method has same code as Store.persistentWindowStore(). But TimeOrderedWindowStore is
+    // a non-public API, so we need to keep duplicate code until it becomes public.
+    private static WindowBytesStoreSupplier persistentTimeOrderedWindowStore(final String storeName,
+                                                                             final Duration retentionPeriod,
+                                                                             final Duration windowSize) {
+        Objects.requireNonNull(storeName, "name cannot be null");
+        final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
+        final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
+        final long windowSizeMs = validateMillisecondDuration(windowSize, wsMsgPrefix);
+
+        final long segmentInterval = Math.max(retentionMs / 2, 60_000L);
+
+        if (retentionMs < 0L) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        if (windowSizeMs < 0L) {
+            throw new IllegalArgumentException("windowSize cannot be negative");
+        }
+        if (segmentInterval < 1L) {
+            throw new IllegalArgumentException("segmentInterval cannot be zero or negative");
+        }
+        if (windowSizeMs > retentionMs) {
+            throw new IllegalArgumentException("The retention period of the window store "
+                + storeName + " must be no smaller than its window size. Got size=["
+                + windowSizeMs + "], retention=[" + retentionMs + "]");
+        }
+
+        return new RocksDbWindowBytesStoreSupplier(
+            storeName,
+            retentionMs,
+            segmentInterval,
+            windowSizeMs,
+            true,
+            RocksDbWindowBytesStoreSupplier.WindowStoreTypes.TIME_ORDERED_WINDOW_STORE);
+    }
+
     private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilderFromSupplier(final WindowBytesStoreSupplier storeSupplier,
                                                                                              final Serde<K> keySerde,
                                                                                              final Serde<V> valueSerde) {

@@ -18,197 +18,203 @@
 <script><!--#include virtual="js/templateData.js" --></script>
 
 <script id="introduction-template" type="text/x-handlebars-template">
-  <h3> Apache Kafka&reg; is <i>a distributed streaming platform</i>. What exactly does that mean?</h3>
-  <p>A streaming platform has three key capabilities:</p>
-  <ul>
-    <li>Publish and subscribe to streams of records, similar to a message queue or enterprise messaging system.
-    <li>Store streams of records in a fault-tolerant durable way.
-    <li>Process streams of records as they occur.
-  </ul>
-  <p>Kafka is generally used for two broad classes of applications:</p>
-  <ul>
-    <li>Building real-time streaming data pipelines that reliably get data between systems or applications
-    <li>Building real-time streaming applications that transform or react to the streams of data
-  </ul>
-  <p>To understand how Kafka does these things, let's dive in and explore Kafka's capabilities from the bottom up.</p>
-  <p>First a few concepts:</p>
-  <ul>
-    <li>Kafka is run as a cluster on one or more servers that can span multiple datacenters.
-      <li>The Kafka cluster stores streams of <i>records</i> in categories called <i>topics</i>.
-    <li>Each record consists of a key, a value, and a timestamp.
-  </ul>
-  <p>Kafka has four core APIs:</p>
-  <div style="overflow: hidden;">
-      <ul style="float: left; width: 40%;">
-      <li>The <a href="/documentation.html#producerapi">Producer API</a> allows an application to publish a stream of records to one or more Kafka topics.
-      <li>The <a href="/documentation.html#consumerapi">Consumer API</a> allows an application to subscribe to one or more topics and process the stream of records produced to them.
-    <li>The <a href="/documentation/streams">Streams API</a> allows an application to act as a <i>stream processor</i>, consuming an input stream from one or more topics and producing an output stream to one or more output topics, effectively transforming the input streams to output streams.
-    <li>The <a href="/documentation.html#connect">Connector API</a> allows building and running reusable producers or consumers that connect Kafka topics to existing applications or data systems. For example, a connector to a relational database might capture every change to a table.
-  </ul>
-      <img src="/{{version}}/images/kafka-apis.png" style="float: right; width: 50%;">
-      </div>
+  <h4 class="anchor-heading">
+    <a class="anchor-link" id="intro_streaming" href="#intro_streaming"></a>
+    <a href="#intro_streaming">What is event streaming?</a>
+  </h4>
   <p>
-  In Kafka the communication between the clients and the servers is done with a simple, high-performance, language agnostic <a href="https://kafka.apache.org/protocol.html">TCP protocol</a>. This protocol is versioned and maintains backwards compatibility with older version. We provide a Java client for Kafka, but clients are available in <a href="https://cwiki.apache.org/confluence/display/KAFKA/Clients">many languages</a>.</p>
-
-  <h4><a id="intro_topics" href="#intro_topics">Topics and Logs</a></h4>
-  <p>Let's first dive into the core abstraction Kafka provides for a stream of records&mdash;the topic.</p>
-  <p>A topic is a category or feed name to which records are published. Topics in Kafka are always multi-subscriber; that is, a topic can have zero, one, or many consumers that subscribe to the data written to it.</p>
-  <p> For each topic, the Kafka cluster maintains a partitioned log that looks like this: </p>
-  <img class="centered" src="/{{version}}/images/log_anatomy.png">
-
-  <p> Each partition is an ordered, immutable sequence of records that is continually appended to&mdash;a structured commit log. The records in the partitions are each assigned a sequential id number called the <i>offset</i> that uniquely identifies each record within the partition.
+    Event streaming is the digital equivalent of the human body's central nervous system. It is the
+    technological foundation for the 'always-on' world where businesses are increasingly software-defined 
+    and automated, and where the user of software is more software.
   </p>
   <p>
-  The Kafka cluster durably persists all published records&mdash;whether or not they have been consumed&mdash;using a configurable retention period. For example, if the retention policy is set to two days, then for the two days after a record is published, it is available for consumption, after which it will be discarded to free up space. Kafka's performance is effectively constant with respect to data size so storing data for a long time is not a problem.
-  </p>
-  <img class="centered" src="/{{version}}/images/log_consumer.png" style="width:400px">
-  <p>
-  In fact, the only metadata retained on a per-consumer basis is the offset or position of that consumer in the log. This offset is controlled by the consumer: normally a consumer will advance its offset linearly as it reads records, but, in fact, since the position is controlled by the consumer it can consume records in any order it likes. For example a consumer can reset to an older offset to reprocess data from the past or skip ahead to the most recent record and start consuming from "now".
-  </p>
-  <p>
-  This combination of features means that Kafka consumers are very cheap&mdash;they can come and go without much impact on the cluster or on other consumers. For example, you can use our command line tools to "tail" the contents of any topic without changing what is consumed by any existing consumers.
-  </p>
-  <p>
-  The partitions in the log serve several purposes. First, they allow the log to scale beyond a size that will fit on a single server. Each individual partition must fit on the servers that host it, but a topic may have many partitions so it can handle an arbitrary amount of data. Second they act as the unit of parallelism&mdash;more on that in a bit.
+    Technically speaking, event streaming is the practice of capturing data in real-time from event sources
+    like databases, sensors, mobile devices, cloud services, and software applications in the form of streams
+    of events; storing these event streams durably for later retrieval; manipulating, processing, and reacting
+    to the event streams in real-time as well as retrospectively; and routing the event streams to different
+    destination technologies as needed. Event streaming thus ensures a continuous flow and interpretation of
+    data so that the right information is at the right place, at the right time.
   </p>
 
-  <h4><a id="intro_distribution" href="#intro_distribution">Distribution</a></h4>
-
+  <h4 class="anchor-heading">
+    <a class="anchor-link" id="intro_usage" href="#intro_usage"></a>
+    <a href="#intro_usage">What can I use event streaming for?</a>
+  </h4>
   <p>
-  The partitions of the log are distributed over the servers in the Kafka cluster with each server handling data and requests for a share of the partitions. Each partition is replicated across a configurable number of servers for fault tolerance.
-  </p>
-  <p>
-  Each partition has one server which acts as the "leader" and zero or more servers which act as "followers". The leader handles all read and write requests for the partition while the followers passively replicate the leader. If the leader fails, one of the followers will automatically become the new leader. Each server acts as a leader for some of its partitions and a follower for others so load is well balanced within the cluster.
-  </p>
-
-  <h4><a id="intro_geo-replication" href="#intro_geo-replication">Geo-Replication</a></h4>
-
-  <p>Kafka MirrorMaker provides geo-replication support for your clusters. With MirrorMaker, messages are replicated across multiple datacenters or cloud regions. You can use this in active/passive scenarios for backup and recovery; or in active/active scenarios to place data closer to your users, or support data locality requirements. </p>
-
-  <h4><a id="intro_producers" href="#intro_producers">Producers</a></h4>
-  <p>
-  Producers publish data to the topics of their choice. The producer is responsible for choosing which record to assign to which partition within the topic. This can be done in a round-robin fashion simply to balance load or it can be done according to some semantic partition function (say based on some key in the record). More on the use of partitioning in a second!
-  </p>
-
-  <h4><a id="intro_consumers" href="#intro_consumers">Consumers</a></h4>
-
-  <p>
-  Consumers label themselves with a <i>consumer group</i> name, and each record published to a topic is delivered to one consumer instance within each subscribing consumer group. Consumer instances can be in separate processes or on separate machines.
-  </p>
-  <p>
-  If all the consumer instances have the same consumer group, then the records will effectively be load balanced over the consumer instances.</p>
-  <p>
-  If all the consumer instances have different consumer groups, then each record will be broadcast to all the consumer processes.
-  </p>
-  <img class="centered" src="/{{version}}/images/consumer-groups.png">
-  <p>
-    A two server Kafka cluster hosting four partitions (P0-P3) with two consumer groups. Consumer group A has two consumer instances and group B has four.
-  </p>
-
-  <p>
-  More commonly, however, we have found that topics have a small number of consumer groups, one for each "logical subscriber". Each group is composed of many consumer instances for scalability and fault tolerance. This is nothing more than publish-subscribe semantics where the subscriber is a cluster of consumers instead of a single process.
-  </p>
-  <p>
-  The way consumption is implemented in Kafka is by dividing up the partitions in the log over the consumer instances so that each instance is the exclusive consumer of a "fair share" of partitions at any point in time. This process of maintaining membership in the group is handled by the Kafka protocol dynamically. If new instances join the group they will take over some partitions from other members of the group; if an instance dies, its partitions will be distributed to the remaining instances.
-  </p>
-  <p>
-  Kafka only provides a total order over records <i>within</i> a partition, not between different partitions in a topic. Per-partition ordering combined with the ability to partition data by key is sufficient for most applications. However, if you require a total order over records this can be achieved with a topic that has only one partition, though this will mean only one consumer process per consumer group.
-  </p>
-  <h4><a id="intro_multi-tenancy" href="#intro_multi-tenancy">Multi-tenancy</a></h4>
-  <p>You can deploy Kafka as a multi-tenant solution. Multi-tenancy is enabled by configuring which topics can produce or consume data. There is also operations support for quotas.  Administrators can define and enforce quotas on requests to control the broker resources that are used by clients.  For more information, see the <a href="https://kafka.apache.org/documentation/#security">security documentation</a>. </p>
-  <h4><a id="intro_guarantees" href="#intro_guarantees">Guarantees</a></h4>
-  <p>
-  At a high-level Kafka gives the following guarantees:
+    Event streaming is applied to a <a href="/powered-by">wide variety of use cases</a>
+    across a plethora of industries and organizations. Its many examples include:
   </p>
   <ul>
-    <li>Messages sent by a producer to a particular topic partition will be appended in the order they are sent. That is, if a record M1 is sent by the same producer as a record M2, and M1 is sent first, then M1 will have a lower offset than M2 and appear earlier in the log.
-    <li>A consumer instance sees records in the order they are stored in the log.
-    <li>For a topic with replication factor N, we will tolerate up to N-1 server failures without losing any records committed to the log.
+    <li>
+      To process payments and financial transactions in real-time, such as in stock exchanges, banks, and insurances.
+    </li>
+    <li>
+      To track and monitor cars, trucks, fleets, and shipments in real-time, such as in logistics and the automotive industry.
+    </li>
+    <li>
+      To continuously capture and analyze sensor data from IoT devices or other equipment, such as in factories and wind parks.
+    </li>
+    <li>
+      To collect and immediately react to customer interactions and orders, such as in retail, the hotel and travel industry, and mobile applications.
+    </li>
+    <li>
+      To monitor patients in hospital care and predict changes in condition to ensure timely treatment in emergencies.
+    </li>
+    <li>
+      To connect, store, and make available data produced by different divisions of a company.
+    </li>
+    <li>
+      To serve as the foundation for data platforms, event-driven architectures, and microservices.
+    </li>
+  </ul>
+
+  <h4 class="anchor-heading">
+    <a class="anchor-link" id="intro_platform" href="#intro_platform"></a>
+    <a href="#intro_platform">Apache Kafka&reg; is an event streaming platform. What does that mean?</a>
+  </h4>
+  <p>
+    Kafka combines three key capabilities so you can implement
+    <a href="/powered-by">your use cases</a>
+    for event streaming end-to-end with a single battle-tested solution:
+  </p>
+  <ol>
+    <li>
+      To <strong>publish</strong> (write) and <strong>subscribe to</strong> (read) streams of events, including continuous import/export of
+      your data from other systems.
+    </li>
+    <li>
+      To <strong>store</strong> streams of events durably and reliably for as long as you want.
+    </li>
+    <li>
+      To <strong>process</strong> streams of events as they occur or retrospectively.
+    </li>
+  </ol>
+  <p>
+    And all this functionality is provided in a distributed, highly scalable, elastic, fault-tolerant, and
+    secure manner. Kafka can be deployed on bare-metal hardware, virtual machines, and containers, and on-premises
+    as well as in the cloud. You can choose between self-managing your Kafka environments and using fully managed
+    services offered by a variety of vendors.
+  </p>
+
+  <h4 class="anchor-heading">
+    <a class="anchor-link" id="intro_nutshell" href="#intro_nutshell"></a>
+    <a href="#intro_nutshell">How does Kafka work in a nutshell?</a>
+  </h4>
+  <p>
+    Kafka is a distributed system consisting of <strong>servers</strong> and <strong>clients</strong> that
+    communicate via a high-performance <a href="/protocol.html">TCP network protocol</a>.
+    It can be deployed on bare-metal hardware, virtual machines, and containers in on-premise as well as cloud
+    environments.
+  </p>
+  <p>
+    <strong>Servers</strong>: Kafka is run as a cluster of one or more servers that can span multiple datacenters
+    or cloud regions. Some of these servers form the storage layer, called the brokers. Other servers run
+    <a href="/documentation/#connect">Kafka Connect</a> to continuously import and export
+    data as event streams to integrate Kafka with your existing systems such as relational databases as well as
+    other Kafka clusters. To let you implement mission-critical use cases, a Kafka cluster is highly scalable
+    and fault-tolerant: if any of its servers fails, the other servers will take over their work to ensure
+    continuous operations without any data loss.
+  </p>
+  <p>
+    <strong>Clients</strong>: They allow you to write distributed applications and microservices that read, write,
+    and process streams of events in parallel, at scale, and in a fault-tolerant manner even in the case of network
+    problems or machine failures. Kafka ships with some such clients included, which are augmented by
+    <a href="https://cwiki.apache.org/confluence/display/KAFKA/Clients">dozens of clients</a> provided by the Kafka
+    community: clients are available for Java and Scala including the higher-level
+    <a href="/documentation/streams/">Kafka Streams</a> library, for Go, Python, C/C++, and
+    many other programming languages as well as REST APIs.
+  </p>
+
+  <h4 class="anchor-heading">
+    <a class="anchor-link" id="intro_concepts_and_terms" href="#intro_concepts_and_terms"></a>
+    <a href="#intro_concepts_and_terms">Main Concepts and Terminology</a>
+  </h4>
+  <p>
+    An <strong>event</strong> records the fact that "something happened" in the world or in your business. It is also called record or message in the documentation. When you read or write data to Kafka, you do this in the form of events. Conceptually, an event has a key, value, timestamp, and optional metadata headers. Here's an example event:
+  </p>
+  <ul>
+    <li>
+      Event key: "Alice"
+    </li>
+    <li>
+      Event value: "Made a payment of $200 to Bob"
+    </li>
+    <li>
+      Event timestamp: "Jun. 25, 2020 at 2:06 p.m."
+    </li>
   </ul>
   <p>
-  More details on these guarantees are given in the design section of the documentation.
-  </p>
-  <h4><a id="kafka_mq" href="#kafka_mq">Kafka as a Messaging System</a></h4>
-  <p>
-  How does Kafka's notion of streams compare to a traditional enterprise messaging system?
+    <strong>Producers</strong> are those client applications that publish (write) events to Kafka, and <strong>consumers</strong> are those that subscribe to (read and process) these events. In Kafka, producers and consumers are fully decoupled and agnostic of each other, which is a key design element to achieve the high scalability that Kafka is known for. For example, producers never need to wait for consumers. Kafka provides various <a href="/documentation/#intro_guarantees">guarantees</a> such as the ability to process events exactly-once.
   </p>
   <p>
-  Messaging traditionally has two models: <a href="http://en.wikipedia.org/wiki/Message_queue">queuing</a> and <a href="http://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern">publish-subscribe</a>. In a queue, a pool of consumers may read from a server and each record goes to one of them; in publish-subscribe the record is broadcast to all consumers. Each of these two models has a strength and a weakness. The strength of queuing is that it allows you to divide up the processing of data over multiple consumer instances, which lets you scale your processing. Unfortunately, queues aren't multi-subscriber&mdash;once one process reads the data it's gone. Publish-subscribe allows you broadcast data to multiple processes, but has no way of scaling processing since every message goes to every subscriber.
+    Events are organized and durably stored in <strong>topics</strong>. Very simplified, a topic is similar to a folder in a filesystem, and the events are the files in that folder. An example topic name could be "payments". Topics in Kafka are always multi-producer and multi-subscriber: a topic can have zero, one, or many producers that write events to it, as well as zero, one, or many consumers that subscribe to these events. Events in a topic can be read as often as needed—unlike traditional messaging systems, events are not deleted after consumption. Instead, you define for how long Kafka should retain your events through a per-topic configuration setting, after which old events will be discarded. Kafka's performance is effectively constant with respect to data size, so storing data for a long time is perfectly fine.
   </p>
   <p>
-  The consumer group concept in Kafka generalizes these two concepts. As with a queue the consumer group allows you to divide up processing over a collection of processes (the members of the consumer group). As with publish-subscribe, Kafka allows you to broadcast messages to multiple consumer groups.
+    Topics are <strong>partitioned</strong>, meaning a topic is spread over a number of "buckets" located on different Kafka brokers. This distributed placement of your data is very important for scalability because it allows client applications to both read and write the data from/to many brokers at the same time. When a new event is published to a topic, it is actually appended to one of the topic's partitions. Events with the same event key (e.g., a customer or vehicle ID) are written to the same partition, and Kafka <a href="/documentation/#intro_guarantees">guarantees</a> that any consumer of a given topic-partition will always read that partition's events in exactly the same order as they were written.
+  </p>
+  <figure class="figure">
+    <img src="/images/streams-and-tables-p1_p4.png" class="figure-image" />
+    <figcaption class="figure-caption">
+      Figure: This example topic has four partitions P1–P4. Two different producer clients are publishing,
+      independently from each other, new events to the topic by writing events over the network to the topic's
+      partitions. Events with the same key (denoted by their color in the figure) are written to the same
+      partition. Note that both producers can write to the same partition if appropriate.
+    </figcaption>
+  </figure>
+  <p>
+    To make your data fault-tolerant and highly-available, every topic can be <strong>replicated</strong>, even across geo-regions or datacenters, so that there are always multiple brokers that have a copy of the data just in case things go wrong, you want to do maintenance on the brokers, and so on. A common production setting is a replication factor of 3, i.e., there will always be three copies of your data. This replication is performed at the level of topic-partitions.
   </p>
   <p>
-  The advantage of Kafka's model is that every topic has both these properties&mdash;it can scale processing and is also multi-subscriber&mdash;there is no need to choose one or the other.
-  </p>
-  <p>
-  Kafka has stronger ordering guarantees than a traditional messaging system, too.
-  </p>
-  <p>
-  A traditional queue retains records in-order on the server, and if multiple consumers consume from the queue then the server hands out records in the order they are stored. However, although the server hands out records in order, the records are delivered asynchronously to consumers, so they may arrive out of order on different consumers. This effectively means the ordering of the records is lost in the presence of parallel consumption. Messaging systems often work around this by having a notion of "exclusive consumer" that allows only one process to consume from a queue, but of course this means that there is no parallelism in processing.
-  </p>
-  <p>
-  Kafka does it better. By having a notion of parallelism&mdash;the partition&mdash;within the topics, Kafka is able to provide both ordering guarantees and load balancing over a pool of consumer processes. This is achieved by assigning the partitions in the topic to the consumers in the consumer group so that each partition is consumed by exactly one consumer in the group. By doing this we ensure that the consumer is the only reader of that partition and consumes the data in order. Since there are many partitions this still balances the load over many consumer instances. Note however that there cannot be more consumer instances in a consumer group than partitions.
+    This primer should be sufficient for an introduction. The <a href="/documentation/#design">Design</a> section of the documentation explains Kafka's various concepts in full detail, if you are interested.
   </p>
 
-  <h4 id="kafka_storage">Kafka as a Storage System</h4>
+  <h4 class="anchor-heading">
+    <a class="anchor-link" id="intro_apis" href="#intro_apis"></a>
+    <a href="#intro_apis">Kafka APIs</a>
+  </h4>
+  <p>
+    In addition to command line tooling for management and administration tasks, Kafka has five core APIs for Java and Scala:
+  </p>
+  <ul>
+    <li>
+      The <a href="/documentation.html#adminapi">Admin API</a> to manage and inspect topics, brokers, and other Kafka objects.
+    </li>
+    <li>
+      The <a href="/documentation.html#producerapi">Producer API</a> to publish (write) a stream of events to one or more Kafka topics.
+    </li>
+    <li>
+      The <a href="/documentation.html#consumerapi">Consumer API</a> to subscribe to (read) one or more topics and to process the stream of events produced to them.
+    </li>
+    <li>
+      The <a href="/documentation/streams">Kafka Streams API</a> to implement stream processing applications and microservices. It provides higher-level functions to process event streams, including transformations, stateful operations like aggregations and joins, windowing, processing based on event-time, and more. Input is read from one or more topics in order to generate output to one or more topics, effectively transforming the input streams to output streams.
+    </li>
+    <li>
+      The <a href="/documentation.html#connect">Kafka Connect API</a> to build and run reusable data import/export connectors that consume (read) or produce (write) streams of events from and to external systems and applications so they can integrate with Kafka. For example, a connector to a relational database like PostgreSQL might capture every change to a set of tables. However, in practice, you typically don't need to implement your own connectors because the Kafka community already provides hundreds of ready-to-use connectors.
+    </li>
+  </ul>
 
-  <p>
-  Any message queue that allows publishing messages decoupled from consuming them is effectively acting as a storage system for the in-flight messages. What is different about Kafka is that it is a very good storage system.
-  </p>
-  <p>
-  Data written to Kafka is written to disk and replicated for fault-tolerance. Kafka allows producers to wait on acknowledgement so that a write isn't considered complete until it is fully replicated and guaranteed to persist even if the server written to fails.
-  </p>
-  <p>
-  The disk structures Kafka uses scale well&mdash;Kafka will perform the same whether you have 50 KB or 50 TB of persistent data on the server.
-  </p>
-  <p>
-  As a result of taking storage seriously and allowing the clients to control their read position, you can think of Kafka as a kind of special purpose distributed filesystem dedicated to high-performance, low-latency commit log storage, replication, and propagation.
-  </p>
-  <p>
-  For details about the Kafka's commit log storage and replication design, please read <a href="https://kafka.apache.org/documentation/#design">this</a> page.
-  </p>
-  <h4>Kafka for Stream Processing</h4>
-  <p>
-  It isn't enough to just read, write, and store streams of data, the purpose is to enable real-time processing of streams.
-  </p>
-  <p>
-  In Kafka a stream processor is anything that takes continual streams of  data from input topics, performs some processing on this input, and produces continual streams of data to output topics.
-  </p>
-  <p>
-  For example, a retail application might take in input streams of sales and shipments, and output a stream of reorders and price adjustments computed off this data.
-  </p>
-  <p>
-  It is possible to do simple processing directly using the producer and consumer APIs. However for more complex transformations Kafka provides a fully integrated <a href="/documentation/streams">Streams API</a>. This allows building applications that do non-trivial processing that compute aggregations off of streams or join streams together.
-  </p>
-  <p>
-  This facility helps solve the hard problems this type of application faces: handling out-of-order data, reprocessing input as code changes, performing stateful computations, etc.
-  </p>
-  <p>
-  The streams API builds on the core primitives Kafka provides: it uses the producer and consumer APIs for input, uses Kafka for stateful storage, and uses the same group mechanism for fault tolerance among the stream processor instances.
-  </p>
-  <h4>Putting the Pieces Together</h4>
-  <p>
-  This combination of messaging, storage, and stream processing may seem unusual but it is essential to Kafka's role as a streaming platform.
-  </p>
-  <p>
-  A distributed file system like HDFS allows storing static files for batch processing. Effectively a system like this allows storing and processing <i>historical</i> data from the past.
-  </p>
-  <p>
-  A traditional enterprise messaging system allows processing future messages that will arrive after you subscribe. Applications built in this way process future data as it arrives.
-  </p>
-  <p>
-  Kafka combines both of these capabilities, and the combination is critical both for Kafka usage as a platform for streaming applications as well as for streaming data pipelines.
-  </p>
-  <p>
-  By combining storage and low-latency subscriptions, streaming applications can treat both past and future data the same way. That is a single application can process historical, stored data but rather than ending when it reaches the last record it can keep processing as future data arrives. This is a generalized notion of stream processing that subsumes batch processing as well as message-driven applications.
-  </p>
-  <p>
-  Likewise for streaming data pipelines the combination of subscription to real-time events make it possible to use Kafka for very low-latency pipelines; but the ability to store data reliably make it possible to use it for critical data where the delivery of data must be guaranteed or for integration with offline systems that load data only periodically or may go down for extended periods of time for maintenance. The stream processing facilities make it possible to transform data as it arrives.
-  </p>
-  <p>
-  For more information on the guarantees, APIs, and capabilities Kafka provides see the rest of the <a href="/documentation.html">documentation</a>.
-  </p>
+  <!-- TODO: add new section once supporting page is written -->
+
+  <h4 class="anchor-heading">
+    <a class="anchor-link" id="intro_more" href="#intro_more"></a>
+    <a href="#intro_more">Where to go from here</a>
+  </h4>
+  <ul>
+    <li>
+      To get hands-on experience with Kafka, follow the <a href="/quickstart">Quickstart</a>.
+    </li>
+    <li>
+      To understand Kafka in more detail, read the <a href="/documentation/">Documentation</a>.
+      You also have your choice of <a href="/books-and-papers">Kafka books and academic papers</a>.
+    </li>
+    <li>
+      Browse through the <a href="/powered-by">Use Cases</a> to learn how other users in our world-wide community are getting value out of Kafka.
+    </li>
+    <li>
+      Join a <a href="/events">local Kafka meetup group</a> and
+      <a href="https://kafka-summit.org/past-events/">watch talks from Kafka Summit</a>, the main conference of the Kafka community.
+    </li>
+  </ul>
 </script>
 
 <div class="p-introduction"></div>

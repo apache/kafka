@@ -18,11 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 
 public class ListGroupsResponse extends AbstractResponse {
@@ -30,13 +29,11 @@ public class ListGroupsResponse extends AbstractResponse {
     private final ListGroupsResponseData data;
 
     public ListGroupsResponse(ListGroupsResponseData data) {
+        super(ApiKeys.LIST_GROUPS);
         this.data = data;
     }
 
-    public ListGroupsResponse(Struct struct, short version) {
-        this.data = new ListGroupsResponseData(struct, version);
-    }
-
+    @Override
     public ListGroupsResponseData data() {
         return data;
     }
@@ -48,16 +45,11 @@ public class ListGroupsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+        return errorCounts(Errors.forCode(data.errorCode()));
     }
 
     public static ListGroupsResponse parse(ByteBuffer buffer, short version) {
-        return new ListGroupsResponse(ApiKeys.LIST_GROUPS.responseSchema(version).read(buffer), version);
+        return new ListGroupsResponse(new ListGroupsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

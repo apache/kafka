@@ -33,16 +33,17 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 
 @Category({IntegrationTest.class})
 public class StateRestorationIntegrationTest {
@@ -55,8 +56,18 @@ public class StateRestorationIntegrationTest {
 
     private Properties streamsConfiguration;
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
     private final MockTime mockTime = CLUSTER.time;
 
     @Before
@@ -77,7 +88,7 @@ public class StateRestorationIntegrationTest {
     }
 
     @Test
-    public void shouldRestoreNullRecord() throws InterruptedException, ExecutionException {
+    public void shouldRestoreNullRecord() throws Exception {
         builder.table(INPUT_TOPIC, Materialized.<Integer, Bytes>as(
                 Stores.persistentTimestampedKeyValueStore(STATE_STORE_NAME))
                 .withKeySerde(Serdes.Integer())

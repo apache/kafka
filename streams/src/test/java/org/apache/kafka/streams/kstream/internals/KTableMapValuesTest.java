@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
@@ -31,8 +32,8 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockProcessor;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -42,10 +43,11 @@ import java.time.Instant;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("unchecked")
 public class KTableMapValuesTest {
@@ -65,7 +67,7 @@ public class KTableMapValuesTest {
             assertEquals(asList(new KeyValueTimestamp<>("A", 1, 5),
                     new KeyValueTimestamp<>("B", 2, 25),
                     new KeyValueTimestamp<>("C", 3, 20),
-                    new KeyValueTimestamp<>("D", 4, 10)), supplier.theCapturedProcessor().processed);
+                    new KeyValueTimestamp<>("D", 4, 10)), supplier.theCapturedProcessor().processed());
         }
     }
 
@@ -180,16 +182,16 @@ public class KTableMapValuesTest {
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         final KTableImpl<String, String, Integer> table2 =
             (KTableImpl<String, String, Integer>) table1.mapValues(
-                Integer::new,
+                s -> Integer.valueOf(s),
                 Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName2)
                     .withValueSerde(Serdes.Integer()));
         final KTableImpl<String, String, Integer> table3 =
             (KTableImpl<String, String, Integer>) table1.mapValues(
-                value -> new Integer(value) * (-1),
+                value -> Integer.valueOf(value) * (-1),
                 Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName3)
                     .withValueSerde(Serdes.Integer()));
         final KTableImpl<String, String, Integer> table4 =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
 
         assertEquals(storeName2, table2.queryableStoreName());
         assertEquals(storeName3, table3.queryableStoreName());
@@ -206,15 +208,15 @@ public class KTableMapValuesTest {
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         final KTableImpl<String, String, Integer> table2 =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
 
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc", supplier, table2.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
+            final MockApiProcessor<String, Integer, Void, Void> proc = supplier.theCapturedProcessor();
 
             assertFalse(table1.sendingOldValueEnabled());
             assertFalse(table2.sendingOldValueEnabled());
@@ -240,44 +242,82 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testSendingOldValue() {
+    public void shouldEnableSendingOldValuesOnParentIfMapValuesNotMaterialized() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         final KTableImpl<String, String, Integer> table2 =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
-        table2.enableSendingOldValues();
+            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
 
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        table2.enableSendingOldValues(true);
+
+        assertThat(table1.sendingOldValueEnabled(), is(true));
+        assertThat(table2.sendingOldValueEnabled(), is(true));
+
+        testSendingOldValues(builder, topic1, table2);
+    }
+
+    @Test
+    public void shouldNotEnableSendingOldValuesOnParentIfMapValuesMaterialized() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic1 = "topic1";
+
+        final KTableImpl<String, String, String> table1 =
+            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, String, Integer> table2 =
+            (KTableImpl<String, String, Integer>) table1.mapValues(
+                s -> Integer.valueOf(s),
+                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("bob").withValueSerde(Serdes.Integer())
+            );
+
+        table2.enableSendingOldValues(true);
+
+        assertThat(table1.sendingOldValueEnabled(), is(false));
+        assertThat(table2.sendingOldValueEnabled(), is(true));
+
+        testSendingOldValues(builder, topic1, table2);
+    }
+
+    private void testSendingOldValues(
+        final StreamsBuilder builder,
+        final String topic1,
+        final KTableImpl<String, String, Integer> table2
+    ) {
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         builder.build().addProcessor("proc", supplier, table2.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
-
-            assertTrue(table1.sendingOldValueEnabled());
-            assertTrue(table2.sendingOldValueEnabled());
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockApiProcessor<String, Integer, Void, Void> proc = supplier.theCapturedProcessor();
 
             inputTopic1.pipeInput("A", "01", 5L);
             inputTopic1.pipeInput("B", "01", 10L);
             inputTopic1.pipeInput("C", "01", 15L);
-            proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
-                    new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
-                    new KeyValueTimestamp<>("C", new Change<>(1, null), 15));
+            proc.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
+                new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
+                new KeyValueTimestamp<>("C", new Change<>(1, null), 15)
+            );
 
             inputTopic1.pipeInput("A", "02", 10L);
             inputTopic1.pipeInput("B", "02", 8L);
-            proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, 1), 10),
-                    new KeyValueTimestamp<>("B", new Change<>(2, 1), 8));
+            proc.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(2, 1), 10),
+                new KeyValueTimestamp<>("B", new Change<>(2, 1), 8)
+            );
 
             inputTopic1.pipeInput("A", "03", 20L);
-            proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(3, 2), 20));
+            proc.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(3, 2), 20)
+            );
 
             inputTopic1.pipeInput("A", (String) null, 30L);
-            proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, 3), 30));
+            proc.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(null, 3), 30)
+            );
         }
     }
 }

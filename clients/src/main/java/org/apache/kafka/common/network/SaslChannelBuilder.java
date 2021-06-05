@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
@@ -34,6 +35,7 @@ import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerCallbackHandler;
 import org.apache.kafka.common.security.kerberos.KerberosClientCallbackHandler;
 import org.apache.kafka.common.security.kerberos.KerberosLogin;
+import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerRefreshingLogin;
@@ -46,11 +48,19 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.scram.internals.ScramServerCallbackHandler;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.ietf.jgss.GSSContext;
+import org.ietf.jgss.GSSCredential;
+import org.ietf.jgss.GSSException;
+import org.ietf.jgss.GSSManager;
+import org.ietf.jgss.GSSName;
+import org.ietf.jgss.Oid;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import javax.security.auth.Subject;
+import javax.security.auth.kerberos.KerberosPrincipal;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
@@ -62,11 +72,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
-import javax.security.auth.Subject;
-import javax.security.auth.kerberos.KerberosPrincipal;
-
 public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
-    private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
+    static final String GSS_NATIVE_PROP = "sun.security.jgss.native";
 
     private final SecurityProtocol securityProtocol;
     private final ListenerName listenerName;
@@ -79,13 +86,18 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private final DelegationTokenCache tokenCache;
     private final Map<String, LoginManager> loginManagers;
     private final Map<String, Subject> subjects;
+    private final Supplier<ApiVersionsResponse> apiVersionSupplier;
 
     private SslFactory sslFactory;
     private Map<String, ?> configs;
+    private final String sslClientAuthOverride;
+
     private KerberosShortNamer kerberosShortNamer;
     private Map<String, AuthenticateCallbackHandler> saslCallbackHandlers;
     private Map<String, Long> connectionsMaxReauthMsByMechanism;
     private final Time time;
+    private final LogContext logContext;
+    private final Logger log;
 
     public SaslChannelBuilder(Mode mode,
                               Map<String, JaasContext> jaasContexts,
@@ -96,7 +108,10 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                               boolean handshakeRequestEnable,
                               CredentialCache credentialCache,
                               DelegationTokenCache tokenCache,
-                              Time time) {
+                              String sslClientAuthOverride,
+                              Time time,
+                              LogContext logContext,
+                              Supplier<ApiVersionsResponse> apiVersionSupplier) {
         this.mode = mode;
         this.jaasContexts = jaasContexts;
         this.loginManagers = new HashMap<>(jaasContexts.size());
@@ -108,9 +123,17 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         this.clientSaslMechanism = clientSaslMechanism;
         this.credentialCache = credentialCache;
         this.tokenCache = tokenCache;
+        this.sslClientAuthOverride = sslClientAuthOverride;
         this.saslCallbackHandlers = new HashMap<>();
         this.connectionsMaxReauthMsByMechanism = new HashMap<>();
         this.time = time;
+        this.logContext = logContext;
+        this.log = logContext.logger(getClass());
+        this.apiVersionSupplier = apiVersionSupplier;
+
+        if (mode == Mode.SERVER && apiVersionSupplier == null) {
+            throw new IllegalArgumentException("Server channel builder must provide an ApiVersionResponse supplier");
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -128,8 +151,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 entry.getValue().configure(configs, mechanism, jaasContexts.get(mechanism).configurationEntries());
             }
 
-            Class<? extends Login> defaultLoginClass = defaultLoginClass(configs);
-            if (jaasContexts.containsKey(SaslConfigs.GSSAPI_MECHANISM)) {
+            Class<? extends Login> defaultLoginClass = defaultLoginClass();
+            if (mode == Mode.SERVER && jaasContexts.containsKey(SaslConfigs.GSSAPI_MECHANISM)) {
                 String defaultRealm;
                 try {
                     defaultRealm = defaultKerberosRealm();
@@ -146,11 +169,14 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 // use KerberosLogin only for the LoginContext corresponding to GSSAPI
                 LoginManager loginManager = LoginManager.acquireLoginManager(entry.getValue(), mechanism, defaultLoginClass, configs);
                 loginManagers.put(mechanism, loginManager);
-                subjects.put(mechanism, loginManager.subject());
+                Subject subject = loginManager.subject();
+                subjects.put(mechanism, subject);
+                if (mode == Mode.SERVER && mechanism.equals(SaslConfigs.GSSAPI_MECHANISM))
+                    maybeAddNativeGssapiCredentials(subject);
             }
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 // Disable SSL client authentication as we are using SASL authentication
-                this.sslFactory = new SslFactory(mode, "none", isInterBrokerListener);
+                this.sslFactory = new SslFactory(mode, sslClientAuthOverride, isInterBrokerListener);
                 this.sslFactory.configure(configs);
             }
         } catch (Throwable e) {
@@ -182,11 +208,12 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     }
 
     @Override
-    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
+    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
+                                     MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             Socket socket = socketChannel.socket();
-            TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
+            TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel, metadataRegistry);
             Supplier<Authenticator> authenticatorCreator;
             if (mode == Mode.SERVER) {
                 authenticatorCreator = () -> buildServerAuthenticator(configs,
@@ -194,7 +221,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                         id,
                         transportLayer,
                         Collections.unmodifiableMap(subjects),
-                        Collections.unmodifiableMap(connectionsMaxReauthMsByMechanism));
+                        Collections.unmodifiableMap(connectionsMaxReauthMsByMechanism),
+                        metadataRegistry);
             } else {
                 LoginManager loginManager = loginManagers.get(clientSaslMechanism);
                 authenticatorCreator = () -> buildClientAuthenticator(configs,
@@ -205,7 +233,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                         transportLayer,
                         subjects.get(clientSaslMechanism));
             }
-            return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize, memoryPool != null ? memoryPool : MemoryPool.NONE);
+            return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
+                memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);
@@ -219,13 +248,16 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         loginManagers.clear();
         for (AuthenticateCallbackHandler handler : saslCallbackHandlers.values())
             handler.close();
+        if (sslFactory != null) sslFactory.close();
     }
 
     // Visible to override for testing
-    protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel) throws IOException {
+    protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel,
+                                                 ChannelMetadataRegistry metadataRegistry) throws IOException {
         if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
             return SslTransportLayer.create(id, key,
-                sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(), socketChannel.socket().getPort()));
+                sslFactory.createSslEngine(socketChannel.socket()),
+                metadataRegistry);
         } else {
             return new PlaintextTransportLayer(key);
         }
@@ -237,9 +269,11 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                                                                String id,
                                                                TransportLayer transportLayer,
                                                                Map<String, Subject> subjects,
-                                                               Map<String, Long> connectionsMaxReauthMsByMechanism) {
+                                                               Map<String, Long> connectionsMaxReauthMsByMechanism,
+                                                               ChannelMetadataRegistry metadataRegistry) {
         return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects,
-                kerberosShortNamer, listenerName, securityProtocol, transportLayer, connectionsMaxReauthMsByMechanism, time);
+                kerberosShortNamer, listenerName, securityProtocol, transportLayer,
+                connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier);
     }
 
     // Visible to override for testing
@@ -250,7 +284,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                                                                String servicePrincipal,
                                                                TransportLayer transportLayer, Subject subject) {
         return new SaslClientAuthenticator(configs, callbackHandler, id, subject, servicePrincipal,
-                serverHost, clientSaslMechanism, handshakeRequestEnable, transportLayer, time);
+                serverHost, clientSaslMechanism, handshakeRequestEnable, transportLayer, time, logContext);
     }
 
     // Package private for testing
@@ -304,7 +338,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         }
     }
 
-    private Class<? extends Login> defaultLoginClass(Map<String, ?> configs) {
+    protected Class<? extends Login> defaultLoginClass() {
         if (jaasContexts.containsKey(SaslConfigs.GSSAPI_MECHANISM))
             return KerberosLogin.class;
         if (OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(clientSaslMechanism))
@@ -321,5 +355,51 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             default:
                 return SaslClientCallbackHandler.class;
         }
+    }
+
+    // As described in http://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/jgss-features.html:
+    // "To enable Java GSS to delegate to the native GSS library and its list of native mechanisms,
+    // set the system property "sun.security.jgss.native" to true"
+    // "In addition, when performing operations as a particular Subject, for example, Subject.doAs(...)
+    // or Subject.doAsPrivileged(...), the to-be-used GSSCredential should be added to Subject's
+    // private credential set. Otherwise, the GSS operations will fail since no credential is found."
+    private void maybeAddNativeGssapiCredentials(Subject subject) {
+        boolean usingNativeJgss = Boolean.getBoolean(GSS_NATIVE_PROP);
+        if (usingNativeJgss && subject.getPrivateCredentials(GSSCredential.class).isEmpty()) {
+
+            final String servicePrincipal = SaslClientAuthenticator.firstPrincipal(subject);
+            KerberosName kerberosName;
+            try {
+                kerberosName = KerberosName.parse(servicePrincipal);
+            } catch (IllegalArgumentException e) {
+                throw new KafkaException("Principal has name with unexpected format " + servicePrincipal);
+            }
+            final String servicePrincipalName = kerberosName.serviceName();
+            final String serviceHostname = kerberosName.hostName();
+
+            try {
+                GSSManager manager = gssManager();
+                // This Oid is used to represent the Kerberos version 5 GSS-API mechanism. It is defined in
+                // RFC 1964.
+                Oid krb5Mechanism = new Oid("1.2.840.113554.1.2.2");
+                GSSName gssName = manager.createName(servicePrincipalName + "@" + serviceHostname, GSSName.NT_HOSTBASED_SERVICE);
+                GSSCredential cred = manager.createCredential(gssName,
+                        GSSContext.INDEFINITE_LIFETIME, krb5Mechanism, GSSCredential.ACCEPT_ONLY);
+                subject.getPrivateCredentials().add(cred);
+                log.info("Configured native GSSAPI private credentials for {}@{}", serviceHostname, serviceHostname);
+            } catch (GSSException ex) {
+                log.warn("Cannot add private credential to subject; clients authentication may fail", ex);
+            }
+        }
+    }
+
+    // Visibility to override for testing
+    protected GSSManager gssManager() {
+        return GSSManager.getInstance();
+    }
+
+    // Visibility for testing
+    protected Subject subject(String saslMechanism) {
+        return subjects.get(saslMechanism);
     }
 }

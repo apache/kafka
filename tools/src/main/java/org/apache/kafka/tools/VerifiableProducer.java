@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 
 import org.apache.kafka.clients.producer.Callback;
@@ -33,7 +34,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Exit;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -119,14 +119,24 @@ public class VerifiableProducer implements AutoCloseable {
                 .type(String.class)
                 .metavar("TOPIC")
                 .help("Produce messages to this topic.");
-
-        parser.addArgument("--broker-list")
+        MutuallyExclusiveGroup connectionGroup = parser.addMutuallyExclusiveGroup("Connection Group")
+                .description("Group of arguments for connection to brokers")
+                .required(true);
+        connectionGroup.addArgument("--bootstrap-server")
                 .action(store())
-                .required(true)
+                .required(false)
+                .type(String.class)
+                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+                .dest("bootstrapServer")
+                .help("REQUIRED: The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
+
+        connectionGroup.addArgument("--broker-list")
+                .action(store())
+                .required(false)
                 .type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
                 .dest("brokerList")
-                .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
+                .help("DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified.  Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--max-messages")
                 .action(store())
@@ -222,7 +232,17 @@ public class VerifiableProducer implements AutoCloseable {
             createTime = null;
 
         Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+
+        if (res.get("bootstrapServer") != null) {
+            producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServer"));
+        } else if (res.getString("brokerList") != null) {
+            producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+        } else {
+            parser.printHelp();
+            // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
+            System.exit(0);
+        }
+
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
@@ -508,7 +528,8 @@ public class VerifiableProducer implements AutoCloseable {
         ArgumentParser parser = argParser();
         if (args.length == 0) {
             parser.printHelp();
-            Exit.exit(0);
+            // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
+            System.exit(0);
         }
 
         try {
@@ -517,6 +538,7 @@ public class VerifiableProducer implements AutoCloseable {
             final long startMs = System.currentTimeMillis();
             ThroughputThrottler throttler = new ThroughputThrottler(producer.throughput, startMs);
 
+            // Can't use `Exit.addShutdownHook` here because it didn't exist until 2.5.0.
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 // Trigger main thread to stop producing messages
                 producer.stopProducing = true;
@@ -529,12 +551,13 @@ public class VerifiableProducer implements AutoCloseable {
                 double avgThroughput = 1000 * ((producer.numAcked) / (double) (stopMs - startMs));
 
                 producer.printJson(new ToolData(producer.numSent, producer.numAcked, producer.throughput, avgThroughput));
-            }));
+            }, "verifiable-producer-shutdown-hook"));
 
             producer.run(throttler);
         } catch (ArgumentParserException e) {
             parser.handleError(e);
-            Exit.exit(1);
+            // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
+            System.exit(1);
         }
     }
 

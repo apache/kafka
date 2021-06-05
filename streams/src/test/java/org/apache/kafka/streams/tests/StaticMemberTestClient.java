@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -56,7 +57,7 @@ public class StaticMemberTestClient {
 
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, testName);
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
 
         config.putAll(streamsProperties);
 
@@ -70,15 +71,12 @@ public class StaticMemberTestClient {
 
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                System.out.println("closing Kafka Streams instance");
-                System.out.flush();
-                streams.close();
-                System.out.println("Static membership test closed");
-                System.out.flush();
-            }
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
+            System.out.println("closing Kafka Streams instance");
+            System.out.flush();
+            streams.close();
+            System.out.println("Static membership test closed");
+            System.out.flush();
         });
     }
 }

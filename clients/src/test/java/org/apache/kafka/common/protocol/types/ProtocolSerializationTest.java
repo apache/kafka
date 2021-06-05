@@ -17,25 +17,27 @@
 package org.apache.kafka.common.protocol.types;
 
 import org.apache.kafka.common.utils.ByteUtils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProtocolSerializationTest {
 
     private Schema schema;
     private Struct struct;
 
-    @Before
+    @BeforeEach
     public void setup() {
         this.schema = new Schema(new Field("boolean", Type.BOOLEAN),
                                  new Field("int8", Type.INT8),
@@ -44,6 +46,7 @@ public class ProtocolSerializationTest {
                                  new Field("int64", Type.INT64),
                                  new Field("varint", Type.VARINT),
                                  new Field("varlong", Type.VARLONG),
+                                 new Field("float64", Type.FLOAT64),
                                  new Field("string", Type.STRING),
                                  new Field("compact_string", Type.COMPACT_STRING),
                                  new Field("nullable_string", Type.NULLABLE_STRING),
@@ -64,6 +67,7 @@ public class ProtocolSerializationTest {
                                              .set("int64", 1L)
                                              .set("varint", 300)
                                              .set("varlong", 500L)
+                                             .set("float64", 0.5D)
                                              .set("string", "1")
                                              .set("compact_string", "1")
                                              .set("nullable_string", null)
@@ -87,6 +91,16 @@ public class ProtocolSerializationTest {
         check(Type.INT16, (short) -11111, "INT16");
         check(Type.INT32, -11111111, "INT32");
         check(Type.INT64, -11111111111L, "INT64");
+        check(Type.FLOAT64, 2.5, "FLOAT64");
+        check(Type.FLOAT64, -0.5, "FLOAT64");
+        check(Type.FLOAT64, 1e300, "FLOAT64");
+        check(Type.FLOAT64, 0.0, "FLOAT64");
+        check(Type.FLOAT64, -0.0, "FLOAT64");
+        check(Type.FLOAT64, Double.MAX_VALUE, "FLOAT64");
+        check(Type.FLOAT64, Double.MIN_VALUE, "FLOAT64");
+        check(Type.FLOAT64, Double.NaN, "FLOAT64");
+        check(Type.FLOAT64, Double.NEGATIVE_INFINITY, "FLOAT64");
+        check(Type.FLOAT64, Double.POSITIVE_INFINITY, "FLOAT64");
         check(Type.STRING, "", "STRING");
         check(Type.STRING, "hello", "STRING");
         check(Type.STRING, "A\u00ea\u00f1\u00fcC", "STRING");
@@ -140,7 +154,7 @@ public class ProtocolSerializationTest {
                 if (!f.def.type.isNullable())
                     fail("Should not allow serialization of null value.");
             } catch (SchemaException e) {
-                assertFalse(f.toString() + " should not be nullable", f.def.type.isNullable());
+                assertFalse(f.def.type.isNullable(), f.toString() + " should not be nullable");
             } finally {
                 this.struct.set(f, o);
             }
@@ -151,7 +165,7 @@ public class ProtocolSerializationTest {
     public void testDefault() {
         Schema schema = new Schema(new Field("field", Type.INT32, "doc", 42));
         Struct struct = new Struct(schema);
-        assertEquals("Should get the default value", 42, struct.get("field"));
+        assertEquals(42, struct.get("field"), "Should get the default value");
         struct.validate(); // should be valid even with missing value
     }
 
@@ -167,7 +181,7 @@ public class ProtocolSerializationTest {
         // Should use default even if the field allows null values
         Schema schema = new Schema(new Field("field", type, "doc", defaultValue));
         Struct struct = new Struct(schema);
-        assertEquals("Should get the default value", defaultValue, struct.get("field"));
+        assertEquals(defaultValue, struct.get("field"), "Should get the default value");
         struct.validate(); // should be valid even with missing value
     }
 
@@ -318,17 +332,17 @@ public class ProtocolSerializationTest {
     @Test
     public void testToString() {
         String structStr = this.struct.toString();
-        assertNotNull("Struct string should not be null.", structStr);
-        assertFalse("Struct string should not be empty.", structStr.isEmpty());
+        assertNotNull(structStr, "Struct string should not be null.");
+        assertFalse(structStr.isEmpty(), "Struct string should not be empty.");
     }
 
     private Object roundtrip(Type type, Object obj) {
         ByteBuffer buffer = ByteBuffer.allocate(type.sizeOf(obj));
         type.write(buffer, obj);
-        assertFalse("The buffer should now be full.", buffer.hasRemaining());
+        assertFalse(buffer.hasRemaining(), "The buffer should now be full.");
         buffer.rewind();
         Object read = type.read(buffer);
-        assertFalse("All bytes should have been read.", buffer.hasRemaining());
+        assertFalse(buffer.hasRemaining(), "All bytes should have been read.");
         return read;
     }
 
@@ -339,7 +353,7 @@ public class ProtocolSerializationTest {
             result = Arrays.asList((Object[]) result);
         }
         assertEquals(expectedTypeName, type.toString());
-        assertEquals("The object read back should be the same as what was written.", obj, result);
+        assertEquals(obj, result, "The object read back should be the same as what was written.");
     }
 
     @Test
@@ -385,7 +399,7 @@ public class ProtocolSerializationTest {
         Struct newFormat = newSchema.read(buffer);
         assertEquals(value, newFormat.get("field1"));
         assertEquals("default", newFormat.get("field2"));
-        assertEquals(null, newFormat.get("field3"));
+        assertNull(newFormat.get("field3"));
         assertEquals(ByteBuffer.allocate(0), newFormat.get("field4"));
         assertEquals(Long.MAX_VALUE, newFormat.get("field5"));
     }
@@ -402,7 +416,7 @@ public class ProtocolSerializationTest {
         oldFormat.writeTo(buffer);
         buffer.flip();
         SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer));
-        e.getMessage().contains("Error reading field 'field2': java.nio.BufferUnderflowException");
+        assertTrue(e.getMessage().contains("Error reading field 'field2':"));
     }
 
     @Test
@@ -418,6 +432,6 @@ public class ProtocolSerializationTest {
         oldFormat.writeTo(buffer);
         buffer.flip();
         SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer));
-        e.getMessage().contains("Missing value for field 'field2' which has no default value");
+        assertTrue(e.getMessage().contains("Missing value for field 'field2' which has no default value"));
     }
 }

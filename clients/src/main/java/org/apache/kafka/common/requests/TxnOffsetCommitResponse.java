@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -41,20 +41,21 @@ import java.util.Map;
  *   - {@link Errors#INVALID_COMMIT_OFFSET_SIZE}
  *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
  *   - {@link Errors#REQUEST_TIMED_OUT}
+ *   - {@link Errors#UNKNOWN_MEMBER_ID}
+ *   - {@link Errors#FENCED_INSTANCE_ID}
+ *   - {@link Errors#ILLEGAL_GENERATION}
  */
 public class TxnOffsetCommitResponse extends AbstractResponse {
 
-    public final TxnOffsetCommitResponseData data;
+    private final TxnOffsetCommitResponseData data;
 
     public TxnOffsetCommitResponse(TxnOffsetCommitResponseData data) {
+        super(ApiKeys.TXN_OFFSET_COMMIT);
         this.data = data;
     }
 
-    public TxnOffsetCommitResponse(Struct struct, short version) {
-        this.data = new TxnOffsetCommitResponseData(struct, version);
-    }
-
     public TxnOffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData) {
+        super(ApiKeys.TXN_OFFSET_COMMIT);
         Map<String, TxnOffsetCommitResponseTopic> responseTopicDataMap = new HashMap<>();
 
         for (Map.Entry<TopicPartition, Errors> entry : responseData.entrySet()) {
@@ -77,8 +78,8 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public TxnOffsetCommitResponseData data() {
+        return data;
     }
 
     @Override
@@ -88,7 +89,9 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(errors().values());
+        return errorCounts(data.topics().stream().flatMap(topic ->
+                topic.partitions().stream().map(partition ->
+                        Errors.forCode(partition.errorCode()))));
     }
 
     public Map<TopicPartition, Errors> errors() {
@@ -103,7 +106,7 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     }
 
     public static TxnOffsetCommitResponse parse(ByteBuffer buffer, short version) {
-        return new TxnOffsetCommitResponse(ApiKeys.TXN_OFFSET_COMMIT.parseResponse(version, buffer), version);
+        return new TxnOffsetCommitResponse(new TxnOffsetCommitResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

@@ -17,15 +17,13 @@
 package org.apache.kafka.common.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class PartitionStatesTest {
 
@@ -43,8 +41,8 @@ public class PartitionStatesTest {
         expected.put(new TopicPartition("baz", 3), "baz 3");
         checkState(states, expected);
 
-        states.set(new LinkedHashMap<TopicPartition, String>());
-        checkState(states, new LinkedHashMap<TopicPartition, String>());
+        states.set(new LinkedHashMap<>());
+        checkState(states, new LinkedHashMap<>());
     }
 
     private LinkedHashMap<TopicPartition, String> createMap() {
@@ -61,12 +59,7 @@ public class PartitionStatesTest {
     private void checkState(PartitionStates<String> states, LinkedHashMap<TopicPartition, String> expected) {
         assertEquals(expected.keySet(), states.partitionSet());
         assertEquals(expected.size(), states.size());
-        List<PartitionStates.PartitionState<String>> statesList = new ArrayList<>();
-        for (Map.Entry<TopicPartition, String> entry : expected.entrySet()) {
-            statesList.add(new PartitionStates.PartitionState<>(entry.getKey(), entry.getValue()));
-            assertTrue(states.contains(entry.getKey()));
-        }
-        assertEquals(statesList, states.partitionStates());
+        assertEquals(expected, states.partitionStateMap());
     }
 
     @Test

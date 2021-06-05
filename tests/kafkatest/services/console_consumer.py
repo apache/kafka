@@ -13,14 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import itertools
 import os
 
+from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
-from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_9_0_0, V_0_10_0_0, V_0_11_0_0, V_2_0_0
+from kafkatest.services.monitor.jmx import JmxMixin, JmxTool
+from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_10_0_0, V_0_11_0_0, V_2_0_0
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 """
 The console consumer is a tool that reads data from Kafka and outputs it to standard output.
@@ -60,9 +62,10 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=True,
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
-                 enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False,
+                 enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False, print_partition=False,
                  isolation_level="read_uncommitted", jaas_override_variables=None,
-                 kafka_opts_override="", client_prop_file_override="", consumer_properties={}):
+                 kafka_opts_override="", client_prop_file_override="", consumer_properties={},
+                 wait_until_partitions_assigned=False):
         """
         Args:
             context:                    standard context
@@ -76,12 +79,13 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                                         successively consumed messages exceeds this timeout. Setting this and
                                         waiting for the consumer to stop is a pretty good way to consume all messages
                                         in a topic.
+            print_timestamp             if True, print each message's timestamp as well
             print_key                   if True, print each message's key as well
+            print_partition             if True, print each message's partition as well
             enable_systest_events       if True, console consumer will print additional lifecycle-related information
                                         only available in 0.10.0 and later.
             stop_timeout_sec            After stopping a node, wait up to stop_timeout_sec for the node to stop,
                                         and the corresponding background thread to finish successfully.
-            print_timestamp             if True, print each message's timestamp as well
             isolation_level             How to handle transactional messages.
             jaas_override_variables     A dict of variables to be used in the jaas.conf template file
             kafka_opts_override         Override parameters of the KAFKA_OPTS environment variable
@@ -108,6 +112,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.clean_shutdown_nodes = set()
         self.client_id = client_id
         self.print_key = print_key
+        self.print_partition = print_partition
         self.log_level = "TRACE"
         self.stop_timeout_sec = stop_timeout_sec
 
@@ -122,6 +127,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.kafka_opts_override = kafka_opts_override
         self.client_prop_file_override = client_prop_file_override
         self.consumer_properties = consumer_properties
+        self.wait_until_partitions_assigned = wait_until_partitions_assigned
 
 
     def prop_file(self, node):
@@ -145,7 +151,9 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def start_cmd(self, node):
         """Return the start command appropriate for the given node."""
         args = self.args.copy()
-        args['zk_connect'] = self.kafka.zk_connect_setting()
+        args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
+        if not self.new_consumer:
+            args['zk_connect'] = self.kafka.zk_connect_setting()
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['stderr'] = ConsoleConsumer.STDERR_CAPTURE
         args['log_dir'] = ConsoleConsumer.LOG_DIR
@@ -154,14 +162,14 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['jmx_port'] = self.jmx_port
         args['console_consumer'] = self.path.script("kafka-console-consumer.sh", node)
-        args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
 
         if self.kafka_opts_override:
             args['kafka_opts'] = "\"%s\"" % self.kafka_opts_override
         else:
             args['kafka_opts'] = self.security_config.kafka_opts
 
-        cmd = "export JMX_PORT=%(jmx_port)s; " \
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "export JMX_PORT=%(jmx_port)s; " \
               "export LOG_DIR=%(log_dir)s; " \
               "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j_config)s\"; " \
               "export KAFKA_OPTS=%(kafka_opts)s; " \
@@ -170,7 +178,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
               "--consumer.config %(config_file)s " % args
 
         if self.new_consumer:
-            assert node.version >= V_0_9_0_0, \
+            assert node.version.consumer_supports_bootstrap_server(), \
                 "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(node.version)
             if node.version <= LATEST_0_10_0:
                 cmd += " --new-consumer"
@@ -191,11 +199,14 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             if node.version > LATEST_0_8_2:
                 cmd += " --timeout-ms %s" % self.consumer_timeout_ms
 
+        if self.print_timestamp:
+            cmd += " --property print.timestamp=true"
+
         if self.print_key:
             cmd += " --property print.key=true"
 
-        if self.print_timestamp:
-            cmd += " --property print.timestamp=true"
+        if self.print_partition:
+            cmd += " --property print.partition=true"
 
         # LoggingMessageFormatter was introduced after 0.9
         if node.version > LATEST_0_9:
@@ -249,7 +260,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         consumer_output = node.account.ssh_capture(cmd, allow_fail=False)
 
         with self.lock:
-            self._init_jmx_attributes()
             self.logger.debug("collecting following jmx objects: %s", self.jmx_object_names)
             self.start_jmx_tool(idx, node)
 
@@ -269,8 +279,29 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         with self.lock:
             self.read_jmx_output(idx, node)
 
+    def _wait_until_partitions_assigned(self, node, timeout_sec=60):
+        if self.jmx_object_names is not None:
+            raise Exception("'wait_until_partitions_assigned' is not supported while using 'jmx_object_names'/'jmx_attributes'")
+        jmx_tool = JmxTool(self.context, jmx_poll_ms=100)
+        jmx_tool.jmx_object_names = ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
+        jmx_tool.jmx_attributes = ["assigned-partitions"]
+        jmx_tool.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
+        jmx_tool.start_jmx_tool(self.idx(node), node)
+        assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
+
+        def read_and_check():
+            jmx_tool.read_jmx_output(self.idx(node), node)
+            return assigned_partitions_jmx_attr in jmx_tool.maximum_jmx_value
+
+        wait_until(lambda: read_and_check(),
+                timeout_sec=timeout_sec,
+                backoff_sec=.5,
+                err_msg="consumer was not assigned partitions within %d seconds" % timeout_sec)
+
     def start_node(self, node):
         BackgroundThreadService.start_node(self, node)
+        if self.wait_until_partitions_assigned:
+            self._wait_until_partitions_assigned(node)
 
     def stop_node(self, node):
         self.logger.info("%s Stopping node %s" % (self.__class__.__name__, str(node.account)))
@@ -293,27 +324,17 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def java_class_name(self):
         return "ConsoleConsumer"
 
-    def has_partitions_assigned(self, node):
-        if self.new_consumer is False:
+    def has_log_message(self, node, message):
+        try:
+            node.account.ssh("grep '%s' %s" % (message, ConsoleConsumer.LOG_FILE))
+        except RemoteCommandError:
             return False
-        idx = self.idx(node)
-        with self.lock:
-            self._init_jmx_attributes()
-            self.start_jmx_tool(idx, node)
-            self.read_jmx_output(idx, node)
-        if not self.assigned_partitions_jmx_attr in self.maximum_jmx_value:
-            return False
-        self.logger.debug("Number of partitions assigned %f" % self.maximum_jmx_value[self.assigned_partitions_jmx_attr])
-        return self.maximum_jmx_value[self.assigned_partitions_jmx_attr] > 0.0
+        return True
 
-    def _init_jmx_attributes(self):
-        # Must hold lock
-        if self.new_consumer:
-            # We use a flag to track whether we're using this automatically generated ID because the service could be
-            # restarted multiple times and the client ID may be changed.
-            if getattr(self, '_automatic_metrics', False) or not self.jmx_object_names:
-                self._automatic_metrics = True
-                self.jmx_object_names = ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
-                self.jmx_attributes = ["assigned-partitions"]
-                self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
+    def wait_for_offset_reset(self, node, topic, num_partitions):
+        for partition in range(num_partitions):
+            message = "Resetting offset for partition %s-%d" % (topic, partition)
+            wait_until(lambda: self.has_log_message(node, message),
+                       timeout_sec=60,
+                       err_msg="Offset not reset for partition %s-%d" % (topic, partition))
 

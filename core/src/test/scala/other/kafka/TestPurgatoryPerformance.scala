@@ -28,7 +28,7 @@ import kafka.utils._
 import org.apache.kafka.common.utils.Time
 
 import scala.math._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * This is a benchmark test of the purgatory.

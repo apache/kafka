@@ -18,12 +18,18 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.transforms.util.RegexValidator;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Configuration needed for all sink connectors
@@ -86,6 +92,7 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public static void validate(Map<String, String> props) {
         final boolean hasTopicsConfig = hasTopicsConfig(props);
         final boolean hasTopicsRegexConfig = hasTopicsRegexConfig(props);
+        final boolean hasDlqTopicConfig = hasDlqTopicConfig(props);
 
         if (hasTopicsConfig && hasTopicsRegexConfig) {
             throw new ConfigException(SinkTask.TOPICS_CONFIG + " and " + SinkTask.TOPICS_REGEX_CONFIG +
@@ -96,16 +103,53 @@ public class SinkConnectorConfig extends ConnectorConfig {
             throw new ConfigException("Must configure one of " +
                 SinkTask.TOPICS_CONFIG + " or " + SinkTask.TOPICS_REGEX_CONFIG);
         }
+
+        if (hasDlqTopicConfig) {
+            String dlqTopic = props.get(DLQ_TOPIC_NAME_CONFIG).trim();
+            if (hasTopicsConfig) {
+                List<String> topics = parseTopicsList(props);
+                if (topics.contains(dlqTopic)) {
+                    throw new ConfigException(String.format("The DLQ topic '%s' may not be included in the list of "
+                            + "topics ('%s=%s') consumed by the connector", dlqTopic, SinkTask.TOPICS_REGEX_CONFIG, topics));
+                }
+            }
+            if (hasTopicsRegexConfig) {
+                String topicsRegexStr = props.get(SinkTask.TOPICS_REGEX_CONFIG);
+                Pattern pattern = Pattern.compile(topicsRegexStr);
+                if (pattern.matcher(dlqTopic).matches()) {
+                    throw new ConfigException(String.format("The DLQ topic '%s' may not be included in the regex matching the "
+                            + "topics ('%s=%s') consumed by the connector", dlqTopic, SinkTask.TOPICS_REGEX_CONFIG, topicsRegexStr));
+                }
+            }
+        }
     }
 
     public static boolean hasTopicsConfig(Map<String, String> props) {
         String topicsStr = props.get(TOPICS_CONFIG);
-        return topicsStr != null && !topicsStr.trim().isEmpty();
+        return !Utils.isBlank(topicsStr);
     }
 
     public static boolean hasTopicsRegexConfig(Map<String, String> props) {
         String topicsRegexStr = props.get(TOPICS_REGEX_CONFIG);
-        return topicsRegexStr != null && !topicsRegexStr.trim().isEmpty();
+        return !Utils.isBlank(topicsRegexStr);
+    }
+
+    public static boolean hasDlqTopicConfig(Map<String, String> props) {
+        String dqlTopicStr = props.get(DLQ_TOPIC_NAME_CONFIG);
+        return !Utils.isBlank(dqlTopicStr);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static List<String> parseTopicsList(Map<String, String> props) {
+        List<String> topics = (List<String>) ConfigDef.parseType(TOPICS_CONFIG, props.get(TOPICS_CONFIG), Type.LIST);
+        if (topics == null) {
+            return Collections.emptyList();
+        }
+        return topics
+                .stream()
+                .filter(topic -> !topic.isEmpty())
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     public String dlqTopicName() {
@@ -120,7 +164,12 @@ public class SinkConnectorConfig extends ConnectorConfig {
         return getBoolean(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG);
     }
 
+    public boolean enableErrantRecordReporter() {
+        String dqlTopic = dlqTopicName();
+        return !dqlTopic.isEmpty() || enableErrorLog();
+    }
+
     public static void main(String[] args) {
-        System.out.println(config.toHtml());
+        System.out.println(config.toHtml(4, config -> "sinkconnectorconfigs_" + config));
     }
 }

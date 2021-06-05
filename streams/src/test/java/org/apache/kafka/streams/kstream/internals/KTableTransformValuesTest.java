@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -35,15 +37,15 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
-import org.apache.kafka.test.SingletonNoOpValueTransformer;
+import org.apache.kafka.test.NoOpValueTransformerWithKeySupplier;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -58,6 +60,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
+import static org.easymock.EasyMock.anyBoolean;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
@@ -139,7 +142,7 @@ public class KTableTransformValuesTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
-        final SingletonNoOpValueTransformer<String, String> transformer = new SingletonNoOpValueTransformer<>();
+        final NoOpValueTransformerWithKeySupplier<String, String> transformer = new NoOpValueTransformerWithKeySupplier<>();
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, transformer, null);
         final Processor<String, Change<String>> processor = transformValues.get();
@@ -171,7 +174,10 @@ public class KTableTransformValuesTest {
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
-        transformValues.enableSendingOldValues();
+        expect(parent.enableSendingOldValues(true)).andReturn(true);
+        replay(parent);
+
+        transformValues.enableSendingOldValues(true);
         final Processor<String, Change<String>> processor = transformValues.get();
         processor.init(context);
 
@@ -185,17 +191,28 @@ public class KTableTransformValuesTest {
     }
 
     @Test
-    public void shouldSetSendOldValuesOnParent() {
-        parent.enableSendingOldValues();
-        expectLastCall();
+    public void shouldNotSetSendOldValuesOnParentIfMaterialized() {
+        expect(parent.enableSendingOldValues(anyBoolean()))
+            .andThrow(new AssertionError("Should not call enableSendingOldValues"))
+            .anyTimes();
+
         replay(parent);
 
-        new KTableTransformValues<>(parent, new SingletonNoOpValueTransformer<>(), QUERYABLE_NAME).enableSendingOldValues();
+        new KTableTransformValues<>(parent, new NoOpValueTransformerWithKeySupplier<>(), QUERYABLE_NAME).enableSendingOldValues(true);
 
         verify(parent);
     }
 
-    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldSetSendOldValuesOnParentIfNotMaterialized() {
+        expect(parent.enableSendingOldValues(true)).andReturn(true);
+        replay(parent);
+
+        new KTableTransformValues<>(parent, new NoOpValueTransformerWithKeySupplier<>(), null).enableSendingOldValues(true);
+
+        verify(parent);
+    }
+
     @Test
     public void shouldTransformOnGetIfNotMaterialized() {
         final KTableTransformValues<String, String, String> transformValues =
@@ -203,8 +220,26 @@ public class KTableTransformValuesTest {
 
         expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(parentGetterSupplier.get()).andReturn(parentGetter);
-        expect(parentGetter.get("Key")).andReturn(ValueAndTimestamp.make("Value", -1L));
-        replay(parent, parentGetterSupplier, parentGetter);
+        expect(parentGetter.get("Key")).andReturn(ValueAndTimestamp.make("Value", 73L));
+        final ProcessorRecordContext recordContext = new ProcessorRecordContext(
+            42L,
+            23L,
+            1,
+            "foo",
+            null
+        );
+        expect(context.recordContext()).andReturn(recordContext);
+        context.setRecordContext(new ProcessorRecordContext(
+            73L,
+            -1L,
+            1,
+            null,
+            new RecordHeaders()
+        ));
+        expectLastCall();
+        context.setRecordContext(recordContext);
+        expectLastCall();
+        replay(parent, parentGetterSupplier, parentGetter, context);
 
         final KTableValueGetter<String, String> getter = transformValues.view().get();
         getter.init(context);
@@ -212,6 +247,7 @@ public class KTableTransformValuesTest {
         final String result = getter.get("Key").value();
 
         assertThat(result, is("Key->Value!"));
+        verify(context);
     }
 
     @Test
@@ -329,7 +365,7 @@ public class KTableTransformValuesTest {
 
         inputTopic.pipeInput("A", "a", 5L);
         inputTopic.pipeInput("B", "b", 10L);
-        inputTopic.pipeInput("D", (String) null, 15L);
+        inputTopic.pipeInput("D", null, 15L);
 
 
         assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "A->a!", 5),
@@ -358,7 +394,7 @@ public class KTableTransformValuesTest {
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
         inputTopic.pipeInput("A", "a", 5L);
         inputTopic.pipeInput("B", "b", 10L);
-        inputTopic.pipeInput("C", (String) null, 15L);
+        inputTopic.pipeInput("C", null, 15L);
 
         assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "A->a!", 5),
                 new KeyValueTimestamp<>("B", "B->b!", 10),
@@ -398,8 +434,8 @@ public class KTableTransformValuesTest {
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
         inputTopic.pipeInput("A", "ignored", 5L);
-        inputTopic.pipeInput("A", "ignored", 15L);
-        inputTopic.pipeInput("A", "ignored", 10L);
+        inputTopic.pipeInput("A", "ignored1", 15L);
+        inputTopic.pipeInput("A", "ignored2", 10L);
 
         assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "1", 5),
                 new KeyValueTimestamp<>("A", "0", 15),
@@ -437,8 +473,8 @@ public class KTableTransformValuesTest {
                  new KeyValueTimestamp<>("A", "3", 15)));
     }
 
-    private ArrayList<KeyValueTimestamp<Object, Object>> output() {
-        return capture.capturedProcessors(1).get(0).processed;
+    private ArrayList<KeyValueTimestamp<String, String>> output() {
+        return capture.capturedProcessors(1).get(0).processed();
     }
 
     private static KeyValueMapper<String, Integer, KeyValue<String, Integer>> toForceSendingOfOldValues() {
@@ -455,8 +491,6 @@ public class KTableTransformValuesTest {
 
     public static Properties props() {
         final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-transform-values-test");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());

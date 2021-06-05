@@ -25,8 +25,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -98,26 +96,12 @@ public class InternalStreamsBuilderTest {
         final KStream<String, String> source2 = builder.stream(Collections.singleton(topic2), consumed);
         final KStream<String, String> source3 = builder.stream(Collections.singleton(topic3), consumed);
         final KStream<String, String> processedSource1 =
-                source1.mapValues(new ValueMapper<String, String>() {
-                    @Override
-                    public String apply(final String value) {
-                        return value;
-                    }
-                }).filter(new Predicate<String, String>() {
-                    @Override
-                    public boolean test(final String key, final String value) {
-                        return true;
-                    }
-                });
-        final KStream<String, String> processedSource2 = source2.filter(new Predicate<String, String>() {
-            @Override
-            public boolean test(final String key, final String value) {
-                return true;
-            }
-        });
+                source1.mapValues(v -> v)
+                .filter((k, v) -> true);
+        final KStream<String, String> processedSource2 = source2.filter((k, v) -> true);
 
         final KStream<String, String> merged = processedSource1.merge(processedSource2).merge(source3);
-        merged.groupByKey().count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("my-table"));
+        merged.groupByKey().count(Materialized.as("my-table"));
         builder.buildAndOptimizeTopology();
         final Map<String, List<String>> actual = builder.internalTopologyBuilder.stateStoreNameToSourceTopics();
         assertEquals(asList("topic-1", "topic-2", "topic-3"), actual.get("my-table"));
@@ -127,12 +111,12 @@ public class InternalStreamsBuilderTest {
     public void shouldNotMaterializeSourceKTableIfNotRequired() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(Materialized.with(null, null), builder, storePrefix);
-        final KTable table1 = builder.table("topic2", consumed, materializedInternal);
+        final KTable<String, String> table1 = builder.table("topic2", consumed, materializedInternal);
 
         builder.buildAndOptimizeTopology();
         final ProcessorTopology topology = builder.internalTopologyBuilder
             .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
-            .build(null);
+            .buildTopology();
 
         assertEquals(0, topology.stateStores().size());
         assertEquals(0, topology.storeToChangelogTopic().size());
@@ -231,7 +215,7 @@ public class InternalStreamsBuilderTest {
 
         final Map<Integer, Set<String>> nodeGroups = builder.internalTopologyBuilder.nodeGroups();
         for (final Integer groupId : nodeGroups.keySet()) {
-            final ProcessorTopology topology = builder.internalTopologyBuilder.build(groupId);
+            final ProcessorTopology topology = builder.internalTopologyBuilder.buildSubtopology(groupId);
             final List<StateStore> stateStores = topology.globalStateStores();
             final Set<String> names = new HashSet<>();
             for (final StateStore stateStore : stateStores) {
@@ -252,19 +236,18 @@ public class InternalStreamsBuilderTest {
             new MaterializedInternal<>(Materialized.as("table-store"), builder, storePrefix);
         final KTable<String, String> table = builder.table("table-topic", consumed, materializedInternal);
 
-
-        final KStream<String, String> mapped = playEvents.map(MockMapper.<String, String>selectValueKeyValueMapper());
+        final KStream<String, String> mapped = playEvents.map(MockMapper.selectValueKeyValueMapper());
         mapped.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).groupByKey().count(Materialized.as("count"));
         builder.buildAndOptimizeTopology();
         builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)));
-        assertEquals(Collections.singletonList("table-topic"), builder.internalTopologyBuilder.stateStoreNameToSourceTopics().get("table-store"));
-        assertEquals(Collections.singletonList(APP_ID + "-KSTREAM-MAP-0000000003-repartition"), builder.internalTopologyBuilder.stateStoreNameToSourceTopics().get("count"));
+        assertEquals(Collections.singletonList("table-topic"), builder.internalTopologyBuilder.sourceTopicsForStore("table-store"));
+        assertEquals(Collections.singletonList(APP_ID + "-KSTREAM-MAP-0000000003-repartition"), builder.internalTopologyBuilder.sourceTopicsForStore("count"));
     }
 
     @Test
     public void shouldAddTopicToEarliestAutoOffsetResetList() {
         final String topicName = "topic-1";
-        final ConsumedInternal consumed = new ConsumedInternal<>(Consumed.with(AutoOffsetReset.EARLIEST));
+        final ConsumedInternal<String, String> consumed = new ConsumedInternal<>(Consumed.with(AutoOffsetReset.EARLIEST));
         builder.stream(Collections.singleton(topicName), consumed);
         builder.buildAndOptimizeTopology();
 
@@ -276,7 +259,7 @@ public class InternalStreamsBuilderTest {
     public void shouldAddTopicToLatestAutoOffsetResetList() {
         final String topicName = "topic-1";
 
-        final ConsumedInternal consumed = new ConsumedInternal<>(Consumed.with(AutoOffsetReset.LATEST));
+        final ConsumedInternal<String, String> consumed = new ConsumedInternal<>(Consumed.with(AutoOffsetReset.LATEST));
         builder.stream(Collections.singleton(topicName), consumed);
         builder.buildAndOptimizeTopology();
         assertTrue(builder.internalTopologyBuilder.latestResetTopicsPattern().matcher(topicName).matches());
@@ -286,7 +269,7 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldAddTableToEarliestAutoOffsetResetList() {
         final String topicName = "topic-1";
-        builder.table(topicName, new ConsumedInternal<>(Consumed.<String, String>with(AutoOffsetReset.EARLIEST)), materialized);
+        builder.table(topicName, new ConsumedInternal<>(Consumed.with(AutoOffsetReset.EARLIEST)), materialized);
         builder.buildAndOptimizeTopology();
         assertTrue(builder.internalTopologyBuilder.earliestResetTopicsPattern().matcher(topicName).matches());
         assertFalse(builder.internalTopologyBuilder.latestResetTopicsPattern().matcher(topicName).matches());
@@ -295,7 +278,7 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldAddTableToLatestAutoOffsetResetList() {
         final String topicName = "topic-1";
-        builder.table(topicName, new ConsumedInternal<>(Consumed.<String, String>with(AutoOffsetReset.LATEST)), materialized);
+        builder.table(topicName, new ConsumedInternal<>(Consumed.with(AutoOffsetReset.LATEST)), materialized);
         builder.buildAndOptimizeTopology();
         assertTrue(builder.internalTopologyBuilder.latestResetTopicsPattern().matcher(topicName).matches());
         assertFalse(builder.internalTopologyBuilder.earliestResetTopicsPattern().matcher(topicName).matches());
@@ -352,18 +335,18 @@ public class InternalStreamsBuilderTest {
         builder.stream(Collections.singleton("topic"), consumed);
         builder.buildAndOptimizeTopology();
         builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)));
-        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
+        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.buildTopology();
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
     @Test
     public void shouldUseProvidedTimestampExtractor() {
-        final ConsumedInternal consumed = new ConsumedInternal<>(Consumed.with(new MockTimestampExtractor()));
+        final ConsumedInternal<String, String> consumed = new ConsumedInternal<>(Consumed.with(new MockTimestampExtractor()));
         builder.stream(Collections.singleton("topic"), consumed);
         builder.buildAndOptimizeTopology();
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder
             .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
-            .build(null);
+            .buildTopology();
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
@@ -373,24 +356,19 @@ public class InternalStreamsBuilderTest {
         builder.buildAndOptimizeTopology();
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder
             .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
-            .build(null);
+            .buildTopology();
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
     @Test
     public void ktableShouldUseProvidedTimestampExtractor() {
-        final ConsumedInternal<String, String> consumed = new ConsumedInternal<>(Consumed.<String, String>with(new MockTimestampExtractor()));
+        final ConsumedInternal<String, String> consumed = new ConsumedInternal<>(Consumed.with(new MockTimestampExtractor()));
         builder.table("topic", consumed, materialized);
         builder.buildAndOptimizeTopology();
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder
             .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
-            .build(null);
+            .buildTopology();
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    // TODO: this static functions are added because some non-TopologyBuilder unit tests need to access the internal topology builder,
-    //       which is usually a bad sign of design patterns between TopologyBuilder and StreamThread. We need to consider getting rid of them later
-    public static InternalTopologyBuilder internalTopologyBuilder(final InternalStreamsBuilder internalStreamsBuilder) {
-        return internalStreamsBuilder.internalTopologyBuilder;
-    }
 }

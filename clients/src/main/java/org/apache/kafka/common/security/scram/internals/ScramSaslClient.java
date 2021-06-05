@@ -112,7 +112,7 @@ public class ScramSaslClient implements SaslClient {
                     }
 
                     String username = nameCallback.getName();
-                    String saslName = formatter.saslName(username);
+                    String saslName = ScramFormatter.saslName(username);
                     Map<String, String> extensions = extensionsCallback.extensions();
                     this.clientFirstMessage = new ScramMessages.ClientFirstMessage(saslName, clientNonce, extensions);
                     setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
@@ -188,7 +188,7 @@ public class ScramSaslClient implements SaslClient {
 
     private ClientFinalMessage handleServerFirstMessage(char[] password) throws SaslException {
         try {
-            byte[] passwordBytes = formatter.normalize(new String(password));
+            byte[] passwordBytes = ScramFormatter.normalize(new String(password));
             this.saltedPassword = formatter.hi(passwordBytes, serverFirstMessage.salt(), serverFirstMessage.iterations());
 
             ClientFinalMessage clientFinalMessage = new ClientFinalMessage("n,,".getBytes(StandardCharsets.UTF_8), serverFirstMessage.nonce());
@@ -241,7 +241,7 @@ public class ScramSaslClient implements SaslClient {
         @Override
         public String[] getMechanismNames(Map<String, ?> props) {
             Collection<String> mechanisms = ScramMechanism.mechanismNames();
-            return mechanisms.toArray(new String[mechanisms.size()]);
+            return mechanisms.toArray(new String[0]);
         }
     }
 }

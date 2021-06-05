@@ -16,14 +16,12 @@
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.utils import validate_delivery
-
-import time
 
 class EndToEndTest(Test):
     """This class provides a shared template for tests which follow the common pattern of:
@@ -43,8 +41,8 @@ class EndToEndTest(Test):
         self.records_consumed = []
         self.last_consumed_offsets = {}
         
-    def create_zookeeper(self, num_nodes=1, **kwargs):
-        self.zk = ZookeeperService(self.test_context, num_nodes=num_nodes, **kwargs)
+    def create_zookeeper_if_necessary(self, num_nodes=1, **kwargs):
+        self.zk = ZookeeperService(self.test_context, num_nodes=num_nodes, **kwargs) if quorum.for_test(self.test_context) == quorum.zk else None
 
     def create_kafka(self, num_nodes=1, **kwargs):
         group_metadata_config = {
@@ -87,10 +85,11 @@ class EndToEndTest(Test):
 
     def await_consumed_offsets(self, last_acked_offsets, timeout_sec):
         def has_finished_consuming():
-            for partition, offset in last_acked_offsets.iteritems():
+            for partition, offset in last_acked_offsets.items():
                 if not partition in self.last_consumed_offsets:
                     return False
-                if self.last_consumed_offsets[partition] < offset:
+                last_commit = self.consumer.last_commit(partition)
+                if not last_commit or last_commit < offset:
                     return False
             return True
 

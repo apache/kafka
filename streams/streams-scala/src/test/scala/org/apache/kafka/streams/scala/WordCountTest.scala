@@ -1,7 +1,4 @@
 /*
- * Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
- * Copyright (C) 2017-2018 Alexis Seigneurin.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,53 +18,57 @@ package org.apache.kafka.streams.scala
 
 import java.util.Properties
 import java.util.regex.Pattern
-
-import org.junit.Assert._
-import org.junit._
-import org.junit.rules.TemporaryFolder
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api._
+import org.apache.kafka.streams.scala.serialization.{Serdes => NewSerdes}
 import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsConfig}
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.test.{IntegrationTest, TestUtils}
+import org.apache.kafka.common.utils.{MockTime, Utils}
 import ImplicitConversions._
 import org.apache.kafka.common.serialization.{LongDeserializer, StringDeserializer, StringSerializer}
-import org.junit.experimental.categories.Category
+import org.apache.kafka.test.TestUtils
+import org.junit.jupiter.api.Tag
+
+import java.io.File
 
 /**
  * Test suite that does a classic word count example.
  * <p>
  * The suite contains the test case using Scala APIs `testShouldCountWords` and the same test case using the
  * Java APIs `testShouldCountWordsJava`. The idea is to demonstrate that both generate the same result.
- * <p>
- * Note: In the current project settings SAM type conversion is turned off as it's experimental in Scala 2.11.
- * Hence the native Java API based version is more verbose.
  */
-@Category(Array(classOf[IntegrationTest]))
+@Tag("integration")
 class WordCountTest extends WordCountTestData {
 
-  private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
+  private val cluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
 
-  @Rule def cluster: EmbeddedKafkaCluster = privateCluster
-
-  final val alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000
-  val mockTime: MockTime = cluster.time
+  final private val alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000
+  private val mockTime: MockTime = cluster.time
   mockTime.setCurrentTimeMs(alignedTime)
 
-  val tFolder: TemporaryFolder = new TemporaryFolder(TestUtils.tempDirectory())
-  @Rule def testFolder: TemporaryFolder = tFolder
-  @Before
+  private val testFolder: File = TestUtils.tempDirectory()
+
+  @BeforeEach
   def startKafkaCluster(): Unit = {
+    cluster.start()
     cluster.createTopic(inputTopic)
     cluster.createTopic(outputTopic)
     cluster.createTopic(inputTopicJ)
     cluster.createTopic(outputTopicJ)
   }
 
-  @Test def testShouldCountWords(): Unit = {
-    import Serdes._
+  @AfterEach
+  def stopKafkaCluster(): Unit = {
+    cluster.stop()
+    Utils.delete(testFolder)
+  }
+
+  @Test
+  def testShouldCountWords(): Unit = {
+    import org.apache.kafka.streams.scala.serialization.Serdes._
 
     val streamsConfiguration = getStreamsConfiguration()
 
@@ -86,7 +87,7 @@ class WordCountTest extends WordCountTestData {
     // write to output topic
     wordCounts.toStream.to(outputTopic)
 
-    val streams: KafkaStreams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
+    val streams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
     streams.start()
 
     // produce and consume synchronously
@@ -94,12 +95,13 @@ class WordCountTest extends WordCountTestData {
 
     streams.close()
 
-    import collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
   }
 
-  @Test def testShouldCountWordsMaterialized(): Unit = {
-    import Serdes._
+  @Test
+  def testShouldCountWordsMaterialized(): Unit = {
+    import org.apache.kafka.streams.scala.serialization.Serdes._
 
     val streamsConfiguration = getStreamsConfiguration()
 
@@ -118,7 +120,7 @@ class WordCountTest extends WordCountTestData {
     // write to output topic
     wordCounts.toStream.to(outputTopic)
 
-    val streams: KafkaStreams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
+    val streams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
     streams.start()
 
     // produce and consume synchronously
@@ -126,11 +128,12 @@ class WordCountTest extends WordCountTestData {
 
     streams.close()
 
-    import collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
   }
 
-  @Test def testShouldCountWordsJava(): Unit = {
+  @Test
+  def testShouldCountWordsJava(): Unit = {
 
     import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ}
     import org.apache.kafka.streams.kstream.{
@@ -139,32 +142,28 @@ class WordCountTest extends WordCountTestData {
       KGroupedStream => KGroupedStreamJ,
       _
     }
-    import collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
 
     val streamsConfiguration = getStreamsConfiguration()
-    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
-    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, NewSerdes.stringSerde.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, NewSerdes.stringSerde.getClass.getName)
 
     val streamBuilder = new StreamsBuilderJ
     val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopicJ)
 
     val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
 
-    val splits: KStreamJ[String, String] = textLines.flatMapValues {
-      new ValueMapper[String, java.lang.Iterable[String]] {
-        def apply(s: String): java.lang.Iterable[String] = pattern.split(s.toLowerCase).toIterable.asJava
-      }
+    val splits: KStreamJ[String, String] = textLines.flatMapValues { line =>
+      pattern.split(line.toLowerCase).toIterable.asJava
     }
 
-    val grouped: KGroupedStreamJ[String, String] = splits.groupBy {
-      new KeyValueMapper[String, String, String] {
-        def apply(k: String, v: String): String = v
-      }
+    val grouped: KGroupedStreamJ[String, String] = splits.groupBy { (_, v) =>
+      v
     }
 
     val wordCounts: KTableJ[String, java.lang.Long] = grouped.count()
 
-    wordCounts.toStream.to(outputTopicJ, Produced.`with`(Serdes.String, Serdes.JavaLong))
+    wordCounts.toStream.to(outputTopicJ, Produced.`with`(NewSerdes.stringSerde, NewSerdes.javaLongSerde))
 
     val streams: KafkaStreamsJ = new KafkaStreamsJ(streamBuilder.build(), streamsConfiguration)
     streams.start()
@@ -183,7 +182,7 @@ class WordCountTest extends WordCountTestData {
     streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
     streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "10000")
     streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot.getPath)
+    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getPath)
     streamsConfiguration
   }
 
@@ -191,7 +190,6 @@ class WordCountTest extends WordCountTestData {
     val p = new Properties()
     p.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
     p.put(ProducerConfig.ACKS_CONFIG, "all")
-    p.put(ProducerConfig.RETRIES_CONFIG, "0")
     p.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
     p.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
     p
@@ -211,7 +209,7 @@ class WordCountTest extends WordCountTestData {
 
     val linesProducerConfig: Properties = getProducerConfig()
 
-    import collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     IntegrationTestUtils.produceValuesSynchronously(inputTopic, inputValues.asJava, linesProducerConfig, mockTime)
 
     val consumerConfig = getConsumerConfig()

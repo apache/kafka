@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponsePartition;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -41,6 +41,7 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPO
  * - Partition errors:
  *   - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
  *   - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
+ *   - {@link Errors#UNSTABLE_OFFSET_COMMIT}
  *
  * - Group or coordinator errors:
  *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
@@ -62,7 +63,7 @@ public class OffsetFetchResponse extends AbstractResponse {
     private static final List<Errors> PARTITION_ERRORS = Arrays.asList(
         Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.TOPIC_AUTHORIZATION_FAILED);
 
-    public final OffsetFetchResponseData data;
+    private final OffsetFetchResponseData data;
     private final Errors error;
 
     public static final class PartitionData {
@@ -90,10 +91,10 @@ public class OffsetFetchResponse extends AbstractResponse {
             if (!(other instanceof PartitionData))
                 return false;
             PartitionData otherPartition = (PartitionData) other;
-            return this.offset == otherPartition.offset
-                       && this.leaderEpoch.equals(otherPartition.leaderEpoch)
-                       && this.metadata.equals(otherPartition.metadata)
-                       && this.error.equals(otherPartition.error);
+            return Objects.equals(this.offset, otherPartition.offset)
+                   && Objects.equals(this.leaderEpoch, otherPartition.leaderEpoch)
+                   && Objects.equals(this.metadata, otherPartition.metadata)
+                   && Objects.equals(this.error, otherPartition.error);
         }
 
         @Override
@@ -128,6 +129,7 @@ public class OffsetFetchResponse extends AbstractResponse {
      * @param responseData Fetched offset information grouped by topic-partition
      */
     public OffsetFetchResponse(int throttleTimeMs, Errors error, Map<TopicPartition, PartitionData> responseData) {
+        super(ApiKeys.OFFSET_FETCH);
         Map<String, OffsetFetchResponseTopic> offsetFetchResponseTopicMap = new HashMap<>();
         for (Map.Entry<TopicPartition, PartitionData> entry : responseData.entrySet()) {
             String topicName = entry.getKey().topic();
@@ -152,25 +154,26 @@ public class OffsetFetchResponse extends AbstractResponse {
         this.error = error;
     }
 
-    public OffsetFetchResponse(Struct struct, short version) {
-        this.data = new OffsetFetchResponseData(struct, version);
-
-        Errors topLevelError = Errors.NONE;
-        for (OffsetFetchResponseTopic topic : data.topics()) {
-            for (OffsetFetchResponsePartition partition : topic.partitions()) {
-                Errors partitionError = Errors.forCode(partition.errorCode());
-                if (partitionError != Errors.NONE && !PARTITION_ERRORS.contains(partitionError)) {
-                    topLevelError = partitionError;
-                    break;
-                }
-            }
-        }
-
+    public OffsetFetchResponse(OffsetFetchResponseData data, short version) {
+        super(ApiKeys.OFFSET_FETCH);
+        this.data = data;
         // for version 2 and later use the top-level error code (in ERROR_CODE_KEY_NAME) from the response.
         // for older versions there is no top-level error in the response and all errors are partition errors,
         // so if there is a group or coordinator error at the partition level use that as the top-level error.
         // this way clients can depend on the top-level error regardless of the offset fetch version.
-        this.error = version >= 2 ? Errors.forCode(data.errorCode()) : topLevelError;
+        this.error = version >= 2 ? Errors.forCode(data.errorCode()) : topLevelError(data);
+    }
+
+    private static Errors topLevelError(OffsetFetchResponseData data) {
+        for (OffsetFetchResponseTopic topic : data.topics()) {
+            for (OffsetFetchResponsePartition partition : topic.partitions()) {
+                Errors partitionError = Errors.forCode(partition.errorCode());
+                if (partitionError != Errors.NONE && !PARTITION_ERRORS.contains(partitionError)) {
+                    return partitionError;
+                }
+            }
+        }
+        return Errors.NONE;
     }
 
     @Override
@@ -188,7 +191,12 @@ public class OffsetFetchResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(error);
+        Map<Errors, Integer> counts = new HashMap<>();
+        updateErrorCounts(counts, error);
+        data.topics().forEach(topic ->
+                topic.partitions().forEach(partition ->
+                        updateErrorCounts(counts, Errors.forCode(partition.errorCode()))));
+        return counts;
     }
 
     public Map<TopicPartition, PartitionData> responseData() {
@@ -207,12 +215,12 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     public static OffsetFetchResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetFetchResponse(ApiKeys.OFFSET_FETCH.parseResponse(version, buffer), version);
+        return new OffsetFetchResponse(new OffsetFetchResponseData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public OffsetFetchResponseData data() {
+        return data;
     }
 
     @Override

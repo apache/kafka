@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.BaseRecords;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * A record that can be serialized and deserialized according to a pre-defined schema
@@ -89,12 +89,20 @@ public class Struct {
         return getLong(field.name);
     }
 
-    public UUID get(Field.UUID field) {
-        return getUUID(field.name);
+    public Uuid get(Field.UUID field) {
+        return getUuid(field.name);
+    }
+
+    public Integer get(Field.Uint16 field) {
+        return getInt(field.name);
     }
 
     public Short get(Field.Int16 field) {
         return getShort(field.name);
+    }
+
+    public Double get(Field.Float64 field) {
+        return getDouble(field.name);
     }
 
     public String get(Field.Str field) {
@@ -123,9 +131,9 @@ public class Struct {
         return alternative;
     }
 
-    public UUID getOrElse(Field.UUID field, UUID alternative) {
+    public Uuid getOrElse(Field.UUID field, Uuid alternative) {
         if (hasField(field.name))
-            return getUUID(field.name);
+            return getUuid(field.name);
         return alternative;
     }
 
@@ -144,6 +152,12 @@ public class Struct {
     public Integer getOrElse(Field.Int32 field, int alternative) {
         if (hasField(field.name))
             return getInt(field.name);
+        return alternative;
+    }
+
+    public Double getOrElse(Field.Float64 field, double alternative) {
+        if (hasField(field.name))
+            return getDouble(field.name);
         return alternative;
     }
 
@@ -236,6 +250,14 @@ public class Struct {
         return (Short) get(name);
     }
 
+    public Integer getUnsignedShort(BoundField field) {
+        return (Integer) get(field);
+    }
+
+    public Integer getUnsignedShort(String name) {
+        return (Integer) get(name);
+    }
+
     public Integer getInt(BoundField field) {
         return (Integer) get(field);
     }
@@ -256,12 +278,20 @@ public class Struct {
         return (Long) get(name);
     }
 
-    public UUID getUUID(BoundField field) {
-        return (UUID) get(field);
+    public Uuid getUuid(BoundField field) {
+        return (Uuid) get(field);
     }
 
-    public UUID getUUID(String name) {
-        return (UUID) get(name);
+    public Uuid getUuid(String name) {
+        return (Uuid) get(name);
+    }
+
+    public Double getDouble(BoundField field) {
+        return (Double) get(field);
+    }
+
+    public Double getDouble(String name) {
+        return (Double) get(name);
     }
 
     public Object[] getArray(BoundField field) {
@@ -361,11 +391,23 @@ public class Struct {
         return set(def.name, value);
     }
 
-    public Struct set(Field.UUID def, UUID value) {
+    public Struct set(Field.UUID def, Uuid value) {
         return set(def.name, value);
     }
 
     public Struct set(Field.Int16 def, short value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(Field.Uint16 def, int value) {
+        if (value < 0 || value > 65535) {
+            throw new RuntimeException("Invalid value for unsigned short for " +
+                    def.name + ": " + value);
+        }
+        return set(def.name, value);
+    }
+
+    public Struct set(Field.Float64 def, double value) {
         return set(def.name, value);
     }
 
@@ -561,5 +603,4 @@ public class Struct {
         }
         return true;
     }
-
 }

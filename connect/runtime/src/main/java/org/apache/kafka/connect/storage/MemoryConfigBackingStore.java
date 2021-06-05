@@ -74,7 +74,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
                 connectorConfigs,
                 connectorTargetStates,
                 taskConfigs,
-                Collections.<String>emptySet(),
+                Collections.emptySet(),
                 configTransformer);
     }
 

@@ -18,6 +18,7 @@ package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
@@ -58,7 +59,13 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
             return newRecord(record, null, value == null ? null : value.get(fieldName));
         } else {
             final Struct value = requireStructOrNull(operatingValue(record), PURPOSE);
-            return newRecord(record, schema.field(fieldName).schema(), value == null ? null : value.get(fieldName));
+            Field field = schema.field(fieldName);
+
+            if (field == null) {
+                throw new IllegalArgumentException("Unknown field: " + fieldName);
+            }
+
+            return newRecord(record, field.schema(), value == null ? null : value.get(fieldName));
         }
     }
 

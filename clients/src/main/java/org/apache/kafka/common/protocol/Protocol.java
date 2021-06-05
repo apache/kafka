@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.TaggedFields;
 import org.apache.kafka.common.protocol.types.Type;
 
 import java.util.LinkedHashMap;
@@ -50,6 +51,8 @@ public class Protocol {
                 if (!subTypes.containsKey(field.def.name)) {
                     subTypes.put(field.def.name, type.arrayElementType().get());
                 }
+            } else if (type instanceof TaggedFields) {
+                b.append("TAG_BUFFER ");
             } else {
                 b.append(field.def.name);
                 b.append(" ");
@@ -130,7 +133,7 @@ public class Protocol {
             b.append("</pre>\n");
             schemaToFieldTableHtml(ResponseHeaderData.SCHEMAS[i], b);
         }
-        for (ApiKeys key : ApiKeys.values()) {
+        for (ApiKeys key : ApiKeys.zkBrokerApis()) {
             // Key
             b.append("<h5>");
             b.append("<a name=\"The_Messages_" + key.name + "\">");
@@ -140,7 +143,7 @@ public class Protocol {
             b.append("):</a></h5>\n\n");
             // Requests
             b.append("<b>Requests:</b><br>\n");
-            Schema[] requests = key.requestSchemas;
+            Schema[] requests = key.messageType.requestSchemas();
             for (int i = 0; i < requests.length; i++) {
                 Schema schema = requests[i];
                 // Schema
@@ -161,7 +164,7 @@ public class Protocol {
 
             // Responses
             b.append("<b>Responses:</b><br>\n");
-            Schema[] responses = key.responseSchemas;
+            Schema[] responses = key.messageType.responseSchemas();
             for (int i = 0; i < responses.length; i++) {
                 Schema schema = responses[i];
                 // Schema

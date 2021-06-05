@@ -16,10 +16,12 @@
 {
   "apiKey": 36,
   "type": "request",
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "SaslAuthenticateRequest",
   // Version 1 is the same as version 0.
-  "validVersions": "0-1",
-  "flexibleVersions": "none",
+  // Version 2 adds flexible version support
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "AuthBytes", "type": "bytes", "versions": "0+",
       "about": "The SASL authentication bytes from the client, as defined by the SASL mechanism." }

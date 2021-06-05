@@ -17,12 +17,12 @@
 
 package kafka.server
 
-
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
+import kafka.utils.Implicits._
 import kafka.utils.Pool
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
@@ -58,7 +58,7 @@ class DelayedProduce(delayMs: Long,
   extends DelayedOperation(delayMs, lockOpt) {
 
   // first update the acks pending variable according to the error code
-  produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
+  produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
     if (status.responseStatus.error == Errors.NONE) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
@@ -82,21 +82,19 @@ class DelayedProduce(delayMs: Long,
    */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
-    produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
+    produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
       trace(s"Checking produce satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
-        val (hasEnough, error) = replicaManager.getPartition(topicPartition) match {
-          case HostedPartition.Online(partition) =>
-            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
-
-          case HostedPartition.Offline =>
-            (false, Errors.KAFKA_STORAGE_ERROR)
-
-          case HostedPartition.None =>
+        val (hasEnough, error) = replicaManager.getPartitionOrError(topicPartition) match {
+          case Left(err) =>
             // Case A
-            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+            (false, err)
+
+          case Right(partition) =>
+            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
         }
+
         // Case B.1 || B.2
         if (error != Errors.NONE || hasEnough) {
           status.acksPending = false
@@ -113,7 +111,7 @@ class DelayedProduce(delayMs: Long,
   }
 
   override def onExpiration(): Unit = {
-    produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
+    produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
       if (status.acksPending) {
         debug(s"Expiring produce request for partition $topicPartition with status $status")
         DelayedProduceMetrics.recordExpiration(topicPartition)

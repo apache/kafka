@@ -24,12 +24,12 @@ import java.util.Base64
 import joptsimple.ArgumentAcceptingOptionSpec
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, CreateDelegationTokenOptions, DescribeDelegationTokenOptions, ExpireDelegationTokenOptions, RenewDelegationTokenOptions, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, CreateDelegationTokenOptions, DescribeDelegationTokenOptions, ExpireDelegationTokenOptions, RenewDelegationTokenOptions}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Set
 
 /**
@@ -146,7 +146,7 @@ object DelegationTokenCommand extends Logging {
   private def createAdminClient(opts: DelegationTokenCommandOptions): Admin = {
     val props = Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-    JAdminClient.create(props)
+    Admin.create(props)
   }
 
   class DelegationTokenCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {

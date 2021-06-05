@@ -18,13 +18,13 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * A simple implementation of `MetadataUpdater` that returns the cluster nodes set via the constructor or via
@@ -36,13 +36,10 @@ import java.util.List;
  * This class is not thread-safe!
  */
 public class ManualMetadataUpdater implements MetadataUpdater {
-
-    private static final Logger log = LoggerFactory.getLogger(ManualMetadataUpdater.class);
-
     private List<Node> nodes;
 
     public ManualMetadataUpdater() {
-        this(new ArrayList<Node>(0));
+        this(new ArrayList<>(0));
     }
 
     public ManualMetadataUpdater(List<Node> nodes) {
@@ -69,24 +66,18 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
-    public void handleDisconnection(String destination) {
+    public void handleServerDisconnect(long now, String nodeId, Optional<AuthenticationException> maybeAuthException) {
+        // We don't fail the broker on failures. There should be sufficient information from
+        // the NetworkClient logs to indicate the reason for the failure.
+    }
+
+    @Override
+    public void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException) {
         // Do nothing
     }
 
     @Override
-    public void handleFatalException(KafkaException exception) {
-        // We don't fail the broker on failures, but there should be sufficient information in the logs indicating the reason
-        // for failure.
-        log.debug("An error occurred in broker-to-broker communication.", exception);
-    }
-
-    @Override
-    public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
-        // Do nothing
-    }
-
-    @Override
-    public void requestUpdate() {
+    public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
         // Do nothing
     }
 

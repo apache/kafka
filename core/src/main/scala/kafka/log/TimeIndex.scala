@@ -39,10 +39,10 @@ import org.apache.kafka.common.record.RecordBatch
  *
  * The timestamps in the same time index file are guaranteed to be monotonically increasing.
  *
- * The index support timestamp lookup for a memory map of this file. The lookup is done using a binary search to find
+ * The index supports timestamp lookup for a memory map of this file. The lookup is done using a binary search to find
  * the offset of the message whose indexed timestamp is closest but smaller or equals to the target timestamp.
  *
- * Time index files can be opened in two ways: either as an empty, mutable index that allows appends or
+ * Time index files can be opened in two ways: either as an empty, mutable index that allows appending or
  * an immutable read-only index file that has previously been populated. The makeReadOnly method will turn a mutable file into an
  * immutable one and truncate off any extra bytes. This is done when the index file is rolled over.
  *
@@ -51,7 +51,7 @@ import org.apache.kafka.common.record.RecordBatch
  */
 // Avoid shadowing mutable file in AbstractIndex
 class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
-    extends AbstractIndex[Long, Long](_file, baseOffset, maxIndexSize, writable) {
+    extends AbstractIndex(_file, baseOffset, maxIndexSize, writable) {
   import TimeIndex._
 
   @volatile private var _lastEntry = lastEntryFromIndexFile
@@ -102,7 +102,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
 
   /**
    * Attempt to append a time index entry to the time index.
-   * The new entry is appended only if both the timestamp and offsets are greater than the last appended timestamp and
+   * The new entry is appended only if both the timestamp and offset are greater than the last appended timestamp and
    * the last appended offset.
    *
    * @param timestamp The timestamp of the new time index entry
@@ -135,7 +135,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
         mmap.putInt(relativeOffset(offset))
         _entries += 1
         _lastEntry = TimestampOffset(timestamp, offset)
-        require(_entries * entrySize == mmap.position(), _entries + " entries but file position in index is " + mmap.position() + ".")
+        require(_entries * entrySize == mmap.position(), s"${_entries} entries but file position in index is ${mmap.position()}.")
       }
     }
   }
@@ -226,38 +226,4 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
 
 object TimeIndex extends Logging {
   override val loggerName: String = classOf[TimeIndex].getName
-}
-
-
-
-/**
-  * A thin wrapper on top of the raw TimeIndex object to avoid initialization on construction. This defers the TimeIndex
-  * initialization to the time it gets accessed so the cost of the heavy memory mapped operation gets amortized over time.
-  *
-  * Combining with skipping sanity check for safely flushed segments, the startup time of a broker can be reduced, especially
-  * for the the broker with a lot of log segments
-  *
-  */
-class LazyTimeIndex(@volatile private var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
-  @volatile private var timeIndex: Option[TimeIndex] = None
-
-  def file: File = {
-    if (timeIndex.isDefined)
-      timeIndex.get.file
-    else
-      _file
-  }
-
-  def file_=(f: File): Unit = {
-    if (timeIndex.isDefined)
-      timeIndex.get.file = f
-    else
-      _file = f
-  }
-
-  def get: TimeIndex = {
-    if (timeIndex.isEmpty)
-      timeIndex = Some(new TimeIndex(_file, baseOffset, maxIndexSize, writable))
-    timeIndex.get
-  }
 }

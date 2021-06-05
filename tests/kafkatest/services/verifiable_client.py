@@ -18,9 +18,9 @@ from kafkatest.version import DEV_BRANCH, LATEST_0_8_2
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
 import importlib
-import os
 import subprocess
 import signal
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 
 """This module abstracts the implementation of a verifiable client, allowing
@@ -180,8 +180,16 @@ def create_verifiable_client_implementation(context, parent):
 
 class VerifiableClientMixin (object):
     """
-    Verifiable client mixin class
+    Verifiable client mixin class which loads the actual VerifiableClient.. class.
     """
+    def __init__ (self, *args, **kwargs):
+        super(VerifiableClientMixin, self).__init__(*args, **kwargs)
+        if hasattr(self.impl, 'deploy'):
+            # Deploy client on node
+            self.context.logger.debug("Deploying %s on %s" % (self.impl, self.nodes))
+            for node in self.nodes:
+                self.impl.deploy(node)
+
     @property
     def impl (self):
         """
@@ -194,6 +202,13 @@ class VerifiableClientMixin (object):
                 self.context.logger.debug("Using client implementation %s for %s" % (self._impl.__class__.__name__, self.__class__.__name__))
         return self._impl
 
+
+class VerifiableClient (object):
+    """
+    Verifiable client base class
+    """
+    def __init__(self, *args, **kwargs):
+        super(VerifiableClient, self).__init__()
 
     def exec_cmd (self, node):
         """
@@ -217,7 +232,7 @@ class VerifiableClientMixin (object):
         return self.conf.get("kill_signal", signal.SIGTERM)
 
 
-class VerifiableClientJava (VerifiableClientMixin):
+class VerifiableClientJava (VerifiableClient):
     """
     Verifiable Consumer and Producer using the official Java client.
     """
@@ -243,6 +258,7 @@ class VerifiableClientJava (VerifiableClientMixin):
             cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
             cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar
             cmd += "export CLASSPATH; "
+        cmd += fix_opts_for_new_jvm(node)
         cmd += self.parent.path.script("kafka-run-class.sh", node) + " org.apache.kafka.tools." + self.java_class_name
         return cmd
 
@@ -256,7 +272,7 @@ class VerifiableClientJava (VerifiableClientMixin):
             return []
 
 
-class VerifiableClientDummy (VerifiableClientMixin):
+class VerifiableClientDummy (VerifiableClient):
     """
     Dummy class for testing the pluggable framework
     """
@@ -278,7 +294,7 @@ class VerifiableClientDummy (VerifiableClientMixin):
         return []
 
 
-class VerifiableClientApp (VerifiableClientMixin):
+class VerifiableClientApp (VerifiableClient):
     """
     VerifiableClient using --global settings for exec_cmd, pids and deploy.
     By using this a verifiable client application can be used through simple
@@ -300,9 +316,9 @@ class VerifiableClientApp (VerifiableClientMixin):
             raise SyntaxError("%s requires \"exec_cmd\": .. to be set in --globals %s object" % \
                               (self.__class__.__name__, self.name))
 
+
     def exec_cmd (self, node):
         """ :return: command to execute to start instance """
-        self.deploy(node)
         return self.conf["exec_cmd"]
 
     def pids (self, node):

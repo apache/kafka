@@ -61,6 +61,10 @@ public class SimpleRecord {
         this(RecordBatch.NO_TIMESTAMP, null, value);
     }
 
+    public SimpleRecord(ByteBuffer value) {
+        this(RecordBatch.NO_TIMESTAMP, null, value);
+    }
+
     public SimpleRecord(byte[] key, byte[] value) {
         this(RecordBatch.NO_TIMESTAMP, key, value);
     }

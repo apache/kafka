@@ -18,9 +18,12 @@
   "type": "response",
   "name": "TxnOffsetCommitResponse",
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
+  //
   // Version 2 is the same as version 1.
-  "validVersions": "0-2",
-  "flexibleVersions": "none",
+  //
+  // Version 3 adds illegal generation, fenced instance id, and unknown member id errors.
+  "validVersions": "0-3",
+  "flexibleVersions": "3+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -31,7 +34,7 @@
       { "name": "Partitions", "type": "[]TxnOffsetCommitResponsePartition", "versions": "0+",
         "about": "The responses for each partition in the topic.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
-          "about": "The partitition index." },
+          "about": "The partition index." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The error code, or 0 if there was no error." }
       ]}

@@ -19,15 +19,15 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UniformStickyPartitionerTest {
     private final static Node[] NODES = new Node[] {
@@ -58,7 +58,7 @@ public class UniformStickyPartitionerTest {
             Collections.<String>emptySet(), Collections.<String>emptySet());
         for (int i = 0; i < 50; i++) {
             part = partitioner.partition("test", null, null, null, null, cluster);
-            assertTrue("We should never choose a leader-less node in round robin", part == 0 || part == 2);
+            assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
             if (part == 0)
                 countForPart0++;
             else
@@ -68,13 +68,13 @@ public class UniformStickyPartitionerTest {
         partitioner.onNewBatch("test", cluster, part);       
         for (int i = 1; i <= 50; i++) {
             part = partitioner.partition("test", null, null, null, null, cluster);
-            assertTrue("We should never choose a leader-less node in round robin", part == 0 || part == 2);
+            assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
             if (part == 0)
                 countForPart0++;
             else
                 countForPart2++;
         }
-        assertEquals("The distribution between two available partitions should be even", countForPart0, countForPart2);
+        assertEquals(countForPart0, countForPart2, "The distribution between two available partitions should be even");
     }
 
     @Test

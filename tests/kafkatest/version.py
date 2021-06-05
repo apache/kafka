@@ -49,9 +49,62 @@ class KafkaVersion(LooseVersion):
         else:
             return LooseVersion.__str__(self)
 
+    def _cmp(self, other):
+        if isinstance(other, str):
+            other = KafkaVersion(other)
+
+        if other.is_dev:
+            if self.is_dev:
+                return 0
+            return -1
+        elif self.is_dev:
+            return 1
+
+        return LooseVersion._cmp(self, other)
+
+    def consumer_supports_bootstrap_server(self):
+        """
+        Kafka supported a new consumer beginning with v0.9.0 where
+        we can specify --bootstrap-server instead of --zookeeper.
+
+        This version also allowed a --consumer-config file where we could specify
+        a security protocol other than PLAINTEXT.
+
+        :return: true if the version of Kafka supports a new consumer with --bootstrap-server
+        """
+        return self >= V_0_9_0_0
+
     def supports_named_listeners(self):
         return self >= V_0_10_2_0
 
+    def acl_command_supports_bootstrap_server(self):
+        return self >= V_2_1_0
+
+    def topic_command_supports_bootstrap_server(self):
+        return self >= V_2_3_0
+
+    def topic_command_supports_if_not_exists_with_bootstrap_server(self):
+        return self >= V_2_6_0
+
+    def supports_tls_to_zookeeper(self):
+        # indicate if KIP-515 is available
+        return self >= V_2_5_0
+
+    def reassign_partitions_command_supports_bootstrap_server(self):
+        return self >= V_2_5_0
+
+    def kafka_configs_command_uses_bootstrap_server(self):
+        # everything except User SCRAM Credentials (KIP-554)
+        return self >= V_2_6_0
+
+    def kafka_configs_command_uses_bootstrap_server_scram(self):
+        # User SCRAM Credentials (KIP-554)
+        return self >= V_2_7_0
+
+    def supports_topic_ids_when_using_zk(self):
+        # Supports topic IDs as described by KIP-516.
+        # Self-managed clusters always support topic ID, so this method only applies to ZK clusters.
+        return self >= V_2_8_0
 
 def get_version(node=None):
     """Return the version attached to the given node.
@@ -63,7 +116,7 @@ def get_version(node=None):
         return DEV_BRANCH
 
 DEV_BRANCH = KafkaVersion("dev")
-DEV_VERSION = KafkaVersion("2.5.0-SNAPSHOT")
+DEV_VERSION = KafkaVersion("3.0.0-SNAPSHOT")
 
 # 0.8.2.x versions
 V_0_8_2_1 = KafkaVersion("0.8.2.1")
@@ -125,8 +178,39 @@ LATEST_2_1 = V_2_1_1
 # 2.2.x versions
 V_2_2_0 = KafkaVersion("2.2.0")
 V_2_2_1 = KafkaVersion("2.2.1")
-LATEST_2_2 = V_2_2_1
+V_2_2_2 = KafkaVersion("2.2.2")
+LATEST_2_2 = V_2_2_2
 
 # 2.3.x versions
 V_2_3_0 = KafkaVersion("2.3.0")
-LATEST_2_3 = V_2_3_0
+V_2_3_1 = KafkaVersion("2.3.1")
+LATEST_2_3 = V_2_3_1
+
+# 2.4.x versions
+V_2_4_0 = KafkaVersion("2.4.0")
+V_2_4_1 = KafkaVersion("2.4.1")
+LATEST_2_4 = V_2_4_1
+
+# 2.5.x versions
+V_2_5_0 = KafkaVersion("2.5.0")
+V_2_5_1 = KafkaVersion("2.5.1")
+LATEST_2_5 = V_2_5_1
+
+# 2.6.x versions
+V_2_6_0 = KafkaVersion("2.6.0")
+V_2_6_1 = KafkaVersion("2.6.1")
+V_2_6_2 = KafkaVersion("2.6.2")
+LATEST_2_6 = V_2_6_2
+
+# 2.7.x versions
+V_2_7_0 = KafkaVersion("2.7.0")
+V_2_7_1 = KafkaVersion("2.7.1")
+LATEST_2_7 = V_2_7_1
+
+# 2.8.x versions
+V_2_8_0 = KafkaVersion("2.8.0")
+LATEST_2_8 = V_2_8_0
+
+# 3.0.x versions
+V_3_0_0 = KafkaVersion("3.0.0")
+LATEST_3_0 = V_3_0_0

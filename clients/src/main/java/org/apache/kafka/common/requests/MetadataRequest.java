@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -102,20 +102,13 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     private final MetadataRequestData data;
-    private final short version;
 
     public MetadataRequest(MetadataRequestData data, short version) {
         super(ApiKeys.METADATA, version);
         this.data = data;
-        this.version = version;
     }
 
-    public MetadataRequest(Struct struct, short version) {
-        super(ApiKeys.METADATA, version);
-        this.data = new MetadataRequestData(struct, version);
-        this.version = version;
-    }
-
+    @Override
     public MetadataRequestData data() {
         return data;
     }
@@ -125,7 +118,7 @@ public class MetadataRequest extends AbstractRequest {
         Errors error = Errors.forException(e);
         MetadataResponseData responseData = new MetadataResponseData();
         if (topics() != null) {
-            for (String topic :topics())
+            for (String topic : topics())
                 responseData.topics().add(new MetadataResponseData.MetadataResponseTopic()
                     .setName(topic)
                     .setErrorCode(error.code())
@@ -133,29 +126,13 @@ public class MetadataRequest extends AbstractRequest {
                     .setPartitions(Collections.emptyList()));
         }
 
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-            case 2:
-                return new MetadataResponse(responseData);
-            case 3:
-            case 4:
-            case 5:
-            case 6:
-            case 7:
-            case 8:
-                responseData.setThrottleTimeMs(throttleTimeMs);
-                return new MetadataResponse(responseData);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.METADATA.latestVersion()));
-        }
+        responseData.setThrottleTimeMs(throttleTimeMs);
+        return new MetadataResponse(responseData, true);
     }
 
     public boolean isAllTopics() {
         return (data.topics() == null) ||
-            (data.topics().isEmpty() && version == 0); //In version 0, an empty topic list indicates
+            (data.topics().isEmpty() && version() == 0); //In version 0, an empty topic list indicates
                                                          // "request metadata for all topics."
     }
 
@@ -174,17 +151,12 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     public static MetadataRequest parse(ByteBuffer buffer, short version) {
-        return new MetadataRequest(ApiKeys.METADATA.parseRequest(version, buffer), version);
+        return new MetadataRequest(new MetadataRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public static List<MetadataRequestTopic> convertToMetadataRequestTopic(final Collection<String> topics) {
         return topics.stream().map(topic -> new MetadataRequestTopic()
             .setName(topic))
             .collect(Collectors.toList());
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version);
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +27,6 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -53,7 +53,8 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
 
     @Override
     public void start() {
-        executor = Executors.newSingleThreadExecutor();
+        executor = Executors.newFixedThreadPool(1, ThreadUtils.createThreadFactory(
+                this.getClass().getSimpleName() + "-%d", false));
     }
 
     @Override
@@ -75,38 +76,27 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     }
 
     @Override
-    public Future<Map<ByteBuffer, ByteBuffer>> get(
-            final Collection<ByteBuffer> keys,
-            final Callback<Map<ByteBuffer, ByteBuffer>> callback) {
-        return executor.submit(new Callable<Map<ByteBuffer, ByteBuffer>>() {
-            @Override
-            public Map<ByteBuffer, ByteBuffer> call() throws Exception {
-                Map<ByteBuffer, ByteBuffer> result = new HashMap<>();
-                for (ByteBuffer key : keys) {
-                    result.put(key, data.get(key));
-                }
-                if (callback != null)
-                    callback.onCompletion(null, result);
-                return result;
+    public Future<Map<ByteBuffer, ByteBuffer>> get(final Collection<ByteBuffer> keys) {
+        return executor.submit(() -> {
+            Map<ByteBuffer, ByteBuffer> result = new HashMap<>();
+            for (ByteBuffer key : keys) {
+                result.put(key, data.get(key));
             }
+            return result;
         });
-
     }
 
     @Override
     public Future<Void> set(final Map<ByteBuffer, ByteBuffer> values,
                             final Callback<Void> callback) {
-        return executor.submit(new Callable<Void>() {
-            @Override
-            public Void call() throws Exception {
-                for (Map.Entry<ByteBuffer, ByteBuffer> entry : values.entrySet()) {
-                    data.put(entry.getKey(), entry.getValue());
-                }
-                save();
-                if (callback != null)
-                    callback.onCompletion(null, null);
-                return null;
+        return executor.submit(() -> {
+            for (Map.Entry<ByteBuffer, ByteBuffer> entry : values.entrySet()) {
+                data.put(entry.getKey(), entry.getValue());
             }
+            save();
+            if (callback != null)
+                callback.onCompletion(null, null);
+            return null;
         });
     }
 

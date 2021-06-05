@@ -18,9 +18,9 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class HeartbeatTest {
 
@@ -31,8 +31,11 @@ public class HeartbeatTest {
         byte[] value = heartbeat.recordValue();
         ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>("any-topic", 6, 7, key, value);
         Heartbeat deserialized = Heartbeat.deserializeRecord(record);
-        assertEquals(heartbeat.sourceClusterAlias(), deserialized.sourceClusterAlias());
-        assertEquals(heartbeat.targetClusterAlias(), deserialized.targetClusterAlias());
-        assertEquals(heartbeat.timestamp(), deserialized.timestamp());
+        assertEquals(heartbeat.sourceClusterAlias(), deserialized.sourceClusterAlias(),
+                "Failure on heartbeat sourceClusterAlias serde");
+        assertEquals(heartbeat.targetClusterAlias(), deserialized.targetClusterAlias(),
+                "Failure on heartbeat targetClusterAlias serde");
+        assertEquals(heartbeat.timestamp(), deserialized.timestamp(),
+                "Failure on heartbeat timestamp serde");
     }
 }

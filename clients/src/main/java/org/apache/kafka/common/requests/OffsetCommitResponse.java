@@ -21,13 +21,12 @@ import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -51,10 +50,12 @@ public class OffsetCommitResponse extends AbstractResponse {
     private final OffsetCommitResponseData data;
 
     public OffsetCommitResponse(OffsetCommitResponseData data) {
+        super(ApiKeys.OFFSET_COMMIT);
         this.data = data;
     }
 
     public OffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData) {
+        super(ApiKeys.OFFSET_COMMIT);
         Map<String, OffsetCommitResponseTopic>
                 responseTopicDataMap = new HashMap<>();
 
@@ -80,37 +81,20 @@ public class OffsetCommitResponse extends AbstractResponse {
         this(DEFAULT_THROTTLE_TIME, responseData);
     }
 
-    public OffsetCommitResponse(Struct struct) {
-        short latestVersion = (short) (OffsetCommitResponseData.SCHEMAS.length - 1);
-        this.data = new OffsetCommitResponseData(struct, latestVersion);
-    }
-
-    public OffsetCommitResponse(Struct struct, short version) {
-        this.data = new OffsetCommitResponseData(struct, version);
-    }
-
+    @Override
     public OffsetCommitResponseData data() {
         return data;
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        List<Errors> errors = new ArrayList<>();
-        for (OffsetCommitResponseTopic topic : data.topics()) {
-            for (OffsetCommitResponsePartition partition : topic.partitions()) {
-                errors.add(Errors.forCode(partition.errorCode()));
-            }
-        }
-        return errorCounts(errors);
+        return errorCounts(data.topics().stream().flatMap(topicResult ->
+                topicResult.partitions().stream().map(partitionResult ->
+                        Errors.forCode(partitionResult.errorCode()))));
     }
 
     public static OffsetCommitResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetCommitResponse(ApiKeys.OFFSET_COMMIT.parseResponse(version, buffer), version);
-    }
-
-    @Override
-    public Struct toStruct(short version) {
-        return data.toStruct(version);
+        return new OffsetCommitResponse(new OffsetCommitResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

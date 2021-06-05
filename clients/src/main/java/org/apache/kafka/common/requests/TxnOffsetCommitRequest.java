@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
@@ -24,8 +25,8 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
@@ -39,20 +40,61 @@ import java.util.stream.Collectors;
 
 public class TxnOffsetCommitRequest extends AbstractRequest {
 
-    public final TxnOffsetCommitRequestData data;
+    private final TxnOffsetCommitRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
 
         public final TxnOffsetCommitRequestData data;
 
-        public Builder(TxnOffsetCommitRequestData data) {
+
+        public Builder(final String transactionalId,
+                       final String consumerGroupId,
+                       final long producerId,
+                       final short producerEpoch,
+                       final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits) {
+            this(transactionalId,
+                consumerGroupId,
+                producerId,
+                producerEpoch,
+                pendingTxnOffsetCommits,
+                JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                JoinGroupRequest.UNKNOWN_GENERATION_ID,
+                Optional.empty());
+        }
+
+        public Builder(final String transactionalId,
+                       final String consumerGroupId,
+                       final long producerId,
+                       final short producerEpoch,
+                       final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits,
+                       final String memberId,
+                       final int generationId,
+                       final Optional<String> groupInstanceId) {
             super(ApiKeys.TXN_OFFSET_COMMIT);
-            this.data = data;
+            this.data = new TxnOffsetCommitRequestData()
+                            .setTransactionalId(transactionalId)
+                            .setGroupId(consumerGroupId)
+                            .setProducerId(producerId)
+                            .setProducerEpoch(producerEpoch)
+                            .setTopics(getTopics(pendingTxnOffsetCommits))
+                            .setMemberId(memberId)
+                            .setGenerationId(generationId)
+                            .setGroupInstanceId(groupInstanceId.orElse(null));
         }
 
         @Override
         public TxnOffsetCommitRequest build(short version) {
+            if (version < 3 && groupMetadataSet()) {
+                throw new UnsupportedVersionException("Broker doesn't support group metadata commit API on version " + version
+                + ", minimum supported request version is 3 which requires brokers to be on version 2.5 or above.");
+            }
             return new TxnOffsetCommitRequest(data, version);
+        }
+
+        private boolean groupMetadataSet() {
+            return !data.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) ||
+                       data.generationId() != JoinGroupRequest.UNKNOWN_GENERATION_ID ||
+                       data.groupInstanceId() != null;
         }
 
         @Override
@@ -64,11 +106,6 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     public TxnOffsetCommitRequest(TxnOffsetCommitRequestData data, short version) {
         super(ApiKeys.TXN_OFFSET_COMMIT, version);
         this.data = data;
-    }
-
-    public TxnOffsetCommitRequest(Struct struct, short version) {
-        super(ApiKeys.TXN_OFFSET_COMMIT, version);
-        this.data = new TxnOffsetCommitRequestData(struct, version);
     }
 
     public Map<TopicPartition, CommittedOffset> offsets() {
@@ -86,7 +123,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return offsetMap;
     }
 
-    public static List<TxnOffsetCommitRequestTopic> getTopics(Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits) {
+    static List<TxnOffsetCommitRequestTopic> getTopics(Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits) {
         Map<String, List<TxnOffsetCommitRequestPartition>> topicPartitionMap = new HashMap<>();
         for (Map.Entry<TopicPartition, CommittedOffset> entry : pendingTxnOffsetCommits.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
@@ -110,8 +147,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public TxnOffsetCommitRequestData data() {
+        return data;
     }
 
     static List<TxnOffsetCommitResponseTopic> getErrorResponseTopics(List<TxnOffsetCommitRequestTopic> requestTopics,
@@ -143,7 +180,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {
-        return new TxnOffsetCommitRequest(ApiKeys.TXN_OFFSET_COMMIT.parseRequest(version, buffer), version);
+        return new TxnOffsetCommitRequest(new TxnOffsetCommitRequestData(
+            new ByteBufferAccessor(buffer), version), version);
     }
 
     public static class CommittedOffset {

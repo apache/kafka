@@ -16,110 +16,65 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.acl.AccessControlEntry;
-import org.apache.kafka.common.acl.AccessControlEntryFilter;
-import org.apache.kafka.common.acl.AclOperation;
-import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.message.ProduceRequestData;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.resource.PatternType;
-import org.apache.kafka.common.resource.ResourcePattern;
-import org.apache.kafka.common.resource.ResourcePatternFilter;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.record.Records;
 
+import java.nio.ByteBuffer;
+import java.util.Iterator;
 import java.util.Optional;
+import java.util.function.Predicate;
 
-import static org.apache.kafka.common.protocol.CommonFields.HOST;
-import static org.apache.kafka.common.protocol.CommonFields.HOST_FILTER;
-import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
-import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
-import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
-import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_FILTER;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_FILTER;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE_FILTER;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
-
-final class RequestUtils {
+public final class RequestUtils {
 
     private RequestUtils() {}
 
-    static ResourcePattern resourcePatternromStructFields(Struct struct) {
-        byte resourceType = struct.get(RESOURCE_TYPE);
-        String name = struct.get(RESOURCE_NAME);
-        PatternType patternType = PatternType.fromCode(
-            struct.getOrElse(RESOURCE_PATTERN_TYPE, PatternType.LITERAL.code()));
-        return new ResourcePattern(ResourceType.fromCode(resourceType), name, patternType);
-    }
-
-    static void resourcePatternSetStructFields(ResourcePattern pattern, Struct struct) {
-        struct.set(RESOURCE_TYPE, pattern.resourceType().code());
-        struct.set(RESOURCE_NAME, pattern.name());
-        struct.setIfExists(RESOURCE_PATTERN_TYPE, pattern.patternType().code());
-    }
-
-    static ResourcePatternFilter resourcePatternFilterFromStructFields(Struct struct) {
-        byte resourceType = struct.get(RESOURCE_TYPE);
-        String name = struct.get(RESOURCE_NAME_FILTER);
-        PatternType patternType = PatternType.fromCode(
-            struct.getOrElse(RESOURCE_PATTERN_TYPE_FILTER, PatternType.LITERAL.code()));
-        return new ResourcePatternFilter(ResourceType.fromCode(resourceType), name, patternType);
-    }
-
-    static void resourcePatternFilterSetStructFields(ResourcePatternFilter patternFilter, Struct struct) {
-        struct.set(RESOURCE_TYPE, patternFilter.resourceType().code());
-        struct.set(RESOURCE_NAME_FILTER, patternFilter.name());
-        struct.setIfExists(RESOURCE_PATTERN_TYPE_FILTER, patternFilter.patternType().code());
-    }
-
-    static AccessControlEntry aceFromStructFields(Struct struct) {
-        String principal = struct.get(PRINCIPAL);
-        String host = struct.get(HOST);
-        byte operation = struct.get(OPERATION);
-        byte permissionType = struct.get(PERMISSION_TYPE);
-        return new AccessControlEntry(principal, host, AclOperation.fromCode(operation),
-            AclPermissionType.fromCode(permissionType));
-    }
-
-    static void aceSetStructFields(AccessControlEntry data, Struct struct) {
-        struct.set(PRINCIPAL, data.principal());
-        struct.set(HOST, data.host());
-        struct.set(OPERATION, data.operation().code());
-        struct.set(PERMISSION_TYPE, data.permissionType().code());
-    }
-
-    static AccessControlEntryFilter aceFilterFromStructFields(Struct struct) {
-        String principal = struct.get(PRINCIPAL_FILTER);
-        String host = struct.get(HOST_FILTER);
-        byte operation = struct.get(OPERATION);
-        byte permissionType = struct.get(PERMISSION_TYPE);
-        return new AccessControlEntryFilter(principal, host, AclOperation.fromCode(operation),
-            AclPermissionType.fromCode(permissionType));
-    }
-
-    static void aceFilterSetStructFields(AccessControlEntryFilter filter, Struct struct) {
-        struct.set(PRINCIPAL_FILTER, filter.principal());
-        struct.set(HOST_FILTER, filter.host());
-        struct.set(OPERATION, filter.operation().code());
-        struct.set(PERMISSION_TYPE, filter.permissionType().code());
-    }
-
-    static void setLeaderEpochIfExists(Struct struct, Field.Int32 leaderEpochField, Optional<Integer> leaderEpoch) {
-        struct.setIfExists(leaderEpochField, leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH));
-    }
-
-    static Optional<Integer> getLeaderEpoch(Struct struct, Field.Int32 leaderEpochField) {
-        int leaderEpoch = struct.getOrElse(leaderEpochField, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-        Optional<Integer> leaderEpochOpt = leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
-                Optional.empty() : Optional.of(leaderEpoch);
-        return leaderEpochOpt;
-    }
-
-    static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
-        Optional<Integer> leaderEpochOpt = leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
+    public static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
+        return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
             Optional.empty() : Optional.of(leaderEpoch);
-        return leaderEpochOpt;
+    }
+
+    public static boolean hasTransactionalRecords(ProduceRequest request) {
+        return flag(request, RecordBatch::isTransactional);
+    }
+
+    /**
+     * find a flag from all records of a produce request.
+     * @param request produce request
+     * @param predicate used to predicate the record
+     * @return true if there is any matched flag in the produce request. Otherwise, false
+     */
+    static boolean flag(ProduceRequest request, Predicate<RecordBatch> predicate) {
+        for (ProduceRequestData.TopicProduceData tp : request.data().topicData()) {
+            for (ProduceRequestData.PartitionProduceData p : tp.partitionData()) {
+                if (p.records() instanceof Records) {
+                    Iterator<? extends RecordBatch> iter = (((Records) p.records())).batchIterator();
+                    if (iter.hasNext() && predicate.test(iter.next())) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public static ByteBuffer serialize(
+        Message header,
+        short headerVersion,
+        Message apiMessage,
+        short apiVersion
+    ) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+
+        int headerSize = header.size(cache, headerVersion);
+        int messageSize = apiMessage.size(cache, apiVersion);
+        ByteBufferAccessor writable = new ByteBufferAccessor(ByteBuffer.allocate(headerSize + messageSize));
+
+        header.write(writable, cache, headerVersion);
+        apiMessage.write(writable, cache, apiVersion);
+
+        writable.flip();
+        return writable.buffer();
     }
 }

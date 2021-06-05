@@ -17,11 +17,9 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
-import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartition;
-import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -46,41 +44,32 @@ import java.util.Map;
  */
 public class OffsetDeleteResponse extends AbstractResponse {
 
-    public final OffsetDeleteResponseData data;
+    private final OffsetDeleteResponseData data;
 
     public OffsetDeleteResponse(OffsetDeleteResponseData data) {
+        super(ApiKeys.OFFSET_DELETE);
         this.data = data;
     }
 
-    public OffsetDeleteResponse(Struct struct) {
-        short latestVersion = (short) (OffsetDeleteResponseData.SCHEMAS.length - 1);
-        this.data = new OffsetDeleteResponseData(struct, latestVersion);
-    }
-
-    public OffsetDeleteResponse(Struct struct, short version) {
-        this.data = new OffsetDeleteResponseData(struct, version);
-    }
-
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public OffsetDeleteResponseData data() {
+        return data;
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
-        counts.put(Errors.forCode(data.errorCode()), 1);
-        for (OffsetDeleteResponseTopic topic : data.topics()) {
-            for (OffsetDeleteResponsePartition partition : topic.partitions()) {
-                Errors error = Errors.forCode(partition.errorCode());
-                counts.put(error, counts.getOrDefault(error, 0) + 1);
-            }
-        }
+        updateErrorCounts(counts, Errors.forCode(data.errorCode()));
+        data.topics().forEach(topic ->
+            topic.partitions().forEach(partition ->
+                updateErrorCounts(counts, Errors.forCode(partition.errorCode()))
+            )
+        );
         return counts;
     }
 
     public static OffsetDeleteResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetDeleteResponse(ApiKeys.OFFSET_DELETE.parseResponse(version, buffer));
+        return new OffsetDeleteResponse(new OffsetDeleteResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

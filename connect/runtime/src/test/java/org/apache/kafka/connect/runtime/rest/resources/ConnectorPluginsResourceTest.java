@@ -52,6 +52,8 @@ import org.apache.kafka.connect.tools.MockSourceConnector;
 import org.apache.kafka.connect.tools.SchemaSourceConnector;
 import org.apache.kafka.connect.tools.VerifiableSinkConnector;
 import org.apache.kafka.connect.tools.VerifiableSourceConnector;
+import org.apache.kafka.connect.util.Callback;
+import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
 import org.junit.Before;
@@ -77,6 +79,7 @@ import java.util.TreeSet;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
@@ -110,31 +113,31 @@ public class ConnectorPluginsResourceTest {
         ConfigDef connectorConfigDef = ConnectorConfig.configDef();
         List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(props);
         List<ConfigValue> partialConnectorConfigValues = connectorConfigDef.validate(partialProps);
-        ConfigInfos result = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), connectorConfigValues, Collections.<String>emptyList());
-        ConfigInfos partialResult = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), partialConnectorConfigValues, Collections.<String>emptyList());
+        ConfigInfos result = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), connectorConfigValues, Collections.emptyList());
+        ConfigInfos partialResult = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), partialConnectorConfigValues, Collections.emptyList());
         configs.addAll(result.values());
         partialConfigs.addAll(partialResult.values());
 
-        ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, null, "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", Collections.<String>emptyList());
-        ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", Collections.<String>emptyList(), Collections.<String>emptyList(), true);
+        ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, null, "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", Collections.emptyList());
+        ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", Collections.emptyList(), Collections.emptyList(), true);
         ConfigInfo configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", true, null, "MEDIUM", "Test configuration for integer type.", "Test", 1, "MEDIUM", "test.int.config", Collections.<String>emptyList());
-        configValueInfo = new ConfigValueInfo("test.int.config", "1", Arrays.asList("1", "2", "3"), Collections.<String>emptyList(), true);
+        configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", true, null, "MEDIUM", "Test configuration for integer type.", "Test", 1, "MEDIUM", "test.int.config", Collections.emptyList());
+        configValueInfo = new ConfigValueInfo("test.int.config", "1", Arrays.asList("1", "2", "3"), Collections.emptyList(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.string.config.default", "STRING", false, "", "LOW", "Test configuration with default value.", null, -1, "NONE", "test.string.config.default", Collections.<String>emptyList());
-        configValueInfo = new ConfigValueInfo("test.string.config.default", "", Collections.<String>emptyList(), Collections.<String>emptyList(), true);
+        configKeyInfo = new ConfigKeyInfo("test.string.config.default", "STRING", false, "", "LOW", "Test configuration with default value.", null, -1, "NONE", "test.string.config.default", Collections.emptyList());
+        configValueInfo = new ConfigValueInfo("test.string.config.default", "", Collections.emptyList(), Collections.emptyList(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.list.config", "LIST", true, null, "HIGH", "Test configuration for list type.", "Test", 2, "LONG", "test.list.config", Collections.<String>emptyList());
-        configValueInfo = new ConfigValueInfo("test.list.config", "a,b", Arrays.asList("a", "b", "c"), Collections.<String>emptyList(), true);
+        configKeyInfo = new ConfigKeyInfo("test.list.config", "LIST", true, null, "HIGH", "Test configuration for list type.", "Test", 2, "LONG", "test.list.config", Collections.emptyList());
+        configValueInfo = new ConfigValueInfo("test.list.config", "a,b", Arrays.asList("a", "b", "c"), Collections.emptyList(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
@@ -198,9 +201,10 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testValidateConfigWithSingleErrorDueToMissingConnectorClassname() throws Throwable {
-        herder.validateConnectorConfig(EasyMock.eq(partialProps));
+        Capture<Callback<ConfigInfos>> configInfosCallback = EasyMock.newCapture();
+        herder.validateConnectorConfig(EasyMock.eq(partialProps), EasyMock.capture(configInfosCallback), EasyMock.anyBoolean());
 
-        PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
+        PowerMock.expectLastCall().andAnswer((IAnswer<Void>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
             List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(partialProps);
 
@@ -214,12 +218,14 @@ public class ConnectorPluginsResourceTest {
             resultConfigKeys.putAll(connectorConfigDef.configKeys());
             configValues.addAll(connectorConfigValues);
 
-            return AbstractHerder.generateResult(
-                    ConnectorPluginsResourceTestConnector.class.getName(),
-                    resultConfigKeys,
-                    configValues,
-                    Collections.singletonList("Test")
+            ConfigInfos configInfos = AbstractHerder.generateResult(
+                ConnectorPluginsResourceTestConnector.class.getName(),
+                resultConfigKeys,
+                configValues,
+                Collections.singletonList("Test")
             );
+            configInfosCallback.getValue().onCompletion(null, configInfos);
+            return null;
         });
 
         PowerMock.replayAll();
@@ -243,7 +249,8 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testValidateConfigWithSimpleName() throws Throwable {
-        herder.validateConnectorConfig(EasyMock.eq(props));
+        Capture<Callback<ConfigInfos>> configInfosCallback = EasyMock.newCapture();
+        herder.validateConnectorConfig(EasyMock.eq(props), EasyMock.capture(configInfosCallback), EasyMock.anyBoolean());
 
         PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
@@ -259,12 +266,14 @@ public class ConnectorPluginsResourceTest {
             resultConfigKeys.putAll(connectorConfigDef.configKeys());
             configValues.addAll(connectorConfigValues);
 
-            return AbstractHerder.generateResult(
+            ConfigInfos configInfos = AbstractHerder.generateResult(
                     ConnectorPluginsResourceTestConnector.class.getName(),
                     resultConfigKeys,
                     configValues,
                     Collections.singletonList("Test")
             );
+            configInfosCallback.getValue().onCompletion(null, configInfos);
+            return null;
         });
 
         PowerMock.replayAll();
@@ -284,7 +293,8 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testValidateConfigWithAlias() throws Throwable {
-        herder.validateConnectorConfig(EasyMock.eq(props));
+        Capture<Callback<ConfigInfos>> configInfosCallback = EasyMock.newCapture();
+        herder.validateConnectorConfig(EasyMock.eq(props), EasyMock.capture(configInfosCallback), EasyMock.anyBoolean());
 
         PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
@@ -300,12 +310,14 @@ public class ConnectorPluginsResourceTest {
             resultConfigKeys.putAll(connectorConfigDef.configKeys());
             configValues.addAll(connectorConfigValues);
 
-            return AbstractHerder.generateResult(
+            ConfigInfos configInfos = AbstractHerder.generateResult(
                     ConnectorPluginsResourceTestConnector.class.getName(),
                     resultConfigKeys,
                     configValues,
                     Collections.singletonList("Test")
             );
+            configInfosCallback.getValue().onCompletion(null, configInfos);
+            return null;
         });
 
         PowerMock.replayAll();
@@ -323,74 +335,18 @@ public class ConnectorPluginsResourceTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = BadRequestException.class)
-    public void testValidateConfigWithNonExistentName() throws Throwable {
-        herder.validateConnectorConfig(EasyMock.eq(props));
-
-        PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
-            ConfigDef connectorConfigDef = ConnectorConfig.configDef();
-            List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(props);
-
-            Connector connector = new ConnectorPluginsResourceTestConnector();
-            Config config = connector.validate(props);
-            ConfigDef configDef = connector.config();
-            Map<String, ConfigDef.ConfigKey> configKeys = configDef.configKeys();
-            List<ConfigValue> configValues = config.configValues();
-
-            Map<String, ConfigDef.ConfigKey> resultConfigKeys = new HashMap<>(configKeys);
-            resultConfigKeys.putAll(connectorConfigDef.configKeys());
-            configValues.addAll(connectorConfigValues);
-
-            return AbstractHerder.generateResult(
-                    ConnectorPluginsResourceTestConnector.class.getName(),
-                    resultConfigKeys,
-                    configValues,
-                    Collections.singletonList("Test")
-            );
-        });
-
-        PowerMock.replayAll();
-
+    @Test
+    public void testValidateConfigWithNonExistentName() {
         // make a request to connector-plugins resource using a non-loaded connector with the same
         // simple name but different package.
         String customClassname = "com.custom.package."
             + ConnectorPluginsResourceTestConnector.class.getSimpleName();
-        connectorPluginsResource.validateConfigs(customClassname, props);
-
-        PowerMock.verifyAll();
+        assertThrows(BadRequestException.class, () -> connectorPluginsResource.validateConfigs(customClassname, props));
     }
 
-    @Test(expected = BadRequestException.class)
-    public void testValidateConfigWithNonExistentAlias() throws Throwable {
-        herder.validateConnectorConfig(EasyMock.eq(props));
-
-        PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
-            ConfigDef connectorConfigDef = ConnectorConfig.configDef();
-            List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(props);
-
-            Connector connector = new ConnectorPluginsResourceTestConnector();
-            Config config = connector.validate(props);
-            ConfigDef configDef = connector.config();
-            Map<String, ConfigDef.ConfigKey> configKeys = configDef.configKeys();
-            List<ConfigValue> configValues = config.configValues();
-
-            Map<String, ConfigDef.ConfigKey> resultConfigKeys = new HashMap<>(configKeys);
-            resultConfigKeys.putAll(connectorConfigDef.configKeys());
-            configValues.addAll(connectorConfigValues);
-
-            return AbstractHerder.generateResult(
-                    ConnectorPluginsResourceTestConnector.class.getName(),
-                    resultConfigKeys,
-                    configValues,
-                    Collections.singletonList("Test")
-            );
-        });
-
-        PowerMock.replayAll();
-
-        connectorPluginsResource.validateConfigs("ConnectorPluginsTest", props);
-
-        PowerMock.verifyAll();
+    @Test
+    public void testValidateConfigWithNonExistentAlias() {
+        assertThrows(BadRequestException.class, () -> connectorPluginsResource.validateConfigs("ConnectorPluginsTest", props));
     }
 
     @Test
@@ -471,15 +427,14 @@ public class ConnectorPluginsResourceTest {
     }
 
     public static class MockConnectorPluginDesc extends PluginDesc<Connector> {
-        public MockConnectorPluginDesc(Class<? extends Connector> klass, String version)
-                throws Exception {
+        public MockConnectorPluginDesc(Class<? extends Connector> klass, String version) {
             super(klass, version, new MockPluginClassLoader(null, new URL[0]));
         }
 
         public MockConnectorPluginDesc(Class<? extends Connector> klass) throws Exception {
             super(
                     klass,
-                    klass.newInstance().version(),
+                    klass.getConstructor().newInstance().version(),
                     new MockPluginClassLoader(null, new URL[0])
             );
         }

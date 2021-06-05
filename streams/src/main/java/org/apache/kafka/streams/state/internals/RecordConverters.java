@@ -38,7 +38,6 @@ public final class RecordConverters {
             record.offset(),
             timestamp,
             record.timestampType(),
-            record.checksum(),
             record.serializedKeySize(),
             record.serializedValueSize(),
             record.key(),

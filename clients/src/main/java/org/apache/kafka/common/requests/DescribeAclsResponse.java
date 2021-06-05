@@ -19,15 +19,12 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -35,146 +32,60 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
-import static org.apache.kafka.common.protocol.CommonFields.HOST;
-import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
-import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
-import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.message.DescribeAclsResponseData;
+import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
+import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
+import org.apache.kafka.common.resource.ResourceType;
 
 public class DescribeAclsResponse extends AbstractResponse {
-    private final static String RESOURCES_KEY_NAME = "resources";
-    private final static String ACLS_KEY_NAME = "acls";
 
-    private static final Schema DESCRIBE_ACLS_RESOURCE_V0 = new Schema(
-            RESOURCE_TYPE,
-            RESOURCE_NAME,
-            new Field(ACLS_KEY_NAME, new ArrayOf(new Schema(
-                    PRINCIPAL,
-                    HOST,
-                    OPERATION,
-                    PERMISSION_TYPE))));
+    private final DescribeAclsResponseData data;
 
-    /**
-     * V1 sees a new `RESOURCE_PATTERN_TYPE` that defines the type of the resource pattern.
-     *
-     * For more info, see {@link PatternType}.
-     */
-    private static final Schema DESCRIBE_ACLS_RESOURCE_V1 = new Schema(
-            RESOURCE_TYPE,
-            RESOURCE_NAME,
-            RESOURCE_PATTERN_TYPE,
-            new Field(ACLS_KEY_NAME, new ArrayOf(new Schema(
-                    PRINCIPAL,
-                    HOST,
-                    OPERATION,
-                    PERMISSION_TYPE))));
-
-    private static final Schema DESCRIBE_ACLS_RESPONSE_V0 = new Schema(
-            THROTTLE_TIME_MS,
-            ERROR_CODE,
-            ERROR_MESSAGE,
-            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE_V0), "The resources and their associated ACLs."));
-
-    /**
-     * V1 sees a new `RESOURCE_PATTERN_TYPE` field added to DESCRIBE_ACLS_RESOURCE_V1, that describes how the resource name is interpreted
-     * and version was bumped to indicate that, on quota violation, brokers send out responses before throttling.
-     *
-     * For more info, see {@link PatternType}.
-     */
-    private static final Schema DESCRIBE_ACLS_RESPONSE_V1 = new Schema(
-            THROTTLE_TIME_MS,
-            ERROR_CODE,
-            ERROR_MESSAGE,
-            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE_V1), "The resources and their associated ACLs."));
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_ACLS_RESPONSE_V0, DESCRIBE_ACLS_RESPONSE_V1};
+    public DescribeAclsResponse(DescribeAclsResponseData data, short version) {
+        super(ApiKeys.DESCRIBE_ACLS);
+        this.data = data;
+        validate(Optional.of(version));
     }
 
-    private final int throttleTimeMs;
-    private final ApiError error;
-    private final Collection<AclBinding> acls;
-
-    public DescribeAclsResponse(int throttleTimeMs, ApiError error, Collection<AclBinding> acls) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.error = error;
-        this.acls = acls;
-    }
-
-    public DescribeAclsResponse(Struct struct) {
-        this.throttleTimeMs = struct.get(THROTTLE_TIME_MS);
-        this.error = new ApiError(struct);
-        this.acls = new ArrayList<>();
-        for (Object resourceStructObj : struct.getArray(RESOURCES_KEY_NAME)) {
-            Struct resourceStruct = (Struct) resourceStructObj;
-            ResourcePattern pattern = RequestUtils.resourcePatternromStructFields(resourceStruct);
-            for (Object aclDataStructObj : resourceStruct.getArray(ACLS_KEY_NAME)) {
-                Struct aclDataStruct = (Struct) aclDataStructObj;
-                AccessControlEntry entry = RequestUtils.aceFromStructFields(aclDataStruct);
-                this.acls.add(new AclBinding(pattern, entry));
-            }
-        }
+    // Skips version validation, visible for testing
+    DescribeAclsResponse(DescribeAclsResponseData data) {
+        super(ApiKeys.DESCRIBE_ACLS);
+        this.data = data;
+        validate(Optional.empty());
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        validate(version);
-
-        Struct struct = new Struct(ApiKeys.DESCRIBE_ACLS.responseSchema(version));
-        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
-        error.write(struct);
-
-        Map<ResourcePattern, List<AccessControlEntry>> resourceToData = new HashMap<>();
-        for (AclBinding acl : acls) {
-            resourceToData
-                .computeIfAbsent(acl.pattern(), k -> new ArrayList<>())
-                .add(acl.entry());
-        }
-
-        List<Struct> resourceStructs = new ArrayList<>();
-        for (Map.Entry<ResourcePattern, List<AccessControlEntry>> tuple : resourceToData.entrySet()) {
-            ResourcePattern resource = tuple.getKey();
-            Struct resourceStruct = struct.instance(RESOURCES_KEY_NAME);
-            RequestUtils.resourcePatternSetStructFields(resource, resourceStruct);
-            List<Struct> dataStructs = new ArrayList<>();
-            for (AccessControlEntry entry : tuple.getValue()) {
-                Struct dataStruct = resourceStruct.instance(ACLS_KEY_NAME);
-                RequestUtils.aceSetStructFields(entry, dataStruct);
-                dataStructs.add(dataStruct);
-            }
-            resourceStruct.set(ACLS_KEY_NAME, dataStructs.toArray());
-            resourceStructs.add(resourceStruct);
-        }
-        struct.set(RESOURCES_KEY_NAME, resourceStructs.toArray());
-        return struct;
+    public DescribeAclsResponseData data() {
+        return data;
     }
 
     @Override
     public int throttleTimeMs() {
-        return throttleTimeMs;
+        return data.throttleTimeMs();
     }
 
     public ApiError error() {
-        return error;
+        return new ApiError(Errors.forCode(data.errorCode()), data.errorMessage());
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(error.error());
+        return errorCounts(Errors.forCode(data.errorCode()));
     }
 
-    public Collection<AclBinding> acls() {
-        return acls;
+    public List<DescribeAclsResource> acls() {
+        return data.resources();
     }
 
     public static DescribeAclsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeAclsResponse(ApiKeys.DESCRIBE_ACLS.responseSchema(version).read(buffer));
+        return new DescribeAclsResponse(new DescribeAclsResponseData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
@@ -182,20 +93,69 @@ public class DescribeAclsResponse extends AbstractResponse {
         return version >= 1;
     }
 
-    private void validate(short version) {
-        if (version == 0) {
-            final boolean unsupported = acls.stream()
-                .map(AclBinding::pattern)
-                .map(ResourcePattern::patternType)
-                .anyMatch(patternType -> patternType != PatternType.LITERAL);
+    private void validate(Optional<Short> version) {
+        if (version.isPresent() && version.get() == 0) {
+            final boolean unsupported = acls().stream()
+                .anyMatch(acl -> acl.patternType() != PatternType.LITERAL.code());
             if (unsupported) {
                 throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
             }
         }
 
-        final boolean unknown = acls.stream().anyMatch(AclBinding::isUnknown);
-        if (unknown) {
-            throw new IllegalArgumentException("Contain UNKNOWN elements");
+        for (DescribeAclsResource resource : acls()) {
+            if (resource.patternType() == PatternType.UNKNOWN.code() || resource.resourceType() == ResourceType.UNKNOWN.code())
+                throw new IllegalArgumentException("Contain UNKNOWN elements");
+            for (AclDescription acl : resource.acls()) {
+                if (acl.operation() == AclOperation.UNKNOWN.code() || acl.permissionType() == AclPermissionType.UNKNOWN.code()) {
+                    throw new IllegalArgumentException("Contain UNKNOWN elements");
+                }
+            }
         }
+    }
+
+    private static Stream<AclBinding> aclBindings(DescribeAclsResource resource) {
+        return resource.acls().stream().map(acl -> {
+            ResourcePattern pattern = new ResourcePattern(
+                    ResourceType.fromCode(resource.resourceType()),
+                    resource.resourceName(),
+                    PatternType.fromCode(resource.patternType()));
+            AccessControlEntry entry = new AccessControlEntry(
+                    acl.principal(),
+                    acl.host(),
+                    AclOperation.fromCode(acl.operation()),
+                    AclPermissionType.fromCode(acl.permissionType()));
+            return new AclBinding(pattern, entry);
+        });
+    }
+
+    public static List<AclBinding> aclBindings(List<DescribeAclsResource> resources) {
+        return resources.stream().flatMap(DescribeAclsResponse::aclBindings).collect(Collectors.toList());
+    }
+
+    public static List<DescribeAclsResource> aclsResources(Collection<AclBinding> acls) {
+        Map<ResourcePattern, List<AccessControlEntry>> patternToEntries = new HashMap<>();
+        for (AclBinding acl : acls) {
+            patternToEntries.computeIfAbsent(acl.pattern(), v -> new ArrayList<>()).add(acl.entry());
+        }
+        List<DescribeAclsResource> resources = new ArrayList<>(patternToEntries.size());
+        for (Entry<ResourcePattern, List<AccessControlEntry>> entry : patternToEntries.entrySet()) {
+            ResourcePattern key = entry.getKey();
+            List<AclDescription> aclDescriptions = new ArrayList<>();
+            for (AccessControlEntry ace : entry.getValue()) {
+                AclDescription ad = new AclDescription()
+                    .setHost(ace.host())
+                    .setOperation(ace.operation().code())
+                    .setPermissionType(ace.permissionType().code())
+                    .setPrincipal(ace.principal());
+                aclDescriptions.add(ad);
+            }
+            DescribeAclsResource dar = new DescribeAclsResource()
+                .setResourceName(key.name())
+                .setPatternType(key.patternType().code())
+                .setResourceType(key.resourceType().code())
+                .setAcls(aclDescriptions);
+            resources.add(dar);
+        }
+        return resources;
     }
 }

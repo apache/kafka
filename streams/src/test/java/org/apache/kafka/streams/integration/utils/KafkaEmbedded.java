@@ -30,7 +30,6 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +54,7 @@ public class KafkaEmbedded {
 
     private final Properties effectiveConfig;
     private final File logDir;
-    private final TemporaryFolder tmpFolder;
+    private final File tmpFolder;
     private final KafkaServer kafka;
 
     /**
@@ -67,9 +66,8 @@ public class KafkaEmbedded {
      */
     @SuppressWarnings("WeakerAccess")
     public KafkaEmbedded(final Properties config, final MockTime time) throws IOException {
-        tmpFolder = new TemporaryFolder();
-        tmpFolder.create();
-        logDir = tmpFolder.newFolder();
+        tmpFolder = org.apache.kafka.test.TestUtils.tempDirectory();
+        logDir = org.apache.kafka.test.TestUtils.tempDirectory(tmpFolder.toPath(), "log");
         effectiveConfig = effectiveConfigFrom(config);
         final boolean loggingEnabled = true;
         final KafkaConfig kafkaConfig = new KafkaConfig(effectiveConfig, loggingEnabled);
@@ -123,22 +121,22 @@ public class KafkaEmbedded {
         return effectiveConfig.getProperty("zookeeper.connect", DEFAULT_ZK_CONNECT);
     }
 
-    /**
-     * Stop the broker.
-     */
     @SuppressWarnings("WeakerAccess")
-    public void stop() {
+    public void stopAsync() {
         log.debug("Shutting down embedded Kafka broker at {} (with ZK ensemble at {}) ...",
-            brokerList(), zookeeperConnect());
+                  brokerList(), zookeeperConnect());
         kafka.shutdown();
+    }
+
+    @SuppressWarnings("WeakerAccess")
+    public void awaitStoppedAndPurge() {
         kafka.awaitShutdown();
         log.debug("Removing log dir at {} ...", logDir);
         try {
-            Utils.delete(logDir);
+            Utils.delete(tmpFolder);
         } catch (final IOException e) {
             throw new RuntimeException(e);
         }
-        tmpFolder.delete();
         log.debug("Shutdown of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());
     }

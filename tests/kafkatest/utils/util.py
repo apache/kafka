@@ -1,5 +1,3 @@
-# Copyright 2015 Confluent Inc.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -14,9 +12,7 @@
 
 from kafkatest import __version__ as __kafkatest_version__
 
-import math
 import re
-import time
 
 
 def kafkatest_version():

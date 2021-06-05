@@ -21,7 +21,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
-from kafkatest.version import DEV_BRANCH
+from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_0_10_0_0
 
 
 class ConsumerState:
@@ -97,7 +97,7 @@ class ConsumerEventHandler(object):
                     if tp in self.position:
                         self.position[tp] = max_offset + 1
                     logger.warn(msg)
-            self.total_consumed += event["count"]
+        self.total_consumed += event["count"]
 
     def handle_partitions_revoked(self, event):
         self.revoked_count += 1
@@ -167,7 +167,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def __init__(self, context, num_nodes, kafka, topic, group_id,
                  static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
-                 assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor",
+                 assignment_strategy=None,
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
                  on_record_consumed=None, reset_policy="earliest", verify_offsets=True):
         """
@@ -175,7 +175,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         """
         super(VerifiableConsumer, self).__init__(context, num_nodes)
         self.log_level = log_level
-        
         self.kafka = kafka
         self.topic = topic
         self.group_id = group_id
@@ -225,7 +224,14 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         # apply group.instance.id to the node for static membership validation
         node.group_instance_id = None
         if self.static_membership:
+            assert node.version >= V_2_3_0, \
+                "Version %s does not support static membership (must be 2.3 or higher)" % str(node.version)
             node.group_instance_id = self.group_id + "-instance-" + str(idx)
+
+        if self.assignment_strategy:
+            assert node.version >= V_0_10_0_0, \
+                "Version %s does not setting an assignment strategy (must be 0.10.0 or higher)" % str(node.version)
+
         cmd = self.start_cmd(node)
         self.logger.debug("VerifiableConsumer %d command: %s" % (idx, cmd))
 
@@ -292,9 +298,24 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         cmd += self.impl.exec_cmd(node)
         if self.on_record_consumed:
             cmd += " --verbose"
-        cmd += " --reset-policy %s --group-id %s --topic %s --group-instance-id %s --broker-list %s --session-timeout %s --assignment-strategy %s %s" % \
-               (self.reset_policy, self.group_id, self.topic, node.group_instance_id, self.kafka.bootstrap_servers(self.security_config.security_protocol),
-               self.session_timeout_sec*1000, self.assignment_strategy, "--enable-autocommit" if self.enable_autocommit else "")
+
+        if node.group_instance_id:
+            cmd += " --group-instance-id %s" % node.group_instance_id
+        elif node.version == V_2_3_0 or node.version == V_2_3_1:
+            # In 2.3, --group-instance-id was required, but would be left empty
+            # if `None` is passed as the argument value
+            cmd += " --group-instance-id None"
+
+        if self.assignment_strategy:
+            cmd += " --assignment-strategy %s" % self.assignment_strategy
+
+        if self.enable_autocommit:
+            cmd += " --enable-autocommit "
+
+        cmd += " --reset-policy %s --group-id %s --topic %s --broker-list %s --session-timeout %s" % \
+               (self.reset_policy, self.group_id, self.topic,
+                self.kafka.bootstrap_servers(self.security_config.security_protocol),
+                self.session_timeout_sec*1000)
                
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
@@ -340,7 +361,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def current_assignment(self):
         with self.lock:
-            return { handler.node: handler.current_assignment() for handler in self.event_handlers.itervalues() }
+            return { handler.node: handler.current_assignment() for handler in self.event_handlers.values() }
 
     def current_position(self, tp):
         with self.lock:
@@ -351,7 +372,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def owner(self, tp):
         with self.lock:
-            for handler in self.event_handlers.itervalues():
+            for handler in self.event_handlers.values():
                 if tp in handler.current_assignment():
                     return handler.node
             return None
@@ -365,33 +386,33 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def total_consumed(self):
         with self.lock:
-            return sum(handler.total_consumed for handler in self.event_handlers.itervalues())
+            return sum(handler.total_consumed for handler in self.event_handlers.values())
 
     def num_rebalances(self):
         with self.lock:
-            return max(handler.assigned_count for handler in self.event_handlers.itervalues())
+            return max(handler.assigned_count for handler in self.event_handlers.values())
 
     def num_revokes_for_alive(self, keep_alive=1):
         with self.lock:
-            return max([handler.revoked_count for handler in self.event_handlers.itervalues()
-                       if handler.idx <= keep_alive])
+            return max(handler.revoked_count for handler in self.event_handlers.values()
+                       if handler.idx <= keep_alive)
 
     def joined_nodes(self):
         with self.lock:
-            return [handler.node for handler in self.event_handlers.itervalues()
+            return [handler.node for handler in self.event_handlers.values()
                     if handler.state == ConsumerState.Joined]
 
     def rebalancing_nodes(self):
         with self.lock:
-            return [handler.node for handler in self.event_handlers.itervalues()
+            return [handler.node for handler in self.event_handlers.values()
                     if handler.state == ConsumerState.Rebalancing]
 
     def dead_nodes(self):
         with self.lock:
-            return [handler.node for handler in self.event_handlers.itervalues()
+            return [handler.node for handler in self.event_handlers.values()
                     if handler.state == ConsumerState.Dead]
 
     def alive_nodes(self):
         with self.lock:
-            return [handler.node for handler in self.event_handlers.itervalues()
+            return [handler.node for handler in self.event_handlers.values()
                     if handler.state != ConsumerState.Dead]

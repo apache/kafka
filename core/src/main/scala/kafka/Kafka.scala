@@ -20,12 +20,12 @@ package kafka
 import java.util.Properties
 
 import joptsimple.OptionParser
+import kafka.server.{KafkaConfig, KafkaRaftServer, KafkaServer, Server}
 import kafka.utils.Implicits._
-import kafka.server.{KafkaServer, KafkaServerStartable}
 import kafka.utils.{CommandLineUtils, Exit, Logging}
-import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Utils}
+import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object Kafka extends Logging {
 
@@ -41,7 +41,8 @@ object Kafka extends Logging {
     optionParser.accepts("version", "Print version information and exit.")
 
     if (args.length == 0 || args.contains("--help")) {
-      CommandLineUtils.printUsageAndDie(optionParser, "USAGE: java [options] %s server.properties [--override property=value]*".format(classOf[KafkaServer].getSimpleName()))
+      CommandLineUtils.printUsageAndDie(optionParser,
+        "USAGE: java [options] %s server.properties [--override property=value]*".format(this.getClass.getCanonicalName.split('$').head))
     }
 
     if (args.contains("--version")) {
@@ -62,10 +63,28 @@ object Kafka extends Logging {
     props
   }
 
+  private def buildServer(props: Properties): Server = {
+    val config = KafkaConfig.fromProps(props, false)
+    if (config.requiresZookeeper) {
+      new KafkaServer(
+        config,
+        Time.SYSTEM,
+        threadNamePrefix = None,
+        enableForwarding = false
+      )
+    } else {
+      new KafkaRaftServer(
+        config,
+        Time.SYSTEM,
+        threadNamePrefix = None
+      )
+    }
+  }
+
   def main(args: Array[String]): Unit = {
     try {
       val serverProps = getPropsFromArgs(args)
-      val kafkaServerStartable = KafkaServerStartable.fromProps(serverProps)
+      val server = buildServer(serverProps)
 
       try {
         if (!OperatingSystem.IS_WINDOWS && !Java.isIbmJdk)
@@ -77,12 +96,25 @@ object Kafka extends Logging {
       }
 
       // attach shutdown handler to catch terminating signals as well as normal termination
-      Runtime.getRuntime().addShutdownHook(new Thread("kafka-shutdown-hook") {
-        override def run(): Unit = kafkaServerStartable.shutdown()
+      Exit.addShutdownHook("kafka-shutdown-hook", {
+        try server.shutdown()
+        catch {
+          case _: Throwable =>
+            fatal("Halting Kafka.")
+            // Calling exit() can lead to deadlock as exit() can be called multiple times. Force exit.
+            Exit.halt(1)
+        }
       })
 
-      kafkaServerStartable.startup()
-      kafkaServerStartable.awaitShutdown()
+      try server.startup()
+      catch {
+        case _: Throwable =>
+          // KafkaServer.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
+          fatal("Exiting Kafka.")
+          Exit.exit(1)
+      }
+
+      server.awaitShutdown()
     }
     catch {
       case e: Throwable =>

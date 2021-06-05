@@ -16,35 +16,42 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Collections;
+import java.util.List;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+@SuppressWarnings("rawtypes")
 public class ChangeLoggingKeyValueBytesStoreTest {
 
+    private final MockRecordCollector collector = new MockRecordCollector();
     private final InMemoryKeyValueStore inner = new InMemoryKeyValueStore("kv");
     private final ChangeLoggingKeyValueBytesStore store = new ChangeLoggingKeyValueBytesStore(inner);
-    private final Map<Object, Object> sent = new HashMap<>();
     private final Bytes hi = Bytes.wrap("hi".getBytes());
     private final Bytes hello = Bytes.wrap("hello".getBytes());
     private final byte[] there = "there".getBytes();
@@ -52,27 +59,19 @@ public class ChangeLoggingKeyValueBytesStoreTest {
 
     @Before
     public void before() {
-        final NoOpRecordCollector collector = new NoOpRecordCollector() {
-            @Override
-            public <K, V> void send(final String topic,
-                                    final K key,
-                                    final V value,
-                                    final Headers headers,
-                                    final Integer partition,
-                                    final Long timestamp,
-                                    final Serializer<K> keySerializer,
-                                    final Serializer<V> valueSerializer) {
-                sent.put(key, value);
-            }
-        };
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext context = mockContext();
+        context.setTime(0);
+        store.init((StateStoreContext) context, store);
+    }
+
+    private InternalMockProcessorContext mockContext() {
+        return new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
             collector,
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
-        context.setTime(0);
-        store.init(context, store);
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+        );
     }
 
     @After
@@ -80,16 +79,38 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         store.close();
     }
 
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
+        final InternalMockProcessorContext context = mockContext();
+        final KeyValueStore<Bytes, byte[]> innerMock = EasyMock.mock(InMemoryKeyValueStore.class);
+        final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
+        innerMock.init((ProcessorContext) context, outer);
+        EasyMock.expectLastCall();
+        EasyMock.replay(innerMock);
+        outer.init((ProcessorContext) context, outer);
+        EasyMock.verify(innerMock);
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        final InternalMockProcessorContext context = mockContext();
+        final KeyValueStore<Bytes, byte[]> innerMock = EasyMock.mock(InMemoryKeyValueStore.class);
+        final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
+        innerMock.init((StateStoreContext) context, outer);
+        EasyMock.expectLastCall();
+        EasyMock.replay(innerMock);
+        outer.init((StateStoreContext) context, outer);
+        EasyMock.verify(innerMock);
+    }
+
     @Test
     public void shouldWriteKeyValueBytesToInnerStoreOnPut() {
         store.put(hi, there);
         assertThat(inner.get(hi), equalTo(there));
-    }
-
-    @Test
-    public void shouldLogChangeOnPut() {
-        store.put(hi, there);
-        assertThat(sent.get(hi), equalTo(there));
+        assertThat(collector.collected().size(), equalTo(1));
+        assertThat(collector.collected().get(0).key(), equalTo(hi));
+        assertThat(collector.collected().get(0).value(), equalTo(there));
     }
 
     @Test
@@ -98,14 +119,12 @@ public class ChangeLoggingKeyValueBytesStoreTest {
                                    KeyValue.pair(hello, world)));
         assertThat(inner.get(hi), equalTo(there));
         assertThat(inner.get(hello), equalTo(world));
-    }
 
-    @Test
-    public void shouldLogChangesOnPutAll() {
-        store.putAll(Arrays.asList(KeyValue.pair(hi, there),
-                                   KeyValue.pair(hello, world)));
-        assertThat(sent.get(hi), equalTo(there));
-        assertThat(sent.get(hello), equalTo(world));
+        assertThat(collector.collected().size(), equalTo(2));
+        assertThat(collector.collected().get(0).key(), equalTo(hi));
+        assertThat(collector.collected().get(0).value(), equalTo(there));
+        assertThat(collector.collected().get(1).key(), equalTo(hello));
+        assertThat(collector.collected().get(1).value(), equalTo(world));
     }
 
     @Test
@@ -125,9 +144,13 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     @Test
     public void shouldLogKeyNullOnDelete() {
         store.put(hi, there);
-        store.delete(hi);
-        assertThat(sent.containsKey(hi), is(true));
-        assertThat(sent.get(hi), nullValue());
+        assertThat(store.delete(hi), equalTo(there));
+
+        assertThat(collector.collected().size(), equalTo(2));
+        assertThat(collector.collected().get(0).key(), equalTo(hi));
+        assertThat(collector.collected().get(0).value(), equalTo(there));
+        assertThat(collector.collected().get(1).key(), equalTo(hi));
+        assertThat(collector.collected().get(1).value(), nullValue());
     }
 
     @Test
@@ -146,14 +169,20 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     @Test
     public void shouldWriteToChangelogOnPutIfAbsentWhenNoPreviousValue() {
         store.putIfAbsent(hi, there);
-        assertThat(sent.get(hi), equalTo(there));
+
+        assertThat(collector.collected().size(), equalTo(1));
+        assertThat(collector.collected().get(0).key(), equalTo(hi));
+        assertThat(collector.collected().get(0).value(), equalTo(there));
     }
 
     @Test
     public void shouldNotWriteToChangeLogOnPutIfAbsentWhenValueForKeyExists() {
         store.put(hi, there);
         store.putIfAbsent(hi, world);
-        assertThat(sent.get(hi), equalTo(there));
+
+        assertThat(collector.collected().size(), equalTo(1));
+        assertThat(collector.collected().get(0).key(), equalTo(hi));
+        assertThat(collector.collected().get(0).value(), equalTo(there));
     }
 
     @Test
@@ -171,6 +200,26 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     public void shouldReturnValueOnGetWhenExists() {
         store.put(hello, world);
         assertThat(store.get(hello), equalTo(world));
+    }
+
+    @Test
+    public void shouldGetRecordsWithPrefixKey() {
+        store.put(hi, there);
+        store.put(Bytes.increment(hi), world);
+        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = store.prefixScan(hi.toString(), new StringSerializer());
+        final List<Bytes> keys = new ArrayList<>();
+        final List<Bytes> values = new ArrayList<>();
+        int numberOfKeysReturned = 0;
+
+        while (keysWithPrefix.hasNext()) {
+            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+            keys.add(next.key);
+            values.add(Bytes.wrap(next.value));
+            numberOfKeysReturned++;
+        }
+        assertThat(numberOfKeysReturned, is(1));
+        assertThat(keys, is(Collections.singletonList(hi)));
+        assertThat(values, is(Collections.singletonList(Bytes.wrap(there))));
     }
 
     @Test

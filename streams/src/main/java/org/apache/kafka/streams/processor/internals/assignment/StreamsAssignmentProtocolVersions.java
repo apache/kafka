@@ -18,13 +18,12 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 public final class StreamsAssignmentProtocolVersions {
     public static final int UNKNOWN = -1;
-    public static final int VERSION_ONE = 1;
-    public static final int VERSION_TWO = 2;
-    public static final int VERSION_THREE = 3;
-    public static final int VERSION_FOUR = 4;
-    public static final int VERSION_FIVE = 5;
-    public static final int EARLIEST_PROBEABLE_VERSION = VERSION_THREE;
-    public static final int LATEST_SUPPORTED_VERSION = VERSION_FIVE;
+    public static final int EARLIEST_PROBEABLE_VERSION = 3;
+    public static final int MIN_NAMED_TOPOLOGY_VERSION = 10;
+    public static final int LATEST_SUPPORTED_VERSION = 9;
+    // When changing the versions:
+    // 1) Update the version_probing_message and end_of_upgrade_message in streams_upgrade_test.py::StreamsUpgradeTest.test_version_probing_upgrade
+    // 2) Add a unit test in SubscriptionInfoTest and/or AssignmentInfoTest
 
     private StreamsAssignmentProtocolVersions() {}
 }

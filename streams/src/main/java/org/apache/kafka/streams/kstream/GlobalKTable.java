@@ -49,7 +49,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * final KafkaStreams streams = ...;
  * streams.start()
  * ...
- * ReadOnlyKeyValueStore view = streams.store("g1-store", QueryableStoreTypes.keyValueStore());
+ * ReadOnlyKeyValueStore view = streams.store("g1-store", QueryableStoreTypes.timestampedKeyValueStore());
  * view.get(key); // can be done on any key, as all keys are present
  *}</pre>
  * Note that in contrast to {@link KTable} a {@code GlobalKTable}'s state holds a full copy of the underlying topic,

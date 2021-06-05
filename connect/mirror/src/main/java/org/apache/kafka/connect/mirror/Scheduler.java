@@ -39,7 +39,7 @@ class Scheduler implements AutoCloseable {
         this.timeout = timeout;
     }
 
-    Scheduler(Class clazz, Duration timeout) {
+    Scheduler(Class<?> clazz, Duration timeout) {
         this("Scheduler for " + clazz.getSimpleName(), timeout);
     }
 
@@ -104,7 +104,7 @@ class Scheduler implements AutoCloseable {
     }
 
     private void executeThread(Task task, String description) {
-        Thread.currentThread().setName(description);
+        Thread.currentThread().setName(name + "-" + description);
         if (closed) {
             log.info("{} skipping task due to shutdown: {}", name, description);
             return;

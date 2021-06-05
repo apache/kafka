@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -28,24 +29,27 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.test.GlobalStateManagerStub;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.NoOpProcessorContext;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
+import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.processor.internals.testutil.ConsumerRecordUtil.record;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -57,18 +61,17 @@ public class GlobalStateTaskTest {
     private final String topic2 = "t2";
     private final TopicPartition t1 = new TopicPartition(topic1, 1);
     private final TopicPartition t2 = new TopicPartition(topic2, 1);
-    private final MockSourceNode sourceOne = new MockSourceNode<>(
-        new String[]{topic1},
+    private final MockSourceNode<String, String> sourceOne = new MockSourceNode<>(
         new StringDeserializer(),
         new StringDeserializer());
-    private final MockSourceNode sourceTwo = new MockSourceNode<>(
-        new String[]{topic2},
+    private final MockSourceNode<Integer, Integer>  sourceTwo = new MockSourceNode<>(
         new IntegerDeserializer(),
         new IntegerDeserializer());
-    private final MockProcessorNode processorOne = new MockProcessorNode<>();
-    private final MockProcessorNode processorTwo = new MockProcessorNode<>();
+    private final MockProcessorNode<?, ?, ?, ?> processorOne = new MockProcessorNode<>();
+    private final MockProcessorNode<?, ?, ?, ?> processorTwo = new MockProcessorNode<>();
 
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
+    private File testDirectory = TestUtils.tempDirectory("global-store");
     private final NoOpProcessorContext context = new NoOpProcessorContext();
 
     private ProcessorTopology topology;
@@ -78,7 +81,7 @@ public class GlobalStateTaskTest {
     @Before
     public void before() {
         final Set<String> storeNames = Utils.mkSet("t1-store", "t2-store");
-        final Map<String, SourceNode> sourceByTopics = new HashMap<>();
+        final Map<String, SourceNode<?, ?>> sourceByTopics = new HashMap<>();
         sourceByTopics.put(topic1, sourceOne);
         sourceByTopics.put(topic2, sourceTwo);
         final Map<String, String> storeToTopic = new HashMap<>();
@@ -87,13 +90,19 @@ public class GlobalStateTaskTest {
         topology = ProcessorTopologyFactories.with(
             asList(sourceOne, sourceTwo, processorOne, processorTwo),
             sourceByTopics,
-            Collections.<StateStore>emptyList(),
+            Collections.emptyList(),
             storeToTopic);
 
         offsets.put(t1, 50L);
         offsets.put(t2, 100L);
-        stateMgr = new GlobalStateManagerStub(storeNames, offsets);
-        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr, new LogAndFailExceptionHandler(), logContext);
+        stateMgr = new GlobalStateManagerStub(storeNames, offsets, testDirectory);
+        globalStateTask = new GlobalStateUpdateTask(
+            logContext,
+            topology,
+            context,
+            stateMgr,
+            new LogAndFailExceptionHandler()
+        );
     }
 
     @Test
@@ -121,7 +130,7 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldProcessRecordsForTopic() {
         globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>(topic1, 1, 1, "foo".getBytes(), "bar".getBytes()));
+        globalStateTask.update(record(topic1, 1, 1, "foo".getBytes(), "bar".getBytes()));
         assertEquals(1, sourceOne.numReceived);
         assertEquals(0, sourceTwo.numReceived);
     }
@@ -130,7 +139,7 @@ public class GlobalStateTaskTest {
     public void shouldProcessRecordsForOtherTopic() {
         final byte[] integerBytes = new IntegerSerializer().serialize("foo", 1);
         globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>(topic2, 1, 1, integerBytes, integerBytes));
+        globalStateTask.update(record(topic2, 1, 1, integerBytes, integerBytes));
         assertEquals(1, sourceTwo.numReceived);
         assertEquals(0, sourceOne.numReceived);
     }
@@ -141,7 +150,7 @@ public class GlobalStateTaskTest {
                                   final boolean failExpected) {
         final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
             topic2, 1, 1, 0L, TimestampType.CREATE_TIME,
-            0L, 0, 0, key, recordValue
+            0, 0, key, recordValue, new RecordHeaders(), Optional.empty()
         );
         globalStateTask.initialize();
         try {
@@ -175,11 +184,11 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler() {
         final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(
+            logContext,
             topology,
             context,
             stateMgr,
-            new LogAndContinueExceptionHandler(),
-            logContext
+            new LogAndContinueExceptionHandler()
         );
         final byte[] key = new LongSerializer().serialize(topic2, 1L);
         final byte[] recordValue = new IntegerSerializer().serialize(topic2, 10);
@@ -190,11 +199,11 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldNotThrowStreamsExceptionWhenValueDeserializationFails() {
         final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(
+            logContext,
             topology,
             context,
             stateMgr,
-            new LogAndContinueExceptionHandler(),
-            logContext
+            new LogAndContinueExceptionHandler()
         );
         final byte[] key = new IntegerSerializer().serialize(topic2, 1);
         final byte[] recordValue = new LongSerializer().serialize(topic2, 10L);
@@ -204,14 +213,14 @@ public class GlobalStateTaskTest {
 
 
     @Test
-    public void shouldFlushStateManagerWithOffsets() throws IOException {
+    public void shouldFlushStateManagerWithOffsets() {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 52L);
         expectedOffsets.put(t2, 100L);
         globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>(topic1, 1, 51, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.update(record(topic1, 1, 51, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
-        assertEquals(expectedOffsets, stateMgr.checkpointed());
+        assertEquals(expectedOffsets, stateMgr.changelogOffsets());
     }
 
     @Test
@@ -220,9 +229,15 @@ public class GlobalStateTaskTest {
         expectedOffsets.put(t1, 102L);
         expectedOffsets.put(t2, 100L);
         globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>(topic1, 1, 101, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.update(record(topic1, 1, 101, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
-        assertThat(stateMgr.checkpointed(), equalTo(expectedOffsets));
+        assertThat(stateMgr.changelogOffsets(), equalTo(expectedOffsets));
     }
 
+    @Test
+    public void shouldWipeGlobalStateDirectory() throws Exception {
+        assertTrue(stateMgr.baseDir().exists());
+        globalStateTask.close(true);
+        assertFalse(stateMgr.baseDir().exists());
+    }
 }

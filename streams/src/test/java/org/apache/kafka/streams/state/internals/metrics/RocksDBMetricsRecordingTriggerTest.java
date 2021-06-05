@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Before;
 import org.junit.Test;
@@ -36,7 +38,8 @@ public class RocksDBMetricsRecordingTriggerTest {
     private final RocksDBMetricsRecorder recorder1 = niceMock(RocksDBMetricsRecorder.class);
     private final RocksDBMetricsRecorder recorder2 = niceMock(RocksDBMetricsRecorder.class);
 
-    private final RocksDBMetricsRecordingTrigger recordingTrigger = new RocksDBMetricsRecordingTrigger();
+    private final Time time = new MockTime();
+    private final RocksDBMetricsRecordingTrigger recordingTrigger = new RocksDBMetricsRecordingTrigger(time);
 
     @Before
     public void setUp() {
@@ -54,10 +57,10 @@ public class RocksDBMetricsRecordingTriggerTest {
         recordingTrigger.addMetricsRecorder(recorder2);
 
         resetToDefault(recorder1);
-        recorder1.record();
+        recorder1.record(time.milliseconds());
         replay(recorder1);
         resetToDefault(recorder2);
-        recorder2.record();
+        recorder2.record(time.milliseconds());
         replay(recorder2);
 
         recordingTrigger.run();

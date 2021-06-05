@@ -20,37 +20,40 @@ package kafka.network
 import java.io._
 import java.net._
 import java.nio.ByteBuffer
-import java.nio.channels.SocketChannel
-import java.util.concurrent.{CompletableFuture, Executors}
-import java.util.{HashMap, Properties, Random}
+import java.nio.channels.{SelectionKey, SocketChannel}
+import java.nio.charset.StandardCharsets
+import java.util
+import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, Executors, TimeUnit}
+import java.util.{Properties, Random}
 
+import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
 import com.yammer.metrics.core.{Gauge, Meter}
-import com.yammer.metrics.{Metrics => YammerMetrics}
 import javax.net.ssl._
-
+import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
-import kafka.server.{KafkaConfig, ThrottledChannel}
+import kafka.server.{KafkaConfig, SimpleApiVersionManager, ThrottleCallback, ThrottledChannel}
 import kafka.utils.Implicits._
-import kafka.utils.{CoreUtils, TestUtils}
-import org.apache.kafka.common.TopicPartition
+import kafka.utils.TestUtils
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.message.{ProduceRequestData, SaslAuthenticateRequestData, SaslHandshakeRequestData, VoteRequestData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
-import org.apache.kafka.common.network.{ChannelBuilder, ChannelState, KafkaChannel, ListenerName, NetworkReceive, NetworkSend, Selector, Send}
+import org.apache.kafka.common.network.{ClientInformation, _}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
+import org.apache.kafka.common.requests
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
-import org.apache.kafka.common.utils.{LogContext, MockTime, Time}
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time, Utils}
+import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
-import org.junit.Assert._
-import org.junit._
-import org.scalatest.Assertions.fail
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api._
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.jdk.CollectionConverters._
 import scala.util.control.ControlThrowable
 
 class SocketServerTest {
@@ -60,7 +63,7 @@ class SocketServerTest {
   props.put("socket.send.buffer.bytes", "300000")
   props.put("socket.receive.buffer.bytes", "300000")
   props.put("queued.max.requests", "50")
-  props.put("socket.request.max.bytes", "50")
+  props.put("socket.request.max.bytes", "100")
   props.put("max.connections.per.ip", "5")
   props.put("connections.max.idle.ms", "60000")
   val config = KafkaConfig.fromProps(props)
@@ -71,21 +74,24 @@ class SocketServerTest {
   // Clean-up any metrics left around by previous tests
   TestUtils.clearYammerMetrics()
 
-  val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider)
+  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.ZK_BROKER)
+  val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
   server.startup()
   val sockets = new ArrayBuffer[Socket]
 
   private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
   private var logLevelToRestore: Level = _
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     // Run the tests with TRACE logging to exercise request logging path
     logLevelToRestore = kafkaLogger.getLevel
     kafkaLogger.setLevel(Level.TRACE)
+
+    assertTrue(server.controlPlaneRequestChannelOpt.isEmpty)
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     shutdownServerAndMetrics(server)
     sockets.foreach(_.close())
@@ -107,6 +113,11 @@ class SocketServerTest {
       outgoing.flush()
   }
 
+  def sendApiRequest(socket: Socket, request: AbstractRequest, header: RequestHeader): Unit = {
+    val serializedBytes = Utils.toArray(request.serializeWithHeader(header))
+    sendRequest(socket, serializedBytes)
+  }
+
   def receiveResponse(socket: Socket): Array[Byte] = {
     val incoming = new DataInputStream(socket.getInputStream)
     val len = incoming.readInt()
@@ -118,8 +129,8 @@ class SocketServerTest {
   private def receiveRequest(channel: RequestChannel, timeout: Long = 2000L): RequestChannel.Request = {
     channel.receiveRequest(timeout) match {
       case request: RequestChannel.Request => request
-      case RequestChannel.ShutdownRequest => fail("Unexpected shutdown received")
-      case null => fail("receiveRequest timed out")
+      case RequestChannel.ShutdownRequest => throw new AssertionError("Unexpected shutdown received")
+      case null => throw new AssertionError("receiveRequest timed out")
     }
   }
 
@@ -129,25 +140,51 @@ class SocketServerTest {
   }
 
   def processRequest(channel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val byteBuffer = request.body[AbstractRequest].serialize(request.header)
-    byteBuffer.rewind()
+    val byteBuffer = request.body[AbstractRequest].serializeWithHeader(request.header)
+    val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
+    val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
+    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
+  }
 
-    val send = new NetworkSend(request.context.connectionId, byteBuffer)
-    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(request.header.toString), None))
+  def processRequestNoOpResponse(channel: RequestChannel, request: RequestChannel.Request): Unit = {
+    channel.sendNoOpResponse(request)
   }
 
   def connect(s: SocketServer = server,
               listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
               localAddr: InetAddress = null,
-              port: Int = 0) = {
+              port: Int = 0): Socket = {
     val socket = new Socket("localhost", s.boundPort(listenerName), localAddr, port)
     sockets += socket
     socket
   }
 
+  def sslConnect(s: SocketServer = server): Socket = {
+    val socket = sslClientSocket(s.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SSL)))
+    sockets += socket
+    socket
+  }
+
+  private def sslClientSocket(port: Int): Socket = {
+    val sslContext = SSLContext.getInstance(TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS)
+    sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
+    val socketFactory = sslContext.getSocketFactory
+    val socket = socketFactory.createSocket("localhost", port)
+    socket.asInstanceOf[SSLSocket].setNeedClientAuth(false)
+    socket
+  }
+
   // Create a client connection, process one request and return (client socket, connectionId)
   def connectAndProcessRequest(s: SocketServer): (Socket, String) = {
-    val socket = connect(s)
+    val securityProtocol = s.dataPlaneAcceptors.asScala.head._1.securityProtocol
+    val socket = securityProtocol match {
+      case SecurityProtocol.PLAINTEXT | SecurityProtocol.SASL_PLAINTEXT =>
+        connect(s)
+      case SecurityProtocol.SSL | SecurityProtocol.SASL_SSL =>
+        sslConnect(s)
+      case _ =>
+        throw new IllegalStateException(s"Unexpected security protocol $securityProtocol")
+    }
     val request = sendAndReceiveRequest(socket, s)
     processRequest(s.dataPlaneRequestChannel, request)
     (socket, request.context.connectionId)
@@ -168,15 +205,20 @@ class SocketServerTest {
     val clientId = ""
     val ackTimeoutMs = 10000
 
-    val emptyRequest = ProduceRequest.Builder.forCurrentMagic(ack, ackTimeoutMs,
-      new HashMap[TopicPartition, MemoryRecords]()).build()
+    val emptyRequest = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+      .setAcks(ack)
+      .setTimeoutMs(ackTimeoutMs)
+      .setTransactionalId(null))
+      .build()
     val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
-    val byteBuffer = emptyRequest.serialize(emptyHeader)
-    byteBuffer.rewind()
+    Utils.toArray(emptyRequest.serializeWithHeader(emptyHeader))
+  }
 
-    val serializedBytes = new Array[Byte](byteBuffer.remaining)
-    byteBuffer.get(serializedBytes)
-    serializedBytes
+  private def apiVersionRequestBytes(clientId: String, version: Short): Array[Byte] = {
+    val request = new ApiVersionsRequest.Builder().build(version)
+    val header = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), clientId, -1)
+    Utils.toArray(request.serializeWithHeader(header))
   }
 
   @Test
@@ -191,6 +233,56 @@ class SocketServerTest {
     verifyAcceptorBlockedPercent("PLAINTEXT", expectBlocked = false)
   }
 
+
+  private def testClientInformation(version: Short, expectedClientSoftwareName: String,
+                                    expectedClientSoftwareVersion: String): Unit = {
+    val plainSocket = connect()
+    val address = plainSocket.getLocalAddress
+    val clientId = "clientId"
+
+    // Send ApiVersionsRequest - unknown expected
+    sendRequest(plainSocket, apiVersionRequestBytes(clientId, version))
+    var receivedReq = receiveRequest(server.dataPlaneRequestChannel)
+
+    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareName)
+    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareVersion)
+
+    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
+
+    // Send ProduceRequest - client info expected
+    sendRequest(plainSocket, producerRequestBytes())
+    receivedReq = receiveRequest(server.dataPlaneRequestChannel)
+
+    assertEquals(expectedClientSoftwareName, receivedReq.context.clientInformation.softwareName)
+    assertEquals(expectedClientSoftwareVersion, receivedReq.context.clientInformation.softwareVersion)
+
+    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
+
+    // Close the socket
+    plainSocket.setSoLinger(true, 0)
+    plainSocket.close()
+
+    TestUtils.waitUntilTrue(() => server.connectionCount(address) == 0, msg = "Connection not closed")
+  }
+
+  @Test
+  def testClientInformationWithLatestApiVersionsRequest(): Unit = {
+    testClientInformation(
+      ApiKeys.API_VERSIONS.latestVersion,
+      "apache-kafka-java",
+      AppInfoParser.getVersion
+    )
+  }
+
+  @Test
+  def testClientInformationWithOldestApiVersionsRequest(): Unit = {
+    testClientInformation(
+      ApiKeys.API_VERSIONS.oldestVersion,
+      ClientInformation.UNKNOWN_NAME_OR_VERSION,
+      ClientInformation.UNKNOWN_NAME_OR_VERSION
+    )
+  }
+
   @Test
   def testStagedListenerStartup(): Unit = {
     val testProps = new Properties
@@ -201,13 +293,24 @@ class SocketServerTest {
     testProps.put("inter.broker.listener.name", "INTERNAL")
     val config = KafkaConfig.fromProps(testProps)
     val testableServer = new TestableSocketServer(config)
-    testableServer.startup(startupProcessors = false)
+    testableServer.startup(startProcessingRequests = false)
+
     val updatedEndPoints = config.advertisedListeners.map { endpoint =>
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
     }.map(_.toJava)
 
     val externalReadyFuture = new CompletableFuture[Void]()
     val executor = Executors.newSingleThreadExecutor()
+
+    def controlPlaneListenerStarted() = {
+      try {
+        val socket = connect(testableServer, config.controlPlaneListenerName.get, localAddr = InetAddress.getLocalHost)
+        sendAndReceiveControllerRequest(socket, testableServer)
+        true
+      } catch {
+        case _: Throwable => false
+      }
+    }
 
     def listenerStarted(listenerName: ListenerName) = {
       try {
@@ -220,16 +323,13 @@ class SocketServerTest {
     }
 
     try {
-      testableServer.startControlPlaneProcessor()
-      val socket1 = connect(testableServer, config.controlPlaneListenerName.get, localAddr = InetAddress.getLocalHost)
-      sendAndReceiveControllerRequest(socket1, testableServer)
-
       val externalListener = new ListenerName("EXTERNAL")
       val externalEndpoint = updatedEndPoints.find(e => e.listenerName.get == externalListener.value).get
-      val futures =  Map(externalEndpoint -> externalReadyFuture)
-      val startFuture = executor.submit(CoreUtils.runnable(testableServer.startDataPlaneProcessors(futures)))
+      val futures = Map(externalEndpoint -> externalReadyFuture)
+      val startFuture = executor.submit((() => testableServer.startProcessingRequests(futures)): Runnable)
+      TestUtils.waitUntilTrue(() => controlPlaneListenerStarted(), "Control plane listener not started")
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
-      assertFalse("Socket server startup did not wait for future to complete", startFuture.isDone)
+      assertFalse(startFuture.isDone, "Socket server startup did not wait for future to complete")
 
       assertFalse(listenerStarted(externalListener))
 
@@ -242,18 +342,46 @@ class SocketServerTest {
   }
 
   @Test
-  def testControlPlaneRequest(): Unit = {
+  def testStagedListenerShutdownWhenConnectionQueueIsFull(): Unit = {
     val testProps = new Properties
     testProps ++= props
-    testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
-    testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT")
+    testProps.put("listeners", "EXTERNAL://localhost:0,INTERNAL://localhost:0,CONTROLLER://localhost:0")
+    testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
     testProps.put("control.plane.listener.name", "CONTROLLER")
+    testProps.put("inter.broker.listener.name", "INTERNAL")
     val config = KafkaConfig.fromProps(testProps)
-    withTestableServer(config, { testableServer =>
-      val socket = connect(testableServer, config.controlPlaneListenerName.get,
-        localAddr = InetAddress.getLocalHost)
-      sendAndReceiveControllerRequest(socket, testableServer)
-    })
+    val connectionQueueSize = 1
+    val testableServer = new TestableSocketServer(config, connectionQueueSize)
+    testableServer.startup(startProcessingRequests = false)
+
+    val socket1 = connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
+    sendRequest(socket1, producerRequestBytes())
+    val socket2 = connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
+    sendRequest(socket2, producerRequestBytes())
+
+    testableServer.shutdown()
+  }
+
+  @Test
+  def testDisabledRequestIsRejected(): Unit = {
+    val correlationId = 57
+    val header = new RequestHeader(ApiKeys.VOTE, 0, "", correlationId)
+    val request = new VoteRequest.Builder(new VoteRequestData()).build()
+    val serializedBytes = Utils.toArray(request.serializeWithHeader(header))
+
+    val socket = connect()
+
+    val outgoing = new DataOutputStream(socket.getOutputStream)
+    try {
+      outgoing.writeInt(serializedBytes.length)
+      outgoing.write(serializedBytes)
+      outgoing.flush()
+      receiveResponse(socket)
+    } catch {
+      case _: IOException => // we expect the server to close the socket
+    } finally {
+      outgoing.close()
+    }
   }
 
   @Test
@@ -284,8 +412,8 @@ class SocketServerTest {
     plainSocket.close()
     for (_ <- 0 until 10) {
       val request = receiveRequest(server.dataPlaneRequestChannel)
-      assertNotNull("receiveRequest timed out", request)
-      server.dataPlaneRequestChannel.sendResponse(new RequestChannel.NoOpResponse(request))
+      assertNotNull(request, "receiveRequest timed out")
+      processRequestNoOpResponse(server.dataPlaneRequestChannel, request)
     }
   }
 
@@ -298,8 +426,8 @@ class SocketServerTest {
       sendRequest(plainSocket, serializedBytes)
     for (_ <- 0 until 3) {
       val request = receiveRequest(server.dataPlaneRequestChannel)
-      assertNotNull("receiveRequest timed out", request)
-      server.dataPlaneRequestChannel.sendResponse(new RequestChannel.NoOpResponse(request))
+      assertNotNull(request, "receiveRequest timed out")
+      processRequestNoOpResponse(server.dataPlaneRequestChannel, request)
     }
   }
 
@@ -326,39 +454,44 @@ class SocketServerTest {
     val time = new MockTime()
     props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
     val serverMetrics = new Metrics
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider)
-
-    def openChannel(request: RequestChannel.Request): Option[KafkaChannel] =
-      overrideServer.dataPlaneProcessor(request.processor).channel(request.context.connectionId)
-    def openOrClosingChannel(request: RequestChannel.Request): Option[KafkaChannel] =
-      overrideServer.dataPlaneProcessor(request.processor).openOrClosingChannel(request.context.connectionId)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics,
+      time, credentialProvider, apiVersionManager)
 
     try {
       overrideServer.startup()
       val serializedBytes = producerRequestBytes()
 
-      // Connection with no staged receives
+      // Connection with no outstanding requests
+      val socket0 = connect(overrideServer)
+      sendRequest(socket0, serializedBytes)
+      val request0 = receiveRequest(overrideServer.dataPlaneRequestChannel)
+      processRequest(overrideServer.dataPlaneRequestChannel, request0)
+      assertTrue(openChannel(request0, overrideServer).nonEmpty, "Channel not open")
+      assertEquals(openChannel(request0, overrideServer), openOrClosingChannel(request0, overrideServer))
+      TestUtils.waitUntilTrue(() => !openChannel(request0, overrideServer).get.isMuted, "Failed to unmute channel")
+      time.sleep(idleTimeMs + 1)
+      TestUtils.waitUntilTrue(() => openOrClosingChannel(request0, overrideServer).isEmpty, "Failed to close idle channel")
+      assertTrue(openChannel(request0, overrideServer).isEmpty, "Channel not removed")
+
+      // Connection with one request being processed (channel is muted), no other in-flight requests
       val socket1 = connect(overrideServer)
       sendRequest(socket1, serializedBytes)
       val request1 = receiveRequest(overrideServer.dataPlaneRequestChannel)
-      assertTrue("Channel not open", openChannel(request1).nonEmpty)
-      assertEquals(openChannel(request1), openOrClosingChannel(request1))
-
+      assertTrue(openChannel(request1, overrideServer).nonEmpty, "Channel not open")
+      assertEquals(openChannel(request1, overrideServer), openOrClosingChannel(request1, overrideServer))
       time.sleep(idleTimeMs + 1)
-      TestUtils.waitUntilTrue(() => openOrClosingChannel(request1).isEmpty, "Failed to close idle channel")
-      assertTrue("Channel not removed", openChannel(request1).isEmpty)
+      TestUtils.waitUntilTrue(() => openOrClosingChannel(request1, overrideServer).isEmpty, "Failed to close idle channel")
+      assertTrue(openChannel(request1, overrideServer).isEmpty, "Channel not removed")
       processRequest(overrideServer.dataPlaneRequestChannel, request1)
 
-      // Connection with staged receives
+      // Connection with one request being processed (channel is muted), more in-flight requests
       val socket2 = connect(overrideServer)
-      val request2 = sendRequestsUntilStagedReceive(overrideServer, socket2, serializedBytes)
-
+      val request2 = sendRequestsReceiveOne(overrideServer, socket2, serializedBytes, 3)
       time.sleep(idleTimeMs + 1)
-      TestUtils.waitUntilTrue(() => openChannel(request2).isEmpty, "Failed to close idle channel")
-      TestUtils.waitUntilTrue(() => openOrClosingChannel(request2).nonEmpty, "Channel removed without processing staged receives")
+      TestUtils.waitUntilTrue(() => openOrClosingChannel(request2, overrideServer).isEmpty, "Failed to close idle channel")
+      assertTrue(openChannel(request1, overrideServer).isEmpty, "Channel not removed")
       processRequest(overrideServer.dataPlaneRequestChannel, request2) // this triggers a failed send since channel has been closed
-      TestUtils.waitUntilTrue(() => openOrClosingChannel(request2).isEmpty, "Failed to remove channel with failed sends")
-      assertNull("Received request after failed send", overrideServer.dataPlaneRequestChannel.receiveRequest(200))
+      assertNull(overrideServer.dataPlaneRequestChannel.receiveRequest(200), "Received request on expired channel")
 
     } finally {
       shutdownServerAndMetrics(overrideServer)
@@ -370,21 +503,23 @@ class SocketServerTest {
     val idleTimeMs = 60000
     val time = new MockTime()
     props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
-    props.put("listeners", "PLAINTEXT://localhost:0")
+    props ++= sslServerProps
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
     val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider) {
+    val overrideServer = new SocketServer(
+      KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider, apiVersionManager
+    ) {
       override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
-          credentialProvider, memoryPool, new LogContext()) {
-            override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
-            override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
-             val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
-             selector = testableSelector
-             testableSelector
+          credentialProvider, memoryPool, new LogContext(), Processor.ConnectionQueueSize, isPrivilegedListener, apiVersionManager) {
+          override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
+          override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
+            val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
+            selector = testableSelector
+            testableSelector
           }
         }
       }
@@ -399,7 +534,7 @@ class SocketServerTest {
     // only after `register` is processed by the server.
     def connectAndWaitForConnectionRegister(): Socket = {
       val connections = selector.operationCounts(SelectorOperation.Register)
-      val socket = connect(overrideServer)
+      val socket = sslConnect(overrideServer)
       TestUtils.waitUntilTrue(() =>
         selector.operationCounts(SelectorOperation.Register) == connections + 1, "Connection not registered")
       socket
@@ -416,22 +551,20 @@ class SocketServerTest {
       connectAndWaitForConnectionRegister()
       TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close channel")
       assertSame(channel1, openChannel.getOrElse(throw new RuntimeException("Channel not found")))
+      socket1.close()
+      TestUtils.waitUntilTrue(() => openChannel.isEmpty, "Channel not closed")
 
-      // Send requests to `channel1` until a receive is staged and advance time beyond idle time so that `channel1` is
-      // closed with staged receives and is in Selector.closingChannels
-      val serializedBytes = producerRequestBytes()
-      val request = sendRequestsUntilStagedReceive(overrideServer, socket1, serializedBytes)
-      time.sleep(idleTimeMs + 1)
-      TestUtils.waitUntilTrue(() => openChannel.isEmpty, "Idle channel not closed")
-      TestUtils.waitUntilTrue(() => openOrClosingChannel.isDefined, "Channel removed without processing staged receives")
+      // Create a channel with buffered receive and close remote connection
+      val request = makeChannelWithBufferedRequestsAndCloseRemote(overrideServer, selector)
+      val channel2 = openChannel.getOrElse(throw new RuntimeException("Channel not found"))
 
-      // Create new connection with same id when `channel1` is in Selector.closingChannels
-      // Check that new connection is closed and openOrClosingChannel still contains `channel1`
+      // Create new connection with same id when `channel2` is closing, but still in Selector.channels
+      // Check that new connection is closed and openOrClosingChannel still contains `channel2`
       connectAndWaitForConnectionRegister()
       TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close channel")
-      assertSame(channel1, openOrClosingChannel.getOrElse(throw new RuntimeException("Channel not found")))
+      assertSame(channel2, openOrClosingChannel.getOrElse(throw new RuntimeException("Channel not found")))
 
-      // Complete request with failed send so that `channel1` is removed from Selector.closingChannels
+      // Complete request with failed send so that `channel2` is removed from Selector.channels
       processRequest(overrideServer.dataPlaneRequestChannel, request)
       TestUtils.waitUntilTrue(() => connectionCount == 0 && openOrClosingChannel.isEmpty, "Failed to remove channel with failed send")
 
@@ -447,23 +580,91 @@ class SocketServerTest {
     }
   }
 
-  private def sendRequestsUntilStagedReceive(server: SocketServer, socket: Socket, requestBytes: Array[Byte]): RequestChannel.Request = {
-    def sendTwoRequestsReceiveOne(): RequestChannel.Request = {
-      sendRequest(socket, requestBytes, flush = false)
-      sendRequest(socket, requestBytes, flush = true)
-      receiveRequest(server.dataPlaneRequestChannel)
+  private def makeSocketWithBufferedRequests(server: SocketServer,
+                                             serverSelector: Selector,
+                                             proxyServer: ProxyServer,
+                                             numBufferedRequests: Int = 2): (Socket, RequestChannel.Request) = {
+
+    val requestBytes = producerRequestBytes()
+    val socket = sslClientSocket(proxyServer.localPort)
+    sendRequest(socket, requestBytes)
+    val request1 = receiveRequest(server.dataPlaneRequestChannel)
+
+    val connectionId = request1.context.connectionId
+    val channel = server.dataPlaneProcessor(0).channel(connectionId).getOrElse(throw new IllegalStateException("Channel not found"))
+    val transportLayer: SslTransportLayer = JTestUtils.fieldValue(channel, classOf[KafkaChannel], "transportLayer")
+    val netReadBuffer: ByteBuffer = JTestUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "netReadBuffer")
+
+    proxyServer.enableBuffering(netReadBuffer)
+    (1 to numBufferedRequests).foreach { _ => sendRequest(socket, requestBytes) }
+
+    val keysWithBufferedRead: util.Set[SelectionKey] = JTestUtils.fieldValue(serverSelector, classOf[Selector], "keysWithBufferedRead")
+    keysWithBufferedRead.add(channel.selectionKey)
+    JTestUtils.setFieldValue(transportLayer, "hasBytesBuffered", true)
+
+    (socket, request1)
+  }
+
+  /**
+   * Create a channel with data in SSL buffers and close the remote connection.
+   * The channel should remain open in SocketServer even if it detects that the peer has closed
+   * the connection since there is pending data to be processed.
+   */
+  private def makeChannelWithBufferedRequestsAndCloseRemote(server: SocketServer,
+                                                            serverSelector: Selector,
+                                                            makeClosing: Boolean = false): RequestChannel.Request = {
+
+    val proxyServer = new ProxyServer(server)
+    try {
+      val (socket, request1) = makeSocketWithBufferedRequests(server, serverSelector, proxyServer)
+
+      socket.close()
+      proxyServer.serverConnSocket.close()
+      TestUtils.waitUntilTrue(() => proxyServer.clientConnSocket.isClosed, "Client socket not closed", waitTimeMs = 10000)
+
+      processRequestNoOpResponse(server.dataPlaneRequestChannel, request1)
+      val channel = openOrClosingChannel(request1, server).getOrElse(throw new IllegalStateException("Channel closed too early"))
+      if (makeClosing)
+        serverSelector.asInstanceOf[TestableSelector].pendingClosingChannels.add(channel)
+
+      receiveRequest(server.dataPlaneRequestChannel, timeout = 10000)
+    } finally {
+      proxyServer.close()
     }
-    val (request, hasStagedReceives) = TestUtils.computeUntilTrue(sendTwoRequestsReceiveOne()) { req =>
-      val connectionId = req.context.connectionId
-      val hasStagedReceives = server.dataPlaneProcessor(0).numStagedReceives(connectionId) > 0
-      if (!hasStagedReceives) {
-        processRequest(server.dataPlaneRequestChannel, req)
-        processRequest(server.dataPlaneRequestChannel)
+  }
+
+  def sendRequestsReceiveOne(server: SocketServer, socket: Socket, requestBytes: Array[Byte], numRequests: Int): RequestChannel.Request = {
+    (1 to numRequests).foreach(i => sendRequest(socket, requestBytes, flush = i == numRequests))
+    receiveRequest(server.dataPlaneRequestChannel)
+  }
+
+  private def closeSocketWithPendingRequest(server: SocketServer,
+                                            createSocket: () => Socket): RequestChannel.Request = {
+
+    def maybeReceiveRequest(): Option[RequestChannel.Request] = {
+      try {
+        Some(receiveRequest(server.dataPlaneRequestChannel, timeout = 1000))
+      } catch {
+        case e: Exception => None
       }
-      hasStagedReceives
     }
-    assertTrue(s"Receives not staged for ${org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS} ms", hasStagedReceives)
-    request
+
+    def closedChannelWithPendingRequest(): Option[RequestChannel.Request] = {
+      val socket = createSocket.apply()
+      val req1 = sendRequestsReceiveOne(server, socket, producerRequestBytes(ack = 0), numRequests = 100)
+      processRequestNoOpResponse(server.dataPlaneRequestChannel, req1)
+      // Set SoLinger to 0 to force a hard disconnect via TCP RST
+      socket.setSoLinger(true, 0)
+      socket.close()
+
+      maybeReceiveRequest().flatMap { req =>
+        processRequestNoOpResponse(server.dataPlaneRequestChannel, req)
+        maybeReceiveRequest()
+      }
+    }
+
+    val (request, _) = TestUtils.computeUntilTrue(closedChannelWithPendingRequest()) { req => req.nonEmpty }
+    request.getOrElse(throw new IllegalStateException("Could not create close channel with pending request"))
   }
 
   // Prepares test setup for throttled channel tests. throttlingDone controls whether or not throttling has completed
@@ -475,15 +676,18 @@ class SocketServerTest {
     // Mimic a primitive request handler that fetches the request from RequestChannel and place a response with a
     // throttled channel.
     val request = receiveRequest(server.dataPlaneRequestChannel)
-    val byteBuffer = request.body[AbstractRequest].serialize(request.header)
-    val send = new NetworkSend(request.context.connectionId, byteBuffer)
-    def channelThrottlingCallback(response: RequestChannel.Response): Unit = {
-      server.dataPlaneRequestChannel.sendResponse(response)
+    val byteBuffer = request.body[AbstractRequest].serializeWithHeader(request.header)
+    val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
+
+    val channelThrottlingCallback = new ThrottleCallback {
+      override def startThrottling(): Unit = server.dataPlaneRequestChannel.startThrottling(request)
+      override def endThrottling(): Unit = server.dataPlaneRequestChannel.endThrottling(request)
     }
-    val throttledChannel = new ThrottledChannel(request, new MockTime(), 100, channelThrottlingCallback)
+    val throttledChannel = new ThrottledChannel(new MockTime(), 100, channelThrottlingCallback)
+    val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
     val response =
       if (!noOpResponse)
-        new RequestChannel.SendResponse(request, send, Some(request.header.toString), None)
+        new RequestChannel.SendResponse(request, send, Some(headerLog), None)
       else
         new RequestChannel.NoOpResponse(request)
     server.dataPlaneRequestChannel.sendResponse(response)
@@ -496,7 +700,10 @@ class SocketServerTest {
     request
   }
 
-  def openOrClosingChannel(request: RequestChannel.Request): Option[KafkaChannel] =
+  def openChannel(request: RequestChannel.Request, server: SocketServer = this.server): Option[KafkaChannel] =
+    server.dataPlaneProcessor(0).channel(request.context.connectionId)
+
+  def openOrClosingChannel(request: RequestChannel.Request, server: SocketServer = this.server): Option[KafkaChannel] =
     server.dataPlaneProcessor(0).openOrClosingChannel(request.context.connectionId)
 
   @Test
@@ -510,7 +717,7 @@ class SocketServerTest {
     assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
     // Channel should still be muted.
-    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -525,7 +732,7 @@ class SocketServerTest {
     // Since throttling is already done, the channel can be unmuted after sending out the response.
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
     // Channel is now unmuted.
-    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -537,7 +744,7 @@ class SocketServerTest {
 
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
     // Channel should still be muted.
-    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -550,7 +757,7 @@ class SocketServerTest {
     // Since throttling is already done, the channel can be unmuted.
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
     // Channel is now unmuted.
-    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -564,20 +771,12 @@ class SocketServerTest {
     processRequest(server.dataPlaneRequestChannel)
     // the following sleep is necessary to reliably detect the connection close when we send data below
     Thread.sleep(200L)
-    // make sure the sockets ar e open
+    // make sure the sockets are open
     server.dataPlaneAcceptors.asScala.values.foreach(acceptor => assertFalse(acceptor.serverChannel.socket.isClosed))
     // then shutdown the server
     shutdownServerAndMetrics(server)
 
-    val largeChunkOfBytes = new Array[Byte](1000000)
-    // doing a subsequent send should throw an exception as the connection should be closed.
-    // send a large chunk of bytes to trigger a socket flush
-    try {
-      sendRequest(plainSocket, largeChunkOfBytes, Some(0))
-      fail("expected exception when writing to closed plain socket")
-    } catch {
-      case _: IOException => // expected
-    }
+    verifyRemoteConnectionClosed(plainSocket)
   }
 
   @Test
@@ -607,7 +806,8 @@ class SocketServerTest {
     val newProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     newProps.setProperty(KafkaConfig.MaxConnectionsPerIpProp, "0")
     newProps.setProperty(KafkaConfig.MaxConnectionsPerIpOverridesProp, "%s:%s".format("127.0.0.1", "5"))
-    val server = new SocketServer(KafkaConfig.fromProps(newProps), new Metrics(), Time.SYSTEM, credentialProvider)
+    val server = new SocketServer(KafkaConfig.fromProps(newProps), new Metrics(),
+      Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       server.startup()
       // make the maximum allowable number of connections
@@ -645,7 +845,8 @@ class SocketServerTest {
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$overrideNum")
     val serverMetrics = new Metrics()
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, Time.SYSTEM, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics,
+      Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       overrideServer.startup()
       // make the maximum allowable number of connections
@@ -667,17 +868,92 @@ class SocketServerTest {
   }
 
   @Test
-  def testSslSocketServer(): Unit = {
-    val trustStoreFile = File.createTempFile("truststore", ".jks")
-    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
-      trustStoreFile = Some(trustStoreFile))
-    overrideProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
-
-    val serverMetrics = new Metrics
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, Time.SYSTEM, credentialProvider)
+  def testConnectionRatePerIp(): Unit = {
+    val defaultTimeoutMs = 2000
+    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    overrideProps.remove(KafkaConfig.MaxConnectionsPerIpProp)
+    overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
+    val connectionRate = 5
+    val time = new MockTime()
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),
+      time, credentialProvider, apiVersionManager)
+    // update the connection rate to 5
+    overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
     try {
       overrideServer.startup()
-      val sslContext = SSLContext.getInstance("TLSv1.2")
+      // make the (maximum allowable number + 1) of connections
+      (0 to connectionRate).map(_ => connect(overrideServer))
+
+      val acceptors = overrideServer.dataPlaneAcceptors.asScala.values
+      // waiting for 5 connections got accepted and 1 connection got throttled
+      TestUtils.waitUntilTrue(
+        () => acceptors.foldLeft(0)((accumulator, acceptor) => accumulator + acceptor.throttledSockets.size) == 1,
+        "timeout waiting for 1 connection to get throttled",
+        defaultTimeoutMs)
+
+      // now try one more, so that we can make sure this connection will get throttled
+      var conn = connect(overrideServer)
+      // there should be total 2 connection got throttled now
+      TestUtils.waitUntilTrue(
+        () => acceptors.foldLeft(0)((accumulator, acceptor) => accumulator + acceptor.throttledSockets.size) == 2,
+        "timeout waiting for 2 connection to get throttled",
+        defaultTimeoutMs)
+      // advance time to unthrottle connections
+      time.sleep(defaultTimeoutMs)
+      acceptors.foreach(_.wakeup())
+      // make sure there are no connection got throttled now(and the throttled connections should be closed)
+      TestUtils.waitUntilTrue(() => acceptors.forall(_.throttledSockets.isEmpty),
+        "timeout waiting for connection to be unthrottled",
+        defaultTimeoutMs)
+      // verify the connection is closed now
+      verifyRemoteConnectionClosed(conn)
+
+      // new connection should succeed after previous connection closed, and previous samples have been expired
+      conn = connect(overrideServer)
+      val serializedBytes = producerRequestBytes()
+      sendRequest(conn, serializedBytes)
+      val request = overrideServer.dataPlaneRequestChannel.receiveRequest(defaultTimeoutMs)
+      assertNotNull(request)
+    } finally {
+      shutdownServerAndMetrics(overrideServer)
+    }
+  }
+
+  @Test
+  def testThrottledSocketsClosedOnShutdown(): Unit = {
+    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    overrideProps.remove("max.connections.per.ip")
+    overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
+    val connectionRate = 5
+    val time = new MockTime()
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),
+      time, credentialProvider, apiVersionManager)
+    overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
+    overrideServer.startup()
+    // make the maximum allowable number of connections
+    (0 until connectionRate).map(_ => connect(overrideServer))
+    // now try one more (should get throttled)
+    val conn = connect(overrideServer)
+    // don't advance time so that connection never gets unthrottled
+    shutdownServerAndMetrics(overrideServer)
+    verifyRemoteConnectionClosed(conn)
+  }
+
+  private def verifyRemoteConnectionClosed(connection: Socket): Unit = {
+    val largeChunkOfBytes = new Array[Byte](1000000)
+    // doing a subsequent send should throw an exception as the connection should be closed.
+    // send a large chunk of bytes to trigger a socket flush
+    assertThrows(classOf[IOException], () => sendRequest(connection, largeChunkOfBytes, Some(0)))
+  }
+
+  @Test
+  def testSslSocketServer(): Unit = {
+    val serverMetrics = new Metrics
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(sslServerProps), serverMetrics,
+      Time.SYSTEM, credentialProvider, apiVersionManager)
+    try {
+      overrideServer.startup()
+      val sslContext = SSLContext.getInstance(TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS)
       sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
       val socketFactory = sslContext.getSocketFactory
       val sslSocket = socketFactory.createSocket("localhost",
@@ -688,19 +964,104 @@ class SocketServerTest {
       val clientId = ""
       val ackTimeoutMs = 10000
       val ack = 0: Short
-      val emptyRequest = ProduceRequest.Builder.forCurrentMagic(ack, ackTimeoutMs,
-        new HashMap[TopicPartition, MemoryRecords]()).build()
+      val emptyRequest = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+        .setAcks(ack)
+        .setTimeoutMs(ackTimeoutMs)
+        .setTransactionalId(null))
+        .build()
       val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
-
-      val byteBuffer = emptyRequest.serialize(emptyHeader)
-      byteBuffer.rewind()
-      val serializedBytes = new Array[Byte](byteBuffer.remaining)
-      byteBuffer.get(serializedBytes)
+      val serializedBytes = Utils.toArray(emptyRequest.serializeWithHeader(emptyHeader))
 
       sendRequest(sslSocket, serializedBytes)
       processRequest(overrideServer.dataPlaneRequestChannel)
       assertEquals(serializedBytes.toSeq, receiveResponse(sslSocket).toSeq)
       sslSocket.close()
+    } finally {
+      shutdownServerAndMetrics(overrideServer)
+    }
+  }
+
+  @Test
+  def testSaslReauthenticationFailureWithKip152SaslAuthenticate(): Unit = {
+    checkSaslReauthenticationFailure(true)
+  }
+
+  @Test
+  def testSaslReauthenticationFailureNoKip152SaslAuthenticate(): Unit = {
+    checkSaslReauthenticationFailure(false)
+  }
+
+  def checkSaslReauthenticationFailure(leverageKip152SaslAuthenticateRequest : Boolean): Unit = {
+    shutdownServerAndMetrics(server) // we will use our own instance because we require custom configs
+    val username = "admin"
+    val password = "admin-secret"
+    val reauthMs = 1500
+    val brokerProps = new Properties
+    brokerProps.setProperty("listeners", "SASL_PLAINTEXT://localhost:0")
+    brokerProps.setProperty("security.inter.broker.protocol", "SASL_PLAINTEXT")
+    brokerProps.setProperty("listener.name.sasl_plaintext.plain.sasl.jaas.config",
+      "org.apache.kafka.common.security.plain.PlainLoginModule required " +
+        "username=\"%s\" password=\"%s\" user_%s=\"%s\";".format(username, password, username, password))
+    brokerProps.setProperty("sasl.mechanism.inter.broker.protocol", "PLAIN")
+    brokerProps.setProperty("listener.name.sasl_plaintext.sasl.enabled.mechanisms", "PLAIN")
+    brokerProps.setProperty("num.network.threads", "1")
+    brokerProps.setProperty("connections.max.reauth.ms", reauthMs.toString)
+    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect,
+      saslProperties = Some(brokerProps), enableSaslPlaintext = true)
+    val time = new MockTime()
+    val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(overrideProps), time = time)
+    try {
+      overrideServer.startup()
+      val socket = connect(overrideServer, ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT))
+
+      val correlationId = -1
+      val clientId = ""
+      // send a SASL handshake request
+      val version : Short = if (leverageKip152SaslAuthenticateRequest) ApiKeys.SASL_HANDSHAKE.latestVersion else 0
+      val saslHandshakeRequest = new SaslHandshakeRequest.Builder(new SaslHandshakeRequestData().setMechanism("PLAIN"))
+        .build(version)
+      val saslHandshakeHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE, saslHandshakeRequest.version, clientId,
+        correlationId)
+      sendApiRequest(socket, saslHandshakeRequest, saslHandshakeHeader)
+      receiveResponse(socket)
+
+      // now send credentials
+      val authBytes = "admin\u0000admin\u0000admin-secret".getBytes(StandardCharsets.UTF_8)
+      if (leverageKip152SaslAuthenticateRequest) {
+        // send credentials within a SaslAuthenticateRequest
+        val saslAuthenticateRequest = new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData()
+          .setAuthBytes(authBytes)).build()
+        val saslAuthenticateHeader = new RequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateRequest.version,
+          clientId, correlationId)
+        sendApiRequest(socket, saslAuthenticateRequest, saslAuthenticateHeader)
+      } else {
+        // send credentials directly, without a SaslAuthenticateRequest
+        sendRequest(socket, authBytes)
+      }
+      receiveResponse(socket)
+      assertEquals(1, overrideServer.testableSelector.channels.size)
+
+      // advance the clock long enough to cause server-side disconnection upon next send...
+      time.sleep(reauthMs * 2)
+      // ...and now send something to trigger the disconnection
+      val ackTimeoutMs = 10000
+      val ack = 0: Short
+      val emptyRequest = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+        .setAcks(ack)
+        .setTimeoutMs(ackTimeoutMs)
+        .setTransactionalId(null))
+        .build()
+      val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
+      sendApiRequest(socket, emptyRequest, emptyHeader)
+      // wait a little bit for the server-side disconnection to occur since it happens asynchronously
+      try {
+        TestUtils.waitUntilTrue(() => overrideServer.testableSelector.channels.isEmpty,
+          "Expired connection was not closed", 1000, 100)
+      } finally {
+        socket.close()
+      }
     } finally {
       shutdownServerAndMetrics(overrideServer)
     }
@@ -717,15 +1078,26 @@ class SocketServerTest {
   /* Test that we update request metrics if the client closes the connection while the broker response is in flight. */
   @Test
   def testClientDisconnectionUpdatesRequestMetrics(): Unit = {
+    // The way we detect a connection close from the client depends on the response size. If it's small, an
+    // IOException ("Connection reset by peer") is thrown when the Selector reads from the socket. If
+    // it's large, an IOException ("Broken pipe") is thrown when the Selector writes to the socket. We test
+    // both paths to ensure they are handled correctly.
+    checkClientDisconnectionUpdatesRequestMetrics(0)
+    checkClientDisconnectionUpdatesRequestMetrics(550000)
+  }
+
+  private def checkClientDisconnectionUpdatesRequestMetrics(responseBufferSize: Int): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     val serverMetrics = new Metrics
     var conn: Socket = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
+    val overrideServer = new SocketServer(
+      KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider, apiVersionManager
+    ) {
       override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
-          credentialProvider, MemoryPool.NONE, new LogContext()) {
+          credentialProvider, MemoryPool.NONE, new LogContext(), Processor.ConnectionQueueSize, isPrivilegedListener, apiVersionManager) {
           override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send): Unit = {
             conn.close()
             super.sendResponse(response, responseSend)
@@ -744,15 +1116,12 @@ class SocketServerTest {
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
-      val expectedTotalTimeCount = totalTimeHistCount() + 1
+      val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))
+      val headerLog = new ObjectNode(JsonNodeFactory.instance)
+      headerLog.set("response", new TextNode("someResponse"))
+      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
 
-      // send a large buffer to ensure that the broker detects the client disconnection while writing to the socket channel.
-      // On Mac OS X, the initial write seems to always succeed and it is able to write up to 102400 bytes on the initial
-      // write. If the buffer is smaller than this, the write is considered complete and the disconnection is not
-      // detected. If the buffer is larger than 102400 bytes, a second write is attempted and it fails with an
-      // IOException.
-      val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(550000))
-      channel.sendResponse(new RequestChannel.SendResponse(request, send, None, None))
+      val expectedTotalTimeCount = totalTimeHistCount() + 1
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
 
@@ -762,48 +1131,36 @@ class SocketServerTest {
   }
 
   @Test
-  def testClientDisconnectionWithStagedReceivesFullyProcessed(): Unit = {
+  def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend(): Unit = {
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
-    val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
+    val overrideServer = new SocketServer(
+      KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider, apiVersionManager
+    ) {
       override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
-          credentialProvider, memoryPool, new LogContext()) {
-          override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
+          credentialProvider, memoryPool, new LogContext(), Processor.ConnectionQueueSize, isPrivilegedListener, apiVersionManager) {
           override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
-           val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
-           selector = testableSelector
-           testableSelector
-        }
+            val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
+            selector = testableSelector
+            testableSelector
+          }
         }
       }
     }
 
-    def openChannel: Option[KafkaChannel] = overrideServer.dataPlaneProcessor(0).channel(overrideConnectionId)
-    def openOrClosingChannel: Option[KafkaChannel] = overrideServer.dataPlaneProcessor(0).openOrClosingChannel(overrideConnectionId)
-
     try {
       overrideServer.startup()
-      val socket = connect(overrideServer)
 
-      TestUtils.waitUntilTrue(() => openChannel.nonEmpty, "Channel not found")
+      // Create a channel, send some requests and close socket. Receive one pending request after socket was closed.
+      val request = closeSocketWithPendingRequest(overrideServer, () => connect(overrideServer))
 
-      // Setup channel to client with staged receives so when client disconnects
-      // it will be stored in Selector.closingChannels
-      val serializedBytes = producerRequestBytes(1)
-      val request = sendRequestsUntilStagedReceive(overrideServer, socket, serializedBytes)
-
-      // Set SoLinger to 0 to force a hard disconnect via TCP RST
-      socket.setSoLinger(true, 0)
-      socket.close()
-
-      // Complete request with socket exception so that the channel is removed from Selector.closingChannels
+      // Complete request with socket exception so that the channel is closed
       processRequest(overrideServer.dataPlaneRequestChannel, request)
-      TestUtils.waitUntilTrue(() => openOrClosingChannel.isEmpty, "Channel not closed after failed send")
-      assertTrue("Unexpected completed send", selector.completedSends.isEmpty)
+      TestUtils.waitUntilTrue(() => openOrClosingChannel(request, overrideServer).isEmpty, "Channel not closed after failed send")
+      assertTrue(selector.completedSends.isEmpty, "Unexpected completed send")
     } finally {
       overrideServer.shutdown()
       serverMetrics.close()
@@ -820,7 +1177,8 @@ class SocketServerTest {
     props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "110")
     val serverMetrics = new Metrics
     var conn: Socket = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics,
+      Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       overrideServer.startup()
       conn = connect(overrideServer)
@@ -856,10 +1214,10 @@ class SocketServerTest {
     assertEquals(2, server.dataPlaneRequestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).count())
     server.dataPlaneRequestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
     val nonZeroMeters = Map(s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version" -> 2,
-        s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version2" -> 1,
-        "kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=Produce,error=NONE" -> 1)
+      s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version2" -> 1,
+      "kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=Produce,error=NONE" -> 1)
 
-    def requestMetricMeters = YammerMetrics
+    def requestMetricMeters = KafkaYammerMetrics
       .defaultRegistry
       .allMetrics.asScala
       .collect { case (k, metric: Meter) if k.getType == "RequestMetrics" => (k.toString, metric.count) }
@@ -873,7 +1231,7 @@ class SocketServerTest {
   def testMetricCollectionAfterShutdown(): Unit = {
     server.shutdown()
 
-    val nonZeroMetricNamesAndValues = YammerMetrics
+    val nonZeroMetricNamesAndValues = KafkaYammerMetrics
       .defaultRegistry
       .allMetrics.asScala
       .filter { case (k, _) => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent") }
@@ -894,8 +1252,8 @@ class SocketServerTest {
     }
 
     // legacy metrics not tagged
-    val yammerMetricsNames = YammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getType.equals("Processor"))
+    val yammerMetricsNames = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => k.getType.equals("Processor") }
       .collect { case (k, _: Gauge[_]) => k }
     assertFalse(yammerMetricsNames.isEmpty)
 
@@ -986,32 +1344,268 @@ class SocketServerTest {
   }
 
   /**
-   * Tests exception handling in [[Processor.processNewResponses]] when [[Selector.send]]
-   * to a channel in closing state throws an exception. Test scenario is similar to
-   * [[SocketServerTest.processNewResponseException]].
+   * Tests channel send failure handling when send failure is triggered by [[Selector.send]]
+   * to a channel whose peer has closed its connection.
    */
   @Test
-  def closingChannelException(): Unit = {
+  def remoteCloseSendFailure(): Unit = {
+    verifySendFailureAfterRemoteClose(makeClosing = false)
+  }
+
+  /**
+   * Tests channel send failure handling when send failure is triggered by [[Selector.send]]
+   * to a channel whose peer has closed its connection and the channel is in `closingChannels`.
+   */
+  @Test
+  def closingChannelSendFailure(): Unit = {
+    verifySendFailureAfterRemoteClose(makeClosing = true)
+  }
+
+  private def verifySendFailureAfterRemoteClose(makeClosing: Boolean): Unit = {
+    props ++= sslServerProps
     withTestableServer (testWithServer = { testableServer =>
       val testableSelector = testableServer.testableSelector
-      testableSelector.updateMinWakeup(2)
 
-      val sockets = (1 to 2).map(_ => connect(testableServer))
       val serializedBytes = producerRequestBytes()
-      val request = sendRequestsUntilStagedReceive(testableServer, sockets(0), serializedBytes)
-      sendRequest(sockets(1), serializedBytes)
+      val request = makeChannelWithBufferedRequestsAndCloseRemote(testableServer, testableSelector, makeClosing)
+      val otherSocket = sslConnect(testableServer)
+      sendRequest(otherSocket, serializedBytes)
 
-      testableSelector.addFailure(SelectorOperation.Send)
-      sockets(0).close()
       processRequest(testableServer.dataPlaneRequestChannel, request)
-      processRequest(testableServer.dataPlaneRequestChannel) // Also process request from other channel
+      processRequest(testableServer.dataPlaneRequestChannel) // Also process request from other socket
       testableSelector.waitForOperations(SelectorOperation.Send, 2)
-      testableServer.waitForChannelClose(request.context.connectionId, locallyClosed = true)
+      testableServer.waitForChannelClose(request.context.connectionId, locallyClosed = false)
 
-      assertProcessorHealthy(testableServer, Seq(sockets(1)))
+      assertProcessorHealthy(testableServer, Seq(otherSocket))
     })
   }
 
+  /**
+   * Verifies that all pending buffered receives are processed even if remote connection is closed.
+   * The channel must be closed after pending receives are processed.
+   */
+  @Test
+  def remoteCloseWithBufferedReceives(): Unit = {
+    verifyRemoteCloseWithBufferedReceives(numComplete = 3, hasIncomplete = false)
+  }
+
+  /**
+   * Verifies that channel is closed when remote client closes its connection if there is no
+   * buffered receive.
+   */
+  @Test
+  def remoteCloseWithoutBufferedReceives(): Unit = {
+    verifyRemoteCloseWithBufferedReceives(numComplete = 0, hasIncomplete = false)
+  }
+
+  /**
+   * Verifies that channel is closed when remote client closes its connection if there is a pending
+   * receive that is incomplete.
+   */
+  @Test
+  def remoteCloseWithIncompleteBufferedReceive(): Unit = {
+    verifyRemoteCloseWithBufferedReceives(numComplete = 0, hasIncomplete = true)
+  }
+
+  /**
+   * Verifies that all pending buffered receives are processed even if remote connection is closed.
+   * The channel must be closed after complete receives are processed, even if there is an incomplete
+   * receive remaining in the buffers.
+   */
+  @Test
+  def remoteCloseWithCompleteAndIncompleteBufferedReceives(): Unit = {
+    verifyRemoteCloseWithBufferedReceives(numComplete = 3, hasIncomplete = true)
+  }
+
+  /**
+   * Verifies that pending buffered receives are processed when remote connection is closed
+   * until a response send fails.
+   */
+  @Test
+  def remoteCloseWithBufferedReceivesFailedSend(): Unit = {
+    verifyRemoteCloseWithBufferedReceives(numComplete = 3, hasIncomplete = false, responseRequiredIndex = 1)
+  }
+
+  /**
+   * Verifies that all pending buffered receives are processed for channel in closing state.
+   * The channel must be closed after pending receives are processed.
+   */
+  @Test
+  def closingChannelWithBufferedReceives(): Unit = {
+    verifyRemoteCloseWithBufferedReceives(numComplete = 3, hasIncomplete = false, makeClosing = true)
+  }
+
+  /**
+   * Verifies that all pending buffered receives are processed for channel in closing state.
+   * The channel must be closed after complete receives are processed, even if there is an incomplete
+   * receive remaining in the buffers.
+   */
+  @Test
+  def closingChannelWithCompleteAndIncompleteBufferedReceives(): Unit = {
+    verifyRemoteCloseWithBufferedReceives(numComplete = 3, hasIncomplete = true, makeClosing = false)
+  }
+
+  /**
+   * Verifies that pending buffered receives are processed for a channel in closing state
+   * until a response send fails.
+   */
+  @Test
+  def closingChannelWithBufferedReceivesFailedSend(): Unit = {
+    verifyRemoteCloseWithBufferedReceives(numComplete = 3, hasIncomplete = false, responseRequiredIndex = 1, makeClosing = false)
+  }
+
+  /**
+   * Verifies handling of client disconnections when the server-side channel is in the state
+   * specified using the parameters.
+   *
+   * @param numComplete Number of complete buffered requests
+   * @param hasIncomplete If true, add an additional partial buffered request
+   * @param responseRequiredIndex Index of the buffered request for which a response is sent. Previous requests
+   *                              are completed without a response. If set to -1, all `numComplete` requests
+   *                              are completed without a response.
+   * @param makeClosing If true, put the channel into closing state in the server Selector.
+   */
+  private def verifyRemoteCloseWithBufferedReceives(numComplete: Int,
+                                                    hasIncomplete: Boolean,
+                                                    responseRequiredIndex: Int = -1,
+                                                    makeClosing: Boolean = false): Unit = {
+    props ++= sslServerProps
+
+    // Truncates the last request in the SSL buffers by directly updating the buffers to simulate partial buffered request
+    def truncateBufferedRequest(channel: KafkaChannel): Unit = {
+      val transportLayer: SslTransportLayer = JTestUtils.fieldValue(channel, classOf[KafkaChannel], "transportLayer")
+      val netReadBuffer: ByteBuffer = JTestUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "netReadBuffer")
+      val appReadBuffer: ByteBuffer = JTestUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "appReadBuffer")
+      if (appReadBuffer.position() > 4) {
+        appReadBuffer.position(4)
+        netReadBuffer.position(0)
+      } else {
+        netReadBuffer.position(20)
+      }
+    }
+    withTestableServer (testWithServer = { testableServer =>
+      val testableSelector = testableServer.testableSelector
+
+      val proxyServer = new ProxyServer(testableServer)
+      try {
+        // Step 1: Send client requests.
+        //   a) request1 is sent by the client to ProxyServer and this is directly sent to the server. This
+        //      ensures that server-side channel is in muted state until this request is processed in Step 3.
+        //   b) `numComplete` requests are sent and buffered in the server-side channel's SSL buffers
+        //   c) If `hasIncomplete=true`, an extra request is sent and buffered as in b). This will be truncated later
+        //      when previous requests have been processed and only one request is remaining in the SSL buffer,
+        //      making it easy to truncate.
+        val numBufferedRequests = numComplete + (if (hasIncomplete) 1 else 0)
+        val (socket, request1) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer, numBufferedRequests)
+        val channel = openChannel(request1, testableServer).getOrElse(throw new IllegalStateException("Channel closed too early"))
+
+        // Step 2: Close the client-side socket and the proxy socket to the server, triggering close notification in the
+        // server when the client is unmuted in Step 3. Get the channel into its desired closing/buffered state.
+        socket.close()
+        proxyServer.serverConnSocket.close()
+        TestUtils.waitUntilTrue(() => proxyServer.clientConnSocket.isClosed, "Client socket not closed")
+        if (makeClosing)
+          testableSelector.pendingClosingChannels.add(channel)
+        if (numComplete == 0 && hasIncomplete)
+          truncateBufferedRequest(channel)
+
+        // Step 3: Process the first request. Verify that the channel is not removed since the channel
+        // should be retained to process buffered data.
+        processRequestNoOpResponse(testableServer.dataPlaneRequestChannel, request1)
+        assertSame(channel, openOrClosingChannel(request1, testableServer).getOrElse(throw new IllegalStateException("Channel closed too early")))
+
+        // Step 4: Process buffered data. if `responseRequiredIndex>=0`, the channel should be failed and removed when
+        // attempting to send response. Otherwise, the channel should be removed when all completed buffers are processed.
+        // Channel should be closed and removed even if there is a partial buffered request when `hasIncomplete=true`
+        val numRequests = if (responseRequiredIndex >= 0) responseRequiredIndex + 1 else numComplete
+        (0 until numRequests).foreach { i =>
+          val request = receiveRequest(testableServer.dataPlaneRequestChannel)
+          if (i == numComplete - 1 && hasIncomplete)
+            truncateBufferedRequest(channel)
+          if (responseRequiredIndex == i)
+            processRequest(testableServer.dataPlaneRequestChannel, request)
+          else
+            processRequestNoOpResponse(testableServer.dataPlaneRequestChannel, request)
+        }
+        testableServer.waitForChannelClose(channel.id, locallyClosed = false)
+
+        // Verify that SocketServer is healthy
+        val anotherSocket = sslConnect(testableServer)
+        assertProcessorHealthy(testableServer, Seq(anotherSocket))
+      } finally {
+        proxyServer.close()
+      }
+    })
+  }
+
+  /**
+   * Tests idle channel expiry for SSL channels with buffered data. Muted channels are expired
+   * immediately even if there is pending data to be processed. This is consistent with PLAINTEXT where
+   * we expire muted channels even if there is data available on the socket. This scenario occurs if broker
+   * takes longer than idle timeout to process a client request. In this case, typically client would have
+   * expired its connection and would potentially reconnect to retry the request, so immediate expiry enables
+   * the old connection and its associated resources to be freed sooner.
+   */
+  @Test
+  def idleExpiryWithBufferedReceives(): Unit = {
+    val idleTimeMs = 60000
+    val time = new MockTime()
+    props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
+    props ++= sslServerProps
+    val testableServer = new TestableSocketServer(time = time)
+    testableServer.startup()
+
+    assertTrue(testableServer.controlPlaneRequestChannelOpt.isEmpty)
+
+    val proxyServer = new ProxyServer(testableServer)
+    try {
+      val testableSelector = testableServer.testableSelector
+      testableSelector.updateMinWakeup(2)
+
+      val sleepTimeMs = idleTimeMs / 2 + 1
+      val (socket, request) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
+      // advance mock time in increments to verify that muted sockets with buffered data dont have their idle time updated
+      // additional calls to poll() should not update the channel last idle time
+      for (_ <- 0 to 3) {
+        time.sleep(sleepTimeMs)
+        testableSelector.operationCounts.clear()
+        testableSelector.waitForOperations(SelectorOperation.Poll, 1)
+      }
+      testableServer.waitForChannelClose(request.context.connectionId, locallyClosed = false)
+
+      val otherSocket = sslConnect(testableServer)
+      assertProcessorHealthy(testableServer, Seq(otherSocket))
+
+      socket.close()
+    } finally {
+      proxyServer.close()
+      shutdownServerAndMetrics(testableServer)
+    }
+  }
+  
+  @Test
+  def testUnmuteChannelWithBufferedReceives(): Unit = {
+    val time = new MockTime()
+    props ++= sslServerProps
+    val testableServer = new TestableSocketServer(time = time)
+    testableServer.startup()
+    val proxyServer = new ProxyServer(testableServer)
+    try {
+      val testableSelector = testableServer.testableSelector
+      val (socket, request) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
+      testableSelector.operationCounts.clear()
+      testableSelector.waitForOperations(SelectorOperation.Poll, 1)
+      val keysWithBufferedRead: util.Set[SelectionKey] = JTestUtils.fieldValue(testableSelector, classOf[Selector], "keysWithBufferedRead")
+      assertEquals(Set.empty, keysWithBufferedRead.asScala)
+      processRequest(testableServer.dataPlaneRequestChannel, request)
+      // buffered requests should be processed after channel is unmuted
+      receiveRequest(testableServer.dataPlaneRequestChannel)
+      socket.close()
+    } finally {
+      proxyServer.close()
+      shutdownServerAndMetrics(testableServer)
+    }
+  }
   /**
    * Tests exception handling in [[Processor.processCompletedReceives]]. Exception is
    * injected into [[Selector.mute]] which is used to mute the channel when a receive is complete.
@@ -1122,10 +1716,12 @@ class SocketServerTest {
 
       testableSelector.operationCounts.clear()
       testableSelector.addFailure(SelectorOperation.Poll,
-          Some(new ControlThrowable() {}))
+        Some(new ControlThrowable() {}))
       testableSelector.waitForOperations(SelectorOperation.Poll, 1)
 
       testableSelector.waitForOperations(SelectorOperation.CloseSelector, 1)
+      assertEquals(1, testableServer.uncaughtExceptions)
+      testableServer.uncaughtExceptions = 0
     })
   }
 
@@ -1151,7 +1747,7 @@ class SocketServerTest {
       if (stackTraces.isEmpty)
         errors.add(s"Acceptor thread not found, threads=${Thread.getAllStackTraces.keySet}")
       stackTraces.exists { case (thread, stackTrace) =>
-          thread.getState == Thread.State.WAITING && stackTrace.contains("ArrayBlockingQueue")
+        thread.getState == Thread.State.WAITING && stackTrace.contains("ArrayBlockingQueue")
       }
     }
 
@@ -1177,9 +1773,9 @@ class SocketServerTest {
       // In each iteration, SocketServer processes at most connectionQueueSize (1 in this test)
       // new connections and then does poll() to process data from existing connections. So for
       // 5 connections, we expect 5 iterations. Since we stop when the 5th connection is processed,
-      // we can safely check that there were atleast 4 polls prior to the 5th connection.
+      // we can safely check that there were at least 4 polls prior to the 5th connection.
       val pollCount = testableSelector.operationCounts(SelectorOperation.Poll)
-      assertTrue(s"Connections created too quickly: $pollCount", pollCount >= numConnections - 1)
+      assertTrue(pollCount >= numConnections - 1, s"Connections created too quickly: $pollCount")
       verifyAcceptorBlockedPercent("PLAINTEXT", expectBlocked = true)
 
       assertProcessorHealthy(testableServer, sockets)
@@ -1188,14 +1784,92 @@ class SocketServerTest {
     }
   }
 
-  private def withTestableServer(config : KafkaConfig = config, testWithServer: TestableSocketServer => Unit): Unit = {
-    props.put("listeners", "PLAINTEXT://localhost:0")
+
+  @Test
+  def testControlPlaneAsPrivilegedListener(): Unit = {
+    val testProps = new Properties
+    testProps ++= props
+    testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+    testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT")
+    testProps.put("control.plane.listener.name", "CONTROLLER")
+    val config = KafkaConfig.fromProps(testProps)
+    withTestableServer(config, { testableServer =>
+      val controlPlaneSocket = connect(testableServer, config.controlPlaneListenerName.get,
+        localAddr = InetAddress.getLocalHost)
+      val sentRequest = sendAndReceiveControllerRequest(controlPlaneSocket, testableServer)
+      assertTrue(sentRequest.context.fromPrivilegedListener)
+
+      val plainSocket = connect(testableServer, localAddr = InetAddress.getLocalHost)
+      val plainRequest = sendAndReceiveRequest(plainSocket, testableServer)
+      assertFalse(plainRequest.context.fromPrivilegedListener)
+    })
+  }
+
+  @Test
+  def testInterBrokerListenerAsPrivilegedListener(): Unit = {
+    val testProps = new Properties
+    testProps ++= props
+    testProps.put("listeners", "EXTERNAL://localhost:0,INTERNAL://localhost:0")
+    testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT")
+    testProps.put("inter.broker.listener.name", "INTERNAL")
+    val config = KafkaConfig.fromProps(testProps)
+    withTestableServer(config, { testableServer =>
+      val interBrokerSocket = connect(testableServer, config.interBrokerListenerName,
+        localAddr = InetAddress.getLocalHost)
+      val sentRequest = sendAndReceiveRequest(interBrokerSocket, testableServer)
+      assertTrue(sentRequest.context.fromPrivilegedListener)
+
+      val externalSocket = connect(testableServer, new ListenerName("EXTERNAL"),
+        localAddr = InetAddress.getLocalHost)
+      val externalRequest = sendAndReceiveRequest(externalSocket, testableServer)
+      assertFalse(externalRequest.context.fromPrivilegedListener)
+    })
+  }
+
+  @Test
+  def testControlPlaneTakePrecedenceOverInterBrokerListenerAsPrivilegedListener(): Unit = {
+    val testProps = new Properties
+    testProps ++= props
+    testProps.put("listeners", "EXTERNAL://localhost:0,INTERNAL://localhost:0,CONTROLLER://localhost:0")
+    testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
+    testProps.put("control.plane.listener.name", "CONTROLLER")
+    testProps.put("inter.broker.listener.name", "INTERNAL")
+    val config = KafkaConfig.fromProps(testProps)
+    withTestableServer(config, { testableServer =>
+      val controlPlaneSocket = connect(testableServer, config.controlPlaneListenerName.get,
+        localAddr = InetAddress.getLocalHost)
+      val controlPlaneRequest = sendAndReceiveControllerRequest(controlPlaneSocket, testableServer)
+      assertTrue(controlPlaneRequest.context.fromPrivilegedListener)
+
+      val interBrokerSocket = connect(testableServer, config.interBrokerListenerName,
+        localAddr = InetAddress.getLocalHost)
+      val interBrokerRequest = sendAndReceiveRequest(interBrokerSocket, testableServer)
+      assertFalse(interBrokerRequest.context.fromPrivilegedListener)
+
+      val externalSocket = connect(testableServer, new ListenerName("EXTERNAL"),
+        localAddr = InetAddress.getLocalHost)
+      val externalRequest = sendAndReceiveRequest(externalSocket, testableServer)
+      assertFalse(externalRequest.context.fromPrivilegedListener)
+    })
+  }
+
+  private def sslServerProps: Properties = {
+    val trustStoreFile = File.createTempFile("truststore", ".jks")
+    val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
+      trustStoreFile = Some(trustStoreFile))
+    sslProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
+    sslProps
+  }
+
+  private def withTestableServer(config : KafkaConfig = KafkaConfig.fromProps(props),
+                                 testWithServer: TestableSocketServer => Unit): Unit = {
     val testableServer = new TestableSocketServer(config)
     testableServer.startup()
     try {
-        testWithServer(testableServer)
+      testWithServer(testableServer)
     } finally {
       shutdownServerAndMetrics(testableServer)
+      assertEquals(0, testableServer.uncaughtExceptions)
     }
   }
 
@@ -1220,8 +1894,8 @@ class SocketServerTest {
     // Check new channel behaves as expected
     val (socket, connectionId) = connectAndProcessRequest(testableServer)
     assertArrayEquals(producerRequestBytes(), receiveResponse(socket))
-    assertNotNull("Channel should not have been closed", selector.channel(connectionId))
-    assertNull("Channel should not be closing", selector.closingChannel(connectionId))
+    assertNotNull(selector.channel(connectionId), "Channel should not have been closed")
+    assertNull(selector.closingChannel(connectionId), "Channel should not be closing")
     socket.close()
     TestUtils.waitUntilTrue(() => testableServer.connectionCount(localAddress) == 0, "Channels not removed")
   }
@@ -1232,34 +1906,47 @@ class SocketServerTest {
 
   private def verifyAcceptorBlockedPercent(listenerName: String, expectBlocked: Boolean): Unit = {
     val blockedPercentMetricMBeanName = "kafka.network:type=Acceptor,name=AcceptorBlockedPercent,listener=PLAINTEXT"
-    val blockedPercentMetrics = YammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getMBeanName == blockedPercentMetricMBeanName).values
+    val blockedPercentMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter { case (k, _) =>
+      k.getMBeanName == blockedPercentMetricMBeanName
+    }.values
     assertEquals(1, blockedPercentMetrics.size)
     val blockedPercentMetric = blockedPercentMetrics.head.asInstanceOf[Meter]
     val blockedPercent = blockedPercentMetric.meanRate
     if (expectBlocked) {
-      assertTrue(s"Acceptor blocked percent not recorded: $blockedPercent", blockedPercent > 0.0)
-      assertTrue(s"Unexpected blocked percent in acceptor: $blockedPercent", blockedPercent <= 1.0)
+      assertTrue(blockedPercent > 0.0, s"Acceptor blocked percent not recorded: $blockedPercent")
+      assertTrue(blockedPercent <= 1.0, s"Unexpected blocked percent in acceptor: $blockedPercent")
     } else {
       assertEquals(0.0, blockedPercent, 0.001)
     }
   }
 
-  class TestableSocketServer(config : KafkaConfig = config, val connectionQueueSize: Int = 20) extends SocketServer(config,
-      new Metrics, Time.SYSTEM, credentialProvider) {
+  class TestableSocketServer(
+    config : KafkaConfig = KafkaConfig.fromProps(props),
+    connectionQueueSize: Int = 20,
+    time: Time = Time.SYSTEM
+  ) extends SocketServer(
+    config, new Metrics, time, credentialProvider, apiVersionManager,
+  ) {
 
     @volatile var selector: Option[TestableSelector] = None
+    @volatile var uncaughtExceptions = 0
 
     override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
+                              protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
       new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas, config.connectionsMaxIdleMs,
         config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics, credentialProvider,
-        memoryPool, new LogContext(), connectionQueueSize) {
+        memoryPool, new LogContext(), connectionQueueSize, isPrivilegedListener, apiVersionManager) {
 
         override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
-           val testableSelector = new TestableSelector(config, channelBuilder, time, metrics, metricTags.asScala)
-           selector = Some(testableSelector)
-           testableSelector
+          val testableSelector = new TestableSelector(config, channelBuilder, time, metrics, metricTags.asScala)
+          selector = Some(testableSelector)
+          testableSelector
+        }
+
+        override private[network] def processException(errorMessage: String, throwable: Throwable): Unit = {
+          if (errorMessage.contains("uncaught exception"))
+            uncaughtExceptions += 1
+          super.processException(errorMessage, throwable)
         }
       }
     }
@@ -1271,19 +1958,19 @@ class SocketServerTest {
       val selector = testableSelector
       if (locallyClosed) {
         TestUtils.waitUntilTrue(() => selector.allLocallyClosedChannels.contains(connectionId),
-            s"Channel not closed: $connectionId")
-        assertTrue("Unexpected disconnect notification", testableSelector.allDisconnectedChannels.isEmpty)
+          s"Channel not closed: $connectionId")
+        assertTrue(testableSelector.allDisconnectedChannels.isEmpty, "Unexpected disconnect notification")
       } else {
         TestUtils.waitUntilTrue(() => selector.allDisconnectedChannels.contains(connectionId),
-            s"Disconnect notification not received: $connectionId")
-        assertTrue("Channel closed locally", testableSelector.allLocallyClosedChannels.isEmpty)
+          s"Disconnect notification not received: $connectionId")
+        assertTrue(testableSelector.allLocallyClosedChannels.isEmpty, "Channel closed locally")
       }
       val openCount = selector.allChannels.size - 1 // minus one for the channel just closed above
       TestUtils.waitUntilTrue(() => connectionCount(localAddress) == openCount, "Connection count not decremented")
       TestUtils.waitUntilTrue(() =>
         dataPlaneProcessor(0).inflightResponseCount == 0, "Inflight responses not cleared")
-      assertNull("Channel not removed", selector.channel(connectionId))
-      assertNull("Closing channel not removed", selector.closingChannel(connectionId))
+      assertNull(selector.channel(connectionId), "Channel not removed")
+      assertNull(selector.closingChannel(connectionId), "Closing channel not removed")
     }
   }
 
@@ -1300,8 +1987,8 @@ class SocketServerTest {
   }
 
   class TestableSelector(config: KafkaConfig, channelBuilder: ChannelBuilder, time: Time, metrics: Metrics, metricTags: mutable.Map[String, String] = mutable.Map.empty)
-        extends Selector(config.socketRequestMaxBytes, config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs,
-            metrics, time, "socket-server", metricTags.asJava, false, true, channelBuilder, MemoryPool.NONE, new LogContext()) {
+    extends Selector(config.socketRequestMaxBytes, config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs,
+      metrics, time, "socket-server", metricTags.asJava, false, true, channelBuilder, MemoryPool.NONE, new LogContext()) {
 
     val failures = mutable.Map[SelectorOperation, Throwable]()
     val operationCounts = mutable.Map[SelectorOperation, Int]().withDefaultValue(0)
@@ -1313,12 +2000,19 @@ class SocketServerTest {
     // Enable data from `Selector.poll()` to be deferred to a subsequent poll() until
     // the number of elements of that type reaches `minPerPoll`. This enables tests to verify
     // that failed processing doesn't impact subsequent processing within the same iteration.
-    class PollData[T] {
+    abstract class PollData[T] {
       var minPerPoll = 1
       val deferredValues = mutable.Buffer[T]()
-      val currentPollValues = mutable.Buffer[T]()
-      def update(newValues: mutable.Buffer[T]): Unit = {
-        if (currentPollValues.nonEmpty || deferredValues.size + newValues.size >= minPerPoll) {
+
+      /**
+       * Process new results and return the results for the current poll if at least
+       * `minPerPoll` results are available including any deferred results. Otherwise
+       * add the provided values to the deferred set and return an empty buffer. This allows
+       * tests to process `minPerPoll` elements as the results of a single poll iteration.
+       */
+      protected def update(newValues: mutable.Buffer[T]): mutable.Buffer[T] = {
+        val currentPollValues = mutable.Buffer[T]()
+        if (deferredValues.size + newValues.size >= minPerPoll) {
           if (deferredValues.nonEmpty) {
             currentPollValues ++= deferredValues
             deferredValues.clear()
@@ -1326,15 +2020,51 @@ class SocketServerTest {
           currentPollValues ++= newValues
         } else
           deferredValues ++= newValues
+
+        currentPollValues
       }
-      def reset(): Unit = {
-        currentPollValues.clear()
+
+      /**
+       * Process results from the appropriate buffer in Selector and update the buffer to either
+       * defer and return nothing or return all results including previously deferred values.
+       */
+      def updateResults(): Unit
+    }
+
+    class CompletedReceivesPollData(selector: TestableSelector) extends PollData[NetworkReceive] {
+      val completedReceivesMap: util.Map[String, NetworkReceive] = JTestUtils.fieldValue(selector, classOf[Selector], "completedReceives")
+
+      override def updateResults(): Unit = {
+        val currentReceives = update(selector.completedReceives.asScala.toBuffer)
+        completedReceivesMap.clear()
+        currentReceives.foreach { receive =>
+          val channelOpt = Option(selector.channel(receive.source)).orElse(Option(selector.closingChannel(receive.source)))
+          channelOpt.foreach { channel => completedReceivesMap.put(channel.id, receive) }
+        }
       }
     }
-    val cachedCompletedReceives = new PollData[NetworkReceive]()
-    val cachedCompletedSends = new PollData[Send]()
-    val cachedDisconnected = new PollData[(String, ChannelState)]()
+
+    class CompletedSendsPollData(selector: TestableSelector) extends PollData[NetworkSend] {
+      override def updateResults(): Unit = {
+        val currentSends = update(selector.completedSends.asScala)
+        selector.completedSends.clear()
+        currentSends.foreach { selector.completedSends.add }
+      }
+    }
+
+    class DisconnectedPollData(selector: TestableSelector) extends PollData[(String, ChannelState)] {
+      override def updateResults(): Unit = {
+        val currentDisconnected = update(selector.disconnected.asScala.toBuffer)
+        selector.disconnected.clear()
+        currentDisconnected.foreach { case (channelId, state) => selector.disconnected.put(channelId, state) }
+      }
+    }
+
+    val cachedCompletedReceives = new CompletedReceivesPollData(this)
+    val cachedCompletedSends = new CompletedSendsPollData(this)
+    val cachedDisconnected = new DisconnectedPollData(this)
     val allCachedPollData = Seq(cachedCompletedReceives, cachedCompletedSends, cachedDisconnected)
+    val pendingClosingChannels = new ConcurrentLinkedQueue[KafkaChannel]()
     @volatile var minWakeupCount = 0
     @volatile var pollTimeoutOverride: Option[Long] = None
     @volatile var pollCallback: () => Unit = () => {}
@@ -1359,7 +2089,7 @@ class SocketServerTest {
     }
 
     def runOp[T](operation: SelectorOperation, connectionId: Option[String],
-        onFailure: => Unit = {})(code: => T): T = {
+                 onFailure: => Unit = {})(code: => T): T = {
       // If a failure is set on `operation`, throw that exception even if `code` fails
       try code
       finally onOperation(operation, connectionId, onFailure)
@@ -1371,25 +2101,31 @@ class SocketServerTest {
       }
     }
 
-    override def send(s: Send): Unit = {
-      runOp(SelectorOperation.Send, Some(s.destination)) {
+    override def send(s: NetworkSend): Unit = {
+      runOp(SelectorOperation.Send, Some(s.destinationId)) {
         super.send(s)
       }
     }
 
     override def poll(timeout: Long): Unit = {
       try {
+        assertEquals(0, super.completedReceives().size)
+        assertEquals(0, super.completedSends().size)
+
         pollCallback.apply()
-        allCachedPollData.foreach(_.reset)
+        while (!pendingClosingChannels.isEmpty) {
+          makeClosing(pendingClosingChannels.poll())
+        }
         runOp(SelectorOperation.Poll, None) {
           super.poll(pollTimeoutOverride.getOrElse(timeout))
         }
       } finally {
-        super.channels.asScala.foreach(allChannels += _.id)
+        super.channels.forEach(allChannels += _.id)
         allDisconnectedChannels ++= super.disconnected.asScala.keys
-        cachedCompletedReceives.update(super.completedReceives.asScala)
-        cachedCompletedSends.update(super.completedSends.asScala)
-        cachedDisconnected.update(super.disconnected.asScala.toBuffer)
+
+        cachedCompletedReceives.updateResults()
+        cachedCompletedSends.updateResults()
+        cachedDisconnected.updateResults()
       }
     }
 
@@ -1413,12 +2149,6 @@ class SocketServerTest {
           super.wakeup()
       }
     }
-
-    override def disconnected: java.util.Map[String, ChannelState] = cachedDisconnected.currentPollValues.toMap.asJava
-
-    override def completedSends: java.util.List[Send] = cachedCompletedSends.currentPollValues.asJava
-
-    override def completedReceives: java.util.List[NetworkReceive] = cachedCompletedReceives.currentPollValues.asJava
 
     override def close(id: String): Unit = {
       runOp(SelectorOperation.Close, Some(id)) {
@@ -1453,5 +2183,67 @@ class SocketServerTest {
       val failedConnectionId = allFailedChannels.head
       sockets.filterNot(socket => isSocketConnectionId(failedConnectionId, socket))
     }
+
+    private def makeClosing(channel: KafkaChannel): Unit = {
+      val channels: util.Map[String, KafkaChannel] = JTestUtils.fieldValue(this, classOf[Selector], "channels")
+      val closingChannels: util.Map[String, KafkaChannel] = JTestUtils.fieldValue(this, classOf[Selector], "closingChannels")
+      closingChannels.put(channel.id, channel)
+      channels.remove(channel.id)
+    }
+  }
+
+  /**
+   * Proxy server used to intercept connections to SocketServer. This is used for testing SSL channels
+   * with buffered data. A single SSL client is expected to be created by the test using this ProxyServer.
+   * By default, data between the client and the server is simply transferred across to the destination by ProxyServer.
+   * Tests can enable buffering in ProxyServer to directly copy incoming data from the client to the server-side
+   * channel's `netReadBuffer` to simulate scenarios with SSL buffered data.
+   */
+  private class ProxyServer(socketServer: SocketServer) {
+    val serverSocket = new ServerSocket(0)
+    val localPort = serverSocket.getLocalPort
+    val serverConnSocket = new Socket("localhost", socketServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SSL)))
+    val executor = Executors.newFixedThreadPool(2)
+    @volatile var clientConnSocket: Socket = _
+    @volatile var buffer: Option[ByteBuffer] = None
+
+    executor.submit((() => {
+      try {
+        clientConnSocket = serverSocket.accept()
+        val serverOut = serverConnSocket.getOutputStream
+        val clientIn = clientConnSocket.getInputStream
+        var b: Int = -1
+        while ({b = clientIn.read(); b != -1}) {
+          buffer match {
+            case Some(buf) =>
+              buf.put(b.asInstanceOf[Byte])
+            case None =>
+              serverOut.write(b)
+              serverOut.flush()
+          }
+        }
+      } finally {
+        clientConnSocket.close()
+      }
+    }): Runnable)
+
+    executor.submit((() => {
+      var b: Int = -1
+      val serverIn = serverConnSocket.getInputStream
+      while ({b = serverIn.read(); b != -1}) {
+        clientConnSocket.getOutputStream.write(b)
+      }
+    }): Runnable)
+
+    def enableBuffering(buffer: ByteBuffer): Unit = this.buffer = Some(buffer)
+
+    def close(): Unit = {
+      serverSocket.close()
+      serverConnSocket.close()
+      clientConnSocket.close()
+      executor.shutdownNow()
+      assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS))
+    }
+
   }
 }

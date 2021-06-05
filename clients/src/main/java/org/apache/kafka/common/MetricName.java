@@ -22,7 +22,7 @@ import java.util.Objects;
 /**
  * The <code>MetricName</code> class encapsulates a metric's name, logical group and its related attributes. It should be constructed using metrics.MetricName(...).
  * <p>
- * This class captures the following parameters
+ * This class captures the following parameters:
  * <pre>
  *  <b>name</b> The name of the metric
  *  <b>group</b> logical group name of the metrics to which this metric belongs.
@@ -31,7 +31,7 @@ import java.util.Objects;
  * </pre>
  * group, tags parameters can be used to create unique metric names while reporting in JMX or any custom reporting.
  * <p>
- * Ex: standard JMX MBean can be constructed like  <b>domainName:type=group,key1=val1,key2=val2</b>
+ * Ex: standard JMX MBean can be constructed like <b>domainName:type=group,key1=val1,key2=val2</b>
  * <p>
  *
  * Usage looks something like this:

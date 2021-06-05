@@ -60,7 +60,7 @@ public class KStreamMapValuesTest {
             new KeyValueTimestamp<>(100, 3, 50),
             new KeyValueTimestamp<>(1000, 4, 500)};
 
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
     @Test
@@ -86,7 +86,7 @@ public class KStreamMapValuesTest {
             new KeyValueTimestamp<>(100, 103, 50),
             new KeyValueTimestamp<>(1000, 1004, 500)};
 
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
 }

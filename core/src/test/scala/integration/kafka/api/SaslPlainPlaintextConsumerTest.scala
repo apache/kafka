@@ -13,15 +13,13 @@
 package kafka.api
 
 import java.io.File
-import java.util.{Locale, Properties}
-
-import scala.collection.Seq
+import java.util.Locale
 
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   override protected def listenerName = new ListenerName("CLIENT")
@@ -37,21 +35,16 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both, kafkaServerJaasEntryName))
     super.setUp()
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     super.tearDown()
     closeSasl()
-  }
-
-  override def modifyConfigs(props: Seq[Properties]): Unit = {
-    super.modifyConfigs(props)
-    configureListeners(props)
   }
 
   /**

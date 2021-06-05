@@ -51,19 +51,19 @@ object StressTestLog {
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       brokerTopicStats = new BrokerTopicStats,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true)
     val writer = new WriterThread(log)
     writer.start()
     val reader = new ReaderThread(log)
     reader.start()
 
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      override def run() = {
+    Exit.addShutdownHook("stress-test-shutdown-hook", {
         running.set(false)
         writer.join()
         reader.join()
         Utils.delete(dir)
-      }
     })
 
     while(running.get) {
@@ -121,7 +121,7 @@ object StressTestLog {
   class WriterThread(val log: Log) extends WorkerThread with LogProgress {
     override def work(): Unit = {
       val logAppendInfo = log.appendAsLeader(TestUtils.singletonRecords(currentOffset.toString.getBytes), 0)
-      require(logAppendInfo.firstOffset.forall(_ == currentOffset) && logAppendInfo.lastOffset == currentOffset)
+      require(logAppendInfo.firstOffset.forall(_.messageOffset == currentOffset) && logAppendInfo.lastOffset == currentOffset)
       currentOffset += 1
       if (currentOffset % 1000 == 0)
         Thread.sleep(50)

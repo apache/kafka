@@ -1,0 +1,59 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 59,
+  "type": "response",
+  "name": "FetchSnapshotResponse",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+", "ignorable": true,
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "ErrorCode", "type": "int16", "versions": "0+", "ignorable": false,
+      "about": "The top level response error code." },
+    { "name": "Topics", "type": "[]TopicSnapshot", "versions": "0+",
+      "about": "The topics to fetch.", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The name of the topic to fetch." },
+      { "name": "Partitions", "type": "[]PartitionSnapshot", "versions": "0+",
+        "about": "The partitions to fetch.", "fields": [
+        { "name": "Index", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "ErrorCode", "type": "int16", "versions": "0+",
+          "about": "The error code, or 0 if there was no fetch error." },
+        { "name": "SnapshotId", "type": "SnapshotId", "versions": "0+",
+          "about": "The snapshot endOffset and epoch fetched",
+          "fields": [
+          { "name": "EndOffset", "type": "int64", "versions": "0+" },
+          { "name": "Epoch", "type": "int32", "versions": "0+" }
+        ]},
+        { "name": "CurrentLeader", "type": "LeaderIdAndEpoch",
+          "versions": "0+", "taggedVersions": "0+", "tag": 0, "fields": [
+          { "name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+            "about": "The ID of the current leader or -1 if the leader is unknown."},
+          { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
+            "about": "The latest known leader epoch"}
+        ]},
+        { "name": "Size", "type": "int64", "versions": "0+",
+          "about": "The total size of the snapshot." },
+        { "name": "Position", "type": "int64", "versions": "0+",
+          "about": "The starting byte position within the snapshot included in the Bytes field." },
+        { "name": "UnalignedRecords", "type": "records", "versions": "0+",
+          "about": "Snapshot data in records format which may not be aligned on an offset boundary" }
+      ]}
+    ]}
+  ]
+}

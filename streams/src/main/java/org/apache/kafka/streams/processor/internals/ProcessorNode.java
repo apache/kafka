@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,30 +29,30 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_ID_TAG;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_METRICS_GROUP;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxLatencyToSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
+public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
-public class ProcessorNode<K, V> {
+    private final List<ProcessorNode<KOut, VOut, ?, ?>> children;
+    private final Map<String, ProcessorNode<KOut, VOut, ?, ?>> childByName;
 
-    // TODO: 'children' can be removed when #forward() via index is removed
-    private final List<ProcessorNode<?, ?>> children;
-    private final Map<String, ProcessorNode<?, ?>> childByName;
-
-    private NodeMetrics nodeMetrics;
-    private final Processor<K, V> processor;
+    private final Processor<KIn, VIn, KOut, VOut> processor;
     private final String name;
     private final Time time;
 
     public final Set<String> stateStores;
 
+    private InternalProcessorContext internalProcessorContext;
+    private String threadId;
+
+    private boolean closed = true;
+
     public ProcessorNode(final String name) {
-        this(name, null, null);
+        this(name, (Processor<KIn, VIn, KOut, VOut>) null, null);
     }
 
+    public ProcessorNode(final String name,
+                         final Processor<KIn, VIn, KOut, VOut> processor,
+                         final Set<String> stateStores) {
 
-    public ProcessorNode(final String name, final Processor<K, V> processor, final Set<String> stateStores) {
         this.name = name;
         this.processor = processor;
         this.children = new ArrayList<>();
@@ -63,65 +61,112 @@ public class ProcessorNode<K, V> {
         this.time = new SystemTime();
     }
 
+    public ProcessorNode(final String name,
+                         final org.apache.kafka.streams.processor.Processor<KIn, VIn> processor,
+                         final Set<String> stateStores) {
+
+        this.name = name;
+        this.processor = ProcessorAdapter.adapt(processor);
+        this.children = new ArrayList<>();
+        this.childByName = new HashMap<>();
+        this.stateStores = stateStores;
+        this.time = new SystemTime();
+    }
 
     public final String name() {
         return name;
     }
 
-    public final Processor<K, V> processor() {
+    public final Processor<KIn, VIn, KOut, VOut> processor() {
         return processor;
     }
 
-    public List<ProcessorNode<?, ?>> children() {
+    public List<ProcessorNode<KOut, VOut, ?, ?>> children() {
         return children;
     }
 
-    ProcessorNode getChild(final String childName) {
+    ProcessorNode<KOut, VOut, ?, ?> getChild(final String childName) {
         return childByName.get(childName);
     }
 
-    public void addChild(final ProcessorNode<?, ?> child) {
+    public void addChild(final ProcessorNode<KOut, VOut, ?, ?> child) {
         children.add(child);
         childByName.put(child.name, child);
     }
 
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<KOut, VOut> context) {
+        if (!closed)
+            throw new IllegalStateException("The processor is not closed");
+
         try {
-            nodeMetrics = new NodeMetrics(context.metrics(), name, context);
-            final long startNs = time.nanoseconds();
+            threadId = Thread.currentThread().getName();
+            internalProcessorContext = context;
             if (processor != null) {
                 processor.init(context);
             }
-            nodeMetrics.nodeCreationSensor.record(time.nanoseconds() - startNs);
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
+
+        // revived tasks could re-initialize the topology,
+        // in which case we should reset the flag
+        closed = false;
     }
 
     public void close() {
+        throwIfClosed();
+
         try {
-            final long startNs = time.nanoseconds();
             if (processor != null) {
                 processor.close();
             }
-            nodeMetrics.nodeDestructionSensor.record(time.nanoseconds() - startNs);
-            nodeMetrics.removeAllSensors();
+            internalProcessorContext.metrics().removeAllNodeLevelSensors(
+                threadId,
+                internalProcessorContext.taskId().toString(),
+                name
+            );
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to close processor %s", name), e);
+        }
+
+        closed = true;
+    }
+
+    protected void throwIfClosed() {
+        if (closed) {
+            throw new IllegalStateException("The processor is already closed");
         }
     }
 
 
-    public void process(final K key, final V value) {
-        final long startNs = time.nanoseconds();
-        processor.process(key, value);
-        nodeMetrics.nodeProcessTimeSensor.record(time.nanoseconds() - startNs);
+    public void process(final Record<KIn, VIn> record) {
+        throwIfClosed();
+
+        try {
+            processor.process(record);
+        } catch (final ClassCastException e) {
+            final String keyClass = record.key() == null ? "unknown because key is null" : record.key().getClass().getName();
+            final String valueClass = record.value() == null ? "unknown because value is null" : record.value().getClass().getName();
+            throw new StreamsException(String.format("ClassCastException invoking Processor. Do the Processor's "
+                    + "input types match the deserialized types? Check the Serde setup and change the default Serdes in "
+                    + "StreamConfig or provide correct Serdes via method parameters. Make sure the Processor can accept "
+                    + "the deserialized input of type key: %s, and value: %s.%n"
+                    + "Note that although incorrect Serdes are a common cause of error, the cast exception might have "
+                    + "another cause (in user code, for example). For example, if a processor wires in a store, but casts "
+                    + "the generics incorrectly, a class cast exception could be raised during processing, but the "
+                    + "cause would not be wrong Serdes.",
+                    keyClass,
+                    valueClass),
+                e);
+        }
     }
 
     public void punctuate(final long timestamp, final Punctuator punctuator) {
-        final long startNs = time.nanoseconds();
         punctuator.punctuate(timestamp);
-        nodeMetrics.nodePunctuateTimeSensor.record(time.nanoseconds() - startNs);
+    }
+
+    public boolean isTerminalNode() {
+        return children.isEmpty();
     }
 
     /**
@@ -147,130 +192,5 @@ public class ProcessorNode<K, V> {
             sb.append("]\n");
         }
         return sb.toString();
-    }
-
-    Sensor sourceNodeForwardSensor() {
-        return nodeMetrics.sourceNodeForwardSensor;
-    }
-
-    private static final class NodeMetrics {
-        private final StreamsMetricsImpl metrics;
-
-        private final Sensor nodeProcessTimeSensor;
-        private final Sensor nodePunctuateTimeSensor;
-        private final Sensor sourceNodeForwardSensor;
-        private final Sensor nodeCreationSensor;
-        private final Sensor nodeDestructionSensor;
-        private final String taskName;
-        private final String processorNodeName;
-
-        private NodeMetrics(final StreamsMetricsImpl metrics, final String processorNodeName, final ProcessorContext context) {
-            this.metrics = metrics;
-
-            final String threadId = Thread.currentThread().getName();
-            final String taskName = context.taskId().toString();
-            final Map<String, String> tagMap = metrics.tagMap(
-                threadId,
-                "task-id",
-                context.taskId().toString(),
-                PROCESSOR_NODE_ID_TAG,
-                processorNodeName
-            );
-            final Map<String, String> allTagMap = metrics.tagMap(
-                threadId,
-                "task-id",
-                context.taskId().toString(),
-                PROCESSOR_NODE_ID_TAG,
-                "all"
-            );
-
-            nodeProcessTimeSensor = createTaskAndNodeLatencyAndThroughputSensors(
-                "process",
-                metrics,
-                threadId,
-                taskName,
-                processorNodeName,
-                allTagMap,
-                tagMap
-            );
-
-            nodePunctuateTimeSensor = createTaskAndNodeLatencyAndThroughputSensors(
-                "punctuate",
-                metrics,
-                threadId,
-                taskName,
-                processorNodeName,
-                allTagMap,
-                tagMap
-            );
-
-            nodeCreationSensor = createTaskAndNodeLatencyAndThroughputSensors(
-                "create",
-                metrics,
-                threadId,
-                taskName,
-                processorNodeName,
-                allTagMap,
-                tagMap
-            );
-
-            // note: this metric can be removed in the future, as it is only recorded before being immediately removed
-            nodeDestructionSensor = createTaskAndNodeLatencyAndThroughputSensors(
-                "destroy",
-                metrics,
-                threadId,
-                taskName,
-                processorNodeName,
-                allTagMap,
-                tagMap
-            );
-
-            sourceNodeForwardSensor = createTaskAndNodeLatencyAndThroughputSensors(
-                "forward",
-                metrics,
-                threadId,
-                taskName,
-                processorNodeName,
-                allTagMap,
-                tagMap
-            );
-
-            this.taskName = taskName;
-            this.processorNodeName = processorNodeName;
-        }
-
-        private void removeAllSensors() {
-            metrics.removeAllNodeLevelSensors(Thread.currentThread().getName(), taskName, processorNodeName);
-        }
-
-        private static Sensor createTaskAndNodeLatencyAndThroughputSensors(final String operation,
-                                                                           final StreamsMetricsImpl metrics,
-                                                                           final String threadId,
-                                                                           final String taskName,
-                                                                           final String processorNodeName,
-                                                                           final Map<String, String> taskTags,
-                                                                           final Map<String, String> nodeTags) {
-            final Sensor parent = metrics.taskLevelSensor(
-                threadId,
-                taskName,
-                operation,
-                Sensor.RecordingLevel.DEBUG
-            );
-            addAvgAndMaxLatencyToSensor(parent, PROCESSOR_NODE_METRICS_GROUP, taskTags, operation);
-            addInvocationRateAndCountToSensor(parent, PROCESSOR_NODE_METRICS_GROUP, taskTags, operation);
-
-            final Sensor sensor = metrics.nodeLevelSensor(
-                threadId,
-                taskName,
-                processorNodeName,
-                operation,
-                Sensor.RecordingLevel.DEBUG,
-                parent
-            );
-            addAvgAndMaxLatencyToSensor(sensor, PROCESSOR_NODE_METRICS_GROUP, nodeTags, operation);
-            addInvocationRateAndCountToSensor(sensor, PROCESSOR_NODE_METRICS_GROUP, nodeTags, operation);
-
-            return sensor;
-        }
     }
 }

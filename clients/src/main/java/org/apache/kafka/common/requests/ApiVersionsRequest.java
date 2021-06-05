@@ -19,11 +19,10 @@ package org.apache.kafka.common.requests;
 import java.util.regex.Pattern;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.AppInfoParser;
 
 import java.nio.ByteBuffer;
@@ -60,7 +59,7 @@ public class ApiVersionsRequest extends AbstractRequest {
 
     private final Short unsupportedRequestVersion;
 
-    public final ApiVersionsRequestData data;
+    private final ApiVersionsRequestData data;
 
     public ApiVersionsRequest(ApiVersionsRequestData data, short version) {
         this(data, version, null);
@@ -78,10 +77,6 @@ public class ApiVersionsRequest extends AbstractRequest {
         this.unsupportedRequestVersion = unsupportedRequestVersion;
     }
 
-    public ApiVersionsRequest(Struct struct, short version) {
-        this(new ApiVersionsRequestData(struct, version), version);
-    }
-
     public boolean hasUnsupportedRequestVersion() {
         return unsupportedRequestVersion != null;
     }
@@ -96,8 +91,8 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public ApiVersionsRequestData data() {
+        return data;
     }
 
     @Override
@@ -112,11 +107,8 @@ public class ApiVersionsRequest extends AbstractRequest {
         // Starting from Apache Kafka 2.4 (KIP-511), ApiKeys field is populated with the supported
         // versions of the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
         if (Errors.forException(e) == Errors.UNSUPPORTED_VERSION) {
-            ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
-            apiKeys.add(new ApiVersionsResponseKey()
-                .setApiKey(ApiKeys.API_VERSIONS.id)
-                .setMinVersion(ApiKeys.API_VERSIONS.oldestVersion())
-                .setMaxVersion(ApiKeys.API_VERSIONS.latestVersion()));
+            ApiVersionCollection apiKeys = new ApiVersionCollection();
+            apiKeys.add(ApiVersionsResponse.toApiVersion(ApiKeys.API_VERSIONS));
             data.setApiKeys(apiKeys);
         }
 
@@ -124,7 +116,7 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     public static ApiVersionsRequest parse(ByteBuffer buffer, short version) {
-        return new ApiVersionsRequest(ApiKeys.API_VERSIONS.parseRequest(version, buffer), version);
+        return new ApiVersionsRequest(new ApiVersionsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
 }

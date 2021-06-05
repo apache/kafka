@@ -18,7 +18,7 @@
 <script id="configuration-template" type="text/x-handlebars-template">
   Kafka uses key-value pairs in the <a href="http://en.wikipedia.org/wiki/.properties">property file format</a> for configuration. These values can be supplied either from a file or programmatically.
 
-  <h3><a id="brokerconfigs" href="#brokerconfigs">3.1 Broker Configs</a></h3>
+  <h3 class="anchor-heading"><a id="brokerconfigs" class="anchor-link"></a><a href="#brokerconfigs">3.1 Broker Configs</a></h3>
 
   The essential configurations are the following:
   <ul>
@@ -33,7 +33,7 @@
 
   <p>More details about broker configuration can be found in the scala class <code>kafka.server.KafkaConfig</code>.</p>
 
-  <h4><a id="dynamicbrokerconfigs" href="#dynamicbrokerconfigs">3.1.1 Updating Broker Configs</a></h4>
+  <h4 class="anchor-heading"><a id="dynamicbrokerconfigs" class="anchor-link"></a><a href="#dynamicbrokerconfigs">3.1.1 Updating Broker Configs</a></h4>
   From Kafka version 1.1 onwards, some of the broker configs can be updated without restarting the broker. See the
   <code>Dynamic Update Mode</code> column in <a href="#brokerconfigs">Broker Configs</a> for the update mode of each broker config.
   <ul>
@@ -43,31 +43,21 @@
   </ul>
 
   To alter the current broker configs for broker id 0 (for example, the number of log cleaner threads):
-  <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --add-config log.cleaner.threads=2
-  </pre>
+  <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --add-config log.cleaner.threads=2</code></pre>
 
   To describe the current dynamic broker configs for broker id 0:
-  <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --describe
-  </pre>
+  <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --describe</code></pre>
 
   To delete a config override and revert to the statically configured or default value for broker id 0 (for example,
   the number of log cleaner threads):
-  <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --delete-config log.cleaner.threads
-  </pre>
+  <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --delete-config log.cleaner.threads</code></pre>
 
   Some configs may be configured as a cluster-wide default to maintain consistent values across the whole cluster.  All brokers
   in the cluster will process the cluster default update. For example, to update log cleaner threads on all brokers:
-  <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-default --alter --add-config log.cleaner.threads=2
-  </pre>
+  <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-default --alter --add-config log.cleaner.threads=2</code></pre>
 
   To describe the currently configured dynamic cluster-wide default configs:
-  <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-default --describe
-  </pre>
+  <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-default --describe</code></pre>
 
   All configs that are configurable at cluster level may also be configured at per-broker level (e.g. for testing).
   If a config value is defined at different levels, the following order of precedence is used:
@@ -99,10 +89,8 @@
   encoder configs will not be persisted in ZooKeeper. For example, to store SSL key password for listener <code>INTERNAL</code>
   on broker 0:
 
-  <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type brokers --entity-name 0 --alter --add-config
-    'listener.name.internal.ssl.key.password=key-password,password.encoder.secret=secret,password.encoder.iterations=8192'
-  </pre>
+  <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --entity-type brokers --entity-name 0 --alter --add-config
+    'listener.name.internal.ssl.key.password=key-password,password.encoder.secret=secret,password.encoder.iterations=8192'</code></pre>
 
   The configuration <code>listener.name.internal.ssl.key.password</code> will be persisted in ZooKeeper in encrypted
   form using the provided encoder configs. The encoder secret and iterations are not persisted in ZooKeeper.
@@ -174,10 +162,8 @@
   In Kafka version 1.1.x, changes to <code>unclean.leader.election.enable</code> take effect only when a new controller is elected.
   Controller re-election may be forced by running:
 
-  <pre class="brush: bash;">
-  &gt; bin/zookeeper-shell.sh localhost
-  rmr /controller
-  </pre>
+  <pre class="line-numbers"><code class="language-bash">  &gt; bin/zookeeper-shell.sh localhost
+  rmr /controller</code></pre>
 
   <h5>Updating Log Cleaner Configs</h5>
   Log cleaner configs may be updated dynamically at cluster-default level used by all brokers. The changes take effect
@@ -231,61 +217,53 @@
   Inter-broker listener must be configured using the static broker configuration <code>inter.broker.listener.name</code>
   or <code>inter.broker.security.protocol</code>.
 
-  <h3><a id="topicconfigs" href="#topicconfigs">3.2 Topic-Level Configs</a></h3>
+  <h3 class="anchor-heading"><a id="topicconfigs" class="anchor-link"></a><a href="#topicconfigs">3.2 Topic-Level Configs</a></h3>
 
   Configurations pertinent to topics have both a server default as well an optional per-topic override. If no per-topic configuration is given the server default is used. The override can be set at topic creation time by giving one or more <code>--config</code> options. This example creates a topic named <i>my-topic</i> with a custom max message size and flush rate:
-  <pre class="brush: bash;">
-  &gt; bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic my-topic --partitions 1 \
-      --replication-factor 1 --config max.message.bytes=64000 --config flush.messages=1
-  </pre>
+  <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic my-topic --partitions 1 \
+      --replication-factor 1 --config max.message.bytes=64000 --config flush.messages=1</code></pre>
   Overrides can also be changed or set later using the alter configs command. This example updates the max message size for <i>my-topic</i>:
-  <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic
-      --alter --add-config max.message.bytes=128000
-  </pre>
+  <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics --entity-name my-topic
+      --alter --add-config max.message.bytes=128000</code></pre>
 
   To check overrides set on the topic you can do
-  <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic --describe
-  </pre>
+  <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics --entity-name my-topic --describe</code></pre>
 
   To remove an override you can do
-  <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --zookeeper localhost:2181  --entity-type topics --entity-name my-topic
-      --alter --delete-config max.message.bytes
-  </pre>
+  <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092  --entity-type topics --entity-name my-topic
+      --alter --delete-config max.message.bytes</code></pre>
 
   The following are the topic-level configurations. The server's default configuration for this property is given under the Server Default Property heading. A given server default config value only applies to a topic if it does not have an explicit topic config override.
 
   <!--#include virtual="generated/topic_config.html" -->
 
-  <h3><a id="producerconfigs" href="#producerconfigs">3.3 Producer Configs</a></h3>
+  <h3 class="anchor-heading"><a id="producerconfigs" class="anchor-link"></a><a href="#producerconfigs">3.3 Producer Configs</a></h3>
 
   Below is the configuration of the producer:
   <!--#include virtual="generated/producer_config.html" -->
 
-  <h3><a id="consumerconfigs" href="#consumerconfigs">3.4 Consumer Configs</a></h3>
+  <h3 class="anchor-heading"><a id="consumerconfigs" class="anchor-link"></a><a href="#consumerconfigs">3.4 Consumer Configs</a></h3>
 
   Below is the configuration for the consumer:
   <!--#include virtual="generated/consumer_config.html" -->
 
-  <h3><a id="connectconfigs" href="#connectconfigs">3.5 Kafka Connect Configs</a></h3>
+  <h3 class="anchor-heading"><a id="connectconfigs" class="anchor-link"></a><a href="#connectconfigs">3.5 Kafka Connect Configs</a></h3>
   Below is the configuration of the Kafka Connect framework.
   <!--#include virtual="generated/connect_config.html" -->
 
-  <h4><a id="sourceconnectconfigs" href="#sourceconnectconfigs">3.5.1 Source Connector Configs</a></h4>
+  <h4 class="anchor-heading"><a id="sourceconnectconfigs" class="anchor-link"></a><a href="#sourceconnectconfigs">3.5.1 Source Connector Configs</a></h4>
   Below is the configuration of a source connector.
   <!--#include virtual="generated/source_connector_config.html" -->
 
-  <h4><a id="sinkconnectconfigs" href="#sinkconnectconfigs">3.5.2 Sink Connector Configs</a></h4>
+  <h4 class="anchor-heading"><a id="sinkconnectconfigs" class="anchor-link"></a><a href="#sinkconnectconfigs">3.5.2 Sink Connector Configs</a></h4>
   Below is the configuration of a sink connector.
   <!--#include virtual="generated/sink_connector_config.html" -->
 
-  <h3><a id="streamsconfigs" href="#streamsconfigs">3.6 Kafka Streams Configs</a></h3>
+  <h3 class="anchor-heading"><a id="streamsconfigs" class="anchor-link"></a><a href="#streamsconfigs">3.6 Kafka Streams Configs</a></h3>
   Below is the configuration of the Kafka Streams client library.
   <!--#include virtual="generated/streams_config.html" -->
 
-  <h3><a id="adminclientconfigs" href="#adminclientconfigs">3.7 Admin Configs</a></h3>
+  <h3 class="anchor-heading"><a id="adminclientconfigs" class="anchor-link"></a><a href="#adminclientconfigs">3.7 Admin Configs</a></h3>
   Below is the configuration of the Kafka Admin client library.
   <!--#include virtual="generated/admin_client_config.html" -->
 </script>

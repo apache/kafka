@@ -25,6 +25,7 @@ from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 
 class ConnectServiceBase(KafkaPathResolverMixin, Service):
@@ -43,13 +44,15 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     CONNECT_REST_PORT = 8083
     HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "connect_heap_dump.bin")
 
-    # Currently the Connect worker supports waiting on three modes:
+    # Currently the Connect worker supports waiting on four modes:
     STARTUP_MODE_INSTANT = 'INSTANT'
     """STARTUP_MODE_INSTANT: Start Connect worker and return immediately"""
     STARTUP_MODE_LOAD = 'LOAD'
     """STARTUP_MODE_LOAD: Start Connect worker and return after discovering and loading plugins"""
     STARTUP_MODE_LISTEN = 'LISTEN'
     """STARTUP_MODE_LISTEN: Start Connect worker and return after opening the REST port."""
+    STARTUP_MODE_JOIN = 'JOIN'
+    """STARTUP_MODE_JOIN: Start Connect worker and return after joining the group."""
 
     logs = {
         "connect_log": {
@@ -114,8 +117,9 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
             self.logger.debug("REST resources are not loaded yet")
             return False
 
-    def start(self, mode=STARTUP_MODE_LISTEN):
-        self.startup_mode = mode
+    def start(self, mode=None):
+        if mode:
+            self.startup_mode = mode
         super(ConnectServiceBase, self).start()
 
     def start_and_return_immediately(self, node, worker_type, remote_connector_configs):
@@ -135,6 +139,15 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         wait_until(lambda: self.listening(node), timeout_sec=self.startup_timeout_sec,
                    err_msg="Kafka Connect failed to start on node: %s in condition mode: %s" %
                    (str(node.account), self.startup_mode))
+
+    def start_and_wait_to_join_group(self, node, worker_type, remote_connector_configs):
+        if worker_type != 'distributed':
+            raise RuntimeError("Cannot wait for joined group message for %s" % worker_type)
+        with node.account.monitor_log(self.LOG_FILE) as monitor:
+            self.start_and_return_immediately(node, worker_type, remote_connector_configs)
+            monitor.wait_until('Joined group', timeout_sec=self.startup_timeout_sec,
+                               err_msg="Never saw message indicating Kafka Connect joined group on node: " +
+                                       "%s in condition mode: %s" % (str(node.account), self.startup_mode))
 
     def stop_node(self, node, clean_shutdown=True):
         self.logger.info((clean_shutdown and "Cleanly" or "Forcibly") + " stopping Kafka Connect on " + str(node.account))
@@ -280,6 +293,8 @@ class ConnectStandaloneService(ConnectServiceBase):
         heap_kafka_opts = "-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % \
                           self.logs["connect_heap_dump_file"]["path"]
         other_kafka_opts = self.security_config.kafka_opts.strip('\"')
+
+        cmd += fix_opts_for_new_jvm(node)
         cmd += "export KAFKA_OPTS=\"%s %s\"; " % (heap_kafka_opts, other_kafka_opts)
         for envvar in self.environment:
             cmd += "export %s=%s; " % (envvar, str(self.environment[envvar]))
@@ -307,6 +322,8 @@ class ConnectStandaloneService(ConnectServiceBase):
             self.start_and_wait_to_load_plugins(node, 'standalone', remote_connector_configs)
         elif self.startup_mode == self.STARTUP_MODE_INSTANT:
             self.start_and_return_immediately(node, 'standalone', remote_connector_configs)
+        elif self.startup_mode == self.STARTUP_MODE_JOIN:
+            self.start_and_wait_to_join_group(node, 'standalone', remote_connector_configs)
         else:
             # The default mode is to wait until the complete startup of the worker
             self.start_and_wait_to_start_listening(node, 'standalone', remote_connector_configs)
@@ -321,6 +338,7 @@ class ConnectDistributedService(ConnectServiceBase):
     def __init__(self, context, num_nodes, kafka, files, offsets_topic="connect-offsets",
                  configs_topic="connect-configs", status_topic="connect-status", startup_timeout_sec = 60):
         super(ConnectDistributedService, self).__init__(context, num_nodes, kafka, files, startup_timeout_sec)
+        self.startup_mode = self.STARTUP_MODE_JOIN
         self.offsets_topic = offsets_topic
         self.configs_topic = configs_topic
         self.status_topic = status_topic
@@ -354,9 +372,11 @@ class ConnectDistributedService(ConnectServiceBase):
             self.start_and_wait_to_load_plugins(node, 'distributed', '')
         elif self.startup_mode == self.STARTUP_MODE_INSTANT:
             self.start_and_return_immediately(node, 'distributed', '')
+        elif self.startup_mode == self.STARTUP_MODE_LISTEN:
+            self.start_and_wait_to_start_listening(node, 'distributed', '')
         else:
             # The default mode is to wait until the complete startup of the worker
-            self.start_and_wait_to_start_listening(node, 'distributed', '')
+            self.start_and_wait_to_join_group(node, 'distributed', '')
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -418,10 +438,10 @@ class VerifiableSource(VerifiableConnector):
         self.throughput = throughput
 
     def committed_messages(self):
-        return filter(lambda m: 'committed' in m and m['committed'], self.messages())
+        return list(filter(lambda m: 'committed' in m and m['committed'], self.messages()))
 
     def sent_messages(self):
-        return filter(lambda m: 'committed' not in m or not m['committed'], self.messages())
+        return list(filter(lambda m: 'committed' not in m or not m['committed'], self.messages()))
 
     def start(self):
         self.logger.info("Creating connector VerifiableSourceConnector %s", self.name)
@@ -447,10 +467,10 @@ class VerifiableSink(VerifiableConnector):
         self.topics = topics
 
     def flushed_messages(self):
-        return filter(lambda m: 'flushed' in m and m['flushed'], self.messages())
+        return list(filter(lambda m: 'flushed' in m and m['flushed'], self.messages()))
 
     def received_messages(self):
-        return filter(lambda m: 'flushed' not in m or not m['flushed'], self.messages())
+        return list(filter(lambda m: 'flushed' not in m or not m['flushed'], self.messages()))
 
     def start(self):
         self.logger.info("Creating connector VerifiableSinkConnector %s", self.name)

@@ -20,7 +20,6 @@ package kafka.api
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
 import java.util.Properties
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
 import kafka.utils._
@@ -29,10 +28,10 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, TopicPartition}
 import org.apache.kafka.test.{TestUtils => _, _}
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 /** The test cases here verify the following conditions.
@@ -106,7 +105,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     cfgs.map(KafkaConfig.fromProps)
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     MockDeserializer.resetStaticVariables

@@ -16,30 +16,33 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 
-class KStreamMap<K, V, K1, V1> implements ProcessorSupplier<K, V> {
+class KStreamMap<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
-    private final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> mapper;
+    private final KeyValueMapper<? super KIn, ? super VIn, ? extends KeyValue<? extends KOut, ? extends VOut>> mapper;
 
-    public KStreamMap(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> mapper) {
+    public KStreamMap(final KeyValueMapper<? super KIn, ? super VIn, ? extends KeyValue<? extends KOut, ? extends VOut>> mapper) {
         this.mapper = mapper;
     }
 
     @Override
-    public Processor<K, V> get() {
+    public Processor<KIn, VIn, KOut, VOut> get() {
         return new KStreamMapProcessor();
     }
 
-    private class KStreamMapProcessor extends AbstractProcessor<K, V> {
+    private class KStreamMapProcessor extends ContextualProcessor<KIn, VIn, KOut, VOut> {
+
         @Override
-        public void process(final K key, final V value) {
-            final KeyValue<? extends K1, ? extends V1> newPair = mapper.apply(key, value);
-            context().forward(newPair.key, newPair.value);
+        public void process(final Record<KIn, VIn> record) {
+            final KeyValue<? extends KOut, ? extends VOut> newPair =
+                mapper.apply(record.key(), record.value());
+            context().forward(record.withKey(newPair.key).withValue(newPair.value));
         }
     }
 }

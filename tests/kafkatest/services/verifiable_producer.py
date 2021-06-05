@@ -24,6 +24,7 @@ from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.utils import is_int, is_int_with_prefix
 from kafkatest.version import DEV_BRANCH
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 
 class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
@@ -91,6 +92,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         for node in self.nodes:
             node.version = version
         self.acked_values = []
+        self.acked_values_by_partition = {}
         self._last_acked_offsets = {}
         self.not_acked_values = []
         self.produced_count = {}
@@ -178,7 +180,13 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
                     elif data["name"] == "producer_send_success":
                         partition = TopicPartition(data["topic"], data["partition"])
-                        self.acked_values.append(self.message_validator(data["value"]))
+                        value = self.message_validator(data["value"])
+                        self.acked_values.append(value)
+
+                        if partition not in self.acked_values_by_partition:
+                            self.acked_values_by_partition[partition] = []
+                        self.acked_values_by_partition[partition].append(value)
+
                         self._last_acked_offsets[partition] = data["offset"]
                         self.produced_count[idx] += 1
 
@@ -213,6 +221,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         else:
             cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
 
+        cmd += fix_opts_for_new_jvm(node)
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
         cmd += self.impl.exec_cmd(node)
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol, True, self.offline_nodes))
@@ -254,6 +263,11 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def acked(self):
         with self.lock:
             return self.acked_values
+
+    @property
+    def acked_by_partition(self):
+        with self.lock:
+            return self.acked_values_by_partition
 
     @property
     def not_acked(self):

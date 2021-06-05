@@ -24,7 +24,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -39,11 +38,11 @@ public class ClusterConfigState {
     public static final ClusterConfigState EMPTY = new ClusterConfigState(
             NO_OFFSET,
             null,
-            Collections.<String, Integer>emptyMap(),
-            Collections.<String, Map<String, String>>emptyMap(),
-            Collections.<String, TargetState>emptyMap(),
-            Collections.<ConnectorTaskId, Map<String, String>>emptyMap(),
-            Collections.<String>emptySet());
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptySet());
 
     private final long offset;
     private final SessionKey sessionKey;
@@ -190,7 +189,7 @@ public class ClusterConfigState {
                 taskConfigs.put(taskConfigEntry.getKey().task(), configs);
             }
         }
-        return new LinkedList<>(taskConfigs.values());
+        return Collections.unmodifiableList(new ArrayList<>(taskConfigs.values()));
     }
 
     /**
@@ -209,19 +208,21 @@ public class ClusterConfigState {
      * @return the current set of connector task IDs
      */
     public List<ConnectorTaskId> tasks(String connectorName) {
-        if (inconsistentConnectors.contains(connectorName))
+        if (inconsistentConnectors.contains(connectorName)) {
             return Collections.emptyList();
+        }
 
         Integer numTasks = connectorTaskCounts.get(connectorName);
-        if (numTasks == null)
+        if (numTasks == null) {
             return Collections.emptyList();
+        }
 
-        List<ConnectorTaskId> taskIds = new ArrayList<>();
+        List<ConnectorTaskId> taskIds = new ArrayList<>(numTasks);
         for (int taskIndex = 0; taskIndex < numTasks; taskIndex++) {
             ConnectorTaskId taskId = new ConnectorTaskId(connectorName, taskIndex);
             taskIds.add(taskId);
         }
-        return taskIds;
+        return Collections.unmodifiableList(taskIds);
     }
 
     /**

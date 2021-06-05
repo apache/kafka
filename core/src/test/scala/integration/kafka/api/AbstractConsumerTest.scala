@@ -26,10 +26,10 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
 import kafka.utils.{ShutdownableThread, TestUtils}
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import org.junit.Assert._
-import org.junit.Before
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.BeforeEach
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.WakeupException
@@ -73,7 +73,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     properties.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "10")
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -103,9 +103,11 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   }
 
   protected def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
-                            tp: TopicPartition): Seq[ProducerRecord[Array[Byte], Array[Byte]]] = {
+                            tp: TopicPartition,
+                            startingTimestamp: Long = System.currentTimeMillis()): Seq[ProducerRecord[Array[Byte], Array[Byte]]] = {
     val records = (0 until numRecords).map { i =>
-      val record = new ProducerRecord(tp.topic(), tp.partition(), i.toLong, s"key $i".getBytes, s"value $i".getBytes)
+      val timestamp = startingTimestamp + i.toLong
+      val record = new ProducerRecord(tp.topic(), tp.partition(), timestamp, s"key $i".getBytes, s"value $i".getBytes)
       producer.send(record)
       record
     }
@@ -134,8 +136,8 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
         val timestamp = startingTimestamp + i
         assertEquals(timestamp.toLong, record.timestamp)
       } else
-        assertTrue(s"Got unexpected timestamp ${record.timestamp}. Timestamp should be between [$startingTimestamp, $now}]",
-          record.timestamp >= startingTimestamp && record.timestamp <= now)
+        assertTrue(record.timestamp >= startingTimestamp && record.timestamp <= now,
+          s"Got unexpected timestamp ${record.timestamp}. Timestamp should be between [$startingTimestamp, $now}]")
       assertEquals(offset.toLong, record.offset)
       val keyAndValueIndex = startingKeyAndValueIndex + i
       assertEquals(s"key $keyAndValueIndex", new String(record.key))
@@ -323,11 +325,11 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
                                            partitionsToAssign: Set[TopicPartition])
     extends ShutdownableThread("daemon-consumer-assignment", false) {
 
-    def this(consumer: Consumer[Array[Byte], Array[Byte]], topicsToSubscribe: List[String]) {
+    def this(consumer: Consumer[Array[Byte], Array[Byte]], topicsToSubscribe: List[String]) = {
       this(consumer, topicsToSubscribe, Set.empty[TopicPartition])
     }
 
-    def this(consumer: Consumer[Array[Byte], Array[Byte]], partitionsToAssign: Set[TopicPartition]) {
+    def this(consumer: Consumer[Array[Byte], Array[Byte]], partitionsToAssign: Set[TopicPartition]) = {
       this(consumer, List.empty[String], partitionsToAssign)
     }
 

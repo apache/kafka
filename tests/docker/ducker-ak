@@ -78,7 +78,7 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
 test [test-name(s)]
     Run a test or set of tests inside the currently active Ducker nodes.
     For example, to run the system test produce_bench_test, you would run:
-        ./tests/docker/ducker-ak test ./tests/kafkatest/test/core/produce_bench_test.py
+        ./tests/docker/ducker-ak test ./tests/kafkatest/tests/core/produce_bench_test.py
 
 ssh [node-name|user-name@node-name] [command]
     Log in to a running ducker container.  If node-name is not given, it prints
@@ -223,8 +223,13 @@ ducker_build() {
     SECONDS=0
 
     must_pushd "${ducker_dir}"
+    # Tip: if you are scratching your head for some dependency problems that are referring to an old code version
+    # (for example java.lang.NoClassDefFoundError), add --no-cache flag to the build shall give you a clean start.
     must_do -v -o docker build --memory="${docker_build_memory_limit}" \
-        --build-arg "ducker_creator=${user_name}" --build-arg "jdk_version=${jdk_version}" -t "${image_name}" \
+        --build-arg "ducker_creator=${user_name}" \
+        --build-arg "jdk_version=${jdk_version}" \
+        --build-arg "UID=${UID}" \
+        -t "${image_name}" \
         -f "${ducker_dir}/Dockerfile" ${docker_args} -- .
     docker_status=$?
     must_popd
@@ -268,7 +273,7 @@ setup_custom_ducktape() {
     docker_run ducker01 "${image_name}"
     local running_container="$(docker ps -f=network=ducknet -q)"
     must_do -v -o docker cp "${custom_ducktape}" "${running_container}:/opt/ducktape"
-    docker exec --user=root ducker01 bash -c 'set -x && cd /opt/kafka-dev/tests && sudo python ./setup.py develop install && cd /opt/ducktape && sudo python ./setup.py develop install'
+    docker exec --user=root ducker01 bash -c 'set -x && cd /opt/kafka-dev/tests && sudo python3 ./setup.py develop install && cd /opt/ducktape && sudo python3 ./setup.py develop install'
     [[ $? -ne 0 ]] && die "failed to install the new ducktape."
     must_do -v -o docker commit ducker01 "${image_name}"
     must_do -v docker kill "${running_container}"

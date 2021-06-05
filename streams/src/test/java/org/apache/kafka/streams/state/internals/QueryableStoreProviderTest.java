@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.NoOpWindowStore;
@@ -29,6 +30,9 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.HashMap;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertNotNull;
 
 public class QueryableStoreProviderTest {
@@ -37,53 +41,94 @@ public class QueryableStoreProviderTest {
     private final String windowStore = "window-store";
     private QueryableStoreProvider storeProvider;
     private HashMap<String, StateStore> globalStateStores;
+    private final int numStateStorePartitions = 2;
 
     @Before
     public void before() {
         final StateStoreProviderStub theStoreProvider = new StateStoreProviderStub(false);
-        theStoreProvider.addStore(keyValueStore, new NoOpReadOnlyStore<>());
-        theStoreProvider.addStore(windowStore, new NoOpWindowStore());
+        for (int partition = 0; partition < numStateStorePartitions; partition++) {
+            theStoreProvider.addStore(keyValueStore, partition, new NoOpReadOnlyStore<>());
+            theStoreProvider.addStore(windowStore, partition, new NoOpWindowStore());
+        }
         globalStateStores = new HashMap<>();
         storeProvider =
             new QueryableStoreProvider(
-                    Collections.<StateStoreProvider>singletonList(theStoreProvider), new GlobalStateStoreProvider(globalStateStores));
+                Collections.singletonList(theStoreProvider),
+                new GlobalStateStoreProvider(globalStateStores)
+            );
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionIfKVStoreDoesntExist() {
-        storeProvider.getStore("not-a-store", QueryableStoreTypes.keyValueStore());
+        assertThrows(InvalidStateStoreException.class, () -> storeProvider.getStore(
+            StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.keyValueStore())).get("1"));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionIfWindowStoreDoesntExist() {
-        storeProvider.getStore("not-a-store", QueryableStoreTypes.windowStore());
+        assertThrows(InvalidStateStoreException.class, () -> storeProvider.getStore(
+            StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.windowStore())).fetch("1", System.currentTimeMillis()));
     }
 
     @Test
     public void shouldReturnKVStoreWhenItExists() {
-        assertNotNull(storeProvider.getStore(keyValueStore, QueryableStoreTypes.keyValueStore()));
+        assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())));
     }
 
     @Test
     public void shouldReturnWindowStoreWhenItExists() {
-        assertNotNull(storeProvider.getStore(windowStore, QueryableStoreTypes.windowStore()));
+        assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType(windowStore, QueryableStoreTypes.windowStore())));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionWhenLookingForWindowStoreWithDifferentType() {
-        storeProvider.getStore(windowStore, QueryableStoreTypes.keyValueStore());
+        assertThrows(InvalidStateStoreException.class, () -> storeProvider.getStore(StoreQueryParameters.fromNameAndType(windowStore,
+            QueryableStoreTypes.keyValueStore())).get("1"));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() {
-        storeProvider.getStore(keyValueStore, QueryableStoreTypes.windowStore());
+        assertThrows(InvalidStateStoreException.class, () -> storeProvider.getStore(StoreQueryParameters.fromNameAndType(keyValueStore,
+            QueryableStoreTypes.windowStore())).fetch("1", System.currentTimeMillis()));
     }
 
     @Test
     public void shouldFindGlobalStores() {
         globalStateStores.put("global", new NoOpReadOnlyStore<>());
-        assertNotNull(storeProvider.getStore("global", QueryableStoreTypes.keyValueStore()));
+        assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType("global", QueryableStoreTypes.keyValueStore())));
     }
 
+    @Test
+    public void shouldReturnKVStoreWithPartitionWhenItExists() {
+        assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore()).withPartition(numStateStorePartitions - 1)));
+    }
 
+    @Test
+    public void shouldThrowExceptionWhenKVStoreWithPartitionDoesntExists() {
+        final int partition = numStateStorePartitions + 1;
+        final InvalidStateStoreException thrown = assertThrows(InvalidStateStoreException.class, () ->
+                storeProvider.getStore(
+                        StoreQueryParameters
+                                .fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())
+                                .withPartition(partition)).get("1")
+        );
+        assertThat(thrown.getMessage(), equalTo(String.format("The specified partition %d for store %s does not exist.", partition, keyValueStore)));
+    }
+
+    @Test
+    public void shouldReturnWindowStoreWithPartitionWhenItExists() {
+        assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType(windowStore, QueryableStoreTypes.windowStore()).withPartition(numStateStorePartitions - 1)));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenWindowStoreWithPartitionDoesntExists() {
+        final int partition = numStateStorePartitions + 1;
+        final InvalidStateStoreException thrown = assertThrows(InvalidStateStoreException.class, () ->
+                storeProvider.getStore(
+                        StoreQueryParameters
+                                .fromNameAndType(windowStore, QueryableStoreTypes.windowStore())
+                                .withPartition(partition)).fetch("1", System.currentTimeMillis())
+        );
+        assertThat(thrown.getMessage(), equalTo(String.format("The specified partition %d for store %s does not exist.", partition, windowStore)));
+    }
 }
