@@ -19,6 +19,7 @@ package kafka.tools
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
+
 import joptsimple.OptionException
 import kafka.network.SocketServer
 import kafka.raft.{KafkaRaftManager, RaftManager}
@@ -35,8 +36,9 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
-import org.apache.kafka.raft.BatchReader.Batch
-import org.apache.kafka.raft.{BatchReader, RaftClient, RaftConfig, RecordSerde}
+import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
+import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.snapshot.SnapshotReader
 
 import scala.jdk.CollectionConverters._
 
@@ -150,6 +152,7 @@ class TestRaftServer(
     case class HandleClaim(epoch: Int) extends RaftEvent
     case object HandleResign extends RaftEvent
     case class HandleCommit(reader: BatchReader[Array[Byte]]) extends RaftEvent
+    case class HandleSnapshot(reader: SnapshotReader[Array[Byte]]) extends RaftEvent
     case object Shutdown extends RaftEvent
 
     private val eventQueue = new LinkedBlockingDeque[RaftEvent]()
@@ -163,16 +166,20 @@ class TestRaftServer(
 
     raftManager.register(this)
 
-    override def handleClaim(epoch: Int): Unit = {
-      eventQueue.offer(HandleClaim(epoch))
-    }
-
-    override def handleResign(epoch: Int): Unit = {
-      eventQueue.offer(HandleResign)
+    override def handleLeaderChange(newLeaderAndEpoch: LeaderAndEpoch): Unit = {
+      if (newLeaderAndEpoch.isLeader(config.nodeId)) {
+        eventQueue.offer(HandleClaim(newLeaderAndEpoch.epoch))
+      } else if (claimedEpoch.isDefined) {
+        eventQueue.offer(HandleResign)
+      }
     }
 
     override def handleCommit(reader: BatchReader[Array[Byte]]): Unit = {
       eventQueue.offer(HandleCommit(reader))
+    }
+
+    override def handleSnapshot(reader: SnapshotReader[Array[Byte]]): Unit = {
+      eventQueue.offer(HandleSnapshot(reader))
     }
 
     override def initiateShutdown(): Boolean = {
@@ -226,7 +233,11 @@ class TestRaftServer(
             reader.close()
           }
 
-        case _ =>
+        case HandleSnapshot(reader) =>
+          // Ignore snapshots; only interested in records appended by this leader
+          reader.close()
+
+        case Shutdown => // Ignore shutdown command
       }
     }
 

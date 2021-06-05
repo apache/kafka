@@ -66,8 +66,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     @Override
     public String getDisplayName(int invocationIndex) {
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
-            .map(Object::toString)
-            .collect(Collectors.joining(", "));
+                .map(Object::toString)
+                .collect(Collectors.joining(", "));
         return String.format("[%d] Type=Raft, %s", invocationIndex, clusterDesc);
     }
 
@@ -75,10 +75,14 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     public List<Extension> getAdditionalExtensions() {
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
-                KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(
-                    new TestKitNodes.Builder().
+                TestKitNodes nodes = new TestKitNodes.Builder().
                         setNumBrokerNodes(clusterConfig.numBrokers()).
-                        setNumControllerNodes(clusterConfig.numControllers()).build());
+                        setNumControllerNodes(clusterConfig.numControllers()).build();
+                nodes.brokerNodes().forEach((brokerId, brokerNode) -> {
+                    clusterConfig.brokerServerProperties(brokerId).forEach(
+                            (key, value) -> brokerNode.propertyOverrides().put(key.toString(), value.toString()));
+                });
+                KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
 
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach((key, value) -> builder.setConfigProp(key.toString(), value.toString()));
@@ -191,6 +195,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     throw new RuntimeException("Failed to stop Raft server", e);
                 }
             }
+        }
+
+        @Override
+        public void rollingBrokerRestart() {
+            throw new UnsupportedOperationException("Restarting Raft servers is not yet supported.");
         }
     }
 }

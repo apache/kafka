@@ -22,15 +22,9 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.V
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
-import org.powermock.modules.junit4.PowerMockRunnerDelegate;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 
@@ -47,12 +41,10 @@ import static org.powermock.api.easymock.PowerMock.replay;
 import static org.powermock.api.easymock.PowerMock.verify;
 
 @RunWith(PowerMockRunner.class)
-@PowerMockRunnerDelegate(Parameterized.class)
 @PrepareForTest({StreamsMetricsImpl.class, Sensor.class})
 public class ThreadMetricsTest {
 
     private static final String THREAD_ID = "thread-id";
-    private static final String THREAD_LEVEL_GROUP_0100_TO_24 = "stream-metrics";
     private static final String THREAD_LEVEL_GROUP = "stream-thread-metrics";
     private static final String TASK_LEVEL_GROUP = "stream-task-metrics";
 
@@ -60,23 +52,9 @@ public class ThreadMetricsTest {
     private final StreamsMetricsImpl streamsMetrics = createMock(StreamsMetricsImpl.class);
     private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
 
-    @Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {
-            {Version.LATEST, THREAD_LEVEL_GROUP},
-            {Version.FROM_0100_TO_24, THREAD_LEVEL_GROUP_0100_TO_24}
-        });
-    }
-
-    @Parameter
-    public Version builtInMetricsVersion;
-
-    @Parameter(1)
-    public String threadLevelGroup;
-
     @Before
     public void setUp() {
-        expect(streamsMetrics.version()).andReturn(builtInMetricsVersion).anyTimes();
+        expect(streamsMetrics.version()).andStubReturn(Version.LATEST);
         mockStatic(StreamsMetricsImpl.class);
     }
 
@@ -88,7 +66,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addValueMetricToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             ratioDescription
@@ -110,7 +88,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             avgDescription,
@@ -133,7 +111,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operationLatency,
             avgLatencyDescription,
@@ -157,7 +135,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             rateDescription,
@@ -179,7 +157,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addValueMetricToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             ratioDescription
@@ -201,7 +179,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             avgDescription,
@@ -227,7 +205,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             rateDescription,
@@ -235,7 +213,7 @@ public class ThreadMetricsTest {
         );
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operationLatency,
             avgLatencyDescription,
@@ -261,7 +239,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             rateDescription,
@@ -269,7 +247,7 @@ public class ThreadMetricsTest {
         );
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operationLatency,
             avgLatencyDescription,
@@ -290,7 +268,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addValueMetricToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             ratioDescription
@@ -306,15 +284,10 @@ public class ThreadMetricsTest {
     @Test
     public void shouldGetCommitOverTasksSensor() {
         final String operation = "commit";
-        final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
         final String totalDescription =
             "The total number of calls to commit over all tasks assigned to one stream thread";
         final String rateDescription =
             "The average per-second number of calls to commit over all tasks assigned to one stream thread";
-        final String avgLatencyDescription =
-            "The average commit latency over all tasks assigned to one stream thread";
-        final String maxLatencyDescription =
-            "The maximum commit latency over all tasks assigned to one stream thread";
         expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.DEBUG)).andReturn(expectedSensor);
         expect(streamsMetrics.taskLevelTagMap(THREAD_ID, ROLLUP_VALUE)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
@@ -345,7 +318,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             rateDescription,
@@ -353,7 +326,7 @@ public class ThreadMetricsTest {
         );
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operationLatency,
             avgLatencyDescription,
@@ -375,7 +348,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addValueMetricToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             ratioDescription
@@ -398,7 +371,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             rateDescription,
@@ -422,7 +395,7 @@ public class ThreadMetricsTest {
 
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             rateDescription,
@@ -446,7 +419,7 @@ public class ThreadMetricsTest {
         expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            threadLevelGroup,
+            THREAD_LEVEL_GROUP,
             tagMap,
             operation,
             rateDescription,

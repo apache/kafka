@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -222,6 +223,10 @@ public class QuorumState {
         return localId.orElseThrow(() -> new IllegalStateException("Required local id is not present"));
     }
 
+    public OptionalInt localId() {
+        return localId;
+    }
+
     public int epoch() {
         return state.epoch();
     }
@@ -422,7 +427,7 @@ public class QuorumState {
         ));
     }
 
-    public void transitionToLeader(long epochStartOffset) throws IOException {
+    public <T> LeaderState<T> transitionToLeader(long epochStartOffset, BatchAccumulator<T> accumulator) throws IOException {
         if (isObserver()) {
             throw new IllegalStateException("Cannot transition to Leader since the local broker.id="  + localId +
                 " is not one of the voters " + voters);
@@ -445,14 +450,17 @@ public class QuorumState {
         // could address this problem by decoupling the local high watermark, but
         // we typically expect the state machine to be caught up anyway.
 
-        transitionTo(new LeaderState(
+        LeaderState<T> state = new LeaderState<>(
             localIdOrThrow(),
             epoch(),
             epochStartOffset,
             voters,
             candidateState.grantingVoters(),
+            accumulator,
             logContext
-        ));
+        );
+        transitionTo(state);
+        return state;
     }
 
     private void transitionTo(EpochState state) throws IOException {
@@ -493,9 +501,10 @@ public class QuorumState {
         throw new IllegalStateException("Expected to be Unattached, but current state is " + state);
     }
 
-    public LeaderState leaderStateOrThrow() {
+    @SuppressWarnings("unchecked")
+    public <T> LeaderState<T> leaderStateOrThrow() {
         if (isLeader())
-            return (LeaderState) state;
+            return (LeaderState<T>) state;
         throw new IllegalStateException("Expected to be Leader, but current state is " + state);
     }
 

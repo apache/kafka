@@ -29,6 +29,7 @@ public class StreamsEosTest {
      *  args ::= kafka propFileName command
      *  command := "run" | "process" | "verify"
      */
+    @SuppressWarnings("deprecation")
     public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsEosTest are expecting two parameters: propFile, command; but only see " + args.length + " parameter");
@@ -49,9 +50,11 @@ public class StreamsEosTest {
 
         if ("process".equals(command) || "process-complex".equals(command)) {
             if (!StreamsConfig.EXACTLY_ONCE.equals(processingGuarantee) &&
-                !StreamsConfig.EXACTLY_ONCE_BETA.equals(processingGuarantee)) {
+                !StreamsConfig.EXACTLY_ONCE_BETA.equals(processingGuarantee) &&
+                !StreamsConfig.EXACTLY_ONCE_V2.equals(processingGuarantee)) {
 
-                System.err.println("processingGuarantee must be either " + StreamsConfig.EXACTLY_ONCE + " or " + StreamsConfig.EXACTLY_ONCE_BETA);
+                System.err.println("processingGuarantee must be either " + StreamsConfig.EXACTLY_ONCE + " or " +
+                                       StreamsConfig.EXACTLY_ONCE_BETA + " or " + StreamsConfig.EXACTLY_ONCE_V2);
                 Exit.exit(1);
             }
         }

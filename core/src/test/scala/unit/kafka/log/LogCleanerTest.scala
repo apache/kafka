@@ -73,7 +73,7 @@ class LogCleanerTest {
     // append messages to the log until we have four segments
     while(log.numberOfSegments < 4)
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
-    val keysFound = LogTest.keysInLog(log)
+    val keysFound = LogTestUtils.keysInLog(log)
     assertEquals(0L until log.logEndOffset, keysFound)
 
     // pretend we have the following keys
@@ -86,8 +86,8 @@ class LogCleanerTest {
     val stats = new CleanerStats()
     val expectedBytesRead = segments.map(_.size).sum
     cleaner.cleanSegments(log, segments, map, 0L, stats, new CleanedTransactionMetadata)
-    val shouldRemain = LogTest.keysInLog(log).filter(!keys.contains(_))
-    assertEquals(shouldRemain, LogTest.keysInLog(log))
+    val shouldRemain = LogTestUtils.keysInLog(log).filter(!keys.contains(_))
+    assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
     assertEquals(expectedBytesRead, stats.bytesRead)
   }
 
@@ -106,8 +106,8 @@ class LogCleanerTest {
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val maxProducerIdExpirationMs = 60 * 60 * 1000
     val logSegments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion)
-    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
+    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs, time)
     val offsets = LogLoader.load(LoadLogParams(
       dir,
       topicPartition,
@@ -132,13 +132,12 @@ class LogCleanerTest {
                       scheduler = time.scheduler,
                       brokerTopicStats = new BrokerTopicStats,
                       time,
-                      maxProducerIdExpirationMs = maxProducerIdExpirationMs,
                       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
                       topicPartition = topicPartition,
                       leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
                       logDirFailureChannel = logDirFailureChannel,
-                      topicId = None,
+                      _topicId = None,
                       keepPartitionMetadataFile = true) {
       override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
         deleteStartLatch.countDown()
@@ -233,7 +232,7 @@ class LogCleanerTest {
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
     assertEquals(List(2, 5, 7), lastOffsetsPerBatchInLog(log))
     assertEquals(Map(pid1 -> 2, pid2 -> 2, pid3 -> 1), lastSequencesInLog(log))
-    assertEquals(List(2, 3, 1, 4), LogTest.keysInLog(log))
+    assertEquals(List(2, 3, 1, 4), LogTestUtils.keysInLog(log))
     assertEquals(List(1, 3, 6, 7), offsetsInLog(log))
 
     // we have to reload the log to validate that the cleaner maintained sequence numbers correctly
@@ -265,7 +264,7 @@ class LogCleanerTest {
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
     assertEquals(Map(pid1 -> 2, pid2 -> 2, pid3 -> 1, pid4 -> 0), lastSequencesInLog(log))
     assertEquals(List(2, 5, 7, 8), lastOffsetsPerBatchInLog(log))
-    assertEquals(List(3, 1, 4, 2), LogTest.keysInLog(log))
+    assertEquals(List(3, 1, 4, 2), LogTestUtils.keysInLog(log))
     assertEquals(List(3, 6, 7, 8), offsetsInLog(log))
 
     reloadLog()
@@ -303,7 +302,7 @@ class LogCleanerTest {
     log.roll()
     log.updateHighWatermark(log.activeSegment.baseOffset)
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
-    assertEquals(List(3, 2), LogTest.keysInLog(log))
+    assertEquals(List(3, 2), LogTestUtils.keysInLog(log))
     assertEquals(List(3, 6, 7, 8, 9), offsetsInLog(log))
 
     // ensure the transaction index is still correct
@@ -344,7 +343,7 @@ class LogCleanerTest {
     log.updateHighWatermark(log.activeSegment.baseOffset)
     // we have only cleaned the records in the first segment
     val dirtyOffset = cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))._1
-    assertEquals(List(2, 3, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10), LogTest.keysInLog(log))
+    assertEquals(List(2, 3, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10), LogTestUtils.keysInLog(log))
 
     log.roll()
 
@@ -355,7 +354,7 @@ class LogCleanerTest {
     log.updateHighWatermark(log.activeSegment.baseOffset)
     // finally only the keys from pid3 should remain
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, dirtyOffset, log.activeSegment.baseOffset))
-    assertEquals(List(2, 3, 6, 7, 8, 9, 11, 12), LogTest.keysInLog(log))
+    assertEquals(List(2, 3, 6, 7, 8, 9, 11, 12), LogTestUtils.keysInLog(log))
   }
 
   @Test
@@ -380,7 +379,7 @@ class LogCleanerTest {
     log.updateHighWatermark(log.activeSegment.baseOffset)
     // cannot remove the marker in this pass because there are still valid records
     var dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(1, 3, 2), LogTest.keysInLog(log))
+    assertEquals(List(1, 3, 2), LogTestUtils.keysInLog(log))
     assertEquals(List(0, 2, 3, 4, 5), offsetsInLog(log))
 
     appendProducer(Seq(1, 3))
@@ -389,17 +388,17 @@ class LogCleanerTest {
 
     // the first cleaning preserves the commit marker (at offset 3) since there were still records for the transaction
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(2, 1, 3), LogTest.keysInLog(log))
+    assertEquals(List(2, 1, 3), LogTestUtils.keysInLog(log))
     assertEquals(List(3, 4, 5, 6, 7, 8), offsetsInLog(log))
 
     // delete horizon forced to 0 to verify marker is not removed early
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), deleteHorizonMs = 0L)._1
-    assertEquals(List(2, 1, 3), LogTest.keysInLog(log))
+    assertEquals(List(2, 1, 3), LogTestUtils.keysInLog(log))
     assertEquals(List(3, 4, 5, 6, 7, 8), offsetsInLog(log))
 
     // clean again with large delete horizon and verify the marker is removed
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(2, 1, 3), LogTest.keysInLog(log))
+    assertEquals(List(2, 1, 3), LogTestUtils.keysInLog(log))
     assertEquals(List(4, 5, 6, 7, 8), offsetsInLog(log))
   }
 
@@ -429,11 +428,11 @@ class LogCleanerTest {
 
     log.updateHighWatermark(log.activeSegment.baseOffset)
     cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)
-    assertEquals(List(2), LogTest.keysInLog(log))
+    assertEquals(List(2), LogTestUtils.keysInLog(log))
     assertEquals(List(1, 3, 4), offsetsInLog(log))
 
     cleaner.doClean(LogToClean(tp, log, log.logStartOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)
-    assertEquals(List(2), LogTest.keysInLog(log))
+    assertEquals(List(2), LogTestUtils.keysInLog(log))
     assertEquals(List(3, 4), offsetsInLog(log))
   }
 
@@ -470,14 +469,14 @@ class LogCleanerTest {
     // first time through the records are removed
     // Expected State: [{Producer1: EmptyBatch}, {Producer2: EmptyBatch}, {Producer2: Commit}, {2}, {3}, {Producer1: Commit}]
     var dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(2, 3), LogTest.keysInLog(log))
+    assertEquals(List(2, 3), LogTestUtils.keysInLog(log))
     assertEquals(List(4, 5, 6, 7), offsetsInLog(log))
     assertEquals(List(1, 3, 4, 5, 6, 7), lastOffsetsPerBatchInLog(log))
 
     // the empty batch remains if cleaned again because it still holds the last sequence
     // Expected State: [{Producer1: EmptyBatch}, {Producer2: EmptyBatch}, {Producer2: Commit}, {2}, {3}, {Producer1: Commit}]
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(2, 3), LogTest.keysInLog(log))
+    assertEquals(List(2, 3), LogTestUtils.keysInLog(log))
     assertEquals(List(4, 5, 6, 7), offsetsInLog(log))
     assertEquals(List(1, 3, 4, 5, 6, 7), lastOffsetsPerBatchInLog(log))
 
@@ -491,13 +490,13 @@ class LogCleanerTest {
 
     // Expected State: [{Producer1: EmptyBatch}, {Producer2: Commit}, {2}, {3}, {Producer1: Commit}, {Producer2: 1}, {Producer2: Commit}]
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(2, 3, 1), LogTest.keysInLog(log))
+    assertEquals(List(2, 3, 1), LogTestUtils.keysInLog(log))
     assertEquals(List(4, 5, 6, 7, 8, 9), offsetsInLog(log))
     assertEquals(List(1, 4, 5, 6, 7, 8, 9), lastOffsetsPerBatchInLog(log))
 
     // Expected State: [{Producer1: EmptyBatch}, {2}, {3}, {Producer1: Commit}, {Producer2: 1}, {Producer2: Commit}]
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(2, 3, 1), LogTest.keysInLog(log))
+    assertEquals(List(2, 3, 1), LogTestUtils.keysInLog(log))
     assertEquals(List(5, 6, 7, 8, 9), offsetsInLog(log))
     assertEquals(List(1, 5, 6, 7, 8, 9), lastOffsetsPerBatchInLog(log))
   }
@@ -522,7 +521,7 @@ class LogCleanerTest {
     // first time through the control batch is retained as an empty batch
     // Expected State: [{Producer1: EmptyBatch}], [{2}, {3}]
     var dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(2, 3), LogTest.keysInLog(log))
+    assertEquals(List(2, 3), LogTestUtils.keysInLog(log))
     assertEquals(List(1, 2), offsetsInLog(log))
     assertEquals(List(0, 1, 2), lastOffsetsPerBatchInLog(log))
     // We retain the empty batch, so the logStartOffset stays the same.
@@ -531,7 +530,7 @@ class LogCleanerTest {
     // the empty control batch does not cause an exception when cleaned
     // Expected State: [{Producer1: EmptyBatch}], [{2}, {3}]
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(2, 3), LogTest.keysInLog(log))
+    assertEquals(List(2, 3), LogTestUtils.keysInLog(log))
     assertEquals(List(1, 2), offsetsInLog(log))
     assertEquals(List(0, 1, 2), lastOffsetsPerBatchInLog(log))
     // We retain the empty batch, so the logStartOffset stays the same.
@@ -613,12 +612,12 @@ class LogCleanerTest {
     log.updateHighWatermark(log.activeSegment.baseOffset)
     // delete horizon set to 0 to verify marker is not removed early
     val dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), deleteHorizonMs = 0L)._1
-    assertEquals(List(3), LogTest.keysInLog(log))
+    assertEquals(List(3), LogTestUtils.keysInLog(log))
     assertEquals(List(3, 4, 5), offsetsInLog(log))
 
     // clean again with large delete horizon and verify the marker is removed
     cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)
-    assertEquals(List(3), LogTest.keysInLog(log))
+    assertEquals(List(3), LogTestUtils.keysInLog(log))
     assertEquals(List(4, 5), offsetsInLog(log))
   }
 
@@ -694,14 +693,14 @@ class LogCleanerTest {
     // first time through the records are removed
     var dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
     assertAbortedTransactionIndexed()
-    assertEquals(List(), LogTest.keysInLog(log))
+    assertEquals(List(), LogTestUtils.keysInLog(log))
     assertEquals(List(2), offsetsInLog(log)) // abort marker is retained
     assertEquals(List(1, 2), lastOffsetsPerBatchInLog(log)) // empty batch is retained
 
     // the empty batch remains if cleaned again because it still holds the last sequence
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
     assertAbortedTransactionIndexed()
-    assertEquals(List(), LogTest.keysInLog(log))
+    assertEquals(List(), LogTestUtils.keysInLog(log))
     assertEquals(List(2), offsetsInLog(log)) // abort marker is still retained
     assertEquals(List(1, 2), lastOffsetsPerBatchInLog(log)) // empty batch is retained
 
@@ -711,12 +710,12 @@ class LogCleanerTest {
 
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
     assertAbortedTransactionIndexed()
-    assertEquals(List(1), LogTest.keysInLog(log))
+    assertEquals(List(1), LogTestUtils.keysInLog(log))
     assertEquals(List(2, 3), offsetsInLog(log)) // abort marker is not yet gone because we read the empty batch
     assertEquals(List(2, 3), lastOffsetsPerBatchInLog(log)) // but we do not preserve the empty batch
 
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(1), LogTest.keysInLog(log))
+    assertEquals(List(1), LogTestUtils.keysInLog(log))
     assertEquals(List(3), offsetsInLog(log)) // abort marker is gone
     assertEquals(List(3), lastOffsetsPerBatchInLog(log))
 
@@ -740,7 +739,7 @@ class LogCleanerTest {
 
     while(log.numberOfSegments < 2)
       log.appendAsLeader(record(log.logEndOffset.toInt, Array.fill(largeMessageSize)(0: Byte)), leaderEpoch = 0)
-    val keysFound = LogTest.keysInLog(log)
+    val keysFound = LogTestUtils.keysInLog(log)
     assertEquals(0L until log.logEndOffset, keysFound)
 
     // pretend we have the following keys
@@ -751,8 +750,8 @@ class LogCleanerTest {
     // clean the log
     val stats = new CleanerStats()
     cleaner.cleanSegments(log, Seq(log.logSegments.head), map, 0L, stats, new CleanedTransactionMetadata)
-    val shouldRemain = LogTest.keysInLog(log).filter(!keys.contains(_))
-    assertEquals(shouldRemain, LogTest.keysInLog(log))
+    val shouldRemain = LogTestUtils.keysInLog(log).filter(!keys.contains(_))
+    assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
   }
 
   /**
@@ -764,8 +763,8 @@ class LogCleanerTest {
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
     cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats, new CleanedTransactionMetadata)
-    val shouldRemain = LogTest.keysInLog(log).filter(k => !offsetMap.map.containsKey(k.toString))
-    assertEquals(shouldRemain, LogTest.keysInLog(log))
+    val shouldRemain = LogTestUtils.keysInLog(log).filter(k => !offsetMap.map.containsKey(k.toString))
+    assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
   }
 
   /**
@@ -812,7 +811,7 @@ class LogCleanerTest {
 
     while(log.numberOfSegments < 2)
       log.appendAsLeader(record(log.logEndOffset.toInt, Array.fill(largeMessageSize)(0: Byte)), leaderEpoch = 0)
-    val keysFound = LogTest.keysInLog(log)
+    val keysFound = LogTestUtils.keysInLog(log)
     assertEquals(0L until log.logEndOffset, keysFound)
 
     // Decrease the log's max message size
@@ -850,7 +849,7 @@ class LogCleanerTest {
 
     log.updateHighWatermark(log.activeSegment.baseOffset)
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
-    val keys = LogTest.keysInLog(log).toSet
+    val keys = LogTestUtils.keysInLog(log).toSet
     assertTrue((0 until leo.toInt by 2).forall(!keys.contains(_)), "None of the keys we deleted should still exist.")
   }
 
@@ -904,7 +903,7 @@ class LogCleanerTest {
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
     assertEquals(List(1, 3, 4), lastOffsetsPerBatchInLog(log))
     assertEquals(Map(1L -> 0, 2L -> 1, 3L -> 0), lastSequencesInLog(log))
-    assertEquals(List(0, 1), LogTest.keysInLog(log))
+    assertEquals(List(0, 1), LogTestUtils.keysInLog(log))
     assertEquals(List(3, 4), offsetsInLog(log))
   }
 
@@ -928,7 +927,7 @@ class LogCleanerTest {
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
     assertEquals(List(2, 3), lastOffsetsPerBatchInLog(log))
     assertEquals(Map(producerId -> 2), lastSequencesInLog(log))
-    assertEquals(List(), LogTest.keysInLog(log))
+    assertEquals(List(), LogTestUtils.keysInLog(log))
     assertEquals(List(3), offsetsInLog(log))
 
     // Append a new entry from the producer and verify that the empty batch is cleaned up
@@ -938,7 +937,7 @@ class LogCleanerTest {
 
     assertEquals(List(3, 5), lastOffsetsPerBatchInLog(log))
     assertEquals(Map(producerId -> 4), lastSequencesInLog(log))
-    assertEquals(List(1, 5), LogTest.keysInLog(log))
+    assertEquals(List(1, 5), LogTestUtils.keysInLog(log))
     assertEquals(List(3, 4, 5), offsetsInLog(log))
   }
 
@@ -962,16 +961,16 @@ class LogCleanerTest {
     log.updateHighWatermark(log.activeSegment.baseOffset)
     // clean the log with only one message removed
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
-    assertEquals(List(1,0,1,0), LogTest.keysInLog(log))
+    assertEquals(List(1,0,1,0), LogTestUtils.keysInLog(log))
     assertEquals(List(1,2,3,4), offsetsInLog(log))
 
     // continue to make progress, even though we can only clean one message at a time
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 3, log.activeSegment.baseOffset))
-    assertEquals(List(0,1,0), LogTest.keysInLog(log))
+    assertEquals(List(0,1,0), LogTestUtils.keysInLog(log))
     assertEquals(List(2,3,4), offsetsInLog(log))
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 4, log.activeSegment.baseOffset))
-    assertEquals(List(1,0), LogTest.keysInLog(log))
+    assertEquals(List(1,0), LogTestUtils.keysInLog(log))
     assertEquals(List(3,4), offsetsInLog(log))
   }
 
@@ -1132,7 +1131,7 @@ class LogCleanerTest {
     while(log.numberOfSegments < 4)
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
 
-    val keys = LogTest.keysInLog(log)
+    val keys = LogTestUtils.keysInLog(log)
     val map = new FakeOffsetMap(Int.MaxValue)
     keys.foreach(k => map.put(key(k), Long.MaxValue))
     assertThrows(classOf[LogCleaningAbortedException], () =>
@@ -1330,15 +1329,15 @@ class LogCleanerTest {
     logProps.put(LogConfig.FileDeleteDelayMsProp, 1000: java.lang.Integer)
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
-    LogTest.initializeLogDirWithOverflowedSegment(dir)
+    LogTestUtils.initializeLogDirWithOverflowedSegment(dir)
 
     val log = makeLog(config = config, recoveryPoint = Long.MaxValue)
-    val segmentWithOverflow = LogTest.firstOverflowSegment(log).getOrElse {
+    val segmentWithOverflow = LogTestUtils.firstOverflowSegment(log).getOrElse {
       throw new AssertionError("Failed to create log with a segment which has overflowed offsets")
     }
 
     val numSegmentsInitial = log.logSegments.size
-    val allKeys = LogTest.keysInLog(log).toList
+    val allKeys = LogTestUtils.keysInLog(log).toList
     val expectedKeysAfterCleaning = new mutable.ArrayBuffer[Long]()
 
     // pretend we want to clean every alternate key
@@ -1354,15 +1353,15 @@ class LogCleanerTest {
         new CleanedTransactionMetadata)
     )
     assertEquals(numSegmentsInitial + 1, log.logSegments.size)
-    assertEquals(allKeys, LogTest.keysInLog(log))
-    assertFalse(LogTest.hasOffsetOverflow(log))
+    assertEquals(allKeys, LogTestUtils.keysInLog(log))
+    assertFalse(LogTestUtils.hasOffsetOverflow(log))
 
     // Clean each segment now that split is complete.
     for (segmentToClean <- log.logSegments)
       cleaner.cleanSegments(log, List(segmentToClean), offsetMap, 0L, new CleanerStats(),
         new CleanedTransactionMetadata)
-    assertEquals(expectedKeysAfterCleaning, LogTest.keysInLog(log))
-    assertFalse(LogTest.hasOffsetOverflow(log))
+    assertEquals(expectedKeysAfterCleaning, LogTestUtils.keysInLog(log))
+    assertFalse(LogTestUtils.hasOffsetOverflow(log))
     log.close()
   }
 
@@ -1392,7 +1391,7 @@ class LogCleanerTest {
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
       messageCount += 1
     }
-    val allKeys = LogTest.keysInLog(log)
+    val allKeys = LogTestUtils.keysInLog(log)
 
     // pretend we have odd-numbered keys
     val offsetMap = new FakeOffsetMap(Int.MaxValue)
@@ -1404,7 +1403,7 @@ class LogCleanerTest {
       new CleanedTransactionMetadata)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
-    var cleanedKeys = LogTest.keysInLog(log)
+    var cleanedKeys = LogTestUtils.keysInLog(log)
     log.close()
 
     // 1) Simulate recovery just after .cleaned file is created, before rename to .swap
@@ -1420,7 +1419,7 @@ class LogCleanerTest {
       new CleanedTransactionMetadata)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
-    cleanedKeys = LogTest.keysInLog(log)
+    cleanedKeys = LogTestUtils.keysInLog(log)
     log.close()
 
     // 2) Simulate recovery just after swap file is created, before old segment files are
@@ -1442,7 +1441,7 @@ class LogCleanerTest {
       new CleanedTransactionMetadata)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
-    cleanedKeys = LogTest.keysInLog(log)
+    cleanedKeys = LogTestUtils.keysInLog(log)
 
     // 3) Simulate recovery after swap file is created and old segments files are renamed
     //    to .deleted. Clean operation is resumed during recovery.
@@ -1460,7 +1459,7 @@ class LogCleanerTest {
       new CleanedTransactionMetadata)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
-    cleanedKeys = LogTest.keysInLog(log)
+    cleanedKeys = LogTestUtils.keysInLog(log)
     log.close()
 
     // 4) Simulate recovery after swap is complete, but async deletion
@@ -1522,7 +1521,7 @@ class LogCleanerTest {
     // Number of messages with the same key. Hard-coded so one key fills two segments.
     val numMessagesPerKey = 8
     var (log, config) = createLogWithDuplicateKeys(numMessagesPerKey)
-    val allKeys = LogTest.keysInLog(log)
+    val allKeys = LogTestUtils.keysInLog(log)
 
     // Clean keys 1-8
     val offsetMap = new FakeOffsetMap(Int.MaxValue)
@@ -1563,7 +1562,7 @@ class LogCleanerTest {
     // 3) Subsequent successful cleaning of the first three segments gives expected result
     cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, offsetMap, 0L, new CleanerStats(),
       new CleanedTransactionMetadata)
-    cleanedKeys = LogTest.keysInLog(log)
+    cleanedKeys = LogTestUtils.keysInLog(log)
     log.close()
     log = recoverAndCheck(config, cleanedKeys)
     // [0123, 4444, 5555, 5555, 6666, 6666, 7777, 7777, 8888, 8888, 9]
@@ -1635,7 +1634,7 @@ class LogCleanerTest {
       new CleanedTransactionMetadata)
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
-    val cleanedKeys = LogTest.keysInLog(log)
+    val cleanedKeys = LogTestUtils.keysInLog(log)
     log.close()
     cleanedKeys
   }

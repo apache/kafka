@@ -29,9 +29,12 @@ public class UsableBroker {
 
     private final Optional<String> rack;
 
-    public UsableBroker(int id, Optional<String> rack) {
+    private final boolean fenced;
+
+    public UsableBroker(int id, Optional<String> rack, boolean fenced) {
         this.id = id;
         this.rack = rack;
+        this.fenced = fenced;
     }
 
     public int id() {
@@ -42,20 +45,24 @@ public class UsableBroker {
         return rack;
     }
 
+    public boolean fenced() {
+        return fenced;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof UsableBroker)) return false;
         UsableBroker other = (UsableBroker) o;
-        return other.id == id && other.rack.equals(rack);
+        return other.id == id && other.rack.equals(rack) && other.fenced == fenced;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, rack);
+        return Objects.hash(id, rack, fenced);
     }
 
     @Override
     public String toString() {
-        return "UsableBroker(id=" + id + ", rack=" + rack + ")";
+        return "UsableBroker(id=" + id + ", rack=" + rack + ", fenced=" + fenced + ")";
     }
 }

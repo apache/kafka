@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
@@ -151,5 +152,35 @@ final class StateManagerUtil {
         if (exception != null) {
             throw exception;
         }
+    }
+
+    /**
+     *  Parse the task directory name (of the form topicGroupId_partition) and construct the TaskId with the
+     *  optional namedTopology (may be null)
+     *
+     *  @throws TaskIdFormatException if the taskIdStr is not a valid {@link TaskId}
+     */
+    static TaskId parseTaskDirectoryName(final String taskIdStr, final String namedTopology) {
+        final int index = taskIdStr.indexOf('_');
+        if (index <= 0 || index + 1 >= taskIdStr.length()) {
+            throw new TaskIdFormatException(taskIdStr);
+        }
+
+        try {
+            final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, index));
+            final int partition = Integer.parseInt(taskIdStr.substring(index + 1));
+
+            return new TaskId(topicGroupId, partition, namedTopology);
+        } catch (final Exception e) {
+            throw new TaskIdFormatException(taskIdStr);
+        }
+    }
+
+    /**
+     * @return The string representation of the subtopology and partition metadata, ie the task id string without
+     *         the named topology, which defines the innermost task directory name of this task's state
+     */
+    static String toTaskDirString(final TaskId taskId) {
+        return taskId.subtopology() + "_" + taskId.partition();
     }
 }

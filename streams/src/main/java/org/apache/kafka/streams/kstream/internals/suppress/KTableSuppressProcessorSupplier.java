@@ -69,12 +69,11 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
                 return new KTableValueGetter<K, V>() {
                     private TimeOrderedKeyValueBuffer<K, V> buffer;
 
-                    @SuppressWarnings("unchecked")
                     @Override
                     public void init(final ProcessorContext context) {
                         parentGetter.init(context);
                         // the main processor is responsible for the buffer's lifecycle
-                        buffer = requireNonNull((TimeOrderedKeyValueBuffer<K, V>) context.getStateStore(storeName));
+                        buffer = requireNonNull(context.getStateStore(storeName));
                     }
 
                     @Override
@@ -149,7 +148,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
                 internalProcessorContext.metrics()
             );
 
-            buffer = requireNonNull((TimeOrderedKeyValueBuffer<K, V>) context.getStateStore(storeName));
+            buffer = requireNonNull(context.getStateStore(storeName));
             buffer.setSerdesIfNull((Serde<K>) context.keySerde(), (Serde<V>) context.valueSerde());
         }
 

@@ -113,13 +113,6 @@ public interface TopologyDescription {
      * A source node of a topology.
      */
     interface Source extends Node {
-        /**
-         * The topic names this source node is reading from.
-         * @return comma separated list of topic names or pattern (as String)
-         * @deprecated use {@link #topicSet()} or {@link #topicPattern()} instead
-         */
-        @Deprecated
-        String topics();
 
         /**
          * The topic names this source node is reading from.

@@ -1128,10 +1128,6 @@ object TestUtils extends Logging {
       }
     }
 
-    override def clearPending(topicPartition: TopicPartition): Unit = {
-      inFlight.set(false);
-    }
-
     def completeIsrUpdate(newZkVersion: Int): Unit = {
       if (inFlight.compareAndSet(true, false)) {
         val item = isrUpdates.head

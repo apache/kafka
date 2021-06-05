@@ -49,8 +49,6 @@ trait AlterIsrManager {
   def shutdown(): Unit = {}
 
   def submit(alterIsrItem: AlterIsrItem): Boolean
-
-  def clearPending(topicPartition: TopicPartition): Unit
 }
 
 case class AlterIsrItem(topicPartition: TopicPartition,
@@ -132,10 +130,6 @@ class DefaultAlterIsrManager(
     val enqueued = unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null
     maybePropagateIsrChanges()
     enqueued
-  }
-
-  override def clearPending(topicPartition: TopicPartition): Unit = {
-    unsentIsrUpdates.remove(topicPartition)
   }
 
   private[server] def maybePropagateIsrChanges(): Unit = {
