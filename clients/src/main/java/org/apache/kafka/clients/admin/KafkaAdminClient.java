@@ -388,12 +388,6 @@ public class KafkaAdminClient extends AdminClient {
 
     private final long retryBackoffMs;
 
-
-    private enum ListOffsetRequestVersion {
-        V0AndAbove,
-        V7AndAbove
-    }
-
     /**
      * Get or create a list value from a map.
      *
@@ -4203,8 +4197,8 @@ public class KafkaAdminClient extends AdminClient {
 
         MetadataResponse mr = context.response().orElseThrow(() -> new IllegalStateException("No Metadata response"));
         List<Call> calls = new ArrayList<>();
-        // grouping topic partitions per leader/request version
-        Map<Node, Map<ListOffsetRequestVersion, Map<String, ListOffsetsTopic>>> leaders = new HashMap<>();
+        // grouping topic partitions per leader
+        Map<Node, Map<String, ListOffsetsTopic>> leaders = new HashMap<>();
 
         for (Map.Entry<TopicPartition, OffsetSpec> entry: topicPartitionOffsets.entrySet()) {
 
@@ -4216,13 +4210,8 @@ public class KafkaAdminClient extends AdminClient {
             if (!mr.errors().containsKey(tp.topic())) {
                 Node node = mr.cluster().leaderFor(tp);
                 if (node != null) {
-                    Map<ListOffsetRequestVersion, Map<String, ListOffsetsTopic>> leadersOnNode = leaders.computeIfAbsent(node, k -> new HashMap<>());
-
-                    ListOffsetRequestVersion requiredRequestVersion = offsetQuery == ListOffsetsRequest.MAX_TIMESTAMP
-                        ? ListOffsetRequestVersion.V7AndAbove :
-                        ListOffsetRequestVersion.V0AndAbove;
-                    Map<String, ListOffsetsTopic> requestVersionsOnLeader = leadersOnNode.computeIfAbsent(requiredRequestVersion, k -> new HashMap<>());
-                    ListOffsetsTopic topic = requestVersionsOnLeader.computeIfAbsent(tp.topic(), k -> new ListOffsetsTopic().setName(tp.topic()));
+                    Map<String, ListOffsetsTopic> leadersOnNode = leaders.computeIfAbsent(node, k -> new HashMap<>());
+                    ListOffsetsTopic topic = leadersOnNode.computeIfAbsent(tp.topic(), k -> new ListOffsetsTopic().setName(tp.topic()));
                     topic.partitions().add(new ListOffsetsPartition().setPartitionIndex(tp.partition()).setTimestamp(offsetQuery));
                 } else {
                     future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
@@ -4232,84 +4221,108 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
 
-        for (final Map.Entry<Node, Map<ListOffsetRequestVersion, Map<String, ListOffsetsTopic>>> versionedEntry : leaders.entrySet()) {
-            for (final Map.Entry<ListOffsetRequestVersion, Map<String, ListOffsetsTopic>> entry : versionedEntry.getValue().entrySet()) {
-                final int brokerId = versionedEntry.getKey().id();
+        for (final Map.Entry<Node, Map<String, ListOffsetsTopic>> entry : leaders.entrySet()) {
+            final int brokerId = entry.getKey().id();
 
-                calls.add(new Call("listOffsets on broker " + brokerId, context.deadline(), new ConstantNodeIdProvider(brokerId)) {
+            calls.add(new Call("listOffsets on broker " + brokerId, context.deadline(), new ConstantNodeIdProvider(brokerId)) {
 
-                    final List<ListOffsetsTopic> partitionsToQuery = new ArrayList<>(entry.getValue().values());
+                final List<ListOffsetsTopic> partitionsToQuery = new ArrayList<>(entry.getValue().values());
 
-                    @Override
-                    ListOffsetsRequest.Builder createRequest(int timeoutMs) {
-                        ListOffsetRequestVersion requestVersion = entry.getKey();
-                        if (requestVersion == ListOffsetRequestVersion.V7AndAbove) {
-                            return ListOffsetsRequest.Builder
-                                .forMaxTimestamp(context.options().isolationLevel())
-                                .setTargetTimes(partitionsToQuery);
-                        }
+                private boolean supportsMaxTimestamp = true;
+
+                @Override
+                ListOffsetsRequest.Builder createRequest(int timeoutMs) {
+                    if (supportsMaxTimestamp) {
+                        return ListOffsetsRequest.Builder
+                            .forMaxTimestamp(context.options().isolationLevel())
+                            .setTargetTimes(partitionsToQuery);
+                    } else {
+                        // we shouldn't request offsets for max timestamp partitions
+                        final List<ListOffsetsTopic> remainingPartitionsToQuery = new ArrayList<>();
+                        partitionsToQuery.stream().forEach(t ->
+                                remainingPartitionsToQuery.add(new ListOffsetsTopic()
+                                    .setName(t.name())
+                                    .setPartitions(t.partitions().stream()
+                                        .filter(p -> p.timestamp() != ListOffsetsRequest.MAX_TIMESTAMP)
+                                        .collect(Collectors.toList()))
+                                    ));
                         return ListOffsetsRequest.Builder
                             .forConsumer(true, context.options().isolationLevel())
-                            .setTargetTimes(partitionsToQuery);
+                            .setTargetTimes(remainingPartitionsToQuery);
                     }
+                }
 
-                    @Override
-                    void handleResponse(AbstractResponse abstractResponse) {
-                        ListOffsetsResponse response = (ListOffsetsResponse) abstractResponse;
-                        Map<TopicPartition, OffsetSpec> retryTopicPartitionOffsets = new HashMap<>();
+                @Override
+                void handleResponse(AbstractResponse abstractResponse) {
+                    ListOffsetsResponse response = (ListOffsetsResponse) abstractResponse;
+                    Map<TopicPartition, OffsetSpec> retryTopicPartitionOffsets = new HashMap<>();
 
-                        for (ListOffsetsTopicResponse topic : response.topics()) {
-                            for (ListOffsetsPartitionResponse partition : topic.partitions()) {
-                                TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
-                                KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
-                                Errors error = Errors.forCode(partition.errorCode());
-                                OffsetSpec offsetRequestSpec = topicPartitionOffsets.get(tp);
-                                if (offsetRequestSpec == null) {
-                                    log.warn("Server response mentioned unknown topic partition {}", tp);
-                                } else if (MetadataOperationContext.shouldRefreshMetadata(error)) {
-                                    retryTopicPartitionOffsets.put(tp, offsetRequestSpec);
-                                } else if (error == Errors.NONE) {
-                                    Optional<Integer> leaderEpoch = (partition.leaderEpoch() == ListOffsetsResponse.UNKNOWN_EPOCH)
+                    for (ListOffsetsTopicResponse topic : response.topics()) {
+                        for (ListOffsetsPartitionResponse partition : topic.partitions()) {
+                            TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
+                            KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
+                            Errors error = Errors.forCode(partition.errorCode());
+                            OffsetSpec offsetRequestSpec = topicPartitionOffsets.get(tp);
+                            if (offsetRequestSpec == null) {
+                                log.warn("Server response mentioned unknown topic partition {}", tp);
+                            } else if (MetadataOperationContext.shouldRefreshMetadata(error)) {
+                                retryTopicPartitionOffsets.put(tp, offsetRequestSpec);
+                            } else if (error == Errors.NONE) {
+                                Optional<Integer> leaderEpoch = (partition.leaderEpoch() == ListOffsetsResponse.UNKNOWN_EPOCH)
                                         ? Optional.empty()
                                         : Optional.of(partition.leaderEpoch());
-                                    future.complete(new ListOffsetsResultInfo(partition.offset(), partition.timestamp(), leaderEpoch));
-                                } else {
-                                    future.completeExceptionally(error.exception());
-                                }
+                                future.complete(new ListOffsetsResultInfo(partition.offset(), partition.timestamp(), leaderEpoch));
+                            } else {
+                                future.completeExceptionally(error.exception());
                             }
-                        }
-
-                        if (retryTopicPartitionOffsets.isEmpty()) {
-                            // The server should send back a response for every topic partition. But do a sanity check anyway.
-                            for (ListOffsetsTopic topic : partitionsToQuery) {
-                                for (ListOffsetsPartition partition : topic.partitions()) {
-                                    TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
-                                    ApiException error = new ApiException("The response from broker " + brokerId +
-                                        " did not contain a result for topic partition " + tp);
-                                    futures.get(tp).completeExceptionally(error);
-                                }
-                            }
-                        } else {
-                            Set<String> retryTopics = retryTopicPartitionOffsets.keySet().stream().map(
-                                TopicPartition::topic).collect(Collectors.toSet());
-                            MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> retryContext =
-                                new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), futures);
-                            rescheduleMetadataTask(retryContext, () -> getListOffsetsCalls(retryContext, retryTopicPartitionOffsets, futures));
                         }
                     }
 
-                    @Override
-                    void handleFailure(Throwable throwable) {
-                        for (ListOffsetsTopic topic : entry.getValue().values()) {
+                    if (retryTopicPartitionOffsets.isEmpty()) {
+                        // The server should send back a response for every topic partition. But do a sanity check anyway.
+                        for (ListOffsetsTopic topic : partitionsToQuery) {
                             for (ListOffsetsPartition partition : topic.partitions()) {
                                 TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
-                                KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
-                                future.completeExceptionally(throwable);
+                                // we don't retry MAX_TIMESTAMP requests if the broker doesn't support it so this may be why there was no response.
+                                ApiException error = !supportsMaxTimestamp && partition.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP ?
+                                    new UnsupportedVersionException("Broker " + brokerId + " does not support MAX_TIMESTAMP offset spec") :
+                                    new ApiException("The response from broker " + brokerId +
+                                        " did not contain a result for topic partition " + tp);
+                                futures.get(tp).completeExceptionally(error);
                             }
                         }
+                    } else {
+                        Set<String> retryTopics = retryTopicPartitionOffsets.keySet().stream().map(
+                            TopicPartition::topic).collect(Collectors.toSet());
+                        MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> retryContext =
+                            new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), futures);
+                        rescheduleMetadataTask(retryContext, () -> getListOffsetsCalls(retryContext, retryTopicPartitionOffsets, futures));
                     }
-                });
-            }
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    for (ListOffsetsTopic topic : entry.getValue().values()) {
+                        for (ListOffsetsPartition partition : topic.partitions()) {
+                            TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
+                            KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
+                            future.completeExceptionally(throwable);
+                        }
+                    }
+                }
+
+                @Override
+                boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
+                    if (supportsMaxTimestamp) {
+                        supportsMaxTimestamp = false;
+                        // check if there are any non MAX_TIMESTAMPS partitions left to be downgraded
+                        return partitionsToQuery.stream().anyMatch(
+                            t -> t.partitions().stream().anyMatch(
+                                p -> p.timestamp() != ListOffsetsRequest.MAX_TIMESTAMP));
+                    }
+                    return false;
+                }
+            });
         }
         return calls;
     }

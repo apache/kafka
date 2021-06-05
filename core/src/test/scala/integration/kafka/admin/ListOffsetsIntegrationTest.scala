@@ -38,7 +38,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
-    createTopic(topicName,1,1.asInstanceOf[Short])
+    createTopic(topicName, 1, 1.asInstanceOf[Short])
     produceMessages()
     adminClient = Admin.create(Map[String, Object](
       AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> brokerList
@@ -54,19 +54,19 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   @Test
   def testEarliestOffset(): Unit = {
     val earliestOffset = runFetchOffsets(adminClient, OffsetSpec.earliest())
-    assertEquals(0,earliestOffset.offset())
+    assertEquals(0, earliestOffset.offset())
   }
 
   @Test
   def testLatestOffset(): Unit = {
     val latestOffset = runFetchOffsets(adminClient, OffsetSpec.latest())
-    assertEquals(3,latestOffset.offset())
+    assertEquals(3, latestOffset.offset())
   }
 
   @Test
   def testMaxTimestampOffset(): Unit = {
     val maxTimestampOffset = runFetchOffsets(adminClient, OffsetSpec.maxTimestamp())
-    assertEquals(1,maxTimestampOffset.offset())
+    assertEquals(1, maxTimestampOffset.offset())
   }
 
   private def runFetchOffsets(adminClient: Admin,
@@ -75,7 +75,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     val tp = new TopicPartition(topicName,0)
     adminClient.listOffsets(Map(
       tp -> offsetSpec
-    ).asJava,new ListOffsetsOptions()).all().get().get(tp)
+    ).asJava, new ListOffsetsOptions()).all().get().get(tp)
   }
 
   def produceMessages(): Unit = {
