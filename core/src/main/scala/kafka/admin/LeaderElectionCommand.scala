@@ -26,7 +26,6 @@ import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import kafka.utils.Json
 import kafka.utils.Logging
-import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
@@ -287,7 +286,7 @@ private final class LeaderElectionCommandOptions(args: Array[String]) extends Co
   val requestTimeout = parser
     .accepts(
       "timeout",
-      CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
+      "The configuration controls the maximum amount of time the client will wait for the response of a request. If the response is not received before the timeout elapses the client will resend the request if necessary or fail the request if retries are exhausted.")
     .withRequiredArg
     .describedAs("timeout ms")
     .ofType(classOf[String])
