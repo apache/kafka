@@ -20,10 +20,12 @@
   "name": "AddOffsetsToTxnRequest",
   // Version 1 is the same as version 0.
   //
-  // Version 2 adds the support for new error codes: PRODUCER_FENCED,TRANSACTION_TIMED_OUT.
+  // Version 2 adds the support for new error codes: PRODUCER_FENCED.
   //
   // Version 3 enables flexible versions.
-  "validVersions": "0-3",
+  //
+  // Version 4 adds the support for new error codes: TRANSACTION_TIMED_OUT.
+  "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",
