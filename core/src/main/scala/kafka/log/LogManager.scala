@@ -840,7 +840,7 @@ class LogManager(logDirs: Seq[File],
         else
           currentLogs.put(topicPartition, log)
 
-        info(s"Created log for partition $topicPartition in $logDir with properties " + s"{${config.originals.asScala.mkString(", ")}}.")
+        info(s"Created log for partition $topicPartition in $logDir with properties ${config.overriddenConfigsAsLoggableString}")
         // Remove the preferred log dir since it has already been satisfied
         preferredLogDirs.remove(topicPartition)
 
