@@ -75,9 +75,14 @@ object ReplicaVerificationTool extends Logging {
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser(false)
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The list of hostname and port of the server to connect to.")
+    val brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The list of hostname and port of the server to connect to.")
                          .withRequiredArg
-                         .describedAs("hostname:port,...,hostname:port")
+                         .describedAs("HOST1:PORT1,...,HOST3:PORT3")
+                         .ofType(classOf[String])
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The list of hostname and port of the server to connect to.")
+                         .requiredUnless("broker-list")
+                         .withRequiredArg
+                         .describedAs("HOST1:PORT1,...,HOST3:PORT3")
                          .ofType(classOf[String])
     val fetchSizeOpt = parser.accepts("fetch-size", "The fetch size of each request.")
                          .withRequiredArg
@@ -121,7 +126,13 @@ object ReplicaVerificationTool extends Logging {
     if (options.has(versionOpt)) {
       CommandLineUtils.printVersionAndDie()
     }
-    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt)
+
+    val effectiveBrokerListOpt = if (options.has(bootstrapServerOpt))
+      bootstrapServerOpt
+    else
+      brokerListOpt
+
+    CommandLineUtils.checkRequiredArgs(parser, options, effectiveBrokerListOpt)
 
     val regex = if (options.has(topicsIncludeOpt))
       options.valueOf(topicsIncludeOpt)
@@ -142,7 +153,7 @@ object ReplicaVerificationTool extends Logging {
     val reportInterval = options.valueOf(reportIntervalOpt).longValue
     // getting topic metadata
     info("Getting topic metadata...")
-    val brokerList = options.valueOf(brokerListOpt)
+    val brokerList = options.valueOf(effectiveBrokerListOpt)
     ToolsUtils.validatePortOrDie(parser, brokerList)
 
     val (topicsMetadata, brokerInfo) = {
