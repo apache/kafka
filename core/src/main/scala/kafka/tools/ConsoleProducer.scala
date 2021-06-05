@@ -329,6 +329,21 @@ object ConsoleProducer {
     var filePaths = Array.empty[String]
     var next = 0
 
+    def checkFilesPath(filesPath: String, filesSeparator: String): Array[String] = {
+      val files = filesPath.split(filesSeparator)
+      var nonExistentFiles = Set.empty[String]
+      for (fileName <- files){
+        val file = new File(fileName)
+        if (!file.exists())
+          nonExistentFiles += fileName
+      }
+      if (nonExistentFiles.nonEmpty){
+        System.err.println(s"ERROR: The given file path $nonExistentFiles does not exist. Please check the file path!")
+        Exit.exit(1)
+      }
+      files
+    }
+
     override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
       if (props.containsKey("parse.key"))
@@ -337,7 +352,7 @@ object ConsoleProducer {
         keySeparator = props.getProperty("key.separator")
       if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
-      filePaths = props.getProperty("filesPath").split(props.getProperty("files.separator"))
+      filePaths = checkFilesPath(props.getProperty("filesPath"), props.getProperty("files.separator"))
       reader = new BufferedReader(new FileReader(filePaths(next)))
     }
 
@@ -372,6 +387,4 @@ object ConsoleProducer {
         reader.close()
     }
   }
-
-
 }
