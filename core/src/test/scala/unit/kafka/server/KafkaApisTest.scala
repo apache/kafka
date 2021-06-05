@@ -1282,12 +1282,14 @@ class KafkaApisTest {
         EasyMock.eq(groupId)
       )).andReturn(partition)
 
+      val requestLocal = RequestLocal.withThreadConfinedCaching
       EasyMock.expect(txnCoordinator.handleAddPartitionsToTransaction(
         EasyMock.eq(transactionalId),
         EasyMock.eq(producerId),
         EasyMock.eq(epoch),
         EasyMock.eq(Set(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))),
-        EasyMock.capture(responseCallback)
+        EasyMock.capture(responseCallback),
+        EasyMock.eq(requestLocal)
       )).andAnswer(
         () => responseCallback.getValue.apply(Errors.TRANSACTION_TIMED_OUT))
 
@@ -1299,7 +1301,7 @@ class KafkaApisTest {
 
       EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, groupCoordinator)
 
-      createKafkaApis().handleAddOffsetsToTxnRequest(request)
+      createKafkaApis().handleAddOffsetsToTxnRequest(request, requestLocal)
 
       val response = capturedResponse.getValue.asInstanceOf[AddOffsetsToTxnResponse]
 
@@ -1400,13 +1402,14 @@ class KafkaApisTest {
       ).build(version.toShort)
       val request = buildRequest(addPartitionsToTxnRequest)
 
+      val requestLocal = RequestLocal.withThreadConfinedCaching
       EasyMock.expect(txnCoordinator.handleAddPartitionsToTransaction(
         EasyMock.eq(transactionalId),
         EasyMock.eq(producerId),
         EasyMock.eq(epoch),
         EasyMock.eq(Set(topicPartition)),
-
-        EasyMock.capture(responseCallback)
+        EasyMock.capture(responseCallback),
+        EasyMock.eq(requestLocal)
       )).andAnswer(
         () => responseCallback.getValue.apply(Errors.TRANSACTION_TIMED_OUT))
 
@@ -1419,7 +1422,7 @@ class KafkaApisTest {
 
       EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
-      createKafkaApis().handleAddPartitionToTxnRequest(request)
+      createKafkaApis().handleAddPartitionToTxnRequest(request, requestLocal)
 
       val response = capturedResponse.getValue.asInstanceOf[AddPartitionsToTxnResponse]
 
@@ -1514,12 +1517,14 @@ class KafkaApisTest {
       ).build(version.toShort)
       val request = buildRequest(endTxnRequest)
 
+      val requestLocal = RequestLocal.withThreadConfinedCaching
       EasyMock.expect(txnCoordinator.handleEndTransaction(
         EasyMock.eq(transactionalId),
         EasyMock.eq(producerId),
         EasyMock.eq(epoch),
         EasyMock.eq(TransactionResult.COMMIT),
-        EasyMock.capture(responseCallback)
+        EasyMock.capture(responseCallback),
+        EasyMock.eq(requestLocal)
       )).andAnswer(
         () => responseCallback.getValue.apply(Errors.TRANSACTION_TIMED_OUT))
 
@@ -1531,7 +1536,7 @@ class KafkaApisTest {
 
       EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
-      createKafkaApis().handleEndTxnRequest(request)
+      createKafkaApis().handleEndTxnRequest(request, requestLocal)
 
       val response = capturedResponse.getValue.asInstanceOf[EndTxnResponse]
 
