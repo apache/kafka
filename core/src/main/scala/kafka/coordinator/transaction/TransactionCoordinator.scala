@@ -18,8 +18,7 @@ package kafka.coordinator.transaction
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-
-import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager}
+import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager, RequestLocal}
 import kafka.utils.{Logging, Scheduler}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
@@ -35,7 +34,7 @@ object TransactionCoordinator {
   def apply(config: KafkaConfig,
             replicaManager: ReplicaManager,
             scheduler: Scheduler,
-            createProducerIdGenerator: () => ProducerIdGenerator,
+            createProducerIdGenerator: () => ProducerIdManager,
             metrics: Metrics,
             metadataCache: MetadataCache,
             time: Time): TransactionCoordinator = {
@@ -82,7 +81,7 @@ object TransactionCoordinator {
 class TransactionCoordinator(brokerId: Int,
                              txnConfig: TransactionConfig,
                              scheduler: Scheduler,
-                             createProducerIdGenerator: () => ProducerIdGenerator,
+                             createProducerIdManager: () => ProducerIdManager,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
                              time: Time,
@@ -99,17 +98,18 @@ class TransactionCoordinator(brokerId: Int,
   /* Active flag of the coordinator */
   private val isActive = new AtomicBoolean(false)
 
-  val producerIdGenerator = createProducerIdGenerator()
+  val producerIdManager = createProducerIdManager()
 
   def handleInitProducerId(transactionalId: String,
                            transactionTimeoutMs: Int,
                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
-                           responseCallback: InitProducerIdCallback): Unit = {
+                           responseCallback: InitProducerIdCallback,
+                           requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
 
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
       // and return a new producerId from the producerId manager
-      val producerId = producerIdGenerator.generateProducerId()
+      val producerId = producerIdManager.generateProducerId()
       responseCallback(InitProducerIdResult(producerId, producerEpoch = 0, Errors.NONE))
     } else if (transactionalId.isEmpty) {
       // if transactional id is empty then return error as invalid request. This is
@@ -121,7 +121,7 @@ class TransactionCoordinator(brokerId: Int,
     } else {
       val coordinatorEpochAndMetadata = txnManager.getTransactionState(transactionalId).flatMap {
         case None =>
-          val producerId = producerIdGenerator.generateProducerId()
+          val producerId = producerIdManager.generateProducerId()
           val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
             producerId = producerId,
             lastProducerId = RecordBatch.NO_PRODUCER_ID,
@@ -168,6 +168,7 @@ class TransactionCoordinator(brokerId: Int,
               TransactionResult.ABORT,
               isFromClient = false,
               sendRetriableErrorCallback,
+              requestLocal,
               isFromTimeoutAbort = false)
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
@@ -182,7 +183,8 @@ class TransactionCoordinator(brokerId: Int,
               }
             }
 
-            txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata, sendPidResponseCallback)
+            txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
+              sendPidResponseCallback, requestLocal = requestLocal)
           }
       }
     }
@@ -226,7 +228,7 @@ class TransactionCoordinator(brokerId: Int,
             // If the epoch is exhausted and the expected epoch (if provided) matches it, generate a new producer ID
             if (txnMetadata.isProducerEpochExhausted &&
                 expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch)) {
-              val newProducerId = producerIdGenerator.generateProducerId()
+              val newProducerId = producerIdManager.generateProducerId()
               Right(txnMetadata.prepareProducerIdRotation(newProducerId, transactionTimeoutMs, time.milliseconds(),
                 expectedProducerIdAndEpoch.isDefined))
             } else {
@@ -321,7 +323,8 @@ class TransactionCoordinator(brokerId: Int,
                                        producerId: Long,
                                        producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
-                                       responseCallback: AddPartitionsCallback): Unit = {
+                                       responseCallback: AddPartitionsCallback,
+                                       requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
       debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
       responseCallback(Errors.INVALID_REQUEST)
@@ -365,7 +368,8 @@ class TransactionCoordinator(brokerId: Int,
           responseCallback(err)
 
         case Right((coordinatorEpoch, newMetadata)) =>
-          txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata, responseCallback)
+          txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
+            responseCallback, requestLocal = requestLocal)
       }
     }
   }
@@ -418,13 +422,15 @@ class TransactionCoordinator(brokerId: Int,
                            producerId: Long,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
-                           responseCallback: EndTxnCallback): Unit = {
+                           responseCallback: EndTxnCallback,
+                           requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     endTransaction(transactionalId,
       producerId,
       producerEpoch,
       txnMarkerResult,
       isFromClient = true,
       responseCallback,
+      requestLocal,
       isFromTimeoutAbort = false)
   }
 
@@ -434,6 +440,7 @@ class TransactionCoordinator(brokerId: Int,
                              txnMarkerResult: TransactionResult,
                              isFromClient: Boolean,
                              responseCallback: EndTxnCallback,
+                             requestLocal: RequestLocal,
                              isFromTimeoutAbort: Boolean): Unit = {
     var isEpochFence = false
     if (transactionalId == null || transactionalId.isEmpty)
@@ -606,7 +613,8 @@ class TransactionCoordinator(brokerId: Int,
             }
           }
 
-          txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata, sendTxnMarkersCallback)
+          txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
+            sendTxnMarkersCallback, requestLocal = requestLocal)
       }
     }
   }
@@ -664,6 +672,7 @@ class TransactionCoordinator(brokerId: Int,
               TransactionResult.ABORT,
               isFromClient = false,
               onComplete(txnIdAndPidEpoch),
+              RequestLocal.NoCaching,
               isFromTimeoutAbort = true)
           }
       }
@@ -696,7 +705,7 @@ class TransactionCoordinator(brokerId: Int,
     info("Shutting down.")
     isActive.set(false)
     scheduler.shutdown()
-    producerIdGenerator.shutdown()
+    producerIdManager.shutdown()
     txnManager.shutdown()
     txnMarkerChannelManager.shutdown()
     info("Shutdown complete.")

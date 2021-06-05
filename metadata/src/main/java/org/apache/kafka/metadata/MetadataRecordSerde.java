@@ -14,16 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics.stats;
+package org.apache.kafka.metadata;
 
-/**
- * A {@link SampledStat} that maintains a simple count of what it has seen.
- * This is a special kind of {@link WindowedSum} that always records a value of {@code 1} instead of the provided value.
- *
- * See also {@link CumulativeCount} for a non-sampled version of this metric.
- *
- * @deprecated since 2.4 . Use {@link WindowedCount} instead
- */
-@Deprecated
-public class Count extends WindowedCount {
+import org.apache.kafka.common.metadata.MetadataRecordType;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.server.common.serialization.AbstractApiMessageSerde;
+
+public class MetadataRecordSerde extends AbstractApiMessageSerde {
+
+    @Override
+    public ApiMessage apiMessageFor(short apiKey) {
+        return MetadataRecordType.fromId(apiKey).newMetadataRecord();
+    }
 }

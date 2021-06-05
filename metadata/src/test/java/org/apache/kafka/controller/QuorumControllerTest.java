@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -33,8 +34,9 @@ import java.util.function.Function;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
@@ -53,18 +55,19 @@ import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.metadata.PartitionRecord;
-import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
@@ -91,7 +94,7 @@ public class QuorumControllerTest {
      */
     @Test
     public void testCreateAndClose() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, __ -> { })) {
             }
@@ -103,7 +106,7 @@ public class QuorumControllerTest {
      */
     @Test
     public void testConfigurationOperations() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 testConfigurationOperations(controlEnv.activeController());
@@ -134,7 +137,7 @@ public class QuorumControllerTest {
      */
     @Test
     public void testDelayedConfigurationOperations() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
@@ -160,7 +163,7 @@ public class QuorumControllerTest {
 
     @Test
     public void testUnregisterBroker() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 ListenerCollection listeners = new ListenerCollection();
@@ -179,9 +182,11 @@ public class QuorumControllerTest {
                         new CreatableTopicCollection(Collections.singleton(
                             new CreatableTopic().setName("foo").setNumPartitions(1).
                                 setReplicationFactor((short) 1)).iterator()));
-                // TODO: place on a fenced broker if we have no choice
                 assertEquals(Errors.INVALID_REPLICATION_FACTOR.code(), active.createTopics(
                     createTopicsRequestData).get().topics().find("foo").errorCode());
+                assertEquals("Unable to replicate the partition 1 time(s): All brokers " +
+                    "are currently fenced.", active.createTopics(
+                    createTopicsRequestData).get().topics().find("foo").errorMessage());
                 assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                     active.processBrokerHeartbeat(new BrokerHeartbeatRequestData().
                             setWantFence(false).setBrokerEpoch(0L).setBrokerId(0).
@@ -227,7 +232,7 @@ public class QuorumControllerTest {
         MockSnapshotWriter writer = null;
         Map<Integer, Long> brokerEpochs = new HashMap<>();
         Uuid fooId;
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS).
                          setSnapshotWriterBuilder(snapshotWriterBuilder))) {
@@ -264,17 +269,19 @@ public class QuorumControllerTest {
                                         setBrokerIds(Arrays.asList(1, 2, 0))).
                                             iterator()))).iterator()))).get();
                 fooId = fooData.topics().find("foo").topicId();
+                active.allocateProducerIds(
+                    new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
                 long snapshotEpoch = active.beginWritingSnapshot().get();
                 writer = snapshotWriterBuilder.writers.takeFirst();
                 assertEquals(snapshotEpoch, writer.epoch());
                 writer.waitForCompletion();
                 checkSnapshotContents(fooId, brokerEpochs, writer.batches().iterator());
             }
+        }
 
-            final MockSnapshotReader reader = writer.toReader();
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.of(writer.toReader()))) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS).
-                         setSnapshotReader(reader).
                          setSnapshotWriterBuilder(snapshotWriterBuilder))) {
                 QuorumController active = controlEnv.activeController();
                 long snapshotEpoch = active.beginWritingSnapshot().get();
@@ -335,7 +342,11 @@ public class QuorumControllerTest {
                 setEndPoints(new BrokerEndpointCollection(Arrays.asList(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9095).setSecurityProtocol((short) 0)).iterator())).
-                setRack(null), (short) 0))),
+                setRack(null), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new ProducerIdsRecord().
+                setBrokerId(0).
+                setBrokerEpoch(brokerEpochs.get(0)).
+                setProducerIdsEnd(1000), (short) 0))),
             iterator);
     }
 
@@ -345,7 +356,7 @@ public class QuorumControllerTest {
      */
     @Test
     public void testTimeouts() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 QuorumController controller = controlEnv.activeController();
@@ -401,7 +412,7 @@ public class QuorumControllerTest {
      */
     @Test
     public void testEarlyControllerResults() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 QuorumController controller = controlEnv.activeController();

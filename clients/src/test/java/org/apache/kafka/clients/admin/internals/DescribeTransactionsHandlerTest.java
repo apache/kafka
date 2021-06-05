@@ -48,7 +48,7 @@ public class DescribeTransactionsHandlerTest {
         String transactionalId3 = "baz";
 
         Set<String> transactionalIds = mkSet(transactionalId1, transactionalId2, transactionalId3);
-        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(transactionalIds, logContext);
+        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(logContext);
 
         assertLookup(handler, transactionalIds);
         assertLookup(handler, mkSet(transactionalId1));
@@ -62,7 +62,7 @@ public class DescribeTransactionsHandlerTest {
         String transactionalId2 = "bar";
 
         Set<String> transactionalIds = mkSet(transactionalId1, transactionalId2);
-        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(transactionalIds, logContext);
+        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(logContext);
 
         DescribeTransactionsResponseData.TransactionState transactionState1 =
             sampleTransactionState1(transactionalId1);
@@ -86,8 +86,7 @@ public class DescribeTransactionsHandlerTest {
     @Test
     public void testHandleErrorResponse() {
         String transactionalId = "foo";
-        Set<String> transactionalIds = mkSet(transactionalId);
-        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(transactionalIds, logContext);
+        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(logContext);
         assertFatalError(handler, transactionalId, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED);
         assertFatalError(handler, transactionalId, Errors.TRANSACTIONAL_ID_NOT_FOUND);
         assertFatalError(handler, transactionalId, Errors.UNKNOWN_SERVER_ERROR);

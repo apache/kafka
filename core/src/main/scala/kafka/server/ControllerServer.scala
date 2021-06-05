@@ -17,9 +17,10 @@
 
 package kafka.server
 
-import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util
 import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.{CompletableFuture, TimeUnit}
+
 import kafka.cluster.Broker.ServerInfo
 import kafka.log.LogConfig
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
@@ -37,7 +38,6 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics}
 import org.apache.kafka.metadata.VersionRange
-import org.apache.kafka.metalog.MetaLogManager
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
@@ -49,15 +49,14 @@ import scala.jdk.CollectionConverters._
  * A Kafka controller that runs in KRaft (Kafka Raft) mode.
  */
 class ControllerServer(
-                        val metaProperties: MetaProperties,
-                        val config: KafkaConfig,
-                        val metaLogManager: MetaLogManager,
-                        val raftManager: RaftManager[ApiMessageAndVersion],
-                        val time: Time,
-                        val metrics: Metrics,
-                        val threadNamePrefix: Option[String],
-                        val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
-                      ) extends Logging with KafkaMetricsGroup {
+  val metaProperties: MetaProperties,
+  val config: KafkaConfig,
+  val raftManager: RaftManager[ApiMessageAndVersion],
+  val time: Time,
+  val metrics: Metrics,
+  val threadNamePrefix: Option[String],
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
+) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
   val lock = new ReentrantLock()
@@ -148,7 +147,7 @@ class ControllerServer(
         setTime(time).
         setThreadNamePrefix(threadNamePrefixAsString).
         setConfigDefs(configDefs).
-        setLogManager(metaLogManager).
+        setRaftClient(raftManager.client).
         setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
         setDefaultNumPartitions(config.numPartitions.intValue()).
         setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),

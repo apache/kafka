@@ -187,6 +187,7 @@ public class KeyValueStoreTestDriver<K, V> {
     private final InternalMockProcessorContext context;
     private final StateSerdes<K, V> stateSerdes;
 
+    @SuppressWarnings("unchecked")
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");

@@ -223,6 +223,10 @@ public class QuorumState {
         return localId.orElseThrow(() -> new IllegalStateException("Required local id is not present"));
     }
 
+    public OptionalInt localId() {
+        return localId;
+    }
+
     public int epoch() {
         return state.epoch();
     }

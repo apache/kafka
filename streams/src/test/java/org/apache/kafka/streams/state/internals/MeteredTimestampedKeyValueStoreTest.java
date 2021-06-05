@@ -50,20 +50,13 @@ import org.easymock.MockType;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
-
-import java.util.Arrays;
-import java.util.Collection;
+ 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.aryEq;
 import static org.easymock.EasyMock.eq;
@@ -80,7 +73,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@RunWith(Parameterized.class)
 public class MeteredTimestampedKeyValueStoreTest {
 
     @Rule
@@ -89,10 +81,8 @@ public class MeteredTimestampedKeyValueStoreTest {
     private static final String APPLICATION_ID = "test-app";
     private static final String STORE_NAME = "store-name";
     private static final String STORE_TYPE = "scope";
-    private static final String STORE_LEVEL_GROUP_FROM_0100_TO_24 = "stream-" + STORE_TYPE + "-state-metrics";
     private static final String STORE_LEVEL_GROUP = "stream-state-metrics";
     private static final String CHANGELOG_TOPIC = "changelog-topic-name";
-    private static final String THREAD_ID_TAG_KEY_FROM_0100_TO_24 = "client-id";
     private static final String THREAD_ID_TAG_KEY = "thread-id";
     private static final String KEY = "key";
     private static final Bytes KEY_BYTES = Bytes.wrap(KEY.getBytes());
@@ -114,20 +104,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         VALUE_AND_TIMESTAMP_BYTES
     );
     private final Metrics metrics = new Metrics();
-    private String storeLevelGroup;
-    private String threadIdTagKey;
     private Map<String, String> tags;
-
-    @Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {
-            {StreamsConfig.METRICS_LATEST},
-            {StreamsConfig.METRICS_0100_TO_24}
-        });
-    }
-
-    @Parameter
-    public String builtInMetricsVersion;
 
     @Before
     public void before() {
@@ -142,17 +119,13 @@ public class MeteredTimestampedKeyValueStoreTest {
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         expect(context.applicationId()).andStubReturn(APPLICATION_ID);
         expect(context.metrics())
-            .andStubReturn(new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, mockTime));
+            .andStubReturn(new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, mockTime));
         expect(context.taskId()).andStubReturn(taskId);
         expect(context.changelogFor(STORE_NAME)).andStubReturn(CHANGELOG_TOPIC);
         expectSerdes();
         expect(inner.name()).andStubReturn(STORE_NAME);
-        storeLevelGroup =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? STORE_LEVEL_GROUP_FROM_0100_TO_24 : STORE_LEVEL_GROUP;
-        threadIdTagKey =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? THREAD_ID_TAG_KEY_FROM_0100_TO_24 : THREAD_ID_TAG_KEY;
         tags = mkMap(
-            mkEntry(threadIdTagKey, threadId),
+            mkEntry(THREAD_ID_TAG_KEY, threadId),
             mkEntry("task-id", taskId.toString()),
             mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
         );
@@ -258,24 +231,13 @@ public class MeteredTimestampedKeyValueStoreTest {
         metrics.addReporter(reporter);
         assertTrue(reporter.containsMbean(String.format(
             "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
-            storeLevelGroup,
-            threadIdTagKey,
+            STORE_LEVEL_GROUP,
+            THREAD_ID_TAG_KEY,
             threadId,
             taskId.toString(),
             STORE_TYPE,
             STORE_NAME
         )));
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertTrue(reporter.containsMbean(String.format(
-                "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
-                storeLevelGroup,
-                threadIdTagKey,
-                threadId,
-                taskId.toString(),
-                STORE_TYPE,
-                ROLLUP_VALUE
-            )));
-        }
     }
     @Test
     public void shouldWriteBytesToInnerStoreAndRecordPutMetric() {
@@ -359,7 +321,7 @@ public class MeteredTimestampedKeyValueStoreTest {
     }
 
     private KafkaMetric metric(final String name) {
-        return this.metrics.metric(new MetricName(name, storeLevelGroup, "", tags));
+        return this.metrics.metric(new MetricName(name, STORE_LEVEL_GROUP, "", tags));
     }
 
     @SuppressWarnings("unchecked")
@@ -415,7 +377,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
-        final KafkaMetric metric = metric(new MetricName("all-rate", storeLevelGroup, "", tags));
+        final KafkaMetric metric = metric(new MetricName("all-rate", STORE_LEVEL_GROUP, "", tags));
         assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
     }

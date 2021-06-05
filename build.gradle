@@ -30,7 +30,7 @@ buildscript {
 }
 
 plugins {
-  id 'com.diffplug.spotless' version '5.12.4'
+  id 'com.diffplug.spotless' version '5.12.5'
   id 'com.github.ben-manes.versions' version '0.38.0'
   id 'idea'
   id 'java-library'
@@ -40,7 +40,7 @@ plugins {
   id "com.github.spotbugs" version '4.7.1' apply false
   id 'org.gradle.test-retry' version '1.2.1' apply false
   id 'org.scoverage' version '5.0.0' apply false
-  id 'com.github.johnrengelman.shadow' version '6.1.0' apply false
+  id 'com.github.johnrengelman.shadow' version '7.0.0' apply false
 }
 
 spotless {
@@ -449,6 +449,14 @@ subprojects {
     }
   }
 
+  // remove test output from all test types
+  tasks.withType(Test).all { t ->
+    cleanTest {
+      delete t.reports.junitXml.destination
+      delete t.reports.html.destination
+    }
+  }
+
   jar {
     from "$rootDir/LICENSE"
     from "$rootDir/NOTICE"
@@ -842,15 +850,15 @@ project(':core') {
 
   configurations {
     // manually excludes some unnecessary dependencies
-    compile.exclude module: 'javax'
-    compile.exclude module: 'jline'
-    compile.exclude module: 'jms'
-    compile.exclude module: 'jmxri'
-    compile.exclude module: 'jmxtools'
-    compile.exclude module: 'mail'
+    implementation.exclude module: 'javax'
+    implementation.exclude module: 'jline'
+    implementation.exclude module: 'jms'
+    implementation.exclude module: 'jmxri'
+    implementation.exclude module: 'jmxtools'
+    implementation.exclude module: 'mail'
     // To prevent a UniqueResourceException due the same resource existing in both
     // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
-    testCompile.exclude module: 'api-ldap-schema-data'
+    testImplementation.exclude module: 'api-ldap-schema-data'
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -1069,6 +1077,7 @@ project(':metadata') {
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
+    implementation project(':raft')
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
@@ -1077,6 +1086,7 @@ project(':metadata') {
     testImplementation libs.hamcrest
     testImplementation libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':raft').sourceSets.test.output
   }
 
   task processMessages(type:JavaExec) {
@@ -1267,7 +1277,6 @@ project(':raft') {
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
-    implementation project(':metadata')
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
 

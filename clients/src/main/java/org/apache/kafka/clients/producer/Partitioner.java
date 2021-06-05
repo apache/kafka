@@ -24,7 +24,6 @@ import java.io.Closeable;
 /**
  * Partitioner Interface
  */
-
 public interface Partitioner extends Configurable, Closeable {
 
     /**
@@ -37,13 +36,12 @@ public interface Partitioner extends Configurable, Closeable {
      * @param valueBytes The serialized value to partition on or null
      * @param cluster The current cluster metadata
      */
-    public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster);
+    int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster);
 
     /**
      * This is called when partitioner is closed.
      */
-    public void close();
-
+    void close();
 
     /**
      * Notifies the partitioner a new batch is about to be created. When using the sticky partitioner,
@@ -52,6 +50,6 @@ public interface Partitioner extends Configurable, Closeable {
      * @param cluster The current cluster metadata
      * @param prevPartition The partition previously selected for the record that triggered a new batch
      */
-    default public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
+    default void onNewBatch(String topic, Cluster cluster, int prevPartition) {
     }
 }

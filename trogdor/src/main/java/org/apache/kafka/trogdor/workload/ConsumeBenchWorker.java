@@ -282,7 +282,6 @@ public class ConsumeBenchWorker implements TaskWorker {
                 log.info("{} Consumed total number of messages={}, bytes={} in {} ms.  status: {}",
                          clientId, messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, statusData);
             }
-            doneFuture.complete("");
             consumer.close();
             return null;
         }
@@ -307,6 +306,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             }
             statusUpdaterFuture.cancel(false);
             statusUpdater.update();
+            doneFuture.complete("");
         }
     }
 
