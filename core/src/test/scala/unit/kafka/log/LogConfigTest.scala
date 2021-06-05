@@ -162,6 +162,21 @@ class LogConfigTest {
     assertNull(nullServerDefault)
   }
 
+  @Test
+  def testOverriddenConfigsAsLoggableString(): Unit = {
+    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    kafkaProps.put("unknown.broker.password.config", "aaaaa")
+    kafkaProps.put(KafkaConfig.SslKeyPasswordProp, "somekeypassword")
+    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+    val topicOverrides = new Properties
+    topicOverrides.setProperty(LogConfig.MinInSyncReplicasProp, "2")
+    topicOverrides.setProperty(KafkaConfig.SslTruststorePasswordProp, "sometrustpasswrd")
+    topicOverrides.setProperty("unknown.topic.password.config", "bbbb")
+    val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(kafkaConfig), topicOverrides)
+    assertEquals("{min.insync.replicas=2, ssl.truststore.password=(redacted), unknown.topic.password.config=(redacted)}",
+      logConfig.overriddenConfigsAsLoggableString)
+  }
+
   private def isValid(configValue: String): Boolean = {
     try {
       ThrottledReplicaListValidator.ensureValidString("", configValue)
