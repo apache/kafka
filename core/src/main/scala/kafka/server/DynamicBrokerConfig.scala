@@ -555,7 +555,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       } catch {
         case e: Exception =>
           if (!validateOnly)
-            error(s"Failed to update broker configuration with configs : ${newConfig.originalsFromThisConfig}", e)
+            error(s"Failed to update broker configuration with configs : " +
+              s"${ConfigUtils.configMapToRedactedString(newConfig.originalsFromThisConfig, KafkaConfig.configDef)}", e)
           throw new ConfigException("Invalid dynamic configuration", e)
       }
     }
