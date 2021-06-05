@@ -17,8 +17,12 @@
 
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -139,5 +143,29 @@ public class ConfigUtilsTest {
         assertEquals("derp", newConfig.get("foo.bar"));
         assertNull(newConfig.get("foo.bar.deprecated"));
         assertNull(newConfig.get("foo.bar.even.more.deprecated"));
+    }
+
+    private static final ConfigDef CONFIG = new ConfigDef().
+            define("foo", Type.PASSWORD, Importance.HIGH, "").
+            define("bar", Type.STRING, Importance.HIGH, "").
+            define("quux", Type.INT, Importance.HIGH, "").
+            define("blah", Type.STRING, Importance.HIGH, "");
+
+    @Test
+    public void testConfigMapToRedactedStringForEmptyMap() {
+        assertEquals("{}", ConfigUtils.
+                configMapToRedactedString(Collections.emptyMap(), CONFIG));
+    }
+
+    @Test
+    public void testConfigMapToRedactedStringWithSecrets() {
+        Map<String, Object> testMap1 = new HashMap<>();
+        testMap1.put("bar", "whatever");
+        testMap1.put("quux", Integer.valueOf(123));
+        testMap1.put("foo", "foosecret");
+        testMap1.put("blah", null);
+        testMap1.put("quuux", Integer.valueOf(456));
+        assertEquals("{bar=\"whatever\", blah=null, foo=(redacted), quuux=(redacted), quux=123}",
+                ConfigUtils.configMapToRedactedString(testMap1, CONFIG));
     }
 }
