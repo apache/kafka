@@ -90,7 +90,6 @@ public class RemoteLogMetadataManagerTest {
             remoteLogMetadataManager.configure(Collections.emptyMap());
             remoteLogMetadataManager.onPartitionLeadershipChanges(Collections.singleton(TP0), Collections.emptySet());
 
-
             // Create remote log segment metadata and add them to RLMM.
 
             // segment 0

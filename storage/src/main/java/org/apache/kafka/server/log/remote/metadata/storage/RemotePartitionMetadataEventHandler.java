@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
+
+import java.io.IOException;
 
 public abstract class RemotePartitionMetadataEventHandler {
 
@@ -40,4 +43,9 @@ public abstract class RemotePartitionMetadataEventHandler {
     protected abstract void handleRemoteLogSegmentMetadataUpdate(RemoteLogSegmentMetadataUpdate remoteLogSegmentMetadataUpdate);
 
     protected abstract void handleRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata);
+
+    public abstract void syncLogMetadataDataFile(TopicIdPartition topicIdPartition,
+                                                 int metadataPartition,
+                                                 Long metadataPartitionOffset) throws IOException;
+
 }
