@@ -67,8 +67,9 @@ class MetadataRecordSerdeTest {
         buffer.flip();
 
         MetadataRecordSerde serde = new MetadataRecordSerde();
-        assertThrows(MetadataParseException.class,
-            () -> serde.read(new ByteBufferAccessor(buffer), 16));
+        assertStartsWith("Could not deserialize metadata record due to unknown frame version",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), 16)).getMessage());
     }
 
     /**
@@ -87,8 +88,9 @@ class MetadataRecordSerdeTest {
         buffer.put((byte) 0x80);
         buffer.position(0);
         buffer.limit(64);
-        assertThrows(MetadataParseException.class,
-                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining()));
+        assertStartsWith("Error while reading frame version",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     /**
@@ -108,8 +110,9 @@ class MetadataRecordSerdeTest {
         buffer.put((byte) 0x80);
         buffer.position(0);
         buffer.limit(64);
-        assertThrows(MetadataParseException.class,
-                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining()));
+        assertStartsWith("Error while reading type",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     /**
@@ -129,15 +132,16 @@ class MetadataRecordSerdeTest {
         buffer.put((byte) 0x80);
         buffer.position(0);
         buffer.limit(64);
-        assertThrows(MetadataParseException.class,
-                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining()));
+        assertStartsWith("Error while reading version",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     /**
      * Test attempting to parse an event which has a version > Short.MAX_VALUE
      */
     @Test
-    public void testParsingVersionToLarge() {
+    public void testParsingVersionTooLarge() {
         MetadataRecordSerde serde = new MetadataRecordSerde();
         ByteBuffer buffer = ByteBuffer.allocate(64);
         buffer.clear();
@@ -152,7 +156,7 @@ class MetadataRecordSerdeTest {
         buffer.limit(64);
         assertStartsWith("Value for version was too large",
                 assertThrows(MetadataParseException.class,
-                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getCause().getMessage());
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     /**
@@ -169,8 +173,9 @@ class MetadataRecordSerdeTest {
         buffer.put((byte) 0x80);
         buffer.position(0);
         buffer.limit(64);
-        assertThrows(MetadataParseException.class,
-                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining()));
+        assertStartsWith("Unknown metadata id ",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getCause().getMessage());
     }
 
     /**
@@ -186,8 +191,9 @@ class MetadataRecordSerdeTest {
         buffer.put((byte) 0x80); // malformed data
         buffer.position(0);
         buffer.limit(4);
-        assertThrows(MetadataParseException.class,
-                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining()));
+        assertStartsWith("Failed to deserialize record with type",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     /**

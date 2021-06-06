@@ -45,7 +45,13 @@ public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageA
     private static final short DEFAULT_FRAME_VERSION = 0;
     private static final int DEFAULT_FRAME_VERSION_SIZE = ByteUtils.sizeOfUnsignedVarint(DEFAULT_FRAME_VERSION);
 
-    private static short unsignedIntToShort(int val, String entity) {
+    private static short unsignedIntToShort(Readable input, String entity) {
+        int val;
+        try {
+            val = input.readUnsignedVarint();
+        } catch (Exception e) {
+            throw new MetadataParseException("Error while reading " + entity, e);
+        }
         if (val > Short.MAX_VALUE) {
             throw new MetadataParseException("Value for " + entity + " was too large.");
         }
@@ -75,28 +81,14 @@ public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageA
     @Override
     public ApiMessageAndVersion read(Readable input,
                                      int size) {
-        short frameVersion;
-        try {
-            frameVersion = unsignedIntToShort(input.readUnsignedVarint(), "frame version");
-        } catch (Exception e) {
-            throw new MetadataParseException(e);
-        }
+        short frameVersion = unsignedIntToShort(input, "frame version");
+
         if (frameVersion != DEFAULT_FRAME_VERSION) {
             throw new MetadataParseException("Could not deserialize metadata record due to unknown frame version "
                     + frameVersion + "(only frame version " + DEFAULT_FRAME_VERSION + " is supported)");
         }
-        short apiKey;
-        try {
-            apiKey = unsignedIntToShort(input.readUnsignedVarint(), "type");
-        } catch (Exception e) {
-            throw new MetadataParseException(e);
-        }
-        short version;
-        try {
-            version = unsignedIntToShort(input.readUnsignedVarint(), "version");
-        } catch (Exception e) {
-            throw new MetadataParseException(e);
-        }
+        short apiKey = unsignedIntToShort(input, "type");
+        short version = unsignedIntToShort(input, "version");
 
         ApiMessage record;
         try {
@@ -107,7 +99,7 @@ public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageA
         try {
             record.read(input, version);
         } catch (Exception e) {
-            throw new MetadataParseException(e);
+            throw new MetadataParseException("Failed to deserialize record with type " + apiKey, e);
         }
         if (input.remaining() > 0) {
             throw new MetadataParseException("Found " + input.remaining() +

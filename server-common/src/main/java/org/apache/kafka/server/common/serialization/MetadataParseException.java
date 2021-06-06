@@ -29,4 +29,8 @@ public class MetadataParseException extends RuntimeException {
     public MetadataParseException(Throwable e) {
         super(e);
     }
+
+    public MetadataParseException(String message, Throwable throwable) {
+        super(message, throwable);
+    }
 }
