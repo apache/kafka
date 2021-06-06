@@ -62,7 +62,7 @@ public class RecordQueue {
         this.fifoQueue = new ArrayDeque<>();
         this.timestampExtractor = timestampExtractor;
         this.processorContext = processorContext;
-        droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
+        droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
             Thread.currentThread().getName(),
             processorContext.taskId().toString(),
             processorContext.metrics()

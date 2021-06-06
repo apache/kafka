@@ -30,7 +30,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -68,16 +67,6 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
             keySerde,
             valueSerde)
             .build();
-    }
-
-    @Override
-    String getMetricsScope() {
-        return new RocksDbWindowBytesStoreSupplier(null, 0, 0, 0, false, false).metricsScope();
-    }
-
-    @Override
-    void setClassLoggerToDebug() {
-        LogCaptureAppender.setClassLoggerToDebug(AbstractRocksDBSegmentedBytesStore.class);
     }
 
     @Test

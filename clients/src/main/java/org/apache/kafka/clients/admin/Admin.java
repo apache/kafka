@@ -1534,6 +1534,28 @@ public interface Admin extends AutoCloseable {
     AbortTransactionResult abortTransaction(AbortTransactionSpec spec, AbortTransactionOptions options);
 
     /**
+     * List active transactions in the cluster. See
+     * {@link #listTransactions(ListTransactionsOptions)} for more details.
+     *
+     * @return The result
+     */
+    default ListTransactionsResult listTransactions() {
+        return listTransactions(new ListTransactionsOptions());
+    }
+
+    /**
+     * List active transactions in the cluster. This will query all potential transaction
+     * coordinators in the cluster and collect the state of all transactions. Users
+     * should typically attempt to reduce the size of the result set using
+     * {@link ListTransactionsOptions#filterProducerIds(Collection)} or
+     * {@link ListTransactionsOptions#filterStates(Collection)}
+     *
+     * @param options Options to control the method behavior (including filters)
+     * @return The result
+     */
+    ListTransactionsResult listTransactions(ListTransactionsOptions options);
+
+    /**
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();

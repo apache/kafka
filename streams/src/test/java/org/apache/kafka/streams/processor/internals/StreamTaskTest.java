@@ -105,7 +105,6 @@ import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
 import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
 import static org.apache.kafka.streams.processor.internals.Task.State.SUSPENDED;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -287,7 +286,7 @@ public class StreamTaskTest {
         stateDirectory = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.replay(stateDirectory);
 
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
 
         task.initializeIfNeeded();
 
@@ -331,7 +330,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldResetOffsetsToLastCommittedForSpecifiedPartitions() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.addPartitionsForOffsetReset(Collections.singleton(partition1));
 
         consumer.seek(partition1, 5L);
@@ -355,7 +354,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAutoOffsetResetIfNoCommittedOffsetFound() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.addPartitionsForOffsetReset(Collections.singleton(partition1));
 
         final AtomicReference<AssertionError> shouldNotSeek = new AtomicReference<>();
@@ -400,7 +399,7 @@ public class StreamTaskTest {
         consumer.commitSync(partitions.stream()
             .collect(Collectors.toMap(Function.identity(), tp -> new OffsetAndMetadata(0L, encodeTimestamp(10L)))));
 
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
 
         assertEquals(RecordQueue.UNKNOWN, task.streamTime());
 
@@ -447,7 +446,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldProcessInOrder() {
-        task = createStatelessTask(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig());
 
         task.addRecords(partition1, asList(
             getConsumerRecordWithOffsetAsTimestamp(partition1, 10, 101),
@@ -574,7 +573,7 @@ public class StreamTaskTest {
     public void shouldRecordBufferedRecords() {
         task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
 
-        final KafkaMetric metric = getMetric("active-buffer", "%s-count", task.id().toString(), StreamsConfig.METRICS_LATEST);
+        final KafkaMetric metric = getMetric("active-buffer", "%s-count", task.id().toString());
 
         assertThat(metric.metricValue(), equalTo(0.0));
 
@@ -594,9 +593,9 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRecordProcessRatio() {
-        task = createStatelessTask(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig());
 
-        final KafkaMetric metric = getMetric("active-process", "%s-ratio", task.id().toString(), StreamsConfig.METRICS_LATEST);
+        final KafkaMetric metric = getMetric("active-process", "%s-ratio", task.id().toString());
 
         assertThat(metric.metricValue(), equalTo(0.0));
 
@@ -748,119 +747,78 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldConstructMetricsWithBuiltInMetricsVersion0100To24() {
-        testMetrics(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    @Test
-    public void shouldConstructMetricsWithBuiltInMetricsVersionLatest() {
-        testMetrics(StreamsConfig.METRICS_LATEST);
-    }
-
-    private void testMetrics(final String builtInMetricsVersion) {
-        task = createStatelessTask(createConfig("100"), builtInMetricsVersion);
+    public void testMetrics() {
+        task = createStatelessTask(createConfig("100"));
 
         assertNotNull(getMetric(
             "enforced-processing",
             "%s-rate",
-            task.id().toString(),
-            builtInMetricsVersion
+            task.id().toString()
         ));
         assertNotNull(getMetric(
             "enforced-processing",
             "%s-total",
-            task.id().toString(),
-            builtInMetricsVersion
+            task.id().toString()
         ));
 
         assertNotNull(getMetric(
             "record-lateness",
             "%s-avg",
-            task.id().toString(),
-            builtInMetricsVersion
+            task.id().toString()
         ));
         assertNotNull(getMetric(
             "record-lateness",
             "%s-max",
-            task.id().toString(),
-            builtInMetricsVersion
+            task.id().toString()
         ));
 
         assertNotNull(getMetric(
             "active-process",
             "%s-ratio",
-            task.id().toString(),
-            builtInMetricsVersion
+            task.id().toString()
         ));
 
         assertNotNull(getMetric(
             "active-buffer",
             "%s-count",
-            task.id().toString(),
-            builtInMetricsVersion
+            task.id().toString()
         ));
 
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            testMetricsForBuiltInMetricsVersion0100To24();
-        } else {
-            testMetricsForBuiltInMetricsVersionLatest();
-        }
+        testMetricsForBuiltInMetricsVersionLatest();
 
         final JmxReporter reporter = new JmxReporter();
         final MetricsContext metricsContext = new KafkaMetricsContext("kafka.streams");
         reporter.contextChange(metricsContext);
 
         metrics.addReporter(reporter);
-        final String threadIdTag =
-            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? THREAD_ID_TAG : THREAD_ID_TAG_0100_TO_24;
+        final String threadIdTag = THREAD_ID_TAG;
         assertTrue(reporter.containsMbean(String.format(
             "kafka.streams:type=stream-task-metrics,%s=%s,task-id=%s",
             threadIdTag,
             threadId,
             task.id()
         )));
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertTrue(reporter.containsMbean(String.format(
-                "kafka.streams:type=stream-task-metrics,%s=%s,task-id=all",
-                threadIdTag,
-                threadId
-            )));
-        }
     }
 
     private void testMetricsForBuiltInMetricsVersionLatest() {
         final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
-        assertNull(getMetric("commit", "%s-latency-avg", "all", builtInMetricsVersion));
-        assertNull(getMetric("commit", "%s-latency-max", "all", builtInMetricsVersion));
-        assertNull(getMetric("commit", "%s-rate", "all", builtInMetricsVersion));
-        assertNull(getMetric("commit", "%s-total", "all", builtInMetricsVersion));
+        assertNull(getMetric("commit", "%s-latency-avg", "all"));
+        assertNull(getMetric("commit", "%s-latency-max", "all"));
+        assertNull(getMetric("commit", "%s-rate", "all"));
+        assertNull(getMetric("commit", "%s-total", "all"));
 
-        assertNotNull(getMetric("process", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
-        assertNotNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
+        assertNotNull(getMetric("process", "%s-latency-max", task.id().toString()));
+        assertNotNull(getMetric("process", "%s-latency-avg", task.id().toString()));
 
-        assertNotNull(getMetric("punctuate", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
-        assertNotNull(getMetric("punctuate", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
-        assertNotNull(getMetric("punctuate", "%s-rate", task.id().toString(), builtInMetricsVersion));
-        assertNotNull(getMetric("punctuate", "%s-total", task.id().toString(), builtInMetricsVersion));
-    }
-
-    private void testMetricsForBuiltInMetricsVersion0100To24() {
-        final String builtInMetricsVersion = StreamsConfig.METRICS_0100_TO_24;
-        assertNotNull(getMetric("commit", "%s-rate", "all", builtInMetricsVersion));
-
-        assertNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
-        assertNull(getMetric("process", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
-
-        assertNull(getMetric("punctuate", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
-        assertNull(getMetric("punctuate", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
-        assertNull(getMetric("punctuate", "%s-rate", task.id().toString(), builtInMetricsVersion));
-        assertNull(getMetric("punctuate", "%s-total", task.id().toString(), builtInMetricsVersion));
+        assertNotNull(getMetric("punctuate", "%s-latency-avg", task.id().toString()));
+        assertNotNull(getMetric("punctuate", "%s-latency-max", task.id().toString()));
+        assertNotNull(getMetric("punctuate", "%s-rate", task.id().toString()));
+        assertNotNull(getMetric("punctuate", "%s-total", task.id().toString()));
     }
 
     private KafkaMetric getMetric(final String operation,
                                   final String nameFormat,
-                                  final String taskId,
-                                  final String builtInMetricsVersion) {
+                                  final String taskId) {
         final String descriptionIsNotVerified = "";
         return metrics.metrics().get(metrics.metricName(
             String.format(nameFormat, operation),
@@ -868,11 +826,7 @@ public class StreamTaskTest {
             descriptionIsNotVerified,
             mkMap(
                 mkEntry("task-id", taskId),
-                mkEntry(
-                    StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? THREAD_ID_TAG
-                        : THREAD_ID_TAG_0100_TO_24,
-                    Thread.currentThread().getName()
-                )
+                mkEntry(THREAD_ID_TAG, Thread.currentThread().getName())
             )
         ));
     }
@@ -890,10 +844,7 @@ public class StreamTaskTest {
             mkMap(
                 mkEntry("task-id", taskId),
                 mkEntry("processor-node-id", processorNodeId),
-                mkEntry(
-                    StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? THREAD_ID_TAG
-                        : THREAD_ID_TAG_0100_TO_24,
-                    Thread.currentThread().getName()
+                mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()
                 )
             )
         );
@@ -901,7 +852,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldPauseAndResumeBasedOnBufferedRecords() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
 
         task.addRecords(partition1, asList(
             getConsumerRecordWithOffsetAsTimestamp(partition1, 10),
@@ -955,7 +906,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldPunctuateOnceStreamTimeAfterGap() {
-        task = createStatelessTask(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig());
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -1040,7 +991,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRespectPunctuateCancellationStreamTime() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -1080,7 +1031,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRespectPunctuateCancellationSystemTime() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
         final long now = time.milliseconds();
@@ -1151,7 +1102,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCommitConsumerPositionIfRecordQueueIsEmpty() {
-        task = createStatelessTask(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig());
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -1171,7 +1122,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldFailOnCommitIfTaskIsClosed() {
-        task = createStatelessTask(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig());
         task.suspend();
         task.transitionTo(Task.State.CLOSED);
 
@@ -1185,7 +1136,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRespectCommitRequested() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -1195,13 +1146,13 @@ public class StreamTaskTest {
 
     @Test
     public void shouldEncodeAndDecodeMetadata() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(encodeTimestamp(DEFAULT_TIMESTAMP)));
     }
 
     @Test
     public void shouldReturnUnknownTimestampIfUnknownVersion() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
 
         final byte[] emptyMessage = {StreamTask.LATEST_MAGIC_BYTE + 1};
         final String encodedString = Base64.getEncoder().encodeToString(emptyMessage);
@@ -1210,14 +1161,14 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReturnUnknownTimestampIfEmptyMessage() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
 
         assertEquals(RecordQueue.UNKNOWN, task.decodeTimestamp(""));
     }
 
     @Test
     public void shouldBeProcessableIfAllPartitionsBuffered() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -1241,7 +1192,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldBeRecordIdlingTimeIfSuspended() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
         task.suspend();
@@ -1254,7 +1205,7 @@ public class StreamTaskTest {
     }
 
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
         final long now = time.milliseconds();
@@ -1274,7 +1225,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotPunctuateSystemTimeWhenIntervalNotElapsed() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
         assertFalse(task.maybePunctuateSystemTime());
@@ -1285,7 +1236,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldPunctuateOnceSystemTimeAfterGap() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
         final long now = time.milliseconds();
@@ -1311,7 +1262,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingStreamTime() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -1329,7 +1280,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingWallClockTimeTime() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -1347,7 +1298,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotShareHeadersBetweenPunctuateIterations() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -1531,7 +1482,7 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
         task.processorContext().setCurrentNode(processorStreamTime);
@@ -1545,7 +1496,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCallPunctuateOnPassedInProcessorNode() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
@@ -1556,7 +1507,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldSetProcessorNodeOnContextBackToNullAfterSuccessfulPunctuate() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
@@ -1565,14 +1516,14 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowIllegalStateExceptionOnScheduleIfCurrentNodeIsNull() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         assertThrows(IllegalStateException.class, () -> task.schedule(1, PunctuationType.STREAM_TIME, timestamp -> { }));
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void shouldNotThrowExceptionOnScheduleIfCurrentNodeIsNotNull() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
         task.processorContext().setCurrentNode(processorStreamTime);
         task.schedule(1, PunctuationType.STREAM_TIME, timestamp -> { });
     }
@@ -1674,7 +1625,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowIfCommittingOnIllegalState() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
 
         task.transitionTo(SUSPENDED);
         task.transitionTo(Task.State.CLOSED);
@@ -1683,7 +1634,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowIfPostCommittingOnIllegalState() {
-        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig("100"));
 
         task.transitionTo(SUSPENDED);
         task.transitionTo(Task.State.CLOSED);
@@ -2095,7 +2046,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldUpdatePartitions() {
-        task = createStatelessTask(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig());
         final Set<TopicPartition> newPartitions = new HashSet<>(task.inputPartitions());
         newPartitions.add(new TopicPartition("newTopic", 0));
 
@@ -2122,7 +2073,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowIfRecyclingDirtyTask() {
-        task = createStatelessTask(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig());
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -2230,7 +2181,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldInitTaskTimeoutAndEventuallyThrow() {
-        task = createStatelessTask(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig());
 
         task.maybeInitTaskTimeoutOrThrow(0L, null);
         task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).toMillis(), null);
@@ -2243,7 +2194,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCLearTaskTimeout() {
-        task = createStatelessTask(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createStatelessTask(createConfig());
 
         task.maybeInitTaskTimeoutOrThrow(0L, null);
         task.clearTaskTimeout();
@@ -2440,8 +2391,7 @@ public class StreamTaskTest {
         );
     }
 
-    private StreamTask createStatelessTask(final StreamsConfig config,
-                                           final String builtInMetricsVersion) {
+    private StreamTask createStatelessTask(final StreamsConfig config) {
         final ProcessorTopology topology = withSources(
             asList(source1, source2, processorStreamTime, processorSystemTime),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
@@ -2471,7 +2421,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             config,
-            new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, time),
+            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time),
             stateDirectory,
             cache,
             time,

@@ -16,23 +16,18 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
@@ -47,11 +42,6 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
     private InternalProcessorContext internalProcessorContext;
     private String threadId;
-
-    private Sensor processSensor;
-    private Sensor punctuateSensor;
-    private Sensor destroySensor;
-    private Sensor createSensor;
 
     private boolean closed = true;
 
@@ -109,17 +99,11 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             throw new IllegalStateException("The processor is not closed");
 
         try {
+            threadId = Thread.currentThread().getName();
             internalProcessorContext = context;
-            initSensors();
-            maybeMeasureLatency(
-                () -> {
-                    if (processor != null) {
-                        processor.init(context);
-                    }
-                },
-                time,
-                createSensor
-            );
+            if (processor != null) {
+                processor.init(context);
+            }
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
@@ -129,29 +113,13 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         closed = false;
     }
 
-    private void initSensors() {
-        threadId = Thread.currentThread().getName();
-        final String taskId = internalProcessorContext.taskId().toString();
-        final StreamsMetricsImpl streamsMetrics = internalProcessorContext.metrics();
-        processSensor = ProcessorNodeMetrics.processSensor(threadId, taskId, name, streamsMetrics);
-        punctuateSensor = ProcessorNodeMetrics.punctuateSensor(threadId, taskId, name, streamsMetrics);
-        createSensor = ProcessorNodeMetrics.createSensor(threadId, taskId, name, streamsMetrics);
-        destroySensor = ProcessorNodeMetrics.destroySensor(threadId, taskId, name, streamsMetrics);
-    }
-
     public void close() {
         throwIfClosed();
 
         try {
-            maybeMeasureLatency(
-                () -> {
-                    if (processor != null) {
-                        processor.close();
-                    }
-                },
-                time,
-                destroySensor
-            );
+            if (processor != null) {
+                processor.close();
+            }
             internalProcessorContext.metrics().removeAllNodeLevelSensors(
                 threadId,
                 internalProcessorContext.taskId().toString(),
@@ -175,7 +143,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         throwIfClosed();
 
         try {
-            maybeMeasureLatency(() -> processor.process(record), time, processSensor);
+            processor.process(record);
         } catch (final ClassCastException e) {
             final String keyClass = record.key() == null ? "unknown because key is null" : record.key().getClass().getName();
             final String valueClass = record.value() == null ? "unknown because value is null" : record.value().getClass().getName();
@@ -194,7 +162,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     }
 
     public void punctuate(final long timestamp, final Punctuator punctuator) {
-        maybeMeasureLatency(() -> punctuator.punctuate(timestamp), time, punctuateSensor);
+        punctuator.punctuate(timestamp);
     }
 
     public boolean isTerminalNode() {
