@@ -2451,7 +2451,5 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 wakeup();
             }
         }
-
     }
-
 }
