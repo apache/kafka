@@ -237,7 +237,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
             Time.SYSTEM
         );
-        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, taskId.toString(), metrics);
+        TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), metrics);
     }
 
     @Override

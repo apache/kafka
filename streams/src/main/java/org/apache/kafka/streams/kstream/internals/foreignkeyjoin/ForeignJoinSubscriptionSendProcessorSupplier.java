@@ -88,7 +88,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
             if (valueSerializer == null) {
                 valueSerializer = (Serializer<V>) context.valueSerde().serializer();
             }
-            droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
+            droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
                 (StreamsMetricsImpl) context.metrics()

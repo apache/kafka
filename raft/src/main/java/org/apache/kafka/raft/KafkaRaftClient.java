@@ -444,7 +444,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void flushLeaderLog(LeaderState<T> state, long currentTimeMs) {
-        // We update the end offset before flushing so that parked fetches can return sooner
+        // We update the end offset before flushing so that parked fetches can return sooner.
         updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
         log.flush();
     }
@@ -497,11 +497,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         resetConnections();
 
         // After becoming a follower, we need to complete all pending fetches so that
-        // they can be resent to the leader without waiting for their expiration
+        // they can be re-sent to the leader without waiting for their expirations
         fetchPurgatory.completeAllExceptionally(new NotLeaderOrFollowerException(
             "Cannot process the fetch request because the node is no longer the leader."));
 
-        // Clearing the append purgatory should complete all future exceptionally since this node is no longer the leader
+        // Clearing the append purgatory should complete all futures exceptionally since this node is no longer the leader
         appendPurgatory.completeAllExceptionally(new NotLeaderOrFollowerException(
             "Failed to receive sufficient acknowledgments for this append before leader change."));
     }
@@ -547,7 +547,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         if (!hasValidTopicPartition(request, log.topicPartition())) {
-            // Until we support multi-raft, we treat topic partition mismatches as invalid requests
+            // Until we support multi-raft, we treat individual topic partition mismatches as invalid requests
             return new VoteResponseData().setErrorCode(Errors.INVALID_REQUEST.code());
         }
 
@@ -633,7 +633,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                             binaryExponentialElectionBackoffMs(state.retries())
                         );
                     }
-
                 }
             } else {
                 logger.debug("Ignoring vote response {} since we are no longer a candidate in epoch {}",
@@ -1067,7 +1066,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             FetchResponseData.EpochEndOffset divergingEpoch = partitionResponse.divergingEpoch();
             if (divergingEpoch.epoch() >= 0) {
                 // The leader is asking us to truncate before continuing
-                OffsetAndEpoch divergingOffsetAndEpoch = new OffsetAndEpoch(
+                final OffsetAndEpoch divergingOffsetAndEpoch = new OffsetAndEpoch(
                     divergingEpoch.endOffset(), divergingEpoch.epoch());
 
                 state.highWatermark().ifPresent(highWatermark -> {
@@ -1099,7 +1098,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     );
                     return false;
                 } else {
-                    OffsetAndEpoch snapshotId = new OffsetAndEpoch(
+                    final OffsetAndEpoch snapshotId = new OffsetAndEpoch(
                         partitionResponse.snapshotId().endOffset(),
                         partitionResponse.snapshotId().epoch()
                     );

@@ -31,12 +31,13 @@ import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.DescribeProducersResponse;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -45,20 +46,28 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class DescribeProducersHandler implements AdminApiHandler<TopicPartition, PartitionProducerState> {
-    private final LogContext logContext;
     private final Logger log;
     private final DescribeProducersOptions options;
-    private final Set<TopicPartition> topicPartitions;
+    private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
 
     public DescribeProducersHandler(
-        Set<TopicPartition> topicPartitions,
         DescribeProducersOptions options,
         LogContext logContext
     ) {
-        this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
         this.options = options;
         this.log = logContext.logger(DescribeProducersHandler.class);
-        this.logContext = logContext;
+
+        if (options.brokerId().isPresent()) {
+            this.lookupStrategy = new StaticBrokerStrategy<>(options.brokerId().getAsInt());
+        } else {
+            this.lookupStrategy = new PartitionLeaderStrategy(logContext);
+        }
+    }
+
+    public static AdminApiFuture.SimpleAdminApiFuture<TopicPartition, PartitionProducerState> newFuture(
+        Collection<TopicPartition> topicPartitions
+    ) {
+        return AdminApiFuture.forKeys(new HashSet<>(topicPartitions));
     }
 
     @Override
@@ -67,17 +76,8 @@ public class DescribeProducersHandler implements AdminApiHandler<TopicPartition,
     }
 
     @Override
-    public Keys<TopicPartition> initializeKeys() {
-        if (options.brokerId().isPresent()) {
-            // If the options indicate a specific broker, then we can skip the lookup step
-            int destinationBrokerId = options.brokerId().getAsInt();
-            Map<TopicPartition, Integer> staticMappedPartitions =
-                Utils.initializeMap(topicPartitions, () -> destinationBrokerId);
-            return Keys.staticMapped(staticMappedPartitions);
-        } else {
-            PartitionLeaderStrategy lookupStrategy = new PartitionLeaderStrategy(logContext);
-            return Keys.dynamicMapped(topicPartitions, lookupStrategy);
-        }
+    public AdminApiLookupStrategy<TopicPartition> lookupStrategy() {
+        return lookupStrategy;
     }
 
     @Override

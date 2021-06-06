@@ -48,11 +48,6 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
             valueSerde).build();
     }
 
-    @Override
-    String getMetricsScope() {
-        return new InMemorySessionBytesStoreSupplier(null, 0).metricsScope();
-    }
-
     @Test
     public void shouldRemoveExpired() {
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
