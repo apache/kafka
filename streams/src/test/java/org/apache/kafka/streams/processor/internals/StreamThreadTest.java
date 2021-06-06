@@ -130,7 +130,6 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -326,23 +325,11 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCreateMetricsAtStartupWithBuiltInMetricsVersionLatest() {
-        shouldCreateMetricsAtStartup(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldCreateMetricsAtStartupWithBuiltInMetricsVersion0100To24() {
-        shouldCreateMetricsAtStartup(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldCreateMetricsAtStartup(final String builtInMetricsVersion) {
-        final Properties props = configProps(false);
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        final StreamsConfig config = new StreamsConfig(props);
+    public void shouldCreateMetricsAtStartup() {
         final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
-        final String defaultGroupName = getGroupName(builtInMetricsVersion);
+        final String defaultGroupName = "stream-thread-metrics";
         final Map<String, String> defaultTags = Collections.singletonMap(
-            getThreadTagKey(builtInMetricsVersion),
+            "thread-id",
             thread.getName()
         );
         final String descriptionIsNotVerified = "";
@@ -404,32 +391,20 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "task-closed-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
 
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
-            assertNotNull(metrics.metrics().get(metrics.metricName(
-                "skipped-records-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(
-                "skipped-records-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-        } else {
-            assertNull(metrics.metrics().get(metrics.metricName(
-                "skipped-records-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-            assertNull(metrics.metrics().get(metrics.metricName(
-                "skipped-records-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-        }
+        assertNull(metrics.metrics().get(metrics.metricName(
+            "skipped-records-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNull(metrics.metrics().get(metrics.metricName(
+            "skipped-records-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
 
         final String taskGroupName = "stream-task-metrics";
         final Map<String, String> taskTags =
-            mkMap(mkEntry("task-id", "all"), mkEntry(getThreadTagKey(builtInMetricsVersion), thread.getName()));
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
-            assertNotNull(metrics.metrics().get(metrics.metricName(
-                "commit-rate", taskGroupName, descriptionIsNotVerified, taskTags)));
-        } else {
-            assertNull(metrics.metrics().get(metrics.metricName(
-                "commit-latency-avg", taskGroupName, descriptionIsNotVerified, taskTags)));
-            assertNull(metrics.metrics().get(metrics.metricName(
-                "commit-latency-max", taskGroupName, descriptionIsNotVerified, taskTags)));
-            assertNull(metrics.metrics().get(metrics.metricName(
-                "commit-rate", taskGroupName, descriptionIsNotVerified, taskTags)));
-        }
+            mkMap(mkEntry("task-id", "all"), mkEntry("thread-id", thread.getName()));
+        assertNull(metrics.metrics().get(metrics.metricName(
+            "commit-latency-avg", taskGroupName, descriptionIsNotVerified, taskTags)));
+        assertNull(metrics.metrics().get(metrics.metricName(
+            "commit-latency-max", taskGroupName, descriptionIsNotVerified, taskTags)));
+        assertNull(metrics.metrics().get(metrics.metricName(
+            "commit-rate", taskGroupName, descriptionIsNotVerified, taskTags)));
 
         final JmxReporter reporter = new JmxReporter();
         final MetricsContext metricsContext = new KafkaMetricsContext("kafka.streams");
@@ -439,29 +414,13 @@ public class StreamThreadTest {
         assertEquals(CLIENT_ID + "-StreamThread-1", thread.getName());
         assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,%s=%s",
                                                         defaultGroupName,
-                                                        getThreadTagKey(builtInMetricsVersion),
+                                                        "thread-id",
                                                         thread.getName())
         ));
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
-            assertTrue(reporter.containsMbean(String.format(
-                "kafka.streams:type=stream-task-metrics,%s=%s,task-id=all",
-                getThreadTagKey(builtInMetricsVersion),
-                thread.getName())));
-        } else {
-            assertFalse(reporter.containsMbean(String.format(
-                "kafka.streams:type=stream-task-metrics,%s=%s,task-id=all",
-                getThreadTagKey(builtInMetricsVersion),
-                thread.getName())));
-        }
-    }
-
-    private String getGroupName(final String builtInMetricsVersion) {
-        return builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24) ? "stream-metrics"
-            : "stream-thread-metrics";
-    }
-
-    private String getThreadTagKey(final String builtInMetricsVersion) {
-        return builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24) ? "client-id" : "thread-id";
+        assertFalse(reporter.containsMbean(String.format(
+            "kafka.streams:type=stream-task-metrics,%s=%s,task-id=all",
+            "thread-id",
+            thread.getName())));
     }
 
     @Test
@@ -2134,26 +2093,13 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldLogAndNotRecordSkippedMetricForDeserializationExceptionWithBuiltInMetricsVersionLatest() {
-        shouldLogAndRecordSkippedMetricForDeserializationException(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldLogAndRecordSkippedMetricForDeserializationExceptionWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndRecordSkippedMetricForDeserializationException(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldLogAndRecordSkippedMetricForDeserializationException(final String builtInMetricsVersion) {
+    public void shouldLogAndRecordSkippedMetricForDeserializationException() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
         final Properties config = configProps(false);
         config.setProperty(
             StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
             LogAndContinueExceptionHandler.class.getName()
-        );
-        config.setProperty(
-            StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG,
-            builtInMetricsVersion
         );
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
         final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(config), false);
@@ -2172,21 +2118,6 @@ public class StreamThreadTest {
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
         thread.runOnce();
-
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            final MetricName skippedTotalMetric = metrics.metricName(
-                "skipped-records-total",
-                "stream-metrics",
-                Collections.singletonMap("client-id", thread.getName())
-            );
-            final MetricName skippedRateMetric = metrics.metricName(
-                "skipped-records-rate",
-                "stream-metrics",
-                Collections.singletonMap("client-id", thread.getName())
-            );
-            assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
-            assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
-        }
 
         long offset = -1;
         mockConsumer.addRecord(new ConsumerRecord<>(
@@ -2580,16 +2511,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldLogAndRecordSkippedRecordsForInvalidTimestampsWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndRecordSkippedRecordsForInvalidTimestamps(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    @Test
-    public void shouldLogAndNotRecordSkippedRecordsForInvalidTimestampsWithBuiltInMetricsVersionLatest() {
-        shouldLogAndRecordSkippedRecordsForInvalidTimestamps(StreamsConfig.METRICS_LATEST);
-    }
-
-    private void shouldLogAndRecordSkippedRecordsForInvalidTimestamps(final String builtInMetricsVersion) {
+    public void shouldLogAndRecordSkippedRecordsForInvalidTimestamps() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
         final Properties config = configProps(false);
@@ -2597,7 +2519,6 @@ public class StreamThreadTest {
             StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
             LogAndSkipOnInvalidTimestamp.class.getName()
         );
-        config.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(config), false);
 
         thread.setState(StreamThread.State.STARTING);
@@ -2628,32 +2549,17 @@ public class StreamThreadTest {
             Collections.singletonMap("client-id", thread.getName())
         );
 
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
-            assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
-        }
-
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RecordQueue.class)) {
             long offset = -1;
             addRecord(mockConsumer, ++offset);
             addRecord(mockConsumer, ++offset);
             thread.runOnce();
 
-            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-                assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
-                assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
-            }
-
             addRecord(mockConsumer, ++offset);
             addRecord(mockConsumer, ++offset);
             addRecord(mockConsumer, ++offset);
             addRecord(mockConsumer, ++offset);
             thread.runOnce();
-
-            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-                assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
-                assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
-            }
 
             addRecord(mockConsumer, ++offset, 1L);
             addRecord(mockConsumer, ++offset, 1L);
@@ -2692,11 +2598,6 @@ public class StreamThreadTest {
                     "topic=[topic1] partition=[1] offset=[5] extractedTimestamp=[-1] " +
                     "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
             ));
-        }
-
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
-            assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
         }
     }
 
