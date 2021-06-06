@@ -308,17 +308,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         for (ListenerContext listenerContext : listenerContexts) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < log.startOffset() && nextExpectedOffset < highWatermark) {
-                    SnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> {
-                        return new IllegalStateException(
-                            String.format(
-                                "Snapshot expected since next offset of %s is %s, log start offset is %s and high-watermark is %s",
-                                listenerContext.listener.getClass().getTypeName(),
-                                nextExpectedOffset,
-                                log.startOffset(),
-                                highWatermark
-                            )
-                        );
-                    });
+                    SnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> new IllegalStateException(
+                        String.format(
+                            "Snapshot expected since next offset of %s is %s, log start offset is %s and high-watermark is %s",
+                            listenerContext.listener.getClass().getTypeName(),
+                            nextExpectedOffset,
+                            log.startOffset(),
+                            highWatermark
+                        )
+                    ));
                     listenerContext.fireHandleSnapshot(snapshot);
                 }
             });
@@ -346,14 +344,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private void maybeFireHandleCommit(long baseOffset, int epoch, List<T> records) {
         for (ListenerContext listenerContext : listenerContexts) {
             OptionalLong nextExpectedOffsetOpt = listenerContext.nextExpectedOffset();
-            if (!nextExpectedOffsetOpt.isPresent()) {
-                continue;
-            }
-
-            long nextExpectedOffset = nextExpectedOffsetOpt.getAsLong();
-            if (nextExpectedOffset == baseOffset) {
-                listenerContext.fireHandleCommit(baseOffset, epoch, records);
-            }
+            nextExpectedOffsetOpt.ifPresent(nextOffset -> {
+                if (nextOffset == baseOffset)
+                    listenerContext.fireHandleCommit(baseOffset, epoch, records);
+            });
         }
     }
 
