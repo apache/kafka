@@ -97,6 +97,8 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
+
+import static org.easymock.EasyMock.anyBoolean;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyLong;
@@ -964,7 +966,8 @@ public class KafkaStreamsTest {
         PowerMock.expectNew(StateDirectory.class,
             anyObject(StreamsConfig.class),
             anyObject(Time.class),
-            EasyMock.eq(true)
+            EasyMock.eq(true),
+            anyBoolean()
         ).andReturn(stateDirectory);
         EasyMock.expect(stateDirectory.initializeProcessId()).andReturn(UUID.randomUUID());
         stateDirectory.close();
@@ -1137,7 +1140,8 @@ public class KafkaStreamsTest {
         PowerMock.expectNew(StateDirectory.class,
             anyObject(StreamsConfig.class),
             anyObject(Time.class),
-            EasyMock.eq(shouldFilesExist)
+            EasyMock.eq(shouldFilesExist),
+            anyBoolean()
         ).andReturn(stateDirectory);
         EasyMock.expect(stateDirectory.initializeProcessId()).andReturn(UUID.randomUUID());
 
