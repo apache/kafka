@@ -45,7 +45,7 @@ public class NamedCacheMetricsTest {
     private final Map<String, String> tagMap = mkMap(mkEntry("key", "value"));
 
     @Test
-    public void testShould() {
+    public void shouldGetHitRatioSensorWithBuiltInMetricsVersionCurrent() {
         final String hitRatio = "hit-ratio";
         final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
         Mockito.when(streamsMetrics.cacheLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, hitRatio, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
