@@ -1392,7 +1392,7 @@ class Log(@volatile private var _dir: File,
    *                  (if there is one) and returns true iff it is deletable
    * @return The number of segments deleted
    */
-  private def deleteOldSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean,
+   def deleteOldSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean,
                                 reason: SegmentDeletionReason): Int = {
     lock synchronized {
       val deletable = deletableSegments(predicate)

@@ -23,6 +23,7 @@ import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 
 import java.util.Optional;
+import java.util.OptionalLong;
 
 public interface ReplicatedLog extends AutoCloseable {
 
@@ -186,6 +187,11 @@ public interface ReplicatedLog extends AutoCloseable {
      * Flush the current log to disk.
      */
     void flush();
+
+    /**
+     * Possibly perform cleaning of snapshots and logs
+     */
+    void maybeClean();
 
     /**
      * Get the last offset which has been flushed to disk.
