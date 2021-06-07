@@ -444,7 +444,7 @@ class GroupCoordinator(val brokerId: Int,
                 // force a rebalance if the leader sends JoinGroup;
                 // This allows the leader to trigger rebalances for changes affecting assignment
                 // which do not affect the member metadata (such as topic metadata changes for the consumer)
-                updateMemberAndRebalance(group, member, protocols, s"leader ${member.memberId} re-joining group during ${group.currentState}", responseCallback)
+                updateMemberAndRebalance(group, member, protocols, s"Leader ${member.memberId} re-joining group during ${group.currentState}", responseCallback)
               } else if (!member.matches(protocols)) {
                 updateMemberAndRebalance(group, member, protocols, s"Updating metadata for member ${member.memberId} during ${group.currentState}", responseCallback)
               } else {
@@ -567,7 +567,7 @@ class GroupCoordinator(val brokerId: Int,
 
             // if this is the leader, then we can attempt to persist state and transition to stable
             if (group.isLeader(memberId)) {
-              info(s"Assignment received from leader for group ${group.groupId} for generation ${group.generationId}. " +
+              info(s"Assignment received from leader $memberId for group ${group.groupId} for generation ${group.generationId}. " +
                 s"The group has ${group.size} members, ${group.allStaticMembers.size} of which are static.")
 
               // fill any missing members with an empty assignment
@@ -586,7 +586,7 @@ class GroupCoordinator(val brokerId: Int,
                   if (group.is(CompletingRebalance) && generationId == group.generationId) {
                     if (error != Errors.NONE) {
                       resetAndPropagateAssignmentError(group, error)
-                      maybePrepareRebalance(group, s"error when storing group assignment during SyncGroup (member: $memberId)")
+                      maybePrepareRebalance(group, s"Error when storing group assignment during SyncGroup (member: $memberId)")
                     } else {
                       setAndPropagateAssignment(group, assignment)
                       group.transitionTo(Stable)
@@ -616,7 +616,7 @@ class GroupCoordinator(val brokerId: Int,
 
     def removeCurrentMemberFromGroup(group: GroupMetadata, memberId: String): Unit = {
       val member = group.get(memberId)
-      removeMemberAndUpdateGroup(group, member, s"removing member $memberId on LeaveGroup")
+      removeMemberAndUpdateGroup(group, member, s"Removing member $memberId on LeaveGroup")
       removeHeartbeatForLeavingMember(group, member)
       info(s"Member $member has left group $groupId through explicit `LeaveGroup` request")
     }
