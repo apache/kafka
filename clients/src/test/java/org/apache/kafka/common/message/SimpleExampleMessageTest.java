@@ -372,6 +372,7 @@ public class SimpleExampleMessageTest {
                 "myTaggedStruct=TaggedStruct(structId=''), " +
                 "myCommonStruct=TestCommonStruct(foo=123, bar=123), " +
                 "myOtherCommonStruct=TestCommonStruct(foo=123, bar=123), " +
-                "myUint16=65535)", message.toString());
+                "myUint16=65535, " +
+                "myUint32=1234567)", message.toString());
     }
 }
