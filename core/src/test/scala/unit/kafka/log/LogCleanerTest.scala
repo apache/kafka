@@ -1452,6 +1452,60 @@ class LogCleanerTest {
   }
 
   @Test
+  def testRecoveryRebuildsIndices(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+    logProps.put(LogConfig.FileDeleteDelayMsProp, 10: java.lang.Integer)
+
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
+
+    // create a log and append some messages
+    var log = makeLog(config = config)
+    var messageCount = 0
+    while (log.numberOfSegments < 10) {
+      log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
+      messageCount += 1
+    }
+
+    // pretend we have odd-numbered keys
+    val offsetMap = new FakeOffsetMap(Int.MaxValue)
+    for (k <- 1 until messageCount by 2)
+      offsetMap.put(key(k), Long.MaxValue)
+
+    // clean the log
+    cleaner.cleanSegments(log, log.logSegments.take(5).toSeq, offsetMap, 0L, new CleanerStats(),
+      new CleanedTransactionMetadata)
+    // clear scheduler so that async deletes don't run
+    time.scheduler.clear()
+    val cleanedKeys = LogTestUtils.keysInLog(log)
+
+    // pretend we are cleaning one of the segments in the log
+    val segmentBeingCleaned = log.logSegments.take(5).last
+    val offsetIndex = segmentBeingCleaned.offsetIndex
+    offsetIndex.sanityCheck()
+    val allEntries =
+      for (entryNum <- 0 until offsetIndex.entries)
+        yield offsetIndex.entry(entryNum)
+    val offsetIndexLength = offsetIndex.length
+
+    // Simulate log recovery after swap file is created and old segment is deleted. Also delete the corresponding
+    // offset index and validate that it is recreated after recovery.
+    log.close()
+    segmentBeingCleaned.changeFileSuffixes("", Log.SwapFileSuffix)
+    segmentBeingCleaned.offsetIndex.deleteIfExists()
+    log = recoverAndCheck(config, cleanedKeys)
+    val recoveredSegment = log.logSegments.find(_.baseOffset == segmentBeingCleaned.baseOffset).get
+    val recoveredOffsetIndex = recoveredSegment.offsetIndex
+    val recoveredEntries =
+      for (entryNum <- 0 until recoveredOffsetIndex.entries)
+        yield recoveredOffsetIndex.entry(entryNum)
+    assertEquals(allEntries, recoveredEntries)
+    assertEquals(offsetIndexLength, recoveredOffsetIndex.length)
+  }
+
+  @Test
   def testBuildOffsetMapFakeLarge(): Unit = {
     val map = new FakeOffsetMap(1000)
     val logProps = new Properties()
