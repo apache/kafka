@@ -28,6 +28,8 @@ import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.servlet.http.HttpServletResponse;
+import javax.ws.rs.core.Response;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -100,6 +102,27 @@ public class ConnectorRestartApiIntegrationTest {
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
+    }
+
+    @Test
+    public void testRestartUnknownConnector() throws Exception {
+        restartUnknownConnector(false, false);
+        restartUnknownConnector(false, true);
+        restartUnknownConnector(true, false);
+        restartUnknownConnector(true, true);
+    }
+
+    private void restartUnknownConnector(boolean onlyFailed, boolean includeTasks) throws Exception {
+        String connectorName = "Unknown";
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        // Call the Restart API
+        String restartEndpoint = connect.endpointForResource(
+                String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, connectorName));
+        Response response = connect.requestPost(restartEndpoint, "", Collections.emptyMap());
+        assertEquals(HttpServletResponse.SC_NOT_FOUND, response.getStatus());
     }
 
     @Test
@@ -232,7 +255,7 @@ public class ConnectorRestartApiIntegrationTest {
 
         StartAndStopCounterSnapshot beforeSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
 
-        StartAndStopLatch startLatch = connectorHandle.expectedStarts(expectedConnectorRestarts, 0,  includeTasks);
+        StartAndStopLatch startLatch = connectorHandle.expectedStarts(expectedConnectorRestarts, 0, includeTasks);
 
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
