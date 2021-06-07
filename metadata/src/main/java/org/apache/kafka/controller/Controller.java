@@ -20,6 +20,8 @@ package org.apache.kafka.controller;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
+import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
@@ -221,6 +223,15 @@ public interface Controller extends AutoCloseable {
      */
     CompletableFuture<Map<ClientQuotaEntity, ApiError>> alterClientQuotas(
         Collection<ClientQuotaAlteration> quotaAlterations, boolean validateOnly
+    );
+
+    /**
+     * Allocate a block of producer IDs for transactional and idempotent producers
+     * @param request   The allocate producer IDs request
+     * @return          A future which yields a new producer ID block as a response
+     */
+    CompletableFuture<AllocateProducerIdsResponseData> allocateProducerIds(
+        AllocateProducerIdsRequestData request
     );
 
     /**

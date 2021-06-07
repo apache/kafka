@@ -324,7 +324,11 @@ object LogLoader extends Logging {
    * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
    */
   private def recoverSegment(segment: LogSegment, params: LoadLogParams): Int = {
-    val producerStateManager = new ProducerStateManager(params.topicPartition, params.dir, params.maxProducerIdExpirationMs)
+    val producerStateManager = new ProducerStateManager(
+      params.topicPartition,
+      params.dir,
+      params.maxProducerIdExpirationMs,
+      params.time)
     Log.rebuildProducerState(
       producerStateManager,
       params.segments,
@@ -407,7 +411,7 @@ object LogLoader extends Logging {
             // do nothing and fall back to the recover index logic
           }
         }
-      info(s"Found log file ${swapFile.getPath} from interrupted swap operation, which is not recoverable from ${Log.CleanedFileSuffix} files, repairing.")
+      info(s"${params.logIdentifier}Found log file ${swapFile.getPath} from interrupted swap operation, which is not recoverable from ${Log.CleanedFileSuffix} files, repairing.")
       recoverSegment(swapSegment, params)
 
       // We create swap files for two cases:
@@ -459,8 +463,9 @@ object LogLoader extends Logging {
         if (logEndOffset >= params.logStartOffsetCheckpoint)
           Some(logEndOffset)
         else {
-          warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ${params.logStartOffsetCheckpoint}. " +
-            "This could happen if segment files were deleted from the file system.")
+          warn(s"${params.logIdentifier}Deleting all segments because logEndOffset ($logEndOffset) " +
+            s" smaller than logStartOffset ${params.logStartOffsetCheckpoint}." +
+            " This could happen if segment files were deleted from the file system.")
           removeAndDeleteSegmentsAsync(params.segments.values, params)
           params.leaderEpochCache.foreach(_.clearAndFlush())
           params.producerStateManager.truncateFullyAndStartAt(params.logStartOffsetCheckpoint)
@@ -548,7 +553,7 @@ object LogLoader extends Logging {
       // materialization of the iterator here, so that results of the iteration remain valid and
       // deterministic.
       val toDelete = segmentsToDelete.toList
-      info(s"Deleting segments as part of log recovery: ${toDelete.mkString(",")}")
+      info(s"${params.logIdentifier}Deleting segments as part of log recovery: ${toDelete.mkString(",")}")
       toDelete.foreach { segment =>
         params.segments.remove(segment.baseOffset)
       }

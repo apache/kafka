@@ -43,8 +43,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public abstract class AbstractStickyAssignorTest {
     protected AbstractStickyAssignor assignor;
     protected String consumerId = "consumer";
+    protected String consumer1 = "consumer1";
+    protected String consumer2 = "consumer2";
+    protected String consumer3 = "consumer3";
+    protected String consumer4 = "consumer4";
     protected Map<String, Subscription> subscriptions;
     protected String topic = "topic";
+    protected String topic1 = "topic1";
+    protected String topic2 = "topic2";
+    protected String topic3 = "topic3";
 
     protected abstract AbstractStickyAssignor createAssignor();
 
@@ -124,9 +131,6 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testOneConsumerMultipleTopics() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 1);
         partitionsPerTopic.put(topic2, 2);
@@ -141,9 +145,6 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testTwoConsumersOneTopicOnePartition() {
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 1);
 
@@ -158,9 +159,6 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testTwoConsumersOneTopicTwoPartitions() {
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 2);
 
@@ -177,12 +175,6 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testMultipleConsumersMixedTopicSubscriptions() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-        String consumer3 = "consumer3";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 2);
@@ -202,11 +194,6 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testTwoConsumersTwoTopicsSixPartitions() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 3);
@@ -227,11 +214,6 @@ public abstract class AbstractStickyAssignorTest {
      */
     @Test
     public void testConsumerOwningMinQuotaExpectedMaxQuota() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 2);
         partitionsPerTopic.put(topic2, 3);
@@ -256,12 +238,6 @@ public abstract class AbstractStickyAssignorTest {
      */
     @Test
     public void testMaxQuotaConsumerMoreThanNumExpectedMaxCapacityMembers() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-        String consumer3 = "consumer3";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 2);
         partitionsPerTopic.put(topic2, 2);
@@ -289,12 +265,6 @@ public abstract class AbstractStickyAssignorTest {
      */
     @Test
     public void testAllConsumerAreUnderMinQuota() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-        String consumer3 = "consumer3";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 2);
         partitionsPerTopic.put(topic2, 3);
@@ -319,8 +289,6 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testAddRemoveConsumerOneTopic() {
-        String consumer1 = "consumer1";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
         subscriptions.put(consumer1, new Subscription(topics(topic)));
@@ -331,7 +299,6 @@ public abstract class AbstractStickyAssignorTest {
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
 
-        String consumer2 = "consumer2";
         subscriptions.put(consumer1, buildSubscription(topics(topic), assignment.get(consumer1)));
         subscriptions.put(consumer2, buildSubscription(topics(topic), Collections.emptyList()));
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
@@ -353,12 +320,6 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testAddRemoveTwoConsumersTwoTopics() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-        String consumer3 = "consumer3";
-        String consumer4 = "consumer4";
         List<String> allTopics = topics(topic1, topic2);
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
@@ -441,9 +402,6 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testAddRemoveTopicTwoConsumers() {
-        String consumer1 = "consumer";
-        String consumer2 = "consumer2";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
         subscriptions.put(consumer1, new Subscription(topics(topic)));
@@ -459,7 +417,6 @@ public abstract class AbstractStickyAssignorTest {
         assertTrue((consumer1Assignment1.size() == 1 && consumer2Assignment1.size() == 2) ||
             (consumer1Assignment1.size() == 2 && consumer2Assignment1.size() == 1));
 
-        String topic2 = "topic2";
         partitionsPerTopic.put(topic2, 3);
         subscriptions.put(consumer1, buildSubscription(topics(topic, topic2), assignment.get(consumer1)));
         subscriptions.put(consumer2, buildSubscription(topics(topic, topic2), assignment.get(consumer2)));
@@ -598,6 +555,43 @@ public abstract class AbstractStickyAssignorTest {
         assignor.assign(partitionsPerTopic, subscriptions);
     }
 
+    @Timeout(40)
+    @Test
+    public void testLargeAssignmentAndGroupWithNonEqualSubscription() {
+        // 1 million partitions!
+        int topicCount = 500;
+        int partitionCount = 2_000;
+        int consumerCount = 2_000;
+
+        List<String> topics = new ArrayList<>();
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        for (int i = 0; i < topicCount; i++) {
+            String topicName = getTopicName(i, topicCount);
+            topics.add(topicName);
+            partitionsPerTopic.put(topicName, partitionCount);
+        }
+        for (int i = 0; i < consumerCount; i++) {
+            if (i == consumerCount - 1) {
+                subscriptions.put(getConsumerName(i, consumerCount), new Subscription(topics.subList(0, 1)));
+            } else {
+                subscriptions.put(getConsumerName(i, consumerCount), new Subscription(topics));
+            }
+        }
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+
+        for (int i = 1; i < consumerCount; i++) {
+            String consumer = getConsumerName(i, consumerCount);
+            if (i == consumerCount - 1) {
+                subscriptions.put(consumer, buildSubscription(topics.subList(0, 1), assignment.get(consumer)));
+            } else {
+                subscriptions.put(consumer, buildSubscription(topics, assignment.get(consumer)));
+            }
+        }
+
+        assignor.assign(partitionsPerTopic, subscriptions);
+    }
+
     @Test
     public void testLargeAssignmentWithMultipleConsumersLeavingAndRandomSubscription() {
         Random rand = new Random();
@@ -658,19 +652,23 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testMoveExistingAssignments() {
+        String topic4 = "topic4";
+        String topic5 = "topic5";
+        String topic6 = "topic6";
+
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         for (int i = 1; i <= 6; i++)
-            partitionsPerTopic.put(String.format("topic%02d", i), 1);
+            partitionsPerTopic.put(String.format("topic%d", i), 1);
 
-        subscriptions.put("consumer01",
-            buildSubscription(topics("topic01", "topic02"),
-                partitions(tp("topic01", 0))));
-        subscriptions.put("consumer02",
-            buildSubscription(topics("topic01", "topic02", "topic03", "topic04"),
-                partitions(tp("topic02", 0), tp("topic03", 0))));
-        subscriptions.put("consumer03",
-            buildSubscription(topics("topic02", "topic03", "topic04", "topic05", "topic06"),
-                partitions(tp("topic04", 0), tp("topic05", 0), tp("topic06", 0))));
+        subscriptions.put(consumer1,
+            buildSubscription(topics(topic1, topic2),
+                partitions(tp(topic1, 0))));
+        subscriptions.put(consumer2,
+            buildSubscription(topics(topic1, topic2, topic3, topic4),
+                partitions(tp(topic2, 0), tp(topic3, 0))));
+        subscriptions.put(consumer3,
+            buildSubscription(topics(topic2, topic3, topic4, topic5, topic6),
+                partitions(tp(topic4, 0), tp(topic5, 0), tp(topic6, 0))));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
@@ -679,16 +677,12 @@ public abstract class AbstractStickyAssignorTest {
     @Test
     public void testStickiness() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put("topic01", 3);
-        String consumer1 = "consumer01";
-        String consumer2 = "consumer02";
-        String consumer3 = "consumer03";
-        String consumer4 = "consumer04";
+        partitionsPerTopic.put(topic1, 3);
 
-        subscriptions.put(consumer1, new Subscription(topics("topic01")));
-        subscriptions.put(consumer2, new Subscription(topics("topic01")));
-        subscriptions.put(consumer3, new Subscription(topics("topic01")));
-        subscriptions.put(consumer4, new Subscription(topics("topic01")));
+        subscriptions.put(consumer1, new Subscription(topics(topic1)));
+        subscriptions.put(consumer2, new Subscription(topics(topic1)));
+        subscriptions.put(consumer3, new Subscription(topics(topic1)));
+        subscriptions.put(consumer4, new Subscription(topics(topic1)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
@@ -707,11 +701,11 @@ public abstract class AbstractStickyAssignorTest {
         // removing the potential group leader
         subscriptions.remove(consumer1);
         subscriptions.put(consumer2,
-            buildSubscription(topics("topic01"), assignment.get(consumer2)));
+            buildSubscription(topics(topic1), assignment.get(consumer2)));
         subscriptions.put(consumer3,
-            buildSubscription(topics("topic01"), assignment.get(consumer3)));
+            buildSubscription(topics(topic1), assignment.get(consumer3)));
         subscriptions.put(consumer4,
-            buildSubscription(topics("topic01"), assignment.get(consumer4)));
+            buildSubscription(topics(topic1), assignment.get(consumer4)));
 
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
@@ -730,9 +724,9 @@ public abstract class AbstractStickyAssignorTest {
     @Test
     public void testAssignmentUpdatedForDeletedTopic() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put("topic01", 1);
-        partitionsPerTopic.put("topic03", 100);
-        subscriptions = Collections.singletonMap(consumerId, new Subscription(topics("topic01", "topic02", "topic03")));
+        partitionsPerTopic.put(topic1, 1);
+        partitionsPerTopic.put(topic3, 100);
+        subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic1, topic2, topic3)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(assignment.values().stream().mapToInt(List::size).sum(), 1 + 100);
@@ -764,12 +758,12 @@ public abstract class AbstractStickyAssignorTest {
             int numTopics = minNumTopics + new Random().nextInt(maxNumTopics - minNumTopics);
 
             ArrayList<String> topics = new ArrayList<>();
-            for (int i = 0; i < numTopics; ++i)
-                topics.add(getTopicName(i, maxNumTopics));
 
             Map<String, Integer> partitionsPerTopic = new HashMap<>();
-            for (int i = 0; i < numTopics; ++i)
+            for (int i = 0; i < numTopics; ++i) {
+                topics.add(getTopicName(i, maxNumTopics));
                 partitionsPerTopic.put(getTopicName(i, maxNumTopics), i + 1);
+            }
 
             int numConsumers = minNumConsumers + new Random().nextInt(maxNumConsumers - minNumConsumers);
 

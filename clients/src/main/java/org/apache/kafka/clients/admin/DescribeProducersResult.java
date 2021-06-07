@@ -71,6 +71,13 @@ public class DescribeProducersResult {
         public List<ProducerState> activeProducers() {
             return activeProducers;
         }
+
+        @Override
+        public String toString() {
+            return "PartitionProducerState(" +
+                "activeProducers=" + activeProducers +
+                ')';
+        }
     }
 
 }

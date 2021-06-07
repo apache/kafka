@@ -16,7 +16,7 @@
 {
   "apiKey": 67,
   "type": "request",
-  "listeners": ["controller", "zkBroker"],
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "AllocateProducerIdsRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
