@@ -317,6 +317,11 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
+    public boolean maybeClean() {
+        return false;
+    }
+
+    @Override
     public long lastFlushedOffset() {
         return lastFlushedOffset;
     }
