@@ -98,7 +98,7 @@ public final class MessageUtil {
         long value = jsonNodeToLong(node, about);
         if (value < 0 || value > 4294967293L) {
             throw new RuntimeException(about + ": value " + value +
-                    " does not fit in a 16-bit unsigned integer.");
+                    " does not fit in a 32-bit unsigned integer.");
         }
         return value;
     }
