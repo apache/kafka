@@ -44,10 +44,4 @@ public class RecordDeserializationException extends SerializationException {
     public long offset() {
         return offset;
     }
-
-    /* avoid the expensive and useless stack trace for deserialization exceptions */
-    @Override
-    public Throwable fillInStackTrace() {
-        return this;
-    }
 }
