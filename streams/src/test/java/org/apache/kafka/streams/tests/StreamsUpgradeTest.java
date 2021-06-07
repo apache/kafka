@@ -51,6 +51,7 @@ import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -161,8 +162,8 @@ public class StreamsUpgradeTest {
                     userEndPoint(),
                     taskManager.getTaskOffsetSums(),
                     uniqueField,
-                    0
-                ).encode();
+                    0,
+                    Collections.emptyMap()).encode();
             } else {
                 return new FutureSubscriptionInfo(
                     usedSubscriptionMetadataVersion,
@@ -262,8 +263,8 @@ public class StreamsUpgradeTest {
                                 info.userEndPoint(),
                                 taskManager().getTaskOffsetSums(),
                                 (byte) 0,
-                                0
-                            ).encode(),
+                                0,
+                                Collections.emptyMap()).encode(),
                             subscription.ownedPartitions()
                         ));
                 }

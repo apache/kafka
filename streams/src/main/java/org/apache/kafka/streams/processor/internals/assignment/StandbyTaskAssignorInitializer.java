@@ -16,23 +16,20 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
-import org.apache.kafka.streams.processor.internals.TaskManager;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+/**
+ * Decides which {@link TaskAssignor} implementation to use for standby task assignment based on {@link AssignmentConfigs}.
+ */
+class StandbyTaskAssignorInitializer {
 
-public class ReferenceContainer {
-    public Consumer<byte[], byte[]> mainConsumer;
-    public Admin adminClient;
-    public TaskManager taskManager;
-    public StreamsMetadataState streamsMetadataState;
-    public final AtomicInteger assignmentErrorCode = new AtomicInteger();
-    public final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
-    public Time time;
-    public Map<String, String> clientTags;
+    StandbyTaskAssignor initStandbyTaskAssignor(final AssignmentConfigs configs) {
+        if (configs.numStandbyReplicas == 0) {
+            return new NoopStandbyTaskAssignor(configs);
+        } else if (!configs.rackAwareAssignmentTags.isEmpty()) {
+            return new ClientTagAwareStandbyTaskAssignor(configs);
+        } else {
+            return new DefaultStandbyTaskAssignor(configs);
+        }
+    }
 }

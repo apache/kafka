@@ -49,12 +49,16 @@ import java.io.File;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
+import static org.apache.kafka.common.config.ConfigDef.ListSize.max;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -146,9 +150,11 @@ public class StreamsConfig extends AbstractConfig {
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
     private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
+    private static final short DEFAULT_MAX_CLIENT_TAG_KEY_VALUE_LENGTH = 40;
 
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
+    public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE = 5;
 
     /**
      * Prefix used to provide default topic configs to be applied when creating internal topics.
@@ -213,6 +219,15 @@ public class StreamsConfig extends AbstractConfig {
      */
     @SuppressWarnings("WeakerAccess")
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
+
+    /**
+     * Prefix used to add arbitrary tags to a Kafka Stream's instance as key-value pairs.
+     * Example:
+     * client.tag.zone=zone1
+     * client.tag.cluster=cluster1
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String CLIENT_TAG_PREFIX = "client.tag.";
 
     /**
      * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"} for disabling topology optimization
@@ -427,6 +442,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
     private static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
 
+    /** {@code max.client.tag.length} */
+    public static final String MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG = "max.client.tag.key.value.length";
+    private static final String MAX_CLIENT_TAG_KEY_VALUE_LENGTH_DOC = "The maximum length of key-value pairs set via " + CLIENT_TAG_PREFIX + " configuration prefix.";
+
     /** {@code max.task.idle.ms} */
     public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
     private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time in milliseconds a stream task will stay idle when not all of its partition buffers contain records," +
@@ -493,6 +512,13 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code receive.buffer.bytes} */
     @SuppressWarnings("WeakerAccess")
     public static final String RECEIVE_BUFFER_CONFIG = CommonClientConfigs.RECEIVE_BUFFER_CONFIG;
+
+    /** {@code rack.aware.assignment.tags} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String RACK_AWARE_ASSIGNMENT_TAGS_CONFIG = "rack.aware.assignment.tags";
+    private static final String RACK_AWARE_ASSIGNMENT_TAGS_DOC = "List of client tag keys used to distribute standby replicas across Kafka Streams instances." +
+                                                                 " When configured, Kafka Streams will make a best-effort to distribute" +
+                                                                 " the standby tasks over each client tag dimension.";
 
     /** {@code reconnect.backoff.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -598,6 +624,7 @@ public class StreamsConfig extends AbstractConfig {
             ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
             ProducerConfig.TRANSACTIONAL_ID_CONFIG
         };
+
 
     static {
         CONFIG = new ConfigDef()
@@ -714,6 +741,12 @@ public class StreamsConfig extends AbstractConfig {
                     -1,
                     Importance.MEDIUM,
                     REPLICATION_FACTOR_DOC)
+            .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                    Type.LIST,
+                    Collections.emptyList(),
+                    max(MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
+                    Importance.MEDIUM,
+                    RACK_AWARE_ASSIGNMENT_TAGS_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
                     Type.STRING,
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
@@ -763,6 +796,12 @@ public class StreamsConfig extends AbstractConfig {
                     9 * 60 * 1000L,
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
+            .define(MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG,
+                    Type.SHORT,
+                    DEFAULT_MAX_CLIENT_TAG_KEY_VALUE_LENGTH,
+                    between(1, 200),
+                    Importance.LOW,
+                    MAX_CLIENT_TAG_KEY_VALUE_LENGTH_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
                     ConfigDef.Type.LONG,
                     5 * 60 * 1000L,
@@ -1025,6 +1064,16 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
+     * Prefix a client tag key with {@link #CLIENT_TAG_PREFIX}.
+     *
+     * @param clientTagKey client tag key
+     * @return {@link #CLIENT_TAG_PREFIX} + {@code clientTagKey}
+     */
+    public static String clientTagPrefix(final String clientTagKey) {
+        return CLIENT_TAG_PREFIX + clientTagKey;
+    }
+
+    /**
      * Prefix a property with {@link #TOPIC_PREFIX}
      * used to provide default topic configs to be applied when creating internal topics.
      *
@@ -1106,6 +1155,38 @@ public class StreamsConfig extends AbstractConfig {
                     COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
         }
+
+        // validate rack awareness related configuration
+        final short maxClientTagKeyValueLength = getShort(MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG);
+        final List<String> rackAwareAssignmentTags = getList(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        final Map<String, String> clientTags = getClientTags();
+
+        if (clientTags.size() > MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE) {
+            throw new ConfigException("At most " + MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + " client tags " +
+                                      "can be specified using " + CLIENT_TAG_PREFIX + " prefix.");
+        }
+
+        for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
+            if (!clientTags.containsKey(rackAwareAssignmentTag)) {
+                throw new ConfigException(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                                          rackAwareAssignmentTags,
+                                          "Contains invalid value [" + rackAwareAssignmentTag + "] " +
+                                          "which doesn't have corresponding tag set via [" + CLIENT_TAG_PREFIX + "] prefix.");
+            }
+        }
+
+        clientTags.forEach((tagKey, tagValue) -> {
+            if (tagKey.length() > maxClientTagKeyValueLength) {
+                throw new ConfigException(CLIENT_TAG_PREFIX + tagKey,
+                                          tagValue,
+                                          "Key exceeds maximum length of " + maxClientTagKeyValueLength + ".");
+            }
+            if (tagValue.length() > maxClientTagKeyValueLength) {
+                throw new ConfigException(CLIENT_TAG_PREFIX + tagKey,
+                                          tagValue,
+                                          "Value exceeds max length of " + maxClientTagKeyValueLength + ".");
+            }
+        });
 
         return configUpdates;
     }
@@ -1238,6 +1319,7 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         consumerProps.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
         consumerProps.put(NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
+        consumerProps.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, getList(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
         consumerProps.put(ACCEPTABLE_RECOVERY_LAG_CONFIG, getLong(ACCEPTABLE_RECOVERY_LAG_CONFIG));
         consumerProps.put(MAX_WARMUP_REPLICAS_CONFIG, getInt(MAX_WARMUP_REPLICAS_CONFIG));
         consumerProps.put(PROBING_REBALANCE_INTERVAL_MS_CONFIG, getLong(PROBING_REBALANCE_INTERVAL_MS_CONFIG));
@@ -1387,6 +1469,23 @@ public class StreamsConfig extends AbstractConfig {
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
 
         return props;
+    }
+
+    /**
+     * Get the configured client tags set with {@link #CLIENT_TAG_PREFIX} prefix.
+     * @return Map of the client tags.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public Map<String, String> getClientTags() {
+        return originalsWithPrefix(CLIENT_TAG_PREFIX)
+            .entrySet()
+            .stream()
+            .collect(
+                Collectors.toMap(
+                    Map.Entry::getKey,
+                    tagEntry -> Objects.toString(tagEntry.getValue())
+                )
+            );
     }
 
     private Map<String, Object> getClientPropsWithPrefix(final String prefix,

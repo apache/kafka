@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map.Entry;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -139,7 +140,7 @@ public final class AssignmentTestUtils {
                                            final Set<TaskId> prevTasks,
                                            final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0);
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, Collections.emptyMap());
     }
 
     public static SubscriptionInfo getInfo(final UUID processId,
@@ -147,7 +148,7 @@ public final class AssignmentTestUtils {
                                            final Set<TaskId> standbyTasks,
                                            final String userEndPoint) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0,  0);
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, Collections.emptyMap());
     }
 
     public static SubscriptionInfo getInfo(final UUID processId,
@@ -155,7 +156,7 @@ public final class AssignmentTestUtils {
                                            final Set<TaskId> standbyTasks,
                                            final byte uniqueField) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0);
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0, Collections.emptyMap());
     }
 
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets

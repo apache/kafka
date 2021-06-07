@@ -16,23 +16,24 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
-import org.apache.kafka.streams.processor.internals.TaskManager;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.TreeMap;
+import java.util.UUID;
 
-public class ReferenceContainer {
-    public Consumer<byte[], byte[]> mainConsumer;
-    public Admin adminClient;
-    public TaskManager taskManager;
-    public StreamsMetadataState streamsMetadataState;
-    public final AtomicInteger assignmentErrorCode = new AtomicInteger();
-    public final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
-    public Time time;
-    public Map<String, String> clientTags;
+abstract class StandbyTaskAssignor {
+    protected final AssignmentConfigs configs;
+
+    StandbyTaskAssignor(final AssignmentConfigs configs) {
+        this.configs = configs;
+    }
+
+    abstract void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
+                                     final TreeMap<UUID, ClientState> clientStates);
+
+    boolean isValidTaskMovement(final TaskMovementAttempt taskMovementAttempt) {
+        return true;
+    }
 }

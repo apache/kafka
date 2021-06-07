@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Map;
@@ -54,18 +55,25 @@ public class ClientState {
     private final ClientStateTask previousStandbyTasks = new ClientStateTask(null, null);
     private final ClientStateTask revokingActiveTasks = new ClientStateTask(null, new TreeMap<>());
 
+    private final Map<String, String> clientTags;
+
     private int capacity;
 
     public ClientState() {
-        this(0);
+        this(0, Collections.emptyMap());
     }
 
-    ClientState(final int capacity) {
+    public ClientState(final Map<String, String> clientTags) {
+        this(0, clientTags);
+    }
+
+    ClientState(final int capacity, final Map<String, String> clientTags) {
         previousStandbyTasks.taskIds(new TreeSet<>());
         previousActiveTasks.taskIds(new TreeSet<>());
 
         taskOffsetSums = new TreeMap<>();
         taskLagTotals = new TreeMap<>();
+        this.clientTags = clientTags;
         this.capacity = capacity;
     }
 
@@ -73,12 +81,14 @@ public class ClientState {
     public ClientState(final Set<TaskId> previousActiveTasks,
                        final Set<TaskId> previousStandbyTasks,
                        final Map<TaskId, Long> taskLagTotals,
-                       final int capacity) {
+                       final int capacity,
+                       final Map<String, String> clientTags) {
         this.previousStandbyTasks.taskIds(unmodifiableSet(new TreeSet<>(previousStandbyTasks)));
         this.previousActiveTasks.taskIds(unmodifiableSet(new TreeSet<>(previousActiveTasks)));
         taskOffsetSums = emptyMap();
         this.taskLagTotals = unmodifiableMap(taskLagTotals);
         this.capacity = capacity;
+        this.clientTags = clientTags;
     }
 
     int capacity() {
@@ -199,6 +209,10 @@ public class ClientState {
         taskIds.remove(task);
     }
 
+    public void assignClientTags(final Map<String, String> clientTags) {
+        this.clientTags.putAll(clientTags);
+    }
+
     Set<TaskId> assignedTasks() {
         final Set<TaskId> assignedActiveTaskIds = assignedActiveTasks.taskIds();
         final Set<TaskId> assignedStandbyTaskIds = assignedStandbyTasks.taskIds();
@@ -256,6 +270,10 @@ public class ClientState {
         return union(() -> new HashSet<>(previousActiveTaskIds.size() + previousStandbyTaskIds.size()),
                      previousActiveTaskIds,
                      previousStandbyTaskIds);
+    }
+
+    public Map<String, String> clientTags() {
+        return clientTags;
     }
 
     // May return null

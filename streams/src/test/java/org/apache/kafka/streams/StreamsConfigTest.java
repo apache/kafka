@@ -38,6 +38,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -64,6 +65,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -1120,6 +1122,92 @@ public class StreamsConfigTest {
     @Test
     public void shouldThrowConfigExceptionIfProbingRebalanceIntervalIsOutsideBounds() {
         props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, (60 * 1000L) - 1);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldDefaultToNullIfRackAwareAssignmentTagsIsNotSet() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertTrue(config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG).isEmpty());
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagsExceedTheLimit() {
+        final int limit = StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + 1;
+        for (int i = 0; i < limit; i++) {
+            props.put(StreamsConfig.clientTagPrefix("k" + i), "v" + i);
+        }
+
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenRackAwareAssignmentTagsExceedsMaxListSize() {
+        final int limit = StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + 1;
+        final List<String> rackAwareAssignmentTags = new ArrayList<>();
+        for (int i = 0; i < limit; i++) {
+            final String clientTagKey = "k" + i;
+            rackAwareAssignmentTags.add(clientTagKey);
+            props.put(StreamsConfig.clientTagPrefix(clientTagKey), "v" + i);
+        }
+
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldSetRackAwareAssignmentTags() {
+        props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
+        props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "cluster,zone");
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG), Arrays.asList("cluster", "zone"));
+    }
+
+    @Test
+    public void shouldGetEmptyMapIfClientTagsAreNotSet() {
+        props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
+        props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
+        final StreamsConfig config = new StreamsConfig(props);
+        final Map<String, String> clientTags = config.getClientTags();
+        assertFalse(clientTags.isEmpty());
+        assertEquals(clientTags.get("zone"), "eu-central-1a");
+        assertEquals(clientTags.get("cluster"), "cluster-1");
+    }
+
+    @Test
+    public void shouldGetClientTagsMapWhenSet() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertTrue(config.getClientTags().isEmpty());
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagRackAwarenessIsConfiguredWithUnknownTags() {
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "cluster");
+
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagKeyExceedMaxLimit() {
+        final short maxClientTagKeyValueLength = 1;
+        props.put(StreamsConfig.MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG, maxClientTagKeyValueLength);
+        props.put(StreamsConfig.clientTagPrefix("zone"), "x");
+
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagValueExceedMaxLimit() {
+        final short maxClientTagKeyValueLength = 1;
+        props.put(StreamsConfig.MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG, maxClientTagKeyValueLength);
+        props.put(StreamsConfig.clientTagPrefix("x"), "eu-central-1a");
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenMaxClientTagKeyValueLengthConfigHasInvalidValue() {
+        props.put(StreamsConfig.MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG, 0);
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 

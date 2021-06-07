@@ -53,8 +53,8 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ClientStateTest {
-    private final ClientState client = new ClientState(1);
-    private final ClientState zeroCapacityClient = new ClientState(0);
+    private final ClientState client = new ClientState(1, Collections.emptyMap());
+    private final ClientState zeroCapacityClient = new ClientState(0, Collections.emptyMap());
 
     @Test
     public void previousStateConstructorShouldCreateAValidObject() {
@@ -62,8 +62,8 @@ public class ClientStateTest {
             mkSet(TASK_0_0, TASK_0_1),
             mkSet(TASK_0_2, TASK_0_3),
             mkMap(mkEntry(TASK_0_0, 5L), mkEntry(TASK_0_2, -1L)),
-            4
-        );
+            4,
+            Collections.emptyMap());
 
         // all the "next assignment" fields should be empty
         assertThat(clientState.activeTaskCount(), is(0));
@@ -96,61 +96,61 @@ public class ClientStateTest {
 
     @Test
     public void shouldRefuseDoubleActiveTask() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         clientState.assignActive(TASK_0_0);
         assertThrows(IllegalArgumentException.class, () -> clientState.assignActive(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseActiveAndStandbyTask() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         clientState.assignActive(TASK_0_0);
         assertThrows(IllegalArgumentException.class, () -> clientState.assignStandby(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseDoubleStandbyTask() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         clientState.assignStandby(TASK_0_0);
         assertThrows(IllegalArgumentException.class, () -> clientState.assignStandby(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseStandbyAndActiveTask() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         clientState.assignStandby(TASK_0_0);
         assertThrows(IllegalArgumentException.class, () -> clientState.assignActive(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseToUnassignNotAssignedActiveTask() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         assertThrows(IllegalArgumentException.class, () -> clientState.unassignActive(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseToUnassignNotAssignedStandbyTask() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         assertThrows(IllegalArgumentException.class, () -> clientState.unassignStandby(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseToUnassignActiveTaskAsStandby() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         clientState.assignActive(TASK_0_0);
         assertThrows(IllegalArgumentException.class, () -> clientState.unassignStandby(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseToUnassignStandbyTaskAsActive() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         clientState.assignStandby(TASK_0_0);
         assertThrows(IllegalArgumentException.class, () -> clientState.unassignActive(TASK_0_0));
     }
 
     @Test
     public void shouldUnassignActiveTask() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         clientState.assignActive(TASK_0_0);
         assertThat(clientState, hasActiveTasks(1));
         clientState.unassignActive(TASK_0_0);
@@ -159,7 +159,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldUnassignStandbyTask() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         clientState.assignStandby(TASK_0_0);
         assertThat(clientState, hasStandbyTasks(1));
         clientState.unassignStandby(TASK_0_0);
@@ -168,7 +168,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldNotModifyActiveView() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         final Set<TaskId> taskIds = clientState.activeTasks();
         assertThrows(UnsupportedOperationException.class, () -> taskIds.add(TASK_0_0));
         assertThat(clientState, hasActiveTasks(0));
@@ -176,7 +176,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldNotModifyStandbyView() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         final Set<TaskId> taskIds = clientState.standbyTasks();
         assertThrows(UnsupportedOperationException.class, () -> taskIds.add(TASK_0_0));
         assertThat(clientState, hasStandbyTasks(0));
@@ -184,7 +184,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldNotModifyAssignedView() {
-        final ClientState clientState = new ClientState(1);
+        final ClientState clientState = new ClientState(1, Collections.emptyMap());
         final Set<TaskId> taskIds = clientState.assignedTasks();
         assertThrows(UnsupportedOperationException.class, () -> taskIds.add(TASK_0_0));
         assertThat(clientState, hasActiveTasks(0));
@@ -243,7 +243,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldHaveMoreAvailableCapacityWhenCapacityTheSameButFewerAssignedTasks() {
-        final ClientState otherClient = new ClientState(1);
+        final ClientState otherClient = new ClientState(1, Collections.emptyMap());
         client.assignActive(TASK_0_1);
         assertTrue(otherClient.hasMoreAvailableCapacityThan(client));
         assertFalse(client.hasMoreAvailableCapacityThan(otherClient));
@@ -251,14 +251,14 @@ public class ClientStateTest {
 
     @Test
     public void shouldHaveMoreAvailableCapacityWhenCapacityHigherAndSameAssignedTaskCount() {
-        final ClientState otherClient = new ClientState(2);
+        final ClientState otherClient = new ClientState(2, Collections.emptyMap());
         assertTrue(otherClient.hasMoreAvailableCapacityThan(client));
         assertFalse(client.hasMoreAvailableCapacityThan(otherClient));
     }
 
     @Test
     public void shouldUseMultiplesOfCapacityToDetermineClientWithMoreAvailableCapacity() {
-        final ClientState otherClient = new ClientState(2);
+        final ClientState otherClient = new ClientState(2, Collections.emptyMap());
 
         for (int i = 0; i < 7; i++) {
             otherClient.assignActive(new TaskId(0, i));
@@ -273,8 +273,8 @@ public class ClientStateTest {
 
     @Test
     public void shouldHaveMoreAvailableCapacityWhenCapacityIsTheSameButAssignedTasksIsLess() {
-        final ClientState client = new ClientState(3);
-        final ClientState otherClient = new ClientState(3);
+        final ClientState client = new ClientState(3, Collections.emptyMap());
+        final ClientState otherClient = new ClientState(3, Collections.emptyMap());
         for (int i = 0; i < 4; i++) {
             client.assignActive(new TaskId(0, i));
             otherClient.assignActive(new TaskId(0, i));
