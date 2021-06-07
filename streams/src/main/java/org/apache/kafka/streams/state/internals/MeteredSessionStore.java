@@ -57,7 +57,6 @@ public class MeteredSessionStore<K, V>
     private Sensor removeSensor;
     private Sensor e2eLatencySensor;
     private InternalProcessorContext context;
-    private final String threadId;
     private String taskId;
 
     MeteredSessionStore(final SessionStore<Bytes, byte[]> inner,
@@ -66,7 +65,6 @@ public class MeteredSessionStore<K, V>
                         final Serde<V> valueSerde,
                         final Time time) {
         super(inner);
-        threadId = Thread.currentThread().getName();
         this.metricsScope = metricsScope;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -84,7 +82,7 @@ public class MeteredSessionStore<K, V>
 
         registerMetrics();
         final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+            StateStoreMetrics.restoreSensor(taskId, metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
@@ -100,17 +98,17 @@ public class MeteredSessionStore<K, V>
 
         registerMetrics();
         final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+            StateStoreMetrics.restoreSensor(taskId, metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
     }
 
     private void registerMetrics() {
-        putSensor = StateStoreMetrics.putSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
-        fetchSensor = StateStoreMetrics.fetchSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
-        flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
-        removeSensor = StateStoreMetrics.removeSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        putSensor = StateStoreMetrics.putSensor(taskId, metricsScope, name(), streamsMetrics);
+        fetchSensor = StateStoreMetrics.fetchSensor(taskId, metricsScope, name(), streamsMetrics);
+        flushSensor = StateStoreMetrics.flushSensor(taskId, metricsScope, name(), streamsMetrics);
+        removeSensor = StateStoreMetrics.removeSensor(taskId, metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
     }
 

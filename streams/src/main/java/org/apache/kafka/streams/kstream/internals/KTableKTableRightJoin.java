@@ -27,7 +27,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
@@ -73,7 +73,7 @@ class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(
+            droppedRecordsSensor = droppedRecordsSensor(
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
                 (StreamsMetricsImpl) context.metrics()

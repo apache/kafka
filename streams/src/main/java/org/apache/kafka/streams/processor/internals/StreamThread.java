@@ -45,7 +45,6 @@ import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
@@ -504,14 +503,10 @@ public class StreamThread extends Thread {
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
         // its metrics initialised. Otherwise, those sensors would have been created during processing, which could
-        // lead to missing metrics. For instance, if no task were created, the metrics for created and closed
+        // lead to missing metrics. If no task were created, the metrics for created and closed
         // tasks would never be added to the metrics.
         ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
         ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
-        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
-            ThreadMetrics.skipRecordSensor(threadId, streamsMetrics);
-            ThreadMetrics.commitOverTasksSensor(threadId, streamsMetrics);
-        }
 
         this.time = time;
         this.builder = builder;
