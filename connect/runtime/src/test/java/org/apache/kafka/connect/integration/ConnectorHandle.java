@@ -75,6 +75,15 @@ public class ConnectorHandle {
     }
 
     /**
+     * Gets the start and stop counter corresponding to this handle.
+     *
+     * @return the start and stop counter
+     */
+    public StartAndStopCounter startAndStopCounter() {
+        return startAndStopCounter;
+    }
+
+    /**
      * Get the connector's name corresponding to this handle.
      *
      * @return the connector's name
