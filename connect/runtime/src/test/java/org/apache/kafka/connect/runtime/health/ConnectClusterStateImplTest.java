@@ -57,7 +57,7 @@ public class ConnectClusterStateImplTest {
             herder
         );
     }
-
+    
     @Test
     public void connectors() {
         Capture<Callback<Collection<String>>> callback = EasyMock.newCapture();
