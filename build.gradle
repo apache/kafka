@@ -1486,7 +1486,6 @@ project(':storage') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
 
-
     testRuntimeOnly libs.slf4jlog4j
   }
 
