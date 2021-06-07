@@ -238,8 +238,9 @@ public class WorkerConfig extends AbstractConfig {
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "connector.client.config.override.policy";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =
         "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
-        + "overriden by the connector. The default implementation is `None`. The other possible policies in the framework include `All` "
-        + "and `Principal`. ";
+        + "overriden by the connector. The default implementation is `All`, meaning connector configurations can override all client properties. "
+        + "The other possible policies in the framework include `None` to disallow connectors from overriding client properties, "
+        + "and `Principal` to allow connectors to override only client principals.";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT = "All";
 
 
