@@ -351,6 +351,33 @@ public class EmbeddedConnectClusterAssertions {
     }
 
     /**
+     * Assert that a connector is in FAILED state, that it has a specific number of tasks, and that all of
+     * its tasks are in the FAILED state.
+     *
+     * @param connectorName the connector name
+     * @param numTasks the number of tasks
+     * @param detailMessage the assertion message
+     * @throws InterruptedException
+     */
+    public void assertConnectorIsFailedAndTasksHaveFailed(String connectorName, int numTasks, String detailMessage)
+            throws InterruptedException {
+        try {
+            waitForCondition(
+                    () -> checkConnectorState(
+                            connectorName,
+                            AbstractStatus.State.FAILED,
+                            numTasks,
+                            AbstractStatus.State.FAILED,
+                            (actual, expected) -> actual >= expected
+                    ).orElse(false),
+                    CONNECTOR_SETUP_DURATION_MS,
+                    "Either the connector is running or not all the " + numTasks + " tasks have failed.");
+        } catch (AssertionError e) {
+            throw new AssertionError(detailMessage, e);
+        }
+    }
+
+    /**
      * Assert that a connector and its tasks are not running.
      *
      * @param connectorName the connector name

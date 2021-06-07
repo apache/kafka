@@ -289,6 +289,16 @@ public class ConnectorHandle {
         return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
     }
 
+    public StartAndStopLatch expectedStarts(int expectedStarts, int expectedTasksStart, boolean includeTasks) {
+        List<StartAndStopLatch> taskLatches = null;
+        if (includeTasks) {
+            taskLatches = taskHandles.values().stream()
+                    .map(task -> task.expectedStarts(expectedTasksStart))
+                    .collect(Collectors.toList());
+        }
+        return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
+    }
+
     /**
      * Obtain a {@link StartAndStopLatch} that can be used to wait until the connector using this handle
      * and optionally all tasks using {@link TaskHandle} have completed the minimum number of
@@ -343,6 +353,15 @@ public class ConnectorHandle {
         return startAndStopCounter.expectedStops(expectedStops, taskLatches);
     }
 
+    public StartAndStopLatch expectedStops(int expectedStops, int expectedTasksStop, boolean includeTasks) {
+        List<StartAndStopLatch> taskLatches = null;
+        if (includeTasks) {
+            taskLatches = taskHandles.values().stream()
+                    .map(task -> task.expectedStops(expectedTasksStop))
+                    .collect(Collectors.toList());
+        }
+        return startAndStopCounter.expectedStops(expectedStops, taskLatches);
+    }
     @Override
     public String toString() {
         return "ConnectorHandle{" +
