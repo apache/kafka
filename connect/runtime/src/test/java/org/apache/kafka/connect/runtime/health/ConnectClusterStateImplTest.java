@@ -21,10 +21,11 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
+import org.easymock.Mock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.api.easymock.annotation.Mock;
+import org.mockito.Mockito;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
@@ -57,7 +58,7 @@ public class ConnectClusterStateImplTest {
             herder
         );
     }
-    
+
     @Test
     public void connectors() {
         Capture<Callback<Collection<String>>> callback = EasyMock.newCapture();
