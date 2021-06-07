@@ -16,8 +16,10 @@
  */
 package kafka.log
 
+import kafka.internals.generated.PidSnapshot
+
 import java.io.File
-import java.nio.ByteBuffer
+import java.nio.{BufferUnderflowException, ByteBuffer}
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
 import java.util.concurrent.ConcurrentSkipListMap
@@ -26,7 +28,7 @@ import kafka.server.LogOffsetMetadata
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.protocol.types._
+import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
@@ -347,62 +349,34 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
 }
 
 object ProducerStateManager {
-  private val ProducerSnapshotVersion: Short = 1
-  private val VersionField = "version"
-  private val CrcField = "crc"
-  private val ProducerIdField = "producer_id"
-  private val LastSequenceField = "last_sequence"
-  private val ProducerEpochField = "epoch"
-  private val LastOffsetField = "last_offset"
-  private val OffsetDeltaField = "offset_delta"
-  private val TimestampField = "timestamp"
-  private val ProducerEntriesField = "producer_entries"
-  private val CoordinatorEpochField = "coordinator_epoch"
-  private val CurrentTxnFirstOffsetField = "current_txn_first_offset"
 
-  private val VersionOffset = 0
-  private val CrcOffset = VersionOffset + 2
-  private val ProducerEntriesOffset = CrcOffset + 4
-
-  val ProducerSnapshotEntrySchema = new Schema(
-    new Field(ProducerIdField, Type.INT64, "The producer ID"),
-    new Field(ProducerEpochField, Type.INT16, "Current epoch of the producer"),
-    new Field(LastSequenceField, Type.INT32, "Last written sequence of the producer"),
-    new Field(LastOffsetField, Type.INT64, "Last written offset of the producer"),
-    new Field(OffsetDeltaField, Type.INT32, "The difference of the last sequence and first sequence in the last written batch"),
-    new Field(TimestampField, Type.INT64, "Max timestamp from the last written entry"),
-    new Field(CoordinatorEpochField, Type.INT32, "The epoch of the last transaction coordinator to send an end transaction marker"),
-    new Field(CurrentTxnFirstOffsetField, Type.INT64, "The first offset of the on-going transaction (-1 if there is none)"))
-  val PidSnapshotMapSchema = new Schema(
-    new Field(VersionField, Type.INT16, "Version of the snapshot file"),
-    new Field(CrcField, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
-    new Field(ProducerEntriesField, new ArrayOf(ProducerSnapshotEntrySchema), "The entries in the producer table"))
+  private val CrcOffset = 2 // size of version
+  private val ProducerEntriesOffset = CrcOffset + 4 // size of crc
 
   def readSnapshot(file: File): Iterable[ProducerStateEntry] = {
     try {
-      val buffer = Files.readAllBytes(file.toPath)
-      val struct = PidSnapshotMapSchema.read(ByteBuffer.wrap(buffer))
+      val buffer = ByteBuffer.wrap(Files.readAllBytes(file.toPath))
+      val version = buffer.getShort
+      val snapshot = new PidSnapshot(new ByteBufferAccessor(buffer), version)
 
-      val version = struct.getShort(VersionField)
-      if (version != ProducerSnapshotVersion)
+      if (version != PidSnapshot.HIGHEST_SUPPORTED_VERSION)
         throw new CorruptSnapshotException(s"Snapshot contained an unknown file version $version")
 
-      val crc = struct.getUnsignedInt(CrcField)
-      val computedCrc =  Crc32C.compute(buffer, ProducerEntriesOffset, buffer.length - ProducerEntriesOffset)
+      val crc = snapshot.crc()
+      val computedCrc =  Crc32C.compute(buffer.array(), ProducerEntriesOffset, buffer.limit() - ProducerEntriesOffset)
       if (crc != computedCrc)
         throw new CorruptSnapshotException(s"Snapshot is corrupt (CRC is no longer valid). " +
           s"Stored crc: $crc. Computed crc: $computedCrc")
 
-      struct.getArray(ProducerEntriesField).map { producerEntryObj =>
-        val producerEntryStruct = producerEntryObj.asInstanceOf[Struct]
-        val producerId = producerEntryStruct.getLong(ProducerIdField)
-        val producerEpoch = producerEntryStruct.getShort(ProducerEpochField)
-        val seq = producerEntryStruct.getInt(LastSequenceField)
-        val offset = producerEntryStruct.getLong(LastOffsetField)
-        val timestamp = producerEntryStruct.getLong(TimestampField)
-        val offsetDelta = producerEntryStruct.getInt(OffsetDeltaField)
-        val coordinatorEpoch = producerEntryStruct.getInt(CoordinatorEpochField)
-        val currentTxnFirstOffset = producerEntryStruct.getLong(CurrentTxnFirstOffsetField)
+      snapshot.producerEntries().asScala.map { producerEntryObj =>
+        val producerId = producerEntryObj.producerId()
+        val producerEpoch = producerEntryObj.producerEpoch()
+        val seq = producerEntryObj.lastSequence()
+        val offset = producerEntryObj.lastOffset()
+        val timestamp = producerEntryObj.timestamp()
+        val offsetDelta = producerEntryObj.offsetDelta()
+        val coordinatorEpoch = producerEntryObj.coordinatorEpoch()
+        val currentTxnFirstOffset = producerEntryObj.currentTxnFirstOffset()
         val lastAppendedDataBatches = mutable.Queue.empty[BatchMetadata]
         if (offset >= 0)
           lastAppendedDataBatches += BatchMetadata(seq, offset, offsetDelta, timestamp)
@@ -412,33 +386,28 @@ object ProducerStateManager {
         newEntry
       }
     } catch {
-      case e: SchemaException =>
+      case e: BufferUnderflowException =>
         throw new CorruptSnapshotException(s"Snapshot failed schema validation: ${e.getMessage}")
     }
   }
 
   private def writeSnapshot(file: File, entries: mutable.Map[Long, ProducerStateEntry]): Unit = {
-    val struct = new Struct(PidSnapshotMapSchema)
-    struct.set(VersionField, ProducerSnapshotVersion)
-    struct.set(CrcField, 0L) // we'll fill this after writing the entries
-    val entriesArray = entries.map {
+    val snapshot = new PidSnapshot()
+    snapshot.setCrc(0L) // we'll fill this after writing the entries
+    snapshot.setProducerEntries(entries.map{
       case (producerId, entry) =>
-        val producerEntryStruct = struct.instance(ProducerEntriesField)
-        producerEntryStruct.set(ProducerIdField, producerId)
-          .set(ProducerEpochField, entry.producerEpoch)
-          .set(LastSequenceField, entry.lastSeq)
-          .set(LastOffsetField, entry.lastDataOffset)
-          .set(OffsetDeltaField, entry.lastOffsetDelta)
-          .set(TimestampField, entry.lastTimestamp)
-          .set(CoordinatorEpochField, entry.coordinatorEpoch)
-          .set(CurrentTxnFirstOffsetField, entry.currentTxnFirstOffset.getOrElse(-1L))
-        producerEntryStruct
-    }.toArray
-    struct.set(ProducerEntriesField, entriesArray)
+        new PidSnapshot.ProducerEntry()
+          .setProducerId(producerId)
+          .setProducerEpoch(entry.producerEpoch)
+          .setLastSequence(entry.lastSeq)
+          .setLastOffset(entry.lastDataOffset)
+          .setOffsetDelta(entry.lastOffsetDelta)
+          .setTimestamp(entry.lastTimestamp)
+          .setCoordinatorEpoch(entry.coordinatorEpoch)
+          .setCurrentTxnFirstOffset(entry.currentTxnFirstOffset.getOrElse(-1L))
+    }.toList.asJava)
 
-    val buffer = ByteBuffer.allocate(struct.sizeOf)
-    struct.writeTo(buffer)
-    buffer.flip()
+    val buffer = MessageUtil.toVersionPrefixedByteBuffer(PidSnapshot.HIGHEST_SUPPORTED_VERSION, snapshot)
 
     // now fill in the CRC
     val crc = Crc32C.compute(buffer, ProducerEntriesOffset, buffer.limit() - ProducerEntriesOffset)
