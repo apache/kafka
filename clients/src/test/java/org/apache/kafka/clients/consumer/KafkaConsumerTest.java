@@ -43,6 +43,8 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.RecordDeserializationException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -185,6 +187,125 @@ public class KafkaConsumerTest {
         assertEquals(consumer.getClientId(), mockMetricsReporter.clientId);
         consumer.close();
     }
+
+    @Test
+    public void testPollReturnsRecords() {
+        KafkaConsumer<String, String> consumer = setUpConsumerWithRecordsToPoll(tp0, 5).consumer;
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
+
+        assertEquals(records.count(), 5);
+        assertEquals(records.partitions(), new HashSet<>(Collections.singletonList(tp0)));
+        assertEquals(records.records(tp0).size(), 5);
+
+        consumer.close(Duration.ofMillis(0));
+    }
+
+    @Test
+    public void testPollReturnsRecordsUpUntilError() {
+        int invalidRecordNumber = 4;
+        StringDeserializer deserializer = mockErrorDeserializer(invalidRecordNumber);
+
+        KafkaConsumer<String, String> consumer = setUpConsumerWithRecordsToPoll(tp0, 5, deserializer).consumer;
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
+
+        assertEquals(invalidRecordNumber - 1, records.count());
+        assertEquals(new HashSet<>(Collections.singletonList(tp0)), records.partitions());
+        assertEquals(invalidRecordNumber - 1, records.records(tp0).size());
+        long lastValidOffset = records.records(tp0).get(records.records(tp0).size() - 1).offset();
+        assertEquals(invalidRecordNumber - 2, lastValidOffset);
+
+        consumer.close(Duration.ofMillis(0));
+    }
+
+    @Test
+    public void testSecondPollWithDeserializationErrorThrowsRecordDeserializationException() {
+        int invalidRecordNumber = 4;
+        int invalidRecordOffset = 3;
+        StringDeserializer deserializer = mockErrorDeserializer(invalidRecordNumber);
+
+        KafkaConsumer<String, String> consumer = setUpConsumerWithRecordsToPoll(tp0, 5, deserializer).consumer;
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
+
+        assertEquals(invalidRecordNumber - 1, records.count());
+        assertEquals(new HashSet<>(Collections.singletonList(tp0)), records.partitions());
+        assertEquals(invalidRecordNumber - 1, records.records(tp0).size());
+        long lastOffset = records.records(tp0).get(records.records(tp0).size() - 1).offset();
+        assertEquals(invalidRecordNumber - 2, lastOffset);
+
+        try {
+            consumer.poll(Duration.ZERO);
+            fail("Second poll should raise " + RecordDeserializationException.class.getName());
+        } catch (RecordDeserializationException rde) {
+            assertEquals(invalidRecordOffset, rde.offset());
+            assertEquals(tp0, rde.partition());
+        }
+
+        consumer.close(Duration.ofMillis(0));
+    }
+
+    /*
+        Create a mock deserializer which throws a SerializationException on the Nth record's value deserialization
+     */
+    private StringDeserializer mockErrorDeserializer(int recordNumber) {
+        int recordIndex = (recordNumber * 2)  - 1; // * 2 because we deserialize key and values
+        return new StringDeserializer() {
+            int i = 0;
+            byte[] invalidData;
+            @Override
+            public String deserialize(String topic, byte[] data) {
+                if (i == recordIndex && invalidData == null) {
+                    invalidData = data;
+                }
+                if (Arrays.equals(data, invalidData)) {
+                    invalidData = data;
+                    throw new SerializationException();
+                }
+                i++;
+
+                return super.deserialize(topic, data);
+            }
+        };
+    }
+
+    private static class ConsumerHarness {
+        MockClient client;
+        public Node node;
+        KafkaConsumer<String, String> consumer;
+
+        ConsumerHarness(KafkaConsumer<String, String> consumer, MockClient client, Node node) {
+            this.consumer = consumer;
+            this.client = client;
+            this.node = node;
+        }
+    }
+
+    private ConsumerHarness setUpConsumerWithRecordsToPoll(TopicPartition tp, int recordCount) {
+        return setUpConsumerWithRecordsToPoll(tp, recordCount, new StringDeserializer());
+    }
+
+    private ConsumerHarness setUpConsumerWithRecordsToPoll(TopicPartition tp, int recordCount, Deserializer<String> deserializer) {
+        Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster(tp.topic(), 1);
+        Node node = cluster.nodes().get(0);
+
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
+                true, groupId, groupInstanceId, Optional.of(deserializer), false);
+        consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
+        prepareRebalance(client, node, assignor, singletonList(tp), null);
+        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+        client.prepareResponseFrom(fetchResponse(tp, 0, recordCount), node);
+
+        return new ConsumerHarness(consumer, client, node);
+    }
+
+
 
     @Test
     public void testConstructorClose() {
@@ -2352,6 +2473,20 @@ public class KafkaConsumerTest {
                                                       String groupId,
                                                       Optional<String> groupInstanceId,
                                                       boolean throwOnStableOffsetNotSupported) {
+        return newConsumer(time, client, subscription, metadata, assignor, autoCommitEnabled, groupId, groupInstanceId,
+        Optional.of(new StringDeserializer()), throwOnStableOffsetNotSupported);
+    }
+
+    private KafkaConsumer<String, String> newConsumer(Time time,
+                                                      KafkaClient client,
+                                                      SubscriptionState subscription,
+                                                      ConsumerMetadata metadata,
+                                                      ConsumerPartitionAssignor assignor,
+                                                      boolean autoCommitEnabled,
+                                                      String groupId,
+                                                      Optional<String> groupInstanceId,
+                                                      Optional<Deserializer<String>> deserializer,
+                                                      boolean throwOnStableOffsetNotSupported) {
         String clientId = "mock-consumer";
         String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
@@ -2365,8 +2500,8 @@ public class KafkaConsumerTest {
         boolean checkCrcs = true;
         int rebalanceTimeoutMs = 60000;
 
-        Deserializer<String> keyDeserializer = new StringDeserializer();
-        Deserializer<String> valueDeserializer = new StringDeserializer();
+        Deserializer<String> keyDeserializer = deserializer.orElse(new StringDeserializer());
+        Deserializer<String> valueDeserializer = deserializer.orElse(new StringDeserializer());
 
         List<ConsumerPartitionAssignor> assignors = singletonList(assignor);
         ConsumerInterceptors<String, String> interceptors = new ConsumerInterceptors<>(Collections.emptyList());
@@ -2379,25 +2514,25 @@ public class KafkaConsumerTest {
                 retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
 
         GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
-                                                                        rebalanceTimeoutMs,
-                                                                        heartbeatIntervalMs,
-                                                                        groupId,
-                                                                        groupInstanceId,
-                                                                        retryBackoffMs,
-                                                                        true);
+                rebalanceTimeoutMs,
+                heartbeatIntervalMs,
+                groupId,
+                groupInstanceId,
+                retryBackoffMs,
+                true);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(rebalanceConfig,
-                                                                          loggerFactory,
-                                                                          consumerClient,
-                                                                          assignors,
-                                                                          metadata,
-                                                                          subscription,
-                                                                          metrics,
-                                                                          metricGroupPrefix,
-                                                                          time,
-                                                                          autoCommitEnabled,
-                                                                          autoCommitIntervalMs,
-                                                                          interceptors,
-                                                                          throwOnStableOffsetNotSupported);
+                loggerFactory,
+                consumerClient,
+                assignors,
+                metadata,
+                subscription,
+                metrics,
+                metricGroupPrefix,
+                time,
+                autoCommitEnabled,
+                autoCommitIntervalMs,
+                interceptors,
+                throwOnStableOffsetNotSupported);
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,
                 consumerClient,
