@@ -408,9 +408,9 @@ object LogLoader extends Logging {
           return
         } catch {
           case _: NoSuchFileException => {}
-            // do nothing and fall back to the recover index logic
-          }
+          // do nothing and fall back to the recover index logic
         }
+      }
       info(s"${params.logIdentifier}Found log file ${swapFile.getPath} from interrupted swap operation, which is not recoverable from ${Log.CleanedFileSuffix} files, repairing.")
       recoverSegment(swapSegment, params)
 
