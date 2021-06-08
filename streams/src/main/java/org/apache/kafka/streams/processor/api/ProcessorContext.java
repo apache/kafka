@@ -39,14 +39,14 @@ import java.util.Optional;
 public interface ProcessorContext<KForward, VForward> {
 
     /**
-     * Returns the application id.
+     * Return the application id.
      *
      * @return the application id
      */
     String applicationId();
 
     /**
-     * Returns the task id.
+     * Return the task id.
      *
      * @return the task id
      */
@@ -74,28 +74,28 @@ public interface ProcessorContext<KForward, VForward> {
     Optional<RecordMetadata> recordMetadata();
 
     /**
-     * Returns the default key serde.
+     * Return the default key serde.
      *
      * @return the key serializer
      */
     Serde<?> keySerde();
 
     /**
-     * Returns the default value serde.
+     * Return the default value serde.
      *
      * @return the value serializer
      */
     Serde<?> valueSerde();
 
     /**
-     * Returns the state directory for the partition.
+     * Return the state directory for the partition.
      *
      * @return the state directory
      */
     File stateDir();
 
     /**
-     * Returns Metrics instance.
+     * Return Metrics instance.
      *
      * @return StreamsMetrics
      */
@@ -113,7 +113,7 @@ public interface ProcessorContext<KForward, VForward> {
     <S extends StateStore> S getStateStore(final String name);
 
     /**
-     * Schedules a periodic operation for processors. A processor may call this method during
+     * Schedule a periodic operation for processors. A processor may call this method during
      * {@link Processor#init(ProcessorContext) initialization} or
      * {@link Processor#process(Record)}  processing} to
      * schedule a periodic callback &mdash; called a punctuation &mdash; to {@link Punctuator#punctuate(long)}.
@@ -149,7 +149,7 @@ public interface ProcessorContext<KForward, VForward> {
                          final Punctuator callback);
 
     /**
-     * Forwards a record to all child processors.
+     * Forward a record to all child processors.
      * <p>
      * Note that the forwarded {@link Record} is shared between the parent and child
      * processors. And of course, the parent may forward the same object to multiple children,
@@ -207,7 +207,7 @@ public interface ProcessorContext<KForward, VForward> {
     <K extends KForward, V extends VForward> void forward(Record<K, V> record);
 
     /**
-     * Forwards a record to the specified child processor.
+     * Forward a record to the specified child processor.
      * See {@link ProcessorContext#forward(Record)} for considerations.
      *
      * @param record The record to forward
@@ -217,7 +217,7 @@ public interface ProcessorContext<KForward, VForward> {
     <K extends KForward, V extends VForward> void forward(Record<K, V> record, final String childName);
 
     /**
-     * Requests a commit.
+     * Request a commit.
      */
     void commit();
 
@@ -237,7 +237,7 @@ public interface ProcessorContext<KForward, VForward> {
     Map<String, Object> appConfigs();
 
     /**
-     * Returns all the application config properties with the given key prefix, as key/value pairs
+     * Return all the application config properties with the given key prefix, as key/value pairs
      * stripping the prefix.
      *
      * <p> The config properties are defined in the {@link org.apache.kafka.streams.StreamsConfig}

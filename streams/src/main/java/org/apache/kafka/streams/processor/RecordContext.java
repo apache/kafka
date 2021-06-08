@@ -26,7 +26,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 public interface RecordContext {
 
     /**
-     * Returns the topic name of the current input record; could be {@code null} if it is not
+     * Return the topic name of the current input record; could be {@code null} if it is not
      * available.
      *
      * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)
@@ -42,7 +42,7 @@ public interface RecordContext {
     String topic();
 
     /**
-     * Returns the partition id of the current input record; could be {@code -1} if it is not
+     * Return the partition id of the current input record; could be {@code -1} if it is not
      * available.
      *
      * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)
@@ -58,7 +58,7 @@ public interface RecordContext {
     int partition();
 
     /**
-     * Returns the offset of the current input record; could be {@code -1} if it is not
+     * Return the offset of the current input record; could be {@code -1} if it is not
      * available.
      *
      * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)
@@ -74,7 +74,7 @@ public interface RecordContext {
     long offset();
 
     /**
-     * Returns the current timestamp.
+     * Return the current timestamp.
      *
      * <p> If it is triggered while processing a record streamed from the source processor,
      * timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
@@ -93,7 +93,7 @@ public interface RecordContext {
     long timestamp();
 
     /**
-     * Returns the headers of the current input record; could be an empty header if it is not
+     * Return the headers of the current input record; could be an empty header if it is not
      * available.
      *
      * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)

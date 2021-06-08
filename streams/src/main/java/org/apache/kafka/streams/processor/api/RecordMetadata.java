@@ -20,7 +20,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 
 public interface RecordMetadata {
     /**
-     * Returns the topic name of the current input record; could be {@code null} if it is not
+     * Return the topic name of the current input record; could be {@code null} if it is not
      * available.
      *
      * <p> For example, if this method is invoked within a @link Punctuator#punctuate(long)
@@ -36,7 +36,7 @@ public interface RecordMetadata {
     String topic();
 
     /**
-     * Returns the partition id of the current input record; could be {@code -1} if it is not
+     * Return the partition id of the current input record; could be {@code -1} if it is not
      * available.
      *
      * <p> For example, if this method is invoked within a @link Punctuator#punctuate(long)
@@ -52,7 +52,7 @@ public interface RecordMetadata {
     int partition();
 
     /**
-     * Returns the offset of the current input record; could be {@code -1} if it is not
+     * Return the offset of the current input record; could be {@code -1} if it is not
      * available.
      *
      * <p> For example, if this method is invoked within a @link Punctuator#punctuate(long)
