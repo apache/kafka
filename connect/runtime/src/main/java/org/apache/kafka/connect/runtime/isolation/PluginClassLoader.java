@@ -30,7 +30,7 @@ import java.net.URLClassLoader;
  * be loaded in isolation, this plugin classloader delegates their loading to its parent. This makes
  * this classloader a child-first classloader.
  * <p>
- * This class is thread-safe.
+ * This class is thread-safe and parallel capable.
  */
 public class PluginClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(PluginClassLoader.class);

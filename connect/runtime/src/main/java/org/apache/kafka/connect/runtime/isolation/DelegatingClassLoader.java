@@ -50,6 +50,7 @@ import java.util.Collection;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.SortedMap;
@@ -57,16 +58,26 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
+/**
+ * A custom classloader dedicated to loading Connect plugin classes in classloading isolation.
+ *
+ * <p>
+ * Under the current scheme for classloading isolation in Connect, the delegating classloader loads
+ * plugin classes that it finds in its child plugin classloaders. For classes that are not plugins,
+ * this delegating classloader delegates its loading to its parent. This makes this classloader a
+ * child-first classloader.
+ * <p>
+ * This class is thread-safe but not parallel capable.
+ */
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
     private static final String CLASSPATH_NAME = "classpath";
     private static final String UNDEFINED_VERSION = "undefined";
 
-    private final ConcurrentMap<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
-    private final ConcurrentMap<String, String> aliases;
+    private final Map<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
+    private final Map<String, String> aliases;
     private final SortedSet<PluginDesc<Connector>> connectors;
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
