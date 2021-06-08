@@ -21,6 +21,8 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 
+import java.util.Locale;
+
 /**
  * If a component's serdes are Wrapping serdes, then they require a little extra setup
  * to be fully initialized at run time.
@@ -28,10 +30,17 @@ import org.apache.kafka.common.serialization.Serializer;
 public class WrappingNullableUtils {
 
     @SuppressWarnings("unchecked")
-    private static <T> Deserializer<T> prepareDeserializer(final Deserializer<T> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer, final boolean isKey) {
-        Deserializer<T> deserializerToUse = specificDeserializer;
-        if (deserializerToUse == null) {
+    private static <T> Deserializer<T> prepareDeserializer(final Deserializer<T> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer, final boolean isKey, final String name) {
+        final Deserializer<T> deserializerToUse;
+
+        if (specificDeserializer == null) {
             deserializerToUse = (Deserializer<T>) (isKey ? contextKeyDeserializer : contextValueDeserializer);
+        } else {
+            deserializerToUse = specificDeserializer;
+        }
+        if (deserializerToUse == null) {
+            final String serde = isKey ? "key" : "value";
+            throw new ConfigException("Failed to create deserializers. Please specify a " + serde + " serde through produced or materialized, or set one through StreamsConfig#DEFAULT_" + serde.toUpperCase(Locale.ROOT) + "_SERDE_CLASS_CONFIG for node " + name);
         } else {
             initNullableDeserializer(deserializerToUse, contextKeyDeserializer, contextValueDeserializer);
         }
@@ -47,7 +56,7 @@ public class WrappingNullableUtils {
         }
         if (serializerToUse == null) {
             final String serde = isKey ? "key" : "value";
-            throw new ConfigException("Please specify a " + serde + " serde through produced or materialized, or set one through the default." + serde + ".serde config for node " + name);
+            throw new ConfigException("Failed to create serializers. Please specify a " + serde + " serde through produced or materialized, or set one through StreamsConfig#DEFAULT_" + serde.toUpperCase(Locale.ROOT) + "_SERDE_CLASS_CONFIG for node " + name);
         } else {
             initNullableSerializer(serializerToUse, contextKeySerializer, contextValueSerializer);
         }
@@ -64,19 +73,19 @@ public class WrappingNullableUtils {
         }
         if (serdeToUse == null) {
             final String serde = isKey ? "key" : "value";
-            throw new ConfigException("Please specify a " + serde + " serde or set one through the default." + serde + ".serde config");
+            throw new ConfigException("Please specify a " + serde + " serde or set one through StreamsConfig#DEFAULT_" + serde.toUpperCase(Locale.ROOT) + "_SERDE_CLASS_CONFIG");
         } else if (serdeToUse instanceof WrappingNullableSerde) {
             ((WrappingNullableSerde) serdeToUse).setIfUnset(contextKeySerde, contextValueSerde);
         }
         return serdeToUse;
     }
 
-    public static <K> Deserializer<K> prepareKeyDeserializer(final Deserializer<K> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer) {
-        return prepareDeserializer(specificDeserializer, contextKeyDeserializer, contextValueDeserializer, true);
+    public static <K> Deserializer<K> prepareKeyDeserializer(final Deserializer<K> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer, final String name) {
+        return prepareDeserializer(specificDeserializer, contextKeyDeserializer, contextValueDeserializer, true, name);
     }
 
-    public static <V> Deserializer<V> prepareValueDeserializer(final Deserializer<V> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer) {
-        return prepareDeserializer(specificDeserializer, contextKeyDeserializer, contextValueDeserializer, false);
+    public static <V> Deserializer<V> prepareValueDeserializer(final Deserializer<V> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer, final String name) {
+        return prepareDeserializer(specificDeserializer, contextKeyDeserializer, contextValueDeserializer, false, name);
     }
 
     public static <K> Serializer<K> prepareKeySerializer(final Serializer<K> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer, final String name) {

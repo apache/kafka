@@ -41,7 +41,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
     public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<T> defaultValueSerializer) {
         if (inner == null) {
             if (defaultValueSerializer == null) {
-                throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
+                throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
             }
             inner = defaultValueSerializer;
         }

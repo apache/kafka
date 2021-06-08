@@ -81,14 +81,14 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements o
             valueSerdeTopic = valueSerdeTopicSupplier.get();
             // get default key serde if it wasn't supplied directly at construction
             if (foreignKeySerializer == null) {
-                if (context.keySerde() == null || context.keySerde().serializer() == null) {
-                    throw new ConfigException("Please specify a key serde or set one through the default.key.serde config");
+                if (context.keySerde() == null) {
+                    throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
                 }
                 foreignKeySerializer = (Serializer<KO>) context.keySerde().serializer();
             }
             if (valueSerializer == null) {
-                if (context.valueSerde() == null || context.valueSerde().serializer() == null) {
-                    throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
+                if (context.valueSerde() == null) {
+                    throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
                 }
                 valueSerializer = (Serializer<V>) context.valueSerde().serializer();
             }

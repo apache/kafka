@@ -21,10 +21,10 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -46,9 +46,9 @@ import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.emptyIterable;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
@@ -173,25 +173,31 @@ public class AbstractProcessorContextTest {
         );
     }
     @Test
-    public void shouldThrowErrorIfSerdeDefaultNotSet() {
+    public void shouldReturnNullIfSerdeDefaultNotSet() {
         final Properties config = getStreamsConfig();
         config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
         config.put("user.supplied.config", "user-supplied-value");
-        final Exception e = assertThrows(StreamsException.class, () -> new TestProcessorContext(metrics, config));
-        assertThat(e.getLocalizedMessage(), containsString("Failed to configure value serde null, please check your default serde"));
+        final TestProcessorContext pc = new TestProcessorContext(metrics, config);
+        assertNull(pc.keySerde());
+        assertNull(pc.valueSerde());
     }
 
     private static class TestProcessorContext extends AbstractProcessorContext<Object, Object> {
         static Properties config;
         static {
             config = getStreamsConfig();
-
             // Value must be a string to test className -> class conversion
             config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
+            config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+            config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
             config.put("user.supplied.config", "user-supplied-value");
         }
 
         TestProcessorContext(final MockStreamsMetrics metrics) {
+            super(new TaskId(0, 0), new StreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
+        }
+
+        TestProcessorContext(final MockStreamsMetrics metrics, final Properties config) {
             super(new TaskId(0, 0), new StreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
         }
 

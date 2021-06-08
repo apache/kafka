@@ -40,7 +40,7 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
     public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<T> defaultValueDeserializer) {
         if (inner == null) {
             if (defaultValueDeserializer == null) {
-                throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
+                throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
             }
             inner = defaultValueDeserializer;
         }

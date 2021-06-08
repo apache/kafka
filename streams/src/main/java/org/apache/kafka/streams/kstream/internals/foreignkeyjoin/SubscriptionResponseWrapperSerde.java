@@ -58,7 +58,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<V> defaultValueSerializer) {
             if (serializer == null) {
                 if (defaultValueSerializer == null) {
-                    throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
+                    throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
                 }
                 serializer = defaultValueSerializer;
             }
@@ -109,7 +109,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<V> defaultValueDeserializer) {
             if (deserializer == null) {
                 if (defaultValueDeserializer == null) {
-                    throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
+                    throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
                 }
                 deserializer = defaultValueDeserializer;
             }

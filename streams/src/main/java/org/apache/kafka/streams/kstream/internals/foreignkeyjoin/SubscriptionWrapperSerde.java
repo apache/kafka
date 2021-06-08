@@ -56,7 +56,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
         public void setIfUnset(final Serializer<K> defaultKeySerializer, final Serializer<Void> defaultValueSerializer) {
             if (primaryKeySerializer == null) {
                 if (defaultKeySerializer == null) {
-                    throw new ConfigException("Please specify a key serde or set one through the default.key.serde config");
+                    throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
                 }
                 primaryKeySerializer = defaultKeySerializer;
             }
@@ -119,7 +119,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
         public void setIfUnset(final Deserializer<K> defaultKeyDeserializer, final Deserializer<Void> defaultValueDeserializer) {
             if (primaryKeyDeserializer == null) {
                 if (defaultKeyDeserializer == null) {
-                    throw new ConfigException("Please specify a key serde or set one through the default.key.serde config");
+                    throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
                 }
                 primaryKeyDeserializer = defaultKeyDeserializer;
             }

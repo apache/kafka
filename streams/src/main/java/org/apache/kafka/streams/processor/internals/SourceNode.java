@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -52,16 +51,10 @@ public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
     }
 
     KIn deserializeKey(final String topic, final Headers headers, final byte[] data) {
-        if (keyDeserializer == null) {
-            throw new ConfigException("Please specify a key serde or set one through the default.key.serde config");
-        }
         return keyDeserializer.deserialize(topic, headers, data);
     }
 
     VIn deserializeValue(final String topic, final Headers headers, final byte[] data) {
-        if (valDeserializer == null) {
-            throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
-        }
         return valDeserializer.deserialize(topic, headers, data);
     }
 
@@ -83,8 +76,8 @@ public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
 
         final Deserializer<?> contextKeyDeserializer = ProcessorContextUtils.getKeyDeserializer(context);
         final Deserializer<?> contextValueDeserializer = ProcessorContextUtils.getValueDeserializer(context);
-        keyDeserializer = prepareKeyDeserializer(keyDeserializer, contextKeyDeserializer, contextValueDeserializer);
-        valDeserializer = prepareValueDeserializer(valDeserializer, contextKeyDeserializer, contextValueDeserializer);
+        keyDeserializer = prepareKeyDeserializer(keyDeserializer, contextKeyDeserializer, contextValueDeserializer, name());
+        valDeserializer = prepareValueDeserializer(valDeserializer, contextKeyDeserializer, contextValueDeserializer, name());
     }
 
 

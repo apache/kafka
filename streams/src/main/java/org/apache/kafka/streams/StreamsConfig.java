@@ -1424,16 +1424,15 @@ public class StreamsConfig extends AbstractConfig {
     public Serde defaultKeySerde() {
         final Object keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
         try {
+            if (keySerdeConfigSetting ==  null) {
+                return null;
+            }
             final Serde<?> serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
             serde.configure(originals(), true);
             return serde;
         } catch (final Exception e) {
-            if (e instanceof NullPointerException) {
-                return null;
-            } else {
-                throw new StreamsException(
-                        String.format("Failed to configure key serde %s", keySerdeConfigSetting), e);
-            }
+            throw new StreamsException(
+                String.format("Failed to configure key serde %s", keySerdeConfigSetting), e);
         }
     }
 
@@ -1447,16 +1446,15 @@ public class StreamsConfig extends AbstractConfig {
     public Serde defaultValueSerde() {
         final Object valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
         try {
+            if (valueSerdeConfigSetting == null) {
+                return null;
+            }
             final Serde<?> serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
             serde.configure(originals(), false);
             return serde;
         } catch (final Exception e) {
-            if (e instanceof NullPointerException) {
-                return null;
-            } else {
-                throw new StreamsException(
-                        String.format("Failed to configure value serde %s", valueSerdeConfigSetting), e);
-            }
+            throw new StreamsException(
+                String.format("Failed to configure value serde %s", valueSerdeConfigSetting), e);
         }
     }
 

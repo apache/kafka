@@ -856,10 +856,12 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldUseCorrectTimestampExtractorDefaultsWhenNoneSpecified() {
-        final StreamsConfig config = new StreamsConfig(getStreamsConfig(Serdes.String(), Serdes.String()));
+    public void shouldUseCorrectDefaultsWhenNoneSpecified() {
+        final StreamsConfig config = new StreamsConfig(getStreamsConfig());
 
         assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
+        assertNull(config.defaultKeySerde());
+        assertNull(config.defaultValueSerde());
     }
 
     @Test
