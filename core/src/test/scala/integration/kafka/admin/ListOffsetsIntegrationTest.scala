@@ -72,7 +72,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   private def runFetchOffsets(adminClient: Admin,
                               offsetSpec: OffsetSpec): ListOffsetsResult.ListOffsetsResultInfo = {
     println(s"==> listOffsets(${topicName} -> ${offsetSpec}, new ListOffsetsOptions())")
-    val tp = new TopicPartition(topicName,0)
+    val tp = new TopicPartition(topicName, 0)
     adminClient.listOffsets(Map(
       tp -> offsetSpec
     ).asJava, new ListOffsetsOptions()).all().get().get(tp)
