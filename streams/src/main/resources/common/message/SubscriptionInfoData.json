@@ -147,12 +147,12 @@
       "fields": [
         {
           "name": "key",
-          "versions": "1+",
+          "versions": "11+",
           "type": "bytes"
         },
         {
           "name": "value",
-          "versions": "1+",
+          "versions": "11+",
           "type": "bytes"
         }
       ]
