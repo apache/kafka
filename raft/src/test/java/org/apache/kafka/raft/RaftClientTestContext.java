@@ -189,7 +189,7 @@ public final class RaftClientTestContext {
         }
 
         Builder withEmptySnapshot(OffsetAndEpoch snapshotId) throws IOException {
-            try (RawSnapshotWriter snapshot = log.createSnapshot(snapshotId)) {
+            try (RawSnapshotWriter snapshot = log.createSnapshot(snapshotId).get()) {
                 snapshot.freeze();
             }
             return this;

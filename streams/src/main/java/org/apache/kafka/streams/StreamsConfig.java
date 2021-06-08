@@ -58,6 +58,7 @@ import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.parseType;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
@@ -144,6 +145,7 @@ public class StreamsConfig extends AbstractConfig {
     private final boolean eosEnabled;
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
+    private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
 
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
@@ -321,11 +323,6 @@ public class StreamsConfig extends AbstractConfig {
      */
     @SuppressWarnings("WeakerAccess")
     public static final String EXACTLY_ONCE_V2 = "exactly_once_v2";
-
-    /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics from version 0.10.0. to 2.4
-     */
-    public static final String METRICS_0100_TO_24 = "0.10.0-2.4";
 
     /**
      * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for the latest built-in metrics version.
@@ -751,7 +748,6 @@ public class StreamsConfig extends AbstractConfig {
                     Type.STRING,
                     METRICS_LATEST,
                     in(
-                        METRICS_0100_TO_24,
                         METRICS_LATEST
                     ),
                     Importance.LOW,
@@ -907,7 +903,7 @@ public class StreamsConfig extends AbstractConfig {
         tempProducerDefaultOverrides.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         tempProducerDefaultOverrides.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         // Reduce the transaction timeout for quicker pending offset expiration on broker side.
-        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
+        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, DEFAULT_TRANSACTION_TIMEOUT);
 
         PRODUCER_EOS_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
@@ -1077,6 +1073,26 @@ public class StreamsConfig extends AbstractConfig {
 
         if (props.containsKey(RETRIES_CONFIG)) {
             log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release.", RETRIES_CONFIG);
+        }
+
+        if (eosEnabled) {
+            verifyEOSTransactionTimeoutCompatibility();
+        }
+    }
+
+    private void verifyEOSTransactionTimeoutCompatibility() {
+        final long commitInterval = getLong(COMMIT_INTERVAL_MS_CONFIG);
+        final String transactionTimeoutConfigKey = producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
+        final int transactionTimeout = originals().containsKey(transactionTimeoutConfigKey) ? (int) parseType(
+            transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT) : DEFAULT_TRANSACTION_TIMEOUT;
+
+        if (transactionTimeout < commitInterval) {
+            throw new IllegalArgumentException(String.format("Transaction timeout %d was set lower than " +
+                "streams commit interval %d. This will cause ongoing transaction always timeout due to inactivity " +
+                "caused by long commit interval. Consider reconfiguring commit interval to match " +
+                "transaction timeout by tuning 'commit.interval.ms' config, or increase the transaction timeout to match " +
+                "commit interval by tuning `producer.transaction.timeout.ms` config.",
+                transactionTimeout, commitInterval));
         }
     }
 

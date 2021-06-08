@@ -16,9 +16,11 @@
 */
 package kafka.zk
 
-import java.util.{Collections, Properties}
+import java.util.{Base64, Collections, Properties}
 import java.nio.charset.StandardCharsets.UTF_8
+import java.security.MessageDigest
 import java.util.concurrent.{CountDownLatch, TimeUnit}
+
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log.LogConfig
@@ -51,7 +53,7 @@ import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.client.ZKClientConfig
-import org.apache.zookeeper.data.Stat
+import org.apache.zookeeper.data.{ACL, Id, Stat}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -138,6 +140,28 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     } finally {
       client.close()
     }
+  }
+
+  @Test
+  def testChrootExistsAndRootIsLocked(): Unit = {
+    // chroot is accessible
+    val root = "/testChrootExistsAndRootIsLocked"
+    val chroot = s"$root/chroot"
+    zkClient.makeSurePersistentPathExists(chroot)
+    zkClient.setAcl(chroot, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
+
+    // root is inaccessible
+    val scheme = "digest"
+    val id = "test"
+    val pwd = "12345"
+    val digest = Base64.getEncoder.encode(MessageDigest.getInstance("SHA1").digest(s"$id:$pwd".getBytes()))
+    zkClient.currentZooKeeper.addAuthInfo(scheme, digest)
+    zkClient.setAcl(root, Seq(new ACL(ZooDefs.Perms.ALL, new Id(scheme, s"$id:$digest"))))
+
+    // this client won't have access to the root, but the chroot already exists
+    val chrootClient = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, createChrootIfNecessary = true)
+    chrootClient.close()
   }
 
   @Test

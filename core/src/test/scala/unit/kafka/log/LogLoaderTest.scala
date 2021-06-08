@@ -94,8 +94,8 @@ class LogLoaderTest {
           val logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(1)
           val maxProducerIdExpirationMs = 60 * 60 * 1000
           val segments = new LogSegments(topicPartition)
-          val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion)
-          val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
+          val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
+          val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs, time)
           val loadLogParams = LoadLogParams(logDir, topicPartition, config, time.scheduler, time,
             logDirFailureChannel, hadCleanShutdown, segments, logStartOffset, logRecoveryPoint,
             maxProducerIdExpirationMs, leaderEpochCache, producerStateManager)
@@ -264,8 +264,8 @@ class LogLoaderTest {
           super.add(wrapper)
         }
       }
-      val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.messageFormatVersion.recordVersion)
-      val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
+      val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.messageFormatVersion.recordVersion, "")
+      val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs, mockTime)
       val loadLogParams = LoadLogParams(
         logDir,
         topicPartition,
@@ -284,7 +284,7 @@ class LogLoaderTest {
       new Log(logDir, logConfig, interceptedLogSegments, offsets.logStartOffset, offsets.recoveryPoint,
         offsets.nextOffsetMetadata, mockTime.scheduler, brokerTopicStats, mockTime,
         LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
-        producerStateManager, logDirFailureChannel, topicId = None, keepPartitionMetadataFile = true)
+        producerStateManager, logDirFailureChannel, _topicId = None, keepPartitionMetadataFile = true)
     }
 
     // Retain snapshots for the last 2 segments
@@ -337,7 +337,7 @@ class LogLoaderTest {
     val config = LogConfig(new Properties())
     val maxProducerIdExpirationMs = 300000
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
     val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
@@ -366,7 +366,7 @@ class LogLoaderTest {
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
       logDirFailureChannel = logDirFailureChannel,
-      topicId = None,
+      _topicId = None,
       keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
@@ -471,7 +471,7 @@ class LogLoaderTest {
     val maxProducerIdExpirationMs = 300000
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
     val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
@@ -500,7 +500,7 @@ class LogLoaderTest {
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
       logDirFailureChannel = logDirFailureChannel,
-      topicId = None,
+      _topicId = None,
       keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
@@ -532,7 +532,7 @@ class LogLoaderTest {
     val maxProducerIdExpirationMs = 300000
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
     val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
@@ -561,7 +561,7 @@ class LogLoaderTest {
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
       logDirFailureChannel = logDirFailureChannel,
-      topicId = None,
+      _topicId = None,
       keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
@@ -595,7 +595,7 @@ class LogLoaderTest {
     val maxProducerIdExpirationMs = 300000
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
     val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
@@ -624,7 +624,7 @@ class LogLoaderTest {
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
       logDirFailureChannel = logDirFailureChannel,
-      topicId = None,
+      _topicId = None,
       keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)

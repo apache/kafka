@@ -36,6 +36,7 @@ import java.util.stream.StreamSupport;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
@@ -56,6 +57,7 @@ import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -261,6 +263,8 @@ public class QuorumControllerTest {
                                         setBrokerIds(Arrays.asList(1, 2, 0))).
                                             iterator()))).iterator()))).get();
                 fooId = fooData.topics().find("foo").topicId();
+                active.allocateProducerIds(
+                    new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
                 long snapshotEpoch = active.beginWritingSnapshot().get();
                 reader = logEnv.waitForSnapshot(snapshotEpoch);
                 SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(reader);
@@ -349,7 +353,11 @@ public class QuorumControllerTest {
                 setEndPoints(new BrokerEndpointCollection(Arrays.asList(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9095).setSecurityProtocol((short) 0)).iterator())).
-                setRack(null), (short) 0)
+                setRack(null), (short) 0),
+            new ApiMessageAndVersion(new ProducerIdsRecord().
+                setBrokerId(0).
+                setBrokerEpoch(brokerEpochs.get(0)).
+                setProducerIdsEnd(1000), (short) 0)
         );
 
         ControllerTestUtils.assertBatchIteratorContains(

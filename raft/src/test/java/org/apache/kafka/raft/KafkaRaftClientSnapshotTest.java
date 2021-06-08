@@ -192,7 +192,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         // Generate a new snapshot
         OffsetAndEpoch secondSnapshotId = new OffsetAndEpoch(localLogEndOffset, epoch);
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(secondSnapshotId.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(secondSnapshotId.offset - 1).get()) {
             assertEquals(secondSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
@@ -240,7 +240,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(localLogEndOffset, epoch);
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1).get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
@@ -286,7 +286,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1).get()) {
             assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
@@ -330,7 +330,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1).get()) {
             assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
@@ -378,7 +378,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1).get()) {
             assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
@@ -421,7 +421,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1).get()) {
             assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
@@ -469,7 +469,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1).get()) {
             assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
@@ -559,7 +559,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1).get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             snapshot.append(records);
             snapshot.freeze();
@@ -608,7 +608,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1).get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             snapshot.append(records);
             snapshot.freeze();
@@ -717,7 +717,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1).get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             snapshot.append(records);
             snapshot.freeze();

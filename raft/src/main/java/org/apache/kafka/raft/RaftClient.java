@@ -20,6 +20,7 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 
@@ -184,12 +185,12 @@ public interface RaftClient<T> extends AutoCloseable {
      *
      * The RaftClient assumes that the snapshot return will contain the records up to and
      * including the committed offset. See {@link SnapshotWriter} for details on how to use
-     * this object.
+     * this object. If a snapshot already exists then return an {@link Optional#empty()}.
      *
      * @param committedOffset the last committed offset that will be included in the snapshot
-     * @return a writable snapshot
+     * @return a writable snapshot if it doesn't already exists
      * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
      *         or less than the log start offset.
      */
-    SnapshotWriter<T> createSnapshot(long committedOffset);
+    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset);
 }

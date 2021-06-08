@@ -55,7 +55,7 @@ final public class SnapshotWriterReaderTest {
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1).get()) {
             assertEquals(id, snapshot.snapshotId());
             expected.forEach(batch -> assertDoesNotThrow(() -> snapshot.append(batch)));
             snapshot.freeze();
@@ -84,7 +84,7 @@ final public class SnapshotWriterReaderTest {
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1).get()) {
             assertEquals(id, snapshot.snapshotId());
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
@@ -112,7 +112,7 @@ final public class SnapshotWriterReaderTest {
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1).get()) {
             assertEquals(id, snapshot.snapshotId());
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));

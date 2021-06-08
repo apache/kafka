@@ -561,18 +561,20 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public SnapshotWriter<ApiMessageAndVersion> createSnapshot(long committedOffset) {
+    public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(long committedOffset) {
         int epoch = shared.epochForCommittedOffset(committedOffset).getAsInt();
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, epoch);
-        return new SnapshotWriter<>(
-            new MockRawSnapshotWriter(snapshotId, buffer -> {
-                shared.addSnapshot(new MockRawSnapshotReader(snapshotId, buffer));
-            }),
-            1024,
-            MemoryPool.NONE,
-            new MockTime(),
-            CompressionType.NONE,
-            new MetadataRecordSerde()
+        return Optional.of(
+            new SnapshotWriter<>(
+                new MockRawSnapshotWriter(snapshotId, buffer -> {
+                    shared.addSnapshot(new MockRawSnapshotReader(snapshotId, buffer));
+                }),
+                1024,
+                MemoryPool.NONE,
+                new MockTime(),
+                CompressionType.NONE,
+                new MetadataRecordSerde()
+            )
         );
     }
 

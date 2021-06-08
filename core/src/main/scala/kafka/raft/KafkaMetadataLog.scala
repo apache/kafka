@@ -19,10 +19,9 @@ package kafka.raft
 import java.io.File
 import java.nio.file.{Files, NoSuchFileException, Path}
 import java.util.{Optional, Properties}
-
 import kafka.api.ApiVersion
 import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
-import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, LogDirFailureChannel, RequestLocal}
 import kafka.utils.{CoreUtils, Logging, Scheduler}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.Time
@@ -76,7 +75,8 @@ final class KafkaMetadataLog private (
     handleAndConvertLogAppendInfo(
       log.appendAsLeader(records.asInstanceOf[MemoryRecords],
         leaderEpoch = epoch,
-        origin = AppendOrigin.RaftLeader
+        origin = AppendOrigin.RaftLeader,
+        requestLocal = RequestLocal.NoCaching
       )
     )
   }
@@ -233,21 +233,15 @@ final class KafkaMetadataLog private (
     log.topicId.get
   }
 
-  override def createSnapshot(snapshotId: OffsetAndEpoch): RawSnapshotWriter = {
-    // Snapshots older than the latest snapshot are not allowed
-    latestSnapshotId().ifPresent { latest =>
-      if (latest.epoch > snapshotId.epoch || latest.offset > snapshotId.offset) {
-        // Since snapshots are less than the high-watermark absolute offset comparison is okay.
-        throw new IllegalArgumentException(
-          s"Attempting to create a snapshot ($snapshotId) that is not greater than the latest snapshot ($latest)"
-        )
-      }
+  override def createSnapshot(snapshotId: OffsetAndEpoch): Optional[RawSnapshotWriter] = {
+    if (snapshots.contains(snapshotId)) {
+      Optional.empty()
+    } else {
+      Optional.of(FileRawSnapshotWriter.create(log.dir.toPath, snapshotId, Optional.of(this)))
     }
-
-    FileRawSnapshotWriter.create(log.dir.toPath, snapshotId, Optional.of(this))
   }
 
-  override def createSnapshotFromEndOffset(endOffset: Long): RawSnapshotWriter = {
+  override def createSnapshotFromEndOffset(endOffset: Long): Optional[RawSnapshotWriter] = {
     val highWatermarkOffset = highWatermark.offset
     if (endOffset > highWatermarkOffset) {
       throw new IllegalArgumentException(
@@ -257,7 +251,7 @@ final class KafkaMetadataLog private (
 
     if (endOffset < startOffset) {
       throw new IllegalArgumentException(
-        s"Cannot create a snapshot for an end offset ($endOffset) less or equal to the log start offset ($startOffset)"
+        s"Cannot create a snapshot for an end offset ($endOffset) less than the log start offset ($startOffset)"
       )
     }
 

@@ -230,27 +230,27 @@ public interface ReplicatedLog extends AutoCloseable {
      * Create a writable snapshot for the given snapshot id.
      *
      * See {@link RawSnapshotWriter} for details on how to use this object. The caller of
-     * this method is responsible for invoking {@link RawSnapshotWriter#close()}.
+     * this method is responsible for invoking {@link RawSnapshotWriter#close()}. If a
+     * snapshot already exists then return an {@link Optional#empty()}.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot
-     * @throws IllegalArgumentException if this snapshot is older than existing snapshots
+     * @return a writable snapshot if it doesn't already exists
      */
-    RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
+    Optional<RawSnapshotWriter> createSnapshot(OffsetAndEpoch snapshotId);
 
     /**
      * Create a writable snapshot for the given end offset.
      *
      * See {@link RawSnapshotWriter} for details on how to use this object. The caller of
-     * this method is responsible for invoking {@link RawSnapshotWriter#close()}.
+     * this method is responsible for invoking {@link RawSnapshotWriter#close()}. If a
+     * snapshot already exists then return an {@link Optional#empty()}.
      *
      * @param endOffset end offset that identifies the snapshot
-     * @return a writable snapshot
+     * @return a writable snapshot if it doesn't already exists
      * @throws IllegalArgumentException if end offset is greater than the high-watermark
      * @throws IllegalArgumentException if end offset is less than the log start offset
-     * @throws IllegalArgumentException if this snapshot is older than existing snapshots
      */
-    RawSnapshotWriter createSnapshotFromEndOffset(long endOffset);
+    Optional<RawSnapshotWriter> createSnapshotFromEndOffset(long endOffset);
 
     /**
      * Opens a readable snapshot for the given snapshot id.

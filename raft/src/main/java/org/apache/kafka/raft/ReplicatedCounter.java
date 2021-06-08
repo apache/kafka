@@ -22,6 +22,7 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
+import java.util.Optional;
 import java.util.OptionalInt;
 
 import static java.util.Collections.singletonList;
@@ -102,12 +103,28 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     lastCommittedOffset,
                     lastSnapshotCommittedOffset
                 );
-                try (SnapshotWriter<Integer> snapshot = client.createSnapshot(lastCommittedOffset)) {
-                    snapshot.append(singletonList(committed));
-                    snapshot.freeze();
+                Optional<SnapshotWriter<Integer>> snapshot = client.createSnapshot(lastCommittedOffset);
+                if (snapshot.isPresent()) {
+                    try {
+                        snapshot.get().append(singletonList(committed));
+                        snapshot.get().freeze();
+                        lastSnapshotCommittedOffset = lastCommittedOffset;
+                    } finally {
+                        snapshot.get().close();
+                    }
+                } else {
                     lastSnapshotCommittedOffset = lastCommittedOffset;
                 }
             }
+        } catch (IllegalArgumentException e) {
+            // TODO: remove this catch
+            log.error(
+                "lastSnapshotCommittedOffset = {}; snapshotDelayInRecords = {}",
+                lastSnapshotCommittedOffset,
+                snapshotDelayInRecords
+            );
+
+            throw e;
         } finally {
             reader.close();
         }
@@ -135,6 +152,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     uncommitted = value;
                 }
             }
+            lastSnapshotCommittedOffset = reader.lastOffset();
             log.debug("Finished loading snapshot. Set value: {}", committed);
         } finally {
             reader.close();

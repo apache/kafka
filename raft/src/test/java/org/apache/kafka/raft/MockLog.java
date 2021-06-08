@@ -414,14 +414,20 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId) {
-        return new MockRawSnapshotWriter(snapshotId, buffer -> {
-            snapshots.putIfAbsent(snapshotId, new MockRawSnapshotReader(snapshotId, buffer));
-        });
+    public Optional<RawSnapshotWriter> createSnapshot(OffsetAndEpoch snapshotId) {
+        if (snapshots.containsKey(snapshotId)) {
+            return Optional.empty();
+        } else {
+            return Optional.of(
+                new MockRawSnapshotWriter(snapshotId, buffer -> {
+                    snapshots.putIfAbsent(snapshotId, new MockRawSnapshotReader(snapshotId, buffer));
+                })
+            );
+        }
     }
 
     @Override
-    public RawSnapshotWriter createSnapshotFromEndOffset(long endOffset) {
+    public Optional<RawSnapshotWriter> createSnapshotFromEndOffset(long endOffset) {
         long highWatermarkOffset = highWatermark().offset;
         if (endOffset > highWatermarkOffset) {
             throw new IllegalArgumentException(
@@ -433,10 +439,10 @@ public class MockLog implements ReplicatedLog {
             );
         }
 
-        if (endOffset <= logStartOffset()) {
+        if (endOffset < logStartOffset()) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Cannot create a snapshot for an end offset (%s) less or equal to the log start offset (%s)",
+                    "Cannot create a snapshot for an end offset (%s) less than the log start offset (%s)",
                     endOffset,
                     logStartOffset()
                 )
@@ -444,8 +450,6 @@ public class MockLog implements ReplicatedLog {
         }
 
         int epoch = epochForEndOffset(endOffset).epoch;
-
-        System.out.println(String.format("epochStartOffsets = %s", epochStartOffsets));
 
         return createSnapshot(new OffsetAndEpoch(endOffset, epoch));
     }
