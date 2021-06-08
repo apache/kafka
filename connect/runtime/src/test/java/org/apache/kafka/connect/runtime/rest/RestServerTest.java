@@ -107,7 +107,6 @@ public class RestServerTest {
         checkCORSRequest("", "http://bar.com", null, null);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testAdvertisedUri() {
         // Advertised URI from listeners without protocol
