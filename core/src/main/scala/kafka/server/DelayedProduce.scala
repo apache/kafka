@@ -30,7 +30,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 
 import scala.collection._
 
-case class ProducePartitionStatus(requiredOffset: Long, responseStatus: PartitionResponse) {
+final case class ProducePartitionStatus(requiredOffset: Long, responseStatus: PartitionResponse) {
   @volatile var acksPending = false
 
   override def toString = s"[acksPending: $acksPending, error: ${responseStatus.error.code}, " +
@@ -40,8 +40,8 @@ case class ProducePartitionStatus(requiredOffset: Long, responseStatus: Partitio
 /**
  * The produce metadata maintained by the delayed produce operation
  */
-case class ProduceMetadata(produceRequiredAcks: Short,
-                           produceStatus: Map[TopicPartition, ProducePartitionStatus]) {
+final case class ProduceMetadata(produceRequiredAcks: Short,
+                                 produceStatus: Map[TopicPartition, ProducePartitionStatus]) {
 
   override def toString = s"[requiredAcks: $produceRequiredAcks, partitionStatus: $produceStatus]"
 }

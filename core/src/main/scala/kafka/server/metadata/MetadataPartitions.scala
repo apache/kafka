@@ -61,16 +61,16 @@ object MetadataPartition {
   }
 }
 
-case class MetadataPartition(topicName: String,
-                             partitionIndex: Int,
-                             leaderId: Int,
-                             leaderEpoch: Int,
-                             replicas: util.List[Integer],
-                             isr: util.List[Integer],
-                             partitionEpoch: Int,
-                             offlineReplicas: util.List[Integer],
-                             addingReplicas: util.List[Integer],
-                             removingReplicas: util.List[Integer]) {
+final case class MetadataPartition(topicName: String,
+                                   partitionIndex: Int,
+                                   leaderId: Int,
+                                   leaderEpoch: Int,
+                                   replicas: util.List[Integer],
+                                   isr: util.List[Integer],
+                                   partitionEpoch: Int,
+                                   offlineReplicas: util.List[Integer],
+                                   addingReplicas: util.List[Integer],
+                                   removingReplicas: util.List[Integer]) {
   def toTopicPartition: TopicPartition = new TopicPartition(topicName, partitionIndex)
 
   def toLeaderAndIsrPartitionState(isNew: Boolean): LeaderAndIsrRequestData.LeaderAndIsrPartitionState = {
@@ -270,9 +270,9 @@ object MetadataPartitions {
   }
 }
 
-case class MetadataPartitions(private val nameMap: util.Map[String, util.Map[Int, MetadataPartition]],
-                              private val idMap: util.Map[Uuid, String],
-                              private val reverseIdMap: util.Map[String, Uuid]) {
+final case class MetadataPartitions(private val nameMap: util.Map[String, util.Map[Int, MetadataPartition]],
+                                    private val idMap: util.Map[Uuid, String],
+                                    private val reverseIdMap: util.Map[String, Uuid]) {
 
   def topicIdToName(uuid: Uuid): Option[String] = Option(idMap.get(uuid))
 

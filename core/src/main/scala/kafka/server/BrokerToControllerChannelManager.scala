@@ -268,7 +268,7 @@ abstract class ControllerRequestCompletionHandler extends RequestCompletionHandl
   def onTimeout(): Unit
 }
 
-case class BrokerToControllerQueueItem(
+final case class BrokerToControllerQueueItem(
   createdTimeMs: Long,
   request: AbstractRequest.Builder[_ <: AbstractRequest],
   callback: ControllerRequestCompletionHandler

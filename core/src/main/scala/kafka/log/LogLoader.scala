@@ -31,9 +31,9 @@ import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Set, mutable}
 
-case class LoadedLogOffsets(logStartOffset: Long,
-                            recoveryPoint: Long,
-                            nextOffsetMetadata: LogOffsetMetadata)
+final case class LoadedLogOffsets(logStartOffset: Long,
+                                  recoveryPoint: Long,
+                                  nextOffsetMetadata: LogOffsetMetadata)
 
 /**
  * @param dir The directory from which log segments need to be loaded
@@ -54,19 +54,19 @@ case class LoadedLogOffsets(logStartOffset: Long,
  * @param leaderEpochCache An optional LeaderEpochFileCache instance to be updated during recovery
  * @param producerStateManager The ProducerStateManager instance to be updated during recovery
  */
-case class LoadLogParams(dir: File,
-                         topicPartition: TopicPartition,
-                         config: LogConfig,
-                         scheduler: Scheduler,
-                         time: Time,
-                         logDirFailureChannel: LogDirFailureChannel,
-                         hadCleanShutdown: Boolean,
-                         segments: LogSegments,
-                         logStartOffsetCheckpoint: Long,
-                         recoveryPointCheckpoint: Long,
-                         maxProducerIdExpirationMs: Int,
-                         leaderEpochCache: Option[LeaderEpochFileCache],
-                         producerStateManager: ProducerStateManager) {
+final case class LoadLogParams(dir: File,
+                               topicPartition: TopicPartition,
+                               config: LogConfig,
+                               scheduler: Scheduler,
+                               time: Time,
+                               logDirFailureChannel: LogDirFailureChannel,
+                               hadCleanShutdown: Boolean,
+                               segments: LogSegments,
+                               logStartOffsetCheckpoint: Long,
+                               recoveryPointCheckpoint: Long,
+                               maxProducerIdExpirationMs: Int,
+                               leaderEpochCache: Option[LeaderEpochFileCache],
+                               producerStateManager: ProducerStateManager) {
   val logIdentifier: String = s"[LogLoader partition=$topicPartition, dir=${dir.getParent}] "
 }
 

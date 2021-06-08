@@ -26,12 +26,12 @@ import org.apache.kafka.common.utils.Java
 
 object JaasTestUtils {
 
-  case class Krb5LoginModule(useKeyTab: Boolean,
-                             storeKey: Boolean,
-                             keyTab: String,
-                             principal: String,
-                             debug: Boolean,
-                             serviceName: Option[String]) extends JaasModule {
+  final case class Krb5LoginModule(useKeyTab: Boolean,
+                                   storeKey: Boolean,
+                                   keyTab: String,
+                                   principal: String,
+                                   debug: Boolean,
+                                   serviceName: Option[String]) extends JaasModule {
 
     def name =
       if (Java.isIbmJdk)
@@ -54,10 +54,10 @@ object JaasTestUtils {
         ) ++ serviceName.map(s => Map("serviceName" -> s)).getOrElse(Map.empty)
   }
 
-  case class PlainLoginModule(username: String,
-                              password: String,
-                              debug: Boolean = false,
-                              validUsers: Map[String, String] = Map.empty) extends JaasModule {
+  final case class PlainLoginModule(username: String,
+                                    password: String,
+                                    debug: Boolean = false,
+                                    validUsers: Map[String, String] = Map.empty) extends JaasModule {
 
     def name = "org.apache.kafka.common.security.plain.PlainLoginModule"
 
@@ -68,15 +68,15 @@ object JaasTestUtils {
 
   }
 
-  case class ZkDigestModule(debug: Boolean = false,
-                            entries: Map[String, String] = Map.empty) extends JaasModule {
+  final case class ZkDigestModule(debug: Boolean = false,
+                                  entries: Map[String, String] = Map.empty) extends JaasModule {
     def name = "org.apache.zookeeper.server.auth.DigestLoginModule"
   }
 
-  case class ScramLoginModule(username: String,
-                              password: String,
-                              debug: Boolean = false,
-                              tokenProps: Map[String, String] = Map.empty) extends JaasModule {
+  final case class ScramLoginModule(username: String,
+                                    password: String,
+                                    debug: Boolean = false,
+                                    tokenProps: Map[String, String] = Map.empty) extends JaasModule {
 
     def name = "org.apache.kafka.common.security.scram.ScramLoginModule"
 
@@ -86,8 +86,8 @@ object JaasTestUtils {
     ) ++ tokenProps.map { case (name, value) => name -> value }
   }
 
-  case class OAuthBearerLoginModule(username: String,
-                              debug: Boolean = false) extends JaasModule {
+  final case class OAuthBearerLoginModule(username: String,
+                                          debug: Boolean = false) extends JaasModule {
 
     def name = "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule"
 
@@ -110,7 +110,7 @@ object JaasTestUtils {
     }
   }
 
-  case class JaasSection(contextName: String, modules: Seq[JaasModule]) {
+  final case class JaasSection(contextName: String, modules: Seq[JaasModule]) {
     override def toString: String = {
       s"""|$contextName {
           |  ${modules.mkString("\n  ")}

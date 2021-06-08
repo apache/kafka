@@ -68,7 +68,7 @@ class LogLoaderTest {
     var log: Log = null
     val time = new MockTime()
     var cleanShutdownInterceptedValue = false
-    case class SimulateError(var hasError: Boolean = false)
+    final case class SimulateError(var hasError: Boolean = false)
     val simulateError = SimulateError()
 
     // Create a LogManager with some overridden methods to facilitate interception of clean shutdown

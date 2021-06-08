@@ -124,19 +124,19 @@ object ConsumerGroupCommand extends Logging {
     }
   }
 
-  private[admin] case class PartitionAssignmentState(group: String, coordinator: Option[Node], topic: Option[String],
-                                                partition: Option[Int], offset: Option[Long], lag: Option[Long],
-                                                consumerId: Option[String], host: Option[String],
-                                                clientId: Option[String], logEndOffset: Option[Long])
+  private[admin] final case class PartitionAssignmentState(group: String, coordinator: Option[Node], topic: Option[String],
+                                                           partition: Option[Int], offset: Option[Long], lag: Option[Long],
+                                                           consumerId: Option[String], host: Option[String],
+                                                           clientId: Option[String], logEndOffset: Option[Long])
 
-  private[admin] case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String, groupInstanceId: String,
-                                             numPartitions: Int, assignment: List[TopicPartition])
+  private[admin] final case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String, groupInstanceId: String,
+                                                        numPartitions: Int, assignment: List[TopicPartition])
 
-  private[admin] case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
+  private[admin] final case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
 
   private[admin] sealed trait CsvRecord
-  private[admin] case class CsvRecordWithGroup(group: String, topic: String, partition: Int, offset: Long) extends CsvRecord
-  private[admin] case class CsvRecordNoGroup(topic: String, partition: Int, offset: Long) extends CsvRecord
+  private[admin] final case class CsvRecordWithGroup(group: String, topic: String, partition: Int, offset: Long) extends CsvRecord
+  private[admin] final case class CsvRecordNoGroup(topic: String, partition: Int, offset: Long) extends CsvRecord
   private[admin] object CsvRecordWithGroup {
     val fields = Array("group", "topic", "partition", "offset")
   }
@@ -144,7 +144,7 @@ object ConsumerGroupCommand extends Logging {
     val fields = Array("topic", "partition", "offset")
   }
   // Example: CsvUtils().readerFor[CsvRecordWithoutGroup]
-  private[admin] case class CsvUtils() {
+  private[admin] final case class CsvUtils() {
     val mapper = new CsvMapper
     mapper.registerModule(DefaultScalaModule)
     def readerFor[T <: CsvRecord : ClassTag] = {
@@ -963,7 +963,7 @@ object ConsumerGroupCommand extends Logging {
   sealed trait LogOffsetResult
 
   object LogOffsetResult {
-    case class LogOffset(value: Long) extends LogOffsetResult
+    final case class LogOffset(value: Long) extends LogOffsetResult
     case object Unknown extends LogOffsetResult
     case object Ignore extends LogOffsetResult
   }

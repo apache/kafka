@@ -23,9 +23,9 @@ import java.util.Collections
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.slf4j.Logger
 
-case class MetadataImageBuilder(brokerId: Int,
-                                log: Logger,
-                                prevImage: MetadataImage) {
+final case class MetadataImageBuilder(brokerId: Int,
+                                      log: Logger,
+                                      prevImage: MetadataImage) {
   private var _partitionsBuilder: MetadataPartitionsBuilder = null
   private var _controllerId = prevImage.controllerId
   private var _brokersBuilder: MetadataBrokersBuilder = null
@@ -106,9 +106,9 @@ case class MetadataImageBuilder(brokerId: Int,
   }
 }
 
-case class MetadataImage(partitions: MetadataPartitions,
-                         controllerId: Option[Int],
-                         brokers: MetadataBrokers) {
+final case class MetadataImage(partitions: MetadataPartitions,
+                               controllerId: Option[Int],
+                               brokers: MetadataBrokers) {
   def this() = {
     this(MetadataPartitions(Collections.emptyMap(), Collections.emptyMap()),
       None,

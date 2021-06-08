@@ -31,7 +31,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.Map
 
 object JsonTest {
-  case class TestObject(@JsonProperty("foo") foo: String, @JsonProperty("bar") bar: Int)
+  final case class TestObject(@JsonProperty("foo") foo: String, @JsonProperty("bar") bar: Int)
 }
 
 class JsonTest {

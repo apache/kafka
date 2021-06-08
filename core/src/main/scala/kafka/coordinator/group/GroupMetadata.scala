@@ -155,17 +155,17 @@ private object GroupMetadata extends Logging {
 /**
  * Case class used to represent group metadata for the ListGroups API
  */
-case class GroupOverview(groupId: String,
-                         protocolType: String,
-                         state: String)
+final case class GroupOverview(groupId: String,
+                               protocolType: String,
+                               state: String)
 
 /**
  * Case class used to represent group metadata for the DescribeGroup API
  */
-case class GroupSummary(state: String,
-                        protocolType: String,
-                        protocol: String,
-                        members: List[MemberSummary])
+final case class GroupSummary(state: String,
+                              protocolType: String,
+                              protocol: String,
+                              members: List[MemberSummary])
 
 /**
   * We cache offset commits along with their commit record offset. This enables us to ensure that the latest offset
@@ -173,7 +173,7 @@ case class GroupSummary(state: String,
   * information of the commit record offset, compaction of the offsets topic itself may result in the wrong offset commit
   * being materialized.
   */
-case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offsetAndMetadata: OffsetAndMetadata) {
+final case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offsetAndMetadata: OffsetAndMetadata) {
   def olderThan(that: CommitRecordMetadataAndOffset): Boolean = appendedBatchOffset.get < that.appendedBatchOffset.get
 }
 

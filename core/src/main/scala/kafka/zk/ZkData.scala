@@ -108,7 +108,7 @@ object BrokerInfo {
 
 }
 
-case class BrokerInfo(broker: Broker, version: Int, jmxPort: Int) {
+final case class BrokerInfo(broker: Broker, version: Int, jmxPort: Int) {
   val path: String = BrokerIdZNode.path(broker.id)
   def toJsonBytes: Array[Byte] = BrokerIdZNode.encode(this)
 }
@@ -279,9 +279,9 @@ object TopicsZNode {
 }
 
 object TopicZNode {
-  case class TopicIdReplicaAssignment(topic: String,
-                                      topicId: Option[Uuid],
-                                      assignment: Map[TopicPartition, ReplicaAssignment])
+  final case class TopicIdReplicaAssignment(topic: String,
+                                            topicId: Option[Uuid],
+                                            assignment: Map[TopicPartition, ReplicaAssignment])
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
   def encode(topicId: Option[Uuid],
              assignment: collection.Map[TopicPartition, ReplicaAssignment]): Array[Byte] = {
@@ -467,9 +467,9 @@ object ReassignPartitionsZNode {
     * A replica assignment consists of a `topic`, `partition` and a list of `replicas`, which
     * represent the broker ids that the `TopicPartition` is assigned to.
     */
-  case class ReplicaAssignment(@BeanProperty @JsonProperty("topic") topic: String,
-                               @BeanProperty @JsonProperty("partition") partition: Int,
-                               @BeanProperty @JsonProperty("replicas") replicas: java.util.List[Int])
+  final case class ReplicaAssignment(@BeanProperty @JsonProperty("topic") topic: String,
+                                     @BeanProperty @JsonProperty("partition") partition: Int,
+                                     @BeanProperty @JsonProperty("replicas") replicas: java.util.List[Int])
 
   /**
     * An assignment consists of a `version` and a list of `partitions`, which represent the
@@ -477,8 +477,8 @@ object ReassignPartitionsZNode {
     * @deprecated Use the PartitionReassignment Kafka API instead
     */
   @Deprecated
-  case class LegacyPartitionAssignment(@BeanProperty @JsonProperty("version") version: Int,
-                                       @BeanProperty @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
+  final case class LegacyPartitionAssignment(@BeanProperty @JsonProperty("version") version: Int,
+                                             @BeanProperty @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
 
   def path = s"${AdminZNode.path}/reassign_partitions"
 
@@ -637,7 +637,7 @@ trait AclChangeSubscription extends AutoCloseable {
   def close(): Unit
 }
 
-case class AclChangeNode(path: String, bytes: Array[Byte])
+final case class AclChangeNode(path: String, bytes: Array[Byte])
 
 sealed trait ZkAclChangeStore {
   val aclChangePath: String
@@ -727,10 +727,10 @@ object ExtendedAclChangeEvent {
   val currentVersion: Int = 1
 }
 
-case class ExtendedAclChangeEvent(@BeanProperty @JsonProperty("version") version: Int,
-                                  @BeanProperty @JsonProperty("resourceType") resourceType: String,
-                                  @BeanProperty @JsonProperty("name") name: String,
-                                  @BeanProperty @JsonProperty("patternType") patternType: String) {
+final case class ExtendedAclChangeEvent(@BeanProperty @JsonProperty("version") version: Int,
+                                        @BeanProperty @JsonProperty("resourceType") resourceType: String,
+                                        @BeanProperty @JsonProperty("name") name: String,
+                                        @BeanProperty @JsonProperty("patternType") patternType: String) {
   if (version > ExtendedAclChangeEvent.currentVersion)
     throw new UnsupportedVersionException(s"Acl change event received for unsupported version: $version")
 
@@ -862,7 +862,7 @@ object FeatureZNodeStatus {
  * @param status     the status of the ZK node
  * @param features   the cluster-wide finalized features
  */
-case class FeatureZNode(status: FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
+final case class FeatureZNode(status: FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
 }
 
 object FeatureZNode {

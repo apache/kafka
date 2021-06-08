@@ -54,14 +54,14 @@ object QuotaFactory extends Logging {
     def record(value: Long): Unit = ()
   }
 
-  case class QuotaManagers(fetch: ClientQuotaManager,
-                           produce: ClientQuotaManager,
-                           request: ClientRequestQuotaManager,
-                           controllerMutation: ControllerMutationQuotaManager,
-                           leader: ReplicationQuotaManager,
-                           follower: ReplicationQuotaManager,
-                           alterLogDirs: ReplicationQuotaManager,
-                           clientQuotaCallback: Option[ClientQuotaCallback]) {
+  final case class QuotaManagers(fetch: ClientQuotaManager,
+                                 produce: ClientQuotaManager,
+                                 request: ClientRequestQuotaManager,
+                                 controllerMutation: ControllerMutationQuotaManager,
+                                 leader: ReplicationQuotaManager,
+                                 follower: ReplicationQuotaManager,
+                                 alterLogDirs: ReplicationQuotaManager,
+                                 clientQuotaCallback: Option[ClientQuotaCallback]) {
     def shutdown(): Unit = {
       fetch.shutdown()
       produce.shutdown()

@@ -38,7 +38,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-case class BatchInfo(records: Seq[SimpleRecord], hasKeys: Boolean, hasValues: Boolean)
+final case class BatchInfo(records: Seq[SimpleRecord], hasKeys: Boolean, hasValues: Boolean)
 
 class DumpLogSegmentsTest {
 

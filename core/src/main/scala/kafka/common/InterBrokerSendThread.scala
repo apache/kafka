@@ -152,7 +152,7 @@ abstract class InterBrokerSendThread(
   def wakeup(): Unit = networkClient.wakeup()
 }
 
-case class RequestAndCompletionHandler(
+final case class RequestAndCompletionHandler(
   creationTimeMs: Long,
   destination: Node,
   request: AbstractRequest.Builder[_ <: AbstractRequest],

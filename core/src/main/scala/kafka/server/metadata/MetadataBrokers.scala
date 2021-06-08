@@ -48,10 +48,10 @@ object MetadataBroker {
   }
 }
 
-case class MetadataBroker(id: Int,
-                          rack: String,
-                          endpoints: collection.Map[String, Node],
-                          fenced: Boolean) {
+final case class MetadataBroker(id: Int,
+                                rack: String,
+                                endpoints: collection.Map[String, Node],
+                                fenced: Boolean) {
   def brokerEndPoint(listenerName: ListenerName): BrokerEndPoint = {
     endpoints.get(listenerName.value) match {
       case None => throw new BrokerEndPointNotAvailableException(
@@ -120,8 +120,8 @@ object MetadataBrokers {
   }
 }
 
-case class MetadataBrokers(private val aliveBrokersList: util.List[MetadataBroker],
-                           private val brokerMap: util.Map[Integer, MetadataBroker]) {
+final case class MetadataBrokers(private val aliveBrokersList: util.List[MetadataBroker],
+                                 private val brokerMap: util.Map[Integer, MetadataBroker]) {
   def size(): Int = brokerMap.size()
 
   def iterator(): Iterator[MetadataBroker] = brokerMap.values().iterator().asScala

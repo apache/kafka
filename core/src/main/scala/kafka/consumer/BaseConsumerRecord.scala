@@ -23,11 +23,11 @@ import org.apache.kafka.common.record.{RecordBatch, TimestampType}
 
 @deprecated("This class has been deprecated and will be removed in a future release. " +
   "Please use org.apache.kafka.clients.consumer.ConsumerRecord instead.", "0.11.0.0")
-case class BaseConsumerRecord(topic: String,
-                              partition: Int,
-                              offset: Long,
-                              timestamp: Long = RecordBatch.NO_TIMESTAMP,
-                              timestampType: TimestampType = TimestampType.NO_TIMESTAMP_TYPE,
-                              key: Array[Byte],
-                              value: Array[Byte],
-                              headers: Headers = new RecordHeaders())
+final case class BaseConsumerRecord(topic: String,
+                                    partition: Int,
+                                    offset: Long,
+                                    timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                                    timestampType: TimestampType = TimestampType.NO_TIMESTAMP_TYPE,
+                                    key: Array[Byte],
+                                    value: Array[Byte],
+                                    headers: Headers = new RecordHeaders())

@@ -32,10 +32,10 @@ import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 object Broker {
-  private[kafka] case class ServerInfo(clusterResource: ClusterResource,
-                                         brokerId: Int,
-                                         endpoints: util.List[Endpoint],
-                                         interBrokerEndpoint: Endpoint) extends AuthorizerServerInfo
+  private[kafka] final case class ServerInfo(clusterResource: ClusterResource,
+                                             brokerId: Int,
+                                             endpoints: util.List[Endpoint],
+                                             interBrokerEndpoint: Endpoint) extends AuthorizerServerInfo
 
   def apply(id: Int, endPoints: Seq[EndPoint], rack: Option[String]): Broker = {
     new Broker(id, endPoints, rack, emptySupportedFeatures)
@@ -50,7 +50,7 @@ object Broker {
  * @param rack        an optional rack
  * @param features    supported features
  */
-case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String], features: Features[SupportedVersionRange]) {
+final case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String], features: Features[SupportedVersionRange]) {
 
   private val endPointsMap = endPoints.map { endPoint =>
     endPoint.listenerName -> endPoint

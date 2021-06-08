@@ -565,10 +565,6 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
   private var currentProcessorIndex = 0
   private[network] val throttledSockets = new mutable.PriorityQueue[DelayedCloseSocket]()
 
-  private[network] case class DelayedCloseSocket(socket: SocketChannel, endThrottleTimeMs: Long) extends Ordered[DelayedCloseSocket] {
-    override def compare(that: DelayedCloseSocket): Int = endThrottleTimeMs compare that.endThrottleTimeMs
-  }
-
   private[network] def addProcessors(newProcessors: Buffer[Processor], processorThreadPrefix: String): Unit = synchronized {
     processors ++= newProcessors
     if (processorsStarted.get)
@@ -802,21 +798,6 @@ private[kafka] class Processor(val id: Int,
                                connectionQueueSize: Int,
                                isPrivilegedListener: Boolean,
                                apiVersionManager: ApiVersionManager) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
-
-  private object ConnectionId {
-    def fromString(s: String): Option[ConnectionId] = s.split("-") match {
-      case Array(local, remote, index) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
-        BrokerEndPoint.parseHostPort(remote).map { case (remoteHost, remotePort) =>
-          ConnectionId(localHost, localPort, remoteHost, remotePort, Integer.parseInt(index))
-        }
-      }
-      case _ => None
-    }
-  }
-
-  private[network] case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int, index: Int) {
-    override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort-$index"
-  }
 
   private val newConnections = new ArrayBlockingQueue[SocketChannel](connectionQueueSize)
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
@@ -1268,7 +1249,7 @@ object ConnectionQuotas {
   private val ListenerThrottlePrefix = ""
   private val IpThrottlePrefix = "ip-"
 
-  private case class ListenerQuotaEntity(listenerName: String) extends ConnectionQuotaEntity {
+  private final case class ListenerQuotaEntity(listenerName: String) extends ConnectionQuotaEntity {
     override def sensorName: String = s"$ConnectionRateSensorName-$listenerName"
     override def sensorExpiration: Long = Long.MaxValue
     override def metricName: String = ConnectionRateMetricName
@@ -1282,7 +1263,7 @@ object ConnectionQuotas {
     override def metricTags: Map[String, String] = Map.empty
   }
 
-  private case class IpQuotaEntity(ip: InetAddress) extends ConnectionQuotaEntity {
+  private final case class IpQuotaEntity(ip: InetAddress) extends ConnectionQuotaEntity {
     override def sensorName: String = s"$ConnectionRateSensorName-${ip.getHostAddress}"
     override def sensorExpiration: Long = InactiveSensorExpirationTimeSeconds
     override def metricName: String = ConnectionRateMetricName
@@ -1715,3 +1696,22 @@ class TooManyConnectionsException(val ip: InetAddress, val count: Int) extends K
 
 class ConnectionThrottledException(val ip: InetAddress, val startThrottleTimeMs: Long, val throttleTimeMs: Long)
   extends KafkaException(s"$ip throttled for $throttleTimeMs")
+
+private[network] final case class DelayedCloseSocket(socket: SocketChannel, endThrottleTimeMs: Long) extends Ordered[DelayedCloseSocket] {
+  override def compare(that: DelayedCloseSocket): Int = endThrottleTimeMs compare that.endThrottleTimeMs
+}
+
+private[network] object ConnectionId {
+  def fromString(s: String): Option[ConnectionId] = s.split("-") match {
+    case Array(local, remote, index) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
+      BrokerEndPoint.parseHostPort(remote).map { case (remoteHost, remotePort) =>
+        ConnectionId(localHost, localPort, remoteHost, remotePort, Integer.parseInt(index))
+      }
+    }
+    case _ => None
+  }
+}
+
+private[network] final case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int, index: Int) {
+  override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort-$index"
+}

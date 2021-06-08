@@ -1924,7 +1924,7 @@ object KafkaZkClient {
    *                      can occur if the partition leader updated partition state while the controller attempted to
    *                      update partition state.
    */
-  case class UpdateLeaderAndIsrResult(
+  final case class UpdateLeaderAndIsrResult(
     finishedPartitions: Map[TopicPartition, Either[Exception, LeaderAndIsr]],
     partitionsToRetry: Seq[TopicPartition]
   )

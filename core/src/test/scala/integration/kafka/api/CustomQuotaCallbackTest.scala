@@ -327,7 +327,7 @@ class GroupedUserPrincipalBuilder extends KafkaPrincipalBuilder {
   }
 }
 
-case class GroupedUserPrincipal(user: String, userGroup: String) extends KafkaPrincipal(KafkaPrincipal.USER_TYPE, user)
+final case class GroupedUserPrincipal(user: String, userGroup: String) extends KafkaPrincipal(KafkaPrincipal.USER_TYPE, user)
 
 object GroupedUserQuotaCallback {
   val QuotaGroupTag = "group"

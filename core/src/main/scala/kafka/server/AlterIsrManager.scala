@@ -51,10 +51,10 @@ trait AlterIsrManager {
   def submit(alterIsrItem: AlterIsrItem): Boolean
 }
 
-case class AlterIsrItem(topicPartition: TopicPartition,
-                        leaderAndIsr: LeaderAndIsr,
-                        callback: Either[Errors, LeaderAndIsr] => Unit,
-                        controllerEpoch: Int) // controllerEpoch needed for Zk impl
+final case class AlterIsrItem(topicPartition: TopicPartition,
+                              leaderAndIsr: LeaderAndIsr,
+                              callback: Either[Errors, LeaderAndIsr] => Unit,
+                              controllerEpoch: Int) // controllerEpoch needed for Zk impl
 
 object AlterIsrManager {
 

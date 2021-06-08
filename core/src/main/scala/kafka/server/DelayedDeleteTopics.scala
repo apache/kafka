@@ -24,7 +24,7 @@ import scala.collection._
 /**
   * The delete metadata maintained by the delayed delete operation
   */
-case class DeleteTopicMetadata(topic: String, error: Errors)
+final case class DeleteTopicMetadata(topic: String, error: Errors)
 
 object DeleteTopicMetadata {
   def apply(topic: String, throwable: Throwable): DeleteTopicMetadata = {
