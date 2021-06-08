@@ -71,8 +71,10 @@ object ConfigEntityName {
  *
  * This will fire a watcher on all brokers. This watcher works as follows. It reads all the config change notifications.
  * It keeps track of the highest config change suffix number it has applied previously. For any previously applied change it finds
- * it checks if this notification is larger than a static expiration time (say 10mins) and if so it deletes this notification.
+ * it checks if this notification is larger than a static expiration time (default to 15 mins) and if so it deletes this notification.
  * For any new changes it reads the new configuration, combines it with the defaults, and updates the existing config.
+ *
+ * See [[kafka.common.ZkNodeChangeNotificationListener]] for details
  *
  * Note that config is always read from the config path in zk, the notification is just a trigger to do so. So if a broker is
  * down and misses a change that is fine--when it restarts it will be loading the full config anyway. Note also that
@@ -86,7 +88,7 @@ object ConfigEntityName {
  */
 class DynamicConfigManager(private val zkClient: KafkaZkClient,
                            private val configHandlers: Map[String, ConfigHandler],
-                           private val changeExpirationMs: Long = 15*60*1000,
+                           private val changeExpirationMs: Long = 15 * 60 * 1000,
                            private val time: Time = Time.SYSTEM) extends Logging {
   val adminZkClient = new AdminZkClient(zkClient)
 
@@ -154,7 +156,7 @@ class DynamicConfigManager(private val zkClient: KafkaZkClient,
   }
 
   private val configChangeListener = new ZkNodeChangeNotificationListener(zkClient, ConfigEntityChangeNotificationZNode.path,
-    ConfigEntityChangeNotificationSequenceZNode.SequenceNumberPrefix, ConfigChangedNotificationHandler)
+    ConfigEntityChangeNotificationSequenceZNode.SequenceNumberPrefix, ConfigChangedNotificationHandler, changeExpirationMs, time)
 
   /**
    * Begin watching for config changes
