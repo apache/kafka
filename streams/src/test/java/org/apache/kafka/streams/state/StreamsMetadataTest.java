@@ -18,6 +18,8 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.StreamsMetadata;
+import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -36,7 +38,7 @@ public class StreamsMetadataTest {
 
     @Before
     public void setUp() {
-        streamsMetadata = new StreamsMetadata(
+        streamsMetadata = new StreamsMetadataImpl(
             HOST_INFO,
             mkSet("store1", "store2"),
             mkSet(TP_0, TP_1),

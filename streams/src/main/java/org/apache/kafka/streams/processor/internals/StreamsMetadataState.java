@@ -27,7 +27,8 @@ import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.HostInfo;
-import org.apache.kafka.streams.state.StreamsMetadata;
+import org.apache.kafka.streams.StreamsMetadata;
+import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -229,7 +230,7 @@ public class StreamsMetadataState {
                                  final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap) {
         if (activePartitionHostMap.isEmpty() && standbyPartitionHostMap.isEmpty()) {
             allMetadata = Collections.emptyList();
-            localMetadata.set(new StreamsMetadata(thisHost,
+            localMetadata.set(new StreamsMetadataImpl(thisHost,
                                                   Collections.emptySet(),
                                                   Collections.emptySet(),
                                                   Collections.emptySet(),
@@ -258,7 +259,7 @@ public class StreamsMetadataState {
                     standbyStoresOnHost.addAll(getStoresOnHost(storeToSourceTopics, standbyPartitionsOnHost));
                 }
 
-                final StreamsMetadata metadata = new StreamsMetadata(hostInfo,
+                final StreamsMetadata metadata = new StreamsMetadataImpl(hostInfo,
                                                                      activeStoresOnHost,
                                                                      activePartitionsOnHost,
                                                                      standbyStoresOnHost,

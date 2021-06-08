@@ -696,13 +696,13 @@ public class EosIntegrationTest {
             // the assignment is. We only really care that the remaining instance only sees one host
             // that owns both partitions.
             waitForCondition(
-                () -> stallingInstance.allMetadata().size() == 2
-                    && remainingInstance.allMetadata().size() == 1
-                    && remainingInstance.allMetadata().iterator().next().topicPartitions().size() == 2,
+                () -> stallingInstance.allRunningMetadata().size() == 2
+                    && remainingInstance.allRunningMetadata().size() == 1
+                    && remainingInstance.allRunningMetadata().iterator().next().topicPartitions().size() == 2,
                 MAX_WAIT_TIME_MS,
                 () -> "Should have rebalanced.\n" +
-                    "Streams1[" + streams1.allMetadata() + "]\n" +
-                    "Streams2[" + streams2.allMetadata() + "]");
+                    "Streams1[" + streams1.allRunningMetadata() + "]\n" +
+                    "Streams2[" + streams2.allRunningMetadata() + "]");
 
             // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
             //
@@ -729,14 +729,14 @@ public class EosIntegrationTest {
             // It doesn't really matter what the assignment is, but we might as well also assert that they
             // both see both partitions assigned exactly once
             waitForCondition(
-                () -> streams1.allMetadata().size() == 2
-                    && streams2.allMetadata().size() == 2
-                    && streams1.allMetadata().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2
-                    && streams2.allMetadata().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2,
+                () -> streams1.allRunningMetadata().size() == 2
+                    && streams2.allRunningMetadata().size() == 2
+                    && streams1.allRunningMetadata().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2
+                    && streams2.allRunningMetadata().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2,
                 MAX_WAIT_TIME_MS,
                 () -> "Should have rebalanced.\n" +
-                    "Streams1[" + streams1.allMetadata() + "]\n" +
-                    "Streams2[" + streams2.allMetadata() + "]");
+                    "Streams1[" + streams1.allRunningMetadata() + "]\n" +
+                    "Streams2[" + streams2.allRunningMetadata() + "]");
 
             writeInputData(dataAfterSecondRebalance);
 

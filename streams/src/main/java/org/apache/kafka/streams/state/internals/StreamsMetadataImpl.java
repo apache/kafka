@@ -14,13 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state;
+package org.apache.kafka.streams.state.internals;
 
-import java.util.Objects;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsMetadata;
+import org.apache.kafka.streams.state.HostInfo;
 
 import java.util.Collections;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -29,15 +31,13 @@ import java.util.Set;
  * APIs and services to connect to other instances, the Set of state stores available on
  * the instance and the Set of {@link TopicPartition}s available on the instance.
  * NOTE: This is a point in time view. It may change when rebalances happen.
- * @deprecated since 3.0.0 use {@link org.apache.kafka.streams.StreamsMetadata}
  */
-@Deprecated
-public class StreamsMetadata {
+public class StreamsMetadataImpl implements StreamsMetadata {
     /**
      * Sentinel to indicate that the StreamsMetadata is currently unavailable. This can occur during rebalance
      * operations.
      */
-    public final static StreamsMetadata NOT_AVAILABLE = new StreamsMetadata(HostInfo.unavailable(),
+    public final static StreamsMetadataImpl NOT_AVAILABLE = new StreamsMetadataImpl(HostInfo.unavailable(),
                                                                             Collections.emptySet(),
                                                                             Collections.emptySet(),
                                                                             Collections.emptySet(),
@@ -53,11 +53,11 @@ public class StreamsMetadata {
 
     private final Set<TopicPartition> standbyTopicPartitions;
 
-    public StreamsMetadata(final HostInfo hostInfo,
-                           final Set<String> stateStoreNames,
-                           final Set<TopicPartition> topicPartitions,
-                           final Set<String> standbyStateStoreNames,
-                           final Set<TopicPartition> standbyTopicPartitions) {
+    public StreamsMetadataImpl(final HostInfo hostInfo,
+                               final Set<String> stateStoreNames,
+                               final Set<TopicPartition> topicPartitions,
+                               final Set<String> standbyStateStoreNames,
+                               final Set<TopicPartition> standbyTopicPartitions) {
 
         this.hostInfo = hostInfo;
         this.stateStoreNames = stateStoreNames;
@@ -72,6 +72,7 @@ public class StreamsMetadata {
      *
      * @return {@link HostInfo} corresponding to the streams instance
      */
+    @Override
     public HostInfo hostInfo() {
         return hostInfo;
     }
@@ -81,6 +82,7 @@ public class StreamsMetadata {
      *
      * @return set of active state store names
      */
+    @Override
     public Set<String> stateStoreNames() {
         return Collections.unmodifiableSet(stateStoreNames);
     }
@@ -90,6 +92,7 @@ public class StreamsMetadata {
      *
      * @return set of active topic partitions
      */
+    @Override
     public Set<TopicPartition> topicPartitions() {
         return Collections.unmodifiableSet(topicPartitions);
     }
@@ -99,6 +102,7 @@ public class StreamsMetadata {
      *
      * @return set of standby topic partitions
      */
+    @Override
     public Set<TopicPartition> standbyTopicPartitions() {
         return Collections.unmodifiableSet(standbyTopicPartitions);
     }
@@ -108,15 +112,18 @@ public class StreamsMetadata {
      *
      * @return set of standby state store names
      */
+    @Override
     public Set<String> standbyStateStoreNames() {
         return Collections.unmodifiableSet(standbyStateStoreNames);
     }
 
+    @Override
     public String host() {
         return hostInfo.host();
     }
 
     @SuppressWarnings("unused")
+    @Override
     public int port() {
         return hostInfo.port();
     }
@@ -130,7 +137,7 @@ public class StreamsMetadata {
             return false;
         }
 
-        final StreamsMetadata that = (StreamsMetadata) o;
+        final StreamsMetadataImpl that = (StreamsMetadataImpl) o;
         return Objects.equals(hostInfo, that.hostInfo)
             && Objects.equals(stateStoreNames, that.stateStoreNames)
             && Objects.equals(topicPartitions, that.topicPartitions)
