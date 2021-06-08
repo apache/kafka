@@ -83,7 +83,7 @@ class LogTest {
                                   expectedSize: Int,
                                   expectedOffsets: Seq[Long]): Unit = {
       val readInfo = log.read(
-        startOffset = fetchOffset,
+        fetchStartOffset = fetchOffset,
         maxLength = 2048,
         isolation = FetchHighWatermark,
         minOneMessage = false)
@@ -269,7 +269,7 @@ class LogTest {
   }
 
   private def assertNonEmptyFetch(log: Log, offset: Long, isolation: FetchIsolation): Unit = {
-    val readInfo = log.read(startOffset = offset,
+    val readInfo = log.read(fetchStartOffset = offset,
       maxLength = Int.MaxValue,
       isolation = isolation,
       minOneMessage = true)
@@ -291,7 +291,7 @@ class LogTest {
   }
 
   private def assertEmptyFetch(log: Log, offset: Long, isolation: FetchIsolation): Unit = {
-    val readInfo = log.read(startOffset = offset,
+    val readInfo = log.read(fetchStartOffset = offset,
       maxLength = Int.MaxValue,
       isolation = isolation,
       minOneMessage = true)
@@ -3006,7 +3006,7 @@ class LogTest {
         appendProducer(1)
 
         val readInfo = log.read(
-          startOffset = currentLogEndOffset,
+          fetchStartOffset = currentLogEndOffset,
           maxLength = Int.MaxValue,
           isolation = FetchTxnCommitted,
           minOneMessage = false)

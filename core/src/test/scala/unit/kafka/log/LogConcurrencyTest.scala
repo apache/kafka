@@ -89,7 +89,7 @@ class LogConcurrencyTest {
       var fetchOffset = 0L
       while (log.highWatermark < lastOffset) {
         val readInfo = log.read(
-          startOffset = fetchOffset,
+          fetchStartOffset = fetchOffset,
           maxLength = 1,
           isolation = FetchHighWatermark,
           minOneMessage = true

@@ -1170,19 +1170,19 @@ class Log(@volatile private var _dir: File,
   /**
    * Read messages from the log.
    *
-   * @param startOffset The offset to begin reading at
+   * @param fetchStartOffset The offset to begin reading at
    * @param maxLength The maximum number of bytes to read
    * @param isolation The fetch isolation, which controls the maximum offset we are allowed to read
    * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxLength` (if one exists)
-   * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the log start offset
+   * @throws OffsetOutOfRangeException If fetchStartOffset is beyond the log end offset or before the log start offset
    * @return The fetch data information including fetch starting offset metadata and messages read.
    */
-  def read(startOffset: Long,
+  def read(fetchStartOffset: Long,
            maxLength: Int,
            isolation: FetchIsolation,
            minOneMessage: Boolean): FetchDataInfo = {
     maybeHandleIOException(s"Exception while reading from $topicPartition in dir ${dir.getParent}") {
-      trace(s"Reading maximum $maxLength bytes at offset $startOffset from log with " +
+      trace(s"Reading maximum $maxLength bytes at offset $fetchStartOffset from log with " +
         s"total length $size bytes")
 
       val includeAbortedTxns = isolation == FetchTxnCommitted
@@ -1191,11 +1191,11 @@ class Log(@volatile private var _dir: File,
       // We create the local variables to avoid race conditions with updates to the log.
       val endOffsetMetadata = nextOffsetMetadata
       val endOffset = endOffsetMetadata.messageOffset
-      var segmentOpt = segments.floorSegment(startOffset)
+      var segmentOpt = segments.floorSegment(fetchStartOffset)
 
       // return error on attempt to read beyond the log end offset or read below log start offset
-      if (startOffset > endOffset || segmentOpt.isEmpty || startOffset < logStartOffset)
-        throw new OffsetOutOfRangeException(s"Received request for offset $startOffset for partition $topicPartition, " +
+      if (fetchStartOffset > endOffset || segmentOpt.isEmpty || fetchStartOffset < logStartOffset)
+        throw new OffsetOutOfRangeException(s"Received request for offset $fetchStartOffset for partition $topicPartition, " +
           s"but we only have log segments in the range $logStartOffset to $endOffset.")
 
       val maxOffsetMetadata = isolation match {
@@ -1204,10 +1204,10 @@ class Log(@volatile private var _dir: File,
         case FetchTxnCommitted => fetchLastStableOffsetMetadata
       }
 
-      if (startOffset == maxOffsetMetadata.messageOffset)
+      if (fetchStartOffset == maxOffsetMetadata.messageOffset)
         emptyFetchDataInfo(maxOffsetMetadata, includeAbortedTxns)
-      else if (startOffset > maxOffsetMetadata.messageOffset)
-        emptyFetchDataInfo(convertToOffsetMetadataOrThrow(startOffset), includeAbortedTxns)
+      else if (fetchStartOffset > maxOffsetMetadata.messageOffset)
+        emptyFetchDataInfo(convertToOffsetMetadataOrThrow(fetchStartOffset), includeAbortedTxns)
       else {
         // Do the read on the segment with a base offset less than the target offset
         // but if that segment doesn't contain any messages with an offset greater than that
@@ -1222,10 +1222,10 @@ class Log(@volatile private var _dir: File,
             if (maxOffsetMetadata.segmentBaseOffset == segment.baseOffset) maxOffsetMetadata.relativePositionInSegment
             else segment.size
 
-          fetchDataInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
+          fetchDataInfo = segment.read(fetchStartOffset, maxLength, maxPosition, minOneMessage)
           if (fetchDataInfo != null) {
             if (includeAbortedTxns)
-              fetchDataInfo = addAbortedTransactions(startOffset, segment, fetchDataInfo)
+              fetchDataInfo = addAbortedTransactions(fetchStartOffset, segment, fetchDataInfo)
           } else segmentOpt = segments.higherSegment(baseOffset)
         }
 
