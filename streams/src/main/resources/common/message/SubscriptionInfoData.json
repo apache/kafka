@@ -143,7 +143,7 @@
     },
     {
       "name": "ClientTag",
-      "versions": "1+",
+      "versions": "11+",
       "fields": [
         {
           "name": "key",
