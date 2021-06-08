@@ -116,15 +116,6 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     lastSnapshotCommittedOffset = lastCommittedOffset;
                 }
             }
-        } catch (IllegalArgumentException e) {
-            // TODO: remove this catch
-            log.error(
-                "lastSnapshotCommittedOffset = {}; snapshotDelayInRecords = {}",
-                lastSnapshotCommittedOffset,
-                snapshotDelayInRecords
-            );
-
-            throw e;
         } finally {
             reader.close();
         }
