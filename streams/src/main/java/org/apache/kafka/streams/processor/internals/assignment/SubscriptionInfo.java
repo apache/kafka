@@ -131,14 +131,13 @@ public class SubscriptionInfo {
     }
 
     public Map<String, String> clientTags() {
-        return data.clientTags()
-                   .stream()
-                   .collect(
-                       Collectors.toMap(
-                           clientTag -> new String(clientTag.key(), StandardCharsets.UTF_8),
-                           clientTag -> new String(clientTag.value(), StandardCharsets.UTF_8)
-                       )
-                   );
+        return data.clientTags().stream()
+            .collect(
+                Collectors.toMap(
+                    clientTag -> new String(clientTag.key(), StandardCharsets.UTF_8),
+                    clientTag -> new String(clientTag.value(), StandardCharsets.UTF_8)
+                )
+            );
     }
 
     public int errorCode() {
@@ -146,15 +145,14 @@ public class SubscriptionInfo {
     }
 
     private List<ClientTag> buildClientTagsFromMap(final Map<String, String> clientTags) {
-        return clientTags.entrySet()
-                         .stream()
-                         .map(clientTagEntry -> {
-                             final ClientTag clientTag = new ClientTag();
-                             clientTag.setKey(clientTagEntry.getKey().getBytes(StandardCharsets.UTF_8));
-                             clientTag.setValue(clientTagEntry.getValue().getBytes(StandardCharsets.UTF_8));
-                             return clientTag;
-                         })
-                         .collect(Collectors.toList());
+        return clientTags.entrySet().stream()
+            .map(clientTagEntry -> {
+                final ClientTag clientTag = new ClientTag();
+                clientTag.setKey(clientTagEntry.getKey().getBytes(StandardCharsets.UTF_8));
+                clientTag.setValue(clientTagEntry.getValue().getBytes(StandardCharsets.UTF_8));
+                return clientTag;
+            })
+            .collect(Collectors.toList());
     }
 
     // For version > MIN_NAMED_TOPOLOGY_VERSION
