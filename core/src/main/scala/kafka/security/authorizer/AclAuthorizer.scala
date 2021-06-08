@@ -477,6 +477,7 @@ class AclAuthorizer extends Authorizer with Logging {
       val allowOps = operation match {
         case DESCRIBE => Set[AclOperation](DESCRIBE, READ, WRITE, DELETE, ALTER)
         case DESCRIBE_CONFIGS => Set[AclOperation](DESCRIBE_CONFIGS, ALTER_CONFIGS)
+        case AUTO_CREATE => Set[AclOperation](AUTO_CREATE, CREATE)
         case _ => Set[AclOperation](operation)
       }
       allowOps.exists(operation => matchingAclExists(operation, resource, principal, host, ALLOW, acls))

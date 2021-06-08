@@ -106,7 +106,12 @@ public enum AclOperation {
     /**
      * IDEMPOTENT_WRITE operation.
      */
-    IDEMPOTENT_WRITE((byte) 12);
+    IDEMPOTENT_WRITE((byte) 12),
+
+    /**
+     * AUTO_CREATE operation.
+     */
+    AUTO_CREATE((byte) 13);
 
     // Note: we cannot have more than 30 ACL operations without modifying the format used
     // to describe ACL operations in MetadataResponse.
