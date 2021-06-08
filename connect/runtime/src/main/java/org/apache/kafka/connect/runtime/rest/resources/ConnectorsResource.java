@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.core.HttpHeaders;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -258,8 +259,8 @@ public class ConnectorsResource {
     @Path("/{connector}/restart")
     public Response restartConnector(final @PathParam("connector") String connector,
                                  final @Context HttpHeaders headers,
-                                 final @QueryParam("includeTasks") Boolean includeTasks,
-                                 final @QueryParam("onlyFailed") Boolean onlyFailed,
+                                 final @DefaultValue ("false") @QueryParam("includeTasks") Boolean includeTasks,
+                                 final @DefaultValue ("false") @QueryParam("onlyFailed") Boolean onlyFailed,
                                  final @QueryParam("forward") Boolean forward) throws Throwable {
         RestartRequest restartRequest = new RestartRequest(connector, onlyFailed, includeTasks);
         if (restartRequest.forciblyRestartConnectorOnly()) {

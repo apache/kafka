@@ -28,7 +28,6 @@ import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.core.Response;
 import java.util.Collections;
 import java.util.HashMap;
@@ -60,7 +59,7 @@ public class ConnectorRestartApiIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ConnectorRestartApiIntegrationTest.class);
 
     private static final long OFFSET_COMMIT_INTERVAL_MS = TimeUnit.SECONDS.toMillis(30);
-    private static final int NUM_WORKERS = 1;
+    private static final int ONE_WORKER = 1;
     private static final int NUM_TASKS = 4;
     private static final int MESSAGES_PER_POLL = 10;
     private static final String CONNECTOR_NAME = "simple-source";
@@ -87,14 +86,18 @@ public class ConnectorRestartApiIntegrationTest {
         brokerProps.put("auto.create.topics.enable", String.valueOf(false));
 
         // build a Connect cluster backed by Kafka and Zk
-        connectBuilder = new EmbeddedConnectCluster.Builder()
-                .name("connect-cluster")
-                .numWorkers(NUM_WORKERS)
-                .workerProps(workerProps)
-                .brokerProps(brokerProps)
-                .maskExitProcedures(true); // true is the default, setting here as example
+        connectBuilder = connectBuilderWithNumWorkers(ONE_WORKER); // true is the default, setting here as example
         // get connector handles before starting test.
         connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
+    }
+
+    private EmbeddedConnectCluster.Builder connectBuilderWithNumWorkers(int numWorkers) {
+        return new EmbeddedConnectCluster.Builder()
+                .name("connect-cluster")
+                .numWorkers(numWorkers)
+                .workerProps(workerProps)
+                .brokerProps(brokerProps)
+                .maskExitProcedures(true);
     }
 
     @After
@@ -102,6 +105,21 @@ public class ConnectorRestartApiIntegrationTest {
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
+    }
+
+    @Test
+    public void testRestartUnknownConnectorNoParams() throws Exception {
+        String connectorName = "Unknown";
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        // Call the Restart API
+        String restartEndpoint = connect.endpointForResource(
+                String.format("connectors/%s/restart", connectorName));
+        Response response = connect.requestPost(restartEndpoint, "", Collections.emptyMap());
+        assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+
     }
 
     @Test
@@ -122,27 +140,27 @@ public class ConnectorRestartApiIntegrationTest {
         String restartEndpoint = connect.endpointForResource(
                 String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, connectorName));
         Response response = connect.requestPost(restartEndpoint, "", Collections.emptyMap());
-        assertEquals(HttpServletResponse.SC_NOT_FOUND, response.getStatus());
+        assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     }
 
     @Test
     public void testRestartOnlyConnector() throws Exception {
-        normalConnectorRestart(false, false, 1, 0, false);
+        runningConnectorAndTasksRestart(false, false, 1, 0, false);
     }
 
     @Test
     public void testRestartBoth() throws Exception {
-        normalConnectorRestart(false, true, 1, 1, false);
+        runningConnectorAndTasksRestart(false, true, 1, 1, false);
     }
 
     @Test
     public void testRestartNoopOnlyConnector() throws Exception {
-        normalConnectorRestart(true, false, 0, 0, true);
+        runningConnectorAndTasksRestart(true, false, 0, 0, true);
     }
 
     @Test
     public void testRestartNoopBoth() throws Exception {
-        normalConnectorRestart(true, true, 0, 0, true);
+        runningConnectorAndTasksRestart(true, true, 0, 0, true);
     }
 
     @Test
@@ -180,7 +198,22 @@ public class ConnectorRestartApiIntegrationTest {
         failedTasksRestart(false, true, 1, 1, false);
     }
 
-    private void normalConnectorRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts, int expectedTasksRestarts, boolean noopRequest) throws Exception {
+    @Test
+    public void testMultiWorkerRestartOnlyConnector() throws Exception {
+        runningConnectorAndTasksRestart(false, false, 1, 0, false, 4);
+    }
+
+    @Test
+    public void testMultiWorkerRestartBoth() throws Exception {
+        runningConnectorAndTasksRestart(false, true, 1, 1, false, 4);
+    }
+
+    private void runningConnectorAndTasksRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts, int expectedTasksRestarts, boolean noopRequest) throws Exception {
+        runningConnectorAndTasksRestart(onlyFailed, includeTasks, expectedConnectorRestarts, expectedTasksRestarts, noopRequest, ONE_WORKER);
+    }
+
+    private void runningConnectorAndTasksRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts, int expectedTasksRestarts, boolean noopRequest, int numWorkers) throws Exception {
+        connectBuilder = connectBuilderWithNumWorkers(numWorkers);
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
@@ -188,7 +221,7 @@ public class ConnectorRestartApiIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
-        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+        connect.assertions().assertExactlyNumWorkersAreUp(numWorkers,
                 "Initial group of workers did not start in time.");
 
         // Try to start the connector and its single task.
@@ -228,11 +261,14 @@ public class ConnectorRestartApiIntegrationTest {
 
         assertEquals(beforeSnapshot.starts() + expectedConnectorRestarts, afterSnapshot.starts());
         assertEquals(beforeSnapshot.stops() + expectedConnectorRestarts, afterSnapshot.stops());
-        connectorHandle.tasks().forEach(t -> {
-            StartAndStopCounterSnapshot afterTaskSnapshot = t.startAndStopCounter().countsSnapshot();
-            assertEquals(beforeTasksSnapshot.get(t.taskId()).starts() + expectedTasksRestarts, afterTaskSnapshot.starts());
-            assertEquals(beforeTasksSnapshot.get(t.taskId()).stops() + expectedTasksRestarts, afterTaskSnapshot.stops());
-        });
+        if (numWorkers == 1) {
+            //validate tasks stop/start counts only in single worker test because the multi worker rebalance triggers stop/start on task and this make the exact counts unpredictable
+            connectorHandle.tasks().forEach(t -> {
+                StartAndStopCounterSnapshot afterTaskSnapshot = t.startAndStopCounter().countsSnapshot();
+                assertEquals(beforeTasksSnapshot.get(t.taskId()).starts() + expectedTasksRestarts, afterTaskSnapshot.starts());
+                assertEquals(beforeTasksSnapshot.get(t.taskId()).stops() + expectedTasksRestarts, afterTaskSnapshot.stops());
+            });
+        }
     }
 
     private void failedConnectorRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts) throws Exception {
@@ -244,7 +280,7 @@ public class ConnectorRestartApiIntegrationTest {
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
         props.put("connector.start.inject.error", "true");
 
-        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+        connect.assertions().assertExactlyNumWorkersAreUp(ONE_WORKER,
                 "Initial group of workers did not start in time.");
 
         // Try to start the connector and its single task.
@@ -282,7 +318,7 @@ public class ConnectorRestartApiIntegrationTest {
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
         props.put("task.start.inject.error", "true");
 
-        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+        connect.assertions().assertExactlyNumWorkersAreUp(ONE_WORKER,
                 "Initial group of workers did not start in time.");
 
         // Try to start the connector and its single task.
