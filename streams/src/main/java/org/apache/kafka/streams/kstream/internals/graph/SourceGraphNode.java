@@ -52,7 +52,7 @@ abstract public class SourceGraphNode<K, V> extends GraphNode {
     }
 
     public Set<String> topicNames() {
-        return Collections.unmodifiableSet(topicNames);
+        return topicNames == null ? null : Collections.unmodifiableSet(topicNames);
     }
 
     public Pattern topicPattern() {
