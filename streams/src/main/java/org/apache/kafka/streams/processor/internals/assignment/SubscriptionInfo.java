@@ -131,14 +131,13 @@ public class SubscriptionInfo {
     }
 
     public Map<String, String> clientTags() {
-        return data.clientTags()
-                   .stream()
-                   .collect(
-                       Collectors.toMap(
-                           clientTag -> new String(clientTag.key(), StandardCharsets.UTF_8),
-                           clientTag -> new String(clientTag.value(), StandardCharsets.UTF_8)
-                       )
-                   );
+        return data.clientTags().stream()
+            .collect(
+                Collectors.toMap(
+                    clientTag -> new String(clientTag.key(), StandardCharsets.UTF_8),
+                    clientTag -> new String(clientTag.value(), StandardCharsets.UTF_8)
+                )
+            );
     }
 
     public int errorCode() {
