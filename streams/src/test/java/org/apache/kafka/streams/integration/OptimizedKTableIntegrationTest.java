@@ -147,7 +147,7 @@ public class OptimizedKTableIntegrationTest {
         }
 
         final ReadOnlyKeyValueStore<Integer, Integer> newActiveStore = kafkaStreams1WasFirstActive ? store2 : store1;
-        TestUtils.retryOnExceptionWithTimeout(100, 60 * 1000, () -> {
+        TestUtils.retryOnExceptionWithTimeout(60 * 1000, 100, () -> {
             // Assert that after failover we have recovered to the last store write
             assertThat(newActiveStore.get(key), is(equalTo(batch1NumMessages - 1)));
         });
@@ -159,7 +159,7 @@ public class OptimizedKTableIntegrationTest {
         // Assert that all messages in the second batch were processed in a timely manner
         assertThat(semaphore.tryAcquire(batch2NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
-        TestUtils.retryOnExceptionWithTimeout(100, 60 * 1000, () -> {
+        TestUtils.retryOnExceptionWithTimeout(60 * 1000, 100, () -> {
             // Assert that the current value in store reflects all messages being processed
             assertThat(newActiveStore.get(key), is(equalTo(totalNumMessages - 1)));
         });

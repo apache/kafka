@@ -21,7 +21,6 @@ import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
 import java.util.concurrent.ConcurrentSkipListMap
-
 import kafka.log.Log.offsetFromFile
 import kafka.server.LogOffsetMetadata
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
@@ -29,6 +28,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
 
 import scala.jdk.CollectionConverters._
@@ -484,7 +484,8 @@ object ProducerStateManager {
 @nonthreadsafe
 class ProducerStateManager(val topicPartition: TopicPartition,
                            @volatile var _logDir: File,
-                           val maxProducerIdExpirationMs: Int = 60 * 60 * 1000) extends Logging {
+                           val maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
+                           val time: Time = Time.SYSTEM) extends Logging {
   import ProducerStateManager._
   import java.util
 
@@ -718,8 +719,10 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     // If not a new offset, then it is not worth taking another snapshot
     if (lastMapOffset > lastSnapOffset) {
       val snapshotFile = SnapshotFile(Log.producerSnapshotFile(_logDir, lastMapOffset))
-      info(s"Writing producer snapshot at offset $lastMapOffset")
+      val start = time.hiResClockMs()
       writeSnapshot(snapshotFile.file, producers)
+      info(s"Wrote producer snapshot at offset $lastMapOffset with ${producers.size} producer ids in ${time.hiResClockMs() - start} ms.")
+
       snapshots.put(snapshotFile.offset, snapshotFile)
 
       // Update the last snap offset according to the serialized map
@@ -730,7 +733,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   /**
    * Update the parentDir for this ProducerStateManager and all of the snapshot files which it manages.
    */
-  def updateParentDir(parentDir: File): Unit ={
+  def updateParentDir(parentDir: File): Unit = {
     _logDir = parentDir
     snapshots.forEach((_, s) => s.updateParentDir(parentDir))
   }

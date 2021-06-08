@@ -605,13 +605,6 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldAcceptBuiltInMetricsVersion0100To24() {
-        // don't use `StreamsConfig.METRICS_0100_TO_24` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.10.0-2.4");
-        new StreamsConfig(props);
-    }
-
-    @Test
     public void shouldAcceptBuiltInMetricsLatestVersion() {
         // don't use `StreamsConfig.METRICS_LATEST` to actually do a useful test
         props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "latest");

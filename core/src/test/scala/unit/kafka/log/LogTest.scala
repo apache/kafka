@@ -2343,9 +2343,8 @@ class LogTest {
     val log = createLog(logDir, logConfig)
 
     // Write a topic ID to the partition metadata file to ensure it is transferred correctly.
-    val id = Uuid.randomUuid()
-    log.topicId = Some(id)
-    log.partitionMetadataFile.write(id)
+    val topicId = Uuid.randomUuid()
+    log.assignTopicId(topicId)
 
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
     assertEquals(Some(5), log.latestEpoch)
@@ -2360,8 +2359,8 @@ class LogTest {
 
     // Check the topic ID remains in memory and was copied correctly.
     assertTrue(log.topicId.isDefined)
-    assertEquals(id, log.topicId.get)
-    assertEquals(id, log.partitionMetadataFile.read().topicId)
+    assertEquals(topicId, log.topicId.get)
+    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
   }
 
   @Test
