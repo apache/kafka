@@ -252,5 +252,4 @@ public class NamedTopologyIntegrationTest {
         }
         return topologies;
     }
-
 }

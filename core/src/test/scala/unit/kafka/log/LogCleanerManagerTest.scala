@@ -121,7 +121,7 @@ class LogCleanerManagerTest extends Logging {
       extends Log(dir, config, segments, offsets.logStartOffset, offsets.recoveryPoint,
         offsets.nextOffsetMetadata, time.scheduler, new BrokerTopicStats, time,
         LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
-        producerStateManager, logDirFailureChannel, topicId = None, keepPartitionMetadataFile = true) {
+        producerStateManager, logDirFailureChannel, _topicId = None, keepPartitionMetadataFile = true) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
       override def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] =
         throw new IllegalStateException("Error!")

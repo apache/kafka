@@ -55,7 +55,6 @@ import java.util.Set;
 import static java.time.Duration.ofMillis;
 
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -76,13 +75,34 @@ public class KStreamKStreamJoinTest {
     private final String errorMessagePrefix = "Window settings mismatch. WindowBytesStoreSupplier settings";
 
     @Test
-    public void shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeterOnSkippedRecordsWithNullValue(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    @Test
     public void shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeterOnSkippedRecordsWithNullValue(StreamsConfig.METRICS_LATEST);
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
+        final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));
+
+        left.join(
+            right,
+            Integer::sum,
+            JoinWindows.of(ofMillis(100)),
+            StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
+        );
+
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKStreamJoin.class);
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
+            final TestInputTopic<String, Integer> inputTopic =
+                driver.createInputTopic("left", new StringSerializer(), new IntegerSerializer());
+            inputTopic.pipeInput("A", null);
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null key or value. key=[A] value=[null] topic=[left] partition=[0] "
+                    + "offset=[0]")
+            );
+        }
     }
 
 
@@ -115,47 +135,6 @@ public class KStreamKStreamJoinTest {
         final Topology topology =  builder.build(props);
         System.out.println(topology.describe().toString());
         assertEquals(expectedTopologyWithUserNamedRepartitionTopics, topology.describe().toString());
-    }
-
-    private void shouldLogAndMeterOnSkippedRecordsWithNullValue(final String builtInMetricsVersion) {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
-        final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));
-
-        left.join(
-            right,
-            Integer::sum,
-            JoinWindows.of(ofMillis(100)),
-            StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
-        );
-
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKStreamJoin.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-
-            final TestInputTopic<String, Integer> inputTopic =
-                    driver.createInputTopic("left", new StringSerializer(), new IntegerSerializer());
-            inputTopic.pipeInput("A", null);
-
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key or value. key=[A] value=[null] topic=[left] partition=[0] "
-                    + "offset=[0]")
-            );
-
-            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-                assertEquals(
-                    1.0,
-                    getMetricByName(
-                        driver.metrics(),
-                        "skipped-records-total",
-                        "stream-metrics"
-                    ).metricValue()
-                );
-            }
-        }
     }
 
     @Test

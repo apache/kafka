@@ -41,14 +41,6 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
         this.logConfig = logConfig;
     }
 
-    public StrictBufferConfigImpl(final long maxRecords,
-                                  final long maxBytes,
-                                  final BufferFullStrategy bufferFullStrategy) {
-        this.maxRecords = maxRecords;
-        this.maxBytes = maxBytes;
-        this.bufferFullStrategy = bufferFullStrategy;
-        this.logConfig = Collections.emptyMap();
-    }
 
     public StrictBufferConfigImpl() {
         this.maxRecords = Long.MAX_VALUE;
@@ -59,12 +51,12 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
 
     @Override
     public Suppressed.StrictBufferConfig withMaxRecords(final long recordLimit) {
-        return new StrictBufferConfigImpl(recordLimit, maxBytes, bufferFullStrategy);
+        return new StrictBufferConfigImpl(recordLimit, maxBytes, bufferFullStrategy, getLogConfig());
     }
 
     @Override
     public Suppressed.StrictBufferConfig withMaxBytes(final long byteLimit) {
-        return new StrictBufferConfigImpl(maxRecords, byteLimit, bufferFullStrategy);
+        return new StrictBufferConfigImpl(maxRecords, byteLimit, bufferFullStrategy, getLogConfig());
     }
 
     @Override
@@ -113,18 +105,21 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
         final StrictBufferConfigImpl that = (StrictBufferConfigImpl) o;
         return maxRecords == that.maxRecords &&
             maxBytes == that.maxBytes &&
-            bufferFullStrategy == that.bufferFullStrategy;
+            bufferFullStrategy == that.bufferFullStrategy &&
+            Objects.equals(getLogConfig(), ((StrictBufferConfigImpl) o).getLogConfig());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(maxRecords, maxBytes, bufferFullStrategy);
+        return Objects.hash(maxRecords, maxBytes, bufferFullStrategy, getLogConfig());
     }
 
     @Override
     public String toString() {
         return "StrictBufferConfigImpl{maxKeys=" + maxRecords +
             ", maxBytes=" + maxBytes +
-            ", bufferFullStrategy=" + bufferFullStrategy + '}';
+            ", bufferFullStrategy=" + bufferFullStrategy +
+            ", logConfig=" + getLogConfig().toString() +
+             '}';
     }
 }
