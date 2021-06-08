@@ -1257,6 +1257,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             case 8:
             case 9:
             case 10:
+            case 11:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);

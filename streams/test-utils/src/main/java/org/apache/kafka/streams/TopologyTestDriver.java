@@ -419,7 +419,7 @@ public class TopologyTestDriver implements Closeable {
 
         final boolean createStateDirectory = processorTopology.hasPersistentLocalStore() ||
             (globalTopology != null && globalTopology.hasPersistentGlobalStore());
-        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, createStateDirectory);
+        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, createStateDirectory, builder.hasNamedTopologies());
     }
 
     private void setupGlobalTask(final Time mockWallClockTime,
