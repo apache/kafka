@@ -111,14 +111,10 @@ public class RestServer {
     public void createConnectors(List<String> listeners, List<String> adminListeners) {
         List<Connector> connectors = new ArrayList<>();
 
-        if (listeners != null && !listeners.isEmpty()) {
-            for (String listener : listeners) {
-                if (!listener.isEmpty()) {
-                    Connector connector = createConnector(listener);
-                    connectors.add(connector);
-                    log.info("Added connector for {}", listener);
-                }
-            }
+        for (String listener : listeners) {
+            Connector connector = createConnector(listener);
+            connectors.add(connector);
+            log.info("Added connector for {}", listener);
         }
 
         jettyServer.setConnectors(connectors.toArray(new Connector[0]));

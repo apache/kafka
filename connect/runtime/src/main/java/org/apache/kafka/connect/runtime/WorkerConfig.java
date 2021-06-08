@@ -152,6 +152,7 @@ public class WorkerConfig extends AbstractConfig {
             " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
             " Leave hostname empty to bind to default interface.\n" +
             " Examples of legal listener lists: HTTP://myhost:8083,HTTPS://myhost:8084";
+    static final List<String> LISTENERS_DEFAULT = Collections.singletonList("http://:8083");
 
     public static final String REST_ADVERTISED_HOST_NAME_CONFIG = "rest.advertised.host.name";
     private static final String REST_ADVERTISED_HOST_NAME_DOC
@@ -184,7 +185,6 @@ public class WorkerConfig extends AbstractConfig {
             " The supported protocols are HTTP and HTTPS." +
             " An empty or blank string will disable this feature." +
             " The default behavior is to use the regular listener (specified by the 'listeners' property).";
-    protected static final List<String> ADMIN_LISTENERS_DEFAULT = null;
     public static final String ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX = "admin.listeners.https.";
 
     public static final String PLUGIN_PATH_CONFIG = "plugin.path";
@@ -286,7 +286,7 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW, OFFSET_COMMIT_INTERVAL_MS_DOC)
                 .define(OFFSET_COMMIT_TIMEOUT_MS_CONFIG, Type.LONG, OFFSET_COMMIT_TIMEOUT_MS_DEFAULT,
                         Importance.LOW, OFFSET_COMMIT_TIMEOUT_MS_DOC)
-                .define(LISTENERS_CONFIG, Type.LIST, null, Importance.LOW, LISTENERS_DOC)
+                .define(LISTENERS_CONFIG, Type.LIST, LISTENERS_DEFAULT, new ListenersValidator(), Importance.LOW, LISTENERS_DOC)
                 .define(REST_ADVERTISED_HOST_NAME_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_HOST_NAME_DOC)
                 .define(REST_ADVERTISED_PORT_CONFIG, Type.INT,  null, Importance.LOW, REST_ADVERTISED_PORT_DOC)
                 .define(REST_ADVERTISED_LISTENER_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_LISTENER_DOC)
@@ -475,6 +475,37 @@ public class WorkerConfig extends AbstractConfig {
         if (!HEADER_ACTIONS.stream().anyMatch(action::equalsIgnoreCase)) {
             throw new ConfigException(String.format("Invalid header config action: '%s'. "
                     + "Expected one of %s", action, HEADER_ACTIONS));
+        }
+    }
+    private static class ListenersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                throw new ConfigException("Invalid value, at least one URI is expected, ex: http://localhost:8080,https://localhost:8443.");
+            }
+
+            if (!(value instanceof List)) {
+                throw new ConfigException("Invalid value type (list expected).");
+            }
+
+            List items = (List) value;
+            if (items.isEmpty()) {
+                throw new ConfigException("Invalid value, at least one URI is expected, ex: http://localhost:8080,https://localhost:8443.");
+            }
+
+            for (Object item: items) {
+                if (!(item instanceof String)) {
+                    throw new ConfigException("Invalid type for listener (expected String).");
+                }
+                if (Utils.isBlank((String) item)) {
+                    throw new ConfigException("Empty listener found when parsing list.");
+                }
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "List of comma-separated URIs, ex: http://localhost:8080,https://localhost:8443.";
         }
     }
 

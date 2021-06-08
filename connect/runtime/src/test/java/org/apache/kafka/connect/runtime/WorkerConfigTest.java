@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
 
+import static org.apache.kafka.connect.runtime.WorkerConfig.LISTENERS_DEFAULT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -55,6 +56,39 @@ public class WorkerConfigTest {
             "add X-XSS-Protection",
             "set X-Frame-Options:DENY, add  :no-cache, no-store, must-revalidate "
     );
+
+    @Test
+    public void testListenersConfigAllowedValues() {
+        Map<String, String> props = baseProps();
+
+        // no value set for "listeners"
+        WorkerConfig config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
+        assertEquals(LISTENERS_DEFAULT, config.getList(WorkerConfig.LISTENERS_CONFIG));
+
+        props.put(WorkerConfig.LISTENERS_CONFIG, "http://a.b:9999");
+        config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
+        assertEquals(config.getList(WorkerConfig.LISTENERS_CONFIG), Arrays.asList("http://a.b:9999"));
+
+        props.put(WorkerConfig.LISTENERS_CONFIG, "http://a.b:9999, https://a.b:7812");
+        config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
+        assertEquals(config.getList(WorkerConfig.LISTENERS_CONFIG), Arrays.asList("http://a.b:9999", "https://a.b:7812"));
+
+        new WorkerConfig(WorkerConfig.baseConfigDef(), props);
+    }
+
+    @Test
+    public void testListenersConfigNotAllowedValues() {
+        Map<String, String> props = baseProps();
+
+        props.put(WorkerConfig.LISTENERS_CONFIG, "");
+        assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props)).printStackTrace();
+
+        props.put(WorkerConfig.LISTENERS_CONFIG, "http://a.b:9999,");
+        assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
+
+        props.put(WorkerConfig.LISTENERS_CONFIG, "http://a.b:9999, ,https://a.b:9999");
+        assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
+    }
 
     @Test
     public void testAdminListenersConfigAllowedValues() {
