@@ -17,9 +17,6 @@
 
 package kafka.log
 
-import java.util.{Collections, Locale, Properties}
-
-import scala.jdk.CollectionConverters._
 import kafka.api.{ApiVersion, ApiVersionValidator}
 import kafka.log.LogConfig.configDef
 import kafka.message.BrokerCompressionCodec
@@ -27,11 +24,14 @@ import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, TopicConfig}
+import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator}
 import org.apache.kafka.common.record.{LegacyRecord, TimestampType}
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 
 import scala.collection.{Map, mutable}
-import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator}
+import scala.jdk.CollectionConverters._
+
+import java.util.{Collections, Locale, Properties}
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
