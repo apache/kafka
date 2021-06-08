@@ -31,7 +31,7 @@ import scala.collection.mutable
  * @param maxDelayMs  Maximum time that an ISR change may be delayed before sending the notification
  * @param lingerMs  Maximum time to await additional changes before sending the notification
  */
-case class IsrChangePropagationConfig(checkIntervalMs: Long, maxDelayMs: Long, lingerMs: Long)
+final case class IsrChangePropagationConfig(checkIntervalMs: Long, maxDelayMs: Long, lingerMs: Long)
 
 object ZkIsrManager {
   // This field is mutable to allow overriding change notification behavior in test cases

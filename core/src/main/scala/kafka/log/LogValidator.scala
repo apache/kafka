@@ -581,11 +581,11 @@ private[log] object LogValidator extends Logging {
     }
   }
 
-  case class ValidationAndOffsetAssignResult(validatedRecords: MemoryRecords,
-                                             maxTimestamp: Long,
-                                             shallowOffsetOfMaxTimestamp: Long,
-                                             messageSizeMaybeChanged: Boolean,
-                                             recordConversionStats: RecordConversionStats)
+  final case class ValidationAndOffsetAssignResult(validatedRecords: MemoryRecords,
+                                                   maxTimestamp: Long,
+                                                   shallowOffsetOfMaxTimestamp: Long,
+                                                   messageSizeMaybeChanged: Boolean,
+                                                   recordConversionStats: RecordConversionStats)
 
-  private case class ApiRecordError(apiError: Errors, recordError: RecordError)
+  private final case class ApiRecordError(apiError: Errors, recordError: RecordError)
 }

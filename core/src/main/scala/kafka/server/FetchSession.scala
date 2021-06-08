@@ -552,12 +552,12 @@ class IncrementalFetchContext(private val time: Time,
   }
 }
 
-case class LastUsedKey(lastUsedMs: Long, id: Int) extends Comparable[LastUsedKey] {
+final case class LastUsedKey(lastUsedMs: Long, id: Int) extends Comparable[LastUsedKey] {
   override def compareTo(other: LastUsedKey): Int =
     (lastUsedMs, id) compare (other.lastUsedMs, other.id)
 }
 
-case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Comparable[EvictableKey] {
+final case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Comparable[EvictableKey] {
   override def compareTo(other: EvictableKey): Int =
     (privileged, size, id) compare (other.privileged, other.size, other.id)
 }

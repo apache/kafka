@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable.ListBuffer
 
-private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTxn], isComplete: Boolean)
+private[log] final case class TxnIndexSearchResult(abortedTransactions: List[AbortedTxn], isComplete: Boolean)
 
 /**
  * The transaction index maintains metadata about the aborted transactions for each segment. This includes

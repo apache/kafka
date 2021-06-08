@@ -1680,18 +1680,18 @@ object GroupCoordinator {
   }
 }
 
-case class GroupConfig(groupMinSessionTimeoutMs: Int,
-                       groupMaxSessionTimeoutMs: Int,
-                       groupMaxSize: Int,
-                       groupInitialRebalanceDelayMs: Int)
+final case class GroupConfig(groupMinSessionTimeoutMs: Int,
+                             groupMaxSessionTimeoutMs: Int,
+                             groupMaxSize: Int,
+                             groupInitialRebalanceDelayMs: Int)
 
-case class JoinGroupResult(members: List[JoinGroupResponseMember],
-                           memberId: String,
-                           generationId: Int,
-                           protocolType: Option[String],
-                           protocolName: Option[String],
-                           leaderId: String,
-                           error: Errors)
+final case class JoinGroupResult(members: List[JoinGroupResponseMember],
+                                 memberId: String,
+                                 generationId: Int,
+                                 protocolType: Option[String],
+                                 protocolName: Option[String],
+                                 leaderId: String,
+                                 error: Errors)
 
 object JoinGroupResult {
   def apply(memberId: String, error: Errors): JoinGroupResult = {
@@ -1706,10 +1706,10 @@ object JoinGroupResult {
   }
 }
 
-case class SyncGroupResult(protocolType: Option[String],
-                           protocolName: Option[String],
-                           memberAssignment: Array[Byte],
-                           error: Errors)
+final case class SyncGroupResult(protocolType: Option[String],
+                                 protocolName: Option[String],
+                                 memberAssignment: Array[Byte],
+                                 error: Errors)
 
 object SyncGroupResult {
   def apply(error: Errors): SyncGroupResult = {
@@ -1717,9 +1717,9 @@ object SyncGroupResult {
   }
 }
 
-case class LeaveMemberResponse(memberId: String,
-                               groupInstanceId: Option[String],
-                               error: Errors)
+final case class LeaveMemberResponse(memberId: String,
+                                     groupInstanceId: Option[String],
+                                     error: Errors)
 
-case class LeaveGroupResult(topLevelError: Errors,
-                            memberResponses : List[LeaveMemberResponse])
+final case class LeaveGroupResult(topLevelError: Errors,
+                                  memberResponses : List[LeaveMemberResponse])

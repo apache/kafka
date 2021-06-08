@@ -1062,11 +1062,11 @@ private class CleanerStats(time: Time = Time.SYSTEM) {
   * Helper class for a log, its topic/partition, the first cleanable position, the first uncleanable dirty position,
   * and whether it needs compaction immediately.
   */
-private case class LogToClean(topicPartition: TopicPartition,
-                              log: UnifiedLog,
-                              firstDirtyOffset: Long,
-                              uncleanableOffset: Long,
-                              needCompactionNow: Boolean = false) extends Ordered[LogToClean] {
+private final case class LogToClean(topicPartition: TopicPartition,
+                                    log: UnifiedLog,
+                                    firstDirtyOffset: Long,
+                                    uncleanableOffset: Long,
+                                    needCompactionNow: Boolean = false) extends Ordered[LogToClean] {
   val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size.toLong).sum
   val (firstUncleanableOffset, cleanableBytes) = LogCleanerManager.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset)
   val totalBytes = cleanBytes + cleanableBytes

@@ -262,9 +262,9 @@ object ReplicaVerificationTool extends Logging {
     new KafkaConsumer(consumerConfig)
 }
 
-private case class TopicPartitionReplica(topic: String, partitionId: Int, replicaId: Int)
+private final case class TopicPartitionReplica(topic: String, partitionId: Int, replicaId: Int)
 
-private case class MessageInfo(replicaId: Int, offset: Long, nextOffset: Long, checksum: Long)
+private final case class MessageInfo(replicaId: Int, offset: Long, nextOffset: Long, checksum: Long)
 
 private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[TopicPartition, Int],
                             initialOffsets: collection.Map[TopicPartition, Long],

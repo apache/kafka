@@ -181,15 +181,15 @@ private[transaction] object TransactionMetadata {
 }
 
 // this is a immutable object representing the target transition of the transaction metadata
-private[transaction] case class TxnTransitMetadata(producerId: Long,
-                                                   lastProducerId: Long,
-                                                   producerEpoch: Short,
-                                                   lastProducerEpoch: Short,
-                                                   txnTimeoutMs: Int,
-                                                   txnState: TransactionState,
-                                                   topicPartitions: immutable.Set[TopicPartition],
-                                                   txnStartTimestamp: Long,
-                                                   txnLastUpdateTimestamp: Long) {
+private[transaction] final case class TxnTransitMetadata(producerId: Long,
+                                                         lastProducerId: Long,
+                                                         producerEpoch: Short,
+                                                         lastProducerEpoch: Short,
+                                                         txnTimeoutMs: Int,
+                                                         txnState: TransactionState,
+                                                         topicPartitions: immutable.Set[TopicPartition],
+                                                         txnStartTimestamp: Long,
+                                                         txnLastUpdateTimestamp: Long) {
   override def toString: String = {
     "TxnTransitMetadata(" +
       s"producerId=$producerId, " +

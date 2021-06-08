@@ -34,15 +34,15 @@ import scala.compat.java8.OptionConverters._
 
 // A strict hierarchy of entities that we support
 sealed trait QuotaEntity
-case class IpEntity(ip: String) extends QuotaEntity
+final case class IpEntity(ip: String) extends QuotaEntity
 case object DefaultIpEntity extends QuotaEntity
-case class UserEntity(user: String) extends QuotaEntity
+final case class UserEntity(user: String) extends QuotaEntity
 case object DefaultUserEntity extends QuotaEntity
-case class ClientIdEntity(clientId: String) extends QuotaEntity
+final case class ClientIdEntity(clientId: String) extends QuotaEntity
 case object DefaultClientIdEntity extends QuotaEntity
-case class ExplicitUserExplicitClientIdEntity(user: String, clientId: String) extends QuotaEntity
-case class ExplicitUserDefaultClientIdEntity(user: String) extends QuotaEntity
-case class DefaultUserExplicitClientIdEntity(clientId: String) extends QuotaEntity
+final case class ExplicitUserExplicitClientIdEntity(user: String, clientId: String) extends QuotaEntity
+final case class ExplicitUserDefaultClientIdEntity(user: String) extends QuotaEntity
+final case class DefaultUserExplicitClientIdEntity(clientId: String) extends QuotaEntity
 case object DefaultUserDefaultClientIdEntity extends QuotaEntity
 
 /**

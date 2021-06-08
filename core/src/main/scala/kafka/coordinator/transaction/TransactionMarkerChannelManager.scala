@@ -415,12 +415,12 @@ class TransactionMarkerChannelManager(
   }
 }
 
-case class TxnIdAndMarkerEntry(txnId: String, txnMarkerEntry: TxnMarkerEntry)
+final case class TxnIdAndMarkerEntry(txnId: String, txnMarkerEntry: TxnMarkerEntry)
 
-case class PendingCompleteTxn(transactionalId: String,
-                              coordinatorEpoch: Int,
-                              txnMetadata: TransactionMetadata,
-                              newMetadata: TxnTransitMetadata) {
+final case class PendingCompleteTxn(transactionalId: String,
+                                    coordinatorEpoch: Int,
+                                    txnMetadata: TransactionMetadata,
+                                    newMetadata: TxnTransitMetadata) {
 
   override def toString: String = {
     "PendingCompleteTxn(" +

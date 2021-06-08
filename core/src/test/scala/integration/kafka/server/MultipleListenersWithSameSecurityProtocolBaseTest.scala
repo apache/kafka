@@ -180,7 +180,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
     props.put(s"${prefix}${KafkaConfig.SaslJaasConfigProp}", jaasConfig)
   }
 
-  case class ClientMetadata(val listenerName: ListenerName, val saslMechanism: String, topic: String) {
+  case class ClientMetadata(listenerName: ListenerName, saslMechanism: String, topic: String) {
     override def hashCode: Int = Objects.hash(listenerName, saslMechanism)
     override def equals(obj: Any): Boolean = obj match {
       case other: ClientMetadata => listenerName == other.listenerName && saslMechanism == other.saslMechanism && topic == other.topic

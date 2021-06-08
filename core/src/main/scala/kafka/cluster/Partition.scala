@@ -117,15 +117,15 @@ sealed trait AssignmentState {
   def isAddingReplica(brokerId: Int): Boolean = false
 }
 
-case class OngoingReassignmentState(addingReplicas: Seq[Int],
-                                    removingReplicas: Seq[Int],
-                                    replicas: Seq[Int]) extends AssignmentState {
+final case class OngoingReassignmentState(addingReplicas: Seq[Int],
+                                          removingReplicas: Seq[Int],
+                                          replicas: Seq[Int]) extends AssignmentState {
 
   override def replicationFactor: Int = replicas.diff(addingReplicas).size // keep the size of the original replicas
   override def isAddingReplica(replicaId: Int): Boolean = addingReplicas.contains(replicaId)
 }
 
-case class SimpleAssignmentState(replicas: Seq[Int]) extends AssignmentState
+final case class SimpleAssignmentState(replicas: Seq[Int]) extends AssignmentState
 
 
 
@@ -150,7 +150,7 @@ sealed trait IsrState {
   def isInflight: Boolean
 }
 
-case class PendingExpandIsr(
+final case class PendingExpandIsr(
   isr: Set[Int],
   newInSyncReplicaId: Int
 ) extends IsrState {
@@ -164,7 +164,7 @@ case class PendingExpandIsr(
   }
 }
 
-case class PendingShrinkIsr(
+final case class PendingShrinkIsr(
   isr: Set[Int],
   outOfSyncReplicaIds: Set[Int]
 ) extends IsrState  {
@@ -178,7 +178,7 @@ case class PendingShrinkIsr(
   }
 }
 
-case class CommittedIsr(
+final case class CommittedIsr(
   isr: Set[Int]
 ) extends IsrState {
   val maximalIsr = isr

@@ -1005,8 +1005,6 @@ class ZkAdminManager(val config: KafkaConfig,
     ApiError.fromThrowable(e)
   }
 
-  case class requestStatus(user: String, mechanism: Option[ScramMechanism], legalRequest: Boolean, iterations: Int) {}
-
   def alterUserScramCredentials(upsertions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion],
                                 deletions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialDeletion]): AlterUserScramCredentialsResponseData = {
 
@@ -1024,26 +1022,26 @@ class ZkAdminManager(val config: KafkaConfig,
     val maxIterations = 16384
     val illegalUpsertions = upsertions.map(upsertion =>
       if (upsertion.name.isEmpty)
-        requestStatus(upsertion.name, None, false, upsertion.iterations) // no determined mechanism -- empty user is the cause of failure
+        RequestStatus(upsertion.name, None, false, upsertion.iterations) // no determined mechanism -- empty user is the cause of failure
       else {
         val publicScramMechanism = scramMechanism(upsertion.mechanism)
         if (publicScramMechanism == ScramMechanism.UNKNOWN) {
-          requestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // unknown mechanism is the cause of failure
+          RequestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // unknown mechanism is the cause of failure
         } else {
           if (upsertion.iterations < InternalScramMechanism.forMechanismName(publicScramMechanism.mechanismName).minIterations
             || upsertion.iterations > maxIterations) {
-            requestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // known mechanism, bad iterations is the cause of failure
+            RequestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // known mechanism, bad iterations is the cause of failure
           } else {
-            requestStatus(upsertion.name, Some(publicScramMechanism), true, upsertion.iterations) // legal
+            RequestStatus(upsertion.name, Some(publicScramMechanism), true, upsertion.iterations) // legal
           }
         }
       }).filter { !_.legalRequest }
     val illegalDeletions = deletions.map(deletion =>
       if (deletion.name.isEmpty) {
-        requestStatus(deletion.name, None, false, 0) // no determined mechanism -- empty user is the cause of failure
+        RequestStatus(deletion.name, None, false, 0) // no determined mechanism -- empty user is the cause of failure
       } else {
         val publicScramMechanism = scramMechanism(deletion.mechanism)
-        requestStatus(deletion.name, Some(publicScramMechanism), publicScramMechanism != ScramMechanism.UNKNOWN, 0)
+        RequestStatus(deletion.name, Some(publicScramMechanism), publicScramMechanism != ScramMechanism.UNKNOWN, 0)
       }).filter { !_.legalRequest }
     // map user names to error messages
     val unknownScramMechanismMsg = "Unknown SCRAM mechanism"
@@ -1147,3 +1145,5 @@ class ZkAdminManager(val config: KafkaConfig,
     retval
   }
 }
+
+private[server] final case class RequestStatus(user: String, mechanism: Option[ScramMechanism], legalRequest: Boolean, iterations: Int)

@@ -70,7 +70,7 @@ object Defaults {
   val MessageDownConversionEnable = kafka.server.Defaults.MessageDownConversionEnable
 }
 
-case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
+final case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
   extends AbstractConfig(LogConfig.configDef, props, false) {
   /**
    * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig

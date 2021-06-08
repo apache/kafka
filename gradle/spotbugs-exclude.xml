@@ -140,6 +140,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
+        <Class name="kafka.log.ProducerStateManager" />
+        <Method name="loadFromSnapshot"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
         <Class name="kafka.tools.StateChangeLogMerger$"/>
         <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
     </Match>

@@ -30,7 +30,7 @@ sealed trait IndexEntry {
  * in some log file of the beginning of the message set entry with the
  * given offset.
  */
-case class OffsetPosition(offset: Long, position: Int) extends IndexEntry {
+final case class OffsetPosition(offset: Long, position: Int) extends IndexEntry {
   override def indexKey = offset
   override def indexValue = position.toLong
 }
@@ -42,7 +42,7 @@ case class OffsetPosition(offset: Long, position: Int) extends IndexEntry {
  * @param timestamp The max timestamp before the given offset.
  * @param offset The message offset.
  */
-case class TimestampOffset(timestamp: Long, offset: Long) extends IndexEntry {
+final case class TimestampOffset(timestamp: Long, offset: Long) extends IndexEntry {
   override def indexKey = timestamp
   override def indexValue = offset
 }

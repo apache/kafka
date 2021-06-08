@@ -41,7 +41,7 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
  * @param deletedSegments segments deleted when splitting a segment
  * @param newSegments new segments created when splitting a segment
  */
-case class SplitSegmentResult(deletedSegments: Iterable[LogSegment], newSegments: Iterable[LogSegment])
+final case class SplitSegmentResult(deletedSegments: Iterable[LogSegment], newSegments: Iterable[LogSegment])
 
 /**
  * An append-only log for storing messages locally. The log is a sequence of LogSegments, each with a base offset.
@@ -60,15 +60,15 @@ case class SplitSegmentResult(deletedSegments: Iterable[LogSegment], newSegments
  * @param topicPartition The topic partition associated with this log
  * @param logDirFailureChannel The LogDirFailureChannel instance to asynchronously handle Log dir failure
  */
-class LocalLog(@volatile private var _dir: File,
-               @volatile private[log] var config: LogConfig,
-               private[log] val segments: LogSegments,
-               @volatile private[log] var recoveryPoint: Long,
-               @volatile private var nextOffsetMetadata: LogOffsetMetadata,
-               private[log] val scheduler: Scheduler,
-               private[log] val time: Time,
-               private[log] val topicPartition: TopicPartition,
-               private[log] val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
+final class LocalLog(@volatile private var _dir: File,
+                     @volatile private[log] var config: LogConfig,
+                     private[log] val segments: LogSegments,
+                     @volatile private[log] var recoveryPoint: Long,
+                     @volatile private var nextOffsetMetadata: LogOffsetMetadata,
+                     private[log] val scheduler: Scheduler,
+                     private[log] val time: Time,
+                     private[log] val topicPartition: TopicPartition,
+                     private[log] val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.LocalLog._
 
@@ -991,19 +991,19 @@ trait SegmentDeletionReason {
   def logReason(toDelete: List[LogSegment]): Unit
 }
 
-case class LogTruncation(log: LocalLog) extends SegmentDeletionReason {
+final case class LogTruncation(log: LocalLog) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
     log.info(s"Deleting segments as part of log truncation: ${toDelete.mkString(",")}")
   }
 }
 
-case class LogRoll(log: LocalLog) extends SegmentDeletionReason {
+final case class LogRoll(log: LocalLog) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
     log.info(s"Deleting segments as part of log roll: ${toDelete.mkString(",")}")
   }
 }
 
-case class LogDeletion(log: LocalLog) extends SegmentDeletionReason {
+final case class LogDeletion(log: LocalLog) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
     log.info(s"Deleting segments as the log has been deleted: ${toDelete.mkString(",")}")
   }

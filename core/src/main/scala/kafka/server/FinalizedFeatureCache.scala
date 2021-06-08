@@ -33,7 +33,7 @@ class FeatureCacheUpdateException(message: String) extends RuntimeException(mess
 }
 
 // Helper class that represents finalized features along with an epoch value.
-case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], epoch: Long) {
+final case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], epoch: Long) {
   override def toString(): String = {
     s"FinalizedFeaturesAndEpoch(features=$features, epoch=$epoch)"
   }

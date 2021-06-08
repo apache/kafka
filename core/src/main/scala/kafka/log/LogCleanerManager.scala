@@ -36,7 +36,7 @@ import scala.collection.{Iterable, Seq, mutable}
 private[log] sealed trait LogCleaningState
 private[log] case object LogCleaningInProgress extends LogCleaningState
 private[log] case object LogCleaningAborted extends LogCleaningState
-private[log] case class LogCleaningPaused(pausedCount: Int) extends LogCleaningState
+private[log] final case class LogCleaningPaused(pausedCount: Int) extends LogCleaningState
 
 private[log] class LogCleaningException(val log: UnifiedLog,
                                         private val message: String,
@@ -522,9 +522,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
  * @param forceUpdateCheckpoint whether to update the checkpoint associated with this log. if true, checkpoint should be
  *                             reset to firstDirtyOffset
  */
-private case class OffsetsToClean(firstDirtyOffset: Long,
-                                  firstUncleanableDirtyOffset: Long,
-                                  forceUpdateCheckpoint: Boolean = false) {
+private final case class OffsetsToClean(firstDirtyOffset: Long,
+                                        firstUncleanableDirtyOffset: Long,
+                                        forceUpdateCheckpoint: Boolean = false) {
 }
 
 private[log] object LogCleanerManager extends Logging {

@@ -69,14 +69,14 @@ import scala.compat.java8.OptionConverters._
 /*
  * Result metadata of a log append operation on the log
  */
-case class LogAppendResult(info: LogAppendInfo, exception: Option[Throwable] = None) {
+final case class LogAppendResult(info: LogAppendInfo, exception: Option[Throwable] = None) {
   def error: Errors = exception match {
     case None => Errors.NONE
     case Some(e) => Errors.forException(e)
   }
 }
 
-case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exception: Option[Throwable] = None) {
+final case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exception: Option[Throwable] = None) {
   def error: Errors = exception match {
     case None => Errors.NONE
     case Some(e) => Errors.forException(e)
@@ -97,16 +97,16 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
  * @param preferredReadReplica the preferred read replica to be used for future fetches
  * @param exception Exception if error encountered while reading from the log
  */
-case class LogReadResult(info: FetchDataInfo,
-                         divergingEpoch: Option[FetchResponseData.EpochEndOffset],
-                         highWatermark: Long,
-                         leaderLogStartOffset: Long,
-                         leaderLogEndOffset: Long,
-                         followerLogStartOffset: Long,
-                         fetchTimeMs: Long,
-                         lastStableOffset: Option[Long],
-                         preferredReadReplica: Option[Int] = None,
-                         exception: Option[Throwable] = None) {
+final case class LogReadResult(info: FetchDataInfo,
+                               divergingEpoch: Option[FetchResponseData.EpochEndOffset],
+                               highWatermark: Long,
+                               leaderLogStartOffset: Long,
+                               leaderLogEndOffset: Long,
+                               followerLogStartOffset: Long,
+                               fetchTimeMs: Long,
+                               lastStableOffset: Option[Long],
+                               preferredReadReplica: Option[Int] = None,
+                               exception: Option[Throwable] = None) {
 
   def error: Errors = exception match {
     case None => Errors.NONE
@@ -144,15 +144,15 @@ case class LogReadResult(info: FetchDataInfo,
 
 }
 
-case class FetchPartitionData(error: Errors = Errors.NONE,
-                              highWatermark: Long,
-                              logStartOffset: Long,
-                              records: Records,
-                              divergingEpoch: Option[FetchResponseData.EpochEndOffset],
-                              lastStableOffset: Option[Long],
-                              abortedTransactions: Option[List[FetchResponseData.AbortedTransaction]],
-                              preferredReadReplica: Option[Int],
-                              isReassignmentFetch: Boolean)
+final case class FetchPartitionData(error: Errors = Errors.NONE,
+                                    highWatermark: Long,
+                                    logStartOffset: Long,
+                                    records: Records,
+                                    divergingEpoch: Option[FetchResponseData.EpochEndOffset],
+                                    lastStableOffset: Option[Long],
+                                    abortedTransactions: Option[List[FetchResponseData.AbortedTransaction]],
+                                    preferredReadReplica: Option[Int],
+                                    isReassignmentFetch: Boolean)
 
 /**
  * Trait to represent the state of hosted partitions. We create a concrete (active) Partition
