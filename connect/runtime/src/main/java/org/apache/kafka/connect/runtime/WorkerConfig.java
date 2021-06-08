@@ -146,25 +146,6 @@ public class WorkerConfig extends AbstractConfig {
             + "data to be committed in a future attempt.";
     public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;
 
-    /**
-     * @deprecated As of 1.1.0. Only used when listeners is not set. Use listeners instead.
-     */
-    @Deprecated
-    public static final String REST_HOST_NAME_CONFIG = "rest.host.name";
-    private static final String REST_HOST_NAME_DOC
-            = "Hostname for the REST API. If this is set, it will only bind to this interface.\n" +
-            "Deprecated, only used when listeners is not set. Use listeners instead.";
-
-    /**
-     * @deprecated As of 1.1.0. Only used when listeners is not set. Use listeners instead.
-     */
-    @Deprecated
-    public static final String REST_PORT_CONFIG = "rest.port";
-    private static final String REST_PORT_DOC
-            = "Port for the REST API to listen on.\n" +
-            "Deprecated, only used when listeners is not set. Use listeners instead.";
-    public static final int REST_PORT_DEFAULT = 8083;
-
     public static final String LISTENERS_CONFIG = "listeners";
     private static final String LISTENERS_DOC
             = "List of comma-separated URIs the REST API will listen on. The supported protocols are HTTP and HTTPS.\n" +
@@ -305,8 +286,6 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW, OFFSET_COMMIT_INTERVAL_MS_DOC)
                 .define(OFFSET_COMMIT_TIMEOUT_MS_CONFIG, Type.LONG, OFFSET_COMMIT_TIMEOUT_MS_DEFAULT,
                         Importance.LOW, OFFSET_COMMIT_TIMEOUT_MS_DOC)
-                .define(REST_HOST_NAME_CONFIG, Type.STRING, null, Importance.LOW, REST_HOST_NAME_DOC)
-                .define(REST_PORT_CONFIG, Type.INT, REST_PORT_DEFAULT, Importance.LOW, REST_PORT_DOC)
                 .define(LISTENERS_CONFIG, Type.LIST, null, Importance.LOW, LISTENERS_DOC)
                 .define(REST_ADVERTISED_HOST_NAME_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_HOST_NAME_DOC)
                 .define(REST_ADVERTISED_PORT_CONFIG, Type.INT,  null, Importance.LOW, REST_ADVERTISED_PORT_DOC)
