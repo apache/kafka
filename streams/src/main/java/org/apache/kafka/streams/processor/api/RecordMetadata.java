@@ -23,8 +23,9 @@ public interface RecordMetadata {
      * Returns the topic name of the current input record; could be {@code null} if it is not
      * available.
      *
-     * <p> For example, if this method is invoked within a punctuate callback, or while processing a
-     * record that was forwarded by a punctuation callback, the record won't have an associated topic.
+     * <p> For example, if this method is invoked within a @link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, the record won't have an associated topic.
      * Another example is
      * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
      * (and siblings), that do not always guarantee to provide a valid topic name, as they might be
@@ -38,8 +39,9 @@ public interface RecordMetadata {
      * Returns the partition id of the current input record; could be {@code -1} if it is not
      * available.
      *
-     * <p> For example, if this method is invoked within a punctuate callback, or while processing a
-     * record that was forwarded by a punctuation callback the record won't have an associated partition id.
+     * <p> For example, if this method is invoked within a @link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, the record won't have an associated partition id.
      * Another example is
      * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
      * (and siblings), that do not always guarantee to provide a valid partition id, as they might be
@@ -53,8 +55,9 @@ public interface RecordMetadata {
      * Returns the offset of the current input record; could be {@code -1} if it is not
      * available.
      *
-     * <p> For example, if this method is invoked within a punctuate callback, or while processing a
-     * record that was forwarded by a punctuation callback, the record won't have an associated offset.
+     * <p> For example, if this method is invoked within a @link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, the record won't have an associated offset.
      * Another example is
      * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
      * (and siblings), that do not always guarantee to provide a valid offset, as they might be

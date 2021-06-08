@@ -53,7 +53,7 @@ public interface ProcessorContext<KForward, VForward> {
     TaskId taskId();
 
     /**
-     * The metadata of the current record if available. Processors may be invoked to
+     * Return the metadata of the current record if available. Processors may be invoked to
      * process a source record from an input topic, to run a scheduled punctuation
      * (see {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator)}),
      * or because a parent processor called {@link ProcessorContext#forward(Record)}.

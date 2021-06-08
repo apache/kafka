@@ -36,7 +36,8 @@ public interface Punctuator {
      *
      * <p> Furthermore, for any record that is sent downstream via {@link ProcessorContext#forward(Object, Object)}
      * or {@link org.apache.kafka.streams.processor.api.ProcessorContext#forward(Record)}, there
-     * won't be any record metadata.
+     * won't be any record metadata. If {@link ProcessorContext#forward(Object, Object)} is use,
+     * it's also not possible to set records headers.
      *
      * @param timestamp when the operation is being called, depending on {@link PunctuationType}
      */

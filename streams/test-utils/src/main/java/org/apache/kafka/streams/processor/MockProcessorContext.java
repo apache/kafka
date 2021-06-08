@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
-import java.util.Objects;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -69,7 +67,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     private String topic;
     private Integer partition;
     private Long offset;
-    private Headers headers = new RecordHeaders();
+    private Headers headers;
     private Long recordTimestamp;
     private Long currentSystemTimeMs;
     private Long currentStreamTimeMs;
@@ -321,7 +319,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.topic = topic;
         this.partition = partition;
         this.offset = offset;
-        this.headers = Objects.requireNonNull(headers);
+        this.headers = headers;
         this.recordTimestamp = timestamp;
     }
 
@@ -366,7 +364,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void setHeaders(final Headers headers) {
-        this.headers = Objects.requireNonNull(headers);
+        this.headers = headers;
     }
 
     /**
@@ -425,6 +423,18 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return offset;
     }
 
+    /**
+     * Returns the headers of the current input record; could be {@code null} if it is not
+     * available.
+     *
+     * <p> Note, that headers should never be {@code null} in the actual Kafka Streams runtime,
+     * even if they could be empty. However, this mock does not guarantee non-{@code null} headers.
+     * Thus, you either need to add a {@code null} check to your production code to use this mock
+     * for testing or you always need to set headers manually via {@link #setHeaders(Headers)} to
+     * avoid a {@link NullPointerException} from your {@link Processor} implementation.
+     *
+     * @return the headers
+     */
     @Override
     public Headers headers() {
         return headers;
