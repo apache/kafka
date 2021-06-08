@@ -1099,7 +1099,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         if (!maybePlan.isPresent()) {
                             callback.onCompletion(new NotFoundException("Status for connector " + connectorName + " not found", null), null);
                         } else {
-                            // TODO: Should we update the status to RESTARTING here in addition to doRestartConnectorAndTasks
                             RestartPlan plan = maybePlan.get();
                             callback.onCompletion(null, plan.restartConnectorStateInfo());
                         }
