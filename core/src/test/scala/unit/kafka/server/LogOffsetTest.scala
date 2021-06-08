@@ -93,7 +93,7 @@ class LogOffsetTest extends BaseRequestTest {
   }
 
   @Test
-  def testFetchOffsetForMaxTimestampAfterTruncate(): Unit = {
+  def testFetchOffsetByTimestampForMaxTimestampAfterTruncate(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
 
@@ -104,20 +104,43 @@ class LogOffsetTest extends BaseRequestTest {
       "Log for partition [topic,0] should be created")
     val log = logManager.getLog(topicPartition).get
 
-    for (_ <- 0 until 20)
-      log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
+    for (timestamp <- 0 until 20)
+      log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes(), timestamp = timestamp.toLong), leaderEpoch = 0)
     log.flush()
 
     log.updateHighWatermark(log.logEndOffset)
 
     val firstOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
-    assertEquals(19, firstOffset.get.offset)
+    assertEquals(19L, firstOffset.get.offset)
 
     log.truncateTo(0)
 
     val secondOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
-    assertEquals(0, secondOffset.get.offset)
+    assertEquals(0L, secondOffset.get.offset)
 
+  }
+
+  @Test
+  def testFetchOffsetByTimestampForMaxTimestampWithUnorderedTimestamps(): Unit = {
+    val topic = "kafka-"
+    val topicPartition = new TopicPartition(topic, 0)
+
+    createTopic(topic, 1, 1)
+
+    val logManager = server.getLogManager
+    TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
+      "Log for partition [topic,0] should be created")
+    val log = logManager.getLog(topicPartition).get
+
+    for (timestamp <- List(0L, 1L, 2L, 3L, 4L, 6L, 5L))
+      log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes(), timestamp = timestamp), leaderEpoch = 0)
+    log.flush()
+
+    log.updateHighWatermark(log.logEndOffset)
+
+    val maxTimestampOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
+    assertEquals(7L, log.logEndOffset)
+    assertEquals(5L, maxTimestampOffset.get.offset)
   }
 
   @Test
@@ -178,8 +201,23 @@ class LogOffsetTest extends BaseRequestTest {
   }
 
   @Test
-  def testEmptyLogsGetMaxTimestampOffsets(): Unit = {
-    fail()
+  def testFetchOffsetByTimestampForMaxTimestampWithEmptyLog(): Unit = {
+    val topic = "kafka-"
+    val topicPartition = new TopicPartition(topic, 0)
+
+    createTopic(topic, 1, 1)
+
+    val logManager = server.getLogManager
+    TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
+      "Log for partition [topic,0] should be created")
+    val log = logManager.getLog(topicPartition).get
+
+    log.updateHighWatermark(log.logEndOffset)
+
+    val maxTimestampOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
+    assertEquals(0L, log.logEndOffset)
+    assertEquals(0L, maxTimestampOffset.get.offset)
+    assertEquals(-1L, maxTimestampOffset.get.timestamp)
   }
 
   @deprecated("legacyFetchOffsetsBefore", since = "")
