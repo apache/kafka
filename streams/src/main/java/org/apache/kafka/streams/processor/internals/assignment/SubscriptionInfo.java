@@ -146,15 +146,14 @@ public class SubscriptionInfo {
     }
 
     private List<ClientTag> buildClientTagsFromMap(final Map<String, String> clientTags) {
-        return clientTags.entrySet()
-                         .stream()
-                         .map(clientTagEntry -> {
-                             final ClientTag clientTag = new ClientTag();
-                             clientTag.setKey(clientTagEntry.getKey().getBytes(StandardCharsets.UTF_8));
-                             clientTag.setValue(clientTagEntry.getValue().getBytes(StandardCharsets.UTF_8));
-                             return clientTag;
-                         })
-                         .collect(Collectors.toList());
+        return clientTags.entrySet().stream()
+            .map(clientTagEntry -> {
+                final ClientTag clientTag = new ClientTag();
+                clientTag.setKey(clientTagEntry.getKey().getBytes(StandardCharsets.UTF_8));
+                clientTag.setValue(clientTagEntry.getValue().getBytes(StandardCharsets.UTF_8));
+                return clientTag;
+            })
+            .collect(Collectors.toList());
     }
 
     // For version > MIN_NAMED_TOPOLOGY_VERSION
