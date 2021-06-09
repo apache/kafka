@@ -152,7 +152,8 @@ public class FileBasedStateStore implements QuorumStateStore {
             Utils.atomicMoveWithFallback(temp.toPath(), stateFile.toPath());
         } catch (IOException e) {
             throw new UncheckedIOException(
-                String.format("Error while writing the Quorum status from the file %s", stateFile.getAbsolutePath()), e);
+                String.format("Error while writing the Quorum status from the file %s",
+                    stateFile.getAbsolutePath()), e);
         } finally {
             // cleanup the temp file when the write finishes (either success or fail).
             deleteFileIfExists(temp);
