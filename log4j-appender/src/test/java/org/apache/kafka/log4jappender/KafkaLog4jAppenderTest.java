@@ -26,9 +26,9 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import org.apache.log4j.helpers.LogLog;
-import org.easymock.EasyMock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
@@ -38,6 +38,8 @@ import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 
 public class KafkaLog4jAppenderTest {
 
@@ -158,18 +160,18 @@ public class KafkaLog4jAppenderTest {
         assertThrows(RuntimeException.class, () -> logger.error(getMessage(0)));
     }
 
+    @SuppressWarnings("unchecked")
     private void replaceProducerWithMocked(MockKafkaLog4jAppender mockKafkaLog4jAppender, boolean success) {
-        MockProducer<byte[], byte[]> producer = EasyMock.niceMock(MockProducer.class);
-        Future<RecordMetadata> futureMock = EasyMock.niceMock(Future.class);
+        MockProducer<byte[], byte[]> producer = mock(MockProducer.class);
+        Future<RecordMetadata> futureMock = mock(Future.class);
         try {
             if (!success)
-                EasyMock.expect(futureMock.get())
-                    .andThrow(new ExecutionException("simulated timeout", new TimeoutException()));
+                Mockito.when(futureMock.get())
+                        .thenThrow(new ExecutionException("simulated timeout", new TimeoutException()));
         } catch (InterruptedException | ExecutionException e) {
             // just mocking
         }
-        EasyMock.expect(producer.send(EasyMock.anyObject())).andReturn(futureMock);
-        EasyMock.replay(producer, futureMock);
+        Mockito.when(producer.send(any())).thenReturn(futureMock);
         // reconfiguring mock appender
         mockKafkaLog4jAppender.setKafkaProducer(producer);
         mockKafkaLog4jAppender.activateOptions();
