@@ -61,7 +61,7 @@ object ConsoleConsumer extends Logging {
   }
 
   def run(conf: ConsumerConfig): Unit = {
-    val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
+    val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs.toLong else Long.MaxValue
     val consumer = new KafkaConsumer(consumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
 
     val consumerWrapper =
@@ -256,7 +256,7 @@ object ConsoleConsumer extends Logging {
     val timeoutMsOpt = parser.accepts("timeout-ms", "If specified, exit if no message is available for consumption for the specified interval.")
       .withRequiredArg
       .describedAs("timeout_ms")
-      .ofType(classOf[java.lang.Long])
+      .ofType(classOf[java.lang.Integer])
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
       "skip it instead of halt.")
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to.")
@@ -308,7 +308,7 @@ object ConsoleConsumer extends Logging {
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
     val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
     val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
-    val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).longValue() else -1L
+    val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val keyDeserializer = options.valueOf(keyDeserializerOpt)
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
