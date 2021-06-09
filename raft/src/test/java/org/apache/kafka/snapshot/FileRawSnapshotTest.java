@@ -308,7 +308,7 @@ public final class FileRawSnapshotTest {
     }
 
     @Test
-    public void testCreateSnapshotWithSameId() throws IOException {
+    public void testCreateSnapshotWithSameId() {
         OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(20L, 2);
         int bufferSize = 256;
         int numberOfBatches = 1;
@@ -352,7 +352,7 @@ public final class FileRawSnapshotTest {
     private static FileRawSnapshotWriter createSnapshotWriter(
         Path dir,
         OffsetAndEpoch snapshotId
-    ) throws IOException {
+    ) {
         return FileRawSnapshotWriter.create(dir, snapshotId, Optional.empty());
     }
 }
