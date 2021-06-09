@@ -17,43 +17,40 @@
 package org.apache.kafka.streams.internals.metrics;
 
 import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams.State;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_LEVEL_GROUP;
 import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.expect;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.powermock.api.easymock.PowerMock.createMock;
-import static org.powermock.api.easymock.PowerMock.mockStatic;
-import static org.powermock.api.easymock.PowerMock.replay;
-import static org.powermock.api.easymock.PowerMock.verify;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({StreamsMetricsImpl.class, Sensor.class, ClientMetrics.class})
+@RunWith(MockitoJUnitRunner.class)
 public class ClientMetricsTest {
     private static final String COMMIT_ID = "test-commit-ID";
     private static final String VERSION = "test-version";
+    private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
 
-    private final StreamsMetricsImpl streamsMetrics = createMock(StreamsMetricsImpl.class);
-    private final Sensor expectedSensor = createMock(Sensor.class);
+    private final Metrics metrics = new Metrics();
+    private final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class,
+            Mockito.withSettings().useConstructor(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime()));
+    private final Sensor expectedSensor = Mockito.mock(Sensor.class);
     private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
 
-    @Before
-    public void setUp() {
-        mockStatic(StreamsMetricsImpl.class);
-    }
 
     @Test
     public void shouldAddVersionMetric() {
@@ -125,8 +122,8 @@ public class ClientMetricsTest {
     public void shouldGetFailedStreamThreadsSensor() {
         final String name = "failed-stream-threads";
         final String description = "The number of failed stream threads since the start of the Kafka Streams client";
-        expect(streamsMetrics.clientLevelSensor(name, RecordingLevel.INFO)).andReturn(expectedSensor);
-        expect(streamsMetrics.clientLevelTagMap()).andReturn(tagMap);
+        Mockito.when(streamsMetrics.clientLevelSensor(name, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        Mockito.when(streamsMetrics.clientLevelTagMap()).thenReturn(tagMap);
         StreamsMetricsImpl.addSumMetricToSensor(
             expectedSensor,
             CLIENT_LEVEL_GROUP,
@@ -135,11 +132,8 @@ public class ClientMetricsTest {
             false,
             description
         );
-        replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
-
-        verify(StreamsMetricsImpl.class, streamsMetrics);
         assertThat(sensor, is(expectedSensor));
     }
 
@@ -147,33 +141,42 @@ public class ClientMetricsTest {
                                                  final String description,
                                                  final Gauge<K> valueProvider,
                                                  final Runnable metricAdder) {
-        streamsMetrics.addClientLevelMutableMetric(
-            eq(name),
-            eq(description),
-            eq(RecordingLevel.INFO),
-            eq(valueProvider)
+        Mockito.doCallRealMethod().when(streamsMetrics).addClientLevelMutableMetric(
+                eq(name),
+                eq(description),
+                eq(RecordingLevel.INFO),
+                eq(valueProvider)
         );
-        replay(streamsMetrics);
 
         metricAdder.run();
 
-        verify(streamsMetrics);
+        Mockito.verify(streamsMetrics).addClientLevelMutableMetric(
+                eq(name),
+                eq(description),
+                eq(RecordingLevel.INFO),
+                eq(valueProvider)
+        );
     }
 
     private void setUpAndVerifyImmutableMetric(final String name,
                                                final String description,
                                                final String value,
                                                final Runnable metricAdder) {
-        streamsMetrics.addClientLevelImmutableMetric(
-            eq(name),
-            eq(description),
-            eq(RecordingLevel.INFO),
-            eq(value)
+
+        Mockito.doCallRealMethod().when(streamsMetrics).addClientLevelImmutableMetric(
+                Mockito.eq(name),
+                Mockito.eq(description),
+                Mockito.eq(RecordingLevel.INFO),
+                Mockito.eq(value)
         );
-        replay(streamsMetrics);
 
         metricAdder.run();
 
-        verify(streamsMetrics);
+        Mockito.verify(streamsMetrics).addClientLevelImmutableMetric(
+                Mockito.eq(name),
+                Mockito.eq(description),
+                Mockito.eq(RecordingLevel.INFO),
+                Mockito.eq(value)
+        );
     }
 }
