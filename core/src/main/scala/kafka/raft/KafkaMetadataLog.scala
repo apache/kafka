@@ -26,7 +26,7 @@ import kafka.utils.{CoreUtils, Logging, Scheduler}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.raft.{Isolation, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog}
+import org.apache.kafka.raft.{Isolation, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 
 import scala.annotation.nowarn
@@ -233,40 +233,34 @@ final class KafkaMetadataLog private (
     log.topicId.get
   }
 
-  override def createSnapshot(snapshotId: OffsetAndEpoch): Optional[RawSnapshotWriter] = {
+  override def createSnapshot(snapshotId: OffsetAndEpoch, validate: Boolean): Optional[RawSnapshotWriter] = {
+    if (validate) {
+      val highWatermarkOffset = highWatermark.offset
+      if (snapshotId.offset > highWatermarkOffset) {
+        throw new IllegalArgumentException(
+          s"Cannot create a snapshot for an end offset ($endOffset) greater than the high-watermark ($highWatermarkOffset)"
+        )
+      }
+
+      if (snapshotId.offset < startOffset) {
+        throw new IllegalArgumentException(
+          s"Cannot create a snapshot for an end offset ($endOffset) less than the log start offset ($startOffset)"
+        )
+      }
+
+      val validOffsetAndEpoch = validateOffsetAndEpoch(snapshotId.offset, snapshotId.epoch)
+      if (validOffsetAndEpoch.kind() != ValidOffsetAndEpoch.Kind.VALID) {
+        throw new IllegalArgumentException(
+          s"Snapshot id ($snapshotId) is not valid according to the log: $validOffsetAndEpoch"
+        )
+      }
+    }
+
     if (snapshots.contains(snapshotId)) {
       Optional.empty()
     } else {
       Optional.of(FileRawSnapshotWriter.create(log.dir.toPath, snapshotId, Optional.of(this)))
     }
-  }
-
-  override def createSnapshotFromEndOffset(endOffset: Long): Optional[RawSnapshotWriter] = {
-    val highWatermarkOffset = highWatermark.offset
-    if (endOffset > highWatermarkOffset) {
-      throw new IllegalArgumentException(
-        s"Cannot create a snapshot for an end offset ($endOffset) greater than the high-watermark ($highWatermarkOffset)"
-      )
-    }
-
-    if (endOffset < startOffset) {
-      throw new IllegalArgumentException(
-        s"Cannot create a snapshot for an end offset ($endOffset) less than the log start offset ($startOffset)"
-      )
-    }
-
-    val epoch = log.leaderEpochCache.flatMap(_.findEpochEntryByEndOffset(endOffset)) match {
-      case Some(epochEntry) =>
-        epochEntry.epoch
-      case None =>
-        // Assume that the end offset falls in the current epoch since based on the check above:
-        // 1. it was not found in the leader epoch cache
-        // 2. it cannot be less than the log start offset
-        // 3. it is not greater than the log end offset
-        lastFetchedEpoch
-    }
-
-    createSnapshot(new OffsetAndEpoch(endOffset, epoch))
   }
 
   override def readSnapshot(snapshotId: OffsetAndEpoch): Optional[RawSnapshotReader] = {

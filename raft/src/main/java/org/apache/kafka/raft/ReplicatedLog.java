@@ -234,23 +234,14 @@ public interface ReplicatedLog extends AutoCloseable {
      * snapshot already exists then return an {@link Optional#empty()}.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
+     * @param validate validate the snapshot id against the log
      * @return a writable snapshot if it doesn't already exists
+     * @throws IllegalArgumentException if validate is true and end offset is greater than the
+     *         high-watermark
+     * @throws IllegalArgumentException if validate is true and end offset is less than the log
+     *         start offset
      */
-    Optional<RawSnapshotWriter> createSnapshot(OffsetAndEpoch snapshotId);
-
-    /**
-     * Create a writable snapshot for the given end offset.
-     *
-     * See {@link RawSnapshotWriter} for details on how to use this object. The caller of
-     * this method is responsible for invoking {@link RawSnapshotWriter#close()}. If a
-     * snapshot already exists then return an {@link Optional#empty()}.
-     *
-     * @param endOffset end offset that identifies the snapshot
-     * @return a writable snapshot if it doesn't already exists
-     * @throws IllegalArgumentException if end offset is greater than the high-watermark
-     * @throws IllegalArgumentException if end offset is less than the log start offset
-     */
-    Optional<RawSnapshotWriter> createSnapshotFromEndOffset(long endOffset);
+    Optional<RawSnapshotWriter> createSnapshot(OffsetAndEpoch snapshotId, boolean validate);
 
     /**
      * Opens a readable snapshot for the given snapshot id.

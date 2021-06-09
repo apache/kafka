@@ -414,7 +414,41 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public Optional<RawSnapshotWriter> createSnapshot(OffsetAndEpoch snapshotId) {
+    public Optional<RawSnapshotWriter> createSnapshot(OffsetAndEpoch snapshotId, boolean validate) {
+        if (validate) {
+            long highWatermarkOffset = highWatermark().offset;
+            if (snapshotId.offset > highWatermarkOffset) {
+                throw new IllegalArgumentException(
+                    String.format(
+                        "Cannot create a snapshot with an id (%s) greater than the high-watermark (%s)",
+                        snapshotId,
+                        highWatermarkOffset
+                    )
+                );
+            }
+
+            if (snapshotId.offset < logStartOffset()) {
+                throw new IllegalArgumentException(
+                    String.format(
+                        "Cannot create a snapshot with and id (%s) less than the log start offset (%s)",
+                        snapshotId,
+                        logStartOffset()
+                    )
+                );
+            }
+
+            ValidOffsetAndEpoch validOffsetAndEpoch = validateOffsetAndEpoch(snapshotId.offset, snapshotId.epoch);
+            if (validOffsetAndEpoch.kind() != ValidOffsetAndEpoch.Kind.VALID) {
+                throw new IllegalArgumentException(
+                    String.format(
+                        "Snapshot id (%s) is not valid according to the log: %s",
+                        snapshotId,
+                        validOffsetAndEpoch
+                    )
+                );
+            }
+        }
+
         if (snapshots.containsKey(snapshotId)) {
             return Optional.empty();
         } else {
@@ -424,34 +458,6 @@ public class MockLog implements ReplicatedLog {
                 })
             );
         }
-    }
-
-    @Override
-    public Optional<RawSnapshotWriter> createSnapshotFromEndOffset(long endOffset) {
-        long highWatermarkOffset = highWatermark().offset;
-        if (endOffset > highWatermarkOffset) {
-            throw new IllegalArgumentException(
-                String.format(
-                    "Cannot create a snapshot for an end offset (%s) greater than the high-watermark (%s)",
-                    endOffset,
-                    highWatermarkOffset
-                )
-            );
-        }
-
-        if (endOffset < logStartOffset()) {
-            throw new IllegalArgumentException(
-                String.format(
-                    "Cannot create a snapshot for an end offset (%s) less than the log start offset (%s)",
-                    endOffset,
-                    logStartOffset()
-                )
-            );
-        }
-
-        int epoch = epochForEndOffset(endOffset).epoch;
-
-        return createSnapshot(new OffsetAndEpoch(endOffset, epoch));
     }
 
     @Override

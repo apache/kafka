@@ -1101,7 +1101,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                         partitionResponse.snapshotId().epoch()
                     );
 
-                    state.setFetchingSnapshot(log.createSnapshot(snapshotId));
+                    state.setFetchingSnapshot(log.createSnapshot(snapshotId, false));
                 }
             } else {
                 Records records = FetchResponse.recordsOrFail(partitionResponse);
@@ -2257,8 +2257,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public Optional<SnapshotWriter<T>> createSnapshot(long committedOffset) {
-        return log.createSnapshotFromEndOffset(committedOffset + 1).map(snapshot -> {
+    public Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch) {
+        return log.createSnapshot(
+            new OffsetAndEpoch(committedOffset + 1, committedEpoch),
+            true
+        ).map(snapshot -> {
             return new SnapshotWriter<>(
                 snapshot,
                 MAX_BATCH_SIZE_BYTES,

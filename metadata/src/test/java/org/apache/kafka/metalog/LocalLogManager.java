@@ -262,28 +262,6 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             });
         }
 
-        synchronized OptionalInt epochForCommittedOffset(long committedOffset) {
-            log.error("committedOffset = {}; batches = {}", committedOffset, batches);
-            OptionalInt lastEpoch = OptionalInt.empty();
-            for (Entry<Long, LocalBatch> entry : batches.entrySet()) {
-                if (entry.getKey() > committedOffset) {
-                    break;
-                } else {
-                    lastEpoch = OptionalInt.of(entry.getValue().epoch());
-                }
-            }
-
-            if (!lastEpoch.isPresent()) {
-                // See if we already have a snapshot for this committed offset
-                RawSnapshotReader reader = snapshots.get(committedOffset);
-                if (reader != null) {
-                    lastEpoch = OptionalInt.of(reader.snapshotId().epoch);
-                }
-            }
-
-            return lastEpoch;
-        }
-
         /**
          * Stores a new snapshot and notifies all threads waiting for a snapshot.
          */
@@ -561,9 +539,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(long committedOffset) {
-        int epoch = shared.epochForCommittedOffset(committedOffset).getAsInt();
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, epoch);
+    public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(long committedOffset, int committedEpoch) {
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, committedEpoch);
         return Optional.of(
             new SnapshotWriter<>(
                 new MockRawSnapshotWriter(snapshotId, buffer -> {

@@ -269,29 +269,6 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   }
 
   /**
-   * Finds the epoch entry (epoch and end offset) that spans the given end offset.
-   *
-   * If Some[EpochEntry] is return then the returned epoch entry has the largest
-   * start offset that is less than the given end offset. Otherwise, None is returned.
-   *
-   * This operation is linear on the number of epoch entries.
-   *
-   * @param endOffset the end offset to use for look up
-   * @return found leader epoch and end offset
-   */
-  def findEpochEntryByEndOffset(endOffset: Long): Option[EpochEntry] = {
-    inReadLock(lock) {
-      for (epochEntry <- epochs.descendingMap.values().asScala) {
-        if (epochEntry.startOffset < endOffset) {
-          return Some(epochEntry)
-        }
-      }
-
-      None
-    }
-  }
-
-  /**
     * Delete all entries.
     */
   def clearAndFlush(): Unit = {

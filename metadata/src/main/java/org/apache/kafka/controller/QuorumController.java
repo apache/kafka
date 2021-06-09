@@ -94,7 +94,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -328,39 +328,50 @@ public final class QuorumController implements Controller {
     private static final int MAX_BATCHES_PER_GENERATE_CALL = 10;
 
     class SnapshotGeneratorManager implements Runnable {
-        private final Function<Long, Optional<SnapshotWriter<ApiMessageAndVersion>>> writerBuilder;
+        private final BiFunction<Long, Integer, Optional<SnapshotWriter<ApiMessageAndVersion>>> writerBuilder;
         private final ExponentialBackoff exponentialBackoff =
             new ExponentialBackoff(10, 2, 5000, 0);
         private SnapshotGenerator generator = null;
 
-        SnapshotGeneratorManager(Function<Long, Optional<SnapshotWriter<ApiMessageAndVersion>>> writerBuilder) {
+        SnapshotGeneratorManager(BiFunction<Long, Integer, Optional<SnapshotWriter<ApiMessageAndVersion>>> writerBuilder) {
             this.writerBuilder = writerBuilder;
         }
 
-        void createSnapshotGenerator(long epoch) {
+        void createSnapshotGenerator(long committedOffset, int committedEpoch) {
             if (generator != null) {
                 throw new RuntimeException("Snapshot generator already exists.");
             }
-            if (!snapshotRegistry.hasSnapshot(epoch)) {
-                throw new RuntimeException("Can't generate a snapshot at epoch " + epoch +
-                    " because no such epoch exists in the snapshot registry.");
+            if (!snapshotRegistry.hasSnapshot(committedOffset)) {
+                throw new RuntimeException(
+                    String.format(
+                        "Cannot generate a snapshot at committed offset %s because it does not exists in the snapshot registry.",
+                        committedOffset
+                    )
+                );
             }
-            Optional<SnapshotWriter<ApiMessageAndVersion>> writer = writerBuilder.apply(epoch);
+            Optional<SnapshotWriter<ApiMessageAndVersion>> writer = writerBuilder.apply(committedOffset, committedEpoch);
             if (writer.isPresent()) {
-                generator = new SnapshotGenerator(logContext,
+                generator = new SnapshotGenerator(
+                    logContext,
                     writer.get(),
                     MAX_BATCHES_PER_GENERATE_CALL,
                     exponentialBackoff,
                     Arrays.asList(
-                        new Section("features", featureControl.iterator(epoch)),
-                        new Section("cluster", clusterControl.iterator(epoch)),
-                        new Section("replication", replicationControl.iterator(epoch)),
-                        new Section("configuration", configurationControl.iterator(epoch)),
-                        new Section("clientQuotas", clientQuotaControlManager.iterator(epoch)),
-                        new Section("producerIds", producerIdControlManager.iterator(epoch))));
+                        new Section("features", featureControl.iterator(committedOffset)),
+                        new Section("cluster", clusterControl.iterator(committedOffset)),
+                        new Section("replication", replicationControl.iterator(committedOffset)),
+                        new Section("configuration", configurationControl.iterator(committedOffset)),
+                        new Section("clientQuotas", clientQuotaControlManager.iterator(committedOffset)),
+                        new Section("producerIds", producerIdControlManager.iterator(committedOffset))
+                    )
+                );
                 reschedule(0);
             } else {
-                log.info("Skipping generation of snapshot for committed offset {} since it already exists", epoch);
+                log.info(
+                    "Skipping generation of snapshot for committed offset {} and epoch {} since it already exists",
+                    committedOffset,
+                    committedEpoch
+                );
             }
         }
 
@@ -657,6 +668,7 @@ public final class QuorumController implements Controller {
                             }
                         }
                         lastCommittedOffset = offset;
+                        lastCommittedEpoch = batch.epoch();
                     }
                 } finally {
                     reader.close();
@@ -719,6 +731,7 @@ public final class QuorumController implements Controller {
                     }
 
                     lastCommittedOffset = reader.lastOffset();
+                    lastCommittedEpoch = reader.snapshotId().epoch;
                     snapshotRegistry.createSnapshot(lastCommittedOffset);
                 } finally {
                     reader.close();
@@ -965,7 +978,12 @@ public final class QuorumController implements Controller {
     /**
      * The last offset we have committed, or -1 if we have not committed any offsets.
      */
-    private long lastCommittedOffset;
+    private long lastCommittedOffset = -1;
+
+    /**
+     * The epoch of the last offset we have committed, or -1 if we have not committed any offsets.
+     */
+    private int lastCommittedEpoch = -1;
 
     /**
      * If we have called scheduleWrite, this is the last offset we got back from it.
@@ -1006,7 +1024,6 @@ public final class QuorumController implements Controller {
         this.raftClient = raftClient;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
-        this.lastCommittedOffset = -1L;
         this.writeOffset = -1L;
 
         snapshotRegistry.createSnapshot(lastCommittedOffset);
@@ -1228,7 +1245,7 @@ public final class QuorumController implements Controller {
         CompletableFuture<Long> future = new CompletableFuture<>();
         appendControlEvent("beginWritingSnapshot", () -> {
             if (snapshotGeneratorManager.generator == null) {
-                snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset);
+                snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch);
             }
             future.complete(snapshotGeneratorManager.generator.epoch());
         });

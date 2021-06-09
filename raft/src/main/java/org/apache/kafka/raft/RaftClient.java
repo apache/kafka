@@ -188,9 +188,10 @@ public interface RaftClient<T> extends AutoCloseable {
      * this object. If a snapshot already exists then return an {@link Optional#empty()}.
      *
      * @param committedOffset the last committed offset that will be included in the snapshot
+     * @param committedEpoch the epoch of the committed offset
      * @return a writable snapshot if it doesn't already exists
      * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
      *         or less than the log start offset.
      */
-    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset);
+    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int commitedEpoch);
 }
