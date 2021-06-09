@@ -289,11 +289,11 @@ public class ConnectorHandle {
         return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
     }
 
-    public StartAndStopLatch expectedStarts(int expectedStarts, int expectedTasksStart, boolean includeTasks) {
+    public StartAndStopLatch expectedStarts(int expectedStarts, Map<String, Integer> expectedTasksStarts, boolean includeTasks) {
         List<StartAndStopLatch> taskLatches = null;
         if (includeTasks) {
             taskLatches = taskHandles.values().stream()
-                    .map(task -> task.expectedStarts(expectedTasksStart))
+                    .map(task -> task.expectedStarts(expectedTasksStarts.get(task.taskId())))
                     .collect(Collectors.toList());
         }
         return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
@@ -353,11 +353,11 @@ public class ConnectorHandle {
         return startAndStopCounter.expectedStops(expectedStops, taskLatches);
     }
 
-    public StartAndStopLatch expectedStops(int expectedStops, int expectedTasksStop, boolean includeTasks) {
+    public StartAndStopLatch expectedStops(int expectedStops, Map<String, Integer> expectedTasksStops, boolean includeTasks) {
         List<StartAndStopLatch> taskLatches = null;
         if (includeTasks) {
             taskLatches = taskHandles.values().stream()
-                    .map(task -> task.expectedStops(expectedTasksStop))
+                    .map(task -> task.expectedStops(expectedTasksStops.get(task.taskId())))
                     .collect(Collectors.toList());
         }
         return startAndStopCounter.expectedStops(expectedStops, taskLatches);

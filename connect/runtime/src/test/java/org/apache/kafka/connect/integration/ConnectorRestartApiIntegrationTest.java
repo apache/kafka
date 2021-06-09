@@ -31,8 +31,10 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.core.Response;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -145,22 +147,22 @@ public class ConnectorRestartApiIntegrationTest {
 
     @Test
     public void testRestartOnlyConnector() throws Exception {
-        runningConnectorAndTasksRestart(false, false, 1, 0, false);
+        runningConnectorAndTasksRestart(false, false, 1, allTasksExpectedRestarts(0), false);
     }
 
     @Test
     public void testRestartBoth() throws Exception {
-        runningConnectorAndTasksRestart(false, true, 1, 1, false);
+        runningConnectorAndTasksRestart(false, true, 1, allTasksExpectedRestarts(1), false);
     }
 
     @Test
     public void testRestartNoopOnlyConnector() throws Exception {
-        runningConnectorAndTasksRestart(true, false, 0, 0, true);
+        runningConnectorAndTasksRestart(true, false, 0, allTasksExpectedRestarts(0), true);
     }
 
     @Test
     public void testRestartNoopBoth() throws Exception {
-        runningConnectorAndTasksRestart(true, true, 0, 0, true);
+        runningConnectorAndTasksRestart(true, true, 0, allTasksExpectedRestarts(0), true);
     }
 
     @Test
@@ -180,39 +182,45 @@ public class ConnectorRestartApiIntegrationTest {
 
     @Test
     public void testFailedTasksRestartOnlyConnector() throws Exception {
-        failedTasksRestart(false, false, 1, 0, false);
+        failedTasksRestart(false, false, 1, allTasksExpectedRestarts(0), buildAllTasksToFail(), false);
     }
 
     @Test
     public void testFailedTasksRestartOnlyTasks() throws Exception {
-        failedTasksRestart(true, true, 0, 1, false);
+        failedTasksRestart(true, true, 0, allTasksExpectedRestarts(1), buildAllTasksToFail(), false);
     }
 
     @Test
     public void testFailedTasksRestartNoop() throws Exception {
-        failedTasksRestart(true, false, 0, 0, true);
+        failedTasksRestart(true, false, 0, allTasksExpectedRestarts(0), buildAllTasksToFail(), true);
     }
 
     @Test
     public void testFailedTasksRestartBoth() throws Exception {
-        failedTasksRestart(false, true, 1, 1, false);
+        failedTasksRestart(false, true, 1, allTasksExpectedRestarts(1), buildAllTasksToFail(), false);
+    }
+
+    @Test
+    public void testOneFailedTasksRestartOnlyOneTasks() throws Exception {
+        Set<String> tasksToFail = Collections.singleton(taskId(1));
+        failedTasksRestart(true, true, 0, buildExpectedTasksRestarts(tasksToFail), tasksToFail, false);
     }
 
     @Test
     public void testMultiWorkerRestartOnlyConnector() throws Exception {
-        runningConnectorAndTasksRestart(false, false, 1, 0, false, 4);
+        runningConnectorAndTasksRestart(false, false, 1, allTasksExpectedRestarts(0), false, 4);
     }
 
     @Test
     public void testMultiWorkerRestartBoth() throws Exception {
-        runningConnectorAndTasksRestart(false, true, 1, 1, false, 4);
+        runningConnectorAndTasksRestart(false, true, 1, allTasksExpectedRestarts(1), false, 4);
     }
 
-    private void runningConnectorAndTasksRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts, int expectedTasksRestarts, boolean noopRequest) throws Exception {
+    private void runningConnectorAndTasksRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts, Map<String, Integer> expectedTasksRestarts, boolean noopRequest) throws Exception {
         runningConnectorAndTasksRestart(onlyFailed, includeTasks, expectedConnectorRestarts, expectedTasksRestarts, noopRequest, ONE_WORKER);
     }
 
-    private void runningConnectorAndTasksRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts, int expectedTasksRestarts, boolean noopRequest, int numWorkers) throws Exception {
+    private void runningConnectorAndTasksRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts, Map<String, Integer> expectedTasksRestarts, boolean noopRequest, int numWorkers) throws Exception {
         connectBuilder = connectBuilderWithNumWorkers(numWorkers);
         connect = connectBuilder.build();
         // start the clusters
@@ -265,13 +273,16 @@ public class ConnectorRestartApiIntegrationTest {
             //validate tasks stop/start counts only in single worker test because the multi worker rebalance triggers stop/start on task and this make the exact counts unpredictable
             connectorHandle.tasks().forEach(t -> {
                 StartAndStopCounterSnapshot afterTaskSnapshot = t.startAndStopCounter().countsSnapshot();
-                assertEquals(beforeTasksSnapshot.get(t.taskId()).starts() + expectedTasksRestarts, afterTaskSnapshot.starts());
-                assertEquals(beforeTasksSnapshot.get(t.taskId()).stops() + expectedTasksRestarts, afterTaskSnapshot.stops());
+                assertEquals(beforeTasksSnapshot.get(t.taskId()).starts() + expectedTasksRestarts.get(t.taskId()), afterTaskSnapshot.starts());
+                assertEquals(beforeTasksSnapshot.get(t.taskId()).stops() + expectedTasksRestarts.get(t.taskId()), afterTaskSnapshot.stops());
             });
         }
     }
 
     private void failedConnectorRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts) throws Exception {
+        //as connector is failed we expect 0 task to be started
+        Map<String, Integer> expectedTasksStarts = allTasksExpectedRestarts(0);
+
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
@@ -291,7 +302,7 @@ public class ConnectorRestartApiIntegrationTest {
 
         StartAndStopCounterSnapshot beforeSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
 
-        StartAndStopLatch startLatch = connectorHandle.expectedStarts(expectedConnectorRestarts, 0, includeTasks);
+        StartAndStopLatch startLatch = connectorHandle.expectedStarts(expectedConnectorRestarts, expectedTasksStarts, includeTasks);
 
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
@@ -309,14 +320,14 @@ public class ConnectorRestartApiIntegrationTest {
         assertEquals(beforeSnapshot.starts() + expectedConnectorRestarts, afterSnapshot.starts());
     }
 
-    private void failedTasksRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts, int expectedTasksRestarts, boolean noopRequest) throws Exception {
+    private void failedTasksRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts, Map<String, Integer> expectedTasksRestarts, Set<String> tasksToFail, boolean noopRequest) throws Exception {
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
 
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
-        props.put("task.start.inject.error", "true");
+        tasksToFail.forEach(taskId -> props.put("task-" + taskId + ".start.inject.error", "true"));
 
         connect.assertions().assertExactlyNumWorkersAreUp(ONE_WORKER,
                 "Initial group of workers did not start in time.");
@@ -324,7 +335,7 @@ public class ConnectorRestartApiIntegrationTest {
         // Try to start the connector and its single task.
         connect.configureConnector(CONNECTOR_NAME, props);
 
-        connect.assertions().assertConnectorIsRunningAndTasksHaveFailed(CONNECTOR_NAME, NUM_TASKS,
+        connect.assertions().assertConnectorIsRunningAndNumTasksHaveFailed(CONNECTOR_NAME, NUM_TASKS, tasksToFail.size(),
                 "Connector tasks are in running state.");
 
         StartAndStopCounterSnapshot beforeSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
@@ -348,7 +359,7 @@ public class ConnectorRestartApiIntegrationTest {
                         + CONNECTOR_SETUP_DURATION_MS + "ms",
                 stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
 
-        connect.assertions().assertConnectorIsRunningAndTasksHaveFailed(CONNECTOR_NAME, NUM_TASKS,
+        connect.assertions().assertConnectorIsRunningAndNumTasksHaveFailed(CONNECTOR_NAME, NUM_TASKS, tasksToFail.size(),
                 "Connector tasks are not all in running state.");
         // Expect that the connector has started again
         assertTrue("Failed to start connector and tasks within "
@@ -361,9 +372,40 @@ public class ConnectorRestartApiIntegrationTest {
         assertEquals(beforeSnapshot.stops() + expectedConnectorRestarts, afterSnapshot.stops());
         connectorHandle.tasks().forEach(t -> {
             StartAndStopCounterSnapshot afterTaskSnapshot = t.startAndStopCounter().countsSnapshot();
-            assertEquals(beforeTasksSnapshot.get(t.taskId()).starts() + expectedTasksRestarts, afterTaskSnapshot.starts());
-            assertEquals(beforeTasksSnapshot.get(t.taskId()).stops() + expectedTasksRestarts, afterTaskSnapshot.stops());
+            assertEquals(beforeTasksSnapshot.get(t.taskId()).starts() + expectedTasksRestarts.get(t.taskId()), afterTaskSnapshot.starts());
+            assertEquals(beforeTasksSnapshot.get(t.taskId()).stops() + expectedTasksRestarts.get(t.taskId()), afterTaskSnapshot.stops());
         });
+    }
+
+    private Set<String> buildAllTasksToFail() {
+        Set<String> tasksToFail = new HashSet<>();
+        for (int i = 0; i < NUM_TASKS; i++) {
+            String taskId = taskId(i);
+            tasksToFail.add(taskId);
+        }
+        return tasksToFail;
+    }
+
+    private Map<String, Integer> allTasksExpectedRestarts(int expectedRestarts) {
+        Map<String, Integer> expectedTasksRestarts = new HashMap<>();
+        for (int i = 0; i < NUM_TASKS; i++) {
+            String taskId = taskId(i);
+            expectedTasksRestarts.put(taskId, expectedRestarts);
+        }
+        return expectedTasksRestarts;
+    }
+
+    private Map<String, Integer> buildExpectedTasksRestarts(Set<String> tasksToFail) {
+        Map<String, Integer> expectedTasksRestarts = new HashMap<>();
+        for (int i = 0; i < NUM_TASKS; i++) {
+            String taskId = taskId(i);
+            expectedTasksRestarts.put(taskId, tasksToFail.contains(taskId) ? 1 : 0);
+        }
+        return expectedTasksRestarts;
+    }
+
+    private String taskId(int i) {
+        return CONNECTOR_NAME + "-" + i;
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {
