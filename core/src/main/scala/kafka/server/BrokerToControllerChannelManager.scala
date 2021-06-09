@@ -372,8 +372,7 @@ class BrokerToControllerRequestThread(
     } else if (response.wasDisconnected()) {
       updateControllerAddress(null)
       requestQueue.putFirst(queueItem)
-    } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER) ||
-      maybeCheckNotControllerErrorInsideEnvelopeResponse(queueItem.requestHeader, response.responseBody())) {
+    } else if (checkNotControllerErrorInResponse(queueItem.requestHeader, response.responseBody())) {
       // just close the controller connection and wait for metadata cache update in doWork
       activeControllerAddress().foreach { controllerAddress => {
         networkClient.disconnect(controllerAddress.idString)
@@ -386,7 +385,11 @@ class BrokerToControllerRequestThread(
     }
   }
 
-  def maybeCheckNotControllerErrorInsideEnvelopeResponse(requestHeader: RequestHeader, responseBody: AbstractResponse): Boolean = {
+  def checkNotControllerErrorInResponse(requestHeader: RequestHeader, responseBody: AbstractResponse): Boolean = {
+    if (responseBody.errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
+      return true
+    }
+
     if (responseBody.isInstanceOf[EnvelopeResponse] && requestHeader != null) {
       info(s"Trying to find NOT_CONTROLLER exception inside envelope response")
       val envelopeResponse = responseBody.asInstanceOf[EnvelopeResponse]

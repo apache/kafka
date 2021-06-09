@@ -20,20 +20,21 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
-
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, ManualMetadataUpdater, Metadata, MockClient, NodeApiVersions}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.message.MetadataRequestData
+import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, MetadataRequest, MetadataResponse, RequestHeader, RequestTestUtils}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.requests.{AbstractRequest, EnvelopeRequest, EnvelopeResponse, MetadataRequest, MetadataResponse, RequestContext, RequestHeader, RequestTestUtils}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.mockito.MockedStatic
 import org.mockito.Mockito._
+
+import java.net.InetAddress
 
 class BrokerToControllerRequestThreadTest {
 
@@ -237,9 +238,21 @@ class BrokerToControllerRequestThreadTest {
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
       Collections.singletonMap("a", 2))
 
-    val responseBuffer = mock(classOf[ByteBuffer])
-    val notControllerErrorWithinEnvelopeResponse = new EnvelopeResponse(responseBuffer, Errors.NONE)
+    val correlationId = 0
+    val clientId = "clientId"
+    val header = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion, clientId, correlationId)
+
+    val context = new RequestContext(header, "0", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
+      new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, true)
+    // build a response byteBuffer with notControllerError inside
+    val responseBytes = context.buildResponseEnvelopePayload(responseWithNotControllerError)
+
+    // create an envelopeResponse with the byteBuffer built above
+    val notControllerErrorWithinEnvelopeResponse = new EnvelopeResponse(responseBytes, Errors.NONE)
+
+    // response for retry request after receiving Not_Controller error
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
+
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
       config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
@@ -248,9 +261,14 @@ class BrokerToControllerRequestThreadTest {
     val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "principal", true)
     val kafkaPrincipalBuilder = new DefaultKafkaPrincipalBuilder(null, null)
 
+    // build an EnvelopeRequest by dummy data
     val envelopeRequestBuilder = new EnvelopeRequest.Builder(ByteBuffer.allocate(0),
       kafkaPrincipalBuilder.serialize(kafkaPrincipal), "client-address".getBytes)
+
+    // mock requestHeader to return the info in responseWithNotControllerError
     val requestHeader = mock(classOf[RequestHeader])
+    when(requestHeader.apiKey()).thenReturn(ApiKeys.METADATA)
+    when(requestHeader.apiVersion()).thenReturn(11.toShort)
 
     val queueItem = BrokerToControllerQueueItem(
       time.milliseconds(),
@@ -258,10 +276,6 @@ class BrokerToControllerRequestThreadTest {
       completionHandler,
       requestHeader
     )
-
-    val abstractResponse: MockedStatic[AbstractResponse] = mockStatic(classOf[AbstractResponse])
-    abstractResponse.when(AbstractResponse.parseResponse(responseBuffer, requestHeader).asInstanceOf[MockedStatic.Verification])
-      .thenReturn(responseWithNotControllerError)
 
     testRequestThread.enqueue(queueItem)
     // initialize to the controller
@@ -287,7 +301,6 @@ class BrokerToControllerRequestThreadTest {
     assertEquals(Some(newControllerNode), testRequestThread.activeControllerAddress())
 
     assertTrue(completionHandler.completed.get())
-    abstractResponse.close()
   }
 
   @Test
