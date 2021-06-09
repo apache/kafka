@@ -127,6 +127,7 @@ class LocalLogTest {
     val deletedSegments = log.deleteAllSegments()
     assertTrue(log.segments.isEmpty)
     assertEquals(segmentsBeforeDelete, deletedSegments)
+    assertThrows(classOf[KafkaStorageException], () => log.checkIfMemoryMappedBufferClosed())
     assertTrue(logDir.exists)
   }
 
@@ -144,13 +145,6 @@ class LocalLogTest {
     log.deleteAllSegments()
     log.deleteEmptyDir()
     assertFalse(logDir.exists)
-  }
-
-  @Test
-  def testLogDeleteDirFailureAfterCloseHandlers(): Unit = {
-    log.closeHandlers()
-    assertThrows(classOf[KafkaStorageException], () => log.deleteEmptyDir())
-    assertTrue(logDir.exists)
   }
 
   @Test

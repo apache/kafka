@@ -220,13 +220,13 @@ private[log] class LocalLog(@volatile private var _dir: File,
    */
   private[log] def deleteEmptyDir(): Unit = {
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
-      checkIfMemoryMappedBufferClosed()
       if (segments.nonEmpty) {
         throw new IllegalStateException(s"Can not delete directory when ${segments.numberOfSegments} segments are still present")
       }
+      if (!isMemoryMappedBufferClosed) {
+        throw new IllegalStateException(s"Can not delete directory when memory mapped buffer for log of $topicPartition is still open.")
+      }
       Utils.delete(dir)
-      // File handlers will be closed if this log is deleted
-      isMemoryMappedBufferClosed = true
     }
   }
 
@@ -238,6 +238,7 @@ private[log] class LocalLog(@volatile private var _dir: File,
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       val deletableSegments = List[LogSegment]() ++ segments.values
       removeAndDeleteSegments(segments.values, asyncDelete = false, LogDeletion(this))
+      isMemoryMappedBufferClosed = true
       deletableSegments
     }
   }

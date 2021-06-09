@@ -1437,27 +1437,21 @@ class Log(@volatile var logStartOffset: Long,
         .map(_.messageOffset)
         .getOrElse(maxOffsetInMessages - Integer.MAX_VALUE)
 
-      val newSegment = localLog.roll(Some(rollOffset))
-      afterRoll(newSegment)
-      newSegment
+      roll(Some(rollOffset))
     } else {
       segment
     }
   }
 
   /**
-   * Roll the local log over to a new active segment starting with the current logEndOffset.
-   * This will trim the index to the exact size of the number of entries it currently contains.
+   * Roll the local log over to a new active segment starting with the expectedNextOffset (when provided),
+   * or localLog.logEndOffset otherwise. This will trim the index to the exact size of the number of entries
+   * it currently contains.
    *
    * @return The newly rolled segment
    */
   def roll(expectedNextOffset: Option[Long] = None): LogSegment = lock synchronized {
     val newSegment = localLog.roll(expectedNextOffset)
-    afterRoll(newSegment)
-    newSegment
-  }
-
-  private def afterRoll(newSegment: LogSegment): Unit = {
     // Take a snapshot of the producer state to facilitate recovery. It is useful to have the snapshot
     // offset align with the new segment offset since this ensures we can recover the segment by beginning
     // with the corresponding snapshot file and scanning the segment data. Because the segment base offset
@@ -1468,6 +1462,7 @@ class Log(@volatile var logStartOffset: Long,
     updateHighWatermarkWithLogEndOffset()
     // Schedule an asynchronous flush of the old segment
     scheduler.schedule("flush-log", () => flush(newSegment.baseOffset))
+    newSegment
   }
 
   /**
@@ -1587,11 +1582,9 @@ class Log(@volatile var logStartOffset: Long,
     maybeHandleIOException(s"Error while truncating the entire log for $topicPartition in dir ${dir.getParent}") {
       debug(s"Truncate and start at offset $newOffset")
       lock synchronized {
-        val deletedSegments = localLog.truncateFullyAndStartAt(newOffset)
-        deleteProducerSnapshots(deletedSegments, asyncDelete = true)
+        localLog.truncateFullyAndStartAt(newOffset)
         leaderEpochCache.foreach(_.clearAndFlush())
         producerStateManager.truncateFullyAndStartAt(newOffset)
-
         completeTruncation(
           startOffset = newOffset,
           endOffset = newOffset
@@ -1607,7 +1600,10 @@ class Log(@volatile var logStartOffset: Long,
     logStartOffset = startOffset
     localLog.updateLogEndOffset(endOffset)
     rebuildProducerState(endOffset, producerStateManager)
-    updateHighWatermark(math.min(highWatermark, endOffset))
+    if (highWatermark < localLog.logEndOffset)
+      updateHighWatermark(highWatermark)
+    else
+      updateHighWatermark(localLog.logEndOffsetMetadata)
   }
 
   /**
