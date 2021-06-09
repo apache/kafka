@@ -228,7 +228,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.AllCompressions])
   def cleanerConfigUpdateTest(codec: CompressionType): Unit = {
     val largeMessageKey = 20
-    val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
+    val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
     val maxMessageSize = largeMessageSet.sizeInBytes
 
     cleaner = makeCleaner(partitions = topicPartitions, backOffMs = 1, maxMessageSize = maxMessageSize,
@@ -311,7 +311,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     }
 
     val records = kvs.map { case (key, payload) =>
-      new SimpleRecord(key.toString.getBytes, payload.toString.getBytes)
+      new SimpleRecord(key.toString.getBytes, payload.getBytes)
     }
 
     val appendInfo = log.appendAsLeader(MemoryRecords.withRecords(magicValue, codec, records: _*), leaderEpoch = 0)
