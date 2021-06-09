@@ -215,7 +215,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         // increase the session timeout value, to avoid unnecessary rebalance
-        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
+        
         return streamsConfig;
     }
 
@@ -264,10 +264,20 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 
         final Function<Float, String> tableOneKeyExtractor = value -> {
             System.err.println("!!! tableOneKeyExtractor:" + Integer.toString((int) value.floatValue()));
+//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//            for (int i = 1; i < elements.length; i++) {
+//                final StackTraceElement s = elements[i];
+//                System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//            }
             return Integer.toString((int) value.floatValue());
         };
         final Function<String, Integer> joinedTableKeyExtractor = value -> {
             System.err.println("!!! joinedTableKeyExtractor:" + value);
+//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//            for (int i = 1; i < elements.length; i++) {
+//                final StackTraceElement s = elements[i];
+//                System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//            }
             //Hardwired to return the desired foreign key as a test shortcut
             if (value.contains("value2=10"))
                 return 10;
@@ -276,11 +286,21 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         };
 
         final ValueJoiner<Float, Long, String> joiner = (value1, value2) -> {
-            System.err.println("!!! value1 " + value1 + "," + value2);
+            System.err.println("!!! joiner1: value1 " + value1 + "," + value2);
+//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//            for (int i = 1; i < elements.length; i++) {
+//                final StackTraceElement s = elements[i];
+//                System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//            }
             return "value1=" + value1 + ",value2=" + value2;
         };
         final ValueJoiner<String, String, String> joinerTwo = (value1, value2) -> {
             System.err.println("!!! joiner2: value1 " + value1 + "," + value2);
+//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//            for (int i = 1; i < elements.length; i++) {
+//                final StackTraceElement s = elements[i];
+//                System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//            }
             return value1 + ",value3=" + value2;
         };
 

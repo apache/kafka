@@ -82,7 +82,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
 
             @Override
             public void process(final K key, final SubscriptionResponseWrapper<VO> value) {
-                System.err.println("!!! joiner:" + key + "," + value);
+//                System.err.println("!!! joiner:" + key + "," + value);
 //                final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
 //                for (int i = 1; i < elements.length; i++) {
 //                    final StackTraceElement s = elements[i];
@@ -109,7 +109,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
                     if (value.getForeignValue() == null && (!leftJoin || currentValueWithTimestamp == null)) {
                         result = null; //Emit tombstone
                     } else {
-                        System.err.println("!!! ready to apply");
+//                        System.err.println("!!! ready to apply");
                         result = joiner.apply(currentValueWithTimestamp == null ? null : currentValueWithTimestamp.value(), value.getForeignValue());
                     }
                     context().forward(key, result);

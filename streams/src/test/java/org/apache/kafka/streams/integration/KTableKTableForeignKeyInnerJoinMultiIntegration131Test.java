@@ -215,7 +215,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration131Test {
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         // increase the session timeout value, to avoid unnecessary rebalance
-        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 20000);
+        
         return streamsConfig;
     }
 
