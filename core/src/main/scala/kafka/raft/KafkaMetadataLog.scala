@@ -18,7 +18,7 @@ package kafka.raft
 
 import kafka.api.ApiVersion
 import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, LogSegment, RetentionMsBreach, RetentionSizeBreach}
-import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, KafkaConfig, LogDirFailureChannel}
 import kafka.utils.{CoreUtils, Logging, Scheduler}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.Time
@@ -42,7 +42,8 @@ final class KafkaMetadataLog private (
   snapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
   topicPartition: TopicPartition,
   maxFetchSizeInBytes: Int,
-  val fileDeleteDelayMs: Long, // Visible for testing
+  // Visible for testing
+  val fileDeleteDelayMs: Long,
   val retentionSize: Long,
   val retentionMs: Long,
 ) extends ReplicatedLog with Logging {
@@ -313,12 +314,6 @@ final class KafkaMetadataLog private (
     deleted
   }
 
-  override def maybeClean(): Unit = {
-    deleteOldSnapshots()
-    maybeCleanSnapshotsAndLogs()
-    maybeCleanOldLogs()
-  }
-
   private def loadSnapshotSizes(): Seq[(OffsetAndEpoch, Long)] = {
     snapshots synchronized {
       snapshots.keys.map {
@@ -333,24 +328,13 @@ final class KafkaMetadataLog private (
     }
   }
 
-  def deleteOldSnapshots(): Unit = {
-    // Clean up excess snapshots beyond the desired retained count
-    // TODO do we need this?
-    val retainSnapshots = 10
-    val toKeep = math.max(math.min(retainSnapshots, snapshots.size), 1)
-    loadSnapshotSizes().take(snapshots.size - toKeep).foreach {
-      case (epoch, _) => deleteBeforeSnapshot(epoch)
-    }
-  }
-
-  def maybeCleanSnapshotsAndLogs(): Unit = {
+  override def maybeClean(): Unit = {
     val snapshotSizes = loadSnapshotSizes()
 
-    // Clean up snapshots to free up disk space
+    // If we've violated retention, delete as many snapshots as necessary (leaving the newest)
     val logSize: Long = log.size
     var snapshotTotalSize: Long = snapshotSizes.map(_._2).sum
     if (logSize + snapshotTotalSize > retentionSize) {
-      // If we've breached retention, delete as many snapshots as necessary
       snapshotSizes.take(snapshotSizes.size - 1).foreach { case (epoch, size) =>
         if (logSize + snapshotTotalSize > retentionSize) {
           snapshotTotalSize -= size
@@ -359,11 +343,13 @@ final class KafkaMetadataLog private (
       }
     }
 
+    // If retention is still violated, clean up old segments as long as the precede our latest snapshot
     if (logSize + snapshotTotalSize > retentionSize) {
       latestSnapshotId().ifPresent { snapshotId =>
         var diff = log.size - retentionSize
 
         def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
+          // Only delete this segment if the _next_ segment is less than the latest snapshot
           if (nextSegmentOpt.exists(_.baseOffset <= snapshotId.offset)) {
             if (diff - segment.size >= 0) {
               diff -= segment.size
@@ -378,24 +364,6 @@ final class KafkaMetadataLog private (
 
         log.deleteOldSegments(shouldDelete, RetentionSizeBreach)
       }
-    }
-  }
-
-  def maybeCleanOldLogs(): Unit = {
-    // Can only perform cleaning if at least one snapshot exists
-    latestSnapshotId().ifPresent { snapshotId =>
-      val startMs = time.milliseconds
-
-      def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
-        // Can only delete this segment if next segment is less than the latest snapshot
-        if (nextSegmentOpt.exists(_.baseOffset <= snapshotId.offset)) {
-          startMs - segment.largestTimestamp > retentionMs
-        } else {
-          false
-        }
-      }
-
-      log.deleteOldSegments(shouldDelete, RetentionMsBreach)
     }
   }
 
@@ -445,7 +413,6 @@ final class KafkaMetadataLog private (
 }
 
 object KafkaMetadataLog {
-
   def apply(
     topicPartition: TopicPartition,
     topicId: Uuid,
@@ -453,11 +420,14 @@ object KafkaMetadataLog {
     time: Time,
     scheduler: Scheduler,
     maxBatchSizeInBytes: Int,
-    maxFetchSizeInBytes: Int
+    maxFetchSizeInBytes: Int,
+    config: KafkaConfig
   ): KafkaMetadataLog = {
     val props = new Properties()
     props.put(LogConfig.MaxMessageBytesProp, maxBatchSizeInBytes.toString)
     props.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString)
+    props.put(LogConfig.SegmentBytesProp, config.metadataLogSegmentBytes)
+    props.put(LogConfig.SegmentMsProp, config.metadataLogSegmentMillis)
 
     LogConfig.validateValues(props)
     val defaultLogConfig = LogConfig(props)
@@ -486,8 +456,8 @@ object KafkaMetadataLog {
       topicPartition,
       maxFetchSizeInBytes,
       defaultLogConfig.fileDeleteDelayMs,
-      defaultLogConfig.retentionSize,
-      defaultLogConfig.retentionMs
+      config.metadataRetentionBytes,
+      config.metadataRetentionMillis
     )
 
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower

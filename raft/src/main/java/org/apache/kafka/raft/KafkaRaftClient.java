@@ -2099,7 +2099,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollCurrentState(long currentTimeMs) throws IOException {
-        maybeCleanSnapshotsAndLogs(currentTimeMs);
+        snapshotCleaner.maybeClean(currentTimeMs);
 
         if (quorum.isLeader()) {
             return pollLeader(currentTimeMs);
@@ -2163,10 +2163,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return false;
     }
 
-    private void maybeCleanSnapshotsAndLogs(long currentTimeMs) {
-        snapshotCleaner.maybeClean(currentTimeMs);
-    }
-
+    /**
+     * A simple timer based log cleaner
+     */
     private static class RaftMetadataLogCleaner {
         private final Logger logger;
         private final Timer timer;
@@ -2180,7 +2179,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             this.cleaner = cleaner;
         }
 
-        public void maybeClean(long currentTimeMs) {
+        public boolean maybeClean(long currentTimeMs) {
             timer.update(currentTimeMs);
             if (timer.isExpired()) {
                 try {
@@ -2189,6 +2188,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     logger.error("Had an error during log cleaning", t);
                 }
                 timer.reset(delayMs);
+                return true;
+            } else {
+                return false;
             }
         }
     }
