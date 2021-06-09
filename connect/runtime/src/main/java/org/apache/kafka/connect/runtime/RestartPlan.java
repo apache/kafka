@@ -46,10 +46,10 @@ public class RestartPlan {
         this.stateInfo = Objects.requireNonNull(restartStateInfo, "ConnectorStateInfo name may not be null");
         idsToRestart = Collections.unmodifiableList(
                 stateInfo.tasks()
-                         .stream()
-                         .filter(taskState -> isRestarting(taskState))
-                         .map(taskState -> new ConnectorTaskId(request.connectorName(), taskState.id()))
-                         .collect(Collectors.toList())
+                        .stream()
+                        .filter(taskState -> isRestarting(taskState))
+                        .map(taskState -> new ConnectorTaskId(request.connectorName(), taskState.id()))
+                        .collect(Collectors.toList())
         );
     }
 
@@ -164,13 +164,11 @@ public class RestartPlan {
     public String toString() {
         if (restartConnector()) {
             return String.format(
-                "request to restart connector '%s' and %d of %d tasks (onlyFailed=%s, includeTasks=%s)",
-                connectorName(), restartTaskCount(), totalTaskCount(), request.onlyFailed(), request.includeTasks()
+                    "plan to restart connector and %d of %d tasks for %s", restartTaskCount(), totalTaskCount(), request
             );
         }
         return String.format(
-                "request to restart %d of %d tasks for connector '%s' (onlyFailed=%s, includeTasks=%s)",
-                restartTaskCount(), totalTaskCount(), connectorName(), request.onlyFailed(), request.includeTasks()
+                "plan to restart %d of %d tasks for %s", restartTaskCount(), totalTaskCount(), request
         );
     }
 }

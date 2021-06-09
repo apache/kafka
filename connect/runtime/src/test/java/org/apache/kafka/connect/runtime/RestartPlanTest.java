@@ -54,7 +54,7 @@ public class RestartPlanTest {
         assertTrue(restartPlan.restartAnyTasks());
         assertEquals(1, restartPlan.taskIdsToRestart().size());
         assertEquals(3, restartPlan.taskIdsToRestart().iterator().next().task());
-        assertTrue(restartPlan.toString().contains("request to restart connector"));
+        assertTrue(restartPlan.toString().contains("plan to restart connector"));
     }
 
     @Test
@@ -74,7 +74,7 @@ public class RestartPlanTest {
         assertFalse(restartPlan.restartConnector());
         assertFalse(restartPlan.restartAnyTasks());
         assertEquals(0, restartPlan.taskIdsToRestart().size());
-        assertTrue(restartPlan.toString().contains("request to restart 0 of"));
+        assertTrue(restartPlan.toString().contains("plan to restart 0 of"));
     }
 
     @Test

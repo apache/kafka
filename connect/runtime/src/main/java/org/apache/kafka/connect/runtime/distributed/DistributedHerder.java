@@ -1166,9 +1166,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             });
         }
         if (restartTasks) {
-            log.debug("Restarting {} of {} tasks connector {}", plan.restartTaskCount(), plan.totalTaskCount(), connectorName);
+            log.debug("Restarting {} of {} tasks for {}", plan.restartTaskCount(), plan.totalTaskCount(), request);
             plan.taskIdsToRestart().forEach(this::startTask);
-            log.debug("{} tasks for connector {} restarted as requested ({} were left running)", plan.restartTaskCount(), plan.totalTaskCount(), connectorName);
+            log.debug("Restarted {} of {} tasks for {} as requested", plan.restartTaskCount(), plan.totalTaskCount(), request);
         }
         log.info("Completed {}", plan);
         return restartConnector || restartTasks;
@@ -1706,7 +1706,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         @Override
         public void onRestartRequest(RestartRequest request) {
-            log.info("Received connector '{}' restart request ({})", request.connectorName(), request);
+            log.info("Received {}", request);
 
             synchronized (DistributedHerder.this) {
                 //since RestartRequest equality is based only on connector name, and we track only the latest pending restart request

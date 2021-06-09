@@ -341,9 +341,9 @@ public class StandaloneHerder extends AbstractHerder {
             });
         }
         if (plan.restartAnyTasks()) {
-            log.debug("Restarting {} of {} tasks connector {}", plan.restartTaskCount(), plan.totalTaskCount(), connectorName);
+            log.debug("Restarting {} of {} tasks for {}", plan.restartTaskCount(), plan.totalTaskCount(), request);
             createConnectorTasks(connectorName, plan.taskIdsToRestart());
-            log.debug("{} tasks for connector {} restarted as requested ({} were left running)", plan.restartTaskCount(), plan.totalTaskCount(), connectorName);
+            log.debug("Restarted {} of {} tasks for {} as requested", plan.restartTaskCount(), plan.totalTaskCount(), request);
         }
         // Complete the restart request
         log.info("Completed {}", plan);

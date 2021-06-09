@@ -484,7 +484,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     @Override
     public void putRestartRequest(RestartRequest restartRequest) {
-        log.debug("Request to restart: {}", restartRequest);
+        log.debug("Writing {} to Kafka", restartRequest);
         String key = RESTART_KEY(restartRequest.connectorName());
         Struct value = new Struct(RESTART_REQUEST_V0);
         value.put("include-tasks", restartRequest.includeTasks());
@@ -494,8 +494,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             configLog.send(key, serializedValue);
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            log.error("Failed to write restart request {} to Kafka: ", restartRequest, e);
-            throw new ConnectException("Error writing restart request " + restartRequest + " to Kafka", e);
+            log.error("Failed to write {} to Kafka: ", restartRequest, e);
+            throw new ConnectException("Error writing " + restartRequest + " to Kafka", e);
         }
     }
 
