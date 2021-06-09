@@ -51,13 +51,14 @@ public class NamedCacheMetricsTest {
         Mockito.when(streamsMetrics.cacheLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, hitRatio, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
         Mockito.when(streamsMetrics.cacheLevelTagMap(THREAD_ID, TASK_ID, STORE_NAME)).thenReturn(tagMap);
         StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
-                expectedSensor,
-                StreamsMetricsImpl.CACHE_LEVEL_GROUP,
-                tagMap,
-                hitRatio,
-                HIT_RATIO_AVG_DESCRIPTION,
-                HIT_RATIO_MIN_DESCRIPTION,
-                HIT_RATIO_MAX_DESCRIPTION);
+            expectedSensor,
+            StreamsMetricsImpl.CACHE_LEVEL_GROUP,
+            tagMap,
+            hitRatio,
+            HIT_RATIO_AVG_DESCRIPTION,
+            HIT_RATIO_MIN_DESCRIPTION,
+            HIT_RATIO_MAX_DESCRIPTION
+        );
 
         final Sensor sensor = NamedCacheMetrics.hitRatioSensor(streamsMetrics, THREAD_ID, TASK_ID, STORE_NAME);
 
