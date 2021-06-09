@@ -20,8 +20,6 @@ import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
 import org.junit.Test;
@@ -50,8 +48,7 @@ public class RocksDBMetricsTest {
 
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
-    private final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class,
-            Mockito.withSettings().useConstructor(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime()));
+    private final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
     private final Map<String, String> tags = Collections.singletonMap("hello", "world");
 
     private interface SensorCreator {
@@ -462,15 +459,6 @@ public class RocksDBMetricsTest {
     }
 
     private void runAndVerifyMutableMetric(final String name, final String description, final Runnable metricAdder) {
-        Mockito.doCallRealMethod().when(streamsMetrics).addStoreLevelMutableMetric(
-                eq(TASK_ID),
-                eq(STORE_TYPE),
-                eq(STORE_NAME),
-                eq(name),
-                eq(description),
-                eq(RecordingLevel.INFO),
-                eq(VALUE_PROVIDER)
-        );
 
         metricAdder.run();
 

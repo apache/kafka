@@ -17,19 +17,14 @@
 package org.apache.kafka.streams.internals.metrics;
 
 import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams.State;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Map;
@@ -43,11 +38,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class ClientMetricsTest {
     private static final String COMMIT_ID = "test-commit-ID";
     private static final String VERSION = "test-version";
-    private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
 
-    private final Metrics metrics = new Metrics();
-    private final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class,
-            Mockito.withSettings().useConstructor(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime()));
+    private final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
     private final Sensor expectedSensor = Mockito.mock(Sensor.class);
     private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
 
@@ -141,12 +133,6 @@ public class ClientMetricsTest {
                                                  final String description,
                                                  final Gauge<K> valueProvider,
                                                  final Runnable metricAdder) {
-        Mockito.doCallRealMethod().when(streamsMetrics).addClientLevelMutableMetric(
-                eq(name),
-                eq(description),
-                eq(RecordingLevel.INFO),
-                eq(valueProvider)
-        );
 
         metricAdder.run();
 
@@ -162,13 +148,6 @@ public class ClientMetricsTest {
                                                final String description,
                                                final String value,
                                                final Runnable metricAdder) {
-
-        Mockito.doCallRealMethod().when(streamsMetrics).addClientLevelImmutableMetric(
-                Mockito.eq(name),
-                Mockito.eq(description),
-                Mockito.eq(RecordingLevel.INFO),
-                Mockito.eq(value)
-        );
 
         metricAdder.run();
 
