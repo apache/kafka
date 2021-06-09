@@ -20,9 +20,8 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 import java.util.Map;
@@ -31,7 +30,6 @@ import java.util.function.Supplier;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-@RunWith(MockitoJUnitRunner.class)
 public class StateStoreMetricsTest {
 
     private static final String TASK_ID = "test-task";
@@ -40,8 +38,8 @@ public class StateStoreMetricsTest {
     private static final String STORE_LEVEL_GROUP = "stream-state-metrics";
     private static final String BUFFER_NAME = "test-buffer";
 
-    private final Sensor expectedSensor = Mockito.mock(Sensor.class);
-    private final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
+    private final Sensor expectedSensor = mock(Sensor.class);
+    private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
     private final Map<String, String> storeTagMap = Collections.singletonMap("hello", "world");
 
     @Test
@@ -155,9 +153,9 @@ public class StateStoreMetricsTest {
         final String descriptionOfRate = "The average number of calls to prefix-scan per second";
         final String descriptionOfAvg = "The average latency of calls to prefix-scan";
         final String descriptionOfMax = "The maximum latency of calls to prefix-scan";
-        Mockito.when(streamsMetrics.storeLevelSensor(TASK_ID, STORE_NAME, metricName, RecordingLevel.DEBUG))
+        when(streamsMetrics.storeLevelSensor(TASK_ID, STORE_NAME, metricName, RecordingLevel.DEBUG))
                 .thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).thenReturn(storeTagMap);
+        when(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).thenReturn(storeTagMap);
         StreamsMetricsImpl.addInvocationRateToSensor(
             expectedSensor,
             STORE_LEVEL_GROUP,
@@ -270,10 +268,10 @@ public class StateStoreMetricsTest {
         final String metricName = "expired-window-record-drop";
         final String descriptionOfRate = "The average number of dropped records due to an expired window per second";
         final String descriptionOfCount = "The total number of dropped records due to an expired window";
-        Mockito.when(streamsMetrics.storeLevelSensor(TASK_ID, STORE_NAME, metricName, RecordingLevel.INFO))
+        when(streamsMetrics.storeLevelSensor(TASK_ID, STORE_NAME, metricName, RecordingLevel.INFO))
                 .thenReturn(expectedSensor);
 
-        Mockito.when(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).thenReturn(storeTagMap);
+        when(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).thenReturn(storeTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             "stream-" + STORE_TYPE + "-metrics",
@@ -300,9 +298,9 @@ public class StateStoreMetricsTest {
         final String descriptionOfMin = "The minimum " + e2eLatencyDescription;
         final String descriptionOfMax = "The maximum " + e2eLatencyDescription;
 
-        Mockito.when(streamsMetrics.storeLevelSensor(TASK_ID, STORE_NAME, metricName, RecordingLevel.TRACE))
+        when(streamsMetrics.storeLevelSensor(TASK_ID, STORE_NAME, metricName, RecordingLevel.TRACE))
                 .thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).thenReturn(storeTagMap);
+        when(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).thenReturn(storeTagMap);
 
         StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
             expectedSensor,
@@ -325,7 +323,7 @@ public class StateStoreMetricsTest {
                                  final String descriptionOfAvg,
                                  final String descriptionOfMax,
                                  final Supplier<Sensor> sensorSupplier) {
-        Mockito.when(streamsMetrics.storeLevelSensor(
+        when(streamsMetrics.storeLevelSensor(
                 TASK_ID,
                 STORE_NAME,
                 metricName,
@@ -339,7 +337,7 @@ public class StateStoreMetricsTest {
             metricName,
             descriptionOfRate
         );
-        Mockito.when(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).thenReturn(storeTagMap);
+        when(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).thenReturn(storeTagMap);
 
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
@@ -364,9 +362,9 @@ public class StateStoreMetricsTest {
                                                   final String descriptionOfMax,
                                                   final Supplier<Sensor> sensorSupplier) {
         final Map<String, String> tagMap;
-        Mockito.when(streamsMetrics.storeLevelSensor(TASK_ID, BUFFER_NAME, metricName, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
+        when(streamsMetrics.storeLevelSensor(TASK_ID, BUFFER_NAME, metricName, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
         tagMap = storeTagMap;
-        Mockito.when(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, BUFFER_NAME)).thenReturn(tagMap);
+        when(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, BUFFER_NAME)).thenReturn(tagMap);
 
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,

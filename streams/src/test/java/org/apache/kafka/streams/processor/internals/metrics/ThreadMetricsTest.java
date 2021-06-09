@@ -19,9 +19,8 @@ package org.apache.kafka.streams.processor.internals.metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 import java.util.Map;
@@ -32,15 +31,14 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-@RunWith(MockitoJUnitRunner.class)
 public class ThreadMetricsTest {
 
     private static final String THREAD_ID = "thread-id";
     private static final String THREAD_LEVEL_GROUP = "stream-thread-metrics";
     private static final String TASK_LEVEL_GROUP = "stream-task-metrics";
 
-    private final Sensor expectedSensor = Mockito.mock(Sensor.class);
-    private final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
+    private final Sensor expectedSensor = mock(Sensor.class);
+    private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
     private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
 
 
@@ -48,8 +46,8 @@ public class ThreadMetricsTest {
     public void shouldGetProcessRatioSensor() {
         final String operation = "process-ratio";
         final String ratioDescription = "The fraction of time the thread spent on processing active tasks";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addValueMetricToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,
@@ -68,8 +66,8 @@ public class ThreadMetricsTest {
         final String operation = "process-records";
         final String avgDescription = "The average number of records processed within an iteration";
         final String maxDescription = "The maximum number of records processed within an iteration";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,
@@ -89,8 +87,8 @@ public class ThreadMetricsTest {
         final String operationLatency = "process" + LATENCY_SUFFIX;
         final String avgLatencyDescription = "The average process latency";
         final String maxLatencyDescription = "The maximum process latency";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operationLatency, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operationLatency, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,
@@ -111,8 +109,8 @@ public class ThreadMetricsTest {
         final String operationRate = "process" + RATE_SUFFIX;
         final String totalDescription = "The total number of calls to process";
         final String rateDescription = "The average per-second number of calls to process";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operationRate, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operationRate, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,
@@ -131,8 +129,8 @@ public class ThreadMetricsTest {
     public void shouldGetPollRatioSensor() {
         final String operation = "poll-ratio";
         final String ratioDescription = "The fraction of time the thread spent on polling records from consumer";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addValueMetricToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,
@@ -151,8 +149,8 @@ public class ThreadMetricsTest {
         final String operation = "poll-records";
         final String avgDescription = "The average number of records polled from consumer within an iteration";
         final String maxDescription = "The maximum number of records polled from consumer within an iteration";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,
@@ -175,8 +173,8 @@ public class ThreadMetricsTest {
         final String rateDescription = "The average per-second number of calls to poll";
         final String avgLatencyDescription = "The average poll latency";
         final String maxLatencyDescription = "The maximum poll latency";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,
@@ -207,8 +205,8 @@ public class ThreadMetricsTest {
         final String rateDescription = "The average per-second number of calls to commit";
         final String avgLatencyDescription = "The average commit latency";
         final String maxLatencyDescription = "The maximum commit latency";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,
@@ -234,8 +232,8 @@ public class ThreadMetricsTest {
     public void shouldGetCommitRatioSensor() {
         final String operation = "commit-ratio";
         final String ratioDescription = "The fraction of time the thread spent on committing all tasks";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addValueMetricToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,
@@ -256,8 +254,8 @@ public class ThreadMetricsTest {
             "The total number of calls to commit over all tasks assigned to one stream thread";
         final String rateDescription =
             "The average per-second number of calls to commit over all tasks assigned to one stream thread";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.taskLevelTagMap(THREAD_ID, ROLLUP_VALUE)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
+        when(streamsMetrics.taskLevelTagMap(THREAD_ID, ROLLUP_VALUE)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             TASK_LEVEL_GROUP,
@@ -280,8 +278,8 @@ public class ThreadMetricsTest {
         final String rateDescription = "The average per-second number of calls to punctuate";
         final String avgLatencyDescription = "The average punctuate latency";
         final String maxLatencyDescription = "The maximum punctuate latency";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,
@@ -308,8 +306,8 @@ public class ThreadMetricsTest {
     public void shouldGetPunctuateRatioSensor() {
         final String operation = "punctuate-ratio";
         final String ratioDescription = "The fraction of time the thread spent on punctuating active tasks";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addValueMetricToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,
@@ -328,9 +326,9 @@ public class ThreadMetricsTest {
         final String operation = "skipped-records";
         final String totalDescription = "The total number of skipped records";
         final String rateDescription = "The average per-second number of skipped records";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO))
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO))
                 .thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,
@@ -350,8 +348,8 @@ public class ThreadMetricsTest {
         final String operation = "task-created";
         final String totalDescription = "The total number of newly created tasks";
         final String rateDescription = "The average per-second number of newly created tasks";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
 
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
@@ -373,8 +371,8 @@ public class ThreadMetricsTest {
         final String operation = "task-closed";
         final String totalDescription = "The total number of closed tasks";
         final String rateDescription = "The average per-second number of closed tasks";
-        Mockito.when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
+        when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             THREAD_LEVEL_GROUP,

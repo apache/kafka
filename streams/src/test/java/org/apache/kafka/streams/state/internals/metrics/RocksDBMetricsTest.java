@@ -23,19 +23,19 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.eq;
 
 import java.math.BigInteger;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.easymock.EasyMock.eq;
+
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-@RunWith(MockitoJUnitRunner.class)
 public class RocksDBMetricsTest {
 
     private static final String STATE_LEVEL_GROUP = "stream-state-metrics";
@@ -48,7 +48,7 @@ public class RocksDBMetricsTest {
 
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
-    private final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
+    private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
     private final Map<String, String> tags = Collections.singletonMap("hello", "world");
 
     private interface SensorCreator {
@@ -462,7 +462,7 @@ public class RocksDBMetricsTest {
 
         metricAdder.run();
 
-        Mockito.verify(streamsMetrics).addStoreLevelMutableMetric(
+        verify(streamsMetrics).addStoreLevelMutableMetric(
                 eq(TASK_ID),
                 eq(STORE_TYPE),
                 eq(STORE_NAME),
@@ -525,13 +525,13 @@ public class RocksDBMetricsTest {
 
     private void setupStreamsMetricsMock(final String metricNamePrefix) {
 
-        Mockito.when(streamsMetrics.storeLevelSensor(
+        when(streamsMetrics.storeLevelSensor(
                 TASK_ID,
                 STORE_NAME,
                 metricNamePrefix,
                 RecordingLevel.DEBUG
         )).thenReturn(sensor);
-        Mockito.when(streamsMetrics.storeLevelTagMap(
+        when(streamsMetrics.storeLevelTagMap(
                 TASK_ID,
                 STORE_TYPE,
                 STORE_NAME

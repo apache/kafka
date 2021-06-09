@@ -19,9 +19,8 @@ package org.apache.kafka.streams.processor.internals.metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 import java.util.Map;
@@ -30,26 +29,25 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-@RunWith(MockitoJUnitRunner.class)
 public class TaskMetricsTest {
 
     private final static String THREAD_ID = "test-thread";
     private final static String TASK_ID = "test-task";
 
-    private final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
-    private final Sensor expectedSensor = Mockito.mock(Sensor.class);
+    private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
+    private final Sensor expectedSensor = mock(Sensor.class);
     private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
 
 
     @Test
     public void shouldGetActiveProcessRatioSensor() {
         final String operation = "active-process-ratio";
-        Mockito.when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.INFO))
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.INFO))
                 .thenReturn(expectedSensor);
 
         final String ratioDescription = "The fraction of time the thread spent " +
             "on processing this task among all assigned active tasks";
-        Mockito.when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
+        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addValueMetricToSensor(
             expectedSensor,
             TASK_LEVEL_GROUP,
@@ -67,11 +65,11 @@ public class TaskMetricsTest {
     @Test
     public void shouldGetActiveBufferCountSensor() {
         final String operation = "active-buffer-count";
-        Mockito.when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
                 .thenReturn(expectedSensor);
         final String countDescription = "The count of buffered records that are polled " +
             "from consumer and not yet processed for this active task";
-        Mockito.when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
+        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addValueMetricToSensor(
             expectedSensor,
             TASK_LEVEL_GROUP,
@@ -89,11 +87,11 @@ public class TaskMetricsTest {
     @Test
     public void shouldGetProcessLatencySensor() {
         final String operation = "process-latency";
-        Mockito.when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
                 .thenReturn(expectedSensor);
         final String avgLatencyDescription = "The average latency of calls to process";
         final String maxLatencyDescription = "The maximum latency of calls to process";
-        Mockito.when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
+        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
             TASK_LEVEL_GROUP,
@@ -111,14 +109,14 @@ public class TaskMetricsTest {
     @Test
     public void shouldGetPunctuateSensor() {
         final String operation = "punctuate";
-        Mockito.when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
                 .thenReturn(expectedSensor);
         final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
         final String totalDescription = "The total number of calls to punctuate";
         final String rateDescription = "The average number of calls to punctuate per second";
         final String avgLatencyDescription = "The average latency of calls to punctuate";
         final String maxLatencyDescription = "The maximum latency of calls to punctuate";
-        Mockito.when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
+        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             TASK_LEVEL_GROUP,
@@ -146,8 +144,8 @@ public class TaskMetricsTest {
         final String operation = "commit";
         final String totalDescription = "The total number of calls to commit";
         final String rateDescription = "The average number of calls to commit per second";
-        Mockito.when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
+        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             TASK_LEVEL_GROUP,
@@ -167,8 +165,8 @@ public class TaskMetricsTest {
         final String operation = "enforced-processing";
         final String totalDescription = "The total number of occurrences of enforced-processing operations";
         final String rateDescription = "The average number of occurrences of enforced-processing operations per second";
-        Mockito.when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
+        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             TASK_LEVEL_GROUP,
@@ -192,8 +190,8 @@ public class TaskMetricsTest {
         final String maxDescription =
             "The observed maximum lateness of records in milliseconds, measured by comparing the record timestamp with "
                 + "the current stream time";
-        Mockito.when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
+        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
             TASK_LEVEL_GROUP,
@@ -213,8 +211,8 @@ public class TaskMetricsTest {
         final String operation = "dropped-records";
         final String totalDescription = "The total number of dropped records";
         final String rateDescription = "The average number of dropped records per second";
-        Mockito.when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             TASK_LEVEL_GROUP,

@@ -22,25 +22,24 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.eq;
 
 import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_LEVEL_GROUP;
-import static org.easymock.EasyMock.eq;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-@RunWith(MockitoJUnitRunner.class)
 public class ClientMetricsTest {
     private static final String COMMIT_ID = "test-commit-ID";
     private static final String VERSION = "test-version";
 
-    private final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
-    private final Sensor expectedSensor = Mockito.mock(Sensor.class);
+    private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
+    private final Sensor expectedSensor = mock(Sensor.class);
     private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
 
 
@@ -114,8 +113,8 @@ public class ClientMetricsTest {
     public void shouldGetFailedStreamThreadsSensor() {
         final String name = "failed-stream-threads";
         final String description = "The number of failed stream threads since the start of the Kafka Streams client";
-        Mockito.when(streamsMetrics.clientLevelSensor(name, RecordingLevel.INFO)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.clientLevelTagMap()).thenReturn(tagMap);
+        when(streamsMetrics.clientLevelSensor(name, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.clientLevelTagMap()).thenReturn(tagMap);
         StreamsMetricsImpl.addSumMetricToSensor(
             expectedSensor,
             CLIENT_LEVEL_GROUP,
@@ -136,7 +135,7 @@ public class ClientMetricsTest {
 
         metricAdder.run();
 
-        Mockito.verify(streamsMetrics).addClientLevelMutableMetric(
+        verify(streamsMetrics).addClientLevelMutableMetric(
                 eq(name),
                 eq(description),
                 eq(RecordingLevel.INFO),
@@ -151,11 +150,11 @@ public class ClientMetricsTest {
 
         metricAdder.run();
 
-        Mockito.verify(streamsMetrics).addClientLevelImmutableMetric(
-                Mockito.eq(name),
-                Mockito.eq(description),
-                Mockito.eq(RecordingLevel.INFO),
-                Mockito.eq(value)
+        verify(streamsMetrics).addClientLevelImmutableMetric(
+                eq(name),
+                eq(description),
+                eq(RecordingLevel.INFO),
+                eq(value)
         );
     }
 }

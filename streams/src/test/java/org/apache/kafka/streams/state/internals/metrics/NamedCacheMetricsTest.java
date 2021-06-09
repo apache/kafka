@@ -20,9 +20,8 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.Map;
 
@@ -32,7 +31,6 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-@RunWith(MockitoJUnitRunner.class)
 public class NamedCacheMetricsTest {
 
     private static final String THREAD_ID = "test-thread";
@@ -42,15 +40,15 @@ public class NamedCacheMetricsTest {
     private static final String HIT_RATIO_MIN_DESCRIPTION = "The minimum cache hit ratio";
     private static final String HIT_RATIO_MAX_DESCRIPTION = "The maximum cache hit ratio";
 
-    private final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
-    private final Sensor expectedSensor = Mockito.mock(Sensor.class);
+    private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
+    private final Sensor expectedSensor = mock(Sensor.class);
     private final Map<String, String> tagMap = mkMap(mkEntry("key", "value"));
 
     @Test
     public void shouldGetHitRatioSensorWithBuiltInMetricsVersionCurrent() {
         final String hitRatio = "hit-ratio";
-        Mockito.when(streamsMetrics.cacheLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, hitRatio, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
-        Mockito.when(streamsMetrics.cacheLevelTagMap(THREAD_ID, TASK_ID, STORE_NAME)).thenReturn(tagMap);
+        when(streamsMetrics.cacheLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, hitRatio, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
+        when(streamsMetrics.cacheLevelTagMap(THREAD_ID, TASK_ID, STORE_NAME)).thenReturn(tagMap);
 
         StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
             expectedSensor,
