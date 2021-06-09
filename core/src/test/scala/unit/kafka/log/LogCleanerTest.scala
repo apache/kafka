@@ -136,7 +136,7 @@ class LogCleanerTest {
                       leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
                       logDirFailureChannel = logDirFailureChannel,
-                      topicId = None,
+                      _topicId = None,
                       keepPartitionMetadataFile = true) {
       override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
         deleteStartLatch.countDown()

@@ -47,8 +47,12 @@ public class TimelineLong implements Revertable {
     private long value;
 
     public TimelineLong(SnapshotRegistry snapshotRegistry) {
+        this(snapshotRegistry, 0L);
+    }
+
+    public TimelineLong(SnapshotRegistry snapshotRegistry, long value) {
         this.snapshotRegistry = snapshotRegistry;
-        this.value = 0;
+        this.value = value;
     }
 
     public long get() {

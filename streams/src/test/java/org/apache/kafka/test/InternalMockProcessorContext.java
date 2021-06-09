@@ -59,8 +59,8 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
-public class InternalMockProcessorContext
-    extends AbstractProcessorContext
+public class InternalMockProcessorContext<KOut, VOut>
+    extends AbstractProcessorContext<KOut, VOut>
     implements RecordCollector.Supplier {
 
     private StateManager stateManager = new StateManagerStub();
@@ -290,13 +290,13 @@ public class InternalMockProcessorContext
     public void commit() {}
 
     @Override
-    public <K, V> void forward(final Record<K, V> record) {
+    public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {
         forward(record, null);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final Record<K, V> record, final String childName) {
+    public <K extends KOut, V extends VOut> void forward(final Record<K, V> record, final String childName) {
         if (recordContext != null && record.timestamp() != recordContext.timestamp()) {
             setTime(record.timestamp());
         }

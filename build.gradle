@@ -30,7 +30,7 @@ buildscript {
 }
 
 plugins {
-  id 'com.diffplug.spotless' version '5.12.4'
+  id 'com.diffplug.spotless' version '5.12.5'
   id 'com.github.ben-manes.versions' version '0.38.0'
   id 'idea'
   id 'java-library'
@@ -446,6 +446,14 @@ subprojects {
     retry {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
+    }
+  }
+
+  // remove test output from all test types
+  tasks.withType(Test).all { t ->
+    cleanTest {
+      delete t.reports.junitXml.destination
+      delete t.reports.html.destination
     }
   }
 

@@ -226,13 +226,13 @@ public class KTableTransformValuesTest {
             23L,
             1,
             "foo",
-            null
+            new RecordHeaders()
         );
         expect(context.recordContext()).andReturn(recordContext);
         context.setRecordContext(new ProcessorRecordContext(
             73L,
             -1L,
-            1,
+            -1,
             null,
             new RecordHeaders()
         ));

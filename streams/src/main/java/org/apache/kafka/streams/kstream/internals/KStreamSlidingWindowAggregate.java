@@ -37,8 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrLateRecordDropSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
@@ -89,13 +88,12 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
             final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
-            lateRecordDropSensor = droppedRecordsSensorOrLateRecordDropSensor(
+            lateRecordDropSensor = droppedRecordsSensor(
                 threadId,
                 context.taskId().toString(),
-                internalProcessorContext.currentNode().name(),
                 metrics
             );
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(
+            droppedRecordsSensor = droppedRecordsSensor(
                 threadId,
                 context.taskId().toString(),
                 metrics
