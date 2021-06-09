@@ -470,7 +470,7 @@ public class QuorumState {
                 this.state.close();
             } catch (IOException e) {
                 throw new UncheckedIOException(
-                        "Failed to transition from " + this.state.name() + " to " + state.name(), e);
+                    "Failed to transition from " + this.state.name() + " to " + state.name(), e);
             }
         }
 

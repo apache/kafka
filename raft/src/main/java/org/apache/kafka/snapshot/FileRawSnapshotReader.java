@@ -60,11 +60,7 @@ public final class FileRawSnapshotReader implements RawSnapshotReader, AutoClose
             fileRecords.close();
         } catch (IOException e) {
             throw new UncheckedIOException(
-                String.format(
-                    "Unable to close snapshot reader %s at %s",
-                    snapshotId,
-                    fileRecords
-                ),
+                String.format("Unable to close snapshot reader %s at %s", snapshotId, fileRecords),
                 e
             );
         }
@@ -89,11 +85,7 @@ public final class FileRawSnapshotReader implements RawSnapshotReader, AutoClose
             );
         } catch (IOException e) {
             throw new UncheckedIOException(
-                String.format(
-                    "Unable to Opens a snapshot file %s",
-                    filePath.toAbsolutePath()
-                ),
-                e
+                String.format("Unable to Opens a snapshot file %s", filePath.toAbsolutePath()), e
             );
         }
 
