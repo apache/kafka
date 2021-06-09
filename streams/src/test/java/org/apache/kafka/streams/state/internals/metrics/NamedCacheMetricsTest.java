@@ -41,7 +41,7 @@ public class NamedCacheMetricsTest {
     private static final String HIT_RATIO_MIN_DESCRIPTION = "The minimum cache hit ratio";
     private static final String HIT_RATIO_MAX_DESCRIPTION = "The maximum cache hit ratio";
 
-    private Sensor expectedSensor = Mockito.mock(Sensor.class);
+    private final Sensor expectedSensor = Mockito.mock(Sensor.class);
     private final Map<String, String> tagMap = mkMap(mkEntry("key", "value"));
 
     @Test
