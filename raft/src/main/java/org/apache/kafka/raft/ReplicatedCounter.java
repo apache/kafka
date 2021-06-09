@@ -18,8 +18,8 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.snapshot.RaftSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
-import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
 import java.util.OptionalInt;
@@ -100,7 +100,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
 
             if (lastSnapshotEndOffset + snapshotDelayInRecords  < nextReadOffset) {
                 log.debug("Generating new snapshot at {} since next commit offset is {}", lastSnapshotEndOffset, nextReadOffset);
-                try (SnapshotWriter<Integer> snapshot = client.createSnapshot(new OffsetAndEpoch(nextReadOffset, readEpoch))) {
+                try (RaftSnapshotWriter<Integer> snapshot = client.createSnapshot(new OffsetAndEpoch(nextReadOffset, readEpoch))) {
                     snapshot.append(singletonList(committed));
                     snapshot.freeze();
                     lastSnapshotEndOffset = nextReadOffset;
@@ -114,14 +114,14 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     @Override
     public synchronized void handleSnapshot(SnapshotReader<Integer> reader) {
         try {
-            log.debug("Loading snapshot {}", reader.snapshotId());
+            log.debug("Loading snapshot {}", reader.endOffset());
             while (reader.hasNext()) {
                 Batch<Integer> batch = reader.next();
                 if (batch.records().size() != 1) {
                     throw new AssertionError(
                         String.format(
                             "Expected the snapshot at %s to only contain one record %s",
-                            reader.snapshotId(),
+                            reader.endOffset(),
                             batch.records()
                         )
                     );

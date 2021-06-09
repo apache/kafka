@@ -15,33 +15,31 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.snapshot;
 
 import java.io.IOException;
 import java.util.List;
+
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 
 /**
  * The no-op snapshot writer which does nothing.
- *
- * TODO: This will be moved to the test/ directory once we have the KRaft
- * implementation of the snapshot writer.
  */
-public final class NoOpSnapshotWriter implements SnapshotWriter {
-    private final long epoch;
+public final class NoOpSnapshotWriter implements SnapshotWriter<ApiMessageAndVersion> {
+    private final long endOffset;
 
-    public NoOpSnapshotWriter(long epoch) {
-        this.epoch = epoch;
+    public NoOpSnapshotWriter(long endOffset) {
+        this.endOffset = endOffset;
     }
 
     @Override
-    public long epoch() {
-        return epoch;
+    public long endOffset() {
+        return endOffset;
     }
 
     @Override
-    public boolean writeBatch(List<ApiMessageAndVersion> batch) throws IOException {
+    public boolean append(List<ApiMessageAndVersion> records) {
         return true;
     }
 
@@ -50,6 +48,6 @@ public final class NoOpSnapshotWriter implements SnapshotWriter {
     }
 
     @Override
-    public void completeSnapshot() throws IOException {
+    public void freeze() throws IOException {
     }
 }

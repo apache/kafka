@@ -73,9 +73,9 @@ import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
@@ -133,7 +133,7 @@ public final class QuorumController implements Controller {
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
-        private Function<Long, SnapshotWriter> snapshotWriterBuilder;
+        private Function<Long, SnapshotWriter<ApiMessageAndVersion>> snapshotWriterBuilder;
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
         private ControllerMetrics controllerMetrics = null;
 
@@ -186,7 +186,7 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setSnapshotWriterBuilder(Function<Long, SnapshotWriter> snapshotWriterBuilder) {
+        public Builder setSnapshotWriterBuilder(Function<Long, SnapshotWriter<ApiMessageAndVersion>> snapshotWriterBuilder) {
             this.snapshotWriterBuilder = snapshotWriterBuilder;
             return this;
         }
@@ -336,12 +336,12 @@ public final class QuorumController implements Controller {
     private static final int MAX_BATCHES_PER_GENERATE_CALL = 10;
 
     class SnapshotGeneratorManager implements Runnable {
-        private final Function<Long, SnapshotWriter> writerBuilder;
+        private final Function<Long, SnapshotWriter<ApiMessageAndVersion>> writerBuilder;
         private final ExponentialBackoff exponentialBackoff =
             new ExponentialBackoff(10, 2, 5000, 0);
         private SnapshotGenerator generator = null;
 
-        SnapshotGeneratorManager(Function<Long, SnapshotWriter> writerBuilder) {
+        SnapshotGeneratorManager(Function<Long, SnapshotWriter<ApiMessageAndVersion>> writerBuilder) {
             this.writerBuilder = writerBuilder;
         }
 
@@ -369,7 +369,7 @@ public final class QuorumController implements Controller {
 
         void cancel() {
             if (generator == null) return;
-            log.error("Cancelling snapshot {}", generator.epoch());
+            log.error("Cancelling snapshot {}", generator.endOffset());
             generator.writer().close();
             generator = null;
             queue.cancelDeferred(GENERATE_SNAPSHOT);
@@ -391,17 +391,17 @@ public final class QuorumController implements Controller {
             try {
                 nextDelay = generator.generateBatches();
             } catch (Exception e) {
-                log.error("Error while generating snapshot {}", generator.epoch(), e);
+                log.error("Error while generating snapshot {}", generator.endOffset(), e);
                 generator.writer().close();
                 generator = null;
                 return;
             }
             if (!nextDelay.isPresent()) {
                 try {
-                    generator.writer().completeSnapshot();
-                    log.info("Finished generating snapshot {}.", generator.epoch());
+                    generator.writer().freeze();
+                    log.info("Finished generating snapshot {}.", generator.endOffset());
                 } catch (Exception e) {
-                    log.error("Error while completing snapshot {}", generator.epoch(), e);
+                    log.error("Error while completing snapshot {}", generator.endOffset(), e);
                 } finally {
                     generator.writer().close();
                     generator = null;
@@ -415,7 +415,7 @@ public final class QuorumController implements Controller {
             if (generator == null) {
                 return Long.MAX_VALUE;
             }
-            return generator.epoch();
+            return generator.endOffset();
         }
     }
 
@@ -675,14 +675,14 @@ public final class QuorumController implements Controller {
 
         @Override
         public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-            appendControlEvent(String.format("handleSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
+            appendControlEvent(String.format("handleSnapshot[snapshotId=%s]", reader.endOffset()), () -> {
                 try {
                     boolean isActiveController = curClaimEpoch != -1;
                     if (isActiveController) {
                         throw new IllegalStateException(
                             String.format(
                                 "Asked to load snasphot (%s) when it is the active controller (%s)",
-                                reader.snapshotId(),
+                                reader.endOffset(),
                                 curClaimEpoch
                             )
                         );
@@ -691,7 +691,7 @@ public final class QuorumController implements Controller {
                         throw new IllegalStateException(
                             String.format(
                                 "Asked to re-load snapshot (%s) after processing records up to %s",
-                                reader.snapshotId(),
+                                reader.endOffset(),
                                 lastCommittedOffset
                             )
                         );
@@ -706,7 +706,7 @@ public final class QuorumController implements Controller {
                             if (log.isTraceEnabled()) {
                                 log.trace(
                                     "Replaying snapshot ({}) batch with last offset of {}: {}",
-                                    reader.snapshotId(),
+                                    reader.endOffset(),
                                     offset,
                                     messages
                                       .stream()
@@ -716,18 +716,18 @@ public final class QuorumController implements Controller {
                             } else {
                                 log.debug(
                                     "Replaying snapshot ({}) batch with last offset of {}",
-                                    reader.snapshotId(),
+                                    reader.endOffset(),
                                     offset
                                 );
                             }
                         }
 
                         for (ApiMessageAndVersion messageAndVersion : messages) {
-                            replay(messageAndVersion.message(), Optional.of(reader.snapshotId()), offset);
+                            replay(messageAndVersion.message(), Optional.of(reader.endOffset()), offset);
                         }
                     }
 
-                    lastCommittedOffset = reader.snapshotId().offset - 1;
+                    lastCommittedOffset = reader.endOffset();
                     snapshotRegistry.createSnapshot(lastCommittedOffset);
                 } finally {
                     reader.close();
@@ -822,7 +822,7 @@ public final class QuorumController implements Controller {
     }
 
     @SuppressWarnings("unchecked")
-    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long offset) {
+    private void replay(ApiMessage message, Optional<Long> snapshotId, long offset) {
         try {
             MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
             switch (type) {
@@ -991,7 +991,7 @@ public final class QuorumController implements Controller {
                              short defaultReplicationFactor,
                              int defaultNumPartitions,
                              ReplicaPlacer replicaPlacer,
-                             Function<Long, SnapshotWriter> snapshotWriterBuilder,
+                             Function<Long, SnapshotWriter<ApiMessageAndVersion>> snapshotWriterBuilder,
                              long sessionTimeoutNs,
                              ControllerMetrics controllerMetrics) {
         this.logContext = logContext;
@@ -1240,7 +1240,7 @@ public final class QuorumController implements Controller {
             if (snapshotGeneratorManager.generator == null) {
                 snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset);
             }
-            future.complete(snapshotGeneratorManager.generator.epoch());
+            future.complete(snapshotGeneratorManager.generator.endOffset());
         });
         return future;
     }

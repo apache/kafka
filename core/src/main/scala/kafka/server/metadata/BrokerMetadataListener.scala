@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotReader
 
 import scala.compat.java8.OptionConverters._
@@ -87,7 +87,7 @@ class BrokerMetadataListener(
   override def handleSnapshot(reader: SnapshotReader[ApiMessageAndVersion]): Unit = {
     // Loading snapshot on the broker is currently not supported.
     reader.close();
-    throw new UnsupportedOperationException(s"Loading snapshot (${reader.snapshotId()}) is not supported")
+    throw new UnsupportedOperationException(s"Loading snapshot (${reader.endOffset()}) is not supported")
   }
 
   // Visible for testing. It's useful to execute events synchronously in order

@@ -25,6 +25,7 @@ import java.util.OptionalLong;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
 
@@ -48,7 +49,7 @@ final class SnapshotGenerator {
     }
 
     private final Logger log;
-    private final SnapshotWriter writer;
+    private final SnapshotWriter<ApiMessageAndVersion> writer;
     private final int maxBatchesPerGenerateCall;
     private final ExponentialBackoff exponentialBackoff;
     private final List<Section> sections;
@@ -60,7 +61,7 @@ final class SnapshotGenerator {
     private long numWriteTries;
 
     SnapshotGenerator(LogContext logContext,
-                      SnapshotWriter writer,
+                      SnapshotWriter<ApiMessageAndVersion> writer,
                       int maxBatchesPerGenerateCall,
                       ExponentialBackoff exponentialBackoff,
                       List<Section> sections) {
@@ -78,10 +79,10 @@ final class SnapshotGenerator {
     }
 
     /**
-     * Returns the epoch of the snapshot that we are generating.
+     * Returns the endOffset of the snapshot that we are generating.
      */
-    long epoch() {
-        return writer.epoch();
+    long endOffset() {
+        return writer.endOffset();
     }
 
     SnapshotWriter writer() {
@@ -101,22 +102,22 @@ final class SnapshotGenerator {
             while (!batchIterator.hasNext()) {
                 if (section != null) {
                     log.info("Generated {} record(s) for the {} section of snapshot {}.",
-                             numRecords, section.name(), writer.epoch());
+                             numRecords, section.name(), writer.endOffset());
                     section = null;
                     numRecords = 0;
                 }
                 if (!sectionIterator.hasNext()) {
-                    writer.completeSnapshot();
+                    writer.freeze();
                     return -1;
                 }
                 section = sectionIterator.next();
                 log.info("Generating records for the {} section of snapshot {}.",
-                         section.name(), writer.epoch());
+                         section.name(), writer.endOffset());
                 batchIterator = section.iterator();
             }
             batch = batchIterator.next();
         }
-        if (writer.writeBatch(batch)) {
+        if (writer.append(batch)) {
             numRecords += batch.size();
             numWriteTries = 0;
             batch = null;

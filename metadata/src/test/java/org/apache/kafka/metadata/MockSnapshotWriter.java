@@ -15,16 +15,17 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
+import org.apache.kafka.snapshot.RaftSnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotWriter;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -32,32 +33,33 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.nio.ByteBuffer;
 
-class MockSnapshotWriter implements SnapshotWriter {
-    private final long epoch;
+
+public class MockSnapshotWriter implements SnapshotWriter<ApiMessageAndVersion> {
+    private final long endOffset;
     private boolean ready = true;
-    private boolean completed = false;
+    private boolean frozen = false;
     private boolean closed = false;
     private final List<List<ApiMessageAndVersion>> batches = new ArrayList<>();
 
-    public MockSnapshotWriter(long epoch) {
-        this.epoch = epoch;
+    public MockSnapshotWriter(long endOffset) {
+        this.endOffset = endOffset;
     }
 
     @Override
-    public long epoch() {
-        return epoch;
+    public long endOffset() {
+        return endOffset;
     }
 
     @Override
-    public synchronized boolean writeBatch(List<ApiMessageAndVersion> batch) throws IOException {
-        if (completed) throw new RuntimeException("writer has been completed");
+    public synchronized boolean append(List<ApiMessageAndVersion> batch) {
+        if (frozen) throw new RuntimeException("writer has been frozen");
         if (closed) throw new RuntimeException("writer is closed");
         if (!ready) return false;
         batches.add(batch);
         return true;
     }
 
-    synchronized void setReady(boolean ready) {
+    public synchronized void setReady(boolean ready) {
         this.ready = ready;
     }
 
@@ -67,32 +69,32 @@ class MockSnapshotWriter implements SnapshotWriter {
     }
 
     @Override
-    public synchronized void completeSnapshot() throws IOException {
+    public synchronized void freeze() throws IOException {
         if (closed) throw new RuntimeException("writer is closed");
         this.notifyAll();
-        this.completed = true;
+        this.frozen = true;
     }
 
-    synchronized void waitForCompletion() throws InterruptedException {
-        while (!completed) {
+    public synchronized void waitForFreeze() throws InterruptedException {
+        while (!frozen) {
             this.wait();
         }
     }
 
-    synchronized boolean completed() {
-        return completed;
+    public synchronized boolean frozen() {
+        return frozen;
     }
 
-    synchronized List<List<ApiMessageAndVersion>> batches() {
+    public synchronized List<List<ApiMessageAndVersion>> batches() {
         return batches;
     }
 
     public MockRawSnapshotReader toReader() {
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(epoch, 0);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(endOffset, 0);
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>();
         int maxBufferSize = 1024;
-        try (org.apache.kafka.snapshot.SnapshotWriter<ApiMessageAndVersion> snapshotWriter =
-                new org.apache.kafka.snapshot.SnapshotWriter<>(
+        try (RaftSnapshotWriter<ApiMessageAndVersion> snapshotWriter =
+                new RaftSnapshotWriter<>(
                     new MockRawSnapshotWriter(snapshotId, buffer::set),
                     maxBufferSize,
                     MemoryPool.NONE,

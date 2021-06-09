@@ -30,8 +30,8 @@ import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.RawSnapshotReader;
-import org.apache.kafka.snapshot.SnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.RaftSnapshotWriter;
+import org.apache.kafka.snapshot.RaftSnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -317,7 +317,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                         if (snapshot.isPresent()) {
                             log.trace("Node {}: handling snapshot with id {}.", nodeId, snapshot.get().snapshotId());
                             listenerData.listener.handleSnapshot(
-                                SnapshotReader.of(
+                                RaftSnapshotReader.of(
                                     snapshot.get(),
                                     new  MetadataRecordSerde(),
                                     BufferSupplier.create(),
@@ -486,7 +486,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public SnapshotWriter<ApiMessageAndVersion> createSnapshot(OffsetAndEpoch snapshotId) {
+    public RaftSnapshotWriter<ApiMessageAndVersion> createSnapshot(OffsetAndEpoch snapshotId) {
         throw new UnsupportedOperationException();
     }
 

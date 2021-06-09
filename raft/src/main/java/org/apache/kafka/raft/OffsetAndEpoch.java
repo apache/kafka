@@ -25,6 +25,14 @@ public class OffsetAndEpoch implements Comparable<OffsetAndEpoch> {
         this.epoch = epoch;
     }
 
+    public long offset() {
+        return offset;
+    }
+
+    public int epoch() {
+        return epoch;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

@@ -15,27 +15,31 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metadata;
 
-import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.raft.Batch;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.SnapshotReader;
 
 import java.util.Iterator;
 import java.util.List;
 
 
-public class MockSnapshotReader implements SnapshotReader {
-    private final long epoch;
-    private final Iterator<List<ApiMessage>> iterator;
+public class MockSnapshotReader implements SnapshotReader<ApiMessageAndVersion> {
+    private final long endOffset;
+    private final Iterator<List<ApiMessageAndVersion>> iterator;
+    private long curOffset;
 
-    public MockSnapshotReader(long epoch,
-                              Iterator<List<ApiMessage>> iterator) {
-        this.epoch = epoch;
+    public MockSnapshotReader(long endOffset,
+                              Iterator<List<ApiMessageAndVersion>> iterator) {
+        this.endOffset = endOffset;
         this.iterator = iterator;
+        this.curOffset = 0;
     }
 
     @Override
-    public long epoch() {
-        return epoch;
+    public long endOffset() {
+        return endOffset;
     }
 
     @Override
@@ -49,7 +53,10 @@ public class MockSnapshotReader implements SnapshotReader {
     }
 
     @Override
-    public List<ApiMessage> next() {
-        return iterator.next();
+    public Batch<ApiMessageAndVersion> next() {
+        List<ApiMessageAndVersion> records = iterator.next();
+        long prevOffset = curOffset;
+        curOffset += records.size();
+        return Batch.of(prevOffset, 0, records);
     }
 }

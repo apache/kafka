@@ -57,6 +57,7 @@ import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.apache.kafka.snapshot.RaftSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -1058,7 +1059,7 @@ public final class RaftClientTestContext {
         private final Map<Integer, Long> claimedEpochStartOffsets = new HashMap<>();
         private OptionalInt currentClaimedEpoch = OptionalInt.empty();
         private final OptionalInt localId;
-        private Optional<SnapshotReader<String>> snapshot = Optional.empty();
+        private Optional<RaftSnapshotReader<String>> snapshot = Optional.empty();
         private boolean readCommit = true;
 
         MockListener(OptionalInt localId) {
@@ -1109,8 +1110,8 @@ public final class RaftClientTestContext {
                 .orElse(null);
         }
 
-        Optional<SnapshotReader<String>> drainHandledSnapshot() {
-            Optional<SnapshotReader<String>> temp = snapshot;
+        Optional<RaftSnapshotReader<String>> drainHandledSnapshot() {
+            Optional<RaftSnapshotReader<String>> temp = snapshot;
             snapshot = Optional.empty();
             return temp;
         }
@@ -1175,7 +1176,9 @@ public final class RaftClientTestContext {
 
             commits.clear();
             savedBatches.clear();
-            snapshot = Optional.of(reader);
+            @SuppressWarnings("unchecked")
+            RaftSnapshotReader<String> raftSnapshotReader = (RaftSnapshotReader<String>) reader;
+            snapshot = Optional.of(raftSnapshotReader);
         }
     }
 }

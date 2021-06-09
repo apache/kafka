@@ -17,65 +17,20 @@
 
 package org.apache.kafka.snapshot;
 
-import java.util.Iterator;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.server.common.serialization.RecordSerde;
-import org.apache.kafka.raft.internals.RecordsIterator;
 
-/**
- * A type for reading an immutable snapshot.
- *
- * A snapshot reader can be used to scan through all of the objects T in a snapshot. It
- * is assumed that the content of the snapshot represents all of the objects T for the topic
- * partition from offset 0 up to but not including the end offset in the snapshot id.
- */
-public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>> {
-    private final OffsetAndEpoch snapshotId;
-    private final RecordsIterator<T> iterator;
+import java.util.Iterator;
 
-    private SnapshotReader(
-        OffsetAndEpoch snapshotId,
-        RecordsIterator<T> iterator
-    ) {
-        this.snapshotId = snapshotId;
-        this.iterator = iterator;
-    }
+
+public interface SnapshotReader<T> extends Iterator<Batch<T>>, AutoCloseable {
+    /**
+     * Returns the snapshot end offset.
+     */
+    long endOffset();
 
     /**
-     * Returns the end offset and epoch for the snapshot.
+     * Invoked when the snapshot reader is no longer needed.  This should clean
+     * up all reader resources.
      */
-    public OffsetAndEpoch snapshotId() {
-        return snapshotId;
-    }
-
-    @Override
-    public boolean hasNext() {
-        return iterator.hasNext();
-    }
-
-    @Override
-    public Batch<T> next() {
-        return iterator.next();
-    }
-
-    /**
-     * Closes the snapshot reader.
-     */
-    public void close() {
-        iterator.close();
-    }
-
-    public static <T> SnapshotReader<T> of(
-        RawSnapshotReader snapshot,
-        RecordSerde<T> serde,
-        BufferSupplier bufferSupplier,
-        int maxBatchSize
-    ) {
-        return new SnapshotReader<>(
-            snapshot.snapshotId(),
-            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize)
-        );
-    }
+    void close();
 }

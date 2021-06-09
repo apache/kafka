@@ -71,8 +71,8 @@ import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotReader;
-import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.RaftSnapshotReader;
+import org.apache.kafka.snapshot.RaftSnapshotWriter;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -309,7 +309,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         for (ListenerContext listenerContext : listenerContexts) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < log.startOffset() && nextExpectedOffset < highWatermark) {
-                    SnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> new IllegalStateException(
+                    RaftSnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> new IllegalStateException(
                         String.format(
                             "Snapshot expected since next offset of %s is %s, log start offset is %s and high-watermark is %s",
                             listenerContext.listener.getClass().getTypeName(),
@@ -332,12 +332,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private Optional<SnapshotReader<T>> latestSnapshot() {
+    private Optional<RaftSnapshotReader<T>> latestSnapshot() {
         return log.latestSnapshotId().flatMap(snapshotId ->
             log
             .readSnapshot(snapshotId)
             .map(reader ->
-                SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
+                RaftSnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
             )
         );
     }
@@ -2257,8 +2257,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) {
-        return new SnapshotWriter<>(
+    public RaftSnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) {
+        return new RaftSnapshotWriter<>(
             log.createSnapshot(snapshotId),
             MAX_BATCH_SIZE_BYTES,
             memoryPool,
@@ -2368,7 +2368,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          * This API is used when the Listener needs to be notified of a new snapshot. This happens
          * when the context's next offset is less than the log start offset.
          */
-        public void fireHandleSnapshot(SnapshotReader<T> reader) {
+        public void fireHandleSnapshot(RaftSnapshotReader<T> reader) {
             synchronized (this) {
                 nextOffset = reader.snapshotId().offset;
                 lastSent = null;

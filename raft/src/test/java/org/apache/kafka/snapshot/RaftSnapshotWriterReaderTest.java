@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class SnapshotWriterReaderTest {
+final public class RaftSnapshotWriterReaderTest {
     private final int localId = 0;
     private final Set<Integer> voters = Collections.singleton(localId);
 
@@ -43,14 +43,14 @@ final public class SnapshotWriterReaderTest {
         List<List<String>> expected = buildRecords(3, 3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
+        try (RaftSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
             snapshot.freeze();
         }
 
-        try (SnapshotReader<String> reader = readSnapshot(context, id, Integer.MAX_VALUE)) {
+        try (RaftSnapshotReader<String> reader = readSnapshot(context, id, Integer.MAX_VALUE)) {
             assertSnapshot(expected, reader);
         }
     }
@@ -61,7 +61,7 @@ final public class SnapshotWriterReaderTest {
         List<List<String>> expected = buildRecords(3, 3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
+        try (RaftSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
@@ -76,7 +76,7 @@ final public class SnapshotWriterReaderTest {
         List<List<String>> expected = buildRecords(3, 3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
+        try (RaftSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
@@ -101,12 +101,12 @@ final public class SnapshotWriterReaderTest {
         return result;
     }
 
-    private SnapshotReader<String> readSnapshot(
+    private RaftSnapshotReader<String> readSnapshot(
         RaftClientTestContext context,
         OffsetAndEpoch snapshotId,
         int maxBatchSize
     ) {
-        return SnapshotReader.of(
+        return RaftSnapshotReader.of(
             context.log.readSnapshot(snapshotId).get(),
             context.serde,
             BufferSupplier.create(),
@@ -117,11 +117,11 @@ final public class SnapshotWriterReaderTest {
     public static void assertSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
         assertSnapshot(
             batches,
-            SnapshotReader.of(reader, new StringSerde(), BufferSupplier.create(), Integer.MAX_VALUE)
+            RaftSnapshotReader.of(reader, new StringSerde(), BufferSupplier.create(), Integer.MAX_VALUE)
         );
     }
 
-    public static void assertSnapshot(List<List<String>> batches, SnapshotReader<String> reader) {
+    public static void assertSnapshot(List<List<String>> batches, RaftSnapshotReader<String> reader) {
         List<String> expected = new ArrayList<>();
         batches.forEach(expected::addAll);
 

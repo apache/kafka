@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.snapshot.RaftSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
-import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.RaftSnapshotWriter;
 
 import java.util.List;
 import java.util.OptionalInt;
@@ -46,7 +47,7 @@ public interface RaftClient<T> extends AutoCloseable {
 
         /**
          * Callback which is invoked when the Listener needs to load a snapshot.
-         * It is the responsibility of this implementation to invoke {@link SnapshotReader#close()}
+         * It is the responsibility of this implementation to invoke {@link RaftSnapshotReader#close()}
          * after consuming the reader.
          *
          * When handling this call, the implementation must assume that all previous calls
@@ -183,11 +184,11 @@ public interface RaftClient<T> extends AutoCloseable {
      * Create a writable snapshot file for a given offset and epoch.
      *
      * The RaftClient assumes that the snapshot return will contain the records up to but
-     * not including the end offset in the snapshot id. See {@link SnapshotWriter} for
+     * not including the end offset in the snapshot id. See {@link RaftSnapshotWriter} for
      * details on how to use this object.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
      * @return a writable snapshot
      */
-    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId);
+    RaftSnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId);
 }

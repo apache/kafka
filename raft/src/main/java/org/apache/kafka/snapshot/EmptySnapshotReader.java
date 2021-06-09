@@ -15,23 +15,37 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.protocol.ApiMessage;
+import java.util.NoSuchElementException;
 
-import java.util.Iterator;
-import java.util.List;
+import org.apache.kafka.raft.Batch;
 
 
-interface SnapshotReader extends Iterator<List<ApiMessage>>, AutoCloseable {
-    /**
-     * Returns the snapshot epoch, which is the offset of this snapshot within the log.
-     */
-    long epoch();
+public class EmptySnapshotReader<T> implements SnapshotReader<T> {
+    private final long endOffset;
 
-    /**
-     * Invoked when the snapshot reader is no longer needed.  This should clean
-     * up all reader resources.
-     */
-    void close();
+    public EmptySnapshotReader(long endOffset) {
+        this.endOffset = endOffset;
+    }
+
+    @Override
+    public long endOffset() {
+        return endOffset;
+    }
+
+    @Override
+    public void close() {
+        // Nothing to do
+    }
+
+    @Override
+    public boolean hasNext() {
+        return false;
+    }
+
+    @Override
+    public Batch<T> next() {
+        throw new NoSuchElementException();
+    }
 }

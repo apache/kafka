@@ -17,12 +17,16 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.NoOpSnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotWriter;
+
 import java.util.function.Function;
 
 
-public final class NoOpSnapshotWriterBuilder implements Function<Long, SnapshotWriter> {
+public final class NoOpSnapshotWriterBuilder implements Function<Long, SnapshotWriter<ApiMessageAndVersion>> {
     @Override
-    public SnapshotWriter apply(Long epoch) {
-        return new NoOpSnapshotWriter(epoch);
+    public SnapshotWriter<ApiMessageAndVersion> apply(Long snapshotId) {
+        return new NoOpSnapshotWriter(snapshotId);
     }
 }

@@ -66,8 +66,10 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
+import org.apache.kafka.metadata.MockSnapshotWriter;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
@@ -214,11 +216,11 @@ public class QuorumControllerTest {
         }
     }
 
-    static class MockSnapshotWriterBuilder implements Function<Long, SnapshotWriter> {
+    static class MockSnapshotWriterBuilder implements Function<Long, SnapshotWriter<ApiMessageAndVersion>> {
         final LinkedBlockingDeque<MockSnapshotWriter> writers = new LinkedBlockingDeque<>();
 
         @Override
-        public SnapshotWriter apply(Long epoch) {
+        public SnapshotWriter<ApiMessageAndVersion> apply(Long epoch) {
             MockSnapshotWriter writer = new MockSnapshotWriter(epoch);
             writers.add(writer);
             return writer;
@@ -271,10 +273,10 @@ public class QuorumControllerTest {
                 fooId = fooData.topics().find("foo").topicId();
                 active.allocateProducerIds(
                     new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
-                long snapshotEpoch = active.beginWritingSnapshot().get();
+                long snapshotEndOffset = active.beginWritingSnapshot().get();
                 writer = snapshotWriterBuilder.writers.takeFirst();
-                assertEquals(snapshotEpoch, writer.epoch());
-                writer.waitForCompletion();
+                assertEquals(snapshotEndOffset, writer.endOffset());
+                writer.waitForFreeze();
                 checkSnapshotContents(fooId, brokerEpochs, writer.batches().iterator());
             }
         }
@@ -284,10 +286,10 @@ public class QuorumControllerTest {
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS).
                          setSnapshotWriterBuilder(snapshotWriterBuilder))) {
                 QuorumController active = controlEnv.activeController();
-                long snapshotEpoch = active.beginWritingSnapshot().get();
+                long snapshotEndOffset = active.beginWritingSnapshot().get();
                 writer = snapshotWriterBuilder.writers.takeFirst();
-                assertEquals(snapshotEpoch, writer.epoch());
-                writer.waitForCompletion();
+                assertEquals(snapshotEndOffset, writer.endOffset());
+                writer.waitForFreeze();
                 checkSnapshotContents(fooId, brokerEpochs, writer.batches().iterator());
             }
         }

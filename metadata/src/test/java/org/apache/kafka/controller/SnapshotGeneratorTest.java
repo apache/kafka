@@ -24,6 +24,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
+import org.apache.kafka.metadata.MockSnapshotWriter;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -71,14 +72,14 @@ public class SnapshotGeneratorTest {
                 Arrays.asList(BATCHES.get(3), BATCHES.get(4)).iterator()));
         SnapshotGenerator generator = new SnapshotGenerator(new LogContext(),
             writer, 2, exponentialBackoff, sections);
-        assertFalse(writer.completed());
-        assertEquals(123L, generator.epoch());
+        assertFalse(writer.frozen());
+        assertEquals(123L, generator.endOffset());
         assertEquals(writer, generator.writer());
         assertEquals(OptionalLong.of(0L), generator.generateBatches());
         assertEquals(OptionalLong.of(0L), generator.generateBatches());
-        assertFalse(writer.completed());
+        assertFalse(writer.frozen());
         assertEquals(OptionalLong.empty(), generator.generateBatches());
-        assertTrue(writer.completed());
+        assertTrue(writer.frozen());
     }
 
     @Test
@@ -92,9 +93,9 @@ public class SnapshotGeneratorTest {
                 Arrays.asList(BATCHES.get(3), BATCHES.get(4)).iterator()));
         SnapshotGenerator generator = new SnapshotGenerator(new LogContext(),
             writer, 2, exponentialBackoff, sections);
-        assertEquals(123L, generator.epoch());
+        assertEquals(123L, generator.endOffset());
         assertEquals(writer, generator.writer());
-        assertFalse(writer.completed());
+        assertFalse(writer.frozen());
         assertEquals(OptionalLong.of(0L), generator.generateBatches());
         writer.setReady(false);
         assertEquals(OptionalLong.of(100L), generator.generateBatches());
@@ -102,9 +103,9 @@ public class SnapshotGeneratorTest {
         assertEquals(OptionalLong.of(400L), generator.generateBatches());
         assertEquals(OptionalLong.of(400L), generator.generateBatches());
         writer.setReady(true);
-        assertFalse(writer.completed());
+        assertFalse(writer.frozen());
         assertEquals(OptionalLong.of(0L), generator.generateBatches());
         assertEquals(OptionalLong.empty(), generator.generateBatches());
-        assertTrue(writer.completed());
+        assertTrue(writer.frozen());
     }
 }
