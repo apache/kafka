@@ -52,7 +52,7 @@ import static org.hamcrest.core.Is.is;
 public class KTableSuppressProcessorMetricsTest {
     private static final long ARBITRARY_LONG = 5L;
     private static final TaskId TASK_ID = new TaskId(0, 0);
-    private Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
+    private final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
     private final String threadId = Thread.currentThread().getName();
 
     private final MetricName evictionTotalMetricLatest = new MetricName(

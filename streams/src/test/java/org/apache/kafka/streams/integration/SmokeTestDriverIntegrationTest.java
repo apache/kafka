@@ -55,9 +55,9 @@ public class SmokeTestDriverIntegrationTest {
 
 
     private static class Driver extends Thread {
-        private String bootstrapServers;
-        private int numKeys;
-        private int maxRecordsPerKey;
+        private final String bootstrapServers;
+        private final int numKeys;
+        private final int maxRecordsPerKey;
         private Exception exception = null;
         private SmokeTestDriver.VerificationResult result;
 
