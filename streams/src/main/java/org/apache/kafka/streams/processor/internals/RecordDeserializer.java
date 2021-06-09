@@ -69,6 +69,9 @@ class RecordDeserializer {
                 Optional.empty()
             );
         } catch (final Exception deserializationException) {
+            if (deserializationException instanceof ConfigException) {
+                throw deserializationException;
+            }
             final DeserializationExceptionHandler.DeserializationHandlerResponse response;
             try {
                 response = deserializationExceptionHandler.handle(processorContext, rawRecord, deserializationException);
@@ -78,10 +81,6 @@ class RecordDeserializer {
                     rawRecord,
                     deserializationException);
                 throw new StreamsException("Fatal user code error in deserialization error callback", fatalUserException);
-            }
-
-            if (deserializationException instanceof ConfigException) {
-                throw deserializationException;
             }
 
             if (response == DeserializationExceptionHandler.DeserializationHandlerResponse.FAIL) {
