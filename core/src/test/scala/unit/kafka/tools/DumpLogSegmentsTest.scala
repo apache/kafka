@@ -130,13 +130,13 @@ class DumpLogSegmentsTest {
     def verifyRecordsInOutput(checkKeysAndValues: Boolean, args: Array[String]): Unit = {
       def isBatch(index: Int): Boolean = {
         var i = 0
-        batches.zipWithIndex.foreach { case (batch, batchIndex) =>
+        batches.zipWithIndex.foreach { case (batch, _) =>
           if (i == index)
             return true
 
           i += 1
 
-          batch.records.indices.foreach { recordIndex =>
+          batch.records.indices.foreach { _ =>
             if (i == index)
               return false
             i += 1
