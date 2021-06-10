@@ -133,7 +133,4 @@ class ClientCompatibilityFeaturesTest(Test):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
         features = get_broker_features(broker_version)
-        if not self.zk:
-            #  The KRaft mode doesn't support acls yet, we should remove this once it does
-            features["describe-acls-supported"] = False
         self.invoke_compatibility_program(features)
