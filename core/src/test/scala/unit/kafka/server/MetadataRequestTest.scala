@@ -17,13 +17,12 @@
 
 package kafka.server
 
-import java.util.{Collections, Optional}
+import java.util.Optional
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.apache.kafka.metadata.BrokerState
@@ -233,32 +232,6 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
       assertNotEquals(Uuid.ZERO_UUID, topicMetadata.topicId())
       assertNotNull(topicMetadata.topicId())
     }
-  }
-
-  @Test
-  def testInvalidMetadataRequestReturnsError(): Unit = {
-    val replicaAssignment = Map(0 -> Seq(1, 2, 0))
-    val topic1 = "topic1"
-    val topic2 = "topic2"
-    createTopic(topic1, replicaAssignment)
-    createTopic(topic2, replicaAssignment)
-
-    // Construct invalid MetadataRequestTopics. We will send each one separately and ensure the error is thrown.
-    val topics = List(new MetadataRequestData.MetadataRequestTopic().setName(null).setTopicId(Uuid.randomUuid()),
-                      new MetadataRequestData.MetadataRequestTopic().setName(null),
-                      new MetadataRequestData.MetadataRequestTopic().setTopicId(Uuid.randomUuid()),
-                      new MetadataRequestData.MetadataRequestTopic().setName(topic1).setTopicId(Uuid.randomUuid()))
-
-    // if version is 10 or 11, the invalid topic metadata should return an error
-    val invalidVersions = Set(10, 11)
-    invalidVersions.foreach( version =>
-      topics.foreach(topic => {
-        val metadataRequestData = new MetadataRequestData().setTopics(Collections.singletonList(topic))
-        val resp = sendMetadataRequest(new MetadataRequest(metadataRequestData, version.toShort), Some(controllerSocketServer))
-        assertEquals(1, resp.topicMetadata.size)
-        assertEquals(1, resp.errorCounts().get(Errors.INVALID_REQUEST))
-      })
-    )
   }
 
   /**

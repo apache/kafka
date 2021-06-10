@@ -1136,7 +1136,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val requestVersion = request.header.apiVersion
 
     // Topic IDs are not supported for versions 10 and 11. Topic names can not be null in these versions.
-    if (metadataRequest.version() >= 10 && !metadataRequest.isAllTopics) {
+    if (!metadataRequest.isAllTopics) {
       metadataRequest.data().topics().forEach{ topic =>
         // If null, set to the empty string, since the response does not allow null.
         if (topic.name() == null) {

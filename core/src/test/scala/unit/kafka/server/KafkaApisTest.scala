@@ -39,7 +39,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -1051,6 +1051,28 @@ class KafkaApisTest {
       else
         numBrokersNeeded - 1)
   }
+
+  @Test
+  def testInvalidMetadataRequestReturnsError(): Unit = {
+    // Construct invalid MetadataRequestTopics. We will try each one separately and ensure the error is thrown.
+    val topics = List(new MetadataRequestData.MetadataRequestTopic().setName(null).setTopicId(Uuid.randomUuid()),
+      new MetadataRequestData.MetadataRequestTopic().setName(null),
+      new MetadataRequestData.MetadataRequestTopic().setTopicId(Uuid.randomUuid()),
+      new MetadataRequestData.MetadataRequestTopic().setName("topic1").setTopicId(Uuid.randomUuid()))
+
+    // if version is 10 or 11, the invalid topic metadata should return an error
+    val invalidVersions = Set(10, 11)
+    invalidVersions.foreach( version =>
+      topics.foreach(topic => {
+        val metadataRequestData = new MetadataRequestData().setTopics(Collections.singletonList(topic))
+        val request = buildRequest(new MetadataRequest(metadataRequestData, version.toShort))
+        val kafkaApis = createKafkaApis()
+
+        assertThrows(classOf[InvalidRequestException], () => kafkaApis.handleTopicMetadataRequest(request))
+      })
+    )
+  }
+
 
   @Test
   def testOffsetCommitWithInvalidPartition(): Unit = {

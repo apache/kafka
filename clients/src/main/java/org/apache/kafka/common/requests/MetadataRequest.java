@@ -93,14 +93,12 @@ public class MetadataRequest extends AbstractRequest {
             if (!data.allowAutoTopicCreation() && version < 4)
                 throw new UnsupportedVersionException("MetadataRequest versions older than 4 don't support the " +
                         "allowAutoTopicCreation field");
-            if (version >= 10) {
-                if (data.topics() != null) {
-                    data.topics().forEach(topic -> {
-                        if (topic.name() == null || topic.topicId() != Uuid.ZERO_UUID)
-                            throw new UnsupportedVersionException("MetadataRequest version " + version  +
-                                    " does not support null topic names or topic IDs.");
-                    });
-                }
+            if (data.topics() != null) {
+                data.topics().forEach(topic -> {
+                    if (topic.name() == null || topic.topicId() != Uuid.ZERO_UUID)
+                        throw new UnsupportedVersionException("MetadataRequest version " + version  +
+                                " does not support null topic names or non-zero topic IDs.");
+                });
             }
             return new MetadataRequest(data, version);
         }
