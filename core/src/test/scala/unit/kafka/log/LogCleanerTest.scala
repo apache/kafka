@@ -1174,6 +1174,44 @@ class LogCleanerTest {
       "All but the last group should be the target size.")
   }
 
+  @Test
+  def testSegmentGroupingWithSparseEmptyOffsets(): Unit ={
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    //create three segment
+    for(i<-0 until 3){
+      log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes), leaderEpoch = 0)
+      //0 to Int.MaxValue is Int.MaxValue+1 message, -1 will be the last message of ith segment
+      val records = messageWithOffset("hello".getBytes, "hello".getBytes, (i+1L) * (Int.MaxValue + 1L) -1 )
+      log.appendAsFollower(records)
+      assertEquals(i+1,log.numberOfSegments)
+    }
+
+    //4th active segment, not clean
+    log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes), leaderEpoch = 0)
+    assertEquals(4,log.numberOfSegments)
+
+    //last segment not cleanable
+    val firstUncleanableOffset = log.logEndOffset - 1
+    var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, firstUncleanableOffset)
+    assertEquals(log.numberOfSegments - 1, groups.size)
+    cleaner.clean(LogToClean(log.topicPartition, log, 0, firstUncleanableOffset))
+    assertEquals(4,log.numberOfSegments)
+
+    assertEquals(0,log.logSegments.head.size)
+
+    //after compact we got 2 empty segment, they will group together
+    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, firstUncleanableOffset)
+    assertEquals(2, groups.size)
+
+    //empty segment got cleaned
+    cleaner.clean(LogToClean(log.topicPartition, log, 0, firstUncleanableOffset, true))
+    assertEquals(3,log.numberOfSegments)
+
+  }
+
   /**
    * Validate the logic for grouping log segments together for cleaning when only a small number of
    * messages are retained, but the range of offsets is greater than Int.MaxValue. A group should not
