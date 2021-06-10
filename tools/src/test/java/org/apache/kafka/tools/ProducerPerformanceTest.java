@@ -120,7 +120,7 @@ public class ProducerPerformanceTest {
 
         String inputString = "Hello Kafka";
         byte[] byteArrray = inputString.getBytes(StandardCharsets.UTF_8);
-        List<byte[]> payloadByteList = new ArrayList<byte[]>();
+        List<byte[]> payloadByteList = new ArrayList<>();
         payloadByteList.add(byteArrray);
     
         byte[] payload = null;
