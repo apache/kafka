@@ -54,6 +54,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
 
     private volatile boolean configured = false;
 
+    // It indicates whether the close process of this instance is started or not via #close() method.
     // Using AtomicBoolean instead of volatile as it may encounter http://findbugs.sourceforge.net/bugDescriptions.html#SP_SPIN_ON_FIELD
     // if the field is read but not updated in a spin loop like in #initializeResources() method.
     private final AtomicBoolean close = new AtomicBoolean(false);
@@ -154,8 +155,8 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
 
         try {
             // Publish the message to the topic.
-            RecordMetadata recordMetadata = producerManager.publishMessage(topicIdPartition,
-                                                                           remoteLogMetadata);
+            RecordMetadata recordMetadata = producerManager.publishMessage(
+                    remoteLogMetadata);
             // Wait until the consumer catches up with this offset. This will ensure read-after-write consistency
             // semantics.
             consumerManager.waitTillConsumptionCatchesUp(recordMetadata);
@@ -312,9 +313,9 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     public void close() throws IOException {
         // Close all the resources.
         log.info("Closing the resources.");
-        lock.writeLock().lock();
-        try {
-            if (close.compareAndSet(false, true)) {
+        if (close.compareAndSet(false, true)) {
+            lock.writeLock().lock();
+            try {
                 if (initializationThread != null) {
                     try {
                         initializationThread.join();
@@ -326,10 +327,10 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                 Utils.closeQuietly(producerManager, "ProducerTask");
                 Utils.closeQuietly(consumerManager, "RLMMConsumerManager");
                 Utils.closeQuietly(remotePartitionMetadataStore, "RemotePartitionMetadataStore");
+            } finally {
+                lock.writeLock().unlock();
+                log.info("Closed the resources.");
             }
-        } finally {
-            lock.writeLock().unlock();
-            log.info("Closed the resources.");
         }
     }
 }

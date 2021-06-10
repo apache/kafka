@@ -36,6 +36,9 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 
+/**
+ * This class defines the configuration of topic based {@link org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager} implementation.
+ */
 public final class TopicBasedRemoteLogMetadataManagerConfig {
     private static final Logger log = LoggerFactory.getLogger(TopicBasedRemoteLogMetadataManagerConfig.class.getName());
 
@@ -83,7 +86,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     private final int metadataTopicPartitionsCount;
     private final String bootstrapServers;
     private final long consumeWaitMs;
-    private final long metadataTopicRetentionMillis;
+    private final long metadataTopicRetentionMs;
 
     private Map<String, Object> consumerProps;
     private Map<String, Object> producerProps;
@@ -101,9 +104,9 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
         consumeWaitMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP);
         metadataTopicPartitionsCount = (int) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP);
-        metadataTopicRetentionMillis = (long) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_PROP);
-        if (metadataTopicRetentionMillis != -1 && metadataTopicRetentionMillis <= 0) {
-            throw new IllegalArgumentException("Invalid metadata topic retention in millis: " + metadataTopicRetentionMillis);
+        metadataTopicRetentionMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_PROP);
+        if (metadataTopicRetentionMs != -1 && metadataTopicRetentionMs <= 0) {
+            throw new IllegalArgumentException("Invalid metadata topic retention in millis: " + metadataTopicRetentionMs);
         }
 
         clientIdPrefix = REMOTE_LOG_METADATA_CLIENT_PREFIX + "_" + props.get(BROKER_ID);
@@ -189,7 +192,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                 ", metadataTopicPartitionsCount=" + metadataTopicPartitionsCount +
                 ", bootstrapServers='" + bootstrapServers + '\'' +
                 ", consumeWaitMs=" + consumeWaitMs +
-                ", metadataTopicRetentionMillis=" + metadataTopicRetentionMillis +
+                ", metadataTopicRetentionMillis=" + metadataTopicRetentionMs +
                 ", consumerProps=" + consumerProps +
                 ", producerProps=" + producerProps +
                 '}';

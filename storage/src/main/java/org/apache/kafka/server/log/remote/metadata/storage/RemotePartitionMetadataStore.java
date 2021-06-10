@@ -66,7 +66,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
             try {
                 remoteLogMetadataCache.updateRemoteLogSegmentMetadata(rlsmUpdate);
             } catch (RemoteResourceNotFoundException e) {
-                log.error("Error occurred while updating the remote logs segment.");
+                log.error("Error occurred while updating the remote log segment.");
             }
         } else {
             log.error("No partition metadata found for : " + topicIdPartition);

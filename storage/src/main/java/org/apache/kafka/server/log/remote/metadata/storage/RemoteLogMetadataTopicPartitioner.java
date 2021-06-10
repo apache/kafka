@@ -25,25 +25,24 @@ import java.util.Objects;
 
 public class RemoteLogMetadataTopicPartitioner {
     public static final Logger log = LoggerFactory.getLogger(RemoteLogMetadataTopicPartitioner.class);
-    private final int noOfMetadataTopicPartitions;
+    private final int numMetadataTopicPartitions;
 
-    public RemoteLogMetadataTopicPartitioner(int noOfMetadataTopicPartitions) {
-        this.noOfMetadataTopicPartitions = noOfMetadataTopicPartitions;
+    public RemoteLogMetadataTopicPartitioner(int numMetadataTopicPartitions) {
+        this.numMetadataTopicPartitions = numMetadataTopicPartitions;
     }
 
     public int metadataPartition(TopicIdPartition topicIdPartition) {
         Objects.requireNonNull(topicIdPartition, "TopicPartition can not be null");
 
-        int partitionNo = Utils.toPositive(Utils.murmur2(toBytes(topicIdPartition))) % noOfMetadataTopicPartitions;
-        log.debug("No of partitions [{}], partitionNo: [{}] for given topic: [{}]", noOfMetadataTopicPartitions, partitionNo, topicIdPartition);
-        return partitionNo;
+        int partitionNum = Utils.toPositive(Utils.murmur2(toBytes(topicIdPartition))) % numMetadataTopicPartitions;
+        log.debug("No of partitions [{}], partitionNum: [{}] for given topic: [{}]", numMetadataTopicPartitions, partitionNum, topicIdPartition);
+        return partitionNum;
     }
 
     private byte[] toBytes(TopicIdPartition topicIdPartition) {
         // We do not want to depend upon hash code generation of Uuid as that may change.
         int hash = Objects.hash(topicIdPartition.topicId().getLeastSignificantBits(),
                                 topicIdPartition.topicId().getMostSignificantBits(),
-                                topicIdPartition.topicPartition().topic(),
                                 topicIdPartition.topicPartition().partition());
 
         return toBytes(hash);

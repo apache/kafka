@@ -32,13 +32,17 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * This class manages the consumer thread viz {@link ConsumerTask} that polls messages from the assigned metadata topic partitions.
+ * It also provides a way to wait until the given record is received by the consumer before it is timed out with an interval of
+ * {@link TopicBasedRemoteLogMetadataManagerConfig#consumeWaitMs()}.
+ */
 public class ConsumerManager implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerManager.class);
     private static final long CONSUME_RECHECK_INTERVAL_MS = 50L;
 
     private final TopicBasedRemoteLogMetadataManagerConfig rlmmConfig;
-    private final RemoteLogMetadataTopicPartitioner topicPartitioner;
     private final Time time;
     private final ConsumerTask consumerTask;
     private final Thread consumerTaskThread;
@@ -48,12 +52,11 @@ public class ConsumerManager implements Closeable {
                            RemoteLogMetadataTopicPartitioner rlmmTopicPartitioner,
                            Time time) {
         this.rlmmConfig = rlmmConfig;
-        this.topicPartitioner = rlmmTopicPartitioner;
         this.time = time;
 
         //Create a task to consume messages and submit the respective events to RemotePartitionMetadataEventHandler.
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(rlmmConfig.consumerProperties());
-        consumerTask = new ConsumerTask(consumer, remotePartitionMetadataEventHandler, topicPartitioner);
+        consumerTask = new ConsumerTask(consumer, remotePartitionMetadataEventHandler, rlmmTopicPartitioner);
         consumerTaskThread = KafkaThread.daemon("RLMMConsumerTask", consumerTask);
     }
 

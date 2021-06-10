@@ -67,6 +67,8 @@ class ConsumerTask implements Runnable, Closeable {
     private final RemotePartitionMetadataEventHandler remotePartitionMetadataEventHandler;
     private final RemoteLogMetadataTopicPartitioner topicPartitioner;
 
+    // It indicates whether the closing process has been started or not. Id it is set as true,
+    // consumer will stop consuming messages and it will not allow partition assignments to be updated.
     private volatile boolean close = false;
     private volatile boolean assignPartitions = false;
 
