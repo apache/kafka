@@ -62,7 +62,6 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
-import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -304,17 +303,17 @@ public class QuorumControllerTest {
     ) throws Exception {
         List<ApiMessageAndVersion> expected = Arrays.asList(
             new ApiMessageAndVersion(new TopicRecord().
-                setName("foo").setTopicId(fooId), (short) 0),
+                setName("foo").setTopicId(fooId), (short) 1),
             new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
                 setTopicId(fooId).setReplicas(Arrays.asList(0, 1, 2)).
                 setIsr(Arrays.asList(0, 1, 2)).setRemovingReplicas(null).
                 setAddingReplicas(null).setLeader(0).setLeaderEpoch(0).
-                setPartitionEpoch(0), (short) 0),
+                setPartitionEpoch(0), (short) 1),
             new ApiMessageAndVersion(new PartitionRecord().setPartitionId(1).
                 setTopicId(fooId).setReplicas(Arrays.asList(1, 2, 0)).
                 setIsr(Arrays.asList(1, 2, 0)).setRemovingReplicas(null).
                 setAddingReplicas(null).setLeader(1).setLeaderEpoch(0).
-                setPartitionEpoch(0), (short) 0),
+                setPartitionEpoch(0), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
@@ -323,9 +322,8 @@ public class QuorumControllerTest {
                         Arrays.asList(
                             new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9092).setSecurityProtocol((short) 0)).iterator())).
-                setRack(null), (short) 0),
-            new ApiMessageAndVersion(new UnfenceBrokerRecord().
-                setId(0).setEpoch(brokerEpochs.get(0)), (short) 0),
+                setRack(null).
+                setFenced(false), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(1).setBrokerEpoch(brokerEpochs.get(1)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB1")).
@@ -334,9 +332,8 @@ public class QuorumControllerTest {
                         Arrays.asList(
                             new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9093).setSecurityProtocol((short) 0)).iterator())).
-                setRack(null), (short) 0),
-            new ApiMessageAndVersion(new UnfenceBrokerRecord().
-                setId(1).setEpoch(brokerEpochs.get(1)), (short) 0),
+                setRack(null).
+                setFenced(false), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(2).setBrokerEpoch(brokerEpochs.get(2)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB2")).
@@ -345,16 +342,15 @@ public class QuorumControllerTest {
                         Arrays.asList(
                             new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9094).setSecurityProtocol((short) 0)).iterator())).
-                setRack(null), (short) 0),
-            new ApiMessageAndVersion(new UnfenceBrokerRecord().
-                setId(2).setEpoch(brokerEpochs.get(2)), (short) 0),
+                setRack(null).
+                setFenced(false), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(3).setBrokerEpoch(brokerEpochs.get(3)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB3")).
                 setEndPoints(new BrokerEndpointCollection(Arrays.asList(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9095).setSecurityProtocol((short) 0)).iterator())).
-                setRack(null), (short) 0),
+                setRack(null), (short) 1),
             new ApiMessageAndVersion(new ProducerIdsRecord().
                 setBrokerId(0).
                 setBrokerEpoch(brokerEpochs.get(0)).
