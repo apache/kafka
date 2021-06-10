@@ -113,7 +113,7 @@ public class ProducerPerformanceTest {
     }
 
     @Test
-    public void testGenerateRandomPayloadByPayloadFile() throws UnsupportedEncodingException {
+    public void testGenerateRandomPayloadByPayloadFile() {
 
         Integer recordSize = null;
         boolean hasPayloadFile = true;
