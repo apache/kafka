@@ -110,7 +110,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         Array[InetAddress](InetAddress.getByName("10.200.20.100"), InetAddress.getByName(host))
       }
     }
-    client = Admin.create(config, returnBadAddressFirst)
+    client = AdminClientTestUtils.create(config, returnBadAddressFirst)
     client.describeCluster().nodes().get()
   }
 

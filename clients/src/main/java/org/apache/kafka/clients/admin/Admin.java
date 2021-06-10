@@ -25,7 +25,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
-import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaFuture;
@@ -142,11 +141,6 @@ public interface Admin extends AutoCloseable {
      */
     static Admin create(Map<String, Object> conf) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null, null);
-    }
-
-    // For testing only
-    static Admin create(Map<String, Object> conf, HostResolver hostResolver) {
-        return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null, hostResolver);
     }
 
     /**
