@@ -389,7 +389,6 @@ class LogLoaderTest {
     EasyMock.expect(stateManager.mapEndOffset).andReturn(0L)
     // We skip directly to updating the map end offset
     EasyMock.expect(stateManager.updateMapEndOffset(1L))
-    EasyMock.expect(stateManager.onHighWatermarkUpdated(0L))
 
     // Finally, we take a snapshot
     stateManager.takeSnapshot()
@@ -1495,7 +1494,7 @@ class LogLoaderTest {
     assertEquals(startOffset, log.logStartOffset)
     assertEquals(startOffset, log.logEndOffset)
     // Validate that the remaining segment matches our expectations
-    val onlySegment = log.segments.firstSegment.get
+    val onlySegment = log.logSegments.head
     assertEquals(startOffset, onlySegment.baseOffset)
     assertTrue(onlySegment.log.file().exists())
     assertTrue(onlySegment.lazyOffsetIndex.file.exists())

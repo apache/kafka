@@ -41,7 +41,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable, mutable}
 
 object LogAppendInfo {
@@ -1561,11 +1561,11 @@ class Log(@volatile var logStartOffset: Long,
             val deletedSegments = localLog.truncateTo(targetOffset)
             deleteProducerSnapshots(deletedSegments, asyncDelete = true)
             leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
-
-            completeTruncation(
-              startOffset = math.min(targetOffset, logStartOffset),
-              endOffset = targetOffset
-            )
+            logStartOffset = math.min(targetOffset, logStartOffset)
+            localLog.updateLogEndOffset(targetOffset)
+            rebuildProducerState(targetOffset, producerStateManager)
+            if (highWatermark >= localLog.logEndOffset)
+              updateHighWatermark(localLog.logEndOffsetMetadata)
           }
           true
         }
@@ -1585,25 +1585,11 @@ class Log(@volatile var logStartOffset: Long,
         localLog.truncateFullyAndStartAt(newOffset)
         leaderEpochCache.foreach(_.clearAndFlush())
         producerStateManager.truncateFullyAndStartAt(newOffset)
-        completeTruncation(
-          startOffset = newOffset,
-          endOffset = newOffset
-        )
+        logStartOffset = newOffset
+        rebuildProducerState(newOffset, producerStateManager)
+        updateHighWatermark(localLog.logEndOffsetMetadata)
       }
     }
-  }
-
-  private def completeTruncation(
-    startOffset: Long,
-    endOffset: Long
-  ): Unit = {
-    logStartOffset = startOffset
-    localLog.updateLogEndOffset(endOffset)
-    rebuildProducerState(endOffset, producerStateManager)
-    if (highWatermark < localLog.logEndOffset)
-      updateHighWatermark(highWatermark)
-    else
-      updateHighWatermark(localLog.logEndOffsetMetadata)
   }
 
   /**
