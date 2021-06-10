@@ -22,6 +22,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.nio.ByteBuffer;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class LogSegmentDataTest {
 
@@ -32,7 +35,7 @@ public class LogSegmentDataTest {
                 new File(dir, "log-segment").toPath(),
                 new File(dir, "offset-index").toPath(),
                 new File(dir, "time-index").toPath(),
-                new File(dir, "transaction-index").toPath(),
+                Optional.of(new File(dir, "transaction-index").toPath()),
                 new File(dir, "producer-snapshot").toPath(),
                 ByteBuffer.allocate(1)
         );
@@ -42,10 +45,10 @@ public class LogSegmentDataTest {
                 new File(dir, "log-segment").toPath(),
                 new File(dir, "offset-index").toPath(),
                 new File(dir, "time-index").toPath(),
-                null,
+                Optional.empty(),
                 new File(dir, "producer-snapshot").toPath(),
                 ByteBuffer.allocate(1)
         );
-        Assertions.assertFalse(logSegmentDataWithNoTransactionIndex.transactionIndex().isPresent());
+        assertFalse(logSegmentDataWithNoTransactionIndex.transactionIndex().isPresent());
     }
 }

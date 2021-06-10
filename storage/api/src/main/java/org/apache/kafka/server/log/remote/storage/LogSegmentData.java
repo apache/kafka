@@ -34,7 +34,7 @@ public class LogSegmentData {
     private final Path logSegment;
     private final Path offsetIndex;
     private final Path timeIndex;
-    private final Path transactionIndex;
+    private final Optional<Path> transactionIndex;
     private final Path producerSnapshotIndex;
     private final ByteBuffer leaderEpochIndex;
 
@@ -51,15 +51,15 @@ public class LogSegmentData {
     public LogSegmentData(Path logSegment,
                           Path offsetIndex,
                           Path timeIndex,
-                          Path transactionIndex,
+                          Optional<Path> transactionIndex,
                           Path producerSnapshotIndex,
                           ByteBuffer leaderEpochIndex) {
         this.logSegment = Objects.requireNonNull(logSegment, "logSegment can not be null");
         this.offsetIndex = Objects.requireNonNull(offsetIndex, "offsetIndex can not be null");
         this.timeIndex = Objects.requireNonNull(timeIndex, "timeIndex can not be null");
+        this.transactionIndex = Objects.requireNonNull(transactionIndex, "transactionIndex can not be null");
         this.producerSnapshotIndex = Objects.requireNonNull(producerSnapshotIndex, "producerSnapshotIndex can not be null");
         this.leaderEpochIndex = Objects.requireNonNull(leaderEpochIndex, "leaderEpochIndex can not be null");
-        this.transactionIndex = transactionIndex;
     }
 
     /**
@@ -87,7 +87,7 @@ public class LogSegmentData {
      * @return Transaction index file of this segment if it exists.
      */
     public Optional<Path> transactionIndex() {
-        return Optional.ofNullable(transactionIndex);
+        return transactionIndex;
     }
 
     /**
