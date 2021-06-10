@@ -115,7 +115,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String TASK_ID_TAG = "task-id";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
     public static final String STORE_ID_TAG = "state-id";
-    public static final String BUFFER_ID_TAG = "buffer-id";
     public static final String RECORD_CACHE_ID_TAG = "record-cache-id";
 
     public static final String ROLLUP_VALUE = "all";
@@ -246,7 +245,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         removeAllClientLevelMetrics();
     }
 
-    private final void removeAllClientLevelMetrics() {
+    private void removeAllClientLevelMetrics() {
         synchronized (clientLevelMetrics) {
             while (!clientLevelMetrics.isEmpty()) {
                 metrics.removeMetric(clientLevelMetrics.pop());
@@ -254,7 +253,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-    private final void removeAllClientLevelSensors() {
+    private void removeAllClientLevelSensors() {
         synchronized (clientLevelSensors) {
             while (!clientLevelSensors.isEmpty()) {
                 metrics.removeSensor(clientLevelSensors.pop());
@@ -291,14 +290,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String storeName) {
         final Map<String, String> tagMap = taskLevelTagMap(Thread.currentThread().getName(), taskName);
         tagMap.put(storeType + "-" + STORE_ID_TAG, storeName);
-        return tagMap;
-    }
-
-    public Map<String, String> bufferLevelTagMap(final String threadId,
-                                                 final String taskName,
-                                                 final String bufferName) {
-        final Map<String, String> tagMap = taskLevelTagMap(threadId, taskName);
-        tagMap.put(BUFFER_ID_TAG, bufferName);
         return tagMap;
     }
 
@@ -560,10 +551,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return SENSOR_EXTERNAL_LABEL + SENSOR_PREFIX_DELIMITER + threadId
             + SENSOR_PREFIX_DELIMITER + SENSOR_ENTITY_LABEL + SENSOR_PREFIX_DELIMITER + entityName
             + SENSOR_NAME_DELIMITER + operationName;
-    }
-
-    private String externalParentSensorName(final String threadId, final String operationName) {
-        return SENSOR_EXTERNAL_LABEL + SENSOR_PREFIX_DELIMITER + threadId + SENSOR_NAME_DELIMITER + operationName;
     }
 
     public static void addAvgAndMaxToSensor(final Sensor sensor,
