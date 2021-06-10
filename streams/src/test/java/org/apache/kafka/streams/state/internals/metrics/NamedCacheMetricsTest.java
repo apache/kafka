@@ -49,7 +49,6 @@ public class NamedCacheMetricsTest {
         final String hitRatio = "hit-ratio";
         when(streamsMetrics.cacheLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, hitRatio, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
         when(streamsMetrics.cacheLevelTagMap(THREAD_ID, TASK_ID, STORE_NAME)).thenReturn(tagMap);
-
         StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
             expectedSensor,
             StreamsMetricsImpl.CACHE_LEVEL_GROUP,
