@@ -215,7 +215,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration14Test {
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         // increase the session timeout value, to avoid unnecessary rebalance
-        
+        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 15000);
         return streamsConfig;
     }
 
@@ -276,11 +276,11 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration14Test {
         };
 
         final ValueJoiner<Float, Long, String> joiner = (value1, value2) -> {
-            System.err.println("value1 " + value1 + "," + value2);
+            System.err.println("joiner1:" + value1 + "," + value2);
             return "value1=" + value1 + ",value2=" + value2;
         };
         final ValueJoiner<String, String, String> joinerTwo = (value1, value2) -> {
-            System.err.println("joiner2: value1 " + value1 + "," + value2);
+            System.err.println("joiner2:" + value1 + "," + value2);
             return value1 + ",value3=" + value2;
         };
 

@@ -276,11 +276,11 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration138Test {
         };
 
         final ValueJoiner<Float, Long, String> joiner = (value1, value2) -> {
-            System.err.println("value1 " + value1 + "," + value2);
+            System.err.println("joiner1:" + value1 + "," + value2);
             return "value1=" + value1 + ",value2=" + value2;
         };
         final ValueJoiner<String, String, String> joinerTwo = (value1, value2) -> {
-            System.err.println("joiner2: value1 " + value1 + "," + value2);
+            System.err.println("joiner2:" + value1 + "," + value2);
             return value1 + ",value3=" + value2;
         };
 

@@ -303,7 +303,7 @@ public class PartitionGroup {
         final int oldSize = recordQueue.size();
         final int newSize = recordQueue.addRawRecords(rawRecords);
 
-        System.err.println("adding raw records:" + rawRecords + "," + partition);
+        System.err.println("add records:" + rawRecords + "," + partition);
 //        final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
 //        for (int i = 1; i < elements.length; i++) {
 //            final StackTraceElement s = elements[i];
