@@ -39,7 +39,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -1060,6 +1060,9 @@ class KafkaApisTest {
       new MetadataRequestData.MetadataRequestTopic().setTopicId(Uuid.randomUuid()),
       new MetadataRequestData.MetadataRequestTopic().setName("topic1").setTopicId(Uuid.randomUuid()))
 
+    EasyMock.replay(replicaManager, clientRequestQuotaManager,
+      autoTopicCreationManager, forwardingManager, clientControllerQuotaManager, groupCoordinator, txnCoordinator)
+
     // if version is 10 or 11, the invalid topic metadata should return an error
     val invalidVersions = Set(10, 11)
     invalidVersions.foreach( version =>
@@ -1068,11 +1071,24 @@ class KafkaApisTest {
         val request = buildRequest(new MetadataRequest(metadataRequestData, version.toShort))
         val kafkaApis = createKafkaApis()
 
-        assertThrows(classOf[InvalidRequestException], () => kafkaApis.handleTopicMetadataRequest(request))
+        val capturedResponse = EasyMock.newCapture[AbstractResponse]()
+        EasyMock.expect(requestChannel.sendResponse(
+          EasyMock.eq(request),
+          EasyMock.capture(capturedResponse),
+          EasyMock.anyObject()
+        ))
+
+        EasyMock.replay(requestChannel)
+        kafkaApis.handle(request)
+
+        val response = capturedResponse.getValue.asInstanceOf[MetadataResponse]
+        assertEquals(1, response.topicMetadata.size)
+        assertEquals(1, response.errorCounts.get(Errors.INVALID_REQUEST))
+        response.data.topics.forEach(topic => assertNotEquals(null, topic.name))
+        reset(requestChannel)
       })
     )
   }
-
 
   @Test
   def testOffsetCommitWithInvalidPartition(): Unit = {
