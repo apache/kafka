@@ -672,7 +672,7 @@ class GroupMetadataTest {
   @Test
   def testCannotRemovePendingSyncOfUnknownMember(): Unit = {
     assertThrows(classOf[IllegalStateException],
-      () => group.addPendingSyncMember(memberId))
+      () => group.removePendingSyncMember(memberId))
   }
 
   @Test
@@ -687,13 +687,25 @@ class GroupMetadataTest {
   }
 
   @Test
-  def testRemovalFromPendincSyncWhenMemberIsRemoved(): Unit = {
+  def testRemovalFromPendingSyncWhenMemberIsRemoved(): Unit = {
     val member = new MemberMetadata(memberId, Some(groupInstanceId), clientId, clientHost,
       rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
     group.add(member)
     group.addPendingSyncMember(memberId)
     assertEquals(Set(memberId), group.pendingSyncMembers.toSet)
     group.remove(memberId)
+    assertEquals(Set(), group.pendingSyncMembers.toSet)
+  }
+
+  @Test
+  def testNewGenerationClearsPendingSyncMembers(): Unit = {
+    val member = new MemberMetadata(memberId, Some(groupInstanceId), clientId, clientHost,
+      rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+    group.add(member)
+    group.transitionTo(PreparingRebalance)
+    group.addPendingSyncMember(memberId)
+    assertEquals(Set(memberId), group.pendingSyncMembers.toSet)
+    group.initNextGeneration()
     assertEquals(Set(), group.pendingSyncMembers.toSet)
   }
 
