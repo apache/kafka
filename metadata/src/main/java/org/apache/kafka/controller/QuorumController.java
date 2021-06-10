@@ -94,7 +94,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -328,14 +327,9 @@ public final class QuorumController implements Controller {
     private static final int MAX_BATCHES_PER_GENERATE_CALL = 10;
 
     class SnapshotGeneratorManager implements Runnable {
-        private final BiFunction<Long, Integer, Optional<SnapshotWriter<ApiMessageAndVersion>>> writerBuilder;
-        private final ExponentialBackoff exponentialBackoff =
-            new ExponentialBackoff(10, 2, 5000, 0);
+        private final ExponentialBackoff exponentialBackoff = new ExponentialBackoff(10, 2, 5000, 0);
         private SnapshotGenerator generator = null;
 
-        SnapshotGeneratorManager(BiFunction<Long, Integer, Optional<SnapshotWriter<ApiMessageAndVersion>>> writerBuilder) {
-            this.writerBuilder = writerBuilder;
-        }
 
         void createSnapshotGenerator(long committedOffset, int committedEpoch) {
             if (generator != null) {
@@ -349,7 +343,10 @@ public final class QuorumController implements Controller {
                     )
                 );
             }
-            Optional<SnapshotWriter<ApiMessageAndVersion>> writer = writerBuilder.apply(committedOffset, committedEpoch);
+            Optional<SnapshotWriter<ApiMessageAndVersion>> writer = raftClient.createSnapshot(
+                committedOffset,
+                committedEpoch
+            );
             if (writer.isPresent()) {
                 generator = new SnapshotGenerator(
                     logContext,
@@ -377,7 +374,7 @@ public final class QuorumController implements Controller {
 
         void cancel() {
             if (generator == null) return;
-            log.error("Cancelling snapshot {}", generator.epoch());
+            log.error("Cancelling snapshot {}", generator.lastOffsetFromLog());
             generator.writer().close();
             generator = null;
             queue.cancelDeferred(GENERATE_SNAPSHOT);
@@ -399,13 +396,13 @@ public final class QuorumController implements Controller {
             try {
                 nextDelay = generator.generateBatches();
             } catch (Exception e) {
-                log.error("Error while generating snapshot {}", generator.epoch(), e);
+                log.error("Error while generating snapshot {}", generator.lastOffsetFromLog(), e);
                 generator.writer().close();
                 generator = null;
                 return;
             }
             if (!nextDelay.isPresent()) {
-                log.info("Finished generating snapshot {}.", generator.epoch());
+                log.info("Finished generating snapshot {}.", generator.lastOffsetFromLog());
                 generator.writer().close();
                 generator = null;
                 return;
@@ -413,11 +410,11 @@ public final class QuorumController implements Controller {
             reschedule(nextDelay.getAsLong());
         }
 
-        long snapshotEpoch() {
+        long snapshotLastOffsetFromLog() {
             if (generator == null) {
                 return Long.MAX_VALUE;
             }
-            return generator.epoch();
+            return generator.lastOffsetFromLog();
         }
     }
 
@@ -647,7 +644,7 @@ public final class QuorumController implements Controller {
                             // If we are writing a new snapshot, then we need to keep that around;
                             // otherwise, we should delete up to the current committed offset.
                             snapshotRegistry.deleteSnapshotsUpTo(
-                                Math.min(offset, snapshotGeneratorManager.snapshotEpoch()));
+                                Math.min(offset, snapshotGeneratorManager.snapshotLastOffsetFromLog()));
 
                         } else {
                             // If the controller is a standby, replay the records that were
@@ -730,8 +727,8 @@ public final class QuorumController implements Controller {
                         }
                     }
 
-                    lastCommittedOffset = reader.lastOffset();
-                    lastCommittedEpoch = reader.snapshotId().epoch;
+                    lastCommittedOffset = reader.lastOffsetFromLog();
+                    lastCommittedEpoch = reader.lastEpochFromLog();
                     snapshotRegistry.createSnapshot(lastCommittedOffset);
                 } finally {
                     reader.close();
@@ -955,7 +952,7 @@ public final class QuorumController implements Controller {
     /**
      * Manages generating controller snapshots.
      */
-    private final SnapshotGeneratorManager snapshotGeneratorManager;
+    private final SnapshotGeneratorManager snapshotGeneratorManager = new SnapshotGeneratorManager();
 
     /**
      * The interface that we use to mutate the Raft log.
@@ -1017,7 +1014,6 @@ public final class QuorumController implements Controller {
             snapshotRegistry, sessionTimeoutNs, replicaPlacer);
         this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
-        this.snapshotGeneratorManager = new SnapshotGeneratorManager(raftClient::createSnapshot);
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             logContext, defaultReplicationFactor, defaultNumPartitions,
             configurationControl, clusterControl, controllerMetrics);
@@ -1247,7 +1243,7 @@ public final class QuorumController implements Controller {
             if (snapshotGeneratorManager.generator == null) {
                 snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch);
             }
-            future.complete(snapshotGeneratorManager.generator.epoch());
+            future.complete(snapshotGeneratorManager.generator.lastOffsetFromLog());
         });
         return future;
     }

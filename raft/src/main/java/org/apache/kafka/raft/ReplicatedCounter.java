@@ -36,7 +36,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     private int committed = 0;
     private int uncommitted = 0;
     private OptionalInt claimedEpoch = OptionalInt.empty();
-    private long lastSnapshotCommittedOffset = -1;
+    private long lastOffsetSnapshotted = -1;
 
     public ReplicatedCounter(
         int nodeId,
@@ -99,24 +99,24 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             }
             log.debug("Counter incremented from {} to {}", initialCommitted, committed);
 
-            if (lastSnapshotCommittedOffset + snapshotDelayInRecords  < lastCommittedOffset) {
+            if (lastOffsetSnapshotted + snapshotDelayInRecords  < lastCommittedOffset) {
                 log.debug(
                     "Generating new snapshot with committed offset {} and epoch {} since the previoud snapshot includes {}",
                     lastCommittedOffset,
                     lastCommittedEpoch,
-                    lastSnapshotCommittedOffset
+                    lastOffsetSnapshotted
                 );
                 Optional<SnapshotWriter<Integer>> snapshot = client.createSnapshot(lastCommittedOffset, lastCommittedEpoch);
                 if (snapshot.isPresent()) {
                     try {
                         snapshot.get().append(singletonList(committed));
                         snapshot.get().freeze();
-                        lastSnapshotCommittedOffset = lastCommittedOffset;
+                        lastOffsetSnapshotted = lastCommittedOffset;
                     } finally {
                         snapshot.get().close();
                     }
                 } else {
-                    lastSnapshotCommittedOffset = lastCommittedOffset;
+                    lastOffsetSnapshotted = lastCommittedOffset;
                 }
             }
         } finally {
@@ -146,7 +146,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     uncommitted = value;
                 }
             }
-            lastSnapshotCommittedOffset = reader.lastOffset();
+            lastOffsetSnapshotted = reader.lastOffsetFromLog();
             log.debug("Finished loading snapshot. Set value: {}", committed);
         } finally {
             reader.close();

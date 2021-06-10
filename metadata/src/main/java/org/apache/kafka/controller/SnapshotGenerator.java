@@ -77,10 +77,10 @@ final class SnapshotGenerator {
     }
 
     /**
-     * Returns the epoch of the snapshot that we are generating.
+     * Returns the last offset from the log that will be included in the snapshot.
      */
-    long epoch() {
-        return writer.lastOffset();
+    long lastOffsetFromLog() {
+        return writer.lastOffsetFromLog();
     }
 
     SnapshotWriter writer() {
