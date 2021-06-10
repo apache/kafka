@@ -114,8 +114,9 @@ class GroupCoordinatorTest {
 
     val heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
     val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
+    val syncPurgatory = new DelayedOperationPurgatory[DelayedSync]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, syncPurgatory, timer.time, new Metrics())
     groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
       enableMetadataExpiration = false)
 
@@ -1667,7 +1668,7 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testheartbeatDeadGroup(): Unit = {
+  def testHeartbeatDeadGroup(): Unit = {
     val memberId = "memberId"
 
     val deadGroupId = "deadGroupId"
@@ -1678,7 +1679,7 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testheartbeatEmptyGroup(): Unit = {
+  def testHeartbeatEmptyGroup(): Unit = {
     val memberId = "memberId"
 
     val group = new GroupMetadata(groupId, Empty, new MockTime())
@@ -2252,6 +2253,222 @@ class GroupCoordinatorTest {
     assertEquals(2, group().allMembers.size)
     assertEquals(2, group().allDynamicMembers.size)
     assertEquals(0, group().numPending)
+  }
+
+  private def verifyHeartbeat(
+    joinGroupResult: JoinGroupResult,
+    expectedError: Errors
+  ): Unit = {
+    EasyMock.reset(replicaManager)
+    val heartbeatResult = heartbeat(
+      groupId,
+      joinGroupResult.memberId,
+      joinGroupResult.generationId
+    )
+    assertEquals(expectedError, heartbeatResult)
+  }
+
+  private def joinWithNMembers(nbMembers: Int): Seq[JoinGroupResult] = {
+    val requiredKnownMemberId = true
+
+    // First JoinRequests
+    var futures = 1.to(nbMembers).map { _ =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
+        None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
+    }
+
+    // Get back the assigned member ids
+    val memberIds = futures.map(await(_, 1).memberId)
+
+    // Second JoinRequests
+    futures = memberIds.map { memberId =>
+      EasyMock.reset(replicaManager)
+      sendJoinGroup(groupId, memberId, protocolType, protocols,
+        None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
+    }
+
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+    timer.advanceClock(DefaultRebalanceTimeout + 1)
+
+    futures.map(await(_, 1))
+  }
+
+  @Test
+  def testRebalanceTimesOutWhenSyncRequestIsNotReceiced(): Unit = {
+    // This test case ensure that the DelayedSync does kick out all members
+    // if they don't sent a sync request before the rebalance timeout. The
+    // group is in the Stable state in this case.
+    val results = joinWithNMembers(nbMembers = 3)
+    assertEquals(Set(Errors.NONE), results.map(_.error).toSet)
+
+    // Advance time
+    timer.advanceClock(DefaultRebalanceTimeout / 2)
+
+    // Heartbeats succeed
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.NONE)
+    }
+
+    EasyMock.reset(replicaManager)
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
+      .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
+      .anyTimes()
+    EasyMock.replay(replicaManager)
+
+    timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
+
+    // Heartbeats fail because none of the members have sent the sync request
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.UNKNOWN_MEMBER_ID)
+    }
+  }
+
+  @Test
+  def testRebalanceTimesOutWhenSyncRequestIsNotReceicedFromFollowers(): Unit = {
+    // This test case ensure that the DelayedSync does kick out the followers
+    // if they don't sent a sync request before the rebalance timeout. The
+    // group is in the Stable state in this case.
+    val results = joinWithNMembers(nbMembers = 3)
+    assertEquals(Set(Errors.NONE), results.map(_.error).toSet)
+
+    // Advance time
+    timer.advanceClock(DefaultRebalanceTimeout / 2)
+
+    // Heartbeats succeed
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.NONE)
+    }
+
+    // Leader sends Sync
+    EasyMock.reset(replicaManager)
+    val assignments = results.map(result => result.memberId -> Array.empty[Byte]).toMap
+    val leaderResult = sendSyncGroupLeader(groupId, results.head.generationId, results.head.memberId,
+      Some(protocolType), Some(protocolName), None, assignments)
+
+    assertEquals(Errors.NONE, await(leaderResult, 1).error)
+
+    // Leader should be able to heartbeart
+    verifyHeartbeat(results.head, Errors.NONE)
+
+    EasyMock.reset(replicaManager)
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
+      .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
+      .anyTimes()
+    EasyMock.replay(replicaManager)
+
+    // Advance past the rebalance timeout to kick out members without Sync.
+    timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
+
+    // Leader should be able to heartbeart
+    verifyHeartbeat(results.head, Errors.REBALANCE_IN_PROGRESS)
+
+    // Followers should have been removed.
+    results.tail.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.UNKNOWN_MEMBER_ID)
+    }
+  }
+
+  @Test
+  def testRebalanceTimesOutWhenSyncRequestIsNotReceivedFromLeaders(): Unit = {
+    // This test case ensure that the DelayedSync does kick out the leader
+    // if it does not sent a sync request before the rebalance timeout. The
+    // group is in the CompletingRebalance state in this case.
+    val results = joinWithNMembers(nbMembers = 3)
+    assertEquals(Set(Errors.NONE), results.map(_.error).toSet)
+
+    // Advance time
+    timer.advanceClock(DefaultRebalanceTimeout / 2)
+
+    // Heartbeats succeed
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.NONE)
+    }
+
+    // Followers send Sync
+    EasyMock.reset(replicaManager)
+    val followerResults = results.tail.map { joinGroupResult =>
+      EasyMock.reset(replicaManager)
+      sendSyncGroupFollower(groupId, joinGroupResult.generationId, joinGroupResult.memberId,
+        Some(protocolType), Some(protocolName), None)
+    }
+
+    EasyMock.reset(replicaManager)
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
+      .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
+      .anyTimes()
+    EasyMock.replay(replicaManager)
+
+    // Advance past the rebalance timeout to kick out members without Sync.
+    timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
+
+    val followerErrors = followerResults.map(await(_, 1).error)
+    assertEquals(Set(Errors.REBALANCE_IN_PROGRESS), followerErrors.toSet)
+
+    // Leader should have been removed.
+    verifyHeartbeat(results.head, Errors.UNKNOWN_MEMBER_ID)
+
+    // Followers should be able to heartbeat.
+    results.tail.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.REBALANCE_IN_PROGRESS)
+    }
+  }
+
+  @Test
+  def testRebalanceDoesNotTimeOutWhenAllSyncAreReceived(): Unit = {
+    // This test case ensure that the DelayedSync does not kick any
+    // members out when they have all sent their sync requests.
+    val results = joinWithNMembers(nbMembers = 3)
+    assertEquals(Set(Errors.NONE), results.map(_.error).toSet)
+
+    // Advance time
+    timer.advanceClock(DefaultRebalanceTimeout / 2)
+
+    // Heartbeats succeed
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.NONE)
+    }
+
+    EasyMock.reset(replicaManager)
+    val assignments = results.map(result => result.memberId -> Array.empty[Byte]).toMap
+    val leaderResult = sendSyncGroupLeader(groupId, results.head.generationId, results.head.memberId,
+      Some(protocolType), Some(protocolName), None, assignments)
+
+    assertEquals(Errors.NONE, await(leaderResult, 1).error)
+
+    // Followers send Sync
+    EasyMock.reset(replicaManager)
+    val followerResults = results.tail.map { joinGroupResult =>
+      EasyMock.reset(replicaManager)
+      sendSyncGroupFollower(groupId, joinGroupResult.generationId, joinGroupResult.memberId,
+        Some(protocolType), Some(protocolName), None)
+    }
+
+    val followerErrors = followerResults.map(await(_, 1).error)
+    assertEquals(Set(Errors.NONE), followerErrors.toSet)
+
+    EasyMock.reset(replicaManager)
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
+      .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
+      .anyTimes()
+    EasyMock.replay(replicaManager)
+
+    // Advance past the rebalance timeout to expire the Sync timout. All
+    // members should remain and the group should not rebalance.
+    timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
+
+    // Followers should be able to heartbeat.
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.NONE)
+    }
+
+    // Advance a bit more.
+    timer.advanceClock(DefaultRebalanceTimeout / 2)
+
+    // Followers should be able to heartbeat.
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.NONE)
+    }
   }
 
   private def group(groupId: String = groupId) = {

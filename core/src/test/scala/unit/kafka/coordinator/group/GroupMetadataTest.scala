@@ -663,6 +663,40 @@ class GroupMetadataTest {
     assertThrows(classOf[IllegalStateException], () => group.add(member))
   }
 
+  @Test
+  def testCannotAddPendingSyncOfUnknownMember(): Unit = {
+    assertThrows(classOf[IllegalStateException],
+      () => group.addPendingSyncMember(memberId))
+  }
+
+  @Test
+  def testCannotRemovePendingSyncOfUnknownMember(): Unit = {
+    assertThrows(classOf[IllegalStateException],
+      () => group.addPendingSyncMember(memberId))
+  }
+
+  @Test
+  def testCanAddAndRemovePendingSyncMember(): Unit = {
+    val member = new MemberMetadata(memberId, Some(groupInstanceId), clientId, clientHost,
+      rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+    group.add(member)
+    group.addPendingSyncMember(memberId)
+    assertEquals(Set(memberId), group.pendingSyncMembers.toSet)
+    group.removePendingSyncMember(memberId)
+    assertEquals(Set(), group.pendingSyncMembers.toSet)
+  }
+
+  @Test
+  def testRemovalFromPendincSyncWhenMemberIsRemoved(): Unit = {
+    val member = new MemberMetadata(memberId, Some(groupInstanceId), clientId, clientHost,
+      rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+    group.add(member)
+    group.addPendingSyncMember(memberId)
+    assertEquals(Set(memberId), group.pendingSyncMembers.toSet)
+    group.remove(memberId)
+    assertEquals(Set(), group.pendingSyncMembers.toSet)
+  }
+
   private def assertState(group: GroupMetadata, targetState: GroupState): Unit = {
     val states: Set[GroupState] = Set(Stable, PreparingRebalance, CompletingRebalance, Dead)
     val otherStates = states - targetState

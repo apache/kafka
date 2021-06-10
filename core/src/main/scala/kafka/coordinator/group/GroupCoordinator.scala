@@ -54,6 +54,7 @@ class GroupCoordinator(val brokerId: Int,
                        val groupManager: GroupMetadataManager,
                        val heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
                        val joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
+                       val syncPurgatory: DelayedOperationPurgatory[DelayedSync],
                        time: Time,
                        metrics: Metrics) extends Logging {
   import GroupCoordinator._
@@ -565,6 +566,9 @@ class GroupCoordinator(val brokerId: Int,
           case CompletingRebalance =>
             group.get(memberId).awaitingSyncCallback = responseCallback
 
+            group.removePendingSyncMember(memberId)
+            maybeCompleteSyncExpiration(group)
+
             // if this is the leader, then we can attempt to persist state and transition to stable
             if (group.isLeader(memberId)) {
               info(s"Assignment received from leader $memberId for group ${group.groupId} for generation ${group.generationId}. " +
@@ -598,6 +602,9 @@ class GroupCoordinator(val brokerId: Int,
             }
 
           case Stable =>
+            group.removePendingSyncMember(memberId)
+            maybeCompleteSyncExpiration(group)
+
             // if the group is stable, we just return the current assignment
             val memberMetadata = group.get(memberId)
             responseCallback(SyncGroupResult(group.protocolType, group.protocolName, memberMetadata.assignment, Errors.NONE))
@@ -1209,7 +1216,11 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def removeHeartbeatForLeavingMember(group: GroupMetadata, member: MemberMetadata): Unit = {
-    val memberKey = MemberKey(group.groupId, member.memberId)
+    removeHeartbeatForLeavingMember(group, member.memberId)
+  }
+
+  private def removeHeartbeatForLeavingMember(group: GroupMetadata, memberId: String): Unit = {
+    val memberKey = MemberKey(group.groupId, memberId)
     heartbeatPurgatory.checkAndComplete(memberKey)
   }
 
@@ -1357,6 +1368,8 @@ class GroupCoordinator(val brokerId: Int,
     info(s"Preparing to rebalance group ${group.groupId} in state ${group.currentState} with old generation " +
       s"${group.generationId} (${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) (reason: $reason)")
 
+    maybeCompleteSyncExpiration(group)
+
     val groupKey = GroupKey(group.groupId)
     joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
   }
@@ -1398,7 +1411,7 @@ class GroupCoordinator(val brokerId: Int,
         info(s"Group ${group.groupId} removed dynamic members " +
           s"who haven't joined: ${notYetRejoinedDynamicMembers.keySet}")
 
-        notYetRejoinedDynamicMembers.values foreach { failedMember =>
+        notYetRejoinedDynamicMembers.values.foreach { failedMember =>
           group.remove(failedMember.memberId)
           removeHeartbeatForLeavingMember(group, failedMember)
         }
@@ -1450,8 +1463,65 @@ class GroupCoordinator(val brokerId: Int,
             group.maybeInvokeJoinCallback(member, joinResult)
             completeAndScheduleNextHeartbeatExpiration(group, member)
             member.isNew = false
+
+            group.addPendingSyncMember(member.memberId)
           }
+
+          val delayedSync = new DelayedSync(this, group, group.rebalanceTimeoutMs)
+          val groupKey = GroupKey(group.groupId)
+          syncPurgatory.tryCompleteElseWatch(delayedSync, Seq(groupKey))
         }
+      }
+    }
+  }
+
+  private def maybeCompleteSyncExpiration(
+    group: GroupMetadata
+  ): Unit = {
+    val groupKey = GroupKey(group.groupId)
+    syncPurgatory.checkAndComplete(groupKey)
+  }
+
+  def tryCompletePendingSync(
+    group: GroupMetadata,
+    forceComplete: () => Boolean
+  ): Boolean = {
+    group.inLock {
+      group.currentState match {
+        case Dead | Empty | PreparingRebalance =>
+          forceComplete()
+        case CompletingRebalance | Stable =>
+          if (group.hasReceivedSyncFromAllMembers())
+            forceComplete()
+          else false
+      }
+    }
+  }
+
+  def onExpirePendingSync(
+    group: GroupMetadata
+  ): Unit = {
+    group.inLock {
+      group.currentState match {
+        case Dead | Empty | PreparingRebalance =>
+          debug(s"Received notification of sync expiration for group ${group.groupId} in ${group.currentState} state. Ignoring.")
+
+        case CompletingRebalance | Stable =>
+          val pendingSyncMembers = group.pendingSyncMembers
+          if (pendingSyncMembers.nonEmpty) {
+            info(s"Group ${group.groupId} removed members who haven't " +
+              s"sent their sync request: $pendingSyncMembers")
+
+            // pendingSyncMembers is mutated while removing members
+            val reason = s"Removing $pendingSyncMembers on pending sync request expiration"
+
+            pendingSyncMembers.foreach { memberId =>
+              group.remove(memberId)
+              removeHeartbeatForLeavingMember(group, memberId)
+            }
+
+            prepareRebalance(group, reason)
+          }
       }
     }
   }
@@ -1532,8 +1602,10 @@ object GroupCoordinator {
             time: Time,
             metrics: Metrics): GroupCoordinator = {
     val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
+    // TODO Check if we could consolidate both purgatories.
     val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance", config.brokerId)
-    GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
+    val syncPurgatory = DelayedOperationPurgatory[DelayedSync]("Rebalance", config.brokerId)
+    GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, syncPurgatory, time, metrics)
   }
 
   private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
@@ -1553,6 +1625,7 @@ object GroupCoordinator {
             replicaManager: ReplicaManager,
             heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
+            syncPurgatory: DelayedOperationPurgatory[DelayedSync],
             time: Time,
             metrics: Metrics): GroupCoordinator = {
     val offsetConfig = this.offsetConfig(config)
@@ -1563,7 +1636,8 @@ object GroupCoordinator {
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
       offsetConfig, replicaManager, time, metrics)
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time, metrics)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory,
+      joinPurgatory, syncPurgatory, time, metrics)
   }
 
   private def memberLeaveError(memberIdentity: MemberIdentity,
