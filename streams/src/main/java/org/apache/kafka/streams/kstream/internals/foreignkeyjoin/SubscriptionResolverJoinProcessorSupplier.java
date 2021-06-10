@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -73,6 +74,9 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
                 valueGetter = valueGetterSupplier.get();
                 valueGetter.init(context);
                 if (runtimeValueSerializer == null) {
+                    if (context.valueSerde() == null) {
+                        throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
+                    }
                     runtimeValueSerializer = (Serializer<V>) context.valueSerde().serializer();
                 }
             }

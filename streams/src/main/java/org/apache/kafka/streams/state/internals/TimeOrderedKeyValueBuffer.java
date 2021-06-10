@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -72,7 +72,7 @@ public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
         }
     }
 
-    void setSerdesIfNull(final Serde<K> keySerde, final Serde<V> valueSerde);
+    void setSerdesIfNull(final ProcessorContext context);
 
     void evictWhile(final Supplier<Boolean> predicate, final Consumer<Eviction<K, V>> callback);
 

@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
@@ -134,7 +133,6 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
             safeToDropTombstones = suppress.safeToDropTombstones();
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
@@ -147,7 +145,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
             );
 
             buffer = requireNonNull(context.getStateStore(storeName));
-            buffer.setSerdesIfNull((Serde<K>) context.keySerde(), (Serde<V>) context.valueSerde());
+            buffer.setSerdesIfNull(context);
         }
 
         @Override
