@@ -308,8 +308,8 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public void maybeClean() {
-        // No-op for testing
+    public boolean maybeClean() {
+        return false;
     }
 
     @Override

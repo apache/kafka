@@ -16,10 +16,6 @@
  */
 package kafka.raft
 
-import java.io.File
-import java.nio.ByteBuffer
-import java.nio.file.{Files, Path}
-import java.util.{Collections, Optional}
 import kafka.log.Log
 import kafka.server.KafkaRaftServer
 import kafka.utils.{MockTime, TestUtils}
@@ -29,11 +25,17 @@ import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.internals.BatchBuilder
-import org.apache.kafka.raft.{KafkaRaftClient, LogAppendInfo, LogOffsetMetadata, OffsetAndEpoch, ReplicatedLog, ValidOffsetAndEpoch}
+import org.apache.kafka.raft._
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.snapshot.{SnapshotPath, Snapshots}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
+import org.apache.kafka.snapshot.{RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
+import org.apache.kafka.test.TestUtils.assertOptional
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.file.{Files, Path}
+import java.util.{Collections, Optional}
 
 final class KafkaMetadataLogTest {
   import KafkaMetadataLogTest._
@@ -436,7 +438,7 @@ final class KafkaMetadataLogTest {
     val leaderEpoch = 5
     val maxBatchSizeInBytes = 16384
     val recordSize = 64
-    val log = buildMetadataLog(tempDir, mockTime, maxBatchSizeInBytes)
+    val log = buildMetadataLog(tempDir, mockTime, maxBatchSizeInBytes = maxBatchSizeInBytes)
 
     val oversizeBatch = buildFullBatch(leaderEpoch, recordSize, maxBatchSizeInBytes + recordSize)
     assertThrows(classOf[RecordTooLargeException], () => {
@@ -654,6 +656,103 @@ final class KafkaMetadataLogTest {
     assertEquals(ValidOffsetAndEpoch.Kind.VALID, resultOffsetAndEpoch.kind)
     assertEquals(new OffsetAndEpoch(numberOfRecords - 1, epoch), resultOffsetAndEpoch.offsetAndEpoch())
   }
+
+  @Test
+  def testAdvanceLogStartOffsetAfterCleaning(): Unit = {
+    val config = MetadataLogConfig(
+      logSegmentBytes = 1024,
+      logSegmentMillis = 10 * 1000,
+      retentionMaxBytes = 4 * 1024,
+      retentionMillis = 60 * 1000
+    )
+    val log = buildMetadataLog(tempDir, mockTime, config, maxBatchSizeInBytes = 1000)
+
+    // Generate some segments
+    for(_ <- 0 to 1000) {
+      append(log, 47, 1) // An odd number of records to avoid offset alignment
+    }
+    assertFalse(log.maybeClean(), "Should not clean since HW was still 0")
+
+    log.updateHighWatermark(new LogOffsetMetadata(50000))
+    assertFalse(log.maybeClean(), "Should not clean since no snapshots exist")
+
+    val snapshotId = new OffsetAndEpoch(20000, 1)
+    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
+      append(snapshot, 2000)
+      snapshot.freeze()
+    }
+    val lsoBefore = log.startOffset()
+    assertTrue(log.maybeClean(), "Expected to clean since there was at least one snapshot")
+    val lsoAfter = log.startOffset()
+    assertTrue(lsoAfter > lsoBefore, "Log Start Offset should have increased after cleaning")
+    assertTrue(lsoAfter <= snapshotId.offset, "Expected the Log Start Offset to be less than or equal to the snapshot offset")
+  }
+
+  @Test
+  def testDeleteSnapshots(): Unit = {
+    // Generate some logs and a few snapshots, set retention low and verify that cleaning occurs
+    val config = MetadataLogConfig(
+      logSegmentBytes = 1024,
+      logSegmentMillis = 10 * 1000,
+      retentionMaxBytes = 1024,
+      retentionMillis = 60 * 1000
+    )
+    val log = buildMetadataLog(tempDir, mockTime, config, maxBatchSizeInBytes = 100)
+
+    for(_ <- 0 to 1000) {
+      append(log, 1, 1)
+    }
+    log.updateHighWatermark(new LogOffsetMetadata(50000))
+
+    for(offset <- Seq(1000, 2000, 3000, 4000, 5000, 6000)) {
+      val snapshotId = new OffsetAndEpoch(offset, 1)
+      TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
+        append(snapshot, 100)
+        snapshot.freeze()
+      }
+    }
+
+    assertEquals(6, log.snapshots.size, "Expected six snapshots")
+    assertTrue(log.maybeClean())
+    assertEquals(1, log.snapshots.size, "Expected only one snapshot after cleaning")
+    assertOptional(log.latestSnapshotId(), (snapshotId: OffsetAndEpoch) => {
+      assertEquals(6000, snapshotId.offset, "Should see latest snapshot with offset 6000")
+    })
+  }
+
+  @Test
+  def testSoftRetentionLimit(): Unit = {
+    // Set retention equal to the segment size and generate slightly more than one segment of logs
+    val config = MetadataLogConfig(
+      logSegmentBytes = 10240,
+      logSegmentMillis = 10 * 1000,
+      retentionMaxBytes = 10240,
+      retentionMillis = 60 * 1000
+    )
+    val log = buildMetadataLog(tempDir, mockTime, config, maxBatchSizeInBytes = 100)
+
+    for(_ <- 0 to 2000) {
+      append(log, 1, 1)
+    }
+    log.updateHighWatermark(new LogOffsetMetadata(2000))
+
+    // Then generate a snapshot
+    val snapshotId = new OffsetAndEpoch(2000, 1)
+    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
+      append(snapshot, 1000)
+      snapshot.freeze()
+    }
+
+    // Cleaning should occur, but resulting size will not be under retention limit since we have to keep one snapshot
+    assertTrue(log.maybeClean())
+    assertEquals(1, log.snapshots.size, "Expected one snapshot after cleaning")
+    assertOptional(log.latestSnapshotId(), (snapshotId: OffsetAndEpoch) => {
+      assertEquals(2000, snapshotId.offset, "Unexpected offset for latest snapshot")
+      assertOptional(log.readSnapshot(snapshotId), (reader: RawSnapshotReader) => {
+        assertTrue(reader.sizeInBytes() + log.log.size > log.retentionSize)
+      })
+    })
+  }
 }
 
 object KafkaMetadataLogTest {
@@ -671,9 +770,17 @@ object KafkaMetadataLogTest {
     }
   }
 
+  val DefaultMetadataLogConfig = new MetadataLogConfig(
+    logSegmentBytes = 100 * 1024,
+    logSegmentMillis = 10 * 1000,
+    retentionMaxBytes = 100 * 1024,
+    retentionMillis = 60 * 1000
+  )
+
   def buildMetadataLogAndDir(
     tempDir: File,
     time: MockTime,
+    metadataLogConfig: MetadataLogConfig = DefaultMetadataLogConfig,
     maxBatchSizeInBytes: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
     maxFetchSizeInBytes: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
   ): (Path, KafkaMetadataLog) = {
@@ -690,7 +797,8 @@ object KafkaMetadataLogTest {
       time,
       time.scheduler,
       maxBatchSizeInBytes,
-      maxFetchSizeInBytes
+      maxFetchSizeInBytes,
+      metadataLogConfig
     )
 
     (logDir.toPath, metadataLog)
@@ -699,10 +807,11 @@ object KafkaMetadataLogTest {
   def buildMetadataLog(
     tempDir: File,
     time: MockTime,
+    metadataLogConfig: MetadataLogConfig = DefaultMetadataLogConfig,
     maxBatchSizeInBytes: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
     maxFetchSizeInBytes: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
   ): KafkaMetadataLog = {
-    val (_, log) = buildMetadataLogAndDir(tempDir, time, maxBatchSizeInBytes, maxFetchSizeInBytes)
+    val (_, log) = buildMetadataLogAndDir(tempDir, time, metadataLogConfig, maxBatchSizeInBytes, maxFetchSizeInBytes)
     log
   }
 
@@ -716,6 +825,15 @@ object KafkaMetadataLogTest {
       ),
       epoch
     )
+  }
+
+  def append(snapshotWriter: RawSnapshotWriter, numberOfRecords: Int): Unit = {
+    snapshotWriter.append(MemoryRecords.withRecords(
+      0,
+      CompressionType.NONE,
+      0,
+      (0 until numberOfRecords).map(number => new SimpleRecord(number.toString.getBytes)): _*
+    ))
   }
 
   private def createLogDirectory(logDir: File, logDirName: String): File = {
