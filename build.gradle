@@ -51,6 +51,26 @@ spotless {
   }
 }
 
+task copyGitHooks(type: Copy) {
+  description 'Copies the git hooks.'
+  from("${rootDir}/bin/git-hooks/") {
+    include '*'
+  }
+  into "${rootDir}/.git/hooks"
+}
+
+task installGitHooks(type: Exec) {
+  description 'Installs the git hooks.'
+  group 'git hooks'
+  workingDir rootDir
+  commandLine 'chmod'
+  args '-R', '+x', '.git/hooks/'
+  dependsOn copyGitHooks
+  doLast {
+    logger.info('Git hook installed successfully.')
+  }
+}
+
 allprojects {
 
   repositories {
@@ -90,6 +110,10 @@ allprojects {
           libs.nettyHandler,
           libs.nettyTransportNativeEpoll
         )
+
+        dependencySubstitution {
+          substitute module("log4j:log4j:1.2.17") because "we use a custom version with security patches" with module("io.confluent:confluent-log4j:1.2.17-cp2")
+        }
       }
     }
   }
@@ -110,7 +134,7 @@ ext {
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
 
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
-  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
+  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && !version.contains("-alpha") && !version.matches("[0-9]*\\.[0-9]*\\.[0-9]*-[0-9]*-(ccs|ce)")
 
   mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
   mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
@@ -156,7 +180,7 @@ if (file('.git').exists()) {
         'gradle/wrapper/gradle-wrapper.properties',
         'config/kraft/README.md',
         'TROGDOR.md',
-        '**/README.md',
+        '**/*README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
@@ -229,6 +253,7 @@ subprojects {
     // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
     if (JavaVersion.current().isJava9Compatible())
       options.compilerArgs << "--release" << minJavaVersion
+    dependsOn installGitHooks
   }
 
   if (shouldPublish) {
@@ -2587,3 +2612,4 @@ task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
   else
     options.links "https://docs.oracle.com/javase/8/docs/api/"
 }
+
