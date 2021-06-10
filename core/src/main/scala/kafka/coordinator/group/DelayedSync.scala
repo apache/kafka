@@ -20,7 +20,13 @@ package kafka.coordinator.group
 import kafka.server.DelayedOperation
 
 /**
- * TODO
+ * Delayed rebalance operation that is added to the purgatory when is completing the rebalance.
+ *
+ * Whenever a SyncGroup is receives, checks that a SyncGroup has been received for each
+ * member of the group; if yes, complete this operation.
+ *
+ * When the operation has expired, any known members that have not sent a SyncGroup requests
+ * are removed from the group. If any members is removed, the group is rebalanced.
  */
 private[group] class DelayedSync(
   coordinator: GroupCoordinator,

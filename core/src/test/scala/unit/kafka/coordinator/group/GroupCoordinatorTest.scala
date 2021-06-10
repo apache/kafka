@@ -2305,11 +2305,13 @@ class GroupCoordinatorTest {
     // Advance time
     timer.advanceClock(DefaultRebalanceTimeout / 2)
 
-    // Heartbeats succeed
+    // Heartbeats to ensure that heartbeating does not interfere with the
+    // delayed sync operation.
     results.foreach { joinGroupResult =>
       verifyHeartbeat(joinGroupResult, Errors.NONE)
     }
 
+    // Advance part the rebalance timeout to trigger the delayed operation.
     EasyMock.reset(replicaManager)
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
       .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
@@ -2335,7 +2337,8 @@ class GroupCoordinatorTest {
     // Advance time
     timer.advanceClock(DefaultRebalanceTimeout / 2)
 
-    // Heartbeats succeed
+    // Heartbeats to ensure that heartbeating does not interfere with the
+    // delayed sync operation.
     results.foreach { joinGroupResult =>
       verifyHeartbeat(joinGroupResult, Errors.NONE)
     }
@@ -2351,13 +2354,7 @@ class GroupCoordinatorTest {
     // Leader should be able to heartbeart
     verifyHeartbeat(results.head, Errors.NONE)
 
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
-      .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
-      .anyTimes()
-    EasyMock.replay(replicaManager)
-
-    // Advance past the rebalance timeout to kick out members without Sync.
+    // Advance part the rebalance timeout to trigger the delayed operation.
     timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
 
     // Leader should be able to heartbeart
@@ -2380,7 +2377,8 @@ class GroupCoordinatorTest {
     // Advance time
     timer.advanceClock(DefaultRebalanceTimeout / 2)
 
-    // Heartbeats succeed
+    // Heartbeats to ensure that heartbeating does not interfere with the
+    // delayed sync operation.
     results.foreach { joinGroupResult =>
       verifyHeartbeat(joinGroupResult, Errors.NONE)
     }
@@ -2393,13 +2391,7 @@ class GroupCoordinatorTest {
         Some(protocolType), Some(protocolName), None)
     }
 
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
-      .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
-      .anyTimes()
-    EasyMock.replay(replicaManager)
-
-    // Advance past the rebalance timeout to kick out members without Sync.
+    // Advance part the rebalance timeout to trigger the delayed operation.
     timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
 
     val followerErrors = followerResults.map(await(_, 1).error)
@@ -2424,7 +2416,8 @@ class GroupCoordinatorTest {
     // Advance time
     timer.advanceClock(DefaultRebalanceTimeout / 2)
 
-    // Heartbeats succeed
+    // Heartbeats to ensure that heartbeating does not interfere with the
+    // delayed sync operation.
     results.foreach { joinGroupResult =>
       verifyHeartbeat(joinGroupResult, Errors.NONE)
     }
@@ -2446,12 +2439,6 @@ class GroupCoordinatorTest {
 
     val followerErrors = followerResults.map(await(_, 1).error)
     assertEquals(Set(Errors.NONE), followerErrors.toSet)
-
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
-      .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
-      .anyTimes()
-    EasyMock.replay(replicaManager)
 
     // Advance past the rebalance timeout to expire the Sync timout. All
     // members should remain and the group should not rebalance.
