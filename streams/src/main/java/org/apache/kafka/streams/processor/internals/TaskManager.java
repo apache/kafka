@@ -267,12 +267,12 @@ public class TaskManager {
                      "\tExisting standby tasks: {}",
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
-        System.err.println(String.format("%s: Handle new assignment with:" +
-                "New active tasks: %s," +
-                "New standby tasks: %s," +
-                "Existing active tasks: %s," +
-                "Existing standby tasks: %s",
-            logPrefix, activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds()));
+//        System.err.println(String.format("%s: Handle new assignment with:" +
+//                "New active tasks: %s," +
+//                "New standby tasks: %s," +
+//                "Existing active tasks: %s," +
+//                "Existing standby tasks: %s",
+//            logPrefix, activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds()));
 
         builder.addSubscribedTopicsFromAssignment(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
@@ -1094,7 +1094,7 @@ public class TaskManager {
     private void commitOffsetsOrTransaction(final Map<Task, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
         if (offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue)).size() > 0) {
             log.debug("Committing task offsets {}", offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue))); // avoid logging actual Task objects
-            System.err.println("committing task offset:" + offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue)));
+//            System.err.println("committing task offset:" + offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue)));
         }
 
         final Set<TaskId> corruptedTasks = new HashSet<>();
@@ -1212,12 +1212,18 @@ public class TaskManager {
                         task.id()),
                     timeoutException
                 );
+                System.err.println(String.format(
+                    "Could not complete processing records for %s due to the following exception; will move to next task and retry later",
+                    task.id()) + timeoutException);
             } catch (final TaskMigratedException e) {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
                              "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
+                System.err.println("Failed to process stream task '' since it got migrated to another thread already. " +
+                    "Will trigger a new rebalance and close all tasks as zombies together." + task.id() + e);
                 throw e;
             } catch (final RuntimeException e) {
                 log.error("Failed to process stream task {} due to the following error:", task.id(), e);
+                System.err.println("Failed to process stream task {} due to the following error:" + task.id() + e);
                 throw e;
             } finally {
                 now = time.milliseconds();

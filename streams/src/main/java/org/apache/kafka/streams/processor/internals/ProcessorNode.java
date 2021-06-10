@@ -181,15 +181,15 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
      * @return a string representation of this node starting with the given indent, useful for debugging.
      */
     public String toString(final String indent) {
-        final StringBuilder sb = new StringBuilder(indent + name + ":\n");
+        final StringBuilder sb = new StringBuilder(indent + name + ":");
         if (stateStores != null && !stateStores.isEmpty()) {
-            sb.append(indent).append("\tstates:\t\t[");
+            sb.append(indent).append(",states:[");
             for (final String store : stateStores) {
                 sb.append(store);
                 sb.append(", ");
             }
             sb.setLength(sb.length() - 2);  // remove the last comma
-            sb.append("]\n");
+            sb.append("]");
         }
         return sb.toString();
     }

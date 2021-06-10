@@ -197,6 +197,12 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
         throwUnsupportedOperationExceptionIfStandby("forward");
 
         final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
+//        System.err.println("ch: prev:" + previousNode);
+//        final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//        for (int i = 1; i < elements.length; i++) {
+//            final StackTraceElement s = elements[i];
+//            System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//        }
         if (previousNode == null) {
             throw new StreamsException("Current node is unknown. This can happen if 'forward()' is called " +
                     "in an illegal scope. The root cause could be that a 'Processor' or 'Transformer' instance" +
