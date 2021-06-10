@@ -18,7 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.errors.UnsupportedBatchLookupException;
+import org.apache.kafka.common.errors.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -189,7 +189,7 @@ public class AdminApiDriver<K, V> {
      * Check whether any requests need to be sent. This should be called immediately
      * after the driver is constructed and then again after each request returns
      * (i.e. after {@link #onFailure(long, RequestSpec, Throwable)} or
-     * {@link #onResponse(long, RequestSpec, AbstractResponse)}).
+     * {@link #onResponse(long, RequestSpec, AbstractResponse, Node)}).
      *
      * @return A list of requests that need to be sent
      */
@@ -212,12 +212,10 @@ public class AdminApiDriver<K, V> {
         clearInflightRequest(currentTimeMs, spec);
 
         if (spec.scope instanceof FulfillmentScope) {
-            int brokerId = ((FulfillmentScope) spec.scope).destinationBrokerId;
             AdminApiHandler.ApiResult<K, V> result = handler.handleResponse(
-                brokerId,
+                node,
                 spec.keys,
-                response,
-                node
+                response
             );
             complete(result.completedKeys);
             completeExceptionally(result.failedKeys);
@@ -255,7 +253,7 @@ public class AdminApiDriver<K, V> {
                 .collect(Collectors.toSet());
             retryLookup(keysToUnmap);
 
-        } else if (t instanceof UnsupportedBatchLookupException) {
+        } else if (t instanceof NoBatchedFindCoordinatorsException) {
             ((CoordinatorStrategy) handler.lookupStrategy()).disableBatch();
             Set<K> keysToUnmap = spec.keys.stream()
                 .filter(future.lookupKeys()::contains)

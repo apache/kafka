@@ -78,11 +78,11 @@ public class ListTransactionsHandler implements AdminApiHandler<AllBrokersStrate
 
     @Override
     public ApiResult<AllBrokersStrategy.BrokerKey, Collection<TransactionListing>> handleResponse(
-        int brokerId,
+        Node broker,
         Set<AllBrokersStrategy.BrokerKey> keys,
-        AbstractResponse abstractResponse,
-        Node node
+        AbstractResponse abstractResponse
     ) {
+        int brokerId = broker.id();
         AllBrokersStrategy.BrokerKey key = requireSingleton(keys, brokerId);
 
         ListTransactionsResponse response = (ListTransactionsResponse) abstractResponse;

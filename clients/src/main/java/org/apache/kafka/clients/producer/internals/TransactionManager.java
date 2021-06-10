@@ -27,7 +27,7 @@ import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
-import org.apache.kafka.common.errors.UnsupportedBatchLookupException;
+import org.apache.kafka.common.errors.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
@@ -1284,7 +1284,7 @@ public class TransactionManager {
                     if (this.needsCoordinator())
                         lookupCoordinator(this.coordinatorType(), this.coordinatorKey());
                     reenqueue();
-                } else if (response.versionMismatch() instanceof UnsupportedBatchLookupException && response.requestHeader().apiKey() == ApiKeys.FIND_COORDINATOR) {
+                } else if (response.versionMismatch() instanceof NoBatchedFindCoordinatorsException && response.requestHeader().apiKey() == ApiKeys.FIND_COORDINATOR) {
                     batchFindCoordinator = false;
                     reenqueue();
                 } else if (response.versionMismatch() != null) {

@@ -20,14 +20,14 @@ package org.apache.kafka.common.errors;
  * Indicates that it is not possible to lookup coordinators in batches with FindCoordinator. Instead
  * coordinators must be looked up one by one.
  */
-public class UnsupportedBatchLookupException extends UnsupportedVersionException {
+public class NoBatchedFindCoordinatorsException extends UnsupportedVersionException {
     private static final long serialVersionUID = 1L;
 
-    public UnsupportedBatchLookupException(String message, Throwable cause) {
+    public NoBatchedFindCoordinatorsException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public UnsupportedBatchLookupException(String message) {
+    public NoBatchedFindCoordinatorsException(String message) {
         super(message);
     }
 }

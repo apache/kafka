@@ -64,6 +64,7 @@ public class DescribeProducersHandlerTest {
             new LogContext()
         );
     }
+    
 
     @Test
     public void testBrokerIdSetInOptions() {
@@ -193,15 +194,14 @@ public class DescribeProducersHandlerTest {
         DescribeProducersOptions options = new DescribeProducersOptions().brokerId(1);
         DescribeProducersHandler handler = newHandler(options);
 
-        int brokerId = 3;
         PartitionResponse partitionResponse = sampleProducerState(topicPartition);
         DescribeProducersResponse response = describeProducersResponse(
             singletonMap(topicPartition, partitionResponse)
         );
-        Node node = new Node(brokerId, "host", 1);
+        Node node = new Node(3, "host", 1);
 
         ApiResult<TopicPartition, PartitionProducerState> result =
-            handler.handleResponse(brokerId, mkSet(topicPartition), response, node);
+            handler.handleResponse(node, mkSet(topicPartition), response);
 
         assertEquals(mkSet(topicPartition), result.completedKeys.keySet());
         assertEquals(emptyMap(), result.failedKeys);
@@ -240,10 +240,9 @@ public class DescribeProducersHandlerTest {
         Errors error
     ) {
         DescribeProducersHandler handler = newHandler(options);
-        int brokerId = options.brokerId().orElse(3);
         DescribeProducersResponse response = buildResponseWithError(topicPartition, error);
-        Node node = new Node(brokerId, "host", 1);
-        return handler.handleResponse(brokerId, mkSet(topicPartition), response, node);
+        Node node = new Node(options.brokerId().orElse(3), "host", 1);
+        return handler.handleResponse(node, mkSet(topicPartition), response);
     }
 
     private DescribeProducersResponse buildResponseWithError(

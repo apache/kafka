@@ -31,7 +31,7 @@ import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
-import org.apache.kafka.common.errors.UnsupportedBatchLookupException;
+import org.apache.kafka.common.errors.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -885,7 +885,7 @@ public abstract class AbstractCoordinator implements Closeable {
         public void onFailure(RuntimeException e, RequestFuture<Void> future) {
             log.debug("FindCoordinator request failed due to {}", e.toString());
 
-            if (e instanceof UnsupportedBatchLookupException) {
+            if (e instanceof NoBatchedFindCoordinatorsException) {
                 batchFindCoordinator = false;
                 clearFindCoordinatorFuture();
                 lookupCoordinator();

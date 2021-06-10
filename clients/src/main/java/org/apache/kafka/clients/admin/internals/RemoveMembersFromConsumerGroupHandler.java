@@ -30,6 +30,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -48,7 +49,7 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
         this.groupId = CoordinatorKey.byGroupId(groupId);
         this.members = members;
         this.log = logContext.logger(RemoveMembersFromConsumerGroupHandler.class);
-        this.lookupStrategy = new CoordinatorStrategy(logContext);
+        this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
     }
 
     @Override
@@ -73,8 +74,8 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Map<MemberIdentity, Errors>> handleResponse(int brokerId, Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse, Node node) {
+    public ApiResult<CoordinatorKey, Map<MemberIdentity, Errors>> handleResponse(Node broker, Set<CoordinatorKey> groupIds,
+            AbstractResponse abstractResponse) {
 
         final LeaveGroupResponse response = (LeaveGroupResponse) abstractResponse;
         Map<CoordinatorKey, Map<MemberIdentity, Errors>> completed = new HashMap<>();

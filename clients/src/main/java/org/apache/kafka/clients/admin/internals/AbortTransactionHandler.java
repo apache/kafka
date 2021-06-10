@@ -94,10 +94,9 @@ public class AbortTransactionHandler implements AdminApiHandler<TopicPartition, 
 
     @Override
     public ApiResult<TopicPartition, Void> handleResponse(
-        int brokerId,
+        Node broker,
         Set<TopicPartition> topicPartitions,
-        AbstractResponse abstractResponse,
-        Node node
+        AbstractResponse abstractResponse
     ) {
         validateTopicPartitions(topicPartitions);
 

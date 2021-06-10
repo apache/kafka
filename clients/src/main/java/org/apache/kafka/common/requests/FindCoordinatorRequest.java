@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.errors.UnsupportedBatchLookupException;
+import org.apache.kafka.common.errors.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
@@ -45,7 +45,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
                         "because we require features supported only in 2 or later.");
             }
             if (version < 4 && !data.coordinatorKeys().isEmpty()) {
-                throw new UnsupportedBatchLookupException("Cannot create a v" + version + " FindCoordinator request " +
+                throw new NoBatchedFindCoordinatorsException("Cannot create a v" + version + " FindCoordinator request " +
                         "because we require features supported only in 4 or later.");
             }
             return new FindCoordinatorRequest(data, version);

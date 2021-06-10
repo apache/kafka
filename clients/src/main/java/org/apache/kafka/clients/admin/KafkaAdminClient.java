@@ -3091,7 +3091,7 @@ public class KafkaAdminClient extends AdminClient {
                                                                final DescribeConsumerGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, ConsumerGroupDescription> future =
                 DescribeConsumerGroupsHandler.newFuture(groupIds);
-        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(new HashSet<>(groupIds), options.includeAuthorizedOperations(), logContext);
+        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(options.includeAuthorizedOperations(), logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new DescribeConsumerGroupsResult(future.all());
     }

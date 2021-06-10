@@ -34,6 +34,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.OffsetDeleteRequest;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -52,7 +53,7 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         this.groupId = CoordinatorKey.byGroupId(groupId);
         this.partitions = partitions;
         this.log = logContext.logger(DeleteConsumerGroupOffsetsHandler.class);
-        this.lookupStrategy = new CoordinatorStrategy(logContext);
+        this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
     }
 
     @Override
@@ -91,8 +92,8 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(int brokerId, Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse, Node node) {
+    public ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(Node broker, Set<CoordinatorKey> groupIds,
+            AbstractResponse abstractResponse) {
 
         final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
         Map<CoordinatorKey, Map<TopicPartition, Errors>> completed = new HashMap<>();

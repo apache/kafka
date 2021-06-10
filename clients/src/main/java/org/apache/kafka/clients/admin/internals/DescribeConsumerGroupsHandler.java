@@ -46,6 +46,7 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -57,13 +58,12 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public DescribeConsumerGroupsHandler(
-        Set<String> groupIds,
         boolean includeAuthorizedOperations,
         LogContext logContext
     ) {
         this.includeAuthorizedOperations = includeAuthorizedOperations;
         this.log = logContext.logger(DescribeConsumerGroupsHandler.class);
-        this.lookupStrategy = new CoordinatorStrategy(logContext);
+        this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
     }
 
     private static Set<CoordinatorKey> buildKeySet(Collection<String> groupIds) {
@@ -104,8 +104,8 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
     }
 
     @Override
-    public ApiResult<CoordinatorKey, ConsumerGroupDescription> handleResponse(int brokerId, Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse, Node node) {
+    public ApiResult<CoordinatorKey, ConsumerGroupDescription> handleResponse(Node broker, Set<CoordinatorKey> groupIds,
+            AbstractResponse abstractResponse) {
         DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
         Map<CoordinatorKey, ConsumerGroupDescription> completed = new HashMap<>();
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
@@ -143,7 +143,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                         memberDescriptions,
                         describedGroup.protocolData(),
                         ConsumerGroupState.parse(describedGroup.groupState()),
-                        node,
+                        broker,
                         authorizedOperations);
                 completed.put(groupIdKey, consumerGroupDescription);
             } else {

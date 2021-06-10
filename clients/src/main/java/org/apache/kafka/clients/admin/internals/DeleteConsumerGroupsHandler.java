@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -45,7 +46,7 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
         LogContext logContext
     ) {
         this.log = logContext.logger(DeleteConsumerGroupsHandler.class);
-        this.lookupStrategy = new CoordinatorStrategy(logContext);
+        this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
     }
 
     @Override
@@ -85,8 +86,8 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Void> handleResponse(int brokerId, Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse, Node node) {
+    public ApiResult<CoordinatorKey, Void> handleResponse(Node broker, Set<CoordinatorKey> groupIds,
+            AbstractResponse abstractResponse) {
         DeleteGroupsResponse response = (DeleteGroupsResponse) abstractResponse;
         Map<CoordinatorKey, Void> completed = new HashMap<>();
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();

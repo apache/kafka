@@ -100,7 +100,7 @@ public class DeleteConsumerGroupsHandlerTest {
     ) {
         DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(groupIds, logContext);
         DeleteGroupsResponse response = buildResponse(error);
-        return handler.handleResponse(1, singleton(CoordinatorKey.byGroupId(groupId1)), response, Node.noNode());
+        return handler.handleResponse(new Node(1, "host", 1234), singleton(CoordinatorKey.byGroupId(groupId1)), response);
     }
 
     private void assertUnmapped(

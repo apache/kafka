@@ -44,7 +44,7 @@ public class CoordinatorStrategyTest {
 
     @Test
     public void testBuildOldLookupRequest() {
-        CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
+        CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
         strategy.disableBatch();
         FindCoordinatorRequest.Builder request = strategy.buildRequest(singleton(
             CoordinatorKey.byGroupId("foo")));
@@ -54,7 +54,7 @@ public class CoordinatorStrategyTest {
 
     @Test
     public void testBuildLookupRequest() {
-        CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
+        CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
         FindCoordinatorRequest.Builder request = strategy.buildRequest(new HashSet<>(Arrays.asList(
             CoordinatorKey.byGroupId("foo"),
             CoordinatorKey.byGroupId("bar"))));
@@ -65,7 +65,7 @@ public class CoordinatorStrategyTest {
 
     @Test
     public void testBuildLookupOldRequestRequiresOneKey() {
-        CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
+        CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
         strategy.disableBatch();
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(Collections.emptySet()));
 
@@ -76,7 +76,7 @@ public class CoordinatorStrategyTest {
 
     @Test
     public void testBuildLookupRequestRequiresAtLeastOneKey() {
-        CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
+        CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
 
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(Collections.emptySet()));
     }
@@ -86,7 +86,7 @@ public class CoordinatorStrategyTest {
         FindCoordinatorResponseData responseData = new FindCoordinatorResponseData().setErrorCode(Errors.NONE.code());
         FindCoordinatorResponse response = new FindCoordinatorResponse(responseData);
 
-        CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
+        CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
         strategy.disableBatch();
         assertThrows(IllegalArgumentException.class, () ->
             strategy.handleResponse(Collections.emptySet(), response));
@@ -243,7 +243,7 @@ public class CoordinatorStrategyTest {
         CoordinatorKey key,
         FindCoordinatorResponseData responseData
     ) {
-        CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
+        CoordinatorStrategy strategy = new CoordinatorStrategy(key.type, new LogContext());
         strategy.disableBatch();
         FindCoordinatorResponse response = new FindCoordinatorResponse(responseData);
         return strategy.handleResponse(singleton(key), response);
@@ -253,7 +253,7 @@ public class CoordinatorStrategyTest {
         Set<CoordinatorKey> keys,
         FindCoordinatorResponseData responseData
     ) {
-        CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
+        CoordinatorStrategy strategy = new CoordinatorStrategy(keys.iterator().next().type, new LogContext());
         strategy.buildRequest(keys);
         FindCoordinatorResponse response = new FindCoordinatorResponse(responseData);
         return strategy.handleResponse(keys, response);

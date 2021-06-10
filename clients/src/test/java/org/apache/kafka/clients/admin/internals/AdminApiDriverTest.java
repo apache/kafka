@@ -725,7 +725,7 @@ class AdminApiDriverTest {
         }
 
         @Override
-        public ApiResult<K, V> handleResponse(int brokerId, Set<K> keys, AbstractResponse response, Node node) {
+        public ApiResult<K, V> handleResponse(Node broker, Set<K> keys, AbstractResponse response) {
             return Optional.ofNullable(expectedRequests.get(keys)).orElseThrow(() ->
                 new AssertionError("Unexpected fulfillment request for keys " + keys)
             );

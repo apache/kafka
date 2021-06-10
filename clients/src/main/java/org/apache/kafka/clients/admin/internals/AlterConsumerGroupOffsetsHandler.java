@@ -35,6 +35,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -53,7 +54,7 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
         this.groupId = CoordinatorKey.byGroupId(groupId);
         this.offsets = offsets;
         this.log = logContext.logger(AlterConsumerGroupOffsetsHandler.class);
-        this.lookupStrategy = new CoordinatorStrategy(logContext);
+        this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
     }
 
     @Override
@@ -105,8 +106,8 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(int brokerId, Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse, Node node) {
+    public ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(Node broker, Set<CoordinatorKey> groupIds,
+            AbstractResponse abstractResponse) {
 
         final OffsetCommitResponse response = (OffsetCommitResponse) abstractResponse;
         Map<CoordinatorKey, Map<TopicPartition, Errors>> completed = new HashMap<>();

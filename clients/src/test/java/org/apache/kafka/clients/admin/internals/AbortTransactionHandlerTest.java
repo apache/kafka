@@ -47,6 +47,7 @@ public class AbortTransactionHandlerTest {
     private final TopicPartition topicPartition = new TopicPartition("foo", 5);
     private final AbortTransactionSpec abortSpec = new AbortTransactionSpec(
         topicPartition, 12345L, (short) 15, 4321);
+    private final Node node = new Node(1, "host", 1234);
 
     @Test
     public void testInvalidBuildRequestCall() {
@@ -80,12 +81,12 @@ public class AbortTransactionHandlerTest {
     public void testInvalidHandleResponseCall() {
         AbortTransactionHandler handler = new AbortTransactionHandler(abortSpec, logContext);
         WriteTxnMarkersResponseData response = new WriteTxnMarkersResponseData();
-        assertThrows(IllegalArgumentException.class, () -> handler.handleResponse(1,
-            emptySet(), new WriteTxnMarkersResponse(response), Node.noNode()));
-        assertThrows(IllegalArgumentException.class, () -> handler.handleResponse(1,
-            mkSet(new TopicPartition("foo", 1)), new WriteTxnMarkersResponse(response), Node.noNode()));
-        assertThrows(IllegalArgumentException.class, () -> handler.handleResponse(1,
-            mkSet(topicPartition, new TopicPartition("foo", 1)), new WriteTxnMarkersResponse(response), Node.noNode()));
+        assertThrows(IllegalArgumentException.class, () -> handler.handleResponse(node,
+            emptySet(), new WriteTxnMarkersResponse(response)));
+        assertThrows(IllegalArgumentException.class, () -> handler.handleResponse(node,
+            mkSet(new TopicPartition("foo", 1)), new WriteTxnMarkersResponse(response)));
+        assertThrows(IllegalArgumentException.class, () -> handler.handleResponse(node,
+            mkSet(topicPartition, new TopicPartition("foo", 1)), new WriteTxnMarkersResponse(response)));
     }
 
     @Test
@@ -93,44 +94,44 @@ public class AbortTransactionHandlerTest {
         AbortTransactionHandler handler = new AbortTransactionHandler(abortSpec, logContext);
 
         WriteTxnMarkersResponseData response = new WriteTxnMarkersResponseData();
-        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response), Node.noNode()));
+        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(node, singleton(topicPartition),
+            new WriteTxnMarkersResponse(response)));
 
         WriteTxnMarkersResponseData.WritableTxnMarkerResult markerResponse =
             new WriteTxnMarkersResponseData.WritableTxnMarkerResult();
         response.markers().add(markerResponse);
-        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response), Node.noNode()));
+        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(node, singleton(topicPartition),
+            new WriteTxnMarkersResponse(response)));
 
         markerResponse.setProducerId(abortSpec.producerId());
-        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response), Node.noNode()));
+        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(node, singleton(topicPartition),
+            new WriteTxnMarkersResponse(response)));
 
         WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult topicResponse =
             new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult();
         markerResponse.topics().add(topicResponse);
-        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response), Node.noNode()));
+        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(node, singleton(topicPartition),
+            new WriteTxnMarkersResponse(response)));
 
         topicResponse.setName(abortSpec.topicPartition().topic());
-        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response), Node.noNode()));
+        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(node, singleton(topicPartition),
+            new WriteTxnMarkersResponse(response)));
 
         WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult partitionResponse =
             new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult();
         topicResponse.partitions().add(partitionResponse);
-        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response), Node.noNode()));
+        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(node, singleton(topicPartition),
+            new WriteTxnMarkersResponse(response)));
 
         partitionResponse.setPartitionIndex(abortSpec.topicPartition().partition());
         topicResponse.setName(abortSpec.topicPartition().topic() + "random");
-        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response), Node.noNode()));
+        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(node, singleton(topicPartition),
+            new WriteTxnMarkersResponse(response)));
 
         topicResponse.setName(abortSpec.topicPartition().topic());
         markerResponse.setProducerId(abortSpec.producerId() + 1);
-        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response), Node.noNode()));
+        assertFailed(KafkaException.class, topicPartition, handler.handleResponse(node, singleton(topicPartition),
+            new WriteTxnMarkersResponse(response)));
     }
 
     @Test
@@ -182,8 +183,8 @@ public class AbortTransactionHandlerTest {
         WriteTxnMarkersResponseData response = new WriteTxnMarkersResponseData();
         response.markers().add(markerResponse);
 
-        return handler.handleResponse(1, singleton(abortSpec.topicPartition()),
-            new WriteTxnMarkersResponse(response), Node.noNode());
+        return handler.handleResponse(node, singleton(abortSpec.topicPartition()),
+            new WriteTxnMarkersResponse(response));
     }
 
     private void assertUnmapped(

@@ -170,7 +170,7 @@ public class AllBrokersStrategyIntegrationTest {
         assertEquals(time.milliseconds() + RETRY_BACKOFF_MS, retrySpec.nextAllowedTryMs);
         assertEquals(OptionalInt.of(brokerId), retrySpec.scope.destinationBrokerId());
 
-        driver.onResponse(time.milliseconds(), retrySpec, null, Node.noNode());
+        driver.onResponse(time.milliseconds(), retrySpec, null, new Node(brokerId, "host", 1234));
         assertTrue(future.isDone());
         assertEquals(brokerId, future.get());
         assertEquals(Collections.emptyList(), driver.poll());
@@ -233,12 +233,11 @@ public class AllBrokersStrategyIntegrationTest {
 
         @Override
         public ApiResult<AllBrokersStrategy.BrokerKey, Integer> handleResponse(
-            int brokerId,
+            Node broker,
             Set<AllBrokersStrategy.BrokerKey> keys,
-            AbstractResponse response,
-            Node node
+            AbstractResponse response
         ) {
-            return ApiResult.completed(keys.iterator().next(), brokerId);
+            return ApiResult.completed(keys.iterator().next(), broker.id());
         }
 
         @Override

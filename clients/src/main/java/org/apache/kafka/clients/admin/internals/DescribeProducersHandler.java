@@ -155,10 +155,9 @@ public class DescribeProducersHandler implements AdminApiHandler<TopicPartition,
 
     @Override
     public ApiResult<TopicPartition, PartitionProducerState> handleResponse(
-        int brokerId,
+        Node broker,
         Set<TopicPartition> keys,
-        AbstractResponse abstractResponse,
-        Node node
+        AbstractResponse abstractResponse
     ) {
         DescribeProducersResponse response = (DescribeProducersResponse) abstractResponse;
         Map<TopicPartition, PartitionProducerState> completed = new HashMap<>();

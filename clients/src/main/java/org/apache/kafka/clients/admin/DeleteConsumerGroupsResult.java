@@ -43,7 +43,7 @@ public class DeleteConsumerGroupsResult {
      * individual deletions.
      */
     public Map<String, KafkaFuture<Void>> deletedGroups() {
-        Map<String, KafkaFuture<Void>> deletedGroups = new HashMap<>();
+        Map<String, KafkaFuture<Void>> deletedGroups = new HashMap<>(futures.size());
         for (Map.Entry<CoordinatorKey, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
             deletedGroups.put(entry.getKey().idValue, entry.getValue());
         }

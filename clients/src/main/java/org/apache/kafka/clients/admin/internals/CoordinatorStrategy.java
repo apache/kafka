@@ -42,20 +42,22 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
     private static final ApiRequestScope TXN_REQUEST_SCOPE = new ApiRequestScope() { };
 
     private final Logger log;
+    private final FindCoordinatorRequest.CoordinatorType type;
     private boolean batch = true;
-    private FindCoordinatorRequest.CoordinatorType type;
     private Set<CoordinatorKey> unrepresentableKeys = Collections.emptySet();
 
     public CoordinatorStrategy(
+        FindCoordinatorRequest.CoordinatorType type,
         LogContext logContext
     ) {
+        this.type = type;
         this.log = logContext.logger(CoordinatorStrategy.class);
     }
 
     @Override
     public ApiRequestScope lookupScope(CoordinatorKey key) {
         if (batch) {
-            if (key.type == CoordinatorType.GROUP) {
+            if (type == CoordinatorType.GROUP) {
                 return GROUP_REQUEST_SCOPE;
             } else {
                 return TXN_REQUEST_SCOPE;
@@ -73,14 +75,12 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
         keys = keys.stream().filter(k -> isRepresentableKey(k.idValue)).collect(Collectors.toSet());
         if (batch) {
             keys = requireSameType(keys);
-            type = keys.iterator().next().type;
             FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                     .setKeyType(type.id())
                     .setCoordinatorKeys(keys.stream().map(k -> k.idValue).collect(Collectors.toList()));
             return new FindCoordinatorRequest.Builder(data);
         } else {
             CoordinatorKey key = requireSingleton(keys);
-            type = key.type;
             return new FindCoordinatorRequest.Builder(
                 new FindCoordinatorRequestData()
                     .setKey(key.idValue)
@@ -105,7 +105,7 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
         if (batch) {
             for (Coordinator coordinator : response.data().coordinators()) {
                 handleError(Errors.forCode(coordinator.errorCode()),
-                            new CoordinatorKey(coordinator.key(), type),
+                            new CoordinatorKey(type, coordinator.key()),
                             coordinator.nodeId(),
                             mappedKeys,
                             failedKeys);

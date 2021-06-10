@@ -68,12 +68,12 @@ public class DescribeConsumerGroupsHandlerTest {
 
     @Test
     public void testBuildRequest() {
-        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(groupIds, false, logContext);
+        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(false, logContext);
         DescribeGroupsRequest request = handler.buildRequest(1, keys).build();
         assertEquals(2, request.data().groups().size());
         assertFalse(request.data().includeAuthorizedOperations());
 
-        handler = new DescribeConsumerGroupsHandler(groupIds, true, logContext);
+        handler = new DescribeConsumerGroupsHandler(true, logContext);
         request = handler.buildRequest(1, keys).build();
         assertEquals(2, request.data().groups().size());
         assertTrue(request.data().includeAuthorizedOperations());
@@ -81,7 +81,7 @@ public class DescribeConsumerGroupsHandlerTest {
 
     @Test
     public void testInvalidBuildRequest() {
-        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(groupIds, false, logContext);
+        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(false, logContext);
         assertThrows(IllegalArgumentException.class, () -> handler.buildRequest(1, singleton(CoordinatorKey.byTransactionalId("tId"))));
     }
 
@@ -147,9 +147,9 @@ public class DescribeConsumerGroupsHandlerTest {
         Errors error,
         String protocolType
     ) {
-        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(groupIds, true, logContext);
+        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(true, logContext);
         DescribeGroupsResponse response = buildResponse(error, protocolType);
-        return handler.handleResponse(1, singleton(CoordinatorKey.byGroupId(groupId1)), response, coordinator);
+        return handler.handleResponse(coordinator, singleton(CoordinatorKey.byGroupId(groupId1)), response);
     }
 
     private void assertUnmapped(

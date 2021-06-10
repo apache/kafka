@@ -44,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class ListTransactionsHandlerTest {
     private final LogContext logContext = new LogContext();
+    private final Node node = new Node(1, "host", 1234);
 
     @Test
     public void testBuildRequestWithoutFilters() {
@@ -90,7 +91,7 @@ public class ListTransactionsHandlerTest {
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
         ListTransactionsResponse response = sampleListTransactionsResponse1();
         ApiResult<BrokerKey, Collection<TransactionListing>> result = handler.handleResponse(
-            brokerId, singleton(brokerKey), response, Node.noNode());
+            node, singleton(brokerKey), response);
         assertEquals(singleton(brokerKey), result.completedKeys.keySet());
         assertExpectedTransactions(response.data().transactionStates(), result.completedKeys.get(brokerKey));
     }
@@ -135,7 +136,7 @@ public class ListTransactionsHandlerTest {
         ListTransactionsResponse response = new ListTransactionsResponse(
             new ListTransactionsResponseData().setErrorCode(error.code())
         );
-        return handler.handleResponse(brokerId, singleton(brokerKey), response, Node.noNode());
+        return handler.handleResponse(node, singleton(brokerKey), response);
     }
 
     private ListTransactionsResponse sampleListTransactionsResponse1() {

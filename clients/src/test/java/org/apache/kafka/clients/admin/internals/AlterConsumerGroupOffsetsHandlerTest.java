@@ -51,6 +51,7 @@ public class AlterConsumerGroupOffsetsHandlerTest {
     private final TopicPartition t1p1 = new TopicPartition("t1", 1);
     private final Map<TopicPartition, OffsetAndMetadata> partitions = new HashMap<>();
     private final long offset = 1L;
+    private final Node node = new Node(1, "host", 1234);
 
     @BeforeEach
     public void setUp() {
@@ -75,7 +76,7 @@ public class AlterConsumerGroupOffsetsHandlerTest {
         AlterConsumerGroupOffsetsHandler handler = new AlterConsumerGroupOffsetsHandler(groupId, partitions, logContext);
         Map<TopicPartition, Errors> responseData = Collections.singletonMap(t0p0, Errors.NONE);
         OffsetCommitResponse response = new OffsetCommitResponse(0, responseData);
-        ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> result = handler.handleResponse(1, singleton(CoordinatorKey.byGroupId(groupId)), response, Node.noNode());
+        ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> result = handler.handleResponse(node, singleton(CoordinatorKey.byGroupId(groupId)), response);
         assertCompleted(result, responseData);
     }
 
@@ -98,7 +99,7 @@ public class AlterConsumerGroupOffsetsHandlerTest {
         AlterConsumerGroupOffsetsHandler handler = new AlterConsumerGroupOffsetsHandler(groupId, partitions, logContext);
         Map<TopicPartition, Errors> responseData = Collections.singletonMap(t0p0, error);
         OffsetCommitResponse response = new OffsetCommitResponse(0, responseData);
-        return handler.handleResponse(1, singleton(CoordinatorKey.byGroupId(groupId)), response, Node.noNode());
+        return handler.handleResponse(node, singleton(CoordinatorKey.byGroupId(groupId)), response);
     }
 
     private void assertUnmapped(

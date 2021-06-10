@@ -109,7 +109,7 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
     ) {
         DeleteConsumerGroupOffsetsHandler handler = new DeleteConsumerGroupOffsetsHandler(groupId, tps, logContext);
         OffsetDeleteResponse response = buildResponse(error);
-        return handler.handleResponse(1, singleton(CoordinatorKey.byGroupId(groupId)), response, Node.noNode());
+        return handler.handleResponse(new Node(1, "host", 1234), singleton(CoordinatorKey.byGroupId(groupId)), response);
     }
 
     private void assertUnmapped(
