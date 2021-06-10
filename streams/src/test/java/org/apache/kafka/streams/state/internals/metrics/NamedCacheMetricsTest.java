@@ -19,27 +19,19 @@ package org.apache.kafka.streams.state.internals.metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.powermock.api.easymock.PowerMock.createMock;
-import static org.powermock.api.easymock.PowerMock.mockStatic;
-import static org.powermock.api.easymock.PowerMock.replay;
-import static org.powermock.api.easymock.PowerMock.verify;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({StreamsMetricsImpl.class, Sensor.class})
+@RunWith(MockitoJUnitRunner.class)
 public class NamedCacheMetricsTest {
 
     private static final String THREAD_ID = "test-thread";
@@ -49,18 +41,15 @@ public class NamedCacheMetricsTest {
     private static final String HIT_RATIO_MIN_DESCRIPTION = "The minimum cache hit ratio";
     private static final String HIT_RATIO_MAX_DESCRIPTION = "The maximum cache hit ratio";
 
-    private final StreamsMetricsImpl streamsMetrics = createMock(StreamsMetricsImpl.class);
-    private final Sensor expectedSensor = mock(Sensor.class);
+    private final Sensor expectedSensor = Mockito.mock(Sensor.class);
     private final Map<String, String> tagMap = mkMap(mkEntry("key", "value"));
 
     @Test
     public void shouldGetHitRatioSensorWithBuiltInMetricsVersionCurrent() {
         final String hitRatio = "hit-ratio";
-        mockStatic(StreamsMetricsImpl.class);
-        expect(streamsMetrics.version()).andStubReturn(Version.LATEST);
-        expect(streamsMetrics.cacheLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, hitRatio, RecordingLevel.DEBUG))
-            .andReturn(expectedSensor);
-        expect(streamsMetrics.cacheLevelTagMap(THREAD_ID, TASK_ID, STORE_NAME)).andReturn(tagMap);
+        final StreamsMetricsImpl streamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
+        Mockito.when(streamsMetrics.cacheLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, hitRatio, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
+        Mockito.when(streamsMetrics.cacheLevelTagMap(THREAD_ID, TASK_ID, STORE_NAME)).thenReturn(tagMap);
         StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
             expectedSensor,
             StreamsMetricsImpl.CACHE_LEVEL_GROUP,
@@ -68,18 +57,13 @@ public class NamedCacheMetricsTest {
             hitRatio,
             HIT_RATIO_AVG_DESCRIPTION,
             HIT_RATIO_MIN_DESCRIPTION,
-            HIT_RATIO_MAX_DESCRIPTION);
-        replay(streamsMetrics);
-        replay(StreamsMetricsImpl.class);
+            HIT_RATIO_MAX_DESCRIPTION
+        );
 
         final Sensor sensor = NamedCacheMetrics.hitRatioSensor(streamsMetrics, THREAD_ID, TASK_ID, STORE_NAME);
 
-        verifyResult(sensor);
-    }
-
-    private void verifyResult(final Sensor sensor) {
-        verify(streamsMetrics);
-        verify(StreamsMetricsImpl.class);
+        Mockito.verify(streamsMetrics).cacheLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, hitRatio, RecordingLevel.DEBUG);
+        Mockito.verify(streamsMetrics).cacheLevelTagMap(THREAD_ID, TASK_ID, STORE_NAME);
         assertThat(sensor, is(expectedSensor));
     }
 }
