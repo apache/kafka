@@ -60,7 +60,7 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             return channel.size();
         } catch (IOException e) {
             throw new UncheckedIOException(
-                String.format("Error calculating snapshot size.temp path = %s, snapshotId = %s",
+                String.format("Error calculating snapshot size.temp path = %s, snapshotId = %s.",
                     this.tempSnapshotPath, this.snapshotId), e);
         }
     }
@@ -72,8 +72,8 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             Utils.writeFully(channel, records.buffer());
         } catch (IOException e) {
             throw new UncheckedIOException(
-                String.format("Error writing file snapshot," +
-                    "temp path = %s, snapshotId = %s", this.tempSnapshotPath, this.snapshotId),
+                String.format("Error writing file snapshot, " +
+                    "temp path = %s, snapshotId = %s.", this.tempSnapshotPath, this.snapshotId),
                 e
             );
         }
@@ -86,8 +86,8 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             Utils.writeFully(channel, records.buffer());
         } catch (IOException e) {
             throw new UncheckedIOException(
-                String.format("Error writing file snapshot," +
-                    "temp path = %s, snapshotId = %s", this.tempSnapshotPath, this.snapshotId),
+                String.format("Error writing file snapshot, " +
+                    "temp path = %s, snapshotId = %s.", this.tempSnapshotPath, this.snapshotId),
                 e
             );
         }
@@ -116,8 +116,8 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             replicatedLog.ifPresent(log -> log.onSnapshotFrozen(snapshotId));
         } catch (IOException e) {
             throw new UncheckedIOException(
-                String.format("Error freezing file snapshot." +
-                    "temp path = %s, snapshotId = %s", this.tempSnapshotPath, this.snapshotId),
+                String.format("Error freezing file snapshot, " +
+                    "temp path = %s, snapshotId = %s.", this.tempSnapshotPath, this.snapshotId),
                 e
             );
         }
@@ -131,8 +131,8 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             Files.deleteIfExists(tempSnapshotPath);
         } catch (IOException e) {
             throw new UncheckedIOException(
-                String.format("Error closing snapshot writer." +
-                    "temp path = %s, snapshotId %s", this.tempSnapshotPath, this.snapshotId),
+                String.format("Error closing snapshot writer, " +
+                    "temp path = %s, snapshotId %s.", this.tempSnapshotPath, this.snapshotId),
                 e
             );
         }
@@ -183,8 +183,8 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             );
         } catch (IOException e) {
             throw new UncheckedIOException(
-                String.format("Error creating snapshot writer." +
-                    "temp path = %s, snapshotId %s", path, snapshotId),
+                String.format("Error creating snapshot writer, " +
+                    "temp path = %s, snapshotId %s.", path, snapshotId),
                 e
             );
         }
