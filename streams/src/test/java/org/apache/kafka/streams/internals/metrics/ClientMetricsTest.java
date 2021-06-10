@@ -91,7 +91,7 @@ public class ClientMetricsTest {
             name,
             description,
             topologyDescription,
-            () -> ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, topologyDescription)
+            () -> ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, (c, n) -> topologyDescription)
         );
     }
 

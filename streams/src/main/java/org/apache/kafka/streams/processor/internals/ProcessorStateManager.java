@@ -162,8 +162,12 @@ public class ProcessorStateManager implements StateManager {
 
     private TaskType taskType;
 
-    public static String storeChangelogTopic(final String applicationId, final String storeName) {
-        return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
+    public static String storeChangelogTopic(final String applicationId, final String storeName, final String namedTopology) {
+        if (namedTopology == null) {
+            return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
+        } else {
+            return applicationId + "-" + namedTopology + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
+        }
     }
 
     /**

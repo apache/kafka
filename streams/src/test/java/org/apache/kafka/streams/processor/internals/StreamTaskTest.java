@@ -246,7 +246,7 @@ public class StreamTaskTest {
 
         consumer.assign(asList(partition1, partition2));
         consumer.updateBeginningOffsets(mkMap(mkEntry(partition1, 0L), mkEntry(partition2, 0L)));
-        stateDirectory = new StateDirectory(createConfig("100"), new MockTime(), true);
+        stateDirectory = new StateDirectory(createConfig("100"), new MockTime(), true, false);
     }
 
     @After

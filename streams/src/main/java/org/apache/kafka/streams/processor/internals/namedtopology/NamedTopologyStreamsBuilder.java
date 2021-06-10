@@ -22,12 +22,18 @@ import org.apache.kafka.streams.Topology;
 import java.util.Properties;
 
 public class NamedTopologyStreamsBuilder extends StreamsBuilder {
-
     final String topologyName;
 
+    /**
+     * @param topologyName              any string representing your NamedTopology, all characters allowed except for '_'
+     * @throws IllegalArgumentException if the name contains the character '_'
+     */
     public NamedTopologyStreamsBuilder(final String topologyName) {
         super();
         this.topologyName = topologyName;
+        if (topologyName.contains("_")) {
+            throw new IllegalArgumentException("The character '_' is not allowed in a NamedTopology, please select a new name");
+        }
     }
 
     public synchronized NamedTopology buildNamedTopology(final Properties props) {

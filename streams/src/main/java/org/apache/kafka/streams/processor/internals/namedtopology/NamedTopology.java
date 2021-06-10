@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +35,7 @@ public class NamedTopology extends Topology {
             throw new IllegalStateException("Tried to set topologyName but the name was already set");
         }
         name = newTopologyName;
+        internalTopologyBuilder.setTopologyName(name);
     }
 
     public String name() {
@@ -41,5 +44,9 @@ public class NamedTopology extends Topology {
 
     public List<String> sourceTopics() {
         return super.internalTopologyBuilder.fullSourceTopicNames();
+    }
+
+    InternalTopologyBuilder internalTopologyBuilder() {
+        return internalTopologyBuilder;
     }
 }
