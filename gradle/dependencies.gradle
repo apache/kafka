@@ -71,7 +71,7 @@ versions += [
   jetty: "9.4.39.v20210325",
   jersey: "2.34",
   jline: "3.12.1",
-  jmh: "1.27",
+  jmh: "1.32",
   hamcrest: "2.2",
   log4j: "1.2.17",
   scalaLogging: "3.9.3",

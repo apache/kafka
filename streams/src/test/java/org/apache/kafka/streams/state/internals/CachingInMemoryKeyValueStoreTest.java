@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -75,7 +76,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         store.setFlushListener(cacheFlushListener, false);
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext<>(null, null, null, null, cache);
-        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
+        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
         store.init((StateStoreContext) context, null);
     }
 
@@ -201,7 +202,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         store = new CachingKeyValueStore(underlyingStore);
         cache = EasyMock.niceMock(ThreadCache.class);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
-        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
+        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
         store.init((StateStoreContext) context, store);
     }
 
