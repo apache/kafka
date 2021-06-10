@@ -59,10 +59,27 @@ object EndPoint {
   }
 }
 
+
 /**
- * Part of the broker definition - matching host/port pair to a protocol
+ * 代理定义的一部分：匹配 host/port和协议
+ * 监听器使用EndPoint来定义，而定义监听器的参数是listeners和advertised.listeners（这是broker端的配置属性）
+ * @param host                broker主机名，比如localhost、kafka-01
+ * @param port                broker端口号，比如9092
+ * @param listenerName        监听器名字。预定义名称包括PLAINTEXT、SSL、SASL_PLAINTEXT和SASL_SSL。
+ *                            kafka允许自定义监听器名称，如CONTROLLER、INTERNAL等
+ * @param securityProtocol    监听器使用的安全协议，与监听器名称一一对应。
+ *                            Kakfa支持4种安全协议：PLAINTEXT、SSL、SASL_PLAINTEXT和SASL_SSL。
+ *                            Broker参数listener.security.protocol.map用于指定不同名字的监听器都
+ *                            使用哪种安全协议
  */
 case class EndPoint(host: String, port: Int, listenerName: ListenerName, securityProtocol: SecurityProtocol) {
+
+  /**
+   * 生成完整的监听器连接字节串
+   * 格式：监听器名称://主机名:端口
+   * PLAINTEXT://localhost:9092
+   * @return
+   */
   def connectionString: String = {
     val hostport =
       if (host == null)

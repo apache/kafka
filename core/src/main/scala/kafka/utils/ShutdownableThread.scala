@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,14 +21,20 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import org.apache.kafka.common.internals.FatalExitError
 
+/**
+ * 定义可关闭线程的抽象类
+ *
+ * @param name
+ * @param isInterruptible
+ */
 abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean = true)
-        extends Thread(name) with Logging {
+  extends Thread(name) with Logging {
   this.setDaemon(false)
   this.logIdent = "[" + name + "]: "
   private val shutdownInitiated = new CountDownLatch(1)
   private val shutdownComplete = new CountDownLatch(1)
   @volatile private var isStarted: Boolean = false
-  
+
   def shutdown(): Unit = {
     initiateShutdown()
     awaitShutdown()
@@ -39,8 +45,8 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   def isShutdownComplete: Boolean = shutdownComplete.getCount == 0
 
   /**
-    * @return true if there has been an unexpected error and the thread shut down
-    */
+   * @return true if there has been an unexpected error and the thread shut down
+   */
   // mind that run() might set both when we're shutting down the broker
   // but the return value of this function at that point wouldn't matter
   def isThreadFailed: Boolean = isShutdownComplete && !isShutdownInitiated
@@ -72,8 +78,8 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   }
 
   /**
-   *  Causes the current thread to wait until the shutdown is initiated,
-   *  or the specified waiting time elapses.
+   * Causes the current thread to wait until the shutdown is initiated,
+   * or the specified waiting time elapses.
    *
    * @param timeout
    * @param unit
@@ -84,7 +90,8 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   }
 
   /**
-   * This method is repeatedly invoked until the thread shuts down or this method throws an exception
+   * 子类需要实现自己业务逻辑的核心方法，
+   * 它会不停的被调用
    */
   def doWork(): Unit
 
@@ -95,6 +102,7 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
       while (isRunning)
         doWork()
     } catch {
+      // 出现致命异常，关闭资源、线程退出
       case e: FatalExitError =>
         shutdownInitiated.countDown()
         shutdownComplete.countDown()
@@ -104,7 +112,7 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
         if (isRunning)
           error("Error due to", e)
     } finally {
-       shutdownComplete.countDown()
+      shutdownComplete.countDown()
     }
     info("Stopped")
   }

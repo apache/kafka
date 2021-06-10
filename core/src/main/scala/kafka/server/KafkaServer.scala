@@ -158,6 +158,8 @@ class KafkaServer(
   private var _featureChangeListener: FinalizedFeatureChangeListener = null
 
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
+
+  //
   val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 
   def clusterId: String = _clusterId
@@ -238,12 +240,13 @@ class KafkaServer(
         /* register broker metrics */
         _brokerTopicStats = new BrokerTopicStats
 
+        // 配额管理器
         quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
         KafkaBroker.notifyClusterListeners(clusterId, kafkaMetricsReporters ++ metrics.reporters.asScala)
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
-        /* start log manager */
+        // 日志文件管理器
         logManager = LogManager(config, initialOfflineDirs,
           new ZkConfigRepository(new AdminZkClient(zkClient)),
           kafkaScheduler, time, brokerTopicStats, logDirFailureChannel, config.usesTopicId)
@@ -281,10 +284,12 @@ class KafkaServer(
         //
         // Note that we allow the use of KRaft mode controller APIs when forwarding is enabled
         // so that the Envelope request is exposed. This is only used in testing currently.
+        // 创建「SocketServer」组件
         socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
+        // 启动「SocketServer」，但不启动Processor
         socketServer.startup(startProcessingRequests = false)
 
-        /* start replica manager */
+        // 启动「replica manager」副本管理器组件
         alterIsrManager = if (config.interBrokerProtocolVersion.isAlterIsrSupported) {
           AlterIsrManager(
             config = config,
@@ -301,6 +306,7 @@ class KafkaServer(
         }
         alterIsrManager.start()
 
+        // 副本管理器
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 
@@ -314,7 +320,10 @@ class KafkaServer(
         tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
         tokenManager.startup()
 
-        /* start kafka controller */
+        // 创建并启动 KafkaController
+        // ① 注册Zookeeper Session会话过期处理器，一旦发现和ZK的会话过期，那么就将「Expire」事件写入事件队列中，controller事件处理器会执行「退位」操作
+        // ② 将「Start」事件放入事件队列中，这个事件会导致当前Broker尝试进行Controller选举操作
+        // ③ 启动事件管理器，不断从事件队列中获取事件任务并处理
         kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
         kafkaController.startup()
 
@@ -399,6 +408,8 @@ class KafkaServer(
         dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
 
+
+        // 启动Data plane和Control plane的所有线程（Acceptor+Processors）
         socketServer.startProcessingRequests(authorizerFutures)
 
         brokerState.set(BrokerState.RUNNING)
@@ -423,6 +434,10 @@ class KafkaServer(
       brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager, configRepository)
   }
 
+  /**
+   * 初始化ZK客户端，创建固定的节点
+   * @param time
+   */
   private def initZkClient(time: Time): Unit = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")
 
@@ -445,6 +460,7 @@ class KafkaServer(
         s"verification of the JAAS login file failed ${JaasUtils.zkSecuritySysConfigString}")
 
     // make sure chroot path exists
+    // 确保固定节点路径存在，没有则创建
     chrootOption.foreach { chroot =>
       val zkConnForChrootCreation = config.zkConnect.substring(0, chrootIndex)
       val zkClient = createZkClient(zkConnForChrootCreation, secureAclsEnabled)
@@ -453,6 +469,7 @@ class KafkaServer(
       zkClient.close()
     }
 
+    // 创建新的ZK客户端
     _zkClient = createZkClient(config.zkConnect, secureAclsEnabled)
     _zkClient.createTopLevelPaths()
   }

@@ -19,21 +19,29 @@ package kafka.controller
 
 import scala.collection.Seq
 
+/**
+ * 控制类状态类
+ */
 sealed abstract class ControllerState {
-
+  // 每种状态类型都会有一个确切值对应
   def value: Byte
 
+  // 状态变更速度指标
   def rateAndTimeMetricName: Option[String] =
     if (hasRateAndTimeMetric) Some(s"${toString}RateAndTimeMs") else None
 
+  //
   protected def hasRateAndTimeMetric: Boolean = true
 }
 
+/**
+ * Controller状态
+ */
 object ControllerState {
 
   // Note: `rateAndTimeMetricName` is based on the case object name by default. Changing a name is a breaking change
   // unless `rateAndTimeMetricName` is overridden.
-
+  // 空闲状态，也是初始状态
   case object Idle extends ControllerState {
     def value = 0
     override protected def hasRateAndTimeMetric: Boolean = false

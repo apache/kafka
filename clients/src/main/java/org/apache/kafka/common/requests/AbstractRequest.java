@@ -152,35 +152,54 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         return new RequestAndSize(doParseRequest(apiKey, apiVersion, buffer), bufferSize);
     }
 
+
+    /**
+     * 根据不同{@link ApiKeys}类型执行不同的解析逻辑，
+     * 从这里也可以得到整个Kafka的请求类型
+     *
+     * @param apiKey
+     * @param apiVersion
+     * @param buffer
+     * @return
+     */
     private static AbstractRequest doParseRequest(ApiKeys apiKey, short apiVersion, ByteBuffer buffer) {
         switch (apiKey) {
             case PRODUCE:
+                // 生产者请求（生产者生产消费）
                 return ProduceRequest.parse(buffer, apiVersion);
             case FETCH:
+                // 拉取请求（Follower同步消息）
                 return FetchRequest.parse(buffer, apiVersion);
             case LIST_OFFSETS:
                 return ListOffsetsRequest.parse(buffer, apiVersion);
             case METADATA:
+                // 元数据更新请求
                 return MetadataRequest.parse(buffer, apiVersion);
             case OFFSET_COMMIT:
                 return OffsetCommitRequest.parse(buffer, apiVersion);
             case OFFSET_FETCH:
                 return OffsetFetchRequest.parse(buffer, apiVersion);
             case FIND_COORDINATOR:
+                // 寻找协调器
                 return FindCoordinatorRequest.parse(buffer, apiVersion);
             case JOIN_GROUP:
+                // 消费者加入消费组请求
                 return JoinGroupRequest.parse(buffer, apiVersion);
             case HEARTBEAT:
+                // 心跳
                 return HeartbeatRequest.parse(buffer, apiVersion);
             case LEAVE_GROUP:
+                // 消费者离开消费组请求
                 return LeaveGroupRequest.parse(buffer, apiVersion);
             case SYNC_GROUP:
+                // SYNC_GROUP，用于分区重平衡
                 return SyncGroupRequest.parse(buffer, apiVersion);
             case STOP_REPLICA:
                 return StopReplicaRequest.parse(buffer, apiVersion);
             case CONTROLLED_SHUTDOWN:
                 return ControlledShutdownRequest.parse(buffer, apiVersion);
             case UPDATE_METADATA:
+                //
                 return UpdateMetadataRequest.parse(buffer, apiVersion);
             case LEADER_AND_ISR:
                 return LeaderAndIsrRequest.parse(buffer, apiVersion);
@@ -241,6 +260,7 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
             case DELETE_GROUPS:
                 return DeleteGroupsRequest.parse(buffer, apiVersion);
             case ELECT_LEADERS:
+                // Leader选举
                 return ElectLeadersRequest.parse(buffer, apiVersion);
             case INCREMENTAL_ALTER_CONFIGS:
                 return IncrementalAlterConfigsRequest.parse(buffer, apiVersion);

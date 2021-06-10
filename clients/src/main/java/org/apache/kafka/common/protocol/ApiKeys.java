@@ -37,8 +37,10 @@ import static org.apache.kafka.common.protocol.types.Type.COMPACT_NULLABLE_BYTES
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_BYTES;
 import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 
+
 /**
- * Identifiers for all the Kafka APIs
+ * 列举了目前Kafka所有的RPC协议
+ * https://kafka.apache.org/10/protocol.html
  */
 public enum ApiKeys {
     PRODUCE(ApiMessageType.PRODUCE),

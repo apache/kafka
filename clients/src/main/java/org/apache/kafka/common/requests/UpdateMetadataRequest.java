@@ -57,6 +57,11 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             this.topicIds = topicIds;
         }
 
+        /**
+         * 构建 {@link UpdateMetadataRequest} 请求体
+         * @param version   版本号
+         * @return
+         */
         @Override
         public UpdateMetadataRequest build(short version) {
             if (version < 3) {

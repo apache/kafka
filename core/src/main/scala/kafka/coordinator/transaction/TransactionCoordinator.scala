@@ -78,6 +78,19 @@ object TransactionCoordinator {
  * producers. Producers with specific transactional ids are assigned to their corresponding coordinators;
  * Producers with no specific transactional id may talk to a random broker as their coordinators.
  */
+
+/**
+ * 事务协调器：实现Kafka事务功能。同时向多个Topic写入消息时才会用到。
+ *
+ * @param brokerId
+ * @param txnConfig
+ * @param scheduler
+ * @param createProducerIdGenerator
+ * @param txnManager
+ * @param txnMarkerChannelManager
+ * @param time
+ * @param logContext
+ */
 class TransactionCoordinator(brokerId: Int,
                              txnConfig: TransactionConfig,
                              scheduler: Scheduler,

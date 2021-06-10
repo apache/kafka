@@ -30,6 +30,13 @@ object LeaderAndIsr {
   def duringDelete(isr: List[Int]): LeaderAndIsr = LeaderAndIsr(LeaderDuringDelete, isr)
 }
 
+/**
+ * 某个主题Leader和ISR集合，ISR集合包含Leader
+ * @param leader        Leader所在的Broker ID
+ * @param leaderEpoch   Leader版本号
+ * @param isr           ISR集合（有序），存储的是Broker ID
+ * @param zkVersion     ZK版本号
+ */
 case class LeaderAndIsr(leader: Int,
                         leaderEpoch: Int,
                         isr: List[Int],

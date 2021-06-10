@@ -19,14 +19,21 @@ package org.apache.kafka.common;
 import java.io.Serializable;
 import java.util.Objects;
 
+
 /**
- * A topic name and partition number
+ * POJO类，存储分区详情
  */
 public final class TopicPartition implements Serializable {
     private static final long serialVersionUID = -613627415771699627L;
 
     private int hash = 0;
+    /**
+     * 分区号
+     */
     private final int partition;
+    /**
+     * 分区所属的主题名称
+     */
     private final String topic;
 
     public TopicPartition(String topic, int partition) {

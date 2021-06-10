@@ -84,6 +84,7 @@ object Kafka extends Logging {
   def main(args: Array[String]): Unit = {
     try {
       val serverProps = getPropsFromArgs(args)
+      serverProps.put("kafka.logs.dir", "E:\\data\\kafka\\log")
       val server = buildServer(serverProps)
 
       try {

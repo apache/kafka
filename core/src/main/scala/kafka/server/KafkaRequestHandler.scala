@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,12 +30,31 @@ import org.apache.kafka.common.utils.{KafkaThread, Time}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
+/**
+ * 请求处理器接口，之前只有一个实现类，就是 {@link KafkaApis}，
+ * 但是由于Kafka2.8推出了基于Raft协议去Zookeeper操作后，就新增了 {@link ControllerApis}，
+ * 目前，基于Raft算法的Handler并不稳定，所以重点还是 {@link KafkaApis}
+ */
 trait ApiRequestHandler {
+
+  /**
+   * 处理Request业务逻辑
+   *
+   * @param request
+   */
   def handle(request: RequestChannel.Request): Unit
 }
 
 /**
- * A thread that answers kafka requests.
+ * 包装线程，管理多个 {@link KafkaRequestHandler} 请求处理器的生命周期
+ *
+ * @param id                  请求处理线程号，仅用于标识第几个处理线程
+ * @param brokerId            Broker ID，表示位于哪个Broker的处理线程
+ * @param aggregateIdleMeter  聚合指标
+ * @param totalHandlerThreads 线程数量
+ * @param requestChannel      请求处理通道，可以从通道中获取待处理的请求数据
+ * @param apis                KafkaApis类，用于真正实现请求处理逻辑的类。
+ * @param time                时间工具类
  */
 class KafkaRequestHandler(id: Int,
                           brokerId: Int,
@@ -49,35 +68,51 @@ class KafkaRequestHandler(id: Int,
   @volatile private var stopped = false
 
   def run(): Unit = {
+    // 不断尝试从阻塞中获取Request并处理
     while (!stopped) {
       // We use a single meter for aggregate idle percentage for the thread pool.
       // Since meter is calculated as total_recorded_value / time_window and
       // time_window is independent of the number of threads, each recorded idle
       // time should be discounted by # threads.
+      // 定义监控指标：我们使用单个监控指标来聚合线程池空闲百分比。
       val startSelectTime = time.nanoseconds
 
+
+      // #1 从requestQueue缓存队列中获取Request对象（附带超时时间，意味着线程不会永远阻塞）
       val req = requestChannel.receiveRequest(300)
       val endTime = time.nanoseconds
+      // 统计当前I/O线程的空闲时间
       val idleTime = endTime - startSelectTime
+      // 更新线程空闲时间百分比指标
+      if (aggregateIdleMeter == null || totalHandlerThreads == null) {
+        println("hello null")
+      }
       aggregateIdleMeter.mark(idleTime / totalHandlerThreads.get)
 
+      // #2 匹配Request的类型，做不同处理
       req match {
         case RequestChannel.ShutdownRequest =>
+          // #2-1 收到关闭线程请求
           debug(s"Kafka request handler $id on broker $brokerId received shut down command")
+          // #2-2 关闭线程
           shutdownComplete.countDown()
           return
-
         case request: RequestChannel.Request =>
+          // #2-3 普通请求
           try {
             request.requestDequeueTimeNanos = endTime
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
+            // #2-4 交由KafkaApis处理，这是Kafka Broker端核心类
             apis.handle(request)
           } catch {
+            // 如果致命异常，则关闭当前I/O线程
             case e: FatalExitError =>
               shutdownComplete.countDown()
               Exit.exit(e.statusCode)
+            // 如果是普通异常，则日志记录即可
             case e: Throwable => error("Exception when handling request", e)
           } finally {
+            // 释放ByteBuffer，避免内存泄漏
             request.releaseBuffer()
           }
 
@@ -97,20 +132,42 @@ class KafkaRequestHandler(id: Int,
 
 }
 
+/**
+ * I/O线程池，管理 {@link KafkaRequestHandler}
+ *
+ * @param brokerId                        I/O线程池所在的Broker ID
+ * @param requestChannel                  可看作一个管道/队列，I/O线程和Processor交互是通过这个类来完成的：
+ *                                        ① 从requestChannel获取Reqeust;② 将生成好的Response通过requestChannel
+ *                                        放到对应Processor的发送队列中去
+ * @param apis                            实际处理Request的类
+ * @param time                            时间工具类，里面包含多层时间轮
+ * @param numThreads                      I/O线程数量
+ * @param requestHandlerAvgIdleMetricName 指标监控
+ * @param logAndThreadNamePrefix          日志和线程名称前缀
+ */
 class KafkaRequestHandlerPool(val brokerId: Int,
                               val requestChannel: RequestChannel,
                               val apis: ApiRequestHandler,
                               time: Time,
                               numThreads: Int,
                               requestHandlerAvgIdleMetricName: String,
-                              logAndThreadNamePrefix : String) extends Logging with KafkaMetricsGroup {
+                              logAndThreadNamePrefix: String) extends Logging with KafkaMetricsGroup {
 
+  /**
+   * 线程池数量，可动态改变
+   */
   private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
+  /**
+   * 线程池
+   */
+  val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
   /* a meter to track the average free capacity of the request handlers */
   private val aggregateIdleMeter = newMeter(requestHandlerAvgIdleMetricName, "percent", TimeUnit.NANOSECONDS)
-
   this.logIdent = "[" + logAndThreadNamePrefix + " Kafka Request Handler on Broker " + brokerId + "], "
-  val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
+
+  /**
+   * 根据线程数量创建 {@link KafkaRequestHandler} 实例对象
+   */
   for (i <- 0 until numThreads) {
     createHandler(i)
   }
@@ -135,12 +192,19 @@ class KafkaRequestHandlerPool(val brokerId: Int,
     threadPoolSize.set(newSize)
   }
 
+  /**
+   * I/O线程池关闭
+   */
   def shutdown(): Unit = synchronized {
     info("shutting down")
-    for (handler <- runnables)
+    for (handler <- runnables) {
+      // #1 遍历所有正在运行的I/O线程，调用「initiateShutdown()」方法发送关闭
       handler.initiateShutdown()
-    for (handler <- runnables)
+    }
+    for (handler <- runnables) {
+      // #2 等待所有的I/O线程关闭
       handler.awaitShutdown()
+    }
     info("shut down completely")
   }
 }
@@ -287,6 +351,7 @@ object BrokerTopicStats {
 }
 
 class BrokerTopicStats extends Logging {
+
   import BrokerTopicStats._
 
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))

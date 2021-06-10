@@ -198,6 +198,28 @@ object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
 }
 
+/**
+ * 副本管理器：管理集群所有副本状态转换
+ *
+ * @param config
+ * @param metrics
+ * @param time
+ * @param zkClient
+ * @param scheduler
+ * @param logManager
+ * @param isShuttingDown
+ * @param quotaManagers
+ * @param brokerTopicStats
+ * @param metadataCache
+ * @param logDirFailureChannel
+ * @param delayedProducePurgatory
+ * @param delayedFetchPurgatory
+ * @param delayedDeleteRecordsPurgatory
+ * @param delayedElectLeaderPurgatory
+ * @param threadNamePrefix
+ * @param configRepository
+ * @param alterIsrManager
+ */
 class ReplicaManager(val config: KafkaConfig,
                      metrics: Metrics,
                      time: Time,

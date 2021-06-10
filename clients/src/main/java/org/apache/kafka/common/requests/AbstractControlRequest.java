@@ -19,13 +19,31 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 
 // Abstract class for all control requests including UpdateMetadataRequest, LeaderAndIsrRequest and StopReplicaRequest
+
+/**
+ * 所有控制类请求的抽象类，目前包含三种控制类请求，分别是
+ * {@link UpdateMetadataRequest}
+ * {@link LeaderAndIsrRequest}
+ * {@link StopReplicaRequest}
+ */
 public abstract class AbstractControlRequest extends AbstractRequest {
 
     public static final long UNKNOWN_BROKER_EPOCH = -1L;
 
     public static abstract class Builder<T extends AbstractRequest> extends AbstractRequest.Builder<T> {
+        /**
+         * Controller所在的BrokerID
+         */
         protected final int controllerId;
+
+        /**
+         * Controller版本号，用于保证Controller在集群间的一致性
+         */
         protected final int controllerEpoch;
+
+        /**
+         * Controller所在的Broker的版本号，用于保证Broker在集群间的一致性
+         */
         protected final long brokerEpoch;
 
         protected Builder(ApiKeys api, short version, int controllerId, int controllerEpoch, long brokerEpoch) {

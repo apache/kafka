@@ -33,106 +33,142 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
- * A Kafka connection either existing on a client (which could be a broker in an
- * inter-broker scenario) and representing the channel to a remote broker or the
- * reverse (existing on a broker and representing the channel to a remote
- * client, which could be a broker in an inter-broker scenario).
+ * 这是一个基类，可以用于客户端（生产者/消费者），也可以用于broker端（服务端）。
  * <p>
- * Each instance has the following:
- * <ul>
- * <li>a unique ID identifying it in the {@code KafkaClient} instance via which
- * the connection was made on the client-side or in the instance where it was
- * accepted on the server-side</li>
- * <li>a reference to the underlying {@link TransportLayer} to allow reading and
- * writing</li>
- * <li>an {@link Authenticator} that performs the authentication (or
- * re-authentication, if that feature is enabled and it applies to this
- * connection) by reading and writing directly from/to the same
- * {@link TransportLayer}.</li>
- * <li>a {@link MemoryPool} into which responses are read (typically the JVM
- * heap for clients, though smaller pools can be used for brokers and for
- * testing out-of-memory scenarios)</li>
- * <li>a {@link NetworkReceive} representing the current incomplete/in-progress
- * request (from the server-side perspective) or response (from the client-side
- * perspective) being read, if applicable; or a non-null value that has had no
- * data read into it yet or a null value if there is no in-progress
- * request/response (either could be the case)</li>
- * <li>a {@link Send} representing the current request (from the client-side
- * perspective) or response (from the server-side perspective) that is either
- * waiting to be sent or partially sent, if applicable, or null</li>
- * <li>a {@link ChannelMuteState} to document if the channel has been muted due
- * to memory pressure or other reasons</li>
- * </ul>
+ * 每个实例都包含以下内容：
+ * <p>
+ * ① 全局唯一ID，即 node id。在客户端和broker端有不同的含义。客户端表示所连接的节点ID。而服务端表示接收连接的节点ID。
+ * <p>
+ * ② 对传输层 {@link TransportLayer} 的引用，它的实现类持有 {@link SocketChannel} 的引用。负责对 {@link SocketChannel}的读/写操作。
+ * <p>
+ * ③ 一个 {@link Authenticator} 认证器。负责和对端的认证工作。这个类持有 {@link TransportLayer} 引用，可以直接从传输层读/写数据。
+ * <p>
+ * ④ 一个 {@link MemoryPool} 内存对象池（客户端通常使用堆内内存 JVM heap）。
+ * <p>
+ * ⑤ 一个 {@link NetworkReceive} 对象，代表当前正在「读取」的未完成/进行中的请求（从broker角度看）或响应（从客户端角度看）。比如对于客户端，
+ *   这个对象就是接收broker发过来的二进制数据。
+ * <p>
+ * ⑥ 一个 {@link Send} 对象。代表当前正在「写入」的未完成/进行中的响应（从broker角度看）或请求（从客户端角度看）。
+ * <p>
+ * ⑦ 同一时刻，每个 {@link KafkaChannel} 只能发送或接收一个请求或响应，这些请求和响应的接收具有顺序性。
+ *
+ * 总结：KafkaChannel 本质是对 {@link SocketChannel} 的包装，但是这中间还隔了一层 {@link TransportLayer}，它才是和 {@link SocketChannel} 打交道的类。
+ * KafkaChannel通过组合的方式达到解耦的目的。同时 KafkaChannel 有两个重要的引用类，分别是 {@link NetworkReceive} 和 {@link Send}，
+ * 分别存放从 {@link SocketChannel} 接收到的数据和客户端待发送的数据。
+ * KafkaChannel同时拥有通道的状态 {@link ChannelState}。
  */
 public class KafkaChannel implements AutoCloseable {
     private static final long MIN_REAUTH_INTERVAL_ONE_SECOND_NANOS = 1000 * 1000 * 1000;
 
     /**
-     * Mute States for KafkaChannel:
-     * <ul>
-     *   <li> NOT_MUTED: Channel is not muted. This is the default state. </li>
-     *   <li> MUTED: Channel is muted. Channel must be in this state to be unmuted. </li>
-     *   <li> MUTED_AND_RESPONSE_PENDING: (SocketServer only) Channel is muted and SocketServer has not sent a response
-     *                                    back to the client yet (acks != 0) or is currently waiting to receive a
-     *                                    response from the API layer (acks == 0). </li>
-     *   <li> MUTED_AND_THROTTLED: (SocketServer only) Channel is muted and throttling is in progress due to quota
-     *                             violation. </li>
-     *   <li> MUTED_AND_THROTTLED_AND_RESPONSE_PENDING: (SocketServer only) Channel is muted, throttling is in progress,
-     *                                                  and a response is currently pending. </li>
-     * </ul>
+     * 由于内存资源紧张或其他原因，可能会让 {@link KafkaChannel} 处于"静默"状态，
+     * 也就是说不能发送数据，也不能接收数据。等待合适的条件后才能放开。Kafka关于静默状态细分了以下几类
      */
     public enum ChannelMuteState {
+        /**
+         * 通道默认状态，即不静默
+         */
         NOT_MUTED,
+
+        /**
+         * 通道被静默
+         */
         MUTED,
+
+        /**
+         * 仅限于 SocketServer。
+         * 通道被默认且broker端仍未发送一个响应给客户端（acks!=0）
+         * 或者目前正在等待从 API 层（acks==0）接收响应
+         */
         MUTED_AND_RESPONSE_PENDING,
+
+        /**
+         * 仅限于 SocketServer。
+         * 通道被静默且通道被限流
+         */
         MUTED_AND_THROTTLED,
+
+        /**
+         * 仅限于 SocketServer。
+         * 通道被静默且被限流而且有一个响应处于待发送状态
+         */
         MUTED_AND_THROTTLED_AND_RESPONSE_PENDING
     }
 
-    /** Socket server events that will change the mute state:
-     * <ul>
-     *   <li> REQUEST_RECEIVED: A request has been received from the client. </li>
-     *   <li> RESPONSE_SENT: A response has been sent out to the client (ack != 0) or SocketServer has heard back from
-     *                       the API layer (acks = 0) </li>
-     *   <li> THROTTLE_STARTED: Throttling started due to quota violation. </li>
-     *   <li> THROTTLE_ENDED: Throttling ended. </li>
-     * </ul>
-     *
-     * Valid transitions on each event are:
-     * <ul>
-     *   <li> REQUEST_RECEIVED: MUTED => MUTED_AND_RESPONSE_PENDING </li>
-     *   <li> RESPONSE_SENT:    MUTED_AND_RESPONSE_PENDING => MUTED, MUTED_AND_THROTTLED_AND_RESPONSE_PENDING => MUTED_AND_THROTTLED </li>
-     *   <li> THROTTLE_STARTED: MUTED_AND_RESPONSE_PENDING => MUTED_AND_THROTTLED_AND_RESPONSE_PENDING </li>
-     *   <li> THROTTLE_ENDED:   MUTED_AND_THROTTLED => MUTED, MUTED_AND_THROTTLED_AND_RESPONSE_PENDING => MUTED_AND_RESPONSE_PENDING </li>
-     * </ul>
+
+    /**
+     * 定义触发通道静默的相关事件源
+     * 事件转换顺序：
+     * ① REQUEST_RECEIVED: MUTED => MUTED_AND_RESPONSE_PENDING
+     * ② RESPONSE_SENT:    MUTED_AND_RESPONSE_PENDING => MUTED, MUTED_AND_THROTTLED_AND_RESPONSE_PENDING => MUTED_AND_THROTTLED
+     * ③ THROTTLE_STARTED: MUTED_AND_RESPONSE_PENDING => MUTED_AND_THROTTLED_AND_RESPONSE_PENDING
+     * ④ THROTTLE_ENDED:   MUTED_AND_THROTTLED => MUTED, MUTED_AND_THROTTLED_AND_RESPONSE_PENDING => MUTED_AND_RESPONSE_PENDING
      */
     public enum ChannelMuteEvent {
+        /**
+         * 收到来自客户端的请求
+         */
         REQUEST_RECEIVED,
+
+        /**
+         * 已经向客户端发送响应（ack!=0）
+         * 或SocketServer收到API层的反馈（acks=0）
+         */
         RESPONSE_SENT,
+
+        /**
+         * 由于超出分配的额度而被限流
+         */
         THROTTLE_STARTED,
+
+        /**
+         * 限流结束
+         */
         THROTTLE_ENDED
     }
 
+    // 节点ID，客户端和服务端语义不同
     private final String id;
+
+    // 传输层
     private final TransportLayer transportLayer;
+
+    // 认证相关的类
     private final Supplier<Authenticator> authenticatorCreator;
     private Authenticator authenticator;
-    // Tracks accumulated network thread time. This is updated on the network thread.
-    // The values are read and reset after each response is sent.
+
+    // 追踪累加网络线程时间，这被Sender线程更新。
+    // 该值在每次发送响应后被读取和重置
     private long networkThreadTimeNanos;
+
+    // 接收数据最大值
     private final int maxReceiveSize;
+
+    // 内存对象池
     private final MemoryPool memoryPool;
+
+    // 通道元数据收集器
     private final ChannelMetadataRegistry metadataRegistry;
+
+    // 对于客户端来说，receive表示接收从broker端发出的响应，send表示客户端发往broker端的二进制数据
     private NetworkReceive receive;
     private NetworkSend send;
-    // Track connection and mute state of channels to enable outstanding requests on channels to be
-    // processed after the channel is disconnected.
+
+    // 追踪通道的连接和静默状态，以便在通道断开后能够处理通道上的未处理的请求
     private boolean disconnected;
+
+    // 当前通道的静默状态
     private ChannelMuteState muteState;
+
+    // 通道状态
     private ChannelState state;
+
+    // 对端地址
     private SocketAddress remoteAddress;
     private int successfulAuthentications;
     private boolean midWrite;
+
+    // 最近一次开始认证时间戳
     private long lastReauthenticationStartNanos;
 
     public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
@@ -214,15 +250,26 @@ public class KafkaChannel implements AutoCloseable {
         return this.state;
     }
 
+    /**
+     *
+     * @return
+     * @throws IOException
+     */
     public boolean finishConnect() throws IOException {
         //we need to grab remoteAddr before finishConnect() is called otherwise
         //it becomes inaccessible if the connection was refused.
+
+        // #1 获取JDK底层的SocketChannel
         SocketChannel socketChannel = transportLayer.socketChannel();
         if (socketChannel != null) {
+            // #2 获取远端的地址
             remoteAddress = socketChannel.getRemoteAddress();
         }
+
+        // #3 判断通道是否已经成功连接
         boolean connected = transportLayer.finishConnect();
         if (connected) {
+            // #4 通道成功连接，设置「KafkaChannel」通道状态
             if (ready()) {
                 state = ChannelState.READY;
             } else if (remoteAddress != null) {
@@ -231,6 +278,7 @@ public class KafkaChannel implements AutoCloseable {
                 state = ChannelState.AUTHENTICATE;
             }
         }
+        // #4 boolean值表示连接是否已成功建立
         return connected;
     }
 
@@ -271,10 +319,17 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     // Handle the specified channel mute-related event and transition the mute state according to the state machine.
+
+    /**
+     * 通道静默事件状态机：根据 mute-related 事件
+     *
+     * @param event
+     */
     public void handleChannelMuteEvent(ChannelMuteEvent event) {
         boolean stateChanged = false;
         switch (event) {
             case REQUEST_RECEIVED:
+                // #1 收到来自客户端的请求
                 if (muteState == ChannelMuteState.MUTED) {
                     muteState = ChannelMuteState.MUTED_AND_RESPONSE_PENDING;
                     stateChanged = true;
@@ -376,16 +431,33 @@ public class KafkaChannel implements AutoCloseable {
         return socket.getInetAddress().toString();
     }
 
+    /**
+     * 将待发送的数据加入缓冲区，这一步是委托 {@link TransportLayer} 来完成。
+     * 这里说一下，{@link TransportLayer} 是对底层{@link SocketChannel} 封装的类，
+     * 至于为什么这么设计是因为在TCP协议之上还有SSL协议，所以就再封装了一层。通常我们是使用 {@link PlaintextTransportLayer} 传输层。
+     *
+     * @param send  待缓存的数据对象
+     */
     public void setSend(NetworkSend send) {
-        if (this.send != null)
-            throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress, connection id is " + id);
+        // #1 如果通道中的send不为null，会抛出状态异常。因为按正常逻辑讲，只有当send==null，才会将下一个send添加进来，如果不为null是不会被添加的。
+        if (this.send != null) throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress, connection id is " + id);
+
+        // #2 加入缓存
         this.send = send;
+
+        // #3 注册OP_WRITE事件
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
 
+    /**
+     * 判断数据是否完成发送。发送完成条件（针对 {@link ByteBufferSend} 实现类而言）： 剩余字节数据为0，没有暂留的数据
+     *
+     * @return 如果完成发送，则返回 {@link #send} 对象，未完成发送则返回null
+     */
     public NetworkSend maybeCompleteSend() {
         if (send != null && send.completed()) {
             midWrite = false;
+            // 移除OP_WRITE事件
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
             NetworkSend result = send;
             send = null;
@@ -394,15 +466,21 @@ public class KafkaChannel implements AutoCloseable {
         return null;
     }
 
+    /**
+     *
+     * @return
+     * @throws IOException
+     */
     public long read() throws IOException {
+        // #1 创建响应接收类
         if (receive == null) {
             receive = new NetworkReceive(maxReceiveSize, id, memoryPool);
         }
-
+        // 从通道中读取数据并写入「receive」对象中的ByteBuffer里
         long bytesReceived = receive(this.receive);
 
         if (this.receive.requiredMemoryAmountKnown() && !this.receive.memoryAllocated() && isInMutableState()) {
-            //pool must be out of memory, mute ourselves.
+            // pool must be out of memory, mute ourselves.
             mute();
         }
         return bytesReceived;
@@ -412,6 +490,10 @@ public class KafkaChannel implements AutoCloseable {
         return receive;
     }
 
+    /**
+     * 如果数据已读取完毕，则返回 {@link #receive} 对象，否则返回null
+     * @return
+     */
     public NetworkReceive maybeCompleteReceive() {
         if (receive != null && receive.complete()) {
             receive.payload().rewind();
@@ -447,6 +529,12 @@ public class KafkaChannel implements AutoCloseable {
         return current;
     }
 
+    /**
+     * 从 {@link SocketChannel} 通道中接收数据并写入 {@param receive} 对象
+     * @param receive
+     * @return
+     * @throws IOException
+     */
     private long receive(NetworkReceive receive) throws IOException {
         try {
             return receive.readFrom(transportLayer);

@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets
 
 buildscript {
   repositories {
+    maven {url 'http://maven.aliyun.com/nexus/content/groups/public/'}
     mavenCentral()
     jcenter()
     maven {
@@ -194,10 +195,10 @@ subprojects {
   targetCompatibility = minJavaVersion
 
   java {
-    consistentResolution {
+    // consistentResolution {
       // resolve the compileClasspath and then "inject" the result of resolution as strict constraints into the runtimeClasspath
-      useCompileClasspathVersions()
-    }
+    // useCompileClasspathVersions()
+//    }
   }
 
   tasks.withType(JavaCompile) {
@@ -753,6 +754,8 @@ project(':core') {
   archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
+    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.30'
+    compile group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.30'
     compile project(':clients')
     compile project(':metadata')
     compile project(':raft')

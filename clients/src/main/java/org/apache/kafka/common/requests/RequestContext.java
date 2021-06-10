@@ -33,14 +33,50 @@ import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.ApiKeys.API_VERSIONS;
 
+/**
+ * 标识请求上下文详情，这个类主要定义在 Client 工程目录下
+ *
+ */
 public class RequestContext implements AuthorizableRequestContext {
+    /**
+     * 请求头，包含Request类型、Request API版本、clientId等
+     */
     public final RequestHeader header;
+
+    /**
+     * 用于标识发送方的TCP连接号
+     */
     public final String connectionId;
+
+    /**
+     * 发送方的IP地址
+     */
     public final InetAddress clientAddress;
+
+    /**
+     * Kafka用户认证授权
+     */
     public final KafkaPrincipal principal;
+
+    /**
+     * 监听器名称，TODO
+     */
     public final ListenerName listenerName;
+
+    /**
+     * 安全协议类型，目前支持4种：PLAINTEXT、SSL、SASL_PLAINTEXT、SASL_SSL
+     * 由配置项listener.security.protocol.map指定
+     */
     public final SecurityProtocol securityProtocol;
+
+    /**
+     * 客户端的自定义信息
+     */
     public final ClientInformation clientInformation;
+
+    /**
+     *
+     */
     public final boolean fromPrivilegedListener;
     public final Optional<KafkaPrincipalSerde> principalSerde;
 
@@ -53,14 +89,14 @@ public class RequestContext implements AuthorizableRequestContext {
                           ClientInformation clientInformation,
                           boolean fromPrivilegedListener) {
         this(header,
-            connectionId,
-            clientAddress,
-            principal,
-            listenerName,
-            securityProtocol,
-            clientInformation,
-            fromPrivilegedListener,
-            Optional.empty());
+                connectionId,
+                clientAddress,
+                principal,
+                listenerName,
+                securityProtocol,
+                clientInformation,
+                fromPrivilegedListener,
+                Optional.empty());
     }
 
     public RequestContext(RequestHeader header,
@@ -83,15 +119,24 @@ public class RequestContext implements AuthorizableRequestContext {
         this.principalSerde = principalSerde;
     }
 
+    /**
+     * 解析二进制数据
+     * @param buffer
+     * @return
+     */
     public RequestAndSize parseRequest(ByteBuffer buffer) {
         if (isUnsupportedApiVersionsRequest()) {
-            // Unsupported ApiVersion requests are treated as v0 requests and are not parsed
+            // 将不支持的版本统统视为v0版本的请求，且不做解析，直接返回
             ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), (short) 0, header.apiVersion());
             return new RequestAndSize(apiVersionsRequest, 0);
         } else {
+            // 从头部获取ApiKeys对象
             ApiKeys apiKey = header.apiKey();
             try {
+                // 获取请求版本号
                 short apiVersion = header.apiVersion();
+
+                // 解析请求并返回
                 return AbstractRequest.parseRequest(apiKey, apiVersion, buffer);
             } catch (Throwable ex) {
                 throw new InvalidRequestException("Error getting request for apiKey: " + apiKey +
@@ -116,7 +161,7 @@ public class RequestContext implements AuthorizableRequestContext {
      * will be encapsulated in an {@link EnvelopeResponse}. The buffer will contain
      * both the serialized {@link ResponseHeader} as well as the bytes from the response.
      * There is no `size` prefix unlike the output from {@link #buildResponseSend(AbstractResponse)}.
-     *
+     * <p>
      * Note that envelope requests are reserved only for APIs which have set the
      * {@link ApiKeys#forwardable} flag. Notably the `Fetch` API cannot be forwarded,
      * so we do not lose the benefit of "zero copy" transfers from disk.

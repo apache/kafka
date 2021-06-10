@@ -24,6 +24,8 @@ import org.apache.kafka.common.feature.Features._
 import scala.jdk.CollectionConverters._
 
 /**
+ * 一个类，封装了 Broker 支持的最新功能，还提供 API 以检查 Broker 支持的功能与最终功能之间的不兼容性。
+ * 这个类在生产中是不可变的。 它提供了很少的 API 来改变状态，仅用于测试目的。
  * A class that encapsulates the latest features supported by the Broker and also provides APIs to
  * check for incompatibilities between the features supported by the Broker and finalized features.
  * This class is immutable in production. It provides few APIs to mutate state only for the purpose

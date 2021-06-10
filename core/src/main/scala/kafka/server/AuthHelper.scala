@@ -36,6 +36,18 @@ import scala.jdk.CollectionConverters._
 
 class AuthHelper(authorizer: Option[Authorizer]) {
 
+  /**
+   * 授权校验：所有的RPC请求都要求发送者（客户端/其它Broker）必须具备特定的权限
+   *
+   * @param requestContext
+   * @param operation
+   * @param resourceType
+   * @param resourceName
+   * @param logIfAllowed
+   * @param logIfDenied
+   * @param refCount
+   * @return
+   */
   def authorize(requestContext: RequestContext,
                 operation: AclOperation,
                 resourceType: ResourceType,

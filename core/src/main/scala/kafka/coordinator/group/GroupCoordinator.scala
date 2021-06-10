@@ -49,6 +49,19 @@ import scala.math.max
  * used by its callback.  The delayed callback may acquire the group lock
  * since the delayed operation is completed only if the group lock can be acquired.
  */
+
+/**
+ * 消费都组协调器：管理消费组
+ *
+ * @param brokerId
+ * @param groupConfig
+ * @param offsetConfig
+ * @param groupManager
+ * @param heartbeatPurgatory
+ * @param joinPurgatory
+ * @param time
+ * @param metrics
+ */
 class GroupCoordinator(val brokerId: Int,
                        val groupConfig: GroupConfig,
                        val offsetConfig: OffsetConfig,

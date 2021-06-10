@@ -279,10 +279,18 @@ object TopicsZNode {
 }
 
 object TopicZNode {
+  /**
+   * 主题副本分区详情
+   * @param topic       主题名称
+   * @param topicId     主题ID
+   * @param assignment  key：分区，value：分区副本详情
+   */
   case class TopicIdReplicaAssignment(topic: String,
                                       topicId: Option[Uuid],
                                       assignment: Map[TopicPartition, ReplicaAssignment])
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
+
+
   def encode(topicId: Option[Uuid],
              assignment: collection.Map[TopicPartition, ReplicaAssignment]): Array[Byte] = {
     val replicaAssignmentJson = mutable.Map[String, util.List[Int]]()
