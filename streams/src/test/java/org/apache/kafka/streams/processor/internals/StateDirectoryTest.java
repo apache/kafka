@@ -82,6 +82,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class StateDirectoryTest {
 
@@ -233,6 +234,30 @@ public class StateDirectoryTest {
         Utils.delete(stateDir);
 
         assertThrows(ProcessorStateException.class, () -> directory.getOrCreateDirectoryForTask(taskId));
+    }
+
+    @Test
+    public void shouldThrowProcessorStateExceptionIfStateDirOccupied() throws IOException {
+        final TaskId taskId = new TaskId(0, 0);
+
+        // Replace application's stateDir to regular file
+        Utils.delete(appDir);
+        appDir.createNewFile();
+
+        assertThrows(ProcessorStateException.class, () -> directory.getOrCreateDirectoryForTask(taskId));
+    }
+
+    @Test
+    public void shouldThrowProcessorStateExceptionIfAppDirOccupied() throws IOException {
+        final TaskId taskId = new TaskId(0, 0);
+
+        // Replace taskDir to a regular file
+        final File taskDir = new File(appDir, toTaskDirString(taskId));
+        Utils.delete(taskDir);
+        taskDir.createNewFile();
+
+        // Error: ProcessorStateException should be thrown.
+        assertDoesNotThrow(() -> directory.getOrCreateDirectoryForTask(taskId));
     }
 
     @Test
