@@ -82,7 +82,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class StateDirectoryTest {
 
@@ -257,7 +256,7 @@ public class StateDirectoryTest {
         taskDir.createNewFile();
 
         // Error: ProcessorStateException should be thrown.
-        assertDoesNotThrow(() -> directory.getOrCreateDirectoryForTask(taskId));
+        assertThrows(ProcessorStateException.class, () -> directory.getOrCreateDirectoryForTask(taskId));
     }
 
     @Test
