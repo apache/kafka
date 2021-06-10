@@ -1198,7 +1198,6 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            //JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(0L)).after(ofMillis(100L)),
             JoinWindows.of(ofMillis(0)).after(ofMillis(100)).grace(ofMillis(0)),
             StreamJoined.with(Serdes.Integer(),
                 Serdes.String(),
@@ -1468,7 +1467,6 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            //JoinWindows.ofTimeDifferenceAndGrace(ofMillis(0L), ofHours(24L)).before(ofMillis(100L)),
             JoinWindows.of(ofMillis(0)).before(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
