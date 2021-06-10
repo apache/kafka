@@ -27,10 +27,9 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -38,7 +37,7 @@ import java.util.Properties;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -58,9 +57,7 @@ public class ProducerPerformanceTest {
     private File createTempFile(String contents) throws IOException {
         File file = File.createTempFile("ProducerPerformanceTest", ".tmp");
         file.deleteOnExit();
-        final FileWriter writer = new FileWriter(file);
-        writer.write(contents);
-        writer.close();
+        Files.write(file.toPath(), contents.getBytes());
         return file;
     }
 
@@ -130,7 +127,7 @@ public class ProducerPerformanceTest {
     }
 
     @Test
-    public void testGenerateRandomPayloadByRecordSize() throws UnsupportedEncodingException {
+    public void testGenerateRandomPayloadByRecordSize() {
 
         Integer recordSize = 100;
         byte[] payload = new byte[recordSize];
@@ -141,13 +138,13 @@ public class ProducerPerformanceTest {
         Random random = new Random(0);
         payload = ProducerPerformance.generateRandomPayload(recordSize, hasPayloadFile, payloadByteList, payload, random);
         
-        for (int i = 0; i < payload.length; i++) {
-            assertFalse(payload[i] == 0);
+        for (byte b : payload) {
+            assertNotEquals(0, b);
         }
     }
 
     @Test
-    public void testGenerateRandomPayloadException() throws UnsupportedEncodingException {
+    public void testGenerateRandomPayloadException() {
 
         Integer recordSize = null;
         byte[] payload = null;
