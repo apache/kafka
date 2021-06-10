@@ -113,16 +113,14 @@ public class ProducerPerformanceTest {
     public void testGenerateRandomPayloadByPayloadFile() {
 
         Integer recordSize = null;
-        boolean hasPayloadFile = true;
-
         String inputString = "Hello Kafka";
         byte[] byteArrray = inputString.getBytes(StandardCharsets.UTF_8);
         List<byte[]> payloadByteList = new ArrayList<>();
         payloadByteList.add(byteArrray);
-    
         byte[] payload = null;
         Random random = new Random(0);
-        payload = ProducerPerformance.generateRandomPayload(recordSize, hasPayloadFile, payloadByteList, payload, random);
+
+        payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random);
         assertEquals("Hello Kafka", new String(payload));
     }
 
@@ -131,13 +129,10 @@ public class ProducerPerformanceTest {
 
         Integer recordSize = 100;
         byte[] payload = new byte[recordSize];
-
-        boolean hasPayloadFile = false;
-        List<byte[]> payloadByteList = null;
-    
+        List<byte[]> payloadByteList = new ArrayList<>();
         Random random = new Random(0);
-        payload = ProducerPerformance.generateRandomPayload(recordSize, hasPayloadFile, payloadByteList, payload, random);
-        
+
+        payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random);
         for (byte b : payload) {
             assertNotEquals(0, b);
         }
@@ -148,12 +143,10 @@ public class ProducerPerformanceTest {
 
         Integer recordSize = null;
         byte[] payload = null;
-
-        boolean hasPayloadFile = false;
-        List<byte[]> payloadByteList = null;
-    
+        List<byte[]> payloadByteList = new ArrayList<>();
         Random random = new Random(0);
-        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> ProducerPerformance.generateRandomPayload(recordSize, hasPayloadFile, payloadByteList, payload, random));
+
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random));
         assertEquals("no payload File Path or record Size provided", thrown.getMessage());
     }
 }

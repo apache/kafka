@@ -69,7 +69,6 @@ public class ProducerPerformance {
             boolean shouldPrintMetrics = res.getBoolean("printMetrics");
             long transactionDurationMs = res.getLong("transactionDurationMs");
             boolean transactionsEnabled =  0 < transactionDurationMs;
-            boolean hasPayloadFile = payloadFilePath != null;
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
             String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
@@ -103,7 +102,7 @@ public class ProducerPerformance {
             long transactionStartTime = 0;
             for (long i = 0; i < numRecords; i++) {
 
-                payload = generateRandomPayload(recordSize, hasPayloadFile, payloadByteList, payload, random);
+                payload = generateRandomPayload(recordSize, payloadByteList, payload, random);
 
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
@@ -164,9 +163,9 @@ public class ProducerPerformance {
         return new KafkaProducer<>(props);
     }
 
-    static byte[] generateRandomPayload(Integer recordSize, Boolean hasPayloadFile, List<byte[]> payloadByteList, byte[] payload,
+    static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
             Random random) {
-        if (hasPayloadFile) {
+        if (!payloadByteList.isEmpty()) {
             payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
         } else if (recordSize != null) {
             for (int j = 0; j < payload.length; ++j)
