@@ -1330,19 +1330,27 @@ class KafkaController(val config: KafkaConfig,
     val defaultMinISRPropertyValue = 1
 
     val atRiskPartitions = controllerContext.partitionsOnBroker(id).filter { partition =>
-      // Look up minISR for this topic, or use the default if not configured.
-      val minISR: Int = controllerContext.topicMinIsrConfig.getOrElse(partition.topic(), defaultMinISRPropertyValue)
+      if (topicDeletionManager.isTopicQueuedUpForDeletion(partition.topic())) {
+        // if a topic is being deleted, then it should not block the shutdown
+        false
+      } else {
+        // Look up minISR for this topic, or use the default if not configured.
+        val minISR: Int = controllerContext.topicMinIsrConfig.getOrElse(partition.topic(), defaultMinISRPropertyValue)
 
-      // See which replicas are known alive and not pending shutdown for this partition
-      val liveBrokerIds = controllerContext.liveBrokerIds
-      val isr = controllerContext.partitionLeadershipInfo(partition).leaderAndIsr.isr
-      val remainingLiveReplicasInIsr = isr.filter(replicaId => replicaId != id).count({ replicaBrokerId =>
-        liveBrokerIds.contains(replicaBrokerId)
-      })
+        // See which replicas are known alive and not pending shutdown for this partition
+        val liveBrokerIds = controllerContext.liveBrokerIds
+        val isr = controllerContext.partitionLeadershipInfo(partition).leaderAndIsr.isr
+        val remainingLiveReplicasInIsr = isr.filter(replicaId => replicaId != id).count({ replicaBrokerId =>
+          liveBrokerIds.contains(replicaBrokerId)
+        })
 
-      // Consider this topic-partition at-risk if removing one broker will result in the ISR shrinking below minISR
-      info(s"$partition has min.insync.replicas=$minISR and a redundancy factor of ${config.controlledShutdownSafetyCheckRedundancyFactor}. Removing broker $id will leave $remainingLiveReplicasInIsr live replicas in the ISR.")
-      remainingLiveReplicasInIsr < (minISR + config.controlledShutdownSafetyCheckRedundancyFactor)
+        val atRisk = remainingLiveReplicasInIsr < (minISR + config.controlledShutdownSafetyCheckRedundancyFactor)
+        if (atRisk) {
+          // Consider this topic-partition at-risk if removing one broker will result in the ISR shrinking below minISR
+          info(s"$partition has min.insync.replicas=$minISR and a redundancy factor of ${config.controlledShutdownSafetyCheckRedundancyFactor}. Removing broker $id will leave $remainingLiveReplicasInIsr live replicas in the ISR.")
+        }
+        atRisk
+      }
     }
 
     atRiskPartitions.isEmpty

@@ -646,6 +646,41 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testTopicsBeingDeletedDoesNotBlockShutdown(): Unit = {
+    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2, 3))
+    val topic = "test"
+    // create brokers
+    val serverConfigs = TestUtils.createBrokerConfigs(4, zkConnect, true, enableControlledShutdownSafetyCheck = true)
+      .map(props => {
+        props.put(KafkaConfig.ControlledShutdownMaxRetriesProp, Int.MaxValue.toString)
+        KafkaConfig.fromProps(props)
+      })
+    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    TestUtils.waitUntilControllerElected(zkClient)
+
+    // create the topic with min ISR of 2, which should allow one broker to shut down but should block subsequent
+    // shutdowns unless the topic is deleted.
+    val topicConfig = new Properties()
+    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers, topicConfig = topicConfig)
+
+    // shutdown one broker so that the topic deletion can be queued but not completed
+    val broker2 = servers.find(_.config.brokerId == 2).get
+    broker2.shutdown()
+
+    // delete one topic
+    adminZkClient.deleteTopic(topic)
+    val controllerId = zkClient.getControllerId.get
+    val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
+    TestUtils.waitUntilTrue(() => controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic),
+      s"Deletion of the topic $topic never happened")
+
+    // test that a 2nd broker can still shutdown after the topic is being queued for deletion
+    val broker1 = servers.find(_.config.brokerId == 1).get
+    broker1.shutdown()
+  }
+
+  @Test
   def testControllerRejectControlledShutdownRequestWithStaleBrokerEpoch(): Unit = {
     // create brokers
     val serverConfigs = TestUtils.createBrokerConfigs(2, zkConnect, false).map(KafkaConfig.fromProps)
