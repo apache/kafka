@@ -953,6 +953,7 @@ public class StoreUpgradeIntegrationTest {
             "Could not get expected result in time.");
     }
 
+    @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
     private static class KeyValueProcessor implements Processor<Integer, Integer> {
         private KeyValueStore<Integer, Long> store;
 
@@ -980,6 +981,7 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
+    @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
     private static class TimestampedKeyValueProcessor implements Processor<Integer, Integer> {
         private ProcessorContext context;
         private TimestampedKeyValueStore<Integer, Long> store;
@@ -1013,6 +1015,7 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
+    @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
     private static class WindowedProcessor implements Processor<Integer, Integer> {
         private WindowStore<Integer, Long> store;
 
@@ -1040,6 +1043,7 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
+    @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
     private static class TimestampedWindowedProcessor implements Processor<Integer, Integer> {
         private ProcessorContext context;
         private TimestampedWindowStore<Integer, Long> store;

@@ -38,6 +38,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.collection.IsEmptyCollection.empty;
 
+@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
 public class SubscriptionResolverJoinProcessorSupplierTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final ValueJoiner<String, String, String> JOINER =

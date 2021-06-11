@@ -717,7 +717,7 @@ public class ProcessorContextImplTest {
     }
 
     private <T extends StateStore> void doTest(final String name, final Consumer<T> checker) {
-        final Processor<String, Long> processor = new Processor<String, Long>() {
+        @SuppressWarnings("deprecation") final Processor<String, Long> processor = new Processor<String, Long>() {
             @Override
             public void init(final ProcessorContext context) {
                 final T store = context.getStateStore(name);

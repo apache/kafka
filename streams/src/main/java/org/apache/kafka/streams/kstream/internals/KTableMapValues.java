@@ -26,6 +26,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 
+@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
 class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
     private final KTableImpl<K, ?, V> parent;
     private final ValueMapperWithKey<? super K, ? super V, ? extends V1> mapper;

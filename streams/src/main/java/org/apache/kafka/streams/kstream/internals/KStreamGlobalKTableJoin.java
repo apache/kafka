@@ -21,6 +21,7 @@ import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
+@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
 class KStreamGlobalKTableJoin<K1, K2, R, V1, V2> implements ProcessorSupplier<K1, V1> {
 
     private final KTableValueGetterSupplier<K2, V2> valueGetterSupplier;

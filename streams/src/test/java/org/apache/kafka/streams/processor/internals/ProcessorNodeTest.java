@@ -62,6 +62,7 @@ public class ProcessorNodeTest {
         assertThrows(StreamsException.class, () -> node.init(null));
     }
 
+    @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
     private static class ExceptionalProcessor implements Processor<Object, Object> {
         @Override
         public void init(final ProcessorContext context) {
@@ -79,6 +80,7 @@ public class ProcessorNodeTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
     private static class NoOpProcessor implements Processor<Object, Object> {
         @Override
         public void init(final ProcessorContext context) {

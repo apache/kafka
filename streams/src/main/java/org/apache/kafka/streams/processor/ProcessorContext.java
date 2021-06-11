@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 /**
  * Processor context interface.
  */
+@SuppressWarnings("deprecation") // Not deprecating the old PAPI Context, since it is still in use in Transformers.
 public interface ProcessorContext {
 
     /**

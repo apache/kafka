@@ -18,29 +18,10 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams.kstream.{
-  GlobalKTable,
-  JoinWindows,
-  Printed,
-  TransformerSupplier,
-  ValueTransformerSupplier,
-  ValueTransformerWithKeySupplier,
-  KStream => KStreamJ
-}
-import org.apache.kafka.streams.processor.{Processor, ProcessorSupplier, TopicNameExtractor}
-import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
-  FlatValueMapperFromFunction,
-  FlatValueMapperWithKeyFromFunction,
-  ForeachActionFromFunction,
-  KeyValueMapperFromFunction,
-  MapperFromFunction,
-  PredicateFromFunction,
-  TransformerSupplierAsJava,
-  ValueMapperFromFunction,
-  ValueMapperWithKeyFromFunction,
-  ValueTransformerSupplierAsJava,
-  ValueTransformerSupplierWithKeyAsJava
-}
+import org.apache.kafka.streams.kstream.{GlobalKTable, JoinWindows, Printed, TransformerSupplier, ValueTransformerSupplier, ValueTransformerWithKeySupplier, KStream => KStreamJ}
+import org.apache.kafka.streams.processor.api.{Processor, ProcessorSupplier}
+import org.apache.kafka.streams.processor.TopicNameExtractor
+import org.apache.kafka.streams.scala.FunctionsCompatConversions.{FlatValueMapperFromFunction, FlatValueMapperWithKeyFromFunction, ForeachActionFromFunction, KeyValueMapperFromFunction, MapperFromFunction, PredicateFromFunction, TransformerSupplierAsJava, ValueMapperFromFunction, ValueMapperWithKeyFromFunction, ValueTransformerSupplierAsJava, ValueTransformerSupplierWithKeyAsJava}
 
 import scala.jdk.CollectionConverters._
 
@@ -789,8 +770,24 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  def process(processorSupplier: () => Processor[K, V], stateStoreNames: String*): Unit = {
-    val processorSupplierJ: ProcessorSupplier[K, V] = () => processorSupplier()
+  def process(processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V], stateStoreNames: String*): Unit = {
+    val processorSupplierJ: org.apache.kafka.streams.processor.ProcessorSupplier[K, V] = () => processorSupplier()
+    inner.process(processorSupplierJ, stateStoreNames: _*)
+  }
+  /**
+   * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
+   * `processorSupplier`).
+   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
+   * to the `Processor`.
+   * It's not required to connect global state stores that are added via `addGlobalStore`;
+   * read-only access to global state stores is available by default.
+   *
+   * @param processorSupplier a function that generates a [[org.apache.kafka.streams.processor.api.Processor]]
+   * @param stateStoreNames   the names of the state store used by the processor
+   * @see `org.apache.kafka.streams.kstream.KStream#process`
+   */
+  def process[KOut, VOut](processorSupplier: () => Processor[K, V, KOut, VOut], stateStoreNames: String*): Unit = {
+    val processorSupplierJ: ProcessorSupplier[K, V, KOut, VOut] = () => processorSupplier()
     inner.process(processorSupplierJ, stateStoreNames: _*)
   }
 
@@ -807,8 +804,26 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  def process(processorSupplier: () => Processor[K, V], named: Named, stateStoreNames: String*): Unit = {
-    val processorSupplierJ: ProcessorSupplier[K, V] = () => processorSupplier()
+  def process(processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V], named: Named, stateStoreNames: String*): Unit = {
+    val processorSupplierJ: org.apache.kafka.streams.processor.ProcessorSupplier[K, V] = () => processorSupplier()
+    inner.process(processorSupplierJ, named, stateStoreNames: _*)
+  }
+
+  /**
+   * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
+   * `processorSupplier`).
+   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
+   * to the `Processor`.
+   * It's not required to connect global state stores that are added via `addGlobalStore`;
+   * read-only access to global state stores is available by default.
+   *
+   * @param processorSupplier a function that generates a [[org.apache.kafka.streams.processor.Processor]]
+   * @param named             a [[Named]] config used to name the processor in the topology
+   * @param stateStoreNames   the names of the state store used by the processor
+   * @see `org.apache.kafka.streams.kstream.KStream#process`
+   */
+  def process[KOut, VOut](processorSupplier: () => Processor[K, V, KOut, VOut], named: Named, stateStoreNames: String*): Unit = {
+    val processorSupplierJ: ProcessorSupplier[K, V, KOut, VOut] = () => processorSupplier()
     inner.process(processorSupplierJ, named, stateStoreNames: _*)
   }
 

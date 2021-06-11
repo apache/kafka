@@ -32,6 +32,7 @@ import java.util.Collections;
 
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
 public class KStreamFlatTransformTest extends EasyMockSupport {
 
     private Number inputKey;

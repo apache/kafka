@@ -26,6 +26,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
+@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
 public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final String storeName;

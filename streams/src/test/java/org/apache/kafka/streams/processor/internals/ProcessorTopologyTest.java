@@ -919,10 +919,12 @@ public class ProcessorTopologyTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private <K, V> org.apache.kafka.streams.processor.ProcessorSupplier<K, V> define(final org.apache.kafka.streams.processor.Processor<K, V> processor) {
         return () -> processor;
     }
 
+    @SuppressWarnings("deprecation")
     private <K, V> org.apache.kafka.streams.processor.ProcessorSupplier<K, V> defineWithStoresOldAPI(final Supplier<org.apache.kafka.streams.processor.Processor<K, V>> supplier,
                                                                                                      final Set<StoreBuilder<?>> stores) {
         return new org.apache.kafka.streams.processor.ProcessorSupplier<K, V>() {

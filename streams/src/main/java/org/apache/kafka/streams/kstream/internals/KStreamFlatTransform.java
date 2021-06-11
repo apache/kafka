@@ -27,6 +27,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Set;
 
+@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
 public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn> {
 
     private final TransformerSupplier<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformerSupplier;

@@ -430,6 +430,7 @@ public class RestoreIntegrationTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
     public static class KeyValueStoreProcessor implements Processor<Integer, Integer> {
 
         private final String topic;

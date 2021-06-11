@@ -24,6 +24,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Collection;
 
+@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
 public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final Collection<KStreamAggProcessorSupplier> parents;
     private final String storeName;

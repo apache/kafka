@@ -31,6 +31,7 @@ import java.util.Objects;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
+@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
 public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableSource.class);
 
