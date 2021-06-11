@@ -200,6 +200,8 @@ class ControllerServer(
         CoreUtils.swallow(controllerApisHandlerPool.shutdown(), this)
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
+      if (controllerApis != null)
+        CoreUtils.swallow(controllerApis.close(), this)
       if (controller != null)
         controller.close()
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))

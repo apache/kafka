@@ -76,6 +76,11 @@ class ControllerApis(val requestChannel: RequestChannel,
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
 
+  def close(): Unit = {
+    aclApis.close()
+    info("Shutdown complete.")
+  }
+
   override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     try {
       request.header.apiKey match {
