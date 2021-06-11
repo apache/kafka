@@ -16,14 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
 @SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
-class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
+class KStreamJoinWindow<K, V> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V> {
 
     private final String windowName;
 
@@ -32,17 +28,17 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public org.apache.kafka.streams.processor.Processor<K, V> get() {
         return new KStreamJoinWindowProcessor();
     }
 
-    private class KStreamJoinWindowProcessor extends AbstractProcessor<K, V> {
+    private class KStreamJoinWindowProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, V> {
 
         private WindowStore<K, V> window;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
 
             window = (WindowStore<K, V>) context.getStateStore(windowName);

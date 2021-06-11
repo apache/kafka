@@ -19,9 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
@@ -43,7 +40,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public org.apache.kafka.streams.processor.Processor<K, Change<V>> get() {
         return new KTableMapProcessor();
     }
 
@@ -73,7 +70,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
         throw new IllegalStateException("KTableRepartitionMap should always require sending old values.");
     }
 
-    private class KTableMapProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTableMapProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, Change<V>> {
 
         /**
          * @throws StreamsException if key is null
@@ -104,14 +101,14 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
 
     private class KTableMapValueGetter implements KTableValueGetter<K, KeyValue<K1, V1>> {
         private final KTableValueGetter<K, V> parentGetter;
-        private ProcessorContext context;
+        private org.apache.kafka.streams.processor.ProcessorContext context;
 
         KTableMapValueGetter(final KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             this.context = context;
             parentGetter.init(context);
         }

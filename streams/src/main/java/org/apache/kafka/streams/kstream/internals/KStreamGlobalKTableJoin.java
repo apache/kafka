@@ -18,11 +18,9 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 @SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
-class KStreamGlobalKTableJoin<K1, K2, R, V1, V2> implements ProcessorSupplier<K1, V1> {
+class KStreamGlobalKTableJoin<K1, K2, R, V1, V2> implements org.apache.kafka.streams.processor.ProcessorSupplier<K1, V1> {
 
     private final KTableValueGetterSupplier<K2, V2> valueGetterSupplier;
     private final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner;
@@ -40,7 +38,7 @@ class KStreamGlobalKTableJoin<K1, K2, R, V1, V2> implements ProcessorSupplier<K1
     }
 
     @Override
-    public Processor<K1, V1> get() {
+    public org.apache.kafka.streams.processor.Processor<K1, V1> get() {
         return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), mapper, joiner, leftJoin);
     }
 }

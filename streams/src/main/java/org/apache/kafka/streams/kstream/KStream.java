@@ -56,7 +56,6 @@ import org.apache.kafka.streams.state.StoreBuilder;
  * @see KGroupedStream
  * @see StreamsBuilder#stream(String)
  */
-@SuppressWarnings("deprecation") // Old PAPI
 public interface KStream<K, V> {
 
     /**
@@ -4636,6 +4635,7 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
+    @SuppressWarnings("deprecation") // Old PAPI
     void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
                  final String... stateStoreNames);
 
@@ -4831,6 +4831,7 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
+    @SuppressWarnings("deprecation") // Old PAPI
     void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
                  final Named named,
                  final String... stateStoreNames);

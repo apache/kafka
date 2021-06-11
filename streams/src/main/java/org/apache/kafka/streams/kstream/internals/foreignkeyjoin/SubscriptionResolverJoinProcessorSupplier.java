@@ -22,10 +22,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Murmur3;
 
@@ -42,7 +38,7 @@ import java.util.function.Supplier;
  * @param <VR> Type of joined result of primary and foreign values
  */
 @SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
-public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSupplier<K, SubscriptionResponseWrapper<VO>> {
+public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, SubscriptionResponseWrapper<VO>> {
     private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
     private final Serializer<V> constructionTimeValueSerializer;
     private final Supplier<String> valueHashSerdePseudoTopicSupplier;
@@ -62,8 +58,8 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
     }
 
     @Override
-    public Processor<K, SubscriptionResponseWrapper<VO>> get() {
-        return new AbstractProcessor<K, SubscriptionResponseWrapper<VO>>() {
+    public org.apache.kafka.streams.processor.Processor<K, SubscriptionResponseWrapper<VO>> get() {
+        return new org.apache.kafka.streams.processor.AbstractProcessor<K, SubscriptionResponseWrapper<VO>>() {
             private String valueHashSerdePseudoTopic;
             private Serializer<V> runtimeValueSerializer = constructionTimeValueSerializer;
 
@@ -71,7 +67,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
 
             @SuppressWarnings("unchecked")
             @Override
-            public void init(final ProcessorContext context) {
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
                 super.init(context);
                 valueHashSerdePseudoTopic = valueHashSerdePseudoTopicSupplier.get();
                 valueGetter = valueGetterSupplier.get();
