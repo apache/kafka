@@ -402,6 +402,7 @@ class TopologyTest {
       val reducer: Reducer[String] = (v1, v2) => v1 + ":" + v2
       val valueMapper: ValueMapper[String, String] = v => v.toUpperCase(Locale.getDefault)
       val processorValueCollector = new util.ArrayList[String]
+      @annotation.nowarn("msg=trait .* in package processor is deprecated") // old API
       val processorSupplier: org.apache.kafka.streams.processor.ProcessorSupplier[String, String] = () =>
         new SimpleProcessor(processorValueCollector)
       val valueJoiner2: ValueJoiner[String, Integer, String] = (value1, value2) => value1 + ":" + value2.toString
@@ -458,6 +459,7 @@ class TopologyTest {
     assertEquals(getTopologyScala.build(props).describe.toString, getTopologyJava.build(props).describe.toString)
   }
 
+  @annotation.nowarn("msg=class .* in package processor is deprecated") // old API
   private class SimpleProcessor private[TopologyTest] (val valueList: util.List[String])
       extends org.apache.kafka.streams.processor.AbstractProcessor[String, String] {
     override def process(key: String, value: String): Unit =
