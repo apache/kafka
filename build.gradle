@@ -1710,6 +1710,7 @@ project(':streams') {
     testImplementation libs.powermockEasymock
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly libs.slf4jlog4j
