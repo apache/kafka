@@ -1079,7 +1079,7 @@ class KafkaApisTest {
         ))
 
         EasyMock.replay(requestChannel)
-        kafkaApis.handle(request)
+        kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
 
         val response = capturedResponse.getValue.asInstanceOf[MetadataResponse]
         assertEquals(1, response.topicMetadata.size)
