@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.time.Instant;
 
-@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class SmokeTestUtil {
 
     final static int END = Integer.MAX_VALUE;

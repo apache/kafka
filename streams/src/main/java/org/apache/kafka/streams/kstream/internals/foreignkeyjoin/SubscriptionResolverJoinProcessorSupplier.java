@@ -37,7 +37,7 @@ import java.util.function.Supplier;
  * @param <VO> Type of foreign values
  * @param <VR> Type of joined result of primary and foreign values
  */
-@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, SubscriptionResponseWrapper<VO>> {
     private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
     private final Serializer<V> constructionTimeValueSerializer;

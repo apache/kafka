@@ -46,7 +46,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 
 @RunWith(EasyMockRunner.class)
-@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KStreamTransformValuesTest {
     private final String topicName = "topic";
     private final MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();

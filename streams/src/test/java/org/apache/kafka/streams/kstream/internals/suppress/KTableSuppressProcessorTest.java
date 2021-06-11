@@ -59,7 +59,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
-@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KTableSuppressProcessorTest {
     private static final long ARBITRARY_LONG = 5L;
 

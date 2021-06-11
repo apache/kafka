@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.state.WindowStore;
 
-@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 class KStreamJoinWindow<K, V> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V> {
 
     private final String windowName;

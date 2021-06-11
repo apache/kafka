@@ -28,7 +28,7 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  * <p>
  * Given the input, it can output at most two records (one mapped from old value and one mapped from new value).
  */
-@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSupplier<K, V, KeyValue<K1, V1>> {
 
     private final KTableImpl<K, ?, V> parent;

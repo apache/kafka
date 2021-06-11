@@ -35,7 +35,7 @@ import java.util.Objects;
  * @param <KO> Type of foreign key
  * @param <VO> Type of foreign value
  */
-@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
     implements org.apache.kafka.streams.processor.ProcessorSupplier<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> {
 

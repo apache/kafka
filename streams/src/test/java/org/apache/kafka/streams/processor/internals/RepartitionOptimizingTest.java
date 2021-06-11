@@ -256,7 +256,7 @@ public class RepartitionOptimizingTest {
         return keyValueList;
     }
 
-    @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private static class SimpleProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
 
         final List<String> valueList;

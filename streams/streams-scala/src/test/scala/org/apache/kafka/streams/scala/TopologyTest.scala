@@ -20,24 +20,24 @@ import java.time.Duration
 import java.util
 import java.util.{Locale, Properties}
 import java.util.regex.Pattern
-
 import org.apache.kafka.common.serialization.{Serdes => SerdesJ}
 import org.apache.kafka.streams.kstream.{
   Aggregator,
   Initializer,
   JoinWindows,
   KeyValueMapper,
+  Reducer,
+  Transformer,
+  ValueJoiner,
+  ValueMapper,
   KGroupedStream => KGroupedStreamJ,
   KStream => KStreamJ,
   KTable => KTableJ,
   Materialized => MaterializedJ,
-  Reducer,
-  StreamJoined => StreamJoinedJ,
-  Transformer,
-  ValueJoiner,
-  ValueMapper
+  StreamJoined => StreamJoinedJ
 }
-import org.apache.kafka.streams.processor.ProcessorContext
+import org.apache.kafka.streams.processor.{api, ProcessorContext}
+import org.apache.kafka.streams.processor.api.{Processor, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.{Serdes => NewSerdes}
 import org.apache.kafka.streams.scala.serialization.Serdes._
@@ -359,7 +359,7 @@ class TopologyTest {
       mappedStream
         .filter((k: String, _: String) => k == "B")
         .mapValues((v: String) => v.toUpperCase(Locale.getDefault))
-        .process(() => new SimpleProcessor(processorValueCollector))
+        .process(new SimpleProcessorSupplier(processorValueCollector))
 
       val stream2 = mappedStream.groupByKey
         .aggregate(0)(aggregator)(Materialized.`with`(NewSerdes.stringSerde, NewSerdes.intSerde))
@@ -402,9 +402,7 @@ class TopologyTest {
       val reducer: Reducer[String] = (v1, v2) => v1 + ":" + v2
       val valueMapper: ValueMapper[String, String] = v => v.toUpperCase(Locale.getDefault)
       val processorValueCollector = new util.ArrayList[String]
-      @annotation.nowarn("msg=trait .* in package processor is deprecated") // old API
-      val processorSupplier: org.apache.kafka.streams.processor.ProcessorSupplier[String, String] = () =>
-        new SimpleProcessor(processorValueCollector)
+      val processorSupplier = new SimpleProcessorSupplier(processorValueCollector)
       val valueJoiner2: ValueJoiner[String, Integer, String] = (value1, value2) => value1 + ":" + value2.toString
       val valueJoiner3: ValueJoiner[String, String, String] = (value1, value2) => value1 + ":" + value2
 
@@ -459,10 +457,10 @@ class TopologyTest {
     assertEquals(getTopologyScala.build(props).describe.toString, getTopologyJava.build(props).describe.toString)
   }
 
-  @annotation.nowarn("msg=class .* in package processor is deprecated") // old API
-  private class SimpleProcessor private[TopologyTest] (val valueList: util.List[String])
-      extends org.apache.kafka.streams.processor.AbstractProcessor[String, String] {
-    override def process(key: String, value: String): Unit =
-      valueList.add(value)
+  private class SimpleProcessorSupplier private[TopologyTest] (val valueList: util.List[String])
+      extends ProcessorSupplier[String, String, Nothing, Nothing] {
+
+    override def get(): Processor[String, String, Nothing, Nothing] =
+      (record: api.Record[String, String]) => valueList.add(record.value())
   }
 }

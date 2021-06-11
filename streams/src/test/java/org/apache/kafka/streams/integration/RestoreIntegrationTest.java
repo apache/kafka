@@ -429,7 +429,7 @@ public class RestoreIntegrationTest {
         }
     }
 
-    @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
+    @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
     public static class KeyValueStoreProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
 
         private final String topic;

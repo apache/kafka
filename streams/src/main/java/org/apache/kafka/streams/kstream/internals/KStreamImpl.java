@@ -1216,8 +1216,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             ((GlobalKTableImpl<KG, VG>) globalTable).valueGetterSupplier();
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, LEFTJOIN_NAME);
         // Old API. Needs to be migrated.
-        @SuppressWarnings("deprecation") final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> processorSupplier =
-            new KStreamGlobalKTableJoin<>(
+        @SuppressWarnings("deprecation")
+        final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> processorSupplier = new KStreamGlobalKTableJoin<>(
             valueGetterSupplier,
             joiner,
             keySelector,
@@ -1254,8 +1254,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
         // Old API. Needs to be migrated.
-        @SuppressWarnings("deprecation") final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> processorSupplier =
-            new KStreamKTableJoin<>(
+        @SuppressWarnings("deprecation")
+        final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> processorSupplier = new KStreamKTableJoin<>(
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier(),
             joiner,
             leftJoin);
@@ -1477,7 +1477,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    @Deprecated
     public <KOut, VOut> void process(final ProcessorSupplier<? super K, ? super V, KOut, VOut> processorSupplier,
                                      final String... stateStoreNames) {
         process(processorSupplier, Named.as(builder.newProcessorName(PROCESSOR_NAME)), stateStoreNames);

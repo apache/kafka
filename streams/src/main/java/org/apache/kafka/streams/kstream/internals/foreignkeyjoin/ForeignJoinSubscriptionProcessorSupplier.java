@@ -33,7 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements org.apache.kafka.streams.processor.ProcessorSupplier<KO, Change<VO>> {
     private static final Logger LOG = LoggerFactory.getLogger(ForeignJoinSubscriptionProcessorSupplier.class);
     private final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder;

@@ -179,7 +179,7 @@ public class TaskMetadataIntegrationTest {
                 timestamp);
     }
 
-    @SuppressWarnings("deprecation") // Old API. This needs to be migrated.
+    @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
     private class PauseProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
         @Override
         public void process(final String key, final String value) {

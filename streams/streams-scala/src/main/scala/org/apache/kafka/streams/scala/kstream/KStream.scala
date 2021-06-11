@@ -790,6 +790,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
+  @deprecated(since = "3.0", message = "Use process(ProcessorSupplier, String*) instead.")
   @annotation.nowarn("msg=trait .* in package processor is deprecated") // old API
   def process(processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V],
               stateStoreNames: String*): Unit = {
@@ -805,7 +806,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * It's not required to connect global state stores that are added via `addGlobalStore`;
    * read-only access to global state stores is available by default.
    *
-   * @param processorSupplier a function that generates a [[org.apache.kafka.streams.processor.api.Processor]]
+   * Note that this overload takes a ProcessorSupplier instead of a Function to avoid post-erasure ambiguity with
+   * the older (deprecated) overload.
+   *
+   * @param processorSupplier a supplier for [[org.apache.kafka.streams.processor.api.Processor]]
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
@@ -825,6 +829,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
+  @deprecated(since = "3.0", message = "Use process(ProcessorSupplier, String*) instead.")
   @annotation.nowarn("msg=trait .* in package processor is deprecated") // old API
   def process(processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V],
               named: Named,
@@ -841,7 +846,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * It's not required to connect global state stores that are added via `addGlobalStore`;
    * read-only access to global state stores is available by default.
    *
-   * @param processorSupplier a function that generates a [[org.apache.kafka.streams.processor.Processor]]
+   * Note that this overload takes a ProcessorSupplier instead of a Function to avoid post-erasure ambiguity with
+   * the older (deprecated) overload.
+   *
+   * @param processorSupplier a supplier for [[org.apache.kafka.streams.processor.api.Processor]]
    * @param named             a [[Named]] config used to name the processor in the topology
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`

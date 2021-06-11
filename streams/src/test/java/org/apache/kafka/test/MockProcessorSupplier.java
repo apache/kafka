@@ -23,7 +23,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
-@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class MockProcessorSupplier<K, V> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V> {
 
     private final long scheduleInterval;

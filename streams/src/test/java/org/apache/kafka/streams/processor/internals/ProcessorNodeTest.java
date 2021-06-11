@@ -61,7 +61,7 @@ public class ProcessorNodeTest {
         assertThrows(StreamsException.class, () -> node.init(null));
     }
 
-    @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
+    @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
     private static class ExceptionalProcessor implements org.apache.kafka.streams.processor.Processor<Object, Object> {
         @Override
         public void init(final ProcessorContext context) {
@@ -79,7 +79,7 @@ public class ProcessorNodeTest {
         }
     }
 
-    @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
+    @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
     private static class NoOpProcessor implements org.apache.kafka.streams.processor.Processor<Object, Object> {
         @Override
         public void init(final ProcessorContext context) {

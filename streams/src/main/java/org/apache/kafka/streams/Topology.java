@@ -647,9 +647,9 @@ public class Topology {
      * node.
      * Any new record output by this processor will be forwarded to its child processor or sink nodes.
      * The supplier should always generate a new instance each time
-     * {@link org.apache.kafka.streams.processor.api.ProcessorSupplier#get()} gets called. Creating a single
-     * {@link org.apache.kafka.streams.processor.api.Processor} object and returning the same object reference in
-     * {@link org.apache.kafka.streams.processor.api.ProcessorSupplier#get()} would be a violation of the supplier pattern
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} gets called. Creating a single
+     * {@link org.apache.kafka.streams.processor.Processor} object and returning the same object reference in
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} would be a violation of the supplier pattern
      * and leads to runtime exceptions.
      * If {@code supplier} provides stores via {@link ConnectedStoreProvider#stores()}, the provided {@link StoreBuilder}s
      * will be added to the topology and connected to this processor automatically.
