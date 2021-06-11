@@ -60,6 +60,7 @@ public class PartitionGroup {
 
     private  final Logger logger;
     private final Map<TopicPartition, RecordQueue> partitionQueues;
+    private final String logPrefix;
     private final Function<TopicPartition, OptionalLong> lagProvider;
     private final Sensor enforcedProcessingSensor;
     private final long maxTaskIdleMs;
@@ -93,6 +94,7 @@ public class PartitionGroup {
                    final Sensor recordLatenessSensor,
                    final Sensor enforcedProcessingSensor,
                    final long maxTaskIdleMs) {
+        this.logPrefix = logContext.logPrefix();
         this.logger = logContext.logger(PartitionGroup.class);
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::headRecordTimestamp));
         this.partitionQueues = partitionQueues;
@@ -233,6 +235,7 @@ public class PartitionGroup {
         for (final TopicPartition newInputPartition : newInputPartitions) {
             partitionQueues.put(newInputPartition, recordQueueCreator.apply(newInputPartition));
         }
+        System.err.println(logPrefix + "rm:" + removedPartitions);
         nonEmptyQueuesByTime.removeIf(q -> removedPartitions.contains(q.partition()));
         allBuffered = allBuffered && newInputPartitions.isEmpty();
     }
@@ -257,6 +260,7 @@ public class PartitionGroup {
         StampedRecord record = null;
 
         final RecordQueue queue = nonEmptyQueuesByTime.poll();
+        System.err.println(logPrefix + queue.partition() + "," + queue.size());
         info.queue = queue;
 
         if (queue != null) {
@@ -303,7 +307,8 @@ public class PartitionGroup {
         final int oldSize = recordQueue.size();
         final int newSize = recordQueue.addRawRecords(rawRecords);
 
-        System.err.println("add records:" + rawRecords + "," + partition);
+        System.err.println(logPrefix + "add records:" + rawRecords + ";" + oldSize + newSize);
+//        logger.error("add records:" + rawRecords);
 //        final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
 //        for (int i = 1; i < elements.length; i++) {
 //            final StackTraceElement s = elements[i];

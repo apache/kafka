@@ -710,8 +710,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             final ProcessorNode<Object, Object, Object, Object> currNode = (ProcessorNode<Object, Object, Object, Object>) recordInfo.node();
             final TopicPartition partition = recordInfo.partition();
 
-            log.trace("Start processing one record [{}]", record);
-            System.err.println("pro r:" + record);
+//            log.error("Start processing one record [{}]", record);
+            System.err.println(logPrefix + "pro r:" + record);
 
             final ProcessorRecordContext recordContext = new ProcessorRecordContext(
                 record.timestamp,
