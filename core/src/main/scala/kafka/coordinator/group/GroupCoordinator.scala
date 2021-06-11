@@ -1507,20 +1507,18 @@ class GroupCoordinator(val brokerId: Int,
           debug(s"Received notification of sync expiration for group ${group.groupId} in ${group.currentState} state. Ignoring.")
 
         case CompletingRebalance | Stable =>
-          val pendingSyncMembers = group.pendingSyncMembers
-          if (pendingSyncMembers.nonEmpty) {
+          if (!group.hasAllMembersJoined) {
+            val pendingSyncMembers = group.allPendingSyncMembers()
+
             info(s"Group ${group.groupId} removed members who haven't " +
               s"sent their sync request: $pendingSyncMembers")
-
-            // pendingSyncMembers is mutated while removing members
-            val reason = s"Removing $pendingSyncMembers on pending sync request expiration"
 
             pendingSyncMembers.foreach { memberId =>
               group.remove(memberId)
               removeHeartbeatForLeavingMember(group, memberId)
             }
 
-            prepareRebalance(group, reason)
+            prepareRebalance(group, s"Removing $pendingSyncMembers on pending sync request expiration")
           }
       }
     }

@@ -681,9 +681,9 @@ class GroupMetadataTest {
       rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
     group.add(member)
     group.addPendingSyncMember(memberId)
-    assertEquals(Set(memberId), group.pendingSyncMembers.toSet)
+    assertEquals(Set(memberId), group.allPendingSyncMembers())
     group.removePendingSyncMember(memberId)
-    assertEquals(Set(), group.pendingSyncMembers.toSet)
+    assertEquals(Set(), group.allPendingSyncMembers())
   }
 
   @Test
@@ -692,9 +692,9 @@ class GroupMetadataTest {
       rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
     group.add(member)
     group.addPendingSyncMember(memberId)
-    assertEquals(Set(memberId), group.pendingSyncMembers.toSet)
+    assertEquals(Set(memberId), group.allPendingSyncMembers())
     group.remove(memberId)
-    assertEquals(Set(), group.pendingSyncMembers.toSet)
+    assertEquals(Set(), group.allPendingSyncMembers())
   }
 
   @Test
@@ -704,9 +704,9 @@ class GroupMetadataTest {
     group.add(member)
     group.transitionTo(PreparingRebalance)
     group.addPendingSyncMember(memberId)
-    assertEquals(Set(memberId), group.pendingSyncMembers.toSet)
+    assertEquals(Set(memberId), group.allPendingSyncMembers())
     group.initNextGeneration()
-    assertEquals(Set(), group.pendingSyncMembers.toSet)
+    assertEquals(Set(), group.allPendingSyncMembers())
   }
 
   private def assertState(group: GroupMetadata, targetState: GroupState): Unit = {

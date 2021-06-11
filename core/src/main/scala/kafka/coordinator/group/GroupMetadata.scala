@@ -214,7 +214,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private val pendingTransactionalOffsetCommits = new mutable.HashMap[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]()
   private var receivedTransactionalOffsetCommits = false
   private var receivedConsumerOffsetCommits = false
-  val pendingSyncMembers = new mutable.HashSet[String]
+  private val pendingSyncMembers = new mutable.HashSet[String]
 
   // When protocolType == `consumer`, a set of subscribed topics is maintained. The set is
   // computed when a new generation is created or when the group is restored from the log.
@@ -364,6 +364,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def hasReceivedSyncFromAllMembers(): Boolean = {
     pendingSyncMembers.isEmpty
+  }
+
+  def allPendingSyncMembers(): Set[String] = {
+    pendingSyncMembers.toSet
   }
 
   def hasStaticMember(groupInstanceId: String): Boolean = {
