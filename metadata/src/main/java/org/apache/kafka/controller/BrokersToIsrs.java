@@ -18,8 +18,10 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.apache.kafka.timeline.TimelineInteger;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -29,7 +31,8 @@ import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
-import static org.apache.kafka.controller.ReplicationControlManager.NO_LEADER;
+import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
+import static org.apache.kafka.metadata.Replicas.NONE;
 
 
 /**
@@ -48,8 +51,6 @@ import static org.apache.kafka.controller.ReplicationControlManager.NO_LEADER;
  * works because partition IDs cannot be negative.
  */
 public class BrokersToIsrs {
-    private final static int[] EMPTY = new int[0];
-
     private final static int LEADER_FLAG = 0x8000_0000;
 
     private final static int REPLICA_MASK = 0x7fff_ffff;
@@ -94,7 +95,7 @@ public class BrokersToIsrs {
         private final boolean leaderOnly;
         private int offset = 0;
         Uuid uuid = Uuid.ZERO_UUID;
-        int[] replicas = EMPTY;
+        int[] replicas = NONE;
         private TopicIdPartition next = null;
 
         PartitionsOnReplicaIterator(Map<Uuid, int[]> topicMap, boolean leaderOnly) {
@@ -139,10 +140,13 @@ public class BrokersToIsrs {
      * Partitions with no isr members appear in this map under id NO_LEADER.
      */
     private final TimelineHashMap<Integer, TimelineHashMap<Uuid, int[]>> isrMembers;
+    
+    private final TimelineInteger offlinePartitionCount;
 
     BrokersToIsrs(SnapshotRegistry snapshotRegistry) {
         this.snapshotRegistry = snapshotRegistry;
         this.isrMembers = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.offlinePartitionCount = new TimelineInteger(snapshotRegistry);
     }
 
     /**
@@ -159,10 +163,13 @@ public class BrokersToIsrs {
                 int prevLeader, int nextLeader) {
         int[] prev;
         if (prevIsr == null) {
-            prev = EMPTY;
+            prev = NONE;
         } else {
             if (prevLeader == NO_LEADER) {
                 prev = Replicas.copyWith(prevIsr, NO_LEADER);
+                if (nextLeader != NO_LEADER) {
+                    offlinePartitionCount.decrement();
+                }
             } else {
                 prev = Replicas.clone(prevIsr);
             }
@@ -170,10 +177,13 @@ public class BrokersToIsrs {
         }
         int[] next;
         if (nextIsr == null) {
-            next = EMPTY;
+            next = NONE;
         } else {
             if (nextLeader == NO_LEADER) {
                 next = Replicas.copyWith(nextIsr, NO_LEADER);
+                if (prevLeader != NO_LEADER) {
+                    offlinePartitionCount.increment();
+                }
             } else {
                 next = Replicas.clone(nextIsr);
             }
@@ -217,6 +227,9 @@ public class BrokersToIsrs {
     void removeTopicEntryForBroker(Uuid topicId, int brokerId) {
         Map<Uuid, int[]> topicMap = isrMembers.get(brokerId);
         if (topicMap != null) {
+            if (brokerId == NO_LEADER) {
+                offlinePartitionCount.set(offlinePartitionCount.get() - topicMap.get(topicId).length);
+            }
             topicMap.remove(topicId);
         }
     }
@@ -311,11 +324,23 @@ public class BrokersToIsrs {
         return new PartitionsOnReplicaIterator(topicMap, leadersOnly);
     }
 
-    PartitionsOnReplicaIterator noLeaderIterator() {
+    PartitionsOnReplicaIterator partitionsWithNoLeader() {
         return iterator(NO_LEADER, true);
+    }
+
+    PartitionsOnReplicaIterator partitionsLedByBroker(int brokerId) {
+        return iterator(brokerId, true);
+    }
+
+    PartitionsOnReplicaIterator partitionsWithBrokerInIsr(int brokerId) {
+        return iterator(brokerId, false);
     }
 
     boolean hasLeaderships(int brokerId) {
         return iterator(brokerId, true).hasNext();
+    }
+
+    int offlinePartitionCount() {
+        return offlinePartitionCount.get();
     }
 }

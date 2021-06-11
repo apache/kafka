@@ -94,4 +94,6 @@ public interface ClusterInstance {
     void start();
 
     void stop();
+
+    void rollingBrokerRestart();
 }

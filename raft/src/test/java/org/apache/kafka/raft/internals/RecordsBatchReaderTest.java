@@ -21,7 +21,7 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -34,7 +34,6 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -44,7 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RecordsBatchReaderTest {
     private static final int MAX_BATCH_BYTES = 128;
 
-    private final MockTime time = new MockTime();
     private final StringSerde serde = new StringSerde();
 
     @ParameterizedTest
@@ -52,13 +50,9 @@ class RecordsBatchReaderTest {
     public void testReadFromMemoryRecords(CompressionType compressionType) {
         long baseOffset = 57;
 
-        List<BatchReader.Batch<String>> batches = asList(
-            new BatchReader.Batch<>(baseOffset, 1, asList("a", "b", "c")),
-            new BatchReader.Batch<>(baseOffset + 3, 2, asList("d", "e")),
-            new BatchReader.Batch<>(baseOffset + 5, 2, asList("f"))
-        );
+        List<Batch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
+        MemoryRecords memRecords = RecordsIteratorTest.buildRecords(compressionType, batches);
 
-        MemoryRecords memRecords = buildRecords(compressionType, batches);
         testBatchReader(baseOffset, memRecords, batches);
     }
 
@@ -67,13 +61,8 @@ class RecordsBatchReaderTest {
     public void testReadFromFileRecords(CompressionType compressionType) throws Exception {
         long baseOffset = 57;
 
-        List<BatchReader.Batch<String>> batches = asList(
-            new BatchReader.Batch<>(baseOffset, 1, asList("a", "b", "c")),
-            new BatchReader.Batch<>(baseOffset + 3, 2, asList("d", "e")),
-            new BatchReader.Batch<>(baseOffset + 5, 2, asList("f"))
-        );
-
-        MemoryRecords memRecords = buildRecords(compressionType, batches);
+        List<Batch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
+        MemoryRecords memRecords = RecordsIteratorTest.buildRecords(compressionType, batches);
 
         FileRecords fileRecords = FileRecords.open(tempFile());
         fileRecords.append(memRecords);
@@ -81,39 +70,10 @@ class RecordsBatchReaderTest {
         testBatchReader(baseOffset, fileRecords, batches);
     }
 
-    private MemoryRecords buildRecords(
-        CompressionType compressionType,
-        List<BatchReader.Batch<String>> batches
-    ) {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-
-        for (BatchReader.Batch<String> batch : batches) {
-            BatchBuilder<String> builder = new BatchBuilder<>(
-                buffer,
-                serde,
-                compressionType,
-                batch.baseOffset(),
-                time.milliseconds(),
-                false,
-                batch.epoch(),
-                MAX_BATCH_BYTES
-            );
-
-            for (String record : batch.records()) {
-                builder.appendRecord(record, null);
-            }
-
-            builder.build();
-        }
-
-        buffer.flip();
-        return MemoryRecords.readableRecords(buffer);
-    }
-
     private void testBatchReader(
         long baseOffset,
         Records records,
-        List<BatchReader.Batch<String>> expectedBatches
+        List<Batch<String>> expectedBatches
     ) {
         BufferSupplier bufferSupplier = Mockito.mock(BufferSupplier.class);
         Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -134,15 +94,16 @@ class RecordsBatchReaderTest {
         @SuppressWarnings("unchecked")
         CloseListener<BatchReader<String>> closeListener = Mockito.mock(CloseListener.class);
 
-        RecordsBatchReader<String> reader = new RecordsBatchReader<>(
+        RecordsBatchReader<String> reader = RecordsBatchReader.of(
             baseOffset,
             records,
             serde,
             bufferSupplier,
+            MAX_BATCH_BYTES,
             closeListener
         );
 
-        for (BatchReader.Batch<String> batch : expectedBatches) {
+        for (Batch<String> batch : expectedBatches) {
             assertTrue(reader.hasNext());
             assertEquals(batch, reader.next());
         }

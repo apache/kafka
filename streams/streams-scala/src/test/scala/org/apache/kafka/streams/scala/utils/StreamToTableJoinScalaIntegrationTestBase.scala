@@ -1,10 +1,10 @@
 /*
- * Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
- * Copyright (C) 2017-2018 Alexis Seigneurin.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -17,44 +17,47 @@
 package org.apache.kafka.streams.scala.utils
 
 import java.util.Properties
-
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization._
-import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
-import org.apache.kafka.test.{IntegrationTest, TestUtils}
-import org.junit._
-import org.junit.experimental.categories.Category
-import org.junit.rules.TemporaryFolder
+import org.apache.kafka.test.TestUtils
+import org.junit.jupiter.api._
+
+import java.io.File
 
 /**
  * Test suite base that prepares Kafka cluster for stream-table joins in Kafka Streams
  * <p>
  */
-@Category(Array(classOf[IntegrationTest]))
+@Tag("integration")
 class StreamToTableJoinScalaIntegrationTestBase extends StreamToTableJoinTestData {
 
-  private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
+  private val cluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
 
-  @Rule def cluster: EmbeddedKafkaCluster = privateCluster
-
-  final val alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000
-  val mockTime: MockTime = cluster.time
+  final private val alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000
+  private val mockTime: MockTime = cluster.time
   mockTime.setCurrentTimeMs(alignedTime)
 
-  val tFolder: TemporaryFolder = new TemporaryFolder(TestUtils.tempDirectory())
-  @Rule def testFolder: TemporaryFolder = tFolder
+  private val testFolder: File = TestUtils.tempDirectory()
 
-  @Before
+  @BeforeEach
   def startKafkaCluster(): Unit = {
+    cluster.start()
     cluster.createTopic(userClicksTopic)
     cluster.createTopic(userRegionsTopic)
     cluster.createTopic(outputTopic)
     cluster.createTopic(userClicksTopicJ)
     cluster.createTopic(userRegionsTopicJ)
     cluster.createTopic(outputTopicJ)
+  }
+
+  @AfterEach
+  def stopKafkaCluster(): Unit = {
+    cluster.stop()
+    Utils.delete(testFolder)
   }
 
   def getStreamsConfiguration(): Properties = {
@@ -64,7 +67,7 @@ class StreamToTableJoinScalaIntegrationTestBase extends StreamToTableJoinTestDat
     streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
     streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1000")
     streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot.getPath)
+    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getPath)
 
     streamsConfiguration
   }

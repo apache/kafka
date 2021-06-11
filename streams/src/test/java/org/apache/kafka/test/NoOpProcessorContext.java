@@ -44,7 +44,7 @@ import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
-public class NoOpProcessorContext extends AbstractProcessorContext {
+public class NoOpProcessorContext extends AbstractProcessorContext<Object, Object> {
     public boolean initialized;
     @SuppressWarnings("WeakerAccess")
     public Map<Object, Object> forwardedValues = new HashMap<>();
@@ -67,14 +67,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
 
     @Override
     public <S extends StateStore> S getStateStore(final String name) {
-        return null;
-    }
-
-    @Override
-    @Deprecated
-    public Cancellable schedule(final long interval,
-                                final PunctuationType type,
-                                final Punctuator callback) {
         return null;
     }
 
@@ -102,18 +94,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
 
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        forward(key, value);
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        forward(key, value);
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
         forward(key, value);
     }
 

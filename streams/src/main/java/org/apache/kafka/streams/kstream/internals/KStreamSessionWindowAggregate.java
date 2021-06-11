@@ -27,7 +27,6 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -38,8 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrLateRecordDropSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
 public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamSessionWindowAggregate.class);
@@ -82,27 +80,22 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
 
         private SessionStore<K, Agg> store;
         private SessionTupleForwarder<K, Agg> tupleForwarder;
-        private StreamsMetricsImpl metrics;
-        private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            internalProcessorContext = (InternalProcessorContext) context;
-            metrics = (StreamsMetricsImpl) context.metrics();
+            final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
             final String threadId = Thread.currentThread().getName();
-            lateRecordDropSensor = droppedRecordsSensorOrLateRecordDropSensor(
+            lateRecordDropSensor = droppedRecordsSensor(
                 threadId,
                 context.taskId().toString(),
-                internalProcessorContext.currentNode().name(),
                 metrics
             );
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), metrics);
-            store = (SessionStore<K, Agg>) context.getStateStore(storeName);
+            droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
+            store = context.getStateStore(storeName);
             tupleForwarder = new SessionTupleForwarder<>(store, context, new SessionCacheFlushListener<>(context), sendOldValues);
         }
 
@@ -182,8 +175,8 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
     }
 
     private SessionWindow mergeSessionWindow(final SessionWindow one, final SessionWindow two) {
-        final long start = one.start() < two.start() ? one.start() : two.start();
-        final long end = one.end() > two.end() ? one.end() : two.end();
+        final long start = Math.min(one.start(), two.start());
+        final long end = Math.max(one.end(), two.end());
         return new SessionWindow(start, end);
     }
 
@@ -205,10 +198,9 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
     private class KTableSessionWindowValueGetter implements KTableValueGetter<Windowed<K>, Agg> {
         private SessionStore<K, Agg> store;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (SessionStore<K, Agg>) context.getStateStore(storeName);
+            store = context.getStateStore(storeName);
         }
 
         @Override

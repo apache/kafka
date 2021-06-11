@@ -23,11 +23,13 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
+import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
@@ -67,6 +69,7 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
+import javax.crypto.SecretKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -84,8 +87,10 @@ import java.util.concurrent.TimeoutException;
 import static java.util.Collections.singletonList;
 import static javax.ws.rs.core.Response.Status.FORBIDDEN;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.capture;
 import static org.easymock.EasyMock.newCapture;
 import static org.junit.Assert.assertEquals;
@@ -2071,6 +2076,84 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testKeyRotationWhenWorkerBecomesLeader() throws Exception {
+        EasyMock.expect(member.memberId()).andStubReturn("member");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V2);
+
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+        // First rebalance: poll indefinitely as no key has been read yet, so expiration doesn't come into play
+        member.poll(Long.MAX_VALUE);
+        EasyMock.expectLastCall();
+
+        expectRebalance(2, Collections.emptyList(), Collections.emptyList());
+        SessionKey initialKey = new SessionKey(EasyMock.mock(SecretKey.class), 0);
+        ClusterConfigState snapshotWithKey =  new ClusterConfigState(2, initialKey, Collections.singletonMap(CONN1, 3),
+            Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
+            TASK_CONFIGS_MAP, Collections.<String>emptySet());
+        expectPostRebalanceCatchup(snapshotWithKey);
+        // Second rebalance: poll indefinitely as worker is follower, so expiration still doesn't come into play
+        member.poll(Long.MAX_VALUE);
+        EasyMock.expectLastCall();
+
+        expectRebalance(2, Collections.emptyList(), Collections.emptyList(), "member", MEMBER_URL);
+        Capture<SessionKey> updatedKey = EasyMock.newCapture();
+        configBackingStore.putSessionKey(EasyMock.capture(updatedKey));
+        EasyMock.expectLastCall().andAnswer(() -> {
+            configUpdateListener.onSessionKeyUpdate(updatedKey.getValue());
+            return null;
+        });
+        // Third rebalance: poll for a limited time as worker has become leader and must wake up for key expiration
+        Capture<Long> pollTimeout = EasyMock.newCapture();
+        member.poll(EasyMock.captureLong(pollTimeout));
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        configUpdateListener.onSessionKeyUpdate(initialKey);
+        herder.tick();
+        herder.tick();
+
+        assertTrue(pollTimeout.getValue() <= DistributedConfig.INTER_WORKER_KEY_TTL_MS_MS_DEFAULT);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testKeyRotationDisabledWhenWorkerBecomesFollower() throws Exception {
+        EasyMock.expect(member.memberId()).andStubReturn("member");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V2);
+
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList(), "member", MEMBER_URL);
+        SecretKey initialSecretKey = EasyMock.mock(SecretKey.class);
+        EasyMock.expect(initialSecretKey.getAlgorithm()).andReturn(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT).anyTimes();
+        EasyMock.expect(initialSecretKey.getEncoded()).andReturn(new byte[32]).anyTimes();
+        SessionKey initialKey = new SessionKey(initialSecretKey, time.milliseconds());
+        ClusterConfigState snapshotWithKey =  new ClusterConfigState(1, initialKey, Collections.singletonMap(CONN1, 3),
+            Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
+            TASK_CONFIGS_MAP, Collections.<String>emptySet());
+        expectPostRebalanceCatchup(snapshotWithKey);
+        // First rebalance: poll for a limited time as worker is leader and must wake up for key expiration
+        Capture<Long> firstPollTimeout = EasyMock.newCapture();
+        member.poll(EasyMock.captureLong(firstPollTimeout));
+        EasyMock.expectLastCall();
+
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList());
+        // Second rebalance: poll indefinitely as worker is no longer leader, so key expiration doesn't come into play
+        member.poll(Long.MAX_VALUE);
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll(initialSecretKey);
+
+        configUpdateListener.onSessionKeyUpdate(initialKey);
+        herder.tick();
+        assertTrue(firstPollTimeout.getValue() <= DistributedConfig.INTER_WORKER_KEY_TTL_MS_MS_DEFAULT);
+        herder.tick();
+
+        PowerMock.verifyAll();
+    }
 
     @Test
     public void testPutTaskConfigsSignatureNotRequiredV0() {
@@ -2177,6 +2260,83 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void testFailedToWriteSessionKey() throws Exception {
+        // First tick -- after joining the group, we try to write a new
+        // session key to the config topic, and fail
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V2);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+        configBackingStore.putSessionKey(anyObject(SessionKey.class));
+        EasyMock.expectLastCall().andThrow(new ConnectException("Oh no!"));
+
+        // Second tick -- we read to the end of the config topic first,
+        // then ensure we're still active in the group
+        // then try a second time to write a new session key,
+        // then finally begin polling for group activity
+        expectPostRebalanceCatchup(SNAPSHOT);
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        configBackingStore.putSessionKey(anyObject(SessionKey.class));
+        EasyMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        herder.tick();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testFailedToReadBackNewlyWrittenSessionKey() throws Exception {
+        SecretKey secretKey = EasyMock.niceMock(SecretKey.class);
+        EasyMock.expect(secretKey.getAlgorithm()).andReturn(INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT);
+        EasyMock.expect(secretKey.getEncoded()).andReturn(new byte[32]);
+        SessionKey sessionKey = new SessionKey(secretKey, time.milliseconds());
+        ClusterConfigState snapshotWithSessionKey = new ClusterConfigState(1, sessionKey, Collections.singletonMap(CONN1, 3),
+            Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
+            TASK_CONFIGS_MAP, Collections.emptySet());
+
+        // First tick -- after joining the group, we try to write a new session key to
+        // the config topic, and fail (in this case, we're trying to simulate that we've
+        // actually written the key successfully, but haven't been able to read it back
+        // from the config topic, so to the herder it looks the same as if it'd just failed
+        // to write the key)
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V2);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+        configBackingStore.putSessionKey(anyObject(SessionKey.class));
+        EasyMock.expectLastCall().andThrow(new ConnectException("Oh no!"));
+
+        // Second tick -- we read to the end of the config topic first, and pick up
+        // the session key that we were able to write the last time,
+        // then ensure we're still active in the group
+        // then finally begin polling for group activity
+        // Importantly, we do not try to write a new session key this time around
+        configBackingStore.refresh(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        EasyMock.expectLastCall().andAnswer(() -> {
+            configUpdateListener.onSessionKeyUpdate(sessionKey);
+            return null;
+        });
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(snapshotWithSessionKey);
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll(secretKey);
+
+        herder.tick();
+        herder.tick();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testKeyExceptionDetection() {
         assertFalse(herder.isPossibleExpiredKeyException(
             time.milliseconds(),
@@ -2229,6 +2389,14 @@ public class DistributedHerderTest {
                 ConnectProtocol.Assignment.NO_ERROR, offset, assignedConnectors, assignedTasks, 0);
     }
 
+    private void expectRebalance(final long offset,
+                                 final List<String> assignedConnectors,
+                                 final List<ConnectorTaskId> assignedTasks,
+                                 String leader, String leaderUrl) {
+        expectRebalance(Collections.emptyList(), Collections.emptyList(),
+                ConnectProtocol.Assignment.NO_ERROR, offset, leader, leaderUrl, assignedConnectors, assignedTasks, 0);
+    }
+
     // Handles common initial part of rebalance callback. Does not handle instantiation of connectors and tasks.
     private void expectRebalance(final Collection<String> revokedConnectors,
                                  final List<ConnectorTaskId> revokedTasks,
@@ -2247,21 +2415,34 @@ public class DistributedHerderTest {
                                  final List<String> assignedConnectors,
                                  final List<ConnectorTaskId> assignedTasks,
                                  int delay) {
+        expectRebalance(revokedConnectors, revokedTasks, error, offset, "leader", "leaderUrl", assignedConnectors, assignedTasks, delay);
+    }
+
+    // Handles common initial part of rebalance callback. Does not handle instantiation of connectors and tasks.
+    private void expectRebalance(final Collection<String> revokedConnectors,
+                                 final List<ConnectorTaskId> revokedTasks,
+                                 final short error,
+                                 final long offset,
+                                 String leader,
+                                 String leaderUrl,
+                                 final List<String> assignedConnectors,
+                                 final List<ConnectorTaskId> assignedTasks,
+                                 int delay) {
         member.ensureActive();
         PowerMock.expectLastCall().andAnswer(() -> {
             ExtendedAssignment assignment;
             if (!revokedConnectors.isEmpty() || !revokedTasks.isEmpty()) {
-                rebalanceListener.onRevoked("leader", revokedConnectors, revokedTasks);
+                rebalanceListener.onRevoked(leader, revokedConnectors, revokedTasks);
             }
 
             if (connectProtocolVersion == CONNECT_PROTOCOL_V0) {
                 assignment = new ExtendedAssignment(
-                        connectProtocolVersion, error, "leader", "leaderUrl", offset,
+                        connectProtocolVersion, error, leader, leaderUrl, offset,
                         assignedConnectors, assignedTasks,
                         Collections.emptyList(), Collections.emptyList(), 0);
             } else {
                 assignment = new ExtendedAssignment(
-                        connectProtocolVersion, error, "leader", "leaderUrl", offset,
+                        connectProtocolVersion, error, leader, leaderUrl, offset,
                         assignedConnectors, assignedTasks,
                         new ArrayList<>(revokedConnectors), new ArrayList<>(revokedTasks), delay);
             }

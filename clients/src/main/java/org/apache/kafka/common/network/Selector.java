@@ -825,7 +825,7 @@ public class Selector implements Selectable, AutoCloseable {
      * Clears all the results from the previous poll. This is invoked by Selector at the start of
      * a poll() when all the results from the previous poll are expected to have been handled.
      * <p>
-     * SocketServer uses {@link #clearCompletedSends()} and {@link #clearCompletedSends()} to
+     * SocketServer uses {@link #clearCompletedSends()} and {@link #clearCompletedReceives()} to
      * clear `completedSends` and `completedReceives` as soon as they are processed to avoid
      * holding onto large request/response buffers from multiple connections longer than necessary.
      * Clients rely on Selector invoking {@link #clear()} at the start of each poll() since memory usage

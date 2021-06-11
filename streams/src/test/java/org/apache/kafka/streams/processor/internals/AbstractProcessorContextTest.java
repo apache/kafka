@@ -92,7 +92,7 @@ public class AbstractProcessorContextTest {
 
     @Test
     public void shouldNotThrowNullPointerExceptionOnTopicIfRecordContextTopicIsNull() {
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, null, null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, null, new RecordHeaders()));
         assertThat(context.topic(), nullValue());
     }
 
@@ -156,31 +156,22 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnHeadersIfNoRecordContext() {
-        context.setRecordContext(null);
-        try {
-            context.headers();
-        } catch (final IllegalStateException e) {
-            // pass
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
     public void appConfigsShouldReturnParsedValues() {
         assertThat(
             context.appConfigs().get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG),
-            equalTo(RocksDBConfigSetter.class));
+            equalTo(RocksDBConfigSetter.class)
+        );
     }
 
     @Test
     public void appConfigsShouldReturnUnrecognizedValues() {
         assertThat(
             context.appConfigs().get("user.supplied.config"),
-            equalTo("user-supplied-value"));
+            equalTo("user-supplied-value")
+        );
     }
 
-    private static class TestProcessorContext extends AbstractProcessorContext {
+    private static class TestProcessorContext extends AbstractProcessorContext<Object, Object> {
         static Properties config;
         static {
             config = getStreamsConfig();
@@ -204,14 +195,6 @@ public class AbstractProcessorContextTest {
         }
 
         @Override
-        @Deprecated
-        public Cancellable schedule(final long interval,
-                                    final PunctuationType type,
-                                    final Punctuator callback) {
-            return null;
-        }
-
-        @Override
         public Cancellable schedule(final Duration interval,
                                     final PunctuationType type,
                                     final Punctuator callback) throws IllegalArgumentException {
@@ -229,14 +212,6 @@ public class AbstractProcessorContextTest {
 
         @Override
         public <K, V> void forward(final K key, final V value, final To to) {}
-
-        @Override
-        @Deprecated
-        public <K, V> void forward(final K key, final V value, final int childIndex) {}
-
-        @Override
-        @Deprecated
-        public <K, V> void forward(final K key, final V value, final String childName) {}
 
         @Override
         public void commit() {}

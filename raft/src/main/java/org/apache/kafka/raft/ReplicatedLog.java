@@ -17,15 +17,14 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.Optional;
 
-public interface ReplicatedLog extends Closeable {
+public interface ReplicatedLog extends AutoCloseable {
 
     /**
      * Write a set of records to the local leader log. These messages will either
@@ -199,6 +198,11 @@ public interface ReplicatedLog extends Closeable {
     TopicPartition topicPartition();
 
     /**
+     * Return the topic ID associated with the log.
+     */
+    Uuid topicId();
+
+    /**
      * Truncate to an offset and epoch.
      *
      * @param endOffset offset and epoch to truncate to
@@ -225,12 +229,13 @@ public interface ReplicatedLog extends Closeable {
     /**
      * Create a writable snapshot for the given snapshot id.
      *
-     * See {@link RawSnapshotWriter} for details on how to use this object.
+     * See {@link RawSnapshotWriter} for details on how to use this object. The caller of
+     * this method is responsible for invoking {@link RawSnapshotWriter#close()}.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
      * @return a writable snapshot
      */
-    RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId) throws IOException;
+    RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
 
     /**
      * Opens a readable snapshot for the given snapshot id.
@@ -243,7 +248,7 @@ public interface ReplicatedLog extends Closeable {
      * @return an Optional with a readable snapshot, if the snapshot exists, otherwise
      *         returns an empty Optional
      */
-    Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId) throws IOException;
+    Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId);
 
     /**
      * Returns the latest snapshot id if one exists.

@@ -186,7 +186,7 @@ public class ProcessorStateManager implements StateManager {
         this.changelogReader = changelogReader;
         this.sourcePartitions = sourcePartitions;
 
-        this.baseDir = stateDirectory.directoryForTask(taskId);
+        this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
 
         log.debug("Created state store manager for task {}", taskId);
@@ -306,12 +306,16 @@ public class ProcessorStateManager implements StateManager {
     public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
         final String storeName = store.name();
 
+        // TODO (KAFKA-12887): we should not trigger user's exception handler for illegal-argument but always
+        // fail-crash; in this case we would not need to immediately close the state store before throwing
         if (CHECKPOINT_FILE_NAME.equals(storeName)) {
+            store.close();
             throw new IllegalArgumentException(format("%sIllegal store name: %s, which collides with the pre-defined " +
                 "checkpoint file name", logPrefix, storeName));
         }
 
         if (stores.containsKey(storeName)) {
+            store.close();
             throw new IllegalArgumentException(format("%sStore %s has already been registered.", logPrefix, storeName));
         }
 
@@ -328,7 +332,8 @@ public class ProcessorStateManager implements StateManager {
                 converterForStore(store)) :
             new StateStoreMetadata(store);
 
-
+        // register the store first, so that if later an exception is thrown then eventually while we call `close`
+        // on the state manager this state store would be closed as well
         stores.put(storeName, storeMetadata);
 
         maybeRegisterStoreWithChangelogReader(storeName);
@@ -615,7 +620,7 @@ public class ProcessorStateManager implements StateManager {
         // NOTE we assume the partition of the topic can always be inferred from the task id;
         // if user ever use a custom partition grouper (deprecated in KIP-528) this would break and
         // it is not a regression (it would always break anyways)
-        return new TopicPartition(changelogFor(storeName), taskId.partition);
+        return new TopicPartition(changelogFor(storeName), taskId.partition());
     }
 
     private boolean isLoggingEnabled(final String storeName) {

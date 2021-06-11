@@ -103,25 +103,13 @@ public class ClientUtilsTest {
     @Test
     public void testResolveUnknownHostException() {
         assertThrows(UnknownHostException.class,
-            () -> ClientUtils.resolve("some.invalid.hostname.foo.bar.local", ClientDnsLookup.USE_ALL_DNS_IPS, hostResolver));
+            () -> ClientUtils.resolve("some.invalid.hostname.foo.bar.local", hostResolver));
     }
 
     @Test
     public void testResolveDnsLookup() throws UnknownHostException {
         // Note that kafka.apache.org resolves to at least 2 IP addresses
-        assertEquals(1, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.DEFAULT, hostResolver).size());
-    }
-
-    @Test
-    public void testResolveDnsLookupAllIps() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to at least 2 IP addresses
-        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS, hostResolver).size() > 1);
-    }
-
-    @Test
-    public void testResolveDnsLookupResolveCanonicalBootstrapServers() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to at least 2 IP addresses
-        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY, hostResolver).size() > 1);
+        assertTrue(ClientUtils.resolve("kafka.apache.org", hostResolver).size() > 1);
     }
 
     private List<InetSocketAddress> checkWithoutLookup(String... url) {

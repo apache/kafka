@@ -253,8 +253,7 @@ class ApiVersionTest {
       ListenerType.ZK_BROKER
     )
 
-    // Ensure that APIs needed for the self-managed mode (aka KIP-500)
-    // are not exposed through ApiVersions until we are ready for them
+    // Ensure that APIs needed for the KRaft mode are not exposed through ApiVersions until we are ready for them
     val exposedApis = apiKeysInResponse(response)
     assertFalse(exposedApis.contains(ApiKeys.ENVELOPE))
     assertFalse(exposedApis.contains(ApiKeys.VOTE))

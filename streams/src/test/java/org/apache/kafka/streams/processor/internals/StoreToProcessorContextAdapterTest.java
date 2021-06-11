@@ -58,12 +58,6 @@ public class StoreToProcessorContextAdapterTest {
         context.getStateStore("store");
     }
 
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldThrowOnSchedule() {
-        context.schedule(0, PunctuationType.WALL_CLOCK_TIME, punctuator);
-    }
-
     @Test(expected = UnsupportedOperationException.class)
     public void shouldThrowOnScheduleWithDuration() {
         context.schedule(Duration.ZERO, PunctuationType.WALL_CLOCK_TIME, punctuator);
@@ -77,18 +71,6 @@ public class StoreToProcessorContextAdapterTest {
     @Test(expected = UnsupportedOperationException.class)
     public void shouldThrowOnForwardWithTo() {
         context.forward("key", "value", To.all());
-    }
-
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldThrowOnForwardWithChildIndex() {
-        context.forward("key", "value", 1);
-    }
-
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldThrowOnForwardWithChildName() {
-        context.forward("key", "value", "child1");
     }
 
     @Test(expected = UnsupportedOperationException.class)

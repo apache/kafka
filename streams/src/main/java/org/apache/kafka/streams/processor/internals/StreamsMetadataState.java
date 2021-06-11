@@ -125,54 +125,6 @@ public class StreamsMetadataState {
     }
 
     /**
-     * Find the {@link StreamsMetadata}s for a given storeName and key. This method will use the
-     * {@link DefaultStreamPartitioner} to locate the store. If a custom partitioner has been used
-     * please use {@link StreamsMetadataState#getMetadataWithKey(String, Object, StreamPartitioner)}
-     * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
-     * this method provides a way of finding which {@link StreamsMetadata} it would exist on.
-     *
-     *
-     * @param storeName     Name of the store
-     * @param key           Key to use
-     * @param keySerializer Serializer for the key
-     * @param <K>           key type
-     * @return The {@link StreamsMetadata} for the storeName and key or {@link StreamsMetadata#NOT_AVAILABLE}
-     * if streams is (re-)initializing, or {@code null} if no matching metadata could be found.
-     * @deprecated Use {@link #getKeyQueryMetadataForKey(String, Object, Serializer)} instead.
-     */
-    @Deprecated
-    public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
-                                                               final K key,
-                                                               final Serializer<K> keySerializer) {
-        Objects.requireNonNull(keySerializer, "keySerializer can't be null");
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Objects.requireNonNull(key, "key can't be null");
-
-        if (!isInitialized()) {
-            return StreamsMetadata.NOT_AVAILABLE;
-        }
-
-        if (globalStores.contains(storeName)) {
-            // global stores are on every node. if we don't have the host info
-            // for this host then just pick the first metadata
-            if (thisHost.equals(UNKNOWN_HOST)) {
-                return allMetadata.get(0);
-            }
-            return localMetadata.get();
-        }
-
-        final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
-        if (sourceTopicsInfo == null) {
-            return null;
-        }
-
-        return getStreamsMetadataForKey(storeName,
-                                        key,
-                                        new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
-                                        sourceTopicsInfo);
-    }
-
-    /**
      * Find the {@link KeyQueryMetadata}s for a given storeName and key. This method will use the
      * {@link DefaultStreamPartitioner} to locate the store. If a custom partitioner has been used
      * please use {@link StreamsMetadataState#getKeyQueryMetadataForKey(String, Object, StreamPartitioner)} instead.
@@ -235,48 +187,6 @@ public class StreamsMetadataState {
             return null;
         }
         return getKeyQueryMetadataForKey(storeName, key, partitioner, sourceTopicsInfo);
-    }
-
-    /**
-     * Find the {@link StreamsMetadata}s for a given storeName and key.
-     *
-     * Note: the key may not exist in the {@link StateStore},
-     * this method provides a way of finding which {@link StreamsMetadata} it would exist on.
-     *
-     * @param storeName   Name of the store
-     * @param key         Key to use
-     * @param partitioner partitioner to use to find correct partition for key
-     * @param <K>         key type
-     * @return The {@link StreamsMetadata} for the storeName and key or {@link StreamsMetadata#NOT_AVAILABLE}
-     * if streams is (re-)initializing, or {@code null} if no matching metadata could be found.
-     * @deprecated Use {@link #getKeyQueryMetadataForKey(String, Object, StreamPartitioner)} instead.
-     */
-    @Deprecated
-    public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
-                                                               final K key,
-                                                               final StreamPartitioner<? super K, ?> partitioner) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Objects.requireNonNull(key, "key can't be null");
-        Objects.requireNonNull(partitioner, "partitioner can't be null");
-
-        if (!isInitialized()) {
-            return StreamsMetadata.NOT_AVAILABLE;
-        }
-
-        if (globalStores.contains(storeName)) {
-            // global stores are on every node. if we don't have the host info
-            // for this host then just pick the first metadata
-            if (thisHost.equals(UNKNOWN_HOST)) {
-                return allMetadata.get(0);
-            }
-            return localMetadata.get();
-        }
-
-        final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
-        if (sourceTopicsInfo == null) {
-            return null;
-        }
-        return getStreamsMetadataForKey(storeName, key, partitioner, sourceTopicsInfo);
     }
 
     /**
@@ -393,30 +303,6 @@ public class StreamsMetadataState {
         }
 
         return new KeyQueryMetadata(activeHost, standbyHosts, partition);
-    }
-
-    @Deprecated
-    private <K> StreamsMetadata getStreamsMetadataForKey(final String storeName,
-                                                         final K key,
-                                                         final StreamPartitioner<? super K, ?> partitioner,
-                                                         final SourceTopicsInfo sourceTopicsInfo) {
-
-        final Integer partition = partitioner.partition(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions);
-        final Set<TopicPartition> matchingPartitions = new HashSet<>();
-        for (final String sourceTopic : sourceTopicsInfo.sourceTopics) {
-            matchingPartitions.add(new TopicPartition(sourceTopic, partition));
-        }
-
-        for (final StreamsMetadata streamsMetadata : allMetadata) {
-            final Set<String> stateStoreNames = streamsMetadata.stateStoreNames();
-            final Set<TopicPartition> topicPartitions = new HashSet<>(streamsMetadata.topicPartitions());
-            topicPartitions.retainAll(matchingPartitions);
-            if (stateStoreNames.contains(storeName)
-                    && !topicPartitions.isEmpty()) {
-                return streamsMetadata;
-            }
-        }
-        return null;
     }
 
     private SourceTopicsInfo getSourceTopicsInfo(final String storeName) {

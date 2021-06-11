@@ -99,7 +99,7 @@ class DefaultApiVersionManager(
     }
 
     // This is a temporary workaround in order to allow testing of forwarding
-    // in integration tests. We can remove this after the self-managed controller
+    // in integration tests. We can remove this after the KRaft controller
     // is available for integration testing.
     if (forwardingManager.isDefined) {
       response.data.apiKeys.add(

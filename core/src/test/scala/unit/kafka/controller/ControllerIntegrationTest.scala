@@ -18,10 +18,10 @@
 package kafka.controller
 
 import java.util.Properties
-import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
-
+import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingQueue, TimeUnit}
 import com.yammer.metrics.core.Timer
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0, KAFKA_2_7_IV0, LeaderAndIsr}
+import kafka.controller.KafkaController.AlterIsrCallback
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{LogCaptureAppender, TestUtils}
@@ -847,6 +847,66 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     // When re-sending the current ISR, we should not get and error or any ISR changes
     controller.eventManager.put(AlterIsrReceived(otherBroker.config.brokerId, brokerEpoch, Map(tp -> newLeaderAndIsr), callback))
     latch.await()
+  }
+
+  @Test
+  def testAlterIsrErrors(): Unit = {
+    servers = makeServers(1)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(controllerId))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+    val controller = getController().kafkaController
+    var future = captureAlterIsrError(controllerId, controller.brokerEpoch - 1,
+      Map(tp -> LeaderAndIsr(controllerId, List(controllerId))))
+    var capturedError = future.get(5, TimeUnit.SECONDS)
+    assertEquals(Errors.STALE_BROKER_EPOCH, capturedError)
+
+    future = captureAlterIsrError(99, controller.brokerEpoch,
+      Map(tp -> LeaderAndIsr(controllerId, List(controllerId))))
+    capturedError = future.get(5, TimeUnit.SECONDS)
+    assertEquals(Errors.STALE_BROKER_EPOCH, capturedError)
+
+    val unknownTopicPartition = new TopicPartition("unknown", 99)
+    future = captureAlterIsrPartitionError(controllerId, controller.brokerEpoch,
+      Map(unknownTopicPartition -> LeaderAndIsr(controllerId, List(controllerId))), unknownTopicPartition)
+    capturedError = future.get(5, TimeUnit.SECONDS)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, capturedError)
+
+    future = captureAlterIsrPartitionError(controllerId, controller.brokerEpoch,
+      Map(tp -> LeaderAndIsr(controllerId, 1, List(controllerId), 99)), tp)
+    capturedError = future.get(5, TimeUnit.SECONDS)
+    assertEquals(Errors.INVALID_UPDATE_VERSION, capturedError)
+  }
+
+  def captureAlterIsrError(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr]): CompletableFuture[Errors] = {
+    val future = new CompletableFuture[Errors]()
+    val controller = getController().kafkaController
+    val callback: AlterIsrCallback = {
+      case Left(_: Map[TopicPartition, Either[Errors, LeaderAndIsr]]) =>
+        future.completeExceptionally(new AssertionError(s"Should have seen top-level error"))
+      case Right(error: Errors) =>
+        future.complete(error)
+    }
+    controller.eventManager.put(AlterIsrReceived(brokerId, brokerEpoch, isrsToAlter, callback))
+    future
+  }
+
+  def captureAlterIsrPartitionError(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr], tp: TopicPartition): CompletableFuture[Errors] = {
+    val future = new CompletableFuture[Errors]()
+    val controller = getController().kafkaController
+    val callback: AlterIsrCallback = {
+      case Left(partitionResults: Map[TopicPartition, Either[Errors, LeaderAndIsr]]) =>
+        partitionResults.get(tp) match {
+          case Some(Left(error: Errors)) => future.complete(error)
+          case Some(Right(_: LeaderAndIsr)) => future.completeExceptionally(new AssertionError(s"Should have seen an error for $tp in result"))
+          case None => future.completeExceptionally(new AssertionError(s"Should have seen $tp in result"))
+        }
+      case Right(_: Errors) =>
+        future.completeExceptionally(new AssertionError(s"Should not seen top-level error"))
+    }
+    controller.eventManager.put(AlterIsrReceived(brokerId, brokerEpoch, isrsToAlter, callback))
+    future
   }
 
   @Test

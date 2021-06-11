@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.MockProcessorContext;
@@ -159,48 +160,6 @@ public class MockProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIfForwardedWithDeprecatedChildIndex() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
-            @Override
-            public void process(final String key, final Long value) {
-                context().forward(key, value, 0);
-            }
-        };
-
-        final MockProcessorContext context = new MockProcessorContext();
-
-        processor.init(context);
-
-        try {
-            processor.process("foo", 5L);
-            fail("Should have thrown an UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) {
-            // expected
-        }
-    }
-
-    @Test
-    public void shouldThrowIfForwardedWithDeprecatedChildName() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
-            @Override
-            public void process(final String key, final Long value) {
-                context().forward(key, value, "child1");
-            }
-        };
-
-        final MockProcessorContext context = new MockProcessorContext();
-
-        processor.init(context);
-
-        try {
-            processor.process("foo", 5L);
-            fail("Should have thrown an UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) {
-            // expected
-        }
-    }
-
-    @Test
     public void shouldCaptureCommitsAndAllowReset() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             private int count = 0;
@@ -295,7 +254,7 @@ public class MockProcessorContextTest {
         }
 
         context.resetForwards();
-        context.setRecordMetadata("t1", 0, 0L, null, 0L);
+        context.setRecordMetadata("t1", 0, 0L, new RecordHeaders(), 0L);
 
         {
             processor.process("foo", 5L);

@@ -363,10 +363,16 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         if (checkForKeyRotation(now)) {
             log.debug("Distributing new session key");
             keyExpiration = Long.MAX_VALUE;
-            configBackingStore.putSessionKey(new SessionKey(
-                keyGenerator.generateKey(),
-                now
-            ));
+            try {
+                configBackingStore.putSessionKey(new SessionKey(
+                    keyGenerator.generateKey(),
+                    now
+                ));
+            } catch (Exception e) {
+                log.info("Failed to write new session key to config topic; forcing a read to the end of the config topic before possibly retrying");
+                canReadConfigs = false;
+                return;
+            }
         }
 
         // Process any external requests
@@ -402,7 +408,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.debug("Scheduled rebalance at: {} (now: {} nextRequestTimeoutMs: {}) ",
                     scheduledRebalance, now, nextRequestTimeoutMs);
         }
-        if (internalRequestValidationEnabled() && keyExpiration < Long.MAX_VALUE) {
+        if (isLeader() && internalRequestValidationEnabled() && keyExpiration < Long.MAX_VALUE) {
             nextRequestTimeoutMs = Math.min(nextRequestTimeoutMs, Math.max(keyExpiration - now, 0));
             log.debug("Scheduled next key rotation at: {} (now: {} nextRequestTimeoutMs: {}) ",
                     keyExpiration, now, nextRequestTimeoutMs);
@@ -1173,7 +1179,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
      * @return true if successful, false if timed out
      */
     private boolean readConfigToEnd(long timeoutMs) {
-        log.info("Current config state offset {} is behind group assignment {}, reading to end of config log", configState.offset(), assignment.offset());
+        if (configState.offset() < assignment.offset()) {
+            log.info("Current config state offset {} is behind group assignment {}, reading to end of config log", configState.offset(), assignment.offset());
+        } else {
+            log.info("Reading to end of config log; current config state offset: {}", configState.offset());
+        }
         try {
             configBackingStore.refresh(timeoutMs, TimeUnit.MILLISECONDS);
             configState = configBackingStore.snapshot();
@@ -1573,10 +1583,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
             synchronized (DistributedHerder.this) {
                 DistributedHerder.this.sessionKey = sessionKey.key();
-                // Track the expiration of the key if and only if this worker is the leader
+                // Track the expiration of the key.
                 // Followers will receive rotated keys from the leader and won't be responsible for
-                // tracking expiration and distributing new keys themselves
-                if (isLeader() && keyRotationIntervalMs > 0) {
+                // tracking expiration and distributing new keys themselves, but may become leaders
+                // later on and will need to know when to update the key.
+                if (keyRotationIntervalMs > 0) {
                     DistributedHerder.this.keyExpiration = sessionKey.creationTimestamp() + keyRotationIntervalMs;
                 }
             }

@@ -43,7 +43,7 @@ class LogSegmentTest {
   def createSegment(offset: Long,
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
-    val seg = LogUtils.createSegment(offset, logDir, indexIntervalBytes, time)
+    val seg = LogTestUtils.createSegment(offset, logDir, indexIntervalBytes, time)
     segments += seg
     seg
   }
@@ -389,7 +389,7 @@ class LogSegmentTest {
       override def read(): Seq[EpochEntry] = this.epochs
     }
 
-    val cache = new LeaderEpochFileCache(topicPartition, () => seg.readNextOffset, checkpoint)
+    val cache = new LeaderEpochFileCache(topicPartition, checkpoint)
     seg.append(largestOffset = 105L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
       shallowOffsetOfMaxTimestamp = 104L, records = MemoryRecords.withRecords(104L, CompressionType.NONE, 0,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))

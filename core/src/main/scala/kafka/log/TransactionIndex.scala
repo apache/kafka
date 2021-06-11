@@ -109,7 +109,7 @@ class TransactionIndex(val startOffset: Long, @volatile private var _file: File)
   def renameTo(f: File): Unit = {
     try {
       if (file.exists)
-        Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+        Utils.atomicMoveWithFallback(file.toPath, f.toPath, false)
     } finally _file = f
   }
 

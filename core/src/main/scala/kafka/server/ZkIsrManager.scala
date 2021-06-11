@@ -55,12 +55,6 @@ class ZkIsrManager(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient) ex
       period = isrChangeNotificationConfig.checkIntervalMs, unit = TimeUnit.MILLISECONDS)
   }
 
-  override def clearPending(topicPartition: TopicPartition): Unit = {
-    // Since we always immediately process ZK updates and never actually enqueue anything, there is nothing to
-    // clear here so this is a no-op. Even if there are changes that have not been propagated, the write to ZK
-    // has already happened, so we may as well send the notification to the controller.
-  }
-
   override def submit(alterIsrItem: AlterIsrItem): Boolean = {
     debug(s"Writing new ISR ${alterIsrItem.leaderAndIsr.isr} to ZooKeeper with version " +
       s"${alterIsrItem.leaderAndIsr.zkVersion} for partition ${alterIsrItem.topicPartition}")

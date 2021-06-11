@@ -34,7 +34,7 @@ import java.time.Duration;
 
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
-public class GlobalProcessorContextImpl extends AbstractProcessorContext {
+public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object, Object> {
 
     private final GlobalStateManager stateManager;
     private final Time time;
@@ -80,7 +80,6 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <KIn, VIn> void forward(final KIn key, final VIn value) {
         forward(new Record<>(key, value, timestamp(), headers()));
@@ -96,24 +95,6 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         }
     }
 
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
-    }
-
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
-        throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
-    }
-
     @Override
     public void commit() {
         //no-op
@@ -127,15 +108,6 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     @Override
     public long currentStreamTimeMs() {
         throw new UnsupportedOperationException("There is no concept of stream-time for a global processor.");
-    }
-
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @Override
-    @Deprecated
-    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
-        throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
     }
 
     /**
