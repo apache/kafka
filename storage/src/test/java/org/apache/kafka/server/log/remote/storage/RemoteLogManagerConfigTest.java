@@ -41,8 +41,8 @@ public class RemoteLogManagerConfigTest {
         RemoteLogManagerConfig expectedRemoteLogManagerConfig
                 = new RemoteLogManagerConfig(true, "dummy.remote.storage.class", "dummy.remote.storage.class.path",
                                              "dummy.remote.log.metadata.class", "dummy.remote.log.metadata.class.path",
-                                             "listener.name", 1024 * 1024L, 1, 60000L, 100L, 60000L, 1000L, 10, 100, rsmPrefix,
-                                             rsmProps, rlmmPrefix, rlmmProps);
+                                             "listener.name", 1024 * 1024L, 1, 60000L, 100L, 60000L, 0.3, 10, 100,
+                                             rsmPrefix, rsmProps, rlmmPrefix, rlmmProps);
 
         Map<String, Object> props = extractProps(expectedRemoteLogManagerConfig);
         rsmProps.forEach((k, v) -> props.put(rsmPrefix + k, v));
@@ -68,7 +68,7 @@ public class RemoteLogManagerConfigTest {
         props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP, remoteLogManagerConfig.remoteLogManagerTaskRetryBackoffMs());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP,
                   remoteLogManagerConfig.remoteLogManagerTaskRetryBackoffMaxMs());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_MS_PROP, remoteLogManagerConfig.remoteLogManagerTaskRetryJitterMs());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP, remoteLogManagerConfig.remoteLogManagerTaskRetryJitterMs());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, remoteLogManagerConfig.remoteLogReaderThreads());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP, remoteLogManagerConfig.remoteLogReaderMaxPendingTasks());
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP, remoteLogManagerConfig.remoteStorageManagerPrefix());

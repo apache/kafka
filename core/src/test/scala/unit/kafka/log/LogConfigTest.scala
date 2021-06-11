@@ -258,7 +258,7 @@ class LogConfigTest {
     // Check for invalid case of localRetentionBytes > retentionBytes
     doTestInvalidLocalLogRetentionProps(500L, 200, 100, 1000L)
 
-    // Check for invalid case of localRetentionBytes (-1 viz unlimited) > retentionBytes,
+    // Check for invalid case of localRetentionMs (-1 viz unlimited) > retentionMs,
     doTestInvalidLocalLogRetentionProps(-1, 200, 100, 1000L)
 
     // Check for invalid case of localRetentionBytes(-1 viz unlimited) > retentionBytes
