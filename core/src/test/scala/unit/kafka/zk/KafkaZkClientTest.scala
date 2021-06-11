@@ -20,7 +20,6 @@ import java.util.{Base64, Collections, Properties}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.security.MessageDigest
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log.LogConfig
@@ -33,7 +32,7 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException, NodeExistsException}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -142,6 +141,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     }
   }
 
+  @Disabled
   @Test
   def testChrootExistsAndRootIsLocked(): Unit = {
     // chroot is accessible
