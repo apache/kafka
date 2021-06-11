@@ -4634,8 +4634,9 @@ public interface KStream<K, V> {
      *                            implements {@link ConnectedStoreProvider#stores()}
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
+     * @deprecated Since 3.0. Use {@link KStream#process(org.apache.kafka.streams.processor.api.ProcessorSupplier, java.lang.String...)} instead.
      */
-    @SuppressWarnings("deprecation") // Old PAPI
+    @Deprecated
     void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
                  final String... stateStoreNames);
 
@@ -4830,8 +4831,9 @@ public interface KStream<K, V> {
      * @param stateStoreNames   the names of the state store used by the processor
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
+     * @deprecated Since 3.0. Use {@link KStream#process(org.apache.kafka.streams.processor.api.ProcessorSupplier, org.apache.kafka.streams.kstream.Named, java.lang.String...)} instead.
      */
-    @SuppressWarnings("deprecation") // Old PAPI
+    @Deprecated
     void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
                  final Named named,
                  final String... stateStoreNames);
