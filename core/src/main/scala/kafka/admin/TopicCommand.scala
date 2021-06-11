@@ -308,7 +308,7 @@ object TopicCommand extends Logging {
           .toSeq.sortBy(td => td.name())
         val describeOptions = new DescribeOptions(opts, liveBrokers.toSet)
         val topicPartitions = topicDescriptions
-          .flatMap(td => td.partitions.iterator().asScala.map(p => new TopicPartition(td.name(), p.partition())).toSeq)
+          .flatMap(td => td.partitions.iterator().asScala.map(p => new TopicPartition(td.name(), p.partition())))
           .toSet.asJava
         val reassignments = listAllReassignments(topicPartitions)
 
