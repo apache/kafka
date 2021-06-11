@@ -809,9 +809,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  def process[KOut, VOut](processorSupplier: ProcessorSupplier[K, V, KOut, VOut], stateStoreNames: String*): Unit = {
+  def process[KOut, VOut](processorSupplier: ProcessorSupplier[K, V, KOut, VOut], stateStoreNames: String*): Unit =
     inner.process(processorSupplier, stateStoreNames: _*)
-  }
 
   /**
    * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
@@ -849,9 +848,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    */
   def process[KOut, VOut](processorSupplier: ProcessorSupplier[K, V, KOut, VOut],
                           named: Named,
-                          stateStoreNames: String*): Unit = {
+                          stateStoreNames: String*): Unit =
     inner.process(processorSupplier, named, stateStoreNames: _*)
-  }
 
   /**
    * Group the records by their current key into a [[KGroupedStream]]
