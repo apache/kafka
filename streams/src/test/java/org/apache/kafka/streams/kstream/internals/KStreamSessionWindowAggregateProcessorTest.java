@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
@@ -93,12 +94,13 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Before
     public void setup() {
-        setup(StreamsConfig.METRICS_LATEST, true);
+        setup(true);
     }
 
-    private void setup(final String builtInMetricsVersion, final boolean enableCache) {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, new MockTime());
-        context = new InternalMockProcessorContext(
+    private void setup(final boolean enableCache) {
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, new MockTime());
+        context = new InternalMockProcessorContext<Object, Object>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.String(),
@@ -115,7 +117,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 results.add(new KeyValueTimestamp<>((Windowed<String>) key, (Change<Long>) value, toInternal.timestamp()));
             }
         };
-        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), streamsMetrics);
+        TaskMetrics.droppedRecordsSensor(threadId, context.taskId().toString(), streamsMetrics);
 
         initStore(enableCache);
         processor.init(context);
@@ -376,19 +378,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(StreamsConfig.METRICS_LATEST);
-    }
-
-    private void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final String builtInMetricsVersion) {
-        setup(builtInMetricsVersion, false);
+    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics() {
+        setup(false);
         context.setRecordContext(
-            new ProcessorRecordContext(-1, -2, -3, "topic", null)
+            new ProcessorRecordContext(-1, -2, -3, "topic", new RecordHeaders())
         );
 
         try (final LogCaptureAppender appender =
@@ -402,31 +395,15 @@ public class KStreamSessionWindowAggregateProcessorTest {
             );
         }
 
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertEquals(
-                1.0,
-                getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue()
-            );
-        } else {
-            assertEquals(
-                1.0,
-                getMetricByName(context.metrics().metrics(), "dropped-records-total", "stream-task-metrics").metricValue()
-            );
-        }
+        assertEquals(
+            1.0,
+            getMetricByName(context.metrics().metrics(), "dropped-records-total", "stream-task-metrics").metricValue()
+        );
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingLateRecordWithZeroGraceWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldLogAndMeterWhenSkippingLateRecordWithZeroGraceWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace(final String builtInMetricsVersion) {
-        setup(builtInMetricsVersion, false);
+    public void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace() {
+        setup(false);
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(0L)),
             STORE_NAME,
@@ -437,22 +414,22 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.init(context);
 
         // dummy record to establish stream time = 0
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
         processor.process("dummy", "dummy");
 
         // record arrives on time, should not be skipped
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
         processor.process("OnTime1", "1");
 
         // dummy record to advance stream time = 1
-        context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", null));
+        context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", new RecordHeaders()));
         processor.process("dummy", "dummy");
 
         try (final LogCaptureAppender appender =
                  LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
 
             // record is late
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process("Late1", "1");
 
             assertThat(
@@ -464,47 +441,24 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         final MetricName dropTotal;
         final MetricName dropRate;
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            dropTotal = new MetricName(
-                "late-record-drop-total",
-                "stream-processor-node-metrics",
-                "The total number of late records dropped",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0"),
-                    mkEntry("processor-node-id", "TESTING_NODE")
-                )
-            );
-            dropRate = new MetricName(
-                "late-record-drop-rate",
-                "stream-processor-node-metrics",
-                "The average number of late records dropped per second",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0"),
-                    mkEntry("processor-node-id", "TESTING_NODE")
-                )
-            );
-        } else {
-            dropTotal = new MetricName(
-                "dropped-records-total",
-                "stream-task-metrics",
-                "The total number of dropped records",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            );
-            dropRate = new MetricName(
-                "dropped-records-rate",
-                "stream-task-metrics",
-                "The average number of dropped records per second",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            );
-        }
+        dropTotal = new MetricName(
+            "dropped-records-total",
+            "stream-task-metrics",
+            "The total number of dropped records",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+        dropRate = new MetricName(
+            "dropped-records-rate",
+            "stream-task-metrics",
+            "The average number of dropped records per second",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
         assertThat(metrics.metrics().get(dropTotal).metricValue(), is(1.0));
         assertThat(
             (Double) metrics.metrics().get(dropRate).metricValue(),
@@ -513,17 +467,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGraceWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGraceWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace(final String builtInMetricsVersion) {
-        setup(builtInMetricsVersion, false);
+    public void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace() {
+        setup(false);
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(1L)),
             STORE_NAME,
@@ -537,27 +482,27 @@ public class KStreamSessionWindowAggregateProcessorTest {
                  LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
 
             // dummy record to establish stream time = 0
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process("dummy", "dummy");
 
             // record arrives on time, should not be skipped
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process("OnTime1", "1");
 
             // dummy record to advance stream time = 1
-            context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", new RecordHeaders()));
             processor.process("dummy", "dummy");
 
             // delayed record arrives on time, should not be skipped
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process("OnTime2", "1");
 
             // dummy record to advance stream time = 2
-            context.setRecordContext(new ProcessorRecordContext(2, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(2, -2, -3, "topic", new RecordHeaders()));
             processor.process("dummy", "dummy");
 
             // delayed record arrives late
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process("Late1", "1");
 
             assertThat(
@@ -569,47 +514,24 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         final MetricName dropTotal;
         final MetricName dropRate;
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            dropTotal = new MetricName(
-                "late-record-drop-total",
-                "stream-processor-node-metrics",
-                "The total number of late records dropped",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0"),
-                    mkEntry("processor-node-id", "TESTING_NODE")
-                )
-            );
-            dropRate = new MetricName(
-                "late-record-drop-rate",
-                "stream-processor-node-metrics",
-                "The average number of late records dropped per second",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0"),
-                    mkEntry("processor-node-id", "TESTING_NODE")
-                )
-            );
-        } else {
-            dropTotal = new MetricName(
-                "dropped-records-total",
-                "stream-task-metrics",
-                "The total number of dropped records",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            );
-            dropRate = new MetricName(
-                "dropped-records-rate",
-                "stream-task-metrics",
-                "The average number of dropped records per second",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            );
-        }
+        dropTotal = new MetricName(
+            "dropped-records-total",
+            "stream-task-metrics",
+            "The total number of dropped records",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+        dropRate = new MetricName(
+            "dropped-records-rate",
+            "stream-task-metrics",
+            "The average number of dropped records per second",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
 
         assertThat(metrics.metrics().get(dropTotal).metricValue(), is(1.0));
         assertThat(

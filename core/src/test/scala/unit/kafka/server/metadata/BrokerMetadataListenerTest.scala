@@ -94,7 +94,7 @@ class BrokerMetadataListenerTest {
 
     verify(groupCoordinator).handleDeletedPartitions(ArgumentMatchers.argThat[Seq[TopicPartition]] { partitions =>
       partitions.toSet == partitionSet(topic, numPartitions)
-    })
+    }, any())
 
     val deleteImageCapture: ArgumentCaptor[MetadataImageBuilder] =
       ArgumentCaptor.forClass(classOf[MetadataImageBuilder])

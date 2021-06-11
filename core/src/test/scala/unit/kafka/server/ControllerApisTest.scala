@@ -274,7 +274,8 @@ class ControllerApisTest {
     val request = buildRequest(brokerRegistrationRequest)
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
 
-    createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller])).handle(request)
+    createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller])).handle(request,
+      RequestLocal.withThreadConfinedCaching)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
       capturedResponse.capture(),
@@ -407,6 +408,14 @@ class ControllerApisTest {
       Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
         handleAlterPartitionReassignments(buildRequest(new AlterPartitionReassignmentsRequest.Builder(
             new AlterPartitionReassignmentsRequestData()).build())))
+  }
+
+  @Test
+  def testUnauthorizedHandleAllocateProducerIds(): Unit = {
+    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
+      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
+      handleAllocateProducerIdsRequest(buildRequest(new AllocateProducerIdsRequest.Builder(
+        new AllocateProducerIdsRequestData()).build())))
   }
 
   @Test

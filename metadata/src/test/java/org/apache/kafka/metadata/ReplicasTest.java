@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metadata;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;

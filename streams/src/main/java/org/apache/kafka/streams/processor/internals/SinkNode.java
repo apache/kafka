@@ -24,14 +24,14 @@ import org.apache.kafka.streams.processor.api.Record;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerializer;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerializer;
 
-public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut, VOut> {
+public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
 
     private Serializer<KIn> keySerializer;
     private Serializer<VIn> valSerializer;
     private final TopicNameExtractor<KIn, VIn> topicExtractor;
     private final StreamPartitioner<? super KIn, ? super VIn> partitioner;
 
-    private InternalProcessorContext context;
+    private InternalProcessorContext<Void, Void> context;
 
     SinkNode(final String name,
              final TopicNameExtractor<KIn, VIn> topicExtractor,
@@ -50,12 +50,12 @@ public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut
      * @throws UnsupportedOperationException if this method adds a child to a sink node
      */
     @Override
-    public void addChild(final ProcessorNode<KOut, VOut, ?, ?> child) {
+    public void addChild(final ProcessorNode<Void, Void, ?, ?> child) {
         throw new UnsupportedOperationException("sink node does not allow addChild");
     }
 
     @Override
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<Void, Void> context) {
         super.init(context);
         this.context = context;
         final Serializer<?> contextKeySerializer = ProcessorContextUtils.getKeySerializer(context);
