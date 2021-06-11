@@ -22,7 +22,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertTrue;
 
 public class TableProcessorNodeTest {
-    @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private static class TestProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
         @Override
         public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {

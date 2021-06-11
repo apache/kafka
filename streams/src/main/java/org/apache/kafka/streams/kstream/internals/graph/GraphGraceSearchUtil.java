@@ -71,7 +71,7 @@ public final class GraphGraceSearchUtil {
 
     private static Long extractGracePeriod(final GraphNode node) {
         if (node instanceof StatefulProcessorNode) {
-            @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
+            @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
             final org.apache.kafka.streams.processor.ProcessorSupplier processorSupplier = ((StatefulProcessorNode) node).processorParameters().oldProcessorSupplier();
             if (processorSupplier instanceof KStreamWindowAggregate) {
                 final KStreamWindowAggregate kStreamWindowAggregate = (KStreamWindowAggregate) processorSupplier;

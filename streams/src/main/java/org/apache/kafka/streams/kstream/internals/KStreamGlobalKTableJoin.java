@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 
-@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 class KStreamGlobalKTableJoin<K1, K2, R, V1, V2> implements org.apache.kafka.streams.processor.ProcessorSupplier<K1, V1> {
 
     private final KTableValueGetterSupplier<K2, V2> valueGetterSupplier;

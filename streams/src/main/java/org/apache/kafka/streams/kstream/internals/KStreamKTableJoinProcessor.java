@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-@SuppressWarnings("deprecation") // Old API. Needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends org.apache.kafka.streams.processor.AbstractProcessor<K1, V1> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoin.class);
 

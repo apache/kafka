@@ -23,7 +23,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Set;
 
-@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KStreamFlatTransformValues<KIn, VIn, VOut> implements org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> {
 
     private final ValueTransformerWithKeySupplier<KIn, VIn, Iterable<VOut>> valueTransformerSupplier;

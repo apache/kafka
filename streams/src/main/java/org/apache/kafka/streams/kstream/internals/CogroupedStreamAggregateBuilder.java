@@ -254,7 +254,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             builder);
     }
 
-    @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private StatefulProcessorNode<K, ?> getStatefulProcessorNode(final String processorName,
                                                                  final boolean stateCreated,
                                                                  final StoreBuilder<?> storeBuilder,

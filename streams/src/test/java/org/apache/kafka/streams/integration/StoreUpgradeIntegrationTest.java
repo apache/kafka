@@ -952,7 +952,7 @@ public class StoreUpgradeIntegrationTest {
             "Could not get expected result in time.");
     }
 
-    @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private static class KeyValueProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
         private KeyValueStore<Integer, Long> store;
 
@@ -980,7 +980,7 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
-    @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private static class TimestampedKeyValueProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
         private ProcessorContext context;
         private TimestampedKeyValueStore<Integer, Long> store;
@@ -1014,7 +1014,7 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
-    @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private static class WindowedProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
         private WindowStore<Integer, Long> store;
 
@@ -1042,7 +1042,7 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
-    @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private static class TimestampedWindowedProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
         private ProcessorContext context;
         private TimestampedWindowStore<Integer, Long> store;

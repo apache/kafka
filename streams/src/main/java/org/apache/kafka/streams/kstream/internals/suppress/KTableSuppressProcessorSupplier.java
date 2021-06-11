@@ -35,7 +35,7 @@ import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import static java.util.Objects.requireNonNull;
 
-@SuppressWarnings("deprecation") // Old PAPI. This class needs to be migrated.
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final SuppressedInternal<K> suppress;
     private final String storeName;

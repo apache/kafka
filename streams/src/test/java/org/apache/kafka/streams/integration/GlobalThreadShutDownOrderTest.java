@@ -195,7 +195,7 @@ public class GlobalThreadShutDownOrderTest {
     }
 
 
-    @SuppressWarnings("deprecation") // Old API. Needs to be migrated.
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private class GlobalStoreProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, Long> {
 
         private KeyValueStore<String, Long> store;
