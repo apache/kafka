@@ -28,7 +28,6 @@ import org.apache.log4j.PropertyConfigurator;
 import org.apache.log4j.helpers.LogLog;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
@@ -40,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class KafkaLog4jAppenderTest {
 
@@ -166,12 +166,12 @@ public class KafkaLog4jAppenderTest {
         Future<RecordMetadata> futureMock = mock(Future.class);
         try {
             if (!success)
-                Mockito.when(futureMock.get())
+                when(futureMock.get())
                         .thenThrow(new ExecutionException("simulated timeout", new TimeoutException()));
         } catch (InterruptedException | ExecutionException e) {
             // just mocking
         }
-        Mockito.when(producer.send(any())).thenReturn(futureMock);
+        when(producer.send(any())).thenReturn(futureMock);
         // reconfiguring mock appender
         mockKafkaLog4jAppender.setKafkaProducer(producer);
         mockKafkaLog4jAppender.activateOptions();
