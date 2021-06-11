@@ -27,7 +27,7 @@ import org.apache.kafka.streams.kstream.{
   ValueTransformerWithKeySupplier,
   KStream => KStreamJ
 }
-import org.apache.kafka.streams.processor.api.{Processor, ProcessorSupplier}
+import org.apache.kafka.streams.processor.api.ProcessorSupplier
 import org.apache.kafka.streams.processor.TopicNameExtractor
 import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   FlatValueMapperFromFunction,
@@ -790,6 +790,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
+  @annotation.nowarn("msg=trait .* in package processor is deprecated") // old API
   def process(processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V],
               stateStoreNames: String*): Unit = {
     val processorSupplierJ: org.apache.kafka.streams.processor.ProcessorSupplier[K, V] = () => processorSupplier()
@@ -808,9 +809,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  def process[KOut, VOut](processorSupplier: () => Processor[K, V, KOut, VOut], stateStoreNames: String*): Unit = {
-    val processorSupplierJ: ProcessorSupplier[K, V, KOut, VOut] = () => processorSupplier()
-    inner.process(processorSupplierJ, stateStoreNames: _*)
+  def process[KOut, VOut](processorSupplier: ProcessorSupplier[K, V, KOut, VOut], stateStoreNames: String*): Unit = {
+    inner.process(processorSupplier, stateStoreNames: _*)
   }
 
   /**
@@ -826,6 +826,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
+  @annotation.nowarn("msg=trait .* in package processor is deprecated") // old API
   def process(processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V],
               named: Named,
               stateStoreNames: String*): Unit = {
@@ -846,11 +847,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  def process[KOut, VOut](processorSupplier: () => Processor[K, V, KOut, VOut],
+  def process[KOut, VOut](processorSupplier: ProcessorSupplier[K, V, KOut, VOut],
                           named: Named,
                           stateStoreNames: String*): Unit = {
-    val processorSupplierJ: ProcessorSupplier[K, V, KOut, VOut] = () => processorSupplier()
-    inner.process(processorSupplierJ, named, stateStoreNames: _*)
+    inner.process(processorSupplier, named, stateStoreNames: _*)
   }
 
   /**

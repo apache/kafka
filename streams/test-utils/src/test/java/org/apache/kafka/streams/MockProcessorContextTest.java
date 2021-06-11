@@ -18,10 +18,8 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -48,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class MockProcessorContextTest {
     @Test
     public void shouldCaptureOutputRecords() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
                 context().forward(key + value, key.length() + value);
@@ -73,7 +71,7 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldCaptureOutputRecordsUsingTo() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
                 context().forward(key + value, key.length() + value, To.all());
@@ -99,7 +97,7 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldCaptureRecordsOutputToChildByName() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
             private int count = 0;
 
             @Override
@@ -161,7 +159,7 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldCaptureCommitsAndAllowReset() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
             private int count = 0;
 
             @Override
@@ -192,7 +190,7 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldStoreAndReturnStateStores() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
                 final KeyValueStore<String, Long> stateStore = context().getStateStore("my-state");
@@ -227,7 +225,7 @@ public class MockProcessorContextTest {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testMetadata");
 
-        final AbstractProcessor<String, Object> processor = new AbstractProcessor<String, Object>() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Object> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Object>() {
             @Override
             public void process(final String key, final Object value) {
                 context().forward("appId", context().applicationId());
@@ -313,7 +311,7 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldCapturePunctuator() {
-        final Processor<String, Long> processor = new Processor<String, Long>() {
+        final org.apache.kafka.streams.processor.Processor<String, Long> processor = new org.apache.kafka.streams.processor.Processor<String, Long>() {
             @Override
             public void init(final ProcessorContext context) {
                 context.schedule(

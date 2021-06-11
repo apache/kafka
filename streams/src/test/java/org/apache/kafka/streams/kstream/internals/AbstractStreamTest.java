@@ -30,9 +30,6 @@ import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
@@ -109,7 +106,7 @@ public class AbstractStreamTest {
         }
     }
 
-    private static class ExtendedKStreamDummy<K, V> implements ProcessorSupplier<K, V> {
+    private static class ExtendedKStreamDummy<K, V> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V> {
 
         private final Random rand;
 
@@ -118,11 +115,11 @@ public class AbstractStreamTest {
         }
 
         @Override
-        public Processor<K, V> get() {
+        public org.apache.kafka.streams.processor.Processor<K, V> get() {
             return new ExtendedKStreamDummyProcessor();
         }
 
-        private class ExtendedKStreamDummyProcessor extends AbstractProcessor<K, V> {
+        private class ExtendedKStreamDummyProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, V> {
             @Override
             public void process(final K key, final V value) {
                 // flip a coin and filter

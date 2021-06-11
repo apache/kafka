@@ -30,7 +30,6 @@ import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
@@ -67,7 +66,7 @@ public class KTableSuppressProcessorTest {
     private static final Change<Long> ARBITRARY_CHANGE = new Change<>(7L, 14L);
 
     private static class Harness<K, V> {
-        private final Processor<K, Change<V>> processor;
+        private final org.apache.kafka.streams.processor.Processor<K, Change<V>> processor;
         private final MockInternalProcessorContext context;
 
 
@@ -82,7 +81,7 @@ public class KTableSuppressProcessorTest {
                 .build();
 
             final KTableImpl<K, ?, V> parent = EasyMock.mock(KTableImpl.class);
-            final Processor<K, Change<V>> processor =
+            final org.apache.kafka.streams.processor.Processor<K, Change<V>> processor =
                 new KTableSuppressProcessorSupplier<>((SuppressedInternal<K>) suppressed, storeName, parent).get();
 
             final MockInternalProcessorContext context = new MockInternalProcessorContext();

@@ -33,7 +33,6 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -88,7 +87,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             sessionMerger);
 
     private final List<KeyValueTimestamp<Windowed<String>, Change<Long>>> results = new ArrayList<>();
-    private final Processor<String, String> processor = sessionAggregator.get();
+    private final org.apache.kafka.streams.processor.Processor<String, String> processor = sessionAggregator.get();
     private SessionStore<String, Long> sessionStore;
     private InternalMockProcessorContext context;
     private final Metrics metrics = new Metrics();
@@ -405,7 +404,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     @Test
     public void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace() {
         setup(false);
-        final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
+        final org.apache.kafka.streams.processor.Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(0L)),
             STORE_NAME,
             initializer,
@@ -470,7 +469,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     @Test
     public void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace() {
         setup(false);
-        final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
+        final org.apache.kafka.streams.processor.Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(1L)),
             STORE_NAME,
             initializer,

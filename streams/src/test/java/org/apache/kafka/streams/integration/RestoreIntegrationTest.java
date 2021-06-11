@@ -40,7 +40,6 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingS
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
@@ -431,7 +430,7 @@ public class RestoreIntegrationTest {
     }
 
     @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
-    public static class KeyValueStoreProcessor implements Processor<Integer, Integer> {
+    public static class KeyValueStoreProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
 
         private final String topic;
         private final CountDownLatch processorLatch;

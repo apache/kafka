@@ -25,7 +25,6 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -63,7 +62,7 @@ public class ProcessorNodeTest {
     }
 
     @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
-    private static class ExceptionalProcessor implements Processor<Object, Object> {
+    private static class ExceptionalProcessor implements org.apache.kafka.streams.processor.Processor<Object, Object> {
         @Override
         public void init(final ProcessorContext context) {
             throw new RuntimeException();
@@ -81,7 +80,7 @@ public class ProcessorNodeTest {
     }
 
     @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
-    private static class NoOpProcessor implements Processor<Object, Object> {
+    private static class NoOpProcessor implements org.apache.kafka.streams.processor.Processor<Object, Object> {
         @Override
         public void init(final ProcessorContext context) {
 

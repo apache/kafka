@@ -27,7 +27,6 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -954,7 +953,7 @@ public class StoreUpgradeIntegrationTest {
     }
 
     @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
-    private static class KeyValueProcessor implements Processor<Integer, Integer> {
+    private static class KeyValueProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
         private KeyValueStore<Integer, Long> store;
 
         @SuppressWarnings("unchecked")
@@ -982,7 +981,7 @@ public class StoreUpgradeIntegrationTest {
     }
 
     @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
-    private static class TimestampedKeyValueProcessor implements Processor<Integer, Integer> {
+    private static class TimestampedKeyValueProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
         private ProcessorContext context;
         private TimestampedKeyValueStore<Integer, Long> store;
 
@@ -1016,7 +1015,7 @@ public class StoreUpgradeIntegrationTest {
     }
 
     @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
-    private static class WindowedProcessor implements Processor<Integer, Integer> {
+    private static class WindowedProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
         private WindowStore<Integer, Long> store;
 
         @SuppressWarnings("unchecked")
@@ -1044,7 +1043,7 @@ public class StoreUpgradeIntegrationTest {
     }
 
     @SuppressWarnings("deprecation") // Old API. This class needs to be migrated.
-    private static class TimestampedWindowedProcessor implements Processor<Integer, Integer> {
+    private static class TimestampedWindowedProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
         private ProcessorContext context;
         private TimestampedWindowStore<Integer, Long> store;
 
