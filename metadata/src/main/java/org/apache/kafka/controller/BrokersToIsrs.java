@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
@@ -30,7 +31,8 @@ import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
-import static org.apache.kafka.controller.ReplicationControlManager.NO_LEADER;
+import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
+import static org.apache.kafka.metadata.Replicas.NONE;
 
 
 /**
@@ -49,8 +51,6 @@ import static org.apache.kafka.controller.ReplicationControlManager.NO_LEADER;
  * works because partition IDs cannot be negative.
  */
 public class BrokersToIsrs {
-    private final static int[] EMPTY = new int[0];
-
     private final static int LEADER_FLAG = 0x8000_0000;
 
     private final static int REPLICA_MASK = 0x7fff_ffff;
@@ -95,7 +95,7 @@ public class BrokersToIsrs {
         private final boolean leaderOnly;
         private int offset = 0;
         Uuid uuid = Uuid.ZERO_UUID;
-        int[] replicas = EMPTY;
+        int[] replicas = NONE;
         private TopicIdPartition next = null;
 
         PartitionsOnReplicaIterator(Map<Uuid, int[]> topicMap, boolean leaderOnly) {
@@ -163,7 +163,7 @@ public class BrokersToIsrs {
                 int prevLeader, int nextLeader) {
         int[] prev;
         if (prevIsr == null) {
-            prev = EMPTY;
+            prev = NONE;
         } else {
             if (prevLeader == NO_LEADER) {
                 prev = Replicas.copyWith(prevIsr, NO_LEADER);
@@ -177,7 +177,7 @@ public class BrokersToIsrs {
         }
         int[] next;
         if (nextIsr == null) {
-            next = EMPTY;
+            next = NONE;
         } else {
             if (nextLeader == NO_LEADER) {
                 next = Replicas.copyWith(nextIsr, NO_LEADER);
