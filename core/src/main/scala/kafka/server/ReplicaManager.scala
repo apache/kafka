@@ -1665,28 +1665,27 @@ class ReplicaManager(val config: KafkaConfig,
       partitionStates.forKeyValue { (partition, partitionState) =>
         val newLeaderBrokerId = partitionState.leader
         try {
-          metadataCache.getAliveBrokers.find(_.id == newLeaderBrokerId) match {
+          if (metadataCache.hasAliveBroker(newLeaderBrokerId)) {
             // Only change partition state when the leader is available
-            case Some(_) =>
-              if (partition.makeFollower(partitionState, highWatermarkCheckpoints, topicIds(partitionState.topicName)))
-                partitionsToMakeFollower += partition
-              else
-                stateChangeLogger.info(s"Skipped the become-follower state change after marking its partition as " +
-                  s"follower with correlation id $correlationId from controller $controllerId epoch $controllerEpoch " +
-                  s"for partition ${partition.topicPartition} (last update " +
-                  s"controller epoch ${partitionState.controllerEpoch}) " +
-                  s"since the new leader $newLeaderBrokerId is the same as the old leader")
-            case None =>
-              // The leader broker should always be present in the metadata cache.
-              // If not, we should record the error message and abort the transition process for this partition
-              stateChangeLogger.error(s"Received LeaderAndIsrRequest with correlation id $correlationId from " +
-                s"controller $controllerId epoch $controllerEpoch for partition ${partition.topicPartition} " +
-                s"(last update controller epoch ${partitionState.controllerEpoch}) " +
-                s"but cannot become follower since the new leader $newLeaderBrokerId is unavailable.")
-              // Create the local replica even if the leader is unavailable. This is required to ensure that we include
-              // the partition's high watermark in the checkpoint file (see KAFKA-1647)
-              partition.createLogIfNotExists(isNew = partitionState.isNew, isFutureReplica = false,
-                highWatermarkCheckpoints, topicIds(partitionState.topicName))
+            if (partition.makeFollower(partitionState, highWatermarkCheckpoints, topicIds(partitionState.topicName)))
+              partitionsToMakeFollower += partition
+            else
+              stateChangeLogger.info(s"Skipped the become-follower state change after marking its partition as " +
+                s"follower with correlation id $correlationId from controller $controllerId epoch $controllerEpoch " +
+                s"for partition ${partition.topicPartition} (last update " +
+                s"controller epoch ${partitionState.controllerEpoch}) " +
+                s"since the new leader $newLeaderBrokerId is the same as the old leader")
+          } else {
+            // The leader broker should always be present in the metadata cache.
+            // If not, we should record the error message and abort the transition process for this partition
+            stateChangeLogger.error(s"Received LeaderAndIsrRequest with correlation id $correlationId from " +
+              s"controller $controllerId epoch $controllerEpoch for partition ${partition.topicPartition} " +
+              s"(last update controller epoch ${partitionState.controllerEpoch}) " +
+              s"but cannot become follower since the new leader $newLeaderBrokerId is unavailable.")
+            // Create the local replica even if the leader is unavailable. This is required to ensure that we include
+            // the partition's high watermark in the checkpoint file (see KAFKA-1647)
+            partition.createLogIfNotExists(isNew = partitionState.isNew, isFutureReplica = false,
+              highWatermarkCheckpoints, topicIds(partitionState.topicName))
           }
         } catch {
           case e: KafkaStorageException =>
@@ -1721,8 +1720,10 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         // we do not need to check if the leader exists again since this has been done at the beginning of this process
         val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map { partition =>
-          val leader = metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get
-            .brokerEndPoint(config.interBrokerListenerName)
+          val leaderNode = metadataCache.getAliveBrokerNode(
+            partition.leaderReplicaIdOpt.getOrElse(-1), config.interBrokerListenerName.value()).
+              getOrElse(Node.noNode())
+          val leader = new BrokerEndPoint(leaderNode.id(), leaderNode.host(), leaderNode.port())
           val log = partition.localLogOrException
           val fetchOffset = initialFetchOffset(log)
           partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)
@@ -1999,7 +2000,6 @@ class ReplicaManager(val config: KafkaConfig,
         case (partition, Right(leader)) => expectedLeaders += partition -> leader
         case (partition, Left(error)) => failures += partition -> error
       }
-
       if (expectedLeaders.nonEmpty) {
         val watchKeys = expectedLeaders.iterator.map {
           case (tp, _) => TopicPartitionOperationKey(tp)

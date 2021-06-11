@@ -152,7 +152,7 @@ class ZkAdminManager(val config: KafkaConfig,
                    responseCallback: Map[String, ApiError] => Unit): Unit = {
 
     // 1. map over topics creating assignment and calling zookeeper
-    val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, Option(b.rack)) }
+    val brokers = metadataCache.getAliveBrokers()
     val metadata = toCreate.values.map(topic =>
       try {
         if (metadataCache.contains(topic.name))
@@ -256,7 +256,7 @@ class ZkAdminManager(val config: KafkaConfig,
     // 1. map over topics calling the asynchronous delete
     val metadata = topics.map { topic =>
         try {
-          controllerMutationQuota.record(metadataCache.numPartitions(topic).getOrElse(0).toDouble)
+          controllerMutationQuota.record(metadataCache.numPartitions(topic).toDouble)
           adminZkClient.deleteTopic(topic)
           DeleteTopicMetadata(topic, Errors.NONE)
         } catch {

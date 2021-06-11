@@ -174,7 +174,7 @@ class BrokerMetadataListenerTest {
 
     applyBatch(records.toList)
     assertTrue(metadataCache.contains(topic))
-    assertEquals(Some(numPartitions), metadataCache.numPartitions(topic))
+    assertEquals(numPartitions, metadataCache.numPartitions(topic))
     assertEquals(topicConfig, configRepository.topicConfig(topic).asScala)
 
     val imageCapture: ArgumentCaptor[MetadataImageBuilder] =

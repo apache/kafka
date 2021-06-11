@@ -1164,7 +1164,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     var unauthorizedForCreateTopics = Set[String]()
 
     if (authorizedTopics.nonEmpty) {
-      val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
+      val nonExistingTopics = authorizedTopics.filter(!metadataCache.contains(_))
       if (metadataRequest.allowAutoTopicCreation && config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
         if (!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false)) {
           val authorizedForCreateTopics = authHelper.filterByAuthorized(request.context, CREATE, TOPIC,
@@ -1223,7 +1223,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
-    val brokers = metadataCache.getAliveBrokers
+    val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName.value())
 
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
@@ -1232,7 +1232,7 @@ class KafkaApis(val requestChannel: RequestChannel,
        MetadataResponse.prepareResponse(
          requestVersion,
          requestThrottleMs,
-         brokers.flatMap(_.endpoints.get(request.context.listenerName.value())).toList.asJava,
+         brokers.toList.asJava,
          clusterId,
          metadataSupport.controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
          completeTopicMetadata.asJava,
@@ -1364,9 +1364,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             val coordinatorEndpoint = topicMetadata.head.partitions.asScala
               .find(_.partitionIndex == partition)
               .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
-              .flatMap(metadata => metadataCache.getAliveBroker(metadata.leaderId))
-              .flatMap(_.endpoints.get(request.context.listenerName.value()))
-              .filterNot(_.isEmpty)
+              .flatMap(metadata => metadataCache.
+                getAliveBrokerNode(metadata.leaderId, request.context.listenerName.value()))
 
             coordinatorEndpoint match {
               case Some(endpoint) =>
@@ -2886,7 +2885,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(error)(partitionErrors)
     } else {
       val partitions = if (electionRequest.data.topicPartitions == null) {
-        metadataCache.getAllPartitions()
+        metadataCache.getAllTopics().flatMap(metadataCache.getTopicPartitions(_))
       } else {
         electionRequest.topicPartitions
       }
@@ -3130,7 +3129,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         clusterAuthorizedOperations = 0
     }
 
-    val brokers = metadataCache.getAliveBrokers
+    val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName.value())
     val controllerId = metadataSupport.controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
@@ -3141,7 +3140,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setClusterAuthorizedOperations(clusterAuthorizedOperations);
 
 
-      brokers.flatMap(_.endpoints.get(request.context.listenerName.value())).foreach { broker =>
+      brokers.foreach { broker =>
         data.brokers.add(new DescribeClusterResponseData.DescribeClusterBroker()
           .setBrokerId(broker.id)
           .setHost(broker.host)

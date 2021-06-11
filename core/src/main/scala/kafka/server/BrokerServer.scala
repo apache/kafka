@@ -359,10 +359,14 @@ class BrokerServer(
       // Start other services that we've delayed starting, in the appropriate order.
       replicaManager.startup()
       replicaManager.startHighWatermarkCheckPointThread()
-      groupCoordinator.startup(() => metadataCache.numPartitions(Topic.GROUP_METADATA_TOPIC_NAME).
-        getOrElse(config.offsetsTopicPartitions))
-      transactionCoordinator.startup(() => metadataCache.numPartitions(Topic.TRANSACTION_STATE_TOPIC_NAME).
-        getOrElse(config.transactionTopicPartitions))
+      groupCoordinator.startup(() => {
+        val curPartitions = metadataCache.numPartitions(Topic.GROUP_METADATA_TOPIC_NAME)
+        if (curPartitions > 0) curPartitions else  config.offsetsTopicPartitions
+      })
+      transactionCoordinator.startup(() => {
+        val curPartitions = metadataCache.numPartitions(Topic.TRANSACTION_STATE_TOPIC_NAME)
+        if (curPartitions > 0) curPartitions else  config.transactionTopicPartitions
+      })
       // Apply deferred partition metadata changes after starting replica manager and coordinators
       // so that those services are ready and able to process the changes.
       replicaManager.endMetadataChangeDeferral(

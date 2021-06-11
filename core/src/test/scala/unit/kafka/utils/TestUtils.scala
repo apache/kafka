@@ -936,7 +936,7 @@ object TestUtils extends Logging {
                                           timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = servers.map(_.config.brokerId).toSet
     waitUntilTrue(() => servers.forall(server =>
-      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers.map(_.id).toSet
+      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers().map(_.id).toSet
     ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
   }
 
@@ -952,10 +952,7 @@ object TestUtils extends Logging {
                                    topic: String, expectedNumPartitions: Int): Map[TopicPartition, UpdateMetadataPartitionState] = {
     waitUntilTrue(
       () => servers.forall { server =>
-        server.metadataCache.numPartitions(topic) match {
-          case Some(numPartitions) => numPartitions == expectedNumPartitions
-          case _ => false
-        }
+        server.metadataCache.numPartitions(topic) == expectedNumPartitions
       },
       s"Topic [$topic] metadata not propagated after 60000 ms", waitTimeMs = 60000L)
 
