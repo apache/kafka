@@ -303,6 +303,7 @@ object TopicCommand extends Logging {
       if (topics.nonEmpty) {
         val allConfigs = adminClient.describeConfigs(topics.map(new ConfigResource(Type.TOPIC, _)).asJavaCollection).values()
         val liveBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id())
+        // Get a seq of topic description, and sort by topic name
         val topicDescriptions = adminClient.describeTopics(topics.asJavaCollection).all().get().values().asScala
           .toSeq.sortBy(td => td.name())
         val describeOptions = new DescribeOptions(opts, liveBrokers.toSet)
