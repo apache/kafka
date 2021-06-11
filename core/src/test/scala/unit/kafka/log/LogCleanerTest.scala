@@ -1175,40 +1175,48 @@ class LogCleanerTest {
   }
 
   @Test
-  def testSegmentGroupingWithSparseEmptyOffsets(): Unit ={
+  def testSegmentGroupingWithSparseOffsetsAndEmptySegments(): Unit ={
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    //create three segment
+    val k="key".getBytes()
+    val v="val".getBytes()
+
+    //create 3 segments
     for(i<-0 until 3){
-      log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes), leaderEpoch = 0)
+      log.appendAsLeader(TestUtils.singletonRecords(value = v, key = k), leaderEpoch = 0)
       //0 to Int.MaxValue is Int.MaxValue+1 message, -1 will be the last message of ith segment
-      val records = messageWithOffset("hello".getBytes, "hello".getBytes, (i+1L) * (Int.MaxValue + 1L) -1 )
+      val records = messageWithOffset(k, v, (i + 1L) * (Int.MaxValue + 1L) -1 )
       log.appendAsFollower(records)
-      assertEquals(i+1,log.numberOfSegments)
+      assertEquals(i + 1,log.numberOfSegments)
     }
 
     //4th active segment, not clean
-    log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes), leaderEpoch = 0)
-    assertEquals(4,log.numberOfSegments)
+    log.appendAsLeader(TestUtils.singletonRecords(value = v, key = k), leaderEpoch = 0)
 
+    val totalSegments = 4
     //last segment not cleanable
     val firstUncleanableOffset = log.logEndOffset - 1
-    var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, firstUncleanableOffset)
-    assertEquals(log.numberOfSegments - 1, groups.size)
-    cleaner.clean(LogToClean(log.topicPartition, log, 0, firstUncleanableOffset))
-    assertEquals(4,log.numberOfSegments)
+    val notCleanableSegments = 1
 
+    assertEquals(totalSegments,log.numberOfSegments)
+    var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, firstUncleanableOffset)
+    //every cleanable segment one group since relative offset range limit
+    assertEquals(totalSegments - notCleanableSegments, groups.size)
+    //do clean to clean first 2 segments to empty
+    cleaner.clean(LogToClean(log.topicPartition, log, 0, firstUncleanableOffset))
+    assertEquals(totalSegments,log.numberOfSegments)
     assertEquals(0,log.logSegments.head.size)
 
-    //after compact we got 2 empty segment, they will group together
+    //after clean we got 2 empty segment, they will group together this time
     groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, firstUncleanableOffset)
-    assertEquals(2, groups.size)
+    val noneEmptySegment = 1
+    assertEquals(noneEmptySegment + 1, groups.size)
 
-    //empty segment got cleaned
-    cleaner.clean(LogToClean(log.topicPartition, log, 0, firstUncleanableOffset, true))
-    assertEquals(3,log.numberOfSegments)
+    //trigger a clean and 2 empty segments should cleaned to 1
+    cleaner.clean(LogToClean(log.topicPartition, log, 0, firstUncleanableOffset))
+    assertEquals(totalSegments - 1,log.numberOfSegments)
 
   }
 
