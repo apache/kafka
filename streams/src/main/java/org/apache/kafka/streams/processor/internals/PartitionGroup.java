@@ -260,7 +260,11 @@ public class PartitionGroup {
         StampedRecord record = null;
 
         final RecordQueue queue = nonEmptyQueuesByTime.poll();
-        System.err.println(logPrefix + queue.partition() + "," + queue.size());
+        if (queue != null) {
+            System.err.println(logPrefix + queue.partition() + "," + queue.size());
+        } else {
+            System.err.print(logPrefix + "nu");
+        }
         info.queue = queue;
 
         if (queue != null) {
