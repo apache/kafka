@@ -50,13 +50,7 @@ import org.easymock.MockType;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +58,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.aryEq;
 import static org.easymock.EasyMock.eq;
@@ -83,7 +76,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
-@RunWith(Parameterized.class)
 public class MeteredSessionStoreTest {
 
     @Rule
@@ -92,9 +84,7 @@ public class MeteredSessionStoreTest {
     private static final String APPLICATION_ID = "test-app";
     private static final String STORE_TYPE = "scope";
     private static final String STORE_NAME = "mocked-store";
-    private static final String STORE_LEVEL_GROUP_FROM_0100_TO_24 = "stream-" + STORE_TYPE + "-state-metrics";
     private static final String STORE_LEVEL_GROUP = "stream-state-metrics";
-    private static final String THREAD_ID_TAG_KEY_FROM_0100_TO_24 = "client-id";
     private static final String THREAD_ID_TAG_KEY = "thread-id";
     private static final String CHANGELOG_TOPIC = "changelog-topic";
     private static final String KEY = "key";
@@ -115,21 +105,8 @@ public class MeteredSessionStoreTest {
     @Mock(type = MockType.NICE)
     private InternalProcessorContext context;
 
-    private String storeLevelGroup;
-    private String threadIdTagKey;
     private Map<String, String> tags;
-
-    @Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {
-            {StreamsConfig.METRICS_LATEST},
-            {StreamsConfig.METRICS_0100_TO_24}
-        });
-    }
-
-    @Parameter
-    public String builtInMetricsVersion;
-
+    
     @Before
     public void before() {
         final Time mockTime = new MockTime();
@@ -143,16 +120,12 @@ public class MeteredSessionStoreTest {
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         expect(context.applicationId()).andStubReturn(APPLICATION_ID);
         expect(context.metrics())
-            .andStubReturn(new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, mockTime));
+            .andStubReturn(new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, mockTime));
         expect(context.taskId()).andStubReturn(taskId);
         expect(context.changelogFor(STORE_NAME)).andStubReturn(CHANGELOG_TOPIC);
         expect(innerStore.name()).andStubReturn(STORE_NAME);
-        storeLevelGroup =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? STORE_LEVEL_GROUP_FROM_0100_TO_24 : STORE_LEVEL_GROUP;
-        threadIdTagKey =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? THREAD_ID_TAG_KEY_FROM_0100_TO_24 : THREAD_ID_TAG_KEY;
         tags = mkMap(
-            mkEntry(threadIdTagKey, threadId),
+            mkEntry(THREAD_ID_TAG_KEY, threadId),
             mkEntry("task-id", taskId.toString()),
             mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
         );
@@ -252,24 +225,13 @@ public class MeteredSessionStoreTest {
         metrics.addReporter(reporter);
         assertTrue(reporter.containsMbean(String.format(
             "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
-            storeLevelGroup,
-            threadIdTagKey,
+            STORE_LEVEL_GROUP,
+            THREAD_ID_TAG_KEY,
             threadId,
             taskId.toString(),
             STORE_TYPE,
             STORE_NAME
         )));
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertTrue(reporter.containsMbean(String.format(
-                "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
-                storeLevelGroup,
-                threadIdTagKey,
-                threadId,
-                taskId.toString(),
-                STORE_TYPE,
-                ROLLUP_VALUE
-            )));
-        }
     }
 
     @Test
@@ -280,6 +242,8 @@ public class MeteredSessionStoreTest {
 
         store.put(WINDOWED_KEY, VALUE);
 
+        // it suffices to verify one put metric since all put metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("put-rate");
         assertTrue(((Double) metric.metricValue()) > 0);
         verify(innerStore);
@@ -297,6 +261,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all put metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -317,6 +283,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all put metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -334,6 +302,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all put metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -354,6 +324,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all put metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -368,6 +340,8 @@ public class MeteredSessionStoreTest {
 
         store.remove(new Windowed<>(KEY, new SessionWindow(0, 0)));
 
+        // it suffices to verify one remove metric since all remove metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("remove-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -385,6 +359,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -405,6 +381,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -422,6 +400,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -442,6 +422,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -450,6 +432,9 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldRecordRestoreTimeOnInit() {
         init();
+
+        // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("restore-rate");
         assertTrue((Double) metric.metricValue() > 0);
     }
@@ -609,14 +594,14 @@ public class MeteredSessionStoreTest {
     }
 
     private KafkaMetric metric(final String name) {
-        return this.metrics.metric(new MetricName(name, storeLevelGroup, "", this.tags));
+        return this.metrics.metric(new MetricName(name, STORE_LEVEL_GROUP, "", this.tags));
     }
 
     private List<MetricName> storeMetrics() {
         return metrics.metrics()
                       .keySet()
                       .stream()
-                      .filter(name -> name.group().equals(storeLevelGroup) && name.tags().equals(tags))
+                      .filter(name -> name.group().equals(STORE_LEVEL_GROUP) && name.tags().equals(tags))
                       .collect(Collectors.toList());
     }
 }

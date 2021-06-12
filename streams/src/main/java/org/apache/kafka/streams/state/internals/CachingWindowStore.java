@@ -58,7 +58,7 @@ class CachingWindowStore
     private StateSerdes<Bytes, byte[]> bytesSerdes;
     private CacheFlushListener<byte[], byte[]> flushListener;
 
-    private AtomicLong maxObservedTimestamp;
+    private final AtomicLong maxObservedTimestamp;
 
     CachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
                        final long windowSize,

@@ -31,27 +31,32 @@ public class Action {
     private final boolean logIfAllowed;
     private final boolean logIfDenied;
 
+    /**
+     * @param operation non-null operation being performed
+     * @param resourcePattern non-null resource pattern on which this action is being performed
+     */
     public Action(AclOperation operation,
                   ResourcePattern resourcePattern,
                   int resourceReferenceCount,
                   boolean logIfAllowed,
                   boolean logIfDenied) {
-        this.operation = operation;
-        this.resourcePattern = resourcePattern;
+        this.operation = Objects.requireNonNull(operation, "operation can't be null");
+        this.resourcePattern = Objects.requireNonNull(resourcePattern, "resourcePattern can't be null");
         this.logIfAllowed = logIfAllowed;
         this.logIfDenied = logIfDenied;
         this.resourceReferenceCount = resourceReferenceCount;
     }
 
     /**
-     * Resource on which action is being performed.
+     * @return a non-null resource pattern on which this action is being performed
      */
     public ResourcePattern resourcePattern() {
         return resourcePattern;
     }
 
     /**
-     * Operation being performed.
+     *
+     * @return a non-null operation being performed
      */
     public AclOperation operation() {
         return operation;

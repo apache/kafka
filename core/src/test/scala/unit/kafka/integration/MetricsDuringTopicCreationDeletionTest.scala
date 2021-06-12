@@ -39,9 +39,9 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   private val overridingProps = new Properties
   overridingProps.put(KafkaConfig.DeleteTopicEnableProp, "true")
   overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
-  // speed up the test for UnderReplicatedPartitions
-  // which relies on the ISR expiry thread to execute concurrently with topic creation
-  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, "2000")
+  // speed up the test for UnderReplicatedPartitions, which relies on the ISR expiry thread to execute concurrently with topic creation
+  // But the replica.lag.time.max.ms value still need to consider the slow Jenkins testing environment
+  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, "4000")
 
   private val testedMetrics = List("OfflinePartitionsCount","PreferredReplicaImbalanceCount","UnderReplicatedPartitions")
   private val topics = List.tabulate(topicNum) (n => topicName + n)
@@ -116,9 +116,9 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     running = false;
     thread.join
 
-    assert(offlinePartitionsCount==0, "OfflinePartitionCount not 0: "+ offlinePartitionsCount)
-    assert(preferredReplicaImbalanceCount==0, "PreferredReplicaImbalanceCount not 0: " + preferredReplicaImbalanceCount)
-    assert(underReplicatedPartitionCount==0, "UnderReplicatedPartitionCount not 0: " + underReplicatedPartitionCount)
+    assert(offlinePartitionsCount==0, s"Expect offlinePartitionsCount to be 0, but got: $offlinePartitionsCount")
+    assert(preferredReplicaImbalanceCount==0, s"Expect PreferredReplicaImbalanceCount to be 0, but got: $preferredReplicaImbalanceCount")
+    assert(underReplicatedPartitionCount==0, s"Expect UnderReplicatedPartitionCount to be 0, but got: $underReplicatedPartitionCount")
   }
 
   private def getGauge(metricName: String) = {

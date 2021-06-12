@@ -14,16 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics.stats;
+package org.apache.kafka.streams.integration;
 
-/**
- * A {@link SampledStat} that maintains a simple count of what it has seen.
- * This is a special kind of {@link WindowedSum} that always records a value of {@code 1} instead of the provided value.
- *
- * See also {@link CumulativeCount} for a non-sampled version of this metric.
- *
- * @deprecated since 2.4 . Use {@link WindowedCount} instead
- */
-@Deprecated
-public class Count extends WindowedCount {
+public class NamedTopologyIntegrationTest {
+    //TODO KAFKA-12648
+    /**
+     * Things to test in Pt. 2 -  Introduce TopologyMetadata to wrap InternalTopologyBuilders of named topologies:
+     * 1. Verify changelog & repartition topics decorated with named topology
+     * 2. Make sure app run and works with
+     *         -multiple subtopologies
+     *         -persistent state
+     *         -multi-partition input & output topics
+     *         -standbys
+     *         -piped input and verified output records
+     * 3. Is the task assignment balanced? Does KIP-441/warmup replica placement work as intended?
+     */
 }

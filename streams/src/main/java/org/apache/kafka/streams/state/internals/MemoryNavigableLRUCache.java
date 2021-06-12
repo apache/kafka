@@ -86,7 +86,6 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
     private static class CacheIterator implements KeyValueIterator<Bytes, byte[]> {
         private final Iterator<Bytes> keys;
         private final Map<Bytes, byte[]> entries;
-        private Bytes lastKey;
 
         private CacheIterator(final Iterator<Bytes> keys, final Map<Bytes, byte[]> entries) {
             this.keys = keys;
@@ -100,7 +99,7 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
         @Override
         public KeyValue<Bytes, byte[]> next() {
-            lastKey = keys.next();
+            final Bytes lastKey = keys.next();
             return new KeyValue<>(lastKey, entries.get(lastKey));
         }
 
