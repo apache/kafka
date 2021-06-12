@@ -94,7 +94,7 @@ public class PartitionGroup {
                    final Sensor recordLatenessSensor,
                    final Sensor enforcedProcessingSensor,
                    final long maxTaskIdleMs) {
-        this.logPrefix = logContext.logPrefix();
+        this.logPrefix = logContext.logPrefix().substring(logContext.logPrefix().indexOf('[', logContext.logPrefix().indexOf('[') + 1));
         this.logger = logContext.logger(PartitionGroup.class);
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::headRecordTimestamp));
         this.partitionQueues = partitionQueues;
