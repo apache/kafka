@@ -149,7 +149,7 @@ public class PartitionGroup {
                     // must wait to fetch metadata for the partition
                     idlePartitionDeadlines.remove(partition);
                     logger.trace("Waiting to fetch data for {}", partition);
-                    System.err.println(logPrefix + "Waiting to fetch data for" + partition);
+                    System.err.print(logPrefix + "Waiting:" + partition);
                     return false;
                 } else if (fetchedLag.getAsLong() > 0L) {
                     // must wait to poll the data we know to be on the broker

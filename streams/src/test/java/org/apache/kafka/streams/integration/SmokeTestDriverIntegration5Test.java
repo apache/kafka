@@ -40,7 +40,7 @@ import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
 
 @Category(IntegrationTest.class)
-public class SmokeTestDriverIntegrationTest {
+public class SmokeTestDriverIntegration5Test {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeClass
