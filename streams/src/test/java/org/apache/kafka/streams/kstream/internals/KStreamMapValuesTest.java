@@ -39,6 +39,7 @@ public class KStreamMapValuesTest {
     private final MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testFlatMapValues() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -63,6 +64,7 @@ public class KStreamMapValuesTest {
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testMapValuesWithKeys() {
         final StreamsBuilder builder = new StreamsBuilder();

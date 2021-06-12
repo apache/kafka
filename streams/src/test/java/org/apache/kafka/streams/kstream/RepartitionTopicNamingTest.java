@@ -462,6 +462,7 @@ public class RepartitionTopicNamingTest {
     }
 
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private Topology buildTopology(final String optimizationConfig) {
         final Initializer<Integer> initializer = () -> 0;
         final Aggregator<String, String, Integer> aggregator = (k, v, agg) -> agg + v.length();

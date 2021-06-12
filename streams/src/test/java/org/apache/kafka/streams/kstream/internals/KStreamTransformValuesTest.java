@@ -54,6 +54,7 @@ public class KStreamTransformValuesTest {
     @Mock(MockType.NICE)
     private ProcessorContext context;
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testTransform() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -96,6 +97,7 @@ public class KStreamTransformValuesTest {
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testTransformWithKey() {
         final StreamsBuilder builder = new StreamsBuilder();

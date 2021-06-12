@@ -69,6 +69,7 @@ public class AbstractStreamTest {
         verify(valueTransformerWithKeySupplier);
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testShouldBeExtensible() {
         final StreamsBuilder builder = new StreamsBuilder();

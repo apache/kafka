@@ -81,6 +81,7 @@ public class TaskMetadataIntegrationTest {
     private AtomicBoolean process;
     private AtomicBoolean commit;
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Before
     public void setup() {
         final String testId = safeUniqueTestName(getClass(), testName);

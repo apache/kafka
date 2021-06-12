@@ -107,6 +107,7 @@ public class GlobalThreadShutDownOrderTest {
     @Rule
     public TestName testName = new TestName();
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Before
     public void before() throws Exception {
         builder = new StreamsBuilder();

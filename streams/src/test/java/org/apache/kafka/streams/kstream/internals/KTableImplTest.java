@@ -83,6 +83,7 @@ public class KTableImplTest {
         table = new StreamsBuilder().table("test");
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -151,6 +152,7 @@ public class KTableImplTest {
             processors.get(3).processed());
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testMaterializedKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
