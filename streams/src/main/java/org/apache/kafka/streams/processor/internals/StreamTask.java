@@ -673,6 +673,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             return false;
         }
         final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
+//        System.out.println("!!! readyToProcess:" + readyToProcess);
         if (!readyToProcess) {
             if (!timeCurrentIdlingStarted.isPresent()) {
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);

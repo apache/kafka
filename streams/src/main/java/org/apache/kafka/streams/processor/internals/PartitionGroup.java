@@ -195,7 +195,7 @@ public class PartitionGroup {
             return true;
         } else if (queued.isEmpty()) {
             logger.trace("No partitions were buffered locally, so this task is not ready for processing.");
-            System.err.println(logPrefix + "No partitions buffered");
+            System.err.print(logPrefix + "No buffered");
             return false;
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
