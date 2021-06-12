@@ -160,9 +160,10 @@ public class KafkaLog4jAppenderTest {
         assertThrows(RuntimeException.class, () -> logger.error(getMessage(0)));
     }
 
-    @SuppressWarnings("unchecked")
     private void replaceProducerWithMocked(MockKafkaLog4jAppender mockKafkaLog4jAppender, boolean success) {
+        @SuppressWarnings("unchecked")
         MockProducer<byte[], byte[]> producer = mock(MockProducer.class);
+        @SuppressWarnings("unchecked")
         Future<RecordMetadata> futureMock = mock(Future.class);
         try {
             if (!success)
