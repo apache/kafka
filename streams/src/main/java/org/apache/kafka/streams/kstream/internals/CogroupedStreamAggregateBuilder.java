@@ -48,7 +48,6 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     CogroupedStreamAggregateBuilder(final InternalStreamsBuilder builder) {
         this.builder = builder;
     }
-    @SuppressWarnings("unchecked")
     <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                 final Initializer<VOut> initializer,
                                 final NamedInternal named,

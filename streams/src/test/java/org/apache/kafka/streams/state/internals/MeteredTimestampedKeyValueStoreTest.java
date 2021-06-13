@@ -426,7 +426,6 @@ public class MeteredTimestampedKeyValueStoreTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext() {
         final MeteredTimestampedKeyValueStore<String, Long> store = new MeteredTimestampedKeyValueStore<>(
             inner,

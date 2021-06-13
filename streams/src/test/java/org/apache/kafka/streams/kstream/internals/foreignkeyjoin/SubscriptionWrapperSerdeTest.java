@@ -59,7 +59,6 @@ public class SubscriptionWrapperSerdeTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldThrowExceptionOnNullKeyTest() {
         final String originalKey = null;
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
@@ -68,7 +67,6 @@ public class SubscriptionWrapperSerdeTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldThrowExceptionOnNullInstructionTest() {
         final String originalKey = "originalKey";
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});

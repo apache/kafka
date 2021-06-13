@@ -46,7 +46,6 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
         this.delegate = delegate;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext<KOut, VOut> context) {
         // It only makes sense to use this adapter internally to Streams, in which case

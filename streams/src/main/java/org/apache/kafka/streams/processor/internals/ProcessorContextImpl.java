@@ -263,7 +263,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
         streamTask.requestCommit();
     }
 
-    @SuppressWarnings("deprecation") // removing #schedule(final long intervalMs,...) will fix this
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,

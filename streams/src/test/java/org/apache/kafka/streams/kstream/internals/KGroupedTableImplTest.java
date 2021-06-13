@@ -201,7 +201,6 @@ public class KGroupedTableImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldReduceAndMaterializeResults() {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
@@ -235,7 +234,6 @@ public class KGroupedTableImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldCountAndMaterializeResults() {
         builder
@@ -265,7 +263,6 @@ public class KGroupedTableImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateAndMaterializeResults() {
         builder

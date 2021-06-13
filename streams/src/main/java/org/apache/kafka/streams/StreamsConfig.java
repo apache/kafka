@@ -135,7 +135,6 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  * @see ConsumerConfig
  * @see ProducerConfig
  */
-@SuppressWarnings("deprecation")
 public class StreamsConfig extends AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);

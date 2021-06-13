@@ -105,7 +105,6 @@ public class StandbyTaskCreationIntegrationTest {
         builder.addStateStore(keyValueStoreBuilder);
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.Integer()))
             .transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
-                @SuppressWarnings("unchecked")
                 @Override
                 public void init(final ProcessorContext context) {}
 

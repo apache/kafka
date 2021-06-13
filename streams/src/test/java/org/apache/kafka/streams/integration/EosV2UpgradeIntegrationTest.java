@@ -875,7 +875,6 @@ public class EosV2UpgradeIntegrationTest {
 
         final KStream<Long, Long> input = builder.stream(MULTI_PARTITION_INPUT_TOPIC);
         input.transform(new TransformerSupplier<Long, Long, KeyValue<Long, Long>>() {
-            @SuppressWarnings("unchecked")
             @Override
             public Transformer<Long, Long, KeyValue<Long, Long>> get() {
                 return new Transformer<Long, Long, KeyValue<Long, Long>>() {

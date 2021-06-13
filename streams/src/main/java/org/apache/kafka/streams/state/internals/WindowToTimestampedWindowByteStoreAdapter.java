@@ -54,7 +54,6 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     public WindowStoreIterator<byte[]> fetch(final Bytes key,
                                              final long timeFrom,
                                              final long timeTo) {
@@ -83,7 +82,6 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                            final Bytes keyTo,
                                                            final long timeFrom,
@@ -126,7 +124,6 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
                                                               final long timeTo) {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));

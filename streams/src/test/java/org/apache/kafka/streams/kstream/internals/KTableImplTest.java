@@ -574,7 +574,6 @@ public class KTableImplTest {
         assertThrows(NullPointerException.class, () -> table.transformValues(valueTransformerSupplier, (Materialized) null));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenStoreNamesNull() {
         final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier =

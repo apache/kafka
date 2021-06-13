@@ -50,7 +50,6 @@ public class FilteredCacheIteratorTest {
         }
     };
 
-    @SuppressWarnings("unchecked")
     private final KeyValueStore<Bytes, LRUCacheEntry> store = new GenericInMemoryKeyValueStore<>("my-store");
     private final KeyValue<Bytes, LRUCacheEntry> firstEntry = KeyValue.pair(Bytes.wrap("a".getBytes()),
                                                                             new LRUCacheEntry("1".getBytes()));
