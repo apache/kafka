@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
@@ -155,6 +156,12 @@ public class TimestampedKeyValueStoreBuilder<K, V>
         @Override
         public KeyValueIterator<Bytes, byte[]> reverseAll() {
             return wrapped.reverseAll();
+        }
+
+        @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
+                                                                                        final PS prefixKeySerializer) {
+            return wrapped.prefixScan(prefix, prefixKeySerializer);
         }
 
         @Override

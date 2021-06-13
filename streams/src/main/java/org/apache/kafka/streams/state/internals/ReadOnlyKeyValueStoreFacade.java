@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -44,6 +45,12 @@ public class ReadOnlyKeyValueStoreFacade<K, V> implements ReadOnlyKeyValueStore<
     public KeyValueIterator<K, V> reverseRange(final K from,
                                                final K to) {
         return new KeyValueIteratorFacade<>(inner.reverseRange(from, to));
+    }
+
+    @Override
+    public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix,
+                                                                           final PS prefixKeySerializer) {
+        return new KeyValueIteratorFacade<>(inner.prefixScan(prefix, prefixKeySerializer));
     }
 
     @Override

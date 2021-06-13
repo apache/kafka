@@ -26,12 +26,14 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
-import java.util.List;
 import java.util.NavigableMap;
-import java.util.Set;
 import java.util.TreeMap;
+import java.util.List;
+import java.util.Objects;
+import java.util.Iterator;
+import java.util.Set;
 import java.util.TreeSet;
+
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
