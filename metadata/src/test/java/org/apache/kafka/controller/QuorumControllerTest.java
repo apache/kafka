@@ -34,6 +34,7 @@ import java.util.function.Function;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
@@ -54,6 +55,7 @@ import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -64,6 +66,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
+import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
@@ -267,6 +270,8 @@ public class QuorumControllerTest {
                                         setBrokerIds(Arrays.asList(1, 2, 0))).
                                             iterator()))).iterator()))).get();
                 fooId = fooData.topics().find("foo").topicId();
+                active.allocateProducerIds(
+                    new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
                 long snapshotEpoch = active.beginWritingSnapshot().get();
                 writer = snapshotWriterBuilder.writers.takeFirst();
                 assertEquals(snapshotEpoch, writer.epoch());
@@ -292,7 +297,7 @@ public class QuorumControllerTest {
     private void checkSnapshotContents(Uuid fooId,
                                        Map<Integer, Long> brokerEpochs,
                                        Iterator<List<ApiMessageAndVersion>> iterator) throws Exception {
-        ControllerTestUtils.assertBatchIteratorContains(Arrays.asList(
+        RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
             Arrays.asList(new ApiMessageAndVersion(new TopicRecord().
                     setName("foo").setTopicId(fooId), (short) 0),
                 new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
@@ -338,7 +343,11 @@ public class QuorumControllerTest {
                 setEndPoints(new BrokerEndpointCollection(Arrays.asList(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9095).setSecurityProtocol((short) 0)).iterator())).
-                setRack(null), (short) 0))),
+                setRack(null), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new ProducerIdsRecord().
+                setBrokerId(0).
+                setBrokerEpoch(brokerEpochs.get(0)).
+                setProducerIdsEnd(1000), (short) 0))),
             iterator);
     }
 

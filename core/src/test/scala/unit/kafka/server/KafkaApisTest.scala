@@ -1710,7 +1710,11 @@ class KafkaApisTest {
     }
 
     if (deletePartition) {
-      groupCoordinator.onResignation(groupMetadataPartition.partition)
+      if (leaderEpoch >= 0) {
+        groupCoordinator.onResignation(groupMetadataPartition.partition, Some(leaderEpoch))
+      } else {
+        groupCoordinator.onResignation(groupMetadataPartition.partition, None)
+      }
       EasyMock.expectLastCall()
     }
 

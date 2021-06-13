@@ -153,7 +153,7 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorTopology processorTopology = internalTopologyBuilder.buildTopology();
 
         tasks = new HashMap<>();
-        stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true);
+        stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true, false);
 
         taskOne = createStreamsTask(
             streamsConfig,

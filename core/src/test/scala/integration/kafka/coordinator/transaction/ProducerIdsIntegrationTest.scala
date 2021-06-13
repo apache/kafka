@@ -44,7 +44,8 @@ class ProducerIdsIntegrationTest {
 
   @ClusterTests(Array(
     new ClusterTest(clusterType = Type.ZK, brokers = 3, ibp = "2.8"),
-    new ClusterTest(clusterType = Type.ZK, brokers = 3, ibp = "3.0-IV0")
+    new ClusterTest(clusterType = Type.ZK, brokers = 3, ibp = "3.0-IV0"),
+    new ClusterTest(clusterType = Type.RAFT, brokers = 3, ibp = "3.0-IV0")
   ))
   def testUniqueProducerIds(clusterInstance: ClusterInstance): Unit = {
     verifyUniqueIds(clusterInstance)

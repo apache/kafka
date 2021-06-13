@@ -63,10 +63,6 @@ abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends GraphNode {
         return joinMergeProcessorParameters;
     }
 
-    ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner() {
-        return valueJoiner;
-    }
-
     String thisJoinSideNodeName() {
         return thisJoinSideNodeName;
     }

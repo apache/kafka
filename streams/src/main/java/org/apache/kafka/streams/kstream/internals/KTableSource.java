@@ -76,14 +76,13 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
         private TimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
-        private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            metrics = (StreamsMetricsImpl) context.metrics();
+            final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
             droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             if (queryableName != null) {
                 store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
