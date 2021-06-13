@@ -127,7 +127,6 @@ public class SubscriptionResponseWrapperSerdeTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldThrowExceptionWithBadVersionTest() {
         final long[] hashedValue = null;
         assertThrows(UnsupportedVersionException.class,
