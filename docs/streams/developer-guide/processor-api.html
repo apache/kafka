@@ -419,11 +419,14 @@ StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier = Store
                 <code class="docutils literal"><span class="pre">partition</span></code>, <code class="docutils literal"><span class="pre">offset</span></code>, <code class="docutils literal"><span class="pre">timestamp</span></code> and
                 <code class="docutils literal"><span class="pre">headers</span></code>.</p>
             <p>Here is an example implementation of how to add a new header to the record:</p>
-            <pre class="line-numbers"><code class="language-java">public void process(String key, String value) {
-
-    // add a header to the elements
-    context().headers().add.(&quot;key&quot;, &quot;value&quot;);
-}</code></pre>
+            <pre class="line-numbers">
+                <code class="language-java">
+                    public void process(String key, String value) {
+                        // add a header to the elements
+                        context().headers().add(&quot;key&quot;, &quot;value&quot;);
+                    }
+                </code>
+            </pre>
         <div class="section" id="connecting-processors-and-state-stores">
             <h2><a class="toc-backref" href="#id8">Connecting Processors and State Stores</a><a class="headerlink" href="#connecting-processors-and-state-stores" title="Permalink to this headline"></a></h2>
             <p>Now that a <a class="reference internal" href="#streams-developer-guide-stream-processor"><span class="std std-ref">processor</span></a> (WordCountProcessor) and the
