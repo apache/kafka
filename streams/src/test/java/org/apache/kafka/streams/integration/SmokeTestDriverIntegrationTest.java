@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -89,6 +90,10 @@ public class SmokeTestDriverIntegrationTest {
 
     }
 
+    // In this test, we try to keep creating new stream, and closing the old one, to maintain only 3 streams alive.
+    // During the new stream added and old stream left, the stream process should still complete without issue.
+    // We set 2 timeout condition to fail the test before passing the verification:
+    // (1) 6 min timeout, (2) 30 tries of polling without getting any data
     @Test
     public void shouldWorkWithRebalance() throws InterruptedException {
         Exit.setExitProcedure((statusCode, message) -> {
@@ -110,6 +115,8 @@ public class SmokeTestDriverIntegrationTest {
 
         final Properties props = new Properties();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
+        props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         // cycle out Streams instances as long as the test is running.
         while (driver.isAlive()) {
