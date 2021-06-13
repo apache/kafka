@@ -81,6 +81,7 @@ object Defaults {
   val AuthorizerClassName = ""
 
   /** ********* Socket Server Configuration ***********/
+  val Listeners = "PLAINTEXT://:9092"
   val ListenerSecurityProtocolMap: String = EndPoint.DefaultSecurityProtocolMap.map { case (listenerName, securityProtocol) =>
     s"${listenerName.value}:${securityProtocol.name}"
   }.mkString(",")
@@ -1054,7 +1055,7 @@ object KafkaConfig {
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
 
       /** ********* Socket Server Configuration ***********/
-      .define(ListenersProp, STRING, null, HIGH, ListenersDoc)
+      .define(ListenersProp, STRING, Defaults.Listeners, HIGH, ListenersDoc)
       .define(AdvertisedListenersProp, STRING, null, HIGH, AdvertisedListenersDoc)
       .define(ListenerSecurityProtocolMapProp, STRING, Defaults.ListenerSecurityProtocolMap, LOW, ListenerSecurityProtocolMapDoc)
       .define(ControlPlaneListenerNameProp, STRING, null, HIGH, controlPlaneListenerNameDoc)
@@ -1755,12 +1756,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
-  // Use listeners if defined, otherwise fallback to PLAINTEXT://:9092
-  def listeners: Seq[EndPoint] = {
-    Option(getString(KafkaConfig.ListenersProp)).map { listenerProp =>
-      CoreUtils.listenerListToEndPoints(listenerProp, listenerSecurityProtocolMap)
-    }.getOrElse(CoreUtils.listenerListToEndPoints("PLAINTEXT://:9092", listenerSecurityProtocolMap))
-  }
+  def listeners: Seq[EndPoint] =
+    CoreUtils.listenerListToEndPoints(getString(KafkaConfig.ListenersProp), listenerSecurityProtocolMap)
 
   def controllerListenerNames: Seq[String] =
     Option(getString(KafkaConfig.ControllerListenerNamesProp)).getOrElse("").split(",")
