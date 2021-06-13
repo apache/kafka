@@ -161,7 +161,7 @@ pipeline {
             echo 'Skipping Kafka Streams archetype test for Java 15'
           }
         }
-        
+
         stage('JDK 16 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
