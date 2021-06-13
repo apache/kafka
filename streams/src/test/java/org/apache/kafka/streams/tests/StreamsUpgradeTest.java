@@ -65,7 +65,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 
 public class StreamsUpgradeTest {
 
-    @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
             System.err.println("StreamsUpgradeTest requires one argument (properties-file) but no provided: ");

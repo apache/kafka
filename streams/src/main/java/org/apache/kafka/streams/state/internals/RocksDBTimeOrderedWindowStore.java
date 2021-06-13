@@ -66,7 +66,6 @@ public class RocksDBTimeOrderedWindowStore
         throw new UnsupportedOperationException();
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
         throw new UnsupportedOperationException();
@@ -77,7 +76,6 @@ public class RocksDBTimeOrderedWindowStore
         throw new UnsupportedOperationException();
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                            final Bytes keyTo,
@@ -105,7 +103,6 @@ public class RocksDBTimeOrderedWindowStore
         throw new UnsupportedOperationException();
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         throw new UnsupportedOperationException();
