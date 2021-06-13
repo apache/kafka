@@ -146,12 +146,16 @@ public class PartitionGroup {
                 queued.add(partition);
             } else {
                 final OptionalLong fetchedLag = lagProvider.apply(partition);
-
+                String parName = partition.toString();
+                if (parName.length() > 10) {
+                    parName = parName.substring(parName.length() - 11);
+                }
                 if (!fetchedLag.isPresent()) {
                     // must wait to fetch metadata for the partition
                     idlePartitionDeadlines.remove(partition);
                     logger.trace("Waiting to fetch data for {}", partition);
-                    System.err.print(logPrefix + "Waiting:" + partition);
+
+                    System.err.print(logPrefix + "W:" + parName);
                     return false;
                 } else if (fetchedLag.getAsLong() > 0L) {
                     // must wait to poll the data we know to be on the broker
@@ -161,7 +165,7 @@ public class PartitionGroup {
                         partition,
                         fetchedLag.getAsLong()
                     );
-                    System.err.println(logPrefix + "lag for:" + partition + "," + fetchedLag.getAsLong());
+                    System.err.print(logPrefix + "lag for:" + parName + "," + fetchedLag.getAsLong());
                     return false;
                 } else {
                     // p is known to have zero lag. wait for maxTaskIdleMs to see if more data shows up.
@@ -197,7 +201,7 @@ public class PartitionGroup {
             return true;
         } else if (queued.isEmpty()) {
             logger.trace("No partitions were buffered locally, so this task is not ready for processing.");
-            System.err.print(logPrefix + "No buffered");
+            System.err.print(logPrefix);
             return false;
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
@@ -211,7 +215,7 @@ public class PartitionGroup {
                      enforced,
                      maxTaskIdleMs,
                      wallClockTime);
-            System.err.println(logPrefix + "although some partitions empty");
+            System.err.print(logPrefix + "some partitions empty");
             return true;
         }
     }
