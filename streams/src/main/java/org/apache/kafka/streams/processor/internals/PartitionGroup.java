@@ -215,7 +215,7 @@ public class PartitionGroup {
                      enforced,
                      maxTaskIdleMs,
                      wallClockTime);
-            System.err.print(logPrefix + "some partitions empty");
+            System.err.print(logPrefix + "par empty");
             return true;
         }
     }

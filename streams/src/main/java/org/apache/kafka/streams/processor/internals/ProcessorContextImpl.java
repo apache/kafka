@@ -254,7 +254,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
 
     private <K, V> void forwardInternal(final ProcessorNode<K, V, ?, ?> child,
                                         final Record<K, V> record) {
-        System.err.println("ch:" + child + ";r:" + record);
+//        System.err.println("ch:" + child + ";r:" + record);
         setCurrentNode(child);
 
         child.process(record);
