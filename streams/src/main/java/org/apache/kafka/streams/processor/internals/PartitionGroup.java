@@ -155,7 +155,12 @@ public class PartitionGroup {
                     idlePartitionDeadlines.remove(partition);
                     logger.trace("Waiting to fetch data for {}", partition);
 
-                    System.err.print(logPrefix + "W:" + parName);
+
+                    if (logPrefix.contains("1_4")) {
+                        System.err.print(logPrefix + "W:" + parName);
+                    }
+
+
                     return false;
                 } else if (fetchedLag.getAsLong() > 0L) {
                     // must wait to poll the data we know to be on the broker
@@ -196,12 +201,19 @@ public class PartitionGroup {
                 }
             }
         }
+
         if (enforced == null) {
             logger.trace("All partitions were buffered locally, so this task is ready for processing.");
+            if (logPrefix.contains("1_4")) {
+                System.err.print(logPrefix + "buf ");
+            }
             return true;
         } else if (queued.isEmpty()) {
             logger.trace("No partitions were buffered locally, so this task is not ready for processing.");
-            System.err.print(logPrefix);
+            if (logPrefix.contains("1_4")) {
+                System.err.print(logPrefix + "no ");
+            }
+
             return false;
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
