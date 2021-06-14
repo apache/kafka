@@ -139,7 +139,7 @@ public class EmbeddedKafkaCluster {
             brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
             currentBrokerLogDirs[i] = logDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
             brokerConfig.put(KafkaConfig.LogDirProp(), currentBrokerLogDirs[i]);
-            brokerConfig.put(KafkaConfig.ListenersProp(), "PLAINTEXT://localhost:" + brokerPorts[i]);
+            putIfAbsent(brokerConfig, KafkaConfig.ListenersProp(), "PLAINTEXT://localhost:" + brokerPorts[i]);
             brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time);
             currentBrokerPorts[i] = brokers[i].boundPort(listenerName);
         }
