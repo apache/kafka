@@ -44,6 +44,7 @@ public class RestartPlan {
     public RestartPlan(RestartRequest request, ConnectorStateInfo restartStateInfo) {
         this.request = Objects.requireNonNull(request, "RestartRequest name may not be null");
         this.stateInfo = Objects.requireNonNull(restartStateInfo, "ConnectorStateInfo name may not be null");
+        // Collect the task IDs to stop and restart (may be none)
         idsToRestart = Collections.unmodifiableList(
                 stateInfo.tasks()
                         .stream()

@@ -372,7 +372,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
      * and the current status of the connector and task instances.
      *
      * @param request the restart request; may not be null
-     * @return the restart plan, or empty this worker has no status for the connector named in the request and therefore the
+     * @return the restart plan, or empty if this worker has no status for the connector named in the request and therefore the
      *         connector cannot be restarted
      */
     public Optional<RestartPlan> buildRestartPlanFor(RestartRequest request) {
@@ -395,7 +395,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 connectorStatus.trace()
         );
 
-        // Collect the task IDs to stop and restart (may be none)
+        // Collect the task states, If requested, mark the task as restarting
         List<ConnectorStateInfo.TaskState> taskStates = statusBackingStore.getAll(connectorName)
                                                                      .stream()
                                                                      .map(taskStatus -> {
