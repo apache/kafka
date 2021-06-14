@@ -26,6 +26,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import java.io.File;
 import java.time.Duration;
 import java.util.Map;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 
 /**
  * Processor context interface.
@@ -33,49 +34,49 @@ import java.util.Map;
 public interface ProcessorContext {
 
     /**
-     * Returns the application id.
+     * Return the application id.
      *
      * @return the application id
      */
     String applicationId();
 
     /**
-     * Returns the task id.
+     * Return the task id.
      *
      * @return the task id
      */
     TaskId taskId();
 
     /**
-     * Returns the default key serde.
+     * Return the default key serde.
      *
      * @return the key serializer
      */
     Serde<?> keySerde();
 
     /**
-     * Returns the default value serde.
+     * Return the default value serde.
      *
      * @return the value serializer
      */
     Serde<?> valueSerde();
 
     /**
-     * Returns the state directory for the partition.
+     * Return the state directory for the partition.
      *
      * @return the state directory
      */
     File stateDir();
 
     /**
-     * Returns Metrics instance.
+     * Return Metrics instance.
      *
      * @return StreamsMetrics
      */
     StreamsMetrics metrics();
 
     /**
-     * Registers and possibly restores the specified storage engine.
+     * Register and possibly restores the specified storage engine.
      *
      * @param store the storage engine
      * @param stateRestoreCallback the restoration callback logic for log-backed state stores upon restart
@@ -98,7 +99,7 @@ public interface ProcessorContext {
     <S extends StateStore> S getStateStore(final String name);
 
     /**
-     * Schedules a periodic operation for processors. A processor may call this method during
+     * Schedule a periodic operation for processors. A processor may call this method during
      * {@link Processor#init(ProcessorContext) initialization} or
      * {@link Processor#process(Object, Object) processing} to
      * schedule a periodic callback &mdash; called a punctuation &mdash; to {@link Punctuator#punctuate(long)}.
@@ -134,8 +135,11 @@ public interface ProcessorContext {
                          final Punctuator callback);
 
     /**
-     * Forwards a key/value pair to all downstream processors.
+     * Forward a key/value pair to all downstream processors.
      * Used the input record's timestamp as timestamp for the output record.
+     *
+     * <p> If this method is called with {@link Punctuator#punctuate(long)} the record that
+     * is sent downstream won't have any associated record metadata like topic, partition, or offset.
      *
      * @param key key
      * @param value value
@@ -143,8 +147,11 @@ public interface ProcessorContext {
     <K, V> void forward(final K key, final V value);
 
     /**
-     * Forwards a key/value pair to the specified downstream processors.
+     * Forward a key/value pair to the specified downstream processors.
      * Can be used to set the timestamp of the output record.
+     *
+     * <p> If this method is called with {@link Punctuator#punctuate(long)} the record that
+     * is sent downstream won't have any associated record metadata like topic, partition, or offset.
      *
      * @param key key
      * @param value value
@@ -153,48 +160,84 @@ public interface ProcessorContext {
     <K, V> void forward(final K key, final V value, final To to);
 
     /**
-     * Requests a commit.
+     * Request a commit.
      */
     void commit();
 
     /**
-     * Returns the topic name of the current input record; could be null if it is not
-     * available (for example, if this method is invoked from the punctuate call).
+     * Return the topic name of the current input record; could be {@code null} if it is not
+     * available.
+     *
+     * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, the record won't have an associated topic.
+     * Another example is
+     * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
+     * (and siblings), that do not always guarantee to provide a valid topic name, as they might be
+     * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
      *
      * @return the topic name
      */
     String topic();
 
     /**
-     * Returns the partition id of the current input record; could be -1 if it is not
-     * available (for example, if this method is invoked from the punctuate call).
+     * Return the partition id of the current input record; could be {@code -1} if it is not
+     * available.
+     *
+     * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, the record won't have an associated partition id.
+     * Another example is
+     * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
+     * (and siblings), that do not always guarantee to provide a valid partition id, as they might be
+     * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
      *
      * @return the partition id
      */
     int partition();
 
     /**
-     * Returns the offset of the current input record; could be -1 if it is not
-     * available (for example, if this method is invoked from the punctuate call).
+     * Return the offset of the current input record; could be {@code -1} if it is not
+     * available.
+     *
+     * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, the record won't have an associated offset.
+     * Another example is
+     * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
+     * (and siblings), that do not always guarantee to provide a valid offset, as they might be
+     * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
      *
      * @return the offset
      */
     long offset();
 
     /**
-     * Returns the headers of the current input record; could be null if it is not
-     * available (for example, if this method is invoked from the punctuate call).
+     * Return the headers of the current input record; could be an empty header if it is not
+     * available.
+     *
+     * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, the record might not have any associated headers.
+     * Another example is
+     * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
+     * (and siblings), that do not always guarantee to provide valid headers, as they might be
+     * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
      *
      * @return the headers
      */
     Headers headers();
 
     /**
-     * Returns the current timestamp.
+     * Return the current timestamp.
      *
      * <p> If it is triggered while processing a record streamed from the source processor,
      * timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
      * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} by {@link TimestampExtractor}.
+     * Note, that an upstream {@link Processor} might have set a new timestamp by calling
+     * {@link ProcessorContext#forward(Object, Object, To) forward(..., To.all().withTimestamp(...))}.
+     * In particular, some Kafka Streams DSL operators set result record timestamps explicitly,
+     * to guarantee deterministic results.
      *
      * <p> If it is triggered while processing a record generated not from the source processor (for example,
      * if this method is invoked from the punctuate call), timestamp is defined as the current
@@ -205,7 +248,7 @@ public interface ProcessorContext {
     long timestamp();
 
     /**
-     * Returns all the application config properties as key/value pairs.
+     * Return all the application config properties as key/value pairs.
      *
      * <p> The config properties are defined in the {@link org.apache.kafka.streams.StreamsConfig}
      * object and associated to the ProcessorContext.
@@ -220,7 +263,7 @@ public interface ProcessorContext {
     Map<String, Object> appConfigs();
 
     /**
-     * Returns all the application config properties with the given key prefix, as key/value pairs
+     * Return all the application config properties with the given key prefix, as key/value pairs
      * stripping the prefix.
      *
      * <p> The config properties are defined in the {@link org.apache.kafka.streams.StreamsConfig}
@@ -234,8 +277,7 @@ public interface ProcessorContext {
     /**
      * Return the current system timestamp (also called wall-clock time) in milliseconds.
      *
-     * <p>
-     * Note: this method returns the internally cached system timestamp from the Kafka Stream runtime.
+     * <p> Note: this method returns the internally cached system timestamp from the Kafka Stream runtime.
      * Thus, it may return a different value compared to {@code System.currentTimeMillis()}.
      *
      * @return the current system timestamp in milliseconds
@@ -245,13 +287,11 @@ public interface ProcessorContext {
     /**
      * Return the current stream-time in milliseconds.
      *
-     * <p>
-     * Stream-time is the maximum observed {@link TimestampExtractor record timestamp} so far
+     * <p> Stream-time is the maximum observed {@link TimestampExtractor record timestamp} so far
      * (including the currently processed record), i.e., it can be considered a high-watermark.
      * Stream-time is tracked on a per-task basis and is preserved across restarts and during task migration.
-     * <p>
      *
-     * Note: this method is not supported for global processors (cf. {@link Topology#addGlobalStore} (...)
+     * <p> Note: this method is not supported for global processors (cf. {@link Topology#addGlobalStore} (...)
      * and {@link StreamsBuilder#addGlobalStore} (...),
      * because there is no concept of stream-time for this case.
      * Calling this method in a global processor will result in an {@link UnsupportedOperationException}.

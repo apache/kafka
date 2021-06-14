@@ -283,7 +283,6 @@ public class SessionWindowedKStreamImplTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
         assertThrows(NullPointerException.class, () -> stream.reduce(MockReducer.STRING_ADDER, (Named) null));
     }

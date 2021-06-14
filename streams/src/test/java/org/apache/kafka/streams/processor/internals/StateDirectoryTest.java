@@ -66,7 +66,6 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHEC
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.toTaskDirString;
 
 import static java.util.Collections.emptyList;
-import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -460,8 +459,8 @@ public class StateDirectoryTest {
 
         directory.clean();
 
-        assertEquals(emptySet(), Arrays.stream(
-            Objects.requireNonNull(appDir.listFiles())).collect(Collectors.toSet()));
+        // if appDir is empty, it is deleted in StateDirectory#clean process.
+        assertFalse(appDir.exists());
     }
 
     @Test
@@ -517,6 +516,43 @@ public class StateDirectoryTest {
         assertTrue(passed.get());
         assertTrue(runner.taskDirectory.exists());
         assertTrue(runner.taskDirectory.isDirectory());
+    }
+
+    @Test
+    public void shouldDeleteAppDirWhenCleanUpIfEmpty() {
+        final TaskId taskId = new TaskId(0, 0);
+        final File taskDirectory = directory.getOrCreateDirectoryForTask(taskId);
+        final File testFile = new File(taskDirectory, "testFile");
+        assertThat(testFile.mkdir(), is(true));
+        assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
+
+        // call StateDirectory#clean
+        directory.clean();
+
+        // if appDir is empty, it is deleted in StateDirectory#clean process.
+        assertFalse(appDir.exists());
+    }
+
+    @Test
+    public void shouldNotDeleteAppDirWhenCleanUpIfNotEmpty() throws IOException {
+        final TaskId taskId = new TaskId(0, 0);
+        final File taskDirectory = directory.getOrCreateDirectoryForTask(taskId);
+        final File testFile = new File(taskDirectory, "testFile");
+        assertThat(testFile.mkdir(), is(true));
+        assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
+
+        // Create a dummy file in appDir; for this, appDir will not be empty after cleanup.
+        final File dummyFile = new File(appDir, "dummy");
+        assertTrue(dummyFile.createNewFile());
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            // call StateDirectory#clean
+            directory.clean();
+            assertThat(
+                appender.getMessages(),
+                hasItem(endsWith(String.format("Failed to delete state store directory of %s for it is not empty", appDir.getAbsolutePath())))
+            );
+        }
     }
 
     @Test

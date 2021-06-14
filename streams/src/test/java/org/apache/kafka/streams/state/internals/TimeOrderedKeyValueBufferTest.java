@@ -370,7 +370,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders()));
 
         // These serialized formats were captured by running version 2.1 code.
         // They verify that an upgrade from 2.1 will work.
@@ -489,7 +489,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders()));
 
         final RecordHeaders v1FlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
 
@@ -611,7 +611,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders()));
 
         final RecordHeaders v2FlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 2})});
 
@@ -735,7 +735,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders()));
 
         final RecordHeaders headers = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 2})});
 
@@ -856,7 +856,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders()));
 
         final RecordHeaders headers = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 3})});
 
@@ -977,7 +977,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders()));
 
         final RecordHeaders unknownFlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) -1})});
 
@@ -1025,7 +1025,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     }
 
     private static ProcessorRecordContext getContext(final long recordTimestamp) {
-        return new ProcessorRecordContext(recordTimestamp, 0, 0, "topic", null);
+        return new ProcessorRecordContext(recordTimestamp, 0, 0, "topic", new RecordHeaders());
     }
 
 
