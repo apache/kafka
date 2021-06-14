@@ -590,12 +590,14 @@ public class StreamThread extends Thread {
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks " + e.corruptedTasks() + " are corrupted. " +
                          "Will close the task as dirty and re-create and bootstrap from scratch.", e);
+                System.err.println("Detecte task corrupted:" + e);
                 try {
                     taskManager.handleCorruption(e.corruptedTasks());
                 } catch (final TaskMigratedException taskMigrated) {
                     handleTaskMigrated(taskMigrated);
                 }
             } catch (final TaskMigratedException e) {
+                System.err.println("task migrated:" + e);
                 handleTaskMigrated(e);
             } catch (final UnsupportedVersionException e) {
                 final String errorMessage = e.getMessage();
@@ -612,6 +614,7 @@ public class StreamThread extends Thread {
                 return false;
             }
         }
+
         return true;
     }
 
@@ -715,6 +718,9 @@ public class StreamThread extends Thread {
      */
     // Visible for testing
     void runOnce() {
+
+//        System.err.println("runO");
+
         final long startMs = time.milliseconds();
         now = startMs;
 
@@ -834,6 +840,10 @@ public class StreamThread extends Thread {
             totalCommittedSinceLastSummary = 0L;
             lastLogSummaryMs = now;
         }
+
+
+//        System.err.println("e runO");
+
     }
 
     private void initializeAndRestorePhase() {

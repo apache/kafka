@@ -127,7 +127,9 @@ public class PartitionGroup {
                               "\n\tNon-buffered partitions: {}",
                           bufferedPartitions,
                           emptyPartitions);
-                System.err.println(logPrefix + "max.task.idle.ms is disabled" + bufferedPartitions + "," + emptyPartitions);
+                if (logPrefix.contains("1_4")) {
+                    System.err.println(logPrefix + "max.task.idle.ms is disabled" + bufferedPartitions + "," + emptyPartitions);
+                }
             }
             return true;
         }
@@ -170,7 +172,9 @@ public class PartitionGroup {
                         partition,
                         fetchedLag.getAsLong()
                     );
-                    System.err.print(logPrefix + "lag for:" + parName + "," + fetchedLag.getAsLong());
+                    if (logPrefix.contains("1_4")) {
+                        System.err.print(logPrefix + "lag for:" + parName + "," + fetchedLag.getAsLong());
+                    }
                     return false;
                 } else {
                     // p is known to have zero lag. wait for maxTaskIdleMs to see if more data shows up.
@@ -189,7 +193,9 @@ public class PartitionGroup {
                             maxTaskIdleMs,
                             deadline
                         );
-                        System.err.println(logPrefix + "Lag current time:" + partition + "," + maxTaskIdleMs);
+                        if (logPrefix.contains("1_4")) {
+                            System.err.println(logPrefix + "Lag current time:" + partition + "," + maxTaskIdleMs);
+                        }
                         return false;
                     } else {
                         // this partition is ready for processing due to the task idling deadline passing
@@ -227,7 +233,9 @@ public class PartitionGroup {
                      enforced,
                      maxTaskIdleMs,
                      wallClockTime);
-            System.err.print(logPrefix + "par empty");
+            if (logPrefix.contains("1_4")) {
+                System.err.print(logPrefix + "par empty");
+            }
             return true;
         }
     }
@@ -335,7 +343,9 @@ public class PartitionGroup {
         final int oldSize = recordQueue.size();
         final int newSize = recordQueue.addRawRecords(rawRecords);
 
-        System.err.println(logPrefix + "add records:" + rawRecords + ";" + oldSize + newSize);
+        if (logPrefix.contains("1_4")) {
+            System.err.println(logPrefix + "add records:" + rawRecords + ";" + oldSize + newSize);
+        }
 //        logger.error("add records:" + rawRecords);
 //        final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
 //        for (int i = 1; i < elements.length; i++) {

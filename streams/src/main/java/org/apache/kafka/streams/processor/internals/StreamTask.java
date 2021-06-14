@@ -699,6 +699,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @SuppressWarnings("unchecked")
     public boolean process(final long wallClockTime) {
+        if (logPrefix.contains("1_4")) {
+            System.out.print("proc ");
+//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//            for (int i = 1; i < elements.length; i++) {
+//                final StackTraceElement s = elements[i];
+//                System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//            }
+        }
         if (record == null) {
             if (!isProcessable(wallClockTime)) {
                 return false;
@@ -720,7 +728,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             final TopicPartition partition = recordInfo.partition();
 
 //            log.error("Start processing one record [{}]", record);
-            System.err.println(logPrefix + "pro r:" + record);
+            if (logPrefix.contains("1_4")) {
+                System.err.println(logPrefix + "pro r:" + record);
+            }
+
 
             final ProcessorRecordContext recordContext = new ProcessorRecordContext(
                 record.timestamp,

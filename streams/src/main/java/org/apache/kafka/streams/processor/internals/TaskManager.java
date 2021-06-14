@@ -267,12 +267,12 @@ public class TaskManager {
                      "\tExisting standby tasks: {}",
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
-//        System.err.println(String.format("%s: Handle new assignment with:" +
-//                "New active tasks: %s," +
-//                "New standby tasks: %s," +
-//                "Existing active tasks: %s," +
-//                "Existing standby tasks: %s",
-//            logPrefix, activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds()));
+        System.err.println(String.format("%s:new ass:" +
+                "New act:%s," +
+                "New st:%s," +
+                "Exi act:%s," +
+                "Exi sta:%s",
+            logPrefix, activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds()));
 
         builder.addSubscribedTopicsFromAssignment(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
@@ -1193,10 +1193,28 @@ public class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     int process(final int maxNumRecords, final Time time) {
+//        if (logPrefix.contains("1_4")) {
+//            System.err.println("tm:p");
+//        }
         int totalProcessed = 0;
 
         long now = time.milliseconds();
+        final List<Task> subTask = activeTaskIterable().stream().filter(task -> {
+            if (task.id().toString().contains("1_4")) {
+                return true;
+            }
+            return false;
+        }).collect(Collectors.toList());
+
+        final String subLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 20) : logPrefix;
+        if (!subTask.isEmpty()) {
+            System.err.print(subLogPrefix + "p 1_4");
+        } else {
+            System.err.print(subLogPrefix + "!p 1_4 ");
+        }
+
         for (final Task task : activeTaskIterable()) {
+
             int processed = 0;
             final long then = now;
             try {
@@ -1231,6 +1249,10 @@ public class TaskManager {
                 task.recordProcessBatchTime(now - then);
             }
         }
+
+//        if (logPrefix.contains("1_4")) {
+//            System.err.println("end tm:p");
+//        }
 
         return totalProcessed;
     }
