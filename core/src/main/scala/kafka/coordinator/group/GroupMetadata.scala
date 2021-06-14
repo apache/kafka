@@ -370,6 +370,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     pendingSyncMembers.toSet
   }
 
+  def clearPendingSyncMembers(): Unit = {
+    pendingSyncMembers.clear()
+  }
+
   def hasStaticMember(groupInstanceId: String): Boolean = {
     staticMembers.contains(groupInstanceId)
   }
@@ -572,7 +576,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
     receivedConsumerOffsetCommits = false
     receivedTransactionalOffsetCommits = false
-    pendingSyncMembers.clear()
+    clearPendingSyncMembers()
   }
 
   def currentMemberMetadata: List[JoinGroupResponseMember] = {

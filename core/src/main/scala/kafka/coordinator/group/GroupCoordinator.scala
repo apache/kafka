@@ -565,9 +565,7 @@ class GroupCoordinator(val brokerId: Int,
 
           case CompletingRebalance =>
             group.get(memberId).awaitingSyncCallback = responseCallback
-
-            group.removePendingSyncMember(memberId)
-            maybeCompleteSyncExpiration(group)
+            maybeRemovePendingSyncMember(group, memberId)
 
             // if this is the leader, then we can attempt to persist state and transition to stable
             if (group.isLeader(memberId)) {
@@ -602,8 +600,7 @@ class GroupCoordinator(val brokerId: Int,
             }
 
           case Stable =>
-            group.removePendingSyncMember(memberId)
-            maybeCompleteSyncExpiration(group)
+            maybeRemovePendingSyncMember(group, memberId)
 
             // if the group is stable, we just return the current assignment
             val memberMetadata = group.get(memberId)
@@ -1353,6 +1350,9 @@ class GroupCoordinator(val brokerId: Int,
     if (group.is(CompletingRebalance))
       resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS)
 
+    // if a sync expiration is pending, cancel it.
+    removeSyncExpiration(group)
+
     val delayedRebalance = if (group.is(Empty))
       new InitialDelayedJoin(this,
         joinPurgatory,
@@ -1367,8 +1367,6 @@ class GroupCoordinator(val brokerId: Int,
 
     info(s"Preparing to rebalance group ${group.groupId} in state ${group.currentState} with old generation " +
       s"${group.generationId} (${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) (reason: $reason)")
-
-    maybeCompleteSyncExpiration(group)
 
     val groupKey = GroupKey(group.groupId)
     joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
@@ -1467,12 +1465,25 @@ class GroupCoordinator(val brokerId: Int,
             group.addPendingSyncMember(member.memberId)
           }
 
-          val delayedSync = new DelayedSync(this, group, group.rebalanceTimeoutMs)
-          val groupKey = GroupKey(group.groupId)
-          syncPurgatory.tryCompleteElseWatch(delayedSync, Seq(groupKey))
+          schedulePendingSync(group)
         }
       }
     }
+  }
+
+  private def maybeRemovePendingSyncMember(
+    group: GroupMetadata,
+    memberId: String
+  ): Unit = {
+    group.removePendingSyncMember(memberId)
+    maybeCompleteSyncExpiration(group)
+  }
+
+  private def removeSyncExpiration(
+    group: GroupMetadata
+  ): Unit = {
+    group.clearPendingSyncMembers()
+    maybeCompleteSyncExpiration(group)
   }
 
   private def maybeCompleteSyncExpiration(
@@ -1480,6 +1491,14 @@ class GroupCoordinator(val brokerId: Int,
   ): Unit = {
     val groupKey = GroupKey(group.groupId)
     syncPurgatory.checkAndComplete(groupKey)
+  }
+
+  private def schedulePendingSync(
+    group: GroupMetadata
+  ): Unit = {
+    val delayedSync = new DelayedSync(this, group, group.rebalanceTimeoutMs)
+    val groupKey = GroupKey(group.groupId)
+    syncPurgatory.tryCompleteElseWatch(delayedSync, Seq(groupKey))
   }
 
   def tryCompletePendingSync(
