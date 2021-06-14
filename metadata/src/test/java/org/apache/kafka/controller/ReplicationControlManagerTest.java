@@ -28,13 +28,12 @@ import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
-import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
-import org.apache.kafka.common.metadata.PartitionChangeRecord;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -43,9 +42,12 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -69,7 +71,6 @@ import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
-import static org.apache.kafka.controller.ReplicationControlManager.PartitionControlInfo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -100,9 +101,9 @@ public class ReplicationControlManagerTest {
             metrics);
 
         void replay(List<ApiMessageAndVersion> records) throws Exception {
-            ControllerTestUtils.replayAll(clusterControl, records);
-            ControllerTestUtils.replayAll(configurationControl, records);
-            ControllerTestUtils.replayAll(replicationControl, records);
+            RecordTestUtils.replayAll(clusterControl, records);
+            RecordTestUtils.replayAll(configurationControl, records);
+            RecordTestUtils.replayAll(replicationControl, records);
         }
 
         ReplicationControlTestContext() {
@@ -183,7 +184,7 @@ public class ReplicationControlManagerTest {
             setTopicId(result2.response().topics().find("foo").topicId()));
         assertEquals(expectedResponse2, result2.response());
         ctx.replay(result2.records());
-        assertEquals(new PartitionControlInfo(new int[] {1, 2, 0},
+        assertEquals(new PartitionRegistration(new int[] {1, 2, 0},
             new int[] {1, 2, 0}, null, null, 1, 0, 0),
             replicationControl.getPartition(
                 ((TopicRecord) result2.records().get(0).message()).topicId(), 0));
@@ -195,7 +196,7 @@ public class ReplicationControlManagerTest {
                 setErrorMessage(Errors.TOPIC_ALREADY_EXISTS.exception().getMessage()));
         assertEquals(expectedResponse3, result3.response());
         Uuid fooId = result2.response().topics().find("foo").topicId();
-        ControllerTestUtils.assertBatchIteratorContains(Arrays.asList(
+        RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
             Arrays.asList(new ApiMessageAndVersion(new PartitionRecord().
                     setPartitionId(0).setTopicId(fooId).
                     setReplicas(Arrays.asList(1, 2, 0)).setIsr(Arrays.asList(1, 2, 0)).
@@ -227,7 +228,7 @@ public class ReplicationControlManagerTest {
             replicationControl.createTopics(request);
         topicsToDelete.add(result.response().topics().find("foo").topicId());
 
-        ControllerTestUtils.replayAll(replicationControl, result.records());
+        RecordTestUtils.replayAll(replicationControl, result.records());
         assertEquals(1, ctx.metrics.globalTopicsCount());
 
         request = new CreateTopicsRequestData();
@@ -236,19 +237,19 @@ public class ReplicationControlManagerTest {
         request.topics().add(new CreatableTopic().setName("baz").
             setNumPartitions(2).setReplicationFactor((short) -1));
         result = replicationControl.createTopics(request);
-        ControllerTestUtils.replayAll(replicationControl, result.records());
+        RecordTestUtils.replayAll(replicationControl, result.records());
         assertEquals(3, ctx.metrics.globalTopicsCount());
         assertEquals(4, ctx.metrics.globalPartitionCount());
 
         topicsToDelete.add(result.response().topics().find("baz").topicId());
         ControllerResult<Map<Uuid, ApiError>> deleteResult = replicationControl.deleteTopics(topicsToDelete);
-        ControllerTestUtils.replayAll(replicationControl, deleteResult.records());
+        RecordTestUtils.replayAll(replicationControl, deleteResult.records());
         assertEquals(1, ctx.metrics.globalTopicsCount());
         assertEquals(1, ctx.metrics.globalPartitionCount());
 
         Uuid topicToDelete = result.response().topics().find("bar").topicId();
         deleteResult = replicationControl.deleteTopics(Collections.singletonList(topicToDelete));
-        ControllerTestUtils.replayAll(replicationControl, deleteResult.records());
+        RecordTestUtils.replayAll(replicationControl, deleteResult.records());
         assertEquals(0, ctx.metrics.globalTopicsCount());
         assertEquals(0, ctx.metrics.globalPartitionCount());
     }
@@ -347,12 +348,12 @@ public class ReplicationControlManagerTest {
         Set<TopicIdPartition> expectedPartitions = new HashSet<>();
         expectedPartitions.add(new TopicIdPartition(result.topicId(), 0));
         expectedPartitions.add(new TopicIdPartition(result.topicId(), 3));
-        assertEquals(expectedPartitions, ControllerTestUtils.
+        assertEquals(expectedPartitions, RecordTestUtils.
             iteratorToSet(replicationControl.brokersToIsrs().iterator(0, true)));
         List<ApiMessageAndVersion> records = new ArrayList<>();
         replicationControl.handleBrokerFenced(0, records);
         ctx.replay(records);
-        assertEquals(Collections.emptySet(), ControllerTestUtils.
+        assertEquals(Collections.emptySet(), RecordTestUtils.
             iteratorToSet(replicationControl.brokersToIsrs().iterator(0, true)));
     }
 
@@ -460,7 +461,7 @@ public class ReplicationControlManagerTest {
         ReplicationControlManager replicationControl,
         TopicIdPartition topicIdPartition
     ) {
-        PartitionControlInfo partitionControl =
+        PartitionRegistration partitionControl =
             replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
         if (partitionControl.leader < 0) {
             return OptionalInt.empty();
@@ -474,7 +475,7 @@ public class ReplicationControlManagerTest {
         TopicIdPartition topicIdPartition,
         List<Integer> newIsr
     ) {
-        PartitionControlInfo partitionControl =
+        PartitionRegistration partitionControl =
             replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
         return new AlterIsrRequestData.PartitionData()
             .setPartitionIndex(0)
@@ -500,7 +501,7 @@ public class ReplicationControlManagerTest {
         topicData.partitions().add(partitionData);
 
         ControllerResult<AlterIsrResponseData> result = replicationControl.alterIsr(request);
-        ControllerTestUtils.replayAll(replicationControl, result.records());
+        RecordTestUtils.replayAll(replicationControl, result.records());
         return result;
     }
 
@@ -527,7 +528,7 @@ public class ReplicationControlManagerTest {
         TopicIdPartition topicIdPartition,
         AlterIsrResponseData.PartitionData partitionData
     ) {
-        PartitionControlInfo partitionControl =
+        PartitionRegistration partitionControl =
             replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
         assertEquals(partitionControl.leader, partitionData.leaderId());
         assertEquals(partitionControl.leaderEpoch, partitionData.leaderEpoch());
@@ -760,30 +761,6 @@ public class ReplicationControlManagerTest {
                 "3 replica(s).", assertThrows(InvalidReplicaAssignmentException.class, () ->
                     ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2),
                         OptionalInt.of(3))).getMessage());
-    }
-
-    @Test
-    public void testElectionWasClean() {
-        assertTrue(ReplicationControlManager.electionWasClean(1, new int[] {1, 2}));
-        assertFalse(ReplicationControlManager.electionWasClean(1, new int[] {0, 2}));
-        assertFalse(ReplicationControlManager.electionWasClean(1, new int[] {}));
-        assertTrue(ReplicationControlManager.electionWasClean(3, new int[] {1, 2, 3, 4, 5, 6}));
-    }
-
-    @Test
-    public void testPartitionControlInfoMergeAndDiff() {
-        PartitionControlInfo a = new PartitionControlInfo(
-            new int[]{1, 2, 3}, new int[]{1, 2}, null, null, 1, 0, 0);
-        PartitionControlInfo b = new PartitionControlInfo(
-            new int[]{1, 2, 3}, new int[]{3}, null, null, 3, 1, 1);
-        PartitionControlInfo c = new PartitionControlInfo(
-            new int[]{1, 2, 3}, new int[]{1}, null, null, 1, 0, 1);
-        assertEquals(b, a.merge(new PartitionChangeRecord().
-            setLeader(3).setIsr(Arrays.asList(3))));
-        assertEquals("isr: [1, 2] -> [3], leader: 1 -> 3, leaderEpoch: 0 -> 1, partitionEpoch: 0 -> 1",
-            b.diff(a));
-        assertEquals("isr: [1, 2] -> [1], partitionEpoch: 0 -> 1",
-            c.diff(a));
     }
 
     @Test

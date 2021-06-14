@@ -224,7 +224,7 @@ public class KTableTransformValuesTest {
         final ProcessorRecordContext recordContext = new ProcessorRecordContext(
             42L,
             23L,
-            1,
+            -1,
             "foo",
             new RecordHeaders()
         );

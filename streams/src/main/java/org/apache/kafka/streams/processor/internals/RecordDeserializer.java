@@ -50,7 +50,6 @@ class RecordDeserializer {
      *                          {@link DeserializationExceptionHandler.DeserializationHandlerResponse#FAIL FAIL}
      *                          or throws an exception itself
      */
-    @SuppressWarnings("deprecation")
     ConsumerRecord<Object, Object> deserialize(final ProcessorContext processorContext,
                                                final ConsumerRecord<byte[], byte[]> rawRecord) {
 

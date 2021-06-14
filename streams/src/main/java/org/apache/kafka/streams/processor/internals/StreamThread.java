@@ -300,10 +300,10 @@ public class StreamThread extends Thread {
     private final java.util.function.Consumer<Long> cacheResizer;
 
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
-    private Runnable shutdownErrorHook;
-    private AtomicInteger assignmentErrorCode;
-    private AtomicLong cacheResizeSize;
-    private AtomicBoolean leaveGroupRequested;
+    private final Runnable shutdownErrorHook;
+    private final AtomicInteger assignmentErrorCode;
+    private final AtomicLong cacheResizeSize;
+    private final AtomicBoolean leaveGroupRequested;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,

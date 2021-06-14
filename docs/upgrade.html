@@ -69,6 +69,8 @@
             <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> instead.</li>
         <li>The <code>quota.producer.default</code> and <code>quota.consumer.default</code> configurations were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12591">KAFKA-12591</a>).
             Dynamic quota defaults must be used instead.</li>
+        <li>The default value for the consumer configuration <code>session.timeout.ms</code> was increased from 10s to 45s. See 
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-735%3A+Increase+default+consumer+session+timeout">KIP-735</a> for more details.</li>
     </ul>
     <li> The <code>Producer#sendOffsetsToTransaction(Map offsets, String consumerGroupId)</code> method has been deprecated. Please use
         <code>Producer#sendOffsetsToTransaction(Map offsets, ConsumerGroupMetadata metadata)</code> instead, where the <code>ConsumerGroupMetadata</code>

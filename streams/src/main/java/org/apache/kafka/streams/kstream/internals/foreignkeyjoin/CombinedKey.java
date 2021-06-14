@@ -39,9 +39,6 @@ public class CombinedKey<KF, KP> {
     }
 
     public boolean equals(final KF foreignKey, final KP primaryKey) {
-        if (this.primaryKey == null) {
-            return false;
-        }
         return this.foreignKey.equals(foreignKey) && this.primaryKey.equals(primaryKey);
     }
 
