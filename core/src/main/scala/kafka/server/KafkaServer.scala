@@ -753,7 +753,7 @@ class KafkaServer(
 
   def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
 
-  /** Return advertised listeners with the bound port (this may differ from the configured port if -1 is used). */
+  /** Return advertised listeners with the bound port (this may differ from the configured port if the latter is `0`). */
   def advertisedListeners: Seq[EndPoint] = {
     config.advertisedListeners.map { endPoint =>
       endPoint.copy(port = boundPort(endPoint.listenerName))
