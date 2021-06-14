@@ -102,6 +102,30 @@ public class ConsumerProtocolTest {
     }
 
     @Test
+    public void serializeSubscriptionShouldOrderTopics() {
+        assertEquals(
+            ConsumerProtocol.serializeSubscription(
+                new Subscription(Arrays.asList("foo", "bar"), null, Arrays.asList(tp1, tp2))
+            ),
+            ConsumerProtocol.serializeSubscription(
+                new Subscription(Arrays.asList("bar", "foo"), null, Arrays.asList(tp1, tp2))
+            )
+        );
+    }
+
+    @Test
+    public void serializeSubscriptionShouldOrderOwnedPartitions() {
+        assertEquals(
+            ConsumerProtocol.serializeSubscription(
+                new Subscription(Arrays.asList("foo", "bar"), null, Arrays.asList(tp1, tp2))
+            ),
+            ConsumerProtocol.serializeSubscription(
+                new Subscription(Arrays.asList("foo", "bar"), null, Arrays.asList(tp2, tp1))
+            )
+        );
+    }
+
+    @Test
     public void deserializeOldSubscriptionVersion() {
         Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), null);
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription, (short) 0);
