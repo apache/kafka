@@ -86,7 +86,6 @@ public class KafkaEmbedded {
     private Properties effectiveConfigFrom(final Properties initialConfig) {
         final Properties effectiveConfig = new Properties();
         effectiveConfig.put(KafkaConfig.BrokerIdProp(), 0);
-        effectiveConfig.put(KafkaConfig.ListenersProp(), "PLAINTEXT://localhost:9092");
         effectiveConfig.put(KafkaConfig.NumPartitionsProp(), 1);
         effectiveConfig.put(KafkaConfig.AutoCreateTopicsEnableProp(), true);
         effectiveConfig.put(KafkaConfig.MessageMaxBytesProp(), 1000000);
