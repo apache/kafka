@@ -132,16 +132,13 @@ public class MetadataRequest extends AbstractRequest {
             for (MetadataRequestTopic topic : data.topics()) {
                 String topicName;
                 // If null, set to the empty string, since the response does not allow null.
-                if (topic.name() == null)
-                    topicName = "";
-                else
-                    topicName = topic.name();
+                topicName = topic.name() == null ? "" : topic.name();
                 responseData.topics().add(new MetadataResponseData.MetadataResponseTopic()
-                        .setName(topicName)
-                        .setTopicId(topic.topicId())
-                        .setErrorCode(error.code())
-                        .setIsInternal(false)
-                        .setPartitions(Collections.emptyList()));
+                    .setName(topicName)
+                    .setTopicId(topic.topicId())
+                    .setErrorCode(error.code())
+                    .setIsInternal(false)
+                    .setPartitions(Collections.emptyList()));
             }
         }
 
