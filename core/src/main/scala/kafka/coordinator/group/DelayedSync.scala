@@ -22,8 +22,8 @@ import kafka.server.DelayedOperation
 /**
  * Delayed rebalance operation that is added to the purgatory when is completing the rebalance.
  *
- * Whenever a SyncGroup is receives, checks that a SyncGroup has been received for each
- * member of the group; if yes, complete this operation.
+ * Whenever a SyncGroup is receives, checks that we received all the SyncGroup request from
+ * each member of the group; if yes, complete this operation.
  *
  * When the operation has expired, any known members that have not sent a SyncGroup requests
  * are removed from the group. If any members is removed, the group is rebalanced.
@@ -44,7 +44,5 @@ private[group] class DelayedSync(
     coordinator.onExpirePendingSync(group)
   }
 
-  override def onComplete(): Unit = {
-    // Nothing
-  }
+  override def onComplete(): Unit = { }
 }

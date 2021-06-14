@@ -621,7 +621,7 @@ class GroupCoordinator(val brokerId: Int,
     def removeCurrentMemberFromGroup(group: GroupMetadata, memberId: String): Unit = {
       val member = group.get(memberId)
       removeMemberAndUpdateGroup(group, member, s"Removing member $memberId on LeaveGroup")
-      removeHeartbeatForLeavingMember(group, member)
+      removeHeartbeatForLeavingMember(group, member.memberId)
       info(s"Member $member has left group $groupId through explicit `LeaveGroup` request")
     }
 
@@ -1212,10 +1212,6 @@ class GroupCoordinator(val brokerId: Int,
     heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(pendingMemberKey))
   }
 
-  private def removeHeartbeatForLeavingMember(group: GroupMetadata, member: MemberMetadata): Unit = {
-    removeHeartbeatForLeavingMember(group, member.memberId)
-  }
-
   private def removeHeartbeatForLeavingMember(group: GroupMetadata, memberId: String): Unit = {
     val memberKey = MemberKey(group.groupId, memberId)
     heartbeatPurgatory.checkAndComplete(memberKey)
@@ -1411,7 +1407,7 @@ class GroupCoordinator(val brokerId: Int,
 
         notYetRejoinedDynamicMembers.values.foreach { failedMember =>
           group.remove(failedMember.memberId)
-          removeHeartbeatForLeavingMember(group, failedMember)
+          removeHeartbeatForLeavingMember(group, failedMember.memberId)
         }
       }
 
@@ -1523,7 +1519,8 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       group.currentState match {
         case Dead | Empty | PreparingRebalance =>
-          debug(s"Received notification of sync expiration for group ${group.groupId} in ${group.currentState} state. Ignoring.")
+          debug(s"Received unexpected notification of sync expiration after group ${group.groupId} " +
+            s"already transitioned to the ${group.currentState} state.")
 
         case CompletingRebalance | Stable =>
           if (!group.hasAllMembersJoined) {
