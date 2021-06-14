@@ -1171,6 +1171,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.debug("Restarted {} of {} tasks for {} as requested", plan.restartTaskCount(), plan.totalTaskCount(), request);
         }
         log.info("Completed {}", plan);
+        //return value only used by tests
         return restartConnector || restartTasks;
     }
 

@@ -263,11 +263,12 @@ public class ConnectorsResource {
                                  final @DefaultValue ("false") @QueryParam("onlyFailed") Boolean onlyFailed,
                                  final @QueryParam("forward") Boolean forward) throws Throwable {
         RestartRequest restartRequest = new RestartRequest(connector, onlyFailed, includeTasks);
+        String forwardingPath = "/connectors/" + connector + "/restart";
         if (restartRequest.forciblyRestartConnectorOnly()) {
             // For backward compatibility, just restart the connector instance and return OK with no body
             FutureCallback<Void> cb = new FutureCallback<>();
             herder.restartConnector(connector, cb);
-            completeOrForwardRequest(cb, "/connectors/" + connector + "/restart", "POST", headers, null, forward);
+            completeOrForwardRequest(cb, forwardingPath, "POST", headers, null, forward);
             return Response.ok().build();
         }
 
@@ -276,7 +277,6 @@ public class ConnectorsResource {
         Map<String, String> queryParameters = new HashMap<>();
         queryParameters.put("includeTasks", String.valueOf(includeTasks));
         queryParameters.put("onlyFailed", String.valueOf(onlyFailed));
-        String forwardingPath = "/connectors/" + connector + "/restart";
         ConnectorStateInfo stateInfo = completeOrForwardRequest(cb, forwardingPath, "POST", headers, queryParameters, null, new TypeReference<ConnectorStateInfo>() {
         }, new IdentityTranslator<>(), forward);
         return Response.accepted().entity(stateInfo).build();
