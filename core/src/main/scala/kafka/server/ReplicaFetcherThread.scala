@@ -28,7 +28,7 @@ import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.errors.{FetchSessionTopicIdException, KafkaStorageException, UnknownTopicIdException}
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
@@ -218,11 +218,20 @@ class ReplicaFetcherThread(name: String,
       val clientResponse = leaderEndpoint.sendRequest(fetchRequest)
       val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse]
       if (!fetchSessionHandler.handleResponse(fetchResponse, clientResponse.requestHeader().apiVersion())) {
-        Map.empty
+        if (fetchResponse.error() == Errors.UNKNOWN_TOPIC_ID)
+          throw new UnknownTopicIdException("There was a topic ID in the request that was unknown to the server.")
+        else if (fetchResponse.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR)
+          throw new FetchSessionTopicIdException("There was a topic ID in the request that was inconsistent with the session.")
+        else
+          Map.empty
       } else {
         fetchResponse.responseData(fetchSessionHandler.sessionTopicNames, clientResponse.requestHeader().apiVersion()).asScala
       }
     } catch {
+      case unknownId: UnknownTopicIdException =>
+        throw unknownId
+      case sessionUnknownId: FetchSessionTopicIdException =>
+        throw sessionUnknownId
       case t: Throwable =>
         fetchSessionHandler.handleError(t)
         throw t
@@ -298,7 +307,7 @@ class ReplicaFetcherThread(name: String,
     } else {
       val version: Short = if (fetchRequestVersion >= 13 && !fetchData.canUseTopicIds) 12 else fetchRequestVersion
       val requestBuilder = FetchRequest.Builder
-        .forReplica(version, replicaId, maxWait, minBytes, fetchData.toSend, topicIds)
+        .forReplica(version, replicaId, maxWait, minBytes, fetchData.toSend, fetchData.topicIds)
         .setMaxBytes(maxBytes)
         .toForget(fetchData.toForget)
         .metadata(fetchData.metadata)
