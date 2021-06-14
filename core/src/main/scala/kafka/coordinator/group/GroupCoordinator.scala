@@ -1616,9 +1616,8 @@ object GroupCoordinator {
             time: Time,
             metrics: Metrics): GroupCoordinator = {
     val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
-    // TODO Check if we could consolidate both purgatories.
-    val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance", config.brokerId)
-    val syncPurgatory = DelayedOperationPurgatory[DelayedSync]("Rebalance", config.brokerId)
+    val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance (DelayedJoin)", config.brokerId)
+    val syncPurgatory = DelayedOperationPurgatory[DelayedSync]("Rebalance (DelayedSync)", config.brokerId)
     GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, syncPurgatory, time, metrics)
   }
 
