@@ -74,6 +74,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
@@ -81,8 +82,8 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -193,8 +194,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private short backoffRetries;
 
     // visible for testing
-    // The pending restart requests for the connectors;
-    final NavigableSet<RestartRequest> pendingRestartRequests = new TreeSet<>();
+    // The latest pending restart requests for the connectors;
+    final Map<String, RestartRequest> pendingRestartRequests = new ConcurrentHashMap<>();
 
     private final DistributedConfig config;
 
@@ -1113,16 +1114,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     /**
-     * Process all pending restart requests. There can be at most one request per connector, because of how
-     * {@link RestartRequest#equals(Object)} and {@link RestartRequest#hashCode()} are based only on the connector name.
+     * Process all pending restart requests. There can be at most one request per connector.
      *
      * <p>This method is called from within the {@link #tick()} method. It is synchronized so that all pending restart requests
      * are processed at once before any additional requests are added.
      */
     private synchronized void processRestartRequests() {
-        RestartRequest request;
-        while ((request = pendingRestartRequests.pollFirst()) != null) {
+        for (Iterator<Map.Entry<String, RestartRequest>> iterator = pendingRestartRequests.entrySet().iterator(); iterator.hasNext();) {
+            Map.Entry<String, RestartRequest> entry = iterator.next();
+            RestartRequest request = entry.getValue();
             doRestartConnectorAndTasks(request);
+            iterator.remove();
         }
     }
 
@@ -1710,10 +1712,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.info("Received {}", request);
 
             synchronized (DistributedHerder.this) {
-                //since RestartRequest equality is based only on connector name, and we track only the latest pending restart request
-                // we need to explicitly overwrite the existing request by doing remove/add.
-                pendingRestartRequests.remove(request);
-                pendingRestartRequests.add(request);
+                pendingRestartRequests.put(request.connectorName(), request);
             }
             member.wakeup();
         }

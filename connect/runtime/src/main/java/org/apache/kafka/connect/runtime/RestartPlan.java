@@ -145,23 +145,6 @@ public class RestartPlan {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        RestartPlan that = (RestartPlan) o;
-        return Objects.equals(this.request, that.request) && Objects.equals(stateInfo, that.stateInfo);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(request, stateInfo);
-    }
-
-    @Override
     public String toString() {
         if (restartConnector()) {
             return String.format(

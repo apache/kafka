@@ -2798,14 +2798,14 @@ public class DistributedHerderTest {
         restartRequest = new RestartRequest(connectorName, false, true);
         configUpdateListener.onRestartRequest(restartRequest);
         assertEquals(1, herder.pendingRestartRequests.size());
-        assertFalse(herder.pendingRestartRequests.first().onlyFailed());
-        assertTrue(herder.pendingRestartRequests.first().includeTasks());
+        assertFalse(herder.pendingRestartRequests.get(connectorName).onlyFailed());
+        assertTrue(herder.pendingRestartRequests.get(connectorName).includeTasks());
 
         restartRequest = new RestartRequest(connectorName, true, false);
         configUpdateListener.onRestartRequest(restartRequest);
         assertEquals(1, herder.pendingRestartRequests.size());
-        assertTrue(herder.pendingRestartRequests.first().onlyFailed());
-        assertFalse(herder.pendingRestartRequests.first().includeTasks());
+        assertTrue(herder.pendingRestartRequests.get(connectorName).onlyFailed());
+        assertFalse(herder.pendingRestartRequests.get(connectorName).includeTasks());
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class

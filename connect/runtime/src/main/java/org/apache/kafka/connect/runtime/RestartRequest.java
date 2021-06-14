@@ -24,13 +24,8 @@ import org.apache.kafka.connect.connector.Task;
 /**
  * A request to restart a connector and/or task instances.
  *
- * <p>Hashcode and equality are based purely upon the connector name, making it possible to use a Set to track multiple
- * requests. For example, a {@link java.util.concurrent.ConcurrentSkipListSet} could be used to record a batch of requests,
- * where a subsequent request to restart the same connector would overwrite the earlier request.
- *
- * <p>The natural order is based upon the connector name.
  */
-public class RestartRequest implements Comparable<RestartRequest> {
+public class RestartRequest {
 
     private final String connectorName;
     private final boolean onlyFailed;
@@ -103,31 +98,6 @@ public class RestartRequest implements Comparable<RestartRequest> {
      */
     public boolean includeTask(TaskStatus status) {
         return includeTasks && (!onlyFailed || status.state() == AbstractStatus.State.FAILED);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        RestartRequest that = (RestartRequest) o;
-        return Objects.equals(this.connectorName, that.connectorName);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(connectorName);
-    }
-
-    @Override
-    public int compareTo(RestartRequest o) {
-        if (o == this) {
-            return 0;
-        }
-        return connectorName.compareTo(o.connectorName());
     }
 
     @Override
