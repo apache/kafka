@@ -126,9 +126,12 @@ public class StateDirectory {
                 throw new ProcessorStateException(
                     String.format("base state directory [%s] doesn't exist and couldn't be created", stateDirName));
             }
-            if ((stateDir.exists() && !stateDir.isDirectory()) || (!stateDir.exists() && !stateDir.mkdir())) {
+            if (!stateDir.exists() && !stateDir.mkdir()) {
                 throw new ProcessorStateException(
                     String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
+            } else if (stateDir.exists() && !stateDir.isDirectory()) {
+                throw new ProcessorStateException(
+                    String.format("state directory [%s] can't be created as there is an existing file with the same name", stateDir.getPath()));
             }
 
             if (stateDirName.startsWith(System.getProperty("java.io.tmpdir"))) {
@@ -247,11 +250,9 @@ public class StateDirectory {
                             String.format("task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
                     }
                 }
-            } else {
-                if (!taskDir.isDirectory()) {
-                    throw new ProcessorStateException(
-                        String.format("task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
-                }
+            } else if (!taskDir.isDirectory()) {
+                throw new ProcessorStateException(
+                    String.format("state directory [%s] can't be created as there is an existing file with the same name", taskDir.getPath()));
             }
         }
         return taskDir;
@@ -319,9 +320,14 @@ public class StateDirectory {
      */
     File globalStateDir() {
         final File dir = new File(stateDir, "global");
-        if (hasPersistentStores && ((dir.exists() && !dir.isDirectory()) || (!dir.exists() && !dir.mkdir()))) {
-            throw new ProcessorStateException(
-                String.format("global state directory [%s] doesn't exist and couldn't be created", dir.getPath()));
+        if (hasPersistentStores) {
+            if (!dir.exists() && !dir.mkdir()) {
+                throw new ProcessorStateException(
+                    String.format("global state directory [%s] doesn't exist and couldn't be created", dir.getPath()));
+            } else if (dir.exists() && !dir.isDirectory()) {
+                throw new ProcessorStateException(
+                    String.format("global state directory [%s] can't be created as there is an existing file with the same name", dir.getPath()));
+            }
         }
         return dir;
     }

@@ -247,7 +247,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldThrowProcessorStateExceptionIfAppDirOccupied() throws IOException {
+    public void shouldThrowProcessorStateExceptionIfTestDirOccupied() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
 
         // Replace taskDir to a regular file
