@@ -23,43 +23,32 @@ import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode.TableSourceNodeBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.easymock.EasyMock;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Properties;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({InternalTopologyBuilder.class})
+import static org.mockito.Mockito.mock;
+
 public class TableSourceNodeTest {
 
     private static final String STORE_NAME = "store-name";
     private static final String TOPIC = "input-topic";
 
-    private final InternalTopologyBuilder topologyBuilder = PowerMock.createNiceMock(InternalTopologyBuilder.class);
+    private final InternalTopologyBuilder topologyBuilder = mock(InternalTopologyBuilder.class);
 
     @Test
     public void shouldConnectStateStoreToInputTopicIfInputTopicIsUsedAsChangelog() {
         final boolean shouldReuseSourceTopicForChangelog = true;
         topologyBuilder.connectSourceStoreAndTopic(STORE_NAME, TOPIC);
-        EasyMock.replay(topologyBuilder);
 
         buildTableSourceNode(shouldReuseSourceTopicForChangelog);
-
-        EasyMock.verify(topologyBuilder);
     }
 
     @Test
     public void shouldConnectStateStoreToChangelogTopic() {
         final boolean shouldReuseSourceTopicForChangelog = false;
-        EasyMock.replay(topologyBuilder);
 
         buildTableSourceNode(shouldReuseSourceTopicForChangelog);
-
-        EasyMock.verify(topologyBuilder);
     }
 
     private void buildTableSourceNode(final boolean shouldReuseSourceTopicForChangelog) {
