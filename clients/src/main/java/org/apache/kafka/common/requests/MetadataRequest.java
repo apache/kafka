@@ -98,7 +98,7 @@ public class MetadataRequest extends AbstractRequest {
                     if (topic.name() == null)
                         throw new UnsupportedVersionException("MetadataRequest version " + version +
                                 " does not support null topic names.");
-                    else if (topic.topicId() != Uuid.ZERO_UUID)
+                    if (topic.topicId() != Uuid.ZERO_UUID)
                         throw new UnsupportedVersionException("MetadataRequest version " + version +
                             " does not support non-zero topic IDs.");
                 });
