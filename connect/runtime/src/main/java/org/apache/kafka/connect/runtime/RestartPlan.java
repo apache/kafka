@@ -48,7 +48,7 @@ public class RestartPlan {
         idsToRestart = Collections.unmodifiableList(
                 stateInfo.tasks()
                         .stream()
-                        .filter(taskState -> isRestarting(taskState))
+                        .filter(this::isRestarting)
                         .map(taskState -> new ConnectorTaskId(request.connectorName(), taskState.id()))
                         .collect(Collectors.toList())
         );
