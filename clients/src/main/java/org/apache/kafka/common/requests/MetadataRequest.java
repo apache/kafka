@@ -95,9 +95,12 @@ public class MetadataRequest extends AbstractRequest {
                         "allowAutoTopicCreation field");
             if (data.topics() != null) {
                 data.topics().forEach(topic -> {
-                    if (topic.name() == null || topic.topicId() != Uuid.ZERO_UUID)
-                        throw new UnsupportedVersionException("MetadataRequest version " + version  +
-                                " does not support null topic names or non-zero topic IDs.");
+                    if (topic.name() == null)
+                        throw new UnsupportedVersionException("MetadataRequest version " + version +
+                                " does not support null topic names.");
+                    else if (topic.topicId() != Uuid.ZERO_UUID)
+                        throw new UnsupportedVersionException("MetadataRequest version " + version +
+                            " does not support non-zero topic IDs.");
                 });
             }
             return new MetadataRequest(data, version);
@@ -125,13 +128,21 @@ public class MetadataRequest extends AbstractRequest {
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         MetadataResponseData responseData = new MetadataResponseData();
-        if (topics() != null) {
-            for (String topic : topics())
+        if (data.topics() != null) {
+            for (MetadataRequestTopic topic : data.topics()) {
+                String topicName;
+                // If null, set to the empty string, since the response does not allow null.
+                if (topic.name() == null)
+                    topicName = "";
+                else
+                    topicName = topic.name();
                 responseData.topics().add(new MetadataResponseData.MetadataResponseTopic()
-                    .setName(topic)
-                    .setErrorCode(error.code())
-                    .setIsInternal(false)
-                    .setPartitions(Collections.emptyList()));
+                        .setName(topicName)
+                        .setTopicId(topic.topicId())
+                        .setErrorCode(error.code())
+                        .setIsInternal(false)
+                        .setPartitions(Collections.emptyList()));
+            }
         }
 
         responseData.setThrottleTimeMs(throttleTimeMs);
