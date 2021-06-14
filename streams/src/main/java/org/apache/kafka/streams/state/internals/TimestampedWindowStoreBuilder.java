@@ -135,7 +135,6 @@ public class TimestampedWindowStoreBuilder<K, V>
             return wrapped.fetch(key, time);
         }
 
-        @SuppressWarnings("deprecation")
         @Override
         public WindowStoreIterator<byte[]> fetch(final Bytes key,
                                                  final long timeFrom,
@@ -150,7 +149,6 @@ public class TimestampedWindowStoreBuilder<K, V>
             return wrapped.backwardFetch(key, timeFrom, timeTo);
         }
 
-        @SuppressWarnings("deprecation")
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                                final Bytes keyTo,
@@ -167,7 +165,6 @@ public class TimestampedWindowStoreBuilder<K, V>
             return wrapped.backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
-        @SuppressWarnings("deprecation")
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
                                                                   final long timeTo) {
