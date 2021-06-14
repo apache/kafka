@@ -21,6 +21,7 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.log4j.Logger;
@@ -31,8 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -163,16 +163,12 @@ public class KafkaLog4jAppenderTest {
     private void replaceProducerWithMocked(MockKafkaLog4jAppender mockKafkaLog4jAppender, boolean success) {
         @SuppressWarnings("unchecked")
         MockProducer<byte[], byte[]> producer = mock(MockProducer.class);
-        @SuppressWarnings("unchecked")
-        Future<RecordMetadata> futureMock = mock(Future.class);
-        try {
-            if (!success)
-                when(futureMock.get())
-                        .thenThrow(new ExecutionException("simulated timeout", new TimeoutException()));
-        } catch (InterruptedException | ExecutionException e) {
-            // just mocking
-        }
-        when(producer.send(any())).thenReturn(futureMock);
+        CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+        if (success)
+            future.complete(new RecordMetadata(new TopicPartition("tp", 0), 0, 0, 0, 0, 0));
+        else
+            future.completeExceptionally(new TimeoutException("simulated timeout"));
+        when(producer.send(any())).thenReturn(future);
         // reconfiguring mock appender
         mockKafkaLog4jAppender.setKafkaProducer(producer);
         mockKafkaLog4jAppender.activateOptions();
