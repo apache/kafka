@@ -67,11 +67,11 @@ public class WorkerConfigTest {
 
         props.put(WorkerConfig.LISTENERS_CONFIG, "http://a.b:9999");
         config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
-        assertEquals(config.getList(WorkerConfig.LISTENERS_CONFIG), Arrays.asList("http://a.b:9999"));
+        assertEquals(Arrays.asList("http://a.b:9999"), config.getList(WorkerConfig.LISTENERS_CONFIG));
 
         props.put(WorkerConfig.LISTENERS_CONFIG, "http://a.b:9999, https://a.b:7812");
         config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
-        assertEquals(config.getList(WorkerConfig.LISTENERS_CONFIG), Arrays.asList("http://a.b:9999", "https://a.b:7812"));
+        assertEquals(Arrays.asList("http://a.b:9999", "https://a.b:7812"), config.getList(WorkerConfig.LISTENERS_CONFIG));
 
         new WorkerConfig(WorkerConfig.baseConfigDef(), props);
     }
@@ -79,15 +79,23 @@ public class WorkerConfigTest {
     @Test
     public void testListenersConfigNotAllowedValues() {
         Map<String, String> props = baseProps();
+        assertEquals(LISTENERS_DEFAULT, new WorkerConfig(WorkerConfig.baseConfigDef(), props).getList(WorkerConfig.LISTENERS_CONFIG));
 
         props.put(WorkerConfig.LISTENERS_CONFIG, "");
-        assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props)).printStackTrace();
+        ConfigException ce = assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
+        assertTrue(ce.getMessage().contains(" listeners"));
+
+        props.put(WorkerConfig.LISTENERS_CONFIG, ",,,");
+        ce = assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
+        assertTrue(ce.getMessage().contains(" listeners"));
 
         props.put(WorkerConfig.LISTENERS_CONFIG, "http://a.b:9999,");
-        assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
+        ce = assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
+        assertTrue(ce.getMessage().contains(" listeners"));
 
         props.put(WorkerConfig.LISTENERS_CONFIG, "http://a.b:9999, ,https://a.b:9999");
-        assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
+        ce = assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
+        assertTrue(ce.getMessage().contains(" listeners"));
     }
 
     @Test
@@ -104,7 +112,7 @@ public class WorkerConfigTest {
 
         props.put(WorkerConfig.ADMIN_LISTENERS_CONFIG, "http://a.b:9999, https://a.b:7812");
         config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
-        assertEquals(config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG), Arrays.asList("http://a.b:9999", "https://a.b:7812"));
+        assertEquals(Arrays.asList("http://a.b:9999", "https://a.b:7812"), config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG));
 
         new WorkerConfig(WorkerConfig.baseConfigDef(), props);
     }
@@ -112,8 +120,10 @@ public class WorkerConfigTest {
     @Test
     public void testAdminListenersNotAllowingEmptyStrings() {
         Map<String, String> props = baseProps();
+
         props.put(WorkerConfig.ADMIN_LISTENERS_CONFIG, "http://a.b:9999,");
-        assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
+        ConfigException ce = assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
+        assertTrue(ce.getMessage().contains(" admin.listeners"));
     }
 
     @Test

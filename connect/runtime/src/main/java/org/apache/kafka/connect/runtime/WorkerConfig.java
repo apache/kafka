@@ -481,31 +481,31 @@ public class WorkerConfig extends AbstractConfig {
         @Override
         public void ensureValid(String name, Object value) {
             if (value == null) {
-                throw new ConfigException("Invalid value, at least one URI is expected, ex: http://localhost:8080,https://localhost:8443.");
+                throw new ConfigException("Invalid value for listeners, at least one URL is expected, ex: http://localhost:8080,https://localhost:8443.");
             }
 
             if (!(value instanceof List)) {
-                throw new ConfigException("Invalid value type (list expected).");
+                throw new ConfigException("Invalid value type for listeners (expected list).");
             }
 
             List items = (List) value;
             if (items.isEmpty()) {
-                throw new ConfigException("Invalid value, at least one URI is expected, ex: http://localhost:8080,https://localhost:8443.");
+                throw new ConfigException("Invalid value for listeners, at least one URL is expected, ex: http://localhost:8080,https://localhost:8443.");
             }
 
             for (Object item: items) {
                 if (!(item instanceof String)) {
-                    throw new ConfigException("Invalid type for listener (expected String).");
+                    throw new ConfigException("Invalid type for listeners (expected String).");
                 }
                 if (Utils.isBlank((String) item)) {
-                    throw new ConfigException("Empty listener found when parsing list.");
+                    throw new ConfigException("Empty URL found when parsing listeners list.");
                 }
             }
         }
 
         @Override
         public String toString() {
-            return "List of comma-separated URIs, ex: http://localhost:8080,https://localhost:8443.";
+            return "List of comma-separated URLs, ex: http://localhost:8080,https://localhost:8443.";
         }
     }
 
@@ -517,7 +517,7 @@ public class WorkerConfig extends AbstractConfig {
             }
 
             if (!(value instanceof List)) {
-                throw new ConfigException("Invalid value type (list expected).");
+                throw new ConfigException("Invalid value type for admin.listeners (expected list).");
             }
 
             List items = (List) value;
@@ -527,17 +527,17 @@ public class WorkerConfig extends AbstractConfig {
 
             for (Object item: items) {
                 if (!(item instanceof String)) {
-                    throw new ConfigException("Invalid type for admin listener (expected String).");
+                    throw new ConfigException("Invalid type for admin.listeners (expected String).");
                 }
                 if (Utils.isBlank((String) item)) {
-                    throw new ConfigException("Empty listener found when parsing list.");
+                    throw new ConfigException("Empty URL found when parsing admin.listeners list.");
                 }
             }
         }
 
         @Override
         public String toString() {
-            return "List of comma-separated URIs, ex: http://localhost:8080,https://localhost:8443.";
+            return "List of comma-separated URLs, ex: http://localhost:8080,https://localhost:8443.";
         }
     }
 
