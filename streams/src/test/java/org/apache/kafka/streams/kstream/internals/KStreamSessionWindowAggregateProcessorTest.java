@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
@@ -380,7 +381,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics() {
         setup(false);
         context.setRecordContext(
-            new ProcessorRecordContext(-1, -2, -3, "topic", null)
+            new ProcessorRecordContext(-1, -2, -3, "topic", new RecordHeaders())
         );
 
         try (final LogCaptureAppender appender =
@@ -413,22 +414,22 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.init(context);
 
         // dummy record to establish stream time = 0
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
         processor.process("dummy", "dummy");
 
         // record arrives on time, should not be skipped
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
         processor.process("OnTime1", "1");
 
         // dummy record to advance stream time = 1
-        context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", null));
+        context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", new RecordHeaders()));
         processor.process("dummy", "dummy");
 
         try (final LogCaptureAppender appender =
                  LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
 
             // record is late
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process("Late1", "1");
 
             assertThat(
@@ -481,27 +482,27 @@ public class KStreamSessionWindowAggregateProcessorTest {
                  LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
 
             // dummy record to establish stream time = 0
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process("dummy", "dummy");
 
             // record arrives on time, should not be skipped
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process("OnTime1", "1");
 
             // dummy record to advance stream time = 1
-            context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", new RecordHeaders()));
             processor.process("dummy", "dummy");
 
             // delayed record arrives on time, should not be skipped
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process("OnTime2", "1");
 
             // dummy record to advance stream time = 2
-            context.setRecordContext(new ProcessorRecordContext(2, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(2, -2, -3, "topic", new RecordHeaders()));
             processor.process("dummy", "dummy");
 
             // delayed record arrives late
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process("Late1", "1");
 
             assertThat(

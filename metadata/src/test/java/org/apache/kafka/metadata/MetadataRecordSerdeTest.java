@@ -17,18 +17,20 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.serialization.MetadataParseException;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MetadataRecordSerdeTest {
 
@@ -65,8 +67,158 @@ class MetadataRecordSerdeTest {
         buffer.flip();
 
         MetadataRecordSerde serde = new MetadataRecordSerde();
-        assertThrows(SerializationException.class,
-            () -> serde.read(new ByteBufferAccessor(buffer), 16));
+        assertStartsWith("Could not deserialize metadata record due to unknown frame version",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), 16)).getMessage());
+    }
+
+    /**
+     * Test attempting to parse an event which has a malformed frame version type varint.
+     */
+    @Test
+    public void testParsingMalformedFrameVersionVarint() {
+        MetadataRecordSerde serde = new MetadataRecordSerde();
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.clear();
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.position(0);
+        buffer.limit(64);
+        assertStartsWith("Error while reading frame version",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+    }
+
+    /**
+     * Test attempting to parse an event which has a malformed message type varint.
+     */
+    @Test
+    public void testParsingMalformedMessageTypeVarint() {
+        MetadataRecordSerde serde = new MetadataRecordSerde();
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.clear();
+        buffer.put((byte) 0x00);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.position(0);
+        buffer.limit(64);
+        assertStartsWith("Error while reading type",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+    }
+
+    /**
+     * Test attempting to parse an event which has a malformed message version varint.
+     */
+    @Test
+    public void testParsingMalformedMessageVersionVarint() {
+        MetadataRecordSerde serde = new MetadataRecordSerde();
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.clear();
+        buffer.put((byte) 0x00);
+        buffer.put((byte) 0x08);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.put((byte) 0x80);
+        buffer.position(0);
+        buffer.limit(64);
+        assertStartsWith("Error while reading version",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+    }
+
+    /**
+     * Test attempting to parse an event which has a version > Short.MAX_VALUE
+     */
+    @Test
+    public void testParsingVersionTooLarge() {
+        MetadataRecordSerde serde = new MetadataRecordSerde();
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.clear();
+        buffer.put((byte) 0x00); // frame version
+        buffer.put((byte) 0x08); // apiKey
+        buffer.put((byte) 0xff); // api version
+        buffer.put((byte) 0xff); // api version
+        buffer.put((byte) 0xff); // api version
+        buffer.put((byte) 0x7f); // api version end
+        buffer.put((byte) 0x80);
+        buffer.position(0);
+        buffer.limit(64);
+        assertStartsWith("Value for version was too large",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+    }
+
+    /**
+     * Test attempting to parse an event which has a unsupported version
+     */
+    @Test
+    public void testParsingUnsupportedApiKey() {
+        MetadataRecordSerde serde = new MetadataRecordSerde();
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.put((byte) 0x00); // frame version
+        buffer.put((byte) 0xff); // apiKey
+        buffer.put((byte) 0x7f); // apiKey
+        buffer.put((byte) 0x00); // api version
+        buffer.put((byte) 0x80);
+        buffer.position(0);
+        buffer.limit(64);
+        assertStartsWith("Unknown metadata id ",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getCause().getMessage());
+    }
+
+    /**
+     * Test attempting to parse an event which has a malformed message body.
+     */
+    @Test
+    public void testParsingMalformedMessage() {
+        MetadataRecordSerde serde = new MetadataRecordSerde();
+        ByteBuffer buffer = ByteBuffer.allocate(4);
+        buffer.put((byte) 0x00); // frame version
+        buffer.put((byte) 0x00); // apiKey
+        buffer.put((byte) 0x00); // apiVersion
+        buffer.put((byte) 0x80); // malformed data
+        buffer.position(0);
+        buffer.limit(4);
+        assertStartsWith("Failed to deserialize record with type",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+    }
+
+    /**
+     * Test attempting to parse an event which has a malformed message version varint.
+     */
+    @Test
+    public void testParsingRecordWithGarbageAtEnd() {
+        MetadataRecordSerde serde = new MetadataRecordSerde();
+        RegisterBrokerRecord message = new RegisterBrokerRecord().setBrokerId(1).setBrokerEpoch(2);
+
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        ApiMessageAndVersion messageAndVersion = new ApiMessageAndVersion(message, (short) 0);
+        int size = serde.recordSize(messageAndVersion, cache);
+        ByteBuffer buffer = ByteBuffer.allocate(size + 1);
+
+        serde.write(messageAndVersion, cache, new ByteBufferAccessor(buffer));
+        buffer.clear();
+        assertStartsWith("Found 1 byte(s) of garbage after",
+                assertThrows(MetadataParseException.class,
+                        () -> serde.read(new ByteBufferAccessor(buffer), size + 1)).getMessage());
+    }
+
+    private static void assertStartsWith(String prefix, String str) {
+        assertTrue(str.startsWith(prefix),
+                "Expected string '" + str + "' to start with '" + prefix + "'");
     }
 
 }

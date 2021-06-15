@@ -70,6 +70,7 @@ import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.MetadataRecordSerde;
+import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -360,7 +361,7 @@ public class QuorumControllerTest {
                 setProducerIdsEnd(1000), (short) 0)
         );
 
-        ControllerTestUtils.assertBatchIteratorContains(
+        RecordTestUtils.assertBatchIteratorContains(
             Arrays.asList(expected),
             Arrays.asList(
                 StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)

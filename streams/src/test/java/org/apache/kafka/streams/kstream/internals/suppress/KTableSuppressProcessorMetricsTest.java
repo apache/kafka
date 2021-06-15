@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -52,7 +53,7 @@ import static org.hamcrest.core.Is.is;
 public class KTableSuppressProcessorMetricsTest {
     private static final long ARBITRARY_LONG = 5L;
     private static final TaskId TASK_ID = new TaskId(0, 0);
-    private Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
+    private final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
     private final String threadId = Thread.currentThread().getName();
 
     private final MetricName evictionTotalMetricLatest = new MetricName(
@@ -151,7 +152,7 @@ public class KTableSuppressProcessorMetricsTest {
         processor.init(context);
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        context.setRecordMetadata("", 0, 0L, new RecordHeaders(), timestamp);
         final String key = "longKey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         processor.process(key, value);
@@ -174,7 +175,7 @@ public class KTableSuppressProcessorMetricsTest {
             verifyMetric(metrics, bufferCountMaxMetric, is(1.0));
         }
 
-        context.setRecordMetadata("", 0, 1L, null, timestamp + 1);
+        context.setRecordMetadata("", 0, 1L, new RecordHeaders(), timestamp + 1);
         processor.process("key", value);
 
         {

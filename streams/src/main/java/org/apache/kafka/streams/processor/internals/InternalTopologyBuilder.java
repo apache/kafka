@@ -2042,6 +2042,11 @@ public class InternalTopologyBuilder {
         return maybeDecorateInternalSourceTopics(sourceTopicNames);
     }
 
+    public boolean hasNamedTopologies() {
+        // TODO KAFKA-12648: covered by Pt. 2
+        return false;
+    }
+
     // following functions are for test only
     public synchronized Set<String> sourceTopicNames() {
         return sourceTopicNames;

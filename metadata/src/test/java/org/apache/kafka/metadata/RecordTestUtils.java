@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -34,9 +35,18 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
-public class ControllerTestUtils {
+/**
+ * Utilities for testing classes that deal with metadata records.
+ */
+public class RecordTestUtils {
+    /**
+     * Replay a list of records.
+     *
+     * @param target                The object to invoke the replay function on.
+     * @param recordsAndVersions    A list of batches of records.
+     */
     public static void replayAll(Object target,
-                                 List<ApiMessageAndVersion> recordsAndVersions) throws Exception {
+                                 List<ApiMessageAndVersion> recordsAndVersions) {
         for (ApiMessageAndVersion recordAndVersion : recordsAndVersions) {
             ApiMessage record = recordAndVersion.message();
             try {
@@ -44,10 +54,34 @@ public class ControllerTestUtils {
                 method.invoke(target, record);
             } catch (NoSuchMethodException e) {
                 // ignore
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException(e);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
             }
         }
     }
 
+    /**
+     * Replay a list of record batches.
+     *
+     * @param target        The object to invoke the replay function on.
+     * @param batches       A list of batches of records.
+     */
+    public static void replayAllBatches(Object target,
+                                        List<List<ApiMessageAndVersion>> batches) {
+        for (List<ApiMessageAndVersion> batch : batches) {
+            replayAll(target, batch);
+        }
+    }
+
+    /**
+     * Materialize the output of an iterator into a set.
+     *
+     * @param iterator      The input iterator.
+     *
+     * @return              The output set.
+     */
     public static <T> Set<T> iteratorToSet(Iterator<T> iterator) {
         HashSet<T> set = new HashSet<>();
         while (iterator.hasNext()) {
@@ -56,6 +90,12 @@ public class ControllerTestUtils {
         return set;
     }
 
+    /**
+     * Assert that a batch iterator yields a given set of record batches.
+     *
+     * @param batches       A list of record batches.
+     * @param iterator      The input iterator.
+     */
     public static void assertBatchIteratorContains(List<List<ApiMessageAndVersion>> batches,
                                                    Iterator<List<ApiMessageAndVersion>> iterator) throws Exception {
         List<List<ApiMessageAndVersion>> actual = new ArrayList<>();
@@ -71,6 +111,11 @@ public class ControllerTestUtils {
         assertEquals(expected, actual);
     }
 
+    /**
+     * Sort the contents of an object which contains records.
+     *
+     * @param o     The input object. It will be modified in-place.
+     */
     @SuppressWarnings("unchecked")
     public static void deepSortRecords(Object o) throws Exception {
         if (o == null) {
