@@ -19,6 +19,8 @@ package org.apache.kafka.controller;
 
 public final class MockControllerMetrics implements ControllerMetrics {
     private volatile boolean active;
+    private volatile int registeredBrokers;
+    private volatile int unfencedBrokers;
     private volatile int topics;
     private volatile int partitions;
     private volatile int offlinePartitions;
@@ -27,6 +29,8 @@ public final class MockControllerMetrics implements ControllerMetrics {
 
     public MockControllerMetrics() {
         this.active = false;
+        this.registeredBrokers = 0;
+        this.unfencedBrokers = 0;
         this.topics = 0;
         this.partitions = 0;
         this.offlinePartitions = 0;
@@ -51,6 +55,27 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public void updateEventQueueProcessingTime(long durationMs) {
         // nothing to do
+    }
+
+    @Override
+    public void setRegisteredBrokerCount(int brokerCount) {
+        this.registeredBrokers = brokerCount;
+    }
+
+    @Override
+    public int registeredBrokerCount() {
+        return this.registeredBrokers;
+    }
+
+
+    @Override
+    public void setUnfencedBrokerCount(int brokerCount) {
+        this.unfencedBrokers = brokerCount;
+    }
+
+    @Override
+    public int unfencedBrokerCount() {
+        return unfencedBrokers;
     }
 
     @Override
