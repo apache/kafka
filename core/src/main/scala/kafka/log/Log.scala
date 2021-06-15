@@ -317,17 +317,21 @@ class Log(@volatile private var _dir: File,
     updateLogStartOffset(logStartOffset)
     maybeIncrementFirstUnstableOffset()
     // Delete partition metadata file if the version does not support topic IDs.
-    // Recover topic ID if present and topic IDs are supported
-    // If we were provided a topic ID when creating the log, partition metadata files are supported, and one does not yet exist
-    // write to the partition metadata file.
-    // Ensure we do not try to assign a provided topicId that is inconsistent with the ID on file.
+    // Set _topicId based on a few scenarios:
+    //  * Recover topic ID if present and topic IDs are supported. Ensure we do not try to assign a provided topicId that is inconsistent
+    //    with the ID on file.
+    //  * If we were provided a topic ID when creating the log, partition metadata files are supported, and one does not yet exist
+    //    set _topicId and write to the partition metadata file.
+    //  * Otherwise set to None
     if (partitionMetadataFile.exists()) {
         if (keepPartitionMetadataFile) {
           val fileTopicId = partitionMetadataFile.read().topicId
           if (_topicId.isDefined && !_topicId.contains(fileTopicId))
             throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
               s"but log already contained topic ID $fileTopicId")
+
           _topicId = Some(fileTopicId)
+
         } else {
           try partitionMetadataFile.delete()
           catch {
