@@ -123,6 +123,7 @@ public final class RaftClientTestContext {
         private static final int DEFAULT_REQUEST_TIMEOUT_MS = 5000;
         private static final int RETRY_BACKOFF_MS = 50;
         private static final int DEFAULT_APPEND_LINGER_MS = 0;
+        private static final int DEFAULT_MAX_UNFLUSHED_BYTES = 512;
 
         private final MockMessageQueue messageQueue = new MockMessageQueue();
         private final MockTime time = new MockTime();
@@ -136,6 +137,7 @@ public final class RaftClientTestContext {
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
         private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
         private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
+        private int maxUnflushedBytes = DEFAULT_MAX_UNFLUSHED_BYTES;
         private MemoryPool memoryPool = MemoryPool.NONE;
 
         public Builder(int localId, Set<Integer> voters) {
@@ -174,6 +176,11 @@ public final class RaftClientTestContext {
 
         Builder withAppendLingerMs(int appendLingerMs) {
             this.appendLingerMs = appendLingerMs;
+            return this;
+        }
+
+        Builder withMaxUnflushedBytes(int maxUnflushedBytes) {
+            this.maxUnflushedBytes = maxUnflushedBytes;
             return this;
         }
 
@@ -227,7 +234,7 @@ public final class RaftClientTestContext {
             Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
                 .collect(Collectors.toMap(id -> id, RaftClientTestContext::mockAddress));
             RaftConfig raftConfig = new RaftConfig(voterAddressMap, requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs,
-                    ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs);
+                    ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs, maxUnflushedBytes);
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
                 SERDE,

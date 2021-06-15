@@ -42,6 +42,7 @@ public class BatchAccumulator<T> implements Closeable {
     private final Time time;
     private final SimpleTimer lingerTimer;
     private final int lingerMs;
+    private final int maxUnflushedBytes;
     private final int maxBatchSize;
     private final CompressionType compressionType;
     private final MemoryPool memoryPool;
@@ -63,6 +64,7 @@ public class BatchAccumulator<T> implements Closeable {
         int epoch,
         long baseOffset,
         int lingerMs,
+        int maxUnflushedBytes,
         int maxBatchSize,
         MemoryPool memoryPool,
         Time time,
@@ -71,7 +73,8 @@ public class BatchAccumulator<T> implements Closeable {
     ) {
         this.epoch = epoch;
         this.lingerMs = lingerMs;
-        this.maxBatchSize = maxBatchSize;
+        this.maxUnflushedBytes = maxUnflushedBytes;
+        this.maxBatchSize = Math.min(maxBatchSize, maxUnflushedBytes);
         this.memoryPool = memoryPool;
         this.time = time;
         this.lingerTimer = new SimpleTimer();
@@ -131,6 +134,11 @@ public class BatchAccumulator<T> implements Closeable {
 
         appendLock.lock();
         try {
+            if (accumulatedMaxUnflushedBytes()) {
+                if (currentBatch != null && currentBatch.nonEmpty()) {
+                    completeCurrentBatch();
+                }
+            }
             maybeCompleteDrain();
 
             BatchBuilder<T> batch = null;
@@ -163,6 +171,20 @@ public class BatchAccumulator<T> implements Closeable {
         if (!lingerTimer.isRunning()) {
             lingerTimer.reset(time.milliseconds() + lingerMs);
         }
+    }
+
+    private boolean accumulatedMaxUnflushedBytes() {
+        int currentBatchSize = currentBatch == null || !currentBatch.nonEmpty() ? 0 : currentBatch.approximateSizeInBytes();
+        int completedSize = getCompletedSize();
+        return currentBatchSize + completedSize >= maxUnflushedBytes;
+    }
+
+    private int getCompletedSize() {
+        int completedSize = 0;
+        for (CompletedBatch completedBatch : completed) {
+            completedSize += completedBatch.sizeInBytes();
+        }
+        return completedSize;
     }
 
     private BatchBuilder<T> maybeAllocateBatch(
@@ -292,6 +314,9 @@ public class BatchAccumulator<T> implements Closeable {
         if (drainStatus == DrainStatus.FINISHED) {
             return 0;
         } else {
+            if (lingerTimer.remainingMs(currentTimeMs) > 0 && getCompletedSize() > maxUnflushedBytes)
+                return 0;
+
             return lingerTimer.remainingMs(currentTimeMs);
         }
     }

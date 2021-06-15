@@ -57,6 +57,7 @@ final public class SnapshotWriter<T> implements AutoCloseable {
      */
     public SnapshotWriter(
         RawSnapshotWriter snapshot,
+        int maxUnflushedBytes,
         int maxBatchSize,
         MemoryPool memoryPool,
         Time time,
@@ -70,6 +71,7 @@ final public class SnapshotWriter<T> implements AutoCloseable {
             snapshot.snapshotId().epoch,
             0,
             Integer.MAX_VALUE,
+            maxUnflushedBytes,
             maxBatchSize,
             memoryPool,
             time,
