@@ -206,7 +206,7 @@ public class StreamThread extends Thread {
      */
     State setState(final State newState) {
         final State oldState;
-
+        System.err.print(shortLogPrefix + "ss ");
         synchronized (stateLock) {
             oldState = state;
 
@@ -227,7 +227,7 @@ public class StreamThread extends Thread {
                 throw new StreamsException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("State transition from {} to {}", oldState, newState);
-                System.err.println(logPrefix + ", " + oldState + "," + newState);
+                System.err.println(shortLogPrefix + ", " + oldState + "," + newState);
             }
 
             state = newState;
@@ -237,6 +237,7 @@ public class StreamThread extends Thread {
 
             stateLock.notifyAll();
         }
+        System.err.print(shortLogPrefix + "ess ");
 
         if (stateListener != null) {
             stateListener.onChange(this, state, oldState);
@@ -254,6 +255,7 @@ public class StreamThread extends Thread {
     private final Time time;
     private final Logger log;
     private final String logPrefix;
+    private final String shortLogPrefix;
     public final Object stateLock;
     private final Duration pollTime;
     private final long commitTimeMs;
@@ -512,6 +514,7 @@ public class StreamThread extends Thread {
         this.time = time;
         this.builder = builder;
         this.logPrefix = logContext.logPrefix();
+        this.shortLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 16) : logPrefix;
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
         this.taskManager = taskManager;
@@ -637,6 +640,7 @@ public class StreamThread extends Thread {
 
     public boolean waitOnThreadState(final StreamThread.State targetState, final long timeoutMs) {
         final long begin = time.milliseconds();
+        System.err.print(shortLogPrefix + "wt ");
         synchronized (stateLock) {
             boolean interrupted = false;
             long elapsedMs = 0L;
@@ -651,10 +655,12 @@ public class StreamThread extends Thread {
                         }
                     } else {
                         log.debug("Cannot transit to {} within {}ms", targetState, timeoutMs);
+                        System.err.print(shortLogPrefix + "wtf ");
                         return false;
                     }
                     elapsedMs = time.milliseconds() - begin;
                 }
+                System.err.print(shortLogPrefix + "wtt ");
                 return true;
             } finally {
                 // Make sure to restore the interruption status before returning.
@@ -664,8 +670,10 @@ public class StreamThread extends Thread {
                 if (interrupted) {
                     Thread.currentThread().interrupt();
                 }
+                System.err.print(shortLogPrefix + "wtF ");
             }
         }
+
     }
 
     public void shutdownToError() {
@@ -719,7 +727,7 @@ public class StreamThread extends Thread {
     // Visible for testing
     void runOnce() {
 
-        final String shortLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 16) : logPrefix;
+//        final String shortLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 16) : logPrefix;
 //        System.err.print(shortLogPrefix + "runO ");
 
         final long startMs = time.milliseconds();
@@ -734,6 +742,7 @@ public class StreamThread extends Thread {
 
         System.err.print(shortLogPrefix + "b r");
         if (!isRunning()) {
+            System.err.print(shortLogPrefix + "eb r:" + state);
             log.info("Thread state is already {}, skipping the run once call after poll request", state);
             return;
         }
