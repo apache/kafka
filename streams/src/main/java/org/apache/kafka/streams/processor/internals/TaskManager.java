@@ -1199,25 +1199,28 @@ public class TaskManager {
         int totalProcessed = 0;
 
         long now = time.milliseconds();
-        final List<Task> subTask = activeTaskIterable().stream().filter(task -> {
-            if (task.id().toString().contains("1_4")) {
-                return true;
-            }
-            return false;
-        }).collect(Collectors.toList());
-
-        final String subLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 20) : logPrefix;
-        if (!subTask.isEmpty()) {
-            System.err.print(subLogPrefix + "p 1_4");
-        } else {
-            System.err.print(subLogPrefix + "!p 1_4 ");
-        }
+//        final List<Task> subTask = activeTaskIterable().stream().filter(task -> {
+//            if (task.id().toString().contains("1_4")) {
+//                return true;
+//            }
+//            return false;
+//        }).collect(Collectors.toList());
+//
+//        final String subLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 20) : logPrefix;
+//        if (!subTask.isEmpty()) {
+//            System.err.print(subLogPrefix + "p 1_4");
+//        } else {
+//            System.err.print(subLogPrefix + "!p 1_4 ");
+//        }
 
         for (final Task task : activeTaskIterable()) {
 
             int processed = 0;
             final long then = now;
             try {
+                if (task.id().toString().contains("1_4")) {
+                    System.err.print("p:" + processed + "m:" + maxNumRecords);
+                }
                 while (processed < maxNumRecords && task.process(now)) {
                     task.clearTaskTimeout();
                     processed++;

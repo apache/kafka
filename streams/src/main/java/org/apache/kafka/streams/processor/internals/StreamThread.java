@@ -719,7 +719,8 @@ public class StreamThread extends Thread {
     // Visible for testing
     void runOnce() {
 
-//        System.err.println("runO");
+        final String shortLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 20) : logPrefix;
+        System.err.print(shortLogPrefix + "runO ");
 
         final long startMs = time.milliseconds();
         now = startMs;
@@ -746,6 +747,7 @@ public class StreamThread extends Thread {
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
         if (state == State.RUNNING) {
+            System.err.print(shortLogPrefix + "do ");
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
              *  1. If it is time to punctuate, do it;

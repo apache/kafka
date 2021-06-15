@@ -61,6 +61,7 @@ public class PartitionGroup {
     private  final Logger logger;
     private final Map<TopicPartition, RecordQueue> partitionQueues;
     private final String logPrefix;
+    private final String longLogPrefix;
     private final Function<TopicPartition, OptionalLong> lagProvider;
     private final Sensor enforcedProcessingSensor;
     private final long maxTaskIdleMs;
@@ -97,6 +98,11 @@ public class PartitionGroup {
         int an = logContext.logPrefix().indexOf('[', logContext.logPrefix().indexOf('[') + 1);
         an = an == -1 ? 0 : an;
         this.logPrefix = logContext.logPrefix().substring(an);
+
+        an = logContext.logPrefix().indexOf(']');
+        an = an == -1 ? logContext.logPrefix().length() : an;
+        this.longLogPrefix = logContext.logPrefix().length() > 25 ?
+            logContext.logPrefix().substring(an - 20, an) + logPrefix : logContext.logPrefix();
         this.logger = logContext.logger(PartitionGroup.class);
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::headRecordTimestamp));
         this.partitionQueues = partitionQueues;
@@ -344,9 +350,8 @@ public class PartitionGroup {
         final int newSize = recordQueue.addRawRecords(rawRecords);
 
         if (logPrefix.contains("1_4")) {
-            System.err.println(logPrefix + "add records:" + rawRecords + ";" + oldSize + newSize);
+            System.err.println(longLogPrefix + "add records:" + rawRecords + ";" + oldSize + newSize);
         }
-//        logger.error("add records:" + rawRecords);
 //        final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
 //        for (int i = 1; i < elements.length; i++) {
 //            final StackTraceElement s = elements[i];
