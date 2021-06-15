@@ -373,12 +373,8 @@ public final class RaftClientTestContext {
     }
 
     LeaderAndEpoch currentLeaderAndEpoch() {
-        try {
-            ElectionState election = quorumStateStore.readElectionState();
-            return new LeaderAndEpoch(election.leaderIdOpt, election.epoch);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        ElectionState election = quorumStateStore.readElectionState();
+        return new LeaderAndEpoch(election.leaderIdOpt, election.epoch);
     }
 
     void expectAndGrantVotes(

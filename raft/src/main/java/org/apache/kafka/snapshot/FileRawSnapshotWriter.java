@@ -23,6 +23,7 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.ReplicatedLog;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -58,7 +59,9 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
         try {
             return channel.size();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(
+                String.format("Error calculating snapshot size.temp path = %s, snapshotId = %s.",
+                    this.tempSnapshotPath, this.snapshotId), e);
         }
     }
 
@@ -68,7 +71,11 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             checkIfFrozen("Append");
             Utils.writeFully(channel, records.buffer());
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(
+                String.format("Error writing file snapshot, " +
+                    "temp path = %s, snapshotId = %s.", this.tempSnapshotPath, this.snapshotId),
+                e
+            );
         }
     }
 
@@ -78,7 +85,11 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             checkIfFrozen("Append");
             Utils.writeFully(channel, records.buffer());
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(
+                String.format("Error writing file snapshot, " +
+                    "temp path = %s, snapshotId = %s.", this.tempSnapshotPath, this.snapshotId),
+                e
+            );
         }
     }
 
@@ -104,7 +115,11 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
 
             replicatedLog.ifPresent(log -> log.onSnapshotFrozen(snapshotId));
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(
+                String.format("Error freezing file snapshot, " +
+                    "temp path = %s, snapshotId = %s.", this.tempSnapshotPath, this.snapshotId),
+                e
+            );
         }
     }
 
@@ -115,7 +130,11 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             // This is a noop if freeze was called before calling close
             Files.deleteIfExists(tempSnapshotPath);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(
+                String.format("Error closing snapshot writer, " +
+                    "temp path = %s, snapshotId %s.", this.tempSnapshotPath, this.snapshotId),
+                e
+            );
         }
     }
 
@@ -147,16 +166,15 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
      *
      * @param logDir the directory for the topic partition
      * @param snapshotId the end offset and epoch for the snapshotId
-     * @throws IOException for any IO error while creating the snapshot
      */
     public static FileRawSnapshotWriter create(
         Path logDir,
         OffsetAndEpoch snapshotId,
         Optional<ReplicatedLog> replicatedLog
     ) {
-        try {
-            Path path = Snapshots.createTempFile(logDir, snapshotId);
+        Path path = Snapshots.createTempFile(logDir, snapshotId);
 
+        try {
             return new FileRawSnapshotWriter(
                 path,
                 FileChannel.open(path, Utils.mkSet(StandardOpenOption.WRITE, StandardOpenOption.APPEND)),
@@ -164,7 +182,11 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
                 replicatedLog
             );
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(
+                String.format("Error creating snapshot writer, " +
+                    "temp path = %s, snapshotId %s.", path, snapshotId),
+                e
+            );
         }
     }
 }
