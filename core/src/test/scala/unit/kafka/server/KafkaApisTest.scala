@@ -1082,20 +1082,17 @@ class KafkaApisTest {
     invalidVersions.foreach( version =>
       topics.foreach(topic => {
         val metadataRequestData = new MetadataRequestData().setTopics(Collections.singletonList(topic))
-        val request = buildRequest(new MetadataRequest(metadataRequestData, version.toShort))
+        val metadataRequest = new MetadataRequest(metadataRequestData, version.toShort)
+        val request = buildRequest(metadataRequest)
         val kafkaApis = createKafkaApis()
 
-        val capturedResponse = EasyMock.newCapture[AbstractResponse]()
-        EasyMock.expect(requestChannel.sendResponse(
-          EasyMock.eq(request),
-          EasyMock.capture(capturedResponse),
-          EasyMock.anyObject()
-        ))
+        val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
+        EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
 
         EasyMock.replay(requestChannel)
-        kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+        kafkaApis.handle(request)
 
-        val response = capturedResponse.getValue.asInstanceOf[MetadataResponse]
+        val response = readResponse(metadataRequest, capturedResponse).asInstanceOf[MetadataResponse]
         assertEquals(1, response.topicMetadata.size)
         assertEquals(1, response.errorCounts.get(Errors.INVALID_REQUEST))
         response.data.topics.forEach(topic => assertNotEquals(null, topic.name))
