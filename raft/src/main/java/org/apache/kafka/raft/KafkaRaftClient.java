@@ -1097,7 +1097,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                         partitionResponse.snapshotId().epoch()
                     );
 
-                    state.setFetchingSnapshot(Optional.of(log.createSnapshot(snapshotId)));
+                    // Do not validate the snapshot id against the local replicated log
+                    // since this snapshot is expected to reference offsets and epochs
+                    // greater than the log end offset and high-watermark
+                    state.setFetchingSnapshot(log.storeSnapshot(snapshotId));
                 }
             } else {
                 Records records = FetchResponse.recordsOrFail(partitionResponse);
@@ -2251,15 +2254,19 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) {
-        return new SnapshotWriter<>(
-            log.createSnapshot(snapshotId),
-            MAX_BATCH_SIZE_BYTES,
-            memoryPool,
-            time,
-            CompressionType.NONE,
-            serde
-        );
+    public Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch) {
+        return log.createNewSnapshot(
+            new OffsetAndEpoch(committedOffset + 1, committedEpoch)
+        ).map(snapshot -> {
+            return new SnapshotWriter<>(
+                snapshot,
+                MAX_BATCH_SIZE_BYTES,
+                memoryPool,
+                time,
+                CompressionType.NONE,
+                serde
+            );
+        });
     }
 
     @Override
@@ -2274,7 +2281,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     public OptionalLong highWatermark() {
-        return quorum.highWatermark().isPresent() ? OptionalLong.of(quorum.highWatermark().get().offset) : OptionalLong.empty();
+        if (quorum.highWatermark().isPresent()) {
+            return OptionalLong.of(quorum.highWatermark().get().offset);
+        } else {
+            return OptionalLong.empty();
+        }
     }
 
     private class GracefulShutdown {

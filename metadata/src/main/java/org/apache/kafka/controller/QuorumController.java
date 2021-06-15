@@ -76,6 +76,7 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
@@ -93,7 +94,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -133,7 +133,6 @@ public final class QuorumController implements Controller {
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
-        private Function<Long, SnapshotWriter> snapshotWriterBuilder;
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
         private ControllerMetrics controllerMetrics = null;
 
@@ -186,11 +185,6 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setSnapshotWriterBuilder(Function<Long, SnapshotWriter> snapshotWriterBuilder) {
-            this.snapshotWriterBuilder = snapshotWriterBuilder;
-            return this;
-        }
-
         public Builder setSessionTimeoutNs(long sessionTimeoutNs) {
             this.sessionTimeoutNs = sessionTimeoutNs;
             return this;
@@ -216,15 +210,12 @@ public final class QuorumController implements Controller {
                 controllerMetrics = (ControllerMetrics) Class.forName(
                     "org.apache.kafka.controller.MockControllerMetrics").getConstructor().newInstance();
             }
-            if (snapshotWriterBuilder == null) {
-                snapshotWriterBuilder = new NoOpSnapshotWriterBuilder();
-            }
             KafkaEventQueue queue = null;
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
                 return new QuorumController(logContext, nodeId, queue, time, configDefs,
                     raftClient, supportedFeatures, defaultReplicationFactor,
-                    defaultNumPartitions, replicaPlacer, snapshotWriterBuilder,
+                    defaultNumPartitions, replicaPlacer,
                     sessionTimeoutNs, controllerMetrics);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -336,40 +327,54 @@ public final class QuorumController implements Controller {
     private static final int MAX_BATCHES_PER_GENERATE_CALL = 10;
 
     class SnapshotGeneratorManager implements Runnable {
-        private final Function<Long, SnapshotWriter> writerBuilder;
-        private final ExponentialBackoff exponentialBackoff =
-            new ExponentialBackoff(10, 2, 5000, 0);
+        private final ExponentialBackoff exponentialBackoff = new ExponentialBackoff(10, 2, 5000, 0);
         private SnapshotGenerator generator = null;
 
-        SnapshotGeneratorManager(Function<Long, SnapshotWriter> writerBuilder) {
-            this.writerBuilder = writerBuilder;
-        }
 
-        void createSnapshotGenerator(long epoch) {
+        void createSnapshotGenerator(long committedOffset, int committedEpoch) {
             if (generator != null) {
                 throw new RuntimeException("Snapshot generator already exists.");
             }
-            if (!snapshotRegistry.hasSnapshot(epoch)) {
-                throw new RuntimeException("Can't generate a snapshot at epoch " + epoch +
-                    " because no such epoch exists in the snapshot registry.");
+            if (!snapshotRegistry.hasSnapshot(committedOffset)) {
+                throw new RuntimeException(
+                    String.format(
+                        "Cannot generate a snapshot at committed offset %s because it does not exists in the snapshot registry.",
+                        committedOffset
+                    )
+                );
             }
-            generator = new SnapshotGenerator(logContext,
-                writerBuilder.apply(epoch),
-                MAX_BATCHES_PER_GENERATE_CALL,
-                exponentialBackoff,
-                Arrays.asList(
-                    new Section("features", featureControl.iterator(epoch)),
-                    new Section("cluster", clusterControl.iterator(epoch)),
-                    new Section("replication", replicationControl.iterator(epoch)),
-                    new Section("configuration", configurationControl.iterator(epoch)),
-                    new Section("clientQuotas", clientQuotaControlManager.iterator(epoch)),
-                    new Section("producerIds", producerIdControlManager.iterator(epoch))));
-            reschedule(0);
+            Optional<SnapshotWriter<ApiMessageAndVersion>> writer = raftClient.createSnapshot(
+                committedOffset,
+                committedEpoch
+            );
+            if (writer.isPresent()) {
+                generator = new SnapshotGenerator(
+                    logContext,
+                    writer.get(),
+                    MAX_BATCHES_PER_GENERATE_CALL,
+                    exponentialBackoff,
+                    Arrays.asList(
+                        new Section("features", featureControl.iterator(committedOffset)),
+                        new Section("cluster", clusterControl.iterator(committedOffset)),
+                        new Section("replication", replicationControl.iterator(committedOffset)),
+                        new Section("configuration", configurationControl.iterator(committedOffset)),
+                        new Section("clientQuotas", clientQuotaControlManager.iterator(committedOffset)),
+                        new Section("producerIds", producerIdControlManager.iterator(committedOffset))
+                    )
+                );
+                reschedule(0);
+            } else {
+                log.info(
+                    "Skipping generation of snapshot for committed offset {} and epoch {} since it already exists",
+                    committedOffset,
+                    committedEpoch
+                );
+            }
         }
 
         void cancel() {
             if (generator == null) return;
-            log.error("Cancelling snapshot {}", generator.epoch());
+            log.error("Cancelling snapshot {}", generator.lastContainedLogOffset());
             generator.writer().close();
             generator = null;
             queue.cancelDeferred(GENERATE_SNAPSHOT);
@@ -391,31 +396,25 @@ public final class QuorumController implements Controller {
             try {
                 nextDelay = generator.generateBatches();
             } catch (Exception e) {
-                log.error("Error while generating snapshot {}", generator.epoch(), e);
+                log.error("Error while generating snapshot {}", generator.lastContainedLogOffset(), e);
                 generator.writer().close();
                 generator = null;
                 return;
             }
             if (!nextDelay.isPresent()) {
-                try {
-                    generator.writer().completeSnapshot();
-                    log.info("Finished generating snapshot {}.", generator.epoch());
-                } catch (Exception e) {
-                    log.error("Error while completing snapshot {}", generator.epoch(), e);
-                } finally {
-                    generator.writer().close();
-                    generator = null;
-                }
+                log.info("Finished generating snapshot {}.", generator.lastContainedLogOffset());
+                generator.writer().close();
+                generator = null;
                 return;
             }
             reschedule(nextDelay.getAsLong());
         }
 
-        long snapshotEpoch() {
+        long snapshotLastOffsetFromLog() {
             if (generator == null) {
                 return Long.MAX_VALUE;
             }
-            return generator.epoch();
+            return generator.lastContainedLogOffset();
         }
     }
 
@@ -645,7 +644,7 @@ public final class QuorumController implements Controller {
                             // If we are writing a new snapshot, then we need to keep that around;
                             // otherwise, we should delete up to the current committed offset.
                             snapshotRegistry.deleteSnapshotsUpTo(
-                                Math.min(offset, snapshotGeneratorManager.snapshotEpoch()));
+                                Math.min(offset, snapshotGeneratorManager.snapshotLastOffsetFromLog()));
 
                         } else {
                             // If the controller is a standby, replay the records that were
@@ -666,6 +665,7 @@ public final class QuorumController implements Controller {
                             }
                         }
                         lastCommittedOffset = offset;
+                        lastCommittedEpoch = batch.epoch();
                     }
                 } finally {
                     reader.close();
@@ -727,7 +727,8 @@ public final class QuorumController implements Controller {
                         }
                     }
 
-                    lastCommittedOffset = reader.snapshotId().offset - 1;
+                    lastCommittedOffset = reader.lastContainedLogOffset();
+                    lastCommittedEpoch = reader.lastContainedLogEpoch();
                     snapshotRegistry.createSnapshot(lastCommittedOffset);
                 } finally {
                     reader.close();
@@ -951,7 +952,7 @@ public final class QuorumController implements Controller {
     /**
      * Manages generating controller snapshots.
      */
-    private final SnapshotGeneratorManager snapshotGeneratorManager;
+    private final SnapshotGeneratorManager snapshotGeneratorManager = new SnapshotGeneratorManager();
 
     /**
      * The interface that we use to mutate the Raft log.
@@ -974,7 +975,12 @@ public final class QuorumController implements Controller {
     /**
      * The last offset we have committed, or -1 if we have not committed any offsets.
      */
-    private long lastCommittedOffset;
+    private long lastCommittedOffset = -1;
+
+    /**
+     * The epoch of the last offset we have committed, or -1 if we have not committed any offsets.
+     */
+    private int lastCommittedEpoch = -1;
 
     /**
      * If we have called scheduleWrite, this is the last offset we got back from it.
@@ -991,7 +997,6 @@ public final class QuorumController implements Controller {
                              short defaultReplicationFactor,
                              int defaultNumPartitions,
                              ReplicaPlacer replicaPlacer,
-                             Function<Long, SnapshotWriter> snapshotWriterBuilder,
                              long sessionTimeoutNs,
                              ControllerMetrics controllerMetrics) {
         this.logContext = logContext;
@@ -1009,14 +1014,12 @@ public final class QuorumController implements Controller {
             snapshotRegistry, sessionTimeoutNs, replicaPlacer);
         this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
-        this.snapshotGeneratorManager = new SnapshotGeneratorManager(snapshotWriterBuilder);
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             logContext, defaultReplicationFactor, defaultNumPartitions,
             configurationControl, clusterControl, controllerMetrics);
         this.raftClient = raftClient;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
-        this.lastCommittedOffset = -1L;
         this.writeOffset = -1L;
 
         snapshotRegistry.createSnapshot(lastCommittedOffset);
@@ -1238,9 +1241,9 @@ public final class QuorumController implements Controller {
         CompletableFuture<Long> future = new CompletableFuture<>();
         appendControlEvent("beginWritingSnapshot", () -> {
             if (snapshotGeneratorManager.generator == null) {
-                snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset);
+                snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch);
             }
-            future.complete(snapshotGeneratorManager.generator.epoch());
+            future.complete(snapshotGeneratorManager.generator.lastContainedLogOffset());
         });
         return future;
     }
