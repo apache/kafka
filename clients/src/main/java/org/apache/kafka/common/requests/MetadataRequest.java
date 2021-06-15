@@ -130,7 +130,7 @@ public class MetadataRequest extends AbstractRequest {
         MetadataResponseData responseData = new MetadataResponseData();
         if (data.topics() != null) {
             for (MetadataRequestTopic topic : data.topics()) {
-                // the response does not allow null, so convert it to empty string if necessary
+                // the response does not allow null, so convert to empty string if necessary
                 String topicName = topic.name() == null ? "" : topic.name();
                 responseData.topics().add(new MetadataResponseData.MetadataResponseTopic()
                     .setName(topicName)
