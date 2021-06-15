@@ -73,6 +73,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -83,7 +84,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -195,7 +195,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     // visible for testing
     // The latest pending restart requests for the connectors;
-    final Map<String, RestartRequest> pendingRestartRequests = new ConcurrentHashMap<>();
+    final Map<String, RestartRequest> pendingRestartRequests = new HashMap<>();
 
     private final DistributedConfig config;
 
@@ -1128,12 +1128,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    protected synchronized boolean doRestartConnectorAndTasks(RestartRequest request) {
+    protected synchronized void doRestartConnectorAndTasks(RestartRequest request) {
         final String connectorName = request.connectorName();
         Optional<RestartPlan> maybePlan = buildRestartPlanFor(request);
         if (!maybePlan.isPresent()) {
             log.debug("Skipping restart of connector '{}' since no status is available: {}", connectorName, request);
-            return false;
+            return;
         }
         RestartPlan plan = maybePlan.get();
         log.info("Executing {}", plan);
@@ -1173,8 +1173,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.debug("Restarted {} of {} tasks for {} as requested", plan.restartTaskCount(), plan.totalTaskCount(), request);
         }
         log.info("Completed {}", plan);
-        //return value only used by tests
-        return restartConnector || restartTasks;
     }
 
     // Should only be called from work thread, so synchronization should not be needed

@@ -1238,7 +1238,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
-        assertFalse(herder.doRestartConnectorAndTasks(restartRequest));
+        herder.doRestartConnectorAndTasks(restartRequest);
         PowerMock.verifyAll();
     }
 
@@ -1255,7 +1255,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
         herder.assignment = ExtendedAssignment.empty();
-        assertFalse(herder.doRestartConnectorAndTasks(restartRequest));
+        herder.doRestartConnectorAndTasks(restartRequest);
         PowerMock.verifyAll();
     }
 
@@ -1286,7 +1286,7 @@ public class DistributedHerderTest {
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();
-        assertTrue(herder.doRestartConnectorAndTasks(restartRequest));
+        herder.doRestartConnectorAndTasks(restartRequest);
         PowerMock.verifyAll();
     }
 
@@ -1317,7 +1317,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andReturn(true);
 
         PowerMock.replayAll();
-        assertTrue(herder.doRestartConnectorAndTasks(restartRequest));
+        herder.doRestartConnectorAndTasks(restartRequest);
         PowerMock.verifyAll();
     }
 
@@ -1359,7 +1359,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andReturn(true);
 
         PowerMock.replayAll();
-        assertTrue(herder.doRestartConnectorAndTasks(restartRequest));
+        herder.doRestartConnectorAndTasks(restartRequest);
         PowerMock.verifyAll();
     }
 
