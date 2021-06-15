@@ -138,6 +138,17 @@ public interface Herder {
     void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback, InternalRequestSignature requestSignature);
 
     /**
+     * Fence out any older task generations for a source connector, and then write a record to the config topic
+     * indicating that it is safe to bring up a new generation of tasks. If that record is already present, do nothing
+     * and invoke the callback successfully.
+     * @param connName the name of the connector to fence out; must refer to a source connector
+     * @param callback callback to invoke upon completion
+     * @param requestSignature the signature of the request made for this connector;
+     *                         may be null if no signature was provided
+     */
+    void fenceZombies(String connName, Callback<Void> callback, InternalRequestSignature requestSignature);
+
+    /**
      * Get a list of connectors currently running in this cluster.
      * @return A list of connector names
      */

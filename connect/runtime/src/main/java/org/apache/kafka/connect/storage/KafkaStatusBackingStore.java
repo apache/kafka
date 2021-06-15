@@ -217,7 +217,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                         DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "connector and task statuses");
             }
         };
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, time, createTopics);
+        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, time, createTopics, false);
     }
 
     @Override

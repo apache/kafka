@@ -26,9 +26,11 @@ import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -100,5 +102,54 @@ public class ConnectUtilsTest {
         assertNull(prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_GROUP_ID));
         assertEquals("cluster-1", prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
 
+    }
+
+    @Test
+    public void testNoOverrideWarning() {
+        assertEquals(
+                Optional.empty(),
+                ConnectUtils.overriddenPropertyWarning(Collections.emptyMap(), "key", "value", "because i say so", true)
+        );
+        assertEquals(
+                Optional.empty(),
+                ConnectUtils.overriddenPropertyWarning(Collections.emptyMap(), "key", "value", "because i say so", false)
+        );
+        assertEquals(
+                Optional.empty(),
+                ConnectUtils.overriddenPropertyWarning(Collections.singletonMap("key", "value"), "key", "value", "because i say so", true)
+        );
+        assertEquals(
+                Optional.empty(),
+                ConnectUtils.overriddenPropertyWarning(Collections.singletonMap("key", "VALUE"), "key", "value", "because i say so", false)
+        );
+    }
+
+    @Test
+    public void testOverrideWarning() {
+        String expectedWarning = "The value 'little brother' for the '\u1984' property will be ignored as it cannot be overridden "
+                + "thanks to newly-introduced federal legislation. "
+                + "The value 'big brother' will be used instead.";
+        assertEquals(
+                Optional.of(expectedWarning),
+                ConnectUtils.overriddenPropertyWarning(
+                        Collections.singletonMap("\u1984", "little brother"),
+                        "\u1984",
+                        "big brother",
+                        "thanks to newly-introduced federal legislation",
+                        false)
+        );
+
+        expectedWarning = "The value 'BIG BROTHER' for the '\u1984' property will be ignored as it cannot be overridden "
+                + "thanks to newly-introduced federal legislation. "
+                + "The value 'big brother' will be used instead.";
+        assertEquals(
+                Optional.of(expectedWarning),
+                ConnectUtils.overriddenPropertyWarning(
+                        Collections.singletonMap("\u1984", "BIG BROTHER"),
+                        "\u1984",
+                        "big brother",
+                        "thanks to newly-introduced federal legislation",
+                        true)
+        );
     }
 }

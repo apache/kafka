@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.EasyMock;
@@ -155,6 +156,9 @@ public class WorkerCoordinatorTest {
                 Collections.singletonMap(connectorId1, new HashMap<String, String>()),
                 Collections.singletonMap(connectorId1, TargetState.STARTED),
                 Collections.singletonMap(taskId1x0, new HashMap<String, String>()),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
                 Collections.emptySet()
         );
 
@@ -178,6 +182,9 @@ public class WorkerCoordinatorTest {
                 configState2ConnectorConfigs,
                 configState2TargetStates,
                 configState2TaskConfigs,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
                 Collections.emptySet()
         );
 
@@ -204,6 +211,9 @@ public class WorkerCoordinatorTest {
                 configStateSingleTaskConnectorsConnectorConfigs,
                 configStateSingleTaskConnectorsTargetStates,
                 configStateSingleTaskConnectorsTaskConfigs,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
                 Collections.emptySet()
         );
     }
@@ -264,6 +274,7 @@ public class WorkerCoordinatorTest {
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
+        assertEquals(1, rebalanceListener.joinCount);
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(1L, rebalanceListener.assignment.offset());
         assertEquals("leader", rebalanceListener.assignment.leader());
@@ -298,6 +309,7 @@ public class WorkerCoordinatorTest {
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
+        assertEquals(1, rebalanceListener.joinCount);
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(1L, rebalanceListener.assignment.offset());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.connectors());
@@ -358,6 +370,7 @@ public class WorkerCoordinatorTest {
 
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
+        assertEquals(1, rebalanceListener.joinCount);
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(1L, rebalanceListener.assignment.offset());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.connectors());
@@ -378,6 +391,7 @@ public class WorkerCoordinatorTest {
         assertEquals(1L, rebalanceListener.assignment.offset());
         assertEquals(Collections.singletonList(connectorId1), rebalanceListener.assignment.connectors());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.tasks());
+        assertEquals(2, rebalanceListener.joinCount);
 
         PowerMock.verifyAll();
     }
@@ -565,6 +579,7 @@ public class WorkerCoordinatorTest {
 
         public int revokedCount = 0;
         public int assignedCount = 0;
+        public int joinCount = 0;
 
         @Override
         public void onAssigned(ExtendedAssignment assignment, int generation) {
@@ -581,6 +596,11 @@ public class WorkerCoordinatorTest {
             this.revokedConnectors = connectors;
             this.revokedTasks = tasks;
             revokedCount++;
+        }
+
+        @Override
+        public void onJoin() {
+            joinCount++;
         }
     }
 }

@@ -43,7 +43,7 @@ public abstract class BaseConnectorClientConfigOverridePolicyTest {
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
             "test",
             ConnectorType.SOURCE,
-            WorkerTest.WorkerTestConnector.class,
+            WorkerTest.WorkerTestSourceConnector.class,
             clientConfig,
             ConnectorClientConfigRequest.ClientType.PRODUCER);
         return policyToTest().validate(connectorClientConfigRequest);

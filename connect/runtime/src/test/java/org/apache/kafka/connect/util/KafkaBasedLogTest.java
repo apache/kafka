@@ -550,7 +550,7 @@ public class KafkaBasedLogTest {
         Supplier<TopicAdmin> adminSupplier = () -> admin;
         java.util.function.Consumer<TopicAdmin> initializer = admin -> { };
         store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
-                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, adminSupplier, consumedCallback, time, initializer);
+                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, adminSupplier, consumedCallback, time, initializer, false);
     }
 
     private void expectProducerAndConsumerCreate() throws Exception {

@@ -112,14 +112,15 @@ public class RestClient {
 
             if (serializedBody != null) {
                 req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
-                if (sessionKey != null && requestSignatureAlgorithm != null) {
-                    InternalRequestSignature.addToRequest(
-                        sessionKey,
-                        serializedBody.getBytes(StandardCharsets.UTF_8),
-                        requestSignatureAlgorithm,
-                        req
-                    );
-                }
+            }
+
+            if (sessionKey != null && requestSignatureAlgorithm != null) {
+                InternalRequestSignature.addToRequest(
+                    sessionKey,
+                    serializedBody != null ? serializedBody.getBytes(StandardCharsets.UTF_8) : null,
+                    requestSignatureAlgorithm,
+                    req
+                );
             }
 
             ContentResponse res = req.send();
@@ -132,7 +133,10 @@ public class RestClient {
                 ErrorMessage errorMessage = JSON_SERDE.readValue(res.getContentAsString(), ErrorMessage.class);
                 throw new ConnectRestException(responseCode, errorMessage.errorCode(), errorMessage.message());
             } else if (responseCode >= 200 && responseCode < 300) {
-                T result = JSON_SERDE.readValue(res.getContentAsString(), responseFormat);
+                String responseBody = res.getContentAsString();
+                T result = responseFormat != null
+                        ? JSON_SERDE.readValue(responseBody, responseFormat)
+                        : null;
                 return new HttpResponse<>(responseCode, convertHttpFieldsToMap(res.getHeaders()), result);
             } else {
                 throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR,

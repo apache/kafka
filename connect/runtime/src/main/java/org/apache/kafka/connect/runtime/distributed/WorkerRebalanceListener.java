@@ -31,9 +31,14 @@ public interface WorkerRebalanceListener {
     void onAssigned(ExtendedAssignment assignment, int generation);
 
     /**
-     * Invoked when a rebalance operation starts, revoking ownership for the set of connectors
+     * Invoked when a rebalance operation starts or completes, revoking ownership for the set of connectors
      * and tasks. Depending on the Connect protocol version, the collection of revoked connectors
      * or tasks might refer to all or some of the connectors and tasks running on the worker.
      */
     void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks);
+
+    /**
+     * Invoked before the worker is about to (re)join the cluster during a rebalance.
+     */
+    void onJoin();
 }

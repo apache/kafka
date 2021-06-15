@@ -20,7 +20,9 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.config.ConfigException;
@@ -29,7 +31,6 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.TargetState;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
@@ -49,6 +50,7 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -60,8 +62,10 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -94,6 +98,7 @@ public class KafkaConfigBackingStoreTest {
     private static final List<String> CONNECTOR_CONFIG_KEYS = Arrays.asList("connector-connector1", "connector-connector2");
     private static final List<String> COMMIT_TASKS_CONFIG_KEYS = Arrays.asList("commit-connector1", "commit-connector2");
     private static final List<String> TARGET_STATE_KEYS =  Arrays.asList("target-state-connector1", "target-state-connector2");
+    private static final List<String> CONNECTOR_TASK_COUNT_RECORD_KEYS = Arrays.asList("tasks-count-connector1", "tasks-count-connector2");
 
     // Need a) connector with multiple tasks and b) multiple connectors
     private static final List<ConnectorTaskId> TASK_IDS = Arrays.asList(
@@ -118,6 +123,10 @@ public class KafkaConfigBackingStoreTest {
             new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(0)),
             new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(1))
     );
+    private static final List<Struct> CONNECTOR_TASK_COUNT_RECORD_STRUCTS = Arrays.asList(
+            new Struct(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0).put("tasks", 6),
+            new Struct(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0).put("tasks", 9)
+    );
     private static final Struct TARGET_STATE_PAUSED = new Struct(KafkaConfigBackingStore.TARGET_STATE_V0).put("state", "PAUSED");
 
     private static final Struct TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR
@@ -139,6 +148,8 @@ public class KafkaConfigBackingStoreTest {
     private ConfigBackingStore.UpdateListener configUpdateListener;
     @Mock
     KafkaBasedLog<String, byte[]> storeLog;
+    @Mock
+    Producer<String, byte[]> fencableProducer;
     private KafkaConfigBackingStore configStorage;
 
     private Capture<String> capturedTopic = EasyMock.newCapture();
@@ -150,15 +161,22 @@ public class KafkaConfigBackingStoreTest {
 
     private long logOffset = 0;
 
+    private void createStore(DistributedConfig config, KafkaBasedLog<String, byte[]> storeLog) {
+        configStorage = PowerMock.createPartialMock(
+                KafkaConfigBackingStore.class,
+                new String[]{"createKafkaBasedLog", "createFencableProducer"},
+                converter, config, null);
+        Whitebox.setInternalState(configStorage, "configLog", storeLog);
+        configStorage.setUpdateListener(configUpdateListener);
+    }
+
     @Before
     public void setUp() {
         PowerMock.mockStaticPartial(ConnectUtils.class, "lookupKafkaClusterId");
         EasyMock.expect(ConnectUtils.lookupKafkaClusterId(EasyMock.anyObject())).andReturn("test-cluster").anyTimes();
         PowerMock.replay(ConnectUtils.class);
 
-        configStorage = PowerMock.createPartialMock(KafkaConfigBackingStore.class, new String[]{"createKafkaBasedLog"}, converter, DEFAULT_DISTRIBUTED_CONFIG, null);
-        Whitebox.setInternalState(configStorage, "configLog", storeLog);
-        configStorage.setUpdateListener(configUpdateListener);
+        createStore(DEFAULT_DISTRIBUTED_CONFIG, storeLog);
     }
 
     @Test
@@ -187,6 +205,32 @@ public class KafkaConfigBackingStoreTest {
         assertEquals("1001", capturedNewTopic.getValue().configs().get("max.message.bytes"));
         configStorage.start();
         configStorage.stop();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testSnapshotCannotMutateInternalState() throws Exception {
+        expectConfigure();
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+        expectPartitionCount(1);
+        PowerMock.replayAll();
+
+        Map<String, String> settings = new HashMap<>(DEFAULT_CONFIG_STORAGE_PROPS);
+        settings.put("config.storage.min.insync.replicas", "3");
+        settings.put("config.storage.max.message.bytes", "1001");
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, new DistributedConfig(settings));
+
+        configStorage.start();
+        ClusterConfigState snapshot = configStorage.snapshot();
+        assertNotSame(snapshot.connectorTaskCounts, configStorage.connectorTaskCounts);
+        assertNotSame(snapshot.connectorConfigs, configStorage.connectorConfigs);
+        assertNotSame(snapshot.connectorTargetStates, configStorage.connectorTargetStates);
+        assertNotSame(snapshot.taskConfigs, configStorage.taskConfigs);
+        assertNotSame(snapshot.connectorTaskCountRecords, configStorage.connectorTaskCountRecords);
+        assertNotSame(snapshot.connectorTaskConfigGenerations, configStorage.connectorTaskConfigGenerations);
+        assertNotSame(snapshot.connectorsPendingFencing, configStorage.connectorsPendingFencing);
+        assertNotSame(snapshot.inconsistentConnectors, configStorage.inconsistent);
 
         PowerMock.verifyAll();
     }
@@ -248,6 +292,172 @@ public class KafkaConfigBackingStoreTest {
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
         assertNull(configState.targetState(CONNECTOR_IDS.get(1)));
+
+        configStorage.stop();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testWritePrivileges() throws Exception {
+        // With exactly.once.source.support = preparing (or also, "enabled"), we need to use a transactional producer
+        // to write some types of messages to the config topic
+        Map<String, String> workerProps = new HashMap<>(DEFAULT_CONFIG_STORAGE_PROPS);
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
+        DistributedConfig config = new DistributedConfig(workerProps);
+        createStore(config, storeLog);
+
+        expectConfigure();
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+
+        // Try and fail to write a task count record to the config topic without write privileges
+        expectConvert(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0, CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(0), CONFIGS_SERIALIZED.get(0));
+        // Claim write privileges
+        expectFencableProducer();
+        // And write the task count record successfully
+        expectConvert(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0, CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(0), CONFIGS_SERIALIZED.get(0));
+        fencableProducer.beginTransaction();
+        EasyMock.expectLastCall();
+        EasyMock.expect(fencableProducer.send(EasyMock.anyObject())).andReturn(null);
+        fencableProducer.commitTransaction();
+        EasyMock.expectLastCall();
+        expectRead(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(0), CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(0));
+
+        // Try to write a connector config
+        expectConvert(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(1));
+        fencableProducer.beginTransaction();
+        EasyMock.expectLastCall();
+        EasyMock.expect(fencableProducer.send(EasyMock.anyObject())).andReturn(null);
+        // Get fenced out
+        fencableProducer.commitTransaction();
+        EasyMock.expectLastCall().andThrow(new ProducerFencedException("Better luck next time"));
+        // And fail when trying to write again without reclaiming write privileges
+        expectConvert(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(1));
+
+        // In the meantime, write a target state (which doesn't require write privileges)
+        expectConvert(KafkaConfigBackingStore.TARGET_STATE_V0, TARGET_STATE_PAUSED, CONFIGS_SERIALIZED.get(1));
+        storeLog.send("target-state-" + CONNECTOR_IDS.get(1), CONFIGS_SERIALIZED.get(1));
+        PowerMock.expectLastCall();
+
+        // Reclaim write privileges
+        expectFencableProducer();
+        // And successfully write the config
+        expectConvert(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(1));
+        fencableProducer.beginTransaction();
+        EasyMock.expectLastCall();
+        EasyMock.expect(fencableProducer.send(EasyMock.anyObject())).andReturn(null);
+        fencableProducer.commitTransaction();
+        EasyMock.expectLastCall();
+        expectConvertRead(CONNECTOR_CONFIG_KEYS.get(1), CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(2));
+        configUpdateListener.onConnectorConfigUpdate(CONNECTOR_IDS.get(1));
+        EasyMock.expectLastCall();
+
+        expectPartitionCount(1);
+        expectStop();
+        fencableProducer.close(Duration.ZERO);
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.start();
+
+        // Should fail the first time since we haven't claimed write privileges
+        assertThrows(IllegalStateException.class, () -> configStorage.putTaskCountRecord(CONNECTOR_IDS.get(0), 6));
+        // Should succeed now
+        configStorage.claimWritePrivileges();
+        configStorage.putTaskCountRecord(CONNECTOR_IDS.get(0), 6);
+
+        // Should fail again when we get fenced out
+        assertThrows(ProducerFencedException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0)));
+        // Should fail if we retry without reclaiming write privileges
+        assertThrows(IllegalStateException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0)));
+
+        // Should succeed even without write privileges (target states can be written by anyone)
+        configStorage.putTargetState(CONNECTOR_IDS.get(1), TargetState.PAUSED);
+
+        // Should succeed if we re-claim write privileges
+        configStorage.claimWritePrivileges();
+        configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0));
+
+        configStorage.stop();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testTaskCountRecordsAndGenerations() throws Exception {
+        expectConfigure();
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+
+        // Task configs should read to end, write to the log, read to end, write root, then read to end again
+        expectReadToEnd(new LinkedHashMap<>());
+        expectConvertWriteRead(
+                TASK_CONFIG_KEYS.get(0), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
+                "properties", SAMPLE_CONFIGS.get(0));
+        expectConvertWriteRead(
+                TASK_CONFIG_KEYS.get(1), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(1),
+                "properties", SAMPLE_CONFIGS.get(1));
+        expectReadToEnd(new LinkedHashMap<>());
+        expectConvertWriteRead(
+                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
+                "tasks", 2); // Starts with 0 tasks, after update has 2
+        // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
+        configUpdateListener.onTaskConfigUpdate(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)));
+        EasyMock.expectLastCall();
+
+        // Records to be read by consumer as it reads to the end of the log
+        LinkedHashMap<String, byte[]> serializedConfigs = new LinkedHashMap<>();
+        serializedConfigs.put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
+        serializedConfigs.put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
+        serializedConfigs.put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
+        expectReadToEnd(serializedConfigs);
+
+        // Task count records are read back after writing as well
+        expectConvertWriteRead(
+                CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), KafkaConfigBackingStore.TASK_COUNT_RECORD_V0, CONFIGS_SERIALIZED.get(3),
+                "tasks", 4);
+        serializedConfigs = new LinkedHashMap<>();
+        serializedConfigs.put(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(3));
+        expectReadToEnd(serializedConfigs);
+
+        expectPartitionCount(1);
+        expectStop();
+
+        PowerMock.replayAll();
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.start();
+
+        // Bootstrap as if we had already added the connector, but no tasks had been added yet
+        whiteboxAddConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
+
+        // Before anything is written
+        String connectorName = CONNECTOR_IDS.get(0);
+        ClusterConfigState configState = configStorage.snapshot();
+        assertFalse(configState.pendingFencing(connectorName));
+        assertNull(configState.taskCountRecord(connectorName));
+        assertNull(configState.taskConfigGeneration(connectorName));
+
+        // Writing task configs should block until all the writes have been performed and the root record update
+        // has completed
+        List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(1));
+        configStorage.putTaskConfigs("connector1", taskConfigs);
+
+        configState = configStorage.snapshot();
+        assertEquals(3, configState.offset());
+        assertTrue(configState.pendingFencing(connectorName));
+        assertNull(configState.taskCountRecord(connectorName));
+        assertEquals(0, (long) configState.taskConfigGeneration(connectorName));
+
+        configStorage.putTaskCountRecord(connectorName, 4);
+
+        configState = configStorage.snapshot();
+        assertEquals(4, configState.offset());
+        assertFalse(configState.pendingFencing(connectorName));
+        assertEquals(4, (long) configState.taskCountRecord(connectorName));
+        assertEquals(0, (long) configState.taskConfigGeneration(connectorName));
 
         configStorage.stop();
 
@@ -671,30 +881,36 @@ public class KafkaConfigBackingStoreTest {
         expectConfigure();
         // Overwrite each type at least once to ensure we see the latest data after loading
         List<ConsumerRecord<String, byte[]>> existingRecords = Arrays.asList(
-                new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
+                new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0),
                         CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty()),
-                new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(0),
+                new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
                         CONFIGS_SERIALIZED.get(1), new RecordHeaders(), Optional.empty()),
-                new ConsumerRecord<>(TOPIC, 0, 2, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(1),
+                new ConsumerRecord<>(TOPIC, 0, 2, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(0),
                         CONFIGS_SERIALIZED.get(2), new RecordHeaders(), Optional.empty()),
-                new ConsumerRecord<>(TOPIC, 0, 3, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
+                new ConsumerRecord<>(TOPIC, 0, 3, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(1),
                         CONFIGS_SERIALIZED.get(3), new RecordHeaders(), Optional.empty()),
-                new ConsumerRecord<>(TOPIC, 0, 4, 0L, TimestampType.CREATE_TIME, 0, 0, COMMIT_TASKS_CONFIG_KEYS.get(0),
+                new ConsumerRecord<>(TOPIC, 0, 4, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
                         CONFIGS_SERIALIZED.get(4), new RecordHeaders(), Optional.empty()),
-                // Connector after root update should make it through, task update shouldn't
-                new ConsumerRecord<>(TOPIC, 0, 5, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
+                new ConsumerRecord<>(TOPIC, 0, 5, 0L, TimestampType.CREATE_TIME, 0, 0, COMMIT_TASKS_CONFIG_KEYS.get(0),
                         CONFIGS_SERIALIZED.get(5), new RecordHeaders(), Optional.empty()),
-                new ConsumerRecord<>(TOPIC, 0, 6, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(0),
-                        CONFIGS_SERIALIZED.get(6), new RecordHeaders(), Optional.empty()));
+                new ConsumerRecord<>(TOPIC, 0, 6, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_TASK_COUNT_RECORD_KEYS.get(1),
+                        CONFIGS_SERIALIZED.get(6), new RecordHeaders(), Optional.empty()),
+                // Connector after root update should make it through, task update shouldn't
+                new ConsumerRecord<>(TOPIC, 0, 7, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(7), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 8, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(8), new RecordHeaders(), Optional.empty()));
         LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap<>();
-        deserialized.put(CONFIGS_SERIALIZED.get(0), CONNECTOR_CONFIG_STRUCTS.get(0));
-        deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(0), CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(1), CONNECTOR_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
-        deserialized.put(CONFIGS_SERIALIZED.get(3), CONNECTOR_CONFIG_STRUCTS.get(1));
-        deserialized.put(CONFIGS_SERIALIZED.get(4), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
-        deserialized.put(CONFIGS_SERIALIZED.get(5), CONNECTOR_CONFIG_STRUCTS.get(2));
-        deserialized.put(CONFIGS_SERIALIZED.get(6), TASK_CONFIG_STRUCTS.get(1));
-        logOffset = 7;
+        deserialized.put(CONFIGS_SERIALIZED.get(3), TASK_CONFIG_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(4), CONNECTOR_CONFIG_STRUCTS.get(1));
+        deserialized.put(CONFIGS_SERIALIZED.get(5), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(6), CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(1));
+        deserialized.put(CONFIGS_SERIALIZED.get(7), CONNECTOR_CONFIG_STRUCTS.get(2));
+        deserialized.put(CONFIGS_SERIALIZED.get(8), TASK_CONFIG_STRUCTS.get(1));
+        logOffset = 9;
         expectStart(existingRecords, deserialized);
         expectPartitionCount(1);
 
@@ -709,7 +925,7 @@ public class KafkaConfigBackingStoreTest {
 
         // Should see a single connector and its config should be the last one seen anywhere in the log
         ClusterConfigState configState = configStorage.snapshot();
-        assertEquals(7, configState.offset()); // Should always be next to be read, even if uncommitted
+        assertEquals(logOffset, configState.offset()); // Should always be next to be read, even if uncommitted
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         assertEquals(TargetState.STARTED, configState.targetState(CONNECTOR_IDS.get(0)));
         // CONNECTOR_CONFIG_STRUCTS[2] -> SAMPLE_CONFIGS[2]
@@ -719,7 +935,9 @@ public class KafkaConfigBackingStoreTest {
         // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(1)));
+        assertEquals(9, (int) configState.taskCountRecord(CONNECTOR_IDS.get(1)));
         assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
+        assertEquals(Collections.singleton("connector1"), configState.connectorsPendingFencing);
 
         configStorage.stop();
 
@@ -944,6 +1162,13 @@ public class KafkaConfigBackingStoreTest {
                 .andReturn(storeLog);
     }
 
+    private void expectFencableProducer() throws Exception {
+        fencableProducer.initTransactions();
+        EasyMock.expectLastCall();
+        PowerMock.expectPrivate(configStorage, "createFencableProducer")
+                .andReturn(fencableProducer);
+    }
+
     private void expectPartitionCount(int partitionCount) {
         EasyMock.expect(storeLog.partitionCount())
                 .andReturn(partitionCount);
@@ -986,6 +1211,11 @@ public class KafkaConfigBackingStoreTest {
         expectRead(serializedData, Collections.singletonMap(key, deserializedValue));
     }
 
+    private void expectConvert(Schema valueSchema, Struct valueStruct, byte[] serialized) {
+        EasyMock.expect(converter.fromConnectData(EasyMock.eq(TOPIC), EasyMock.eq(valueSchema), EasyMock.eq(valueStruct)))
+                .andReturn(serialized);
+    }
+
     // Expect a conversion & write to the underlying log, followed by a subsequent read when the data is consumed back
     // from the log. Validate the data that is captured when the conversion is performed matches the specified data
     // (by checking a single field's value)
@@ -1004,6 +1234,14 @@ public class KafkaConfigBackingStoreTest {
                     // Note null schema because default settings for internal serialization are schema-less
                     return new SchemaAndValue(null, serialized == null ? null : structToMap(capturedRecord.getValue()));
                 });
+    }
+
+    private void expectConvertRead(final String configKey, final Struct struct, final byte[] serialized) {
+        EasyMock.expect(converter.toConnectData(EasyMock.eq(TOPIC), EasyMock.aryEq(serialized)))
+                .andAnswer(() -> new SchemaAndValue(null, serialized == null ? null : structToMap(struct)));
+        LinkedHashMap<String, byte[]> recordsToRead = new LinkedHashMap<>();
+        recordsToRead.put(configKey, serialized);
+        expectReadToEnd(recordsToRead);
     }
 
     // This map needs to maintain ordering

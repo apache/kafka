@@ -26,6 +26,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.After;
@@ -543,6 +544,7 @@ public class WorkerCoordinatorIncrementalTest {
 
         public int revokedCount = 0;
         public int assignedCount = 0;
+        public int joinCount = 0;
 
         @Override
         public void onAssigned(ExtendedAssignment assignment, int generation) {
@@ -559,6 +561,11 @@ public class WorkerCoordinatorIncrementalTest {
             this.revokedConnectors = connectors;
             this.revokedTasks = tasks;
             revokedCount++;
+        }
+
+        @Override
+        public void onJoin() {
+            joinCount++;
         }
     }
 
