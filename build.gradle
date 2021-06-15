@@ -371,8 +371,7 @@ subprojects {
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*", "**/WorkerSourceTaskTest.*",
       "**/WorkerTaskTest.*", "**/WorkerTest.*", "**/RestServerTest.*",
       // streams tests
-      "**/KafkaStreamsTest.*", "**/RepartitionTopicsTest.*", "**/RocksDBMetricsRecorderTest.*",
-      "**/StreamsMetricsImplTest.*", "**/StateManagerUtilTest.*", "**/TableSourceNodeTest.*"
+      "**/KafkaStreamsTest.*", "**/RocksDBMetricsRecorderTest.*"
     ])
   }
 
