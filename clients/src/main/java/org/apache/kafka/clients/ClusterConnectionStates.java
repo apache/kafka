@@ -389,6 +389,7 @@ final class ClusterConnectionStates {
      */
     public void remove(String id) {
         nodeState.remove(id);
+        connectingNodes.remove(id);
     }
 
     /**
