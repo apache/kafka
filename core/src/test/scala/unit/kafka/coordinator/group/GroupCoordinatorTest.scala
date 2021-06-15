@@ -2295,7 +2295,7 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testRebalanceTimesOutWhenSyncRequestIsNotReceiced(): Unit = {
+  def testRebalanceTimesOutWhenSyncRequestIsNotReceived(): Unit = {
     // This test case ensure that the DelayedSync does kick out all members
     // if they don't sent a sync request before the rebalance timeout. The
     // group is in the Stable state in this case.
@@ -2327,7 +2327,7 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testRebalanceTimesOutWhenSyncRequestIsNotReceicedFromFollowers(): Unit = {
+  def testRebalanceTimesOutWhenSyncRequestIsNotReceivedFromFollowers(): Unit = {
     // This test case ensure that the DelayedSync does kick out the followers
     // if they don't sent a sync request before the rebalance timeout. The
     // group is in the Stable state in this case.

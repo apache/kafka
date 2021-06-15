@@ -565,7 +565,7 @@ class GroupCoordinator(val brokerId: Int,
 
           case CompletingRebalance =>
             group.get(memberId).awaitingSyncCallback = responseCallback
-            maybeRemovePendingSyncMember(group, memberId)
+            removePendingSyncMember(group, memberId)
 
             // if this is the leader, then we can attempt to persist state and transition to stable
             if (group.isLeader(memberId)) {
@@ -600,7 +600,7 @@ class GroupCoordinator(val brokerId: Int,
             }
 
           case Stable =>
-            maybeRemovePendingSyncMember(group, memberId)
+            removePendingSyncMember(group, memberId)
 
             // if the group is stable, we just return the current assignment
             val memberMetadata = group.get(memberId)
@@ -1467,7 +1467,7 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  private def maybeRemovePendingSyncMember(
+  private def removePendingSyncMember(
     group: GroupMetadata,
     memberId: String
   ): Unit = {
@@ -1492,50 +1492,61 @@ class GroupCoordinator(val brokerId: Int,
   private def schedulePendingSync(
     group: GroupMetadata
   ): Unit = {
-    val delayedSync = new DelayedSync(this, group, group.rebalanceTimeoutMs)
+    val delayedSync = new DelayedSync(this, group, group.generationId, group.rebalanceTimeoutMs)
     val groupKey = GroupKey(group.groupId)
     syncPurgatory.tryCompleteElseWatch(delayedSync, Seq(groupKey))
   }
 
   def tryCompletePendingSync(
     group: GroupMetadata,
+    generationId: Int,
     forceComplete: () => Boolean
   ): Boolean = {
     group.inLock {
-      group.currentState match {
-        case Dead | Empty | PreparingRebalance =>
-          forceComplete()
-        case CompletingRebalance | Stable =>
-          if (group.hasReceivedSyncFromAllMembers())
+      if (generationId != group.generationId) {
+        forceComplete()
+      } else {
+        group.currentState match {
+          case Dead | Empty | PreparingRebalance =>
             forceComplete()
-          else false
+          case CompletingRebalance | Stable =>
+            if (group.hasReceivedSyncFromAllMembers())
+              forceComplete()
+            else false
+        }
       }
     }
   }
 
   def onExpirePendingSync(
-    group: GroupMetadata
+    group: GroupMetadata,
+    generationId: Int
   ): Unit = {
     group.inLock {
-      group.currentState match {
-        case Dead | Empty | PreparingRebalance =>
-          debug(s"Received unexpected notification of sync expiration after group ${group.groupId} " +
-            s"already transitioned to the ${group.currentState} state.")
+      if (generationId != group.generationId) {
+        debug(s"Received unexpected notification of sync expiration for ${group.groupId} " +
+          s" with an old generation $generationId.")
+      } else {
+        group.currentState match {
+          case Dead | Empty | PreparingRebalance =>
+            debug(s"Received unexpected notification of sync expiration after group ${group.groupId} " +
+              s"already transitioned to the ${group.currentState} state.")
 
-        case CompletingRebalance | Stable =>
-          if (!group.hasAllMembersJoined) {
-            val pendingSyncMembers = group.allPendingSyncMembers()
+          case CompletingRebalance | Stable =>
+            if (!group.hasAllMembersJoined) {
+              val pendingSyncMembers = group.allPendingSyncMembers()
 
-            info(s"Group ${group.groupId} removed members who haven't " +
-              s"sent their sync request: $pendingSyncMembers")
+              debug(s"Group ${group.groupId} removed members who haven't " +
+                s"sent their sync request: $pendingSyncMembers")
 
-            pendingSyncMembers.foreach { memberId =>
-              group.remove(memberId)
-              removeHeartbeatForLeavingMember(group, memberId)
+              pendingSyncMembers.foreach { memberId =>
+                group.remove(memberId)
+                removeHeartbeatForLeavingMember(group, memberId)
+              }
+
+              prepareRebalance(group, s"Removing $pendingSyncMembers on pending sync request expiration")
             }
-
-            prepareRebalance(group, s"Removing $pendingSyncMembers on pending sync request expiration")
-          }
+        }
       }
     }
   }

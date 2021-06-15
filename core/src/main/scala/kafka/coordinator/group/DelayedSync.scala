@@ -22,7 +22,7 @@ import kafka.server.DelayedOperation
 /**
  * Delayed rebalance operation that is added to the purgatory when is completing the rebalance.
  *
- * Whenever a SyncGroup is receives, checks that we received all the SyncGroup request from
+ * Whenever a SyncGroup is received, checks that we received all the SyncGroup request from
  * each member of the group; if yes, complete this operation.
  *
  * When the operation has expired, any known members that have not sent a SyncGroup requests
@@ -31,17 +31,18 @@ import kafka.server.DelayedOperation
 private[group] class DelayedSync(
   coordinator: GroupCoordinator,
   group: GroupMetadata,
+  generationId: Int,
   rebalanceTimeoutMs: Long
 ) extends DelayedOperation(
   rebalanceTimeoutMs,
   Some(group.lock)
 ) {
   override def tryComplete(): Boolean = {
-    coordinator.tryCompletePendingSync(group, forceComplete _)
+    coordinator.tryCompletePendingSync(group, generationId, forceComplete _)
   }
 
   override def onExpiration(): Unit = {
-    coordinator.onExpirePendingSync(group)
+    coordinator.onExpirePendingSync(group, generationId)
   }
 
   override def onComplete(): Unit = { }
