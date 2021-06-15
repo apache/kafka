@@ -1477,8 +1477,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <KOut, VOut> void process(final ProcessorSupplier<? super K, ? super V, KOut, VOut> processorSupplier,
-                                     final String... stateStoreNames) {
+    public void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
+                        final String... stateStoreNames) {
         process(processorSupplier, Named.as(builder.newProcessorName(PROCESSOR_NAME)), stateStoreNames);
     }
 
@@ -1505,9 +1505,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <KOut, VOut> void process(final ProcessorSupplier<? super K, ? super V, KOut, VOut> processorSupplier,
-                                     final Named named,
-                                     final String... stateStoreNames) {
+    public void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
+                        final Named named,
+                        final String... stateStoreNames) {
         Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
