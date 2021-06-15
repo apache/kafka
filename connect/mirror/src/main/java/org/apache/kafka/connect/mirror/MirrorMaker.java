@@ -275,7 +275,7 @@ public class MirrorMaker {
     }
 
     public static void main(String[] args) {
-        ArgumentParser parser = ArgumentParsers.newFor("connect-mirror-maker").build();
+        ArgumentParser parser = ArgumentParsers.newArgumentParser("connect-mirror-maker");
         parser.description("MirrorMaker 2.0 driver");
         parser.addArgument("config").type(Arguments.fileType().verifyCanRead())
             .metavar("mm2.properties").required(true)

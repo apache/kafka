@@ -485,7 +485,7 @@ public abstract class TransactionsCommand {
             appendColumnValue(rowBuilder, columnValue, columnLength);
             rowBuilder.append('\t');
         }
-        out.println(rowBuilder.toString());
+        out.println(rowBuilder);
     }
 
     private static void prettyPrintTable(
@@ -542,7 +542,8 @@ public abstract class TransactionsCommand {
     }
 
     static ArgumentParser buildBaseParser() {
-        ArgumentParser parser = ArgumentParsers.newFor("kafka-transactions.sh").build();
+        ArgumentParser parser = ArgumentParsers
+            .newArgumentParser("kafka-transactions.sh");
 
         parser.description("This tool is used to analyze the transactional state of producers in the cluster. " +
             "It can be used to detect and recover from hanging transactions.");

@@ -222,8 +222,7 @@ public class CoordinatorClient {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser rootParser = ArgumentParsers
-            .newFor("trogdor-coordinator-client")
-            .build()
+            .newArgumentParser("trogdor-coordinator-client")
             .description("The Trogdor coordinator client.");
         Subparsers subParsers = rootParser.addSubparsers().
             dest("command");

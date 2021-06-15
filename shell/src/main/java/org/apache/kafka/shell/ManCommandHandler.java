@@ -87,10 +87,7 @@ public final class ManCommandHandler implements Commands.Handler {
             writer.println("man: unknown command " + cmd +
                 ". Type help to get a list of commands.");
         } else {
-            ArgumentParser parser = ArgumentParsers
-                .newFor(type.name())
-                .addHelp(false)
-                .build();
+            ArgumentParser parser = ArgumentParsers.newArgumentParser(type.name(), false);
             type.addArguments(parser);
             writer.printf("%s: %s%n%n", cmd, type.description());
             parser.printHelp(writer);

@@ -23,7 +23,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
-import net.sourceforge.argparse4j.helper.HelpScreenException;
+import net.sourceforge.argparse4j.internal.HelpScreenException;
 import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
@@ -95,10 +95,7 @@ public final class Commands {
      * @param addShellCommands  True if we should include the shell-only commands.
      */
     public Commands(boolean addShellCommands) {
-        this.parser = ArgumentParsers
-            .newFor("")
-            .addHelp(false)
-            .build();
+        this.parser = ArgumentParsers.newArgumentParser("", false);
         Subparsers subparsers = this.parser.addSubparsers().dest("command");
         for (Type type : TYPES.values()) {
             if (addShellCommands || !type.shellOnly()) {

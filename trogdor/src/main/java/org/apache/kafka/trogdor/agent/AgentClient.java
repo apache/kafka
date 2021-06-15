@@ -199,8 +199,7 @@ public class AgentClient {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser rootParser = ArgumentParsers
-            .newFor("trogdor-agent-client")
-            .build()
+            .newArgumentParser("trogdor-agent-client")
             .defaultHelp(true)
             .description("The Trogdor agent client.");
         Subparsers subParsers = rootParser.addSubparsers().

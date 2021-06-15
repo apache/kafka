@@ -65,8 +65,7 @@ public class TransactionalMessageCopier {
     /** Get the command-line argument parser. */
     private static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
-                .newFor("transactional-message-copier")
-                .build()
+                .newArgumentParser("transactional-message-copier")
                 .defaultHelp(true)
                 .description("This tool copies messages transactionally from an input partition to an output topic, " +
                         "committing the consumed offsets along with the output messages");

@@ -33,8 +33,7 @@ object StorageTool extends Logging {
   def main(args: Array[String]): Unit = {
     try {
       val parser = ArgumentParsers.
-        newFor("kafka-storage").
-        build().
+        newArgumentParser("kafka-storage").
         defaultHelp(true).
         description("The Kafka storage tool.")
       val subparsers = parser.addSubparsers().dest("command")

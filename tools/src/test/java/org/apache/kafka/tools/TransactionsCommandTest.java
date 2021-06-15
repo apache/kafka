@@ -37,6 +37,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.io.BufferedReader;
@@ -402,12 +404,12 @@ public class TransactionsCommandTest {
         assertNormalExit();
     }
 
-    @Test
-    public void testOldBrokerAbortTransaction() throws Exception {
+    @ParameterizedTest
+    @ValueSource(ints = {29, -1})
+    public void testOldBrokerAbortTransactionWithUnknownCoordinatorEpoch(int coordinatorEpoch) throws Exception {
         TopicPartition topicPartition = new TopicPartition("foo", 5);
         long producerId = 12345L;
         short producerEpoch = 15;
-        int coordinatorEpoch = 29;
 
         String[] args = new String[] {
             "--bootstrap-server",
@@ -427,42 +429,16 @@ public class TransactionsCommandTest {
 
         AbortTransactionResult abortTransactionResult = Mockito.mock(AbortTransactionResult.class);
         KafkaFuture<Void> abortFuture = KafkaFutureImpl.completedFuture(null);
+
+        final int expectedCoordinatorEpoch;
+        if (coordinatorEpoch < 0) {
+            expectedCoordinatorEpoch = 0;
+        } else {
+            expectedCoordinatorEpoch = coordinatorEpoch;
+        }
+
         AbortTransactionSpec expectedAbortSpec = new AbortTransactionSpec(
-            topicPartition, producerId, producerEpoch, coordinatorEpoch);
-
-        Mockito.when(abortTransactionResult.all()).thenReturn(abortFuture);
-        Mockito.when(admin.abortTransaction(expectedAbortSpec)).thenReturn(abortTransactionResult);
-
-        execute(args);
-        assertNormalExit();
-    }
-
-    @Test
-    public void testOldBrokerAbortTransactionWithUnknownCoordinatorEpoch() throws Exception {
-        TopicPartition topicPartition = new TopicPartition("foo", 5);
-        long producerId = 12345L;
-        short producerEpoch = 15;
-
-        String[] args = new String[] {
-            "--bootstrap-server",
-            "localhost:9092",
-            "abort",
-            "--topic",
-            topicPartition.topic(),
-            "--partition",
-            String.valueOf(topicPartition.partition()),
-            "--producer-id",
-            String.valueOf(producerId),
-            "--producer-epoch",
-            String.valueOf(producerEpoch),
-            "--coordinator-epoch",
-            "-1"
-        };
-
-        AbortTransactionResult abortTransactionResult = Mockito.mock(AbortTransactionResult.class);
-        KafkaFuture<Void> abortFuture = KafkaFutureImpl.completedFuture(null);
-        AbortTransactionSpec expectedAbortSpec = new AbortTransactionSpec(
-            topicPartition, producerId, producerEpoch, 0);
+            topicPartition, producerId, producerEpoch, expectedCoordinatorEpoch);
 
         Mockito.when(abortTransactionResult.all()).thenReturn(abortFuture);
         Mockito.when(admin.abortTransaction(expectedAbortSpec)).thenReturn(abortTransactionResult);
