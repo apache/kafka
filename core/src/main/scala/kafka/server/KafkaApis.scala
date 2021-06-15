@@ -1142,6 +1142,17 @@ class KafkaApis(val requestChannel: RequestChannel,
     val metadataRequest = request.body[MetadataRequest]
     val requestVersion = request.header.apiVersion
 
+    // Topic IDs are not supported for versions 10 and 11. Topic names can not be null in these versions.
+    if (!metadataRequest.isAllTopics) {
+      metadataRequest.data.topics.forEach{ topic =>
+        if (topic.name == null) {
+          throw new InvalidRequestException(s"Topic name can not be null for version ${metadataRequest.version}")
+        } else if (topic.topicId != Uuid.ZERO_UUID) {
+          throw new InvalidRequestException(s"Topic IDs are not supported in requests for version ${metadataRequest.version}")
+        }
+      }
+    }
+
     val topics = if (metadataRequest.isAllTopics)
       metadataCache.getAllTopics()
     else
