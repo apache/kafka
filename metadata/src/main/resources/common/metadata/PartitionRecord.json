@@ -18,6 +18,7 @@
   "type": "metadata",
   "name": "PartitionRecord",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "PartitionId", "type": "int32", "versions": "0+", "default": "-1",
       "about": "The partition id." },

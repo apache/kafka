@@ -18,6 +18,7 @@
   "type": "metadata",
   "name": "QuotaRecord",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "Entity", "type": "[]EntityData", "versions": "0+",
       "about": "The quota entity to alter.", "fields": [

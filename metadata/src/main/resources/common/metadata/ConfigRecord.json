@@ -18,6 +18,7 @@
   "type": "metadata",
   "name": "ConfigRecord",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ResourceType", "type": "int8", "versions": "0+",
       "about": "The type of resource this configuration applies to." },
