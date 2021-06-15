@@ -361,7 +361,6 @@ public class SlidingWindowedKStreamImplTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(MockReducer.STRING_ADDER, (Named) null));
     }

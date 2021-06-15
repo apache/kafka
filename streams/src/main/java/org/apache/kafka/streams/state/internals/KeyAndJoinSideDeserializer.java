@@ -47,7 +47,7 @@ public class KeyAndJoinSideDeserializer<K> implements WrappingNullableDeserializ
 
     @Override
     public KeyAndJoinSide<K> deserialize(final String topic, final byte[] data) {
-        final boolean bool = data[0] == 1 ? true : false;
+        final boolean bool = data[0] == 1;
         final K key = keyDeserializer.deserialize(topic, rawKey(data));
 
         return KeyAndJoinSide.make(bool, key);

@@ -66,6 +66,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
+import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
@@ -296,7 +297,7 @@ public class QuorumControllerTest {
     private void checkSnapshotContents(Uuid fooId,
                                        Map<Integer, Long> brokerEpochs,
                                        Iterator<List<ApiMessageAndVersion>> iterator) throws Exception {
-        ControllerTestUtils.assertBatchIteratorContains(Arrays.asList(
+        RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
             Arrays.asList(new ApiMessageAndVersion(new TopicRecord().
                     setName("foo").setTopicId(fooId), (short) 0),
                 new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
