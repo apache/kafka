@@ -560,6 +560,8 @@ object ConsumerGroupCommand extends Logging {
       val groupOffsets = TreeMap[String, (Option[String], Option[Seq[PartitionAssignmentState]])]() ++ (for ((groupId, consumerGroup) <- consumerGroups) yield {
         val state = consumerGroup.state
         val committedOffsets = getCommittedOffsets(groupId)
+        // The admin client returns `null` as a value to indicate that there is not committed offset for a partition. The following getPartitionOffset function seeks to avoid NullPointerException by filtering out those null values.
+        def getPartitionOffset(tp: TopicPartition): Option[Long] = committedOffsets.get(tp).filter(_ != null).map(_.offset)
         var assignedTopicPartitions = ListBuffer[TopicPartition]()
         val rowsWithConsumer = consumerGroup.members.asScala.filter(!_.assignment.topicPartitions.isEmpty).toSeq
           .sortWith(_.assignment.topicPartitions.size > _.assignment.topicPartitions.size).flatMap { consumerSummary =>
@@ -567,7 +569,7 @@ object ConsumerGroupCommand extends Logging {
           assignedTopicPartitions = assignedTopicPartitions ++ topicPartitions
           val partitionOffsets = consumerSummary.assignment.topicPartitions.asScala
             .map { topicPartition =>
-              topicPartition -> committedOffsets.get(topicPartition).map(_.offset)
+              topicPartition -> getPartitionOffset(topicPartition)
             }.toMap
           collectConsumerAssignment(groupId, Option(consumerGroup.coordinator), topicPartitions.toList,
             partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
@@ -580,7 +582,7 @@ object ConsumerGroupCommand extends Logging {
             groupId,
             Option(consumerGroup.coordinator),
             unassignedPartitions.keySet.toSeq,
-            unassignedPartitions.map { case (tp, offset) => tp -> Some(offset.offset) },
+            unassignedPartitions.map { case (tp, offset) => tp -> getPartitionOffset(tp) },
             Some(MISSING_COLUMN_VALUE),
             Some(MISSING_COLUMN_VALUE),
             Some(MISSING_COLUMN_VALUE)).toSeq

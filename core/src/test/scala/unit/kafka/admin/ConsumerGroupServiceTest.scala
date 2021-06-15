@@ -63,6 +63,28 @@ class ConsumerGroupServiceTest {
   }
 
   @Test
+  def testAdminRequestsForDescribeNegativeOffsets(): Unit = {
+    val args = Array("--bootstrap-server", "localhost:9092", "--group", group, "--describe", "--offsets")
+    val groupService = consumerGroupService(args)
+
+    when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any()))
+      .thenReturn(describeGroupsResult(ConsumerGroupState.STABLE))
+    when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(group), any()))
+      .thenReturn(listGroupNegativeOffsetsResult)
+    when(admin.listOffsets(offsetsArgMatcher, any()))
+      .thenReturn(listOffsetsResult)
+
+    val (state, assignments) = groupService.collectGroupOffsets(group)
+    assertEquals(Some("Stable"), state)
+    assertTrue(assignments.nonEmpty)
+    assertEquals(topicPartitions.size, assignments.get.size)
+
+    verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any())
+    verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(group), any())
+    verify(admin, times(1)).listOffsets(offsetsArgMatcher, any())
+  }
+
+  @Test
   def testAdminRequestsForResetOffsets(): Unit = {
     val args = Seq("--bootstrap-server", "localhost:9092", "--group", group, "--reset-offsets", "--to-latest")
     val topicsWithoutPartitionsSpecified = topics.tail
@@ -107,6 +129,12 @@ class ConsumerGroupServiceTest {
 
   private def listGroupOffsetsResult: ListConsumerGroupOffsetsResult = {
     val offsets = topicPartitions.map(_ -> new OffsetAndMetadata(100)).toMap.asJava
+    AdminClientTestUtils.listConsumerGroupOffsetsResult(offsets)
+  }
+
+  private def listGroupNegativeOffsetsResult: ListConsumerGroupOffsetsResult = {
+    // Half of the partitions of the testing topics are set to have a negative integer offset (null value [KAFKA-9507 for reference])
+    val offsets = topicPartitions.zipWithIndex.map{ case (tp, i) => tp -> ( if(i % 2 == 0) null else new OffsetAndMetadata(100) ) }.toMap.asJava
     AdminClientTestUtils.listConsumerGroupOffsetsResult(offsets)
   }
 
