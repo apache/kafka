@@ -41,13 +41,13 @@ import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
-import org.apache.kafka.common.metadata.QuotaRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -857,8 +857,8 @@ public final class QuorumController implements Controller {
                 case FEATURE_LEVEL_RECORD:
                     featureControl.replay((FeatureLevelRecord) message);
                     break;
-                case QUOTA_RECORD:
-                    clientQuotaControlManager.replay((QuotaRecord) message);
+                case CLIENT_QUOTA_RECORD:
+                    clientQuotaControlManager.replay((ClientQuotaRecord) message);
                     break;
                 case PRODUCER_IDS_RECORD:
                     producerIdControlManager.replay((ProducerIdsRecord) message);

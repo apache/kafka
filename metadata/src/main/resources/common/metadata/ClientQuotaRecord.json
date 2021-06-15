@@ -16,9 +16,9 @@
 {
   "apiKey": 14,
   "type": "metadata",
-  "name": "QuotaRecord",
-  "validVersions": "0",
-  "flexibleVersions": "none",
+  "name": "ClientQuotaRecord",
+  "validVersions": "0-1",
+  "flexibleVersions": "1+",
   "fields": [
     { "name": "Entity", "type": "[]EntityData", "versions": "0+",
       "about": "The quota entity to alter.", "fields": [

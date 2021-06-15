@@ -14,15 +14,17 @@
 // limitations under the License.
 
 {
-  "apiKey": 7,
+  "apiKey": 17,
   "type": "metadata",
-  "name": "FenceBrokerRecord",
-  "validVersions": "0-1",
-  "flexibleVersions": "1+",
+  "name": "BrokerRegistrationChangeRecord",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
   "fields": [
-    { "name": "Id", "type": "int32", "versions": "0+", "entityType": "brokerId",
-      "about": "The broker ID to fence. It will be removed from all ISRs." },
-	{ "name": "Epoch", "type": "int64", "versions": "0+",
-      "about": "The epoch of the broker to fence." }
+   { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+     "about": "The broker id." },
+   { "name": "BrokerEpoch", "type": "int64", "versions": "0+",
+     "about": "The broker epoch assigned by the controller." },
+   { "name": "Fenced", "type": "int8", "versions": "0+", "taggedVersions": "0+", "tag": 0,
+     "about": "-1 if the broker has been unfenced, 0 if no change, 1 if the broker has been fenced." }
   ]
 }

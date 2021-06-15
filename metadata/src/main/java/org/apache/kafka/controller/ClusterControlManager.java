@@ -52,6 +52,8 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import static org.apache.kafka.common.metadata.MetadataRecordType.REGISTER_BROKER_RECORD;
+
 
 /**
  * The ClusterControlManager manages all the hard state associated with the Kafka cluster.
@@ -219,7 +221,8 @@ public class ClusterControlManager {
         }
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        records.add(new ApiMessageAndVersion(record, (short) 0));
+        records.add(new ApiMessageAndVersion(record,
+            REGISTER_BROKER_RECORD.highestSupportedVersion()));
         return ControllerResult.of(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
@@ -236,20 +239,11 @@ public class ClusterControlManager {
             features.put(feature.name(), new VersionRange(
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }
-        // Normally, all newly registered brokers start off in the fenced state.
-        // If this registration record is for a broker incarnation that was already
-        // registered, though, we preserve the existing fencing state.
-        boolean fenced = true;
-        BrokerRegistration prevRegistration = brokerRegistrations.get(brokerId);
-        if (prevRegistration != null &&
-                prevRegistration.incarnationId().equals(record.incarnationId())) {
-            fenced = prevRegistration.fenced();
-        }
         // Update broker registrations.
         brokerRegistrations.put(brokerId, new BrokerRegistration(brokerId,
             record.brokerEpoch(), record.incarnationId(), listeners, features,
-            Optional.ofNullable(record.rack()), fenced));
-
+            Optional.ofNullable(record.rack()), record.fenced()));
+        BrokerRegistration prevRegistration = brokerRegistrations.get(brokerId);
         if (prevRegistration == null) {
             log.info("Registered new broker: {}", record);
         } else if (prevRegistration.incarnationId().equals(record.incarnationId())) {
@@ -391,12 +385,9 @@ public class ClusterControlManager {
                 setBrokerEpoch(registration.epoch()).
                 setEndPoints(endpoints).
                 setFeatures(features).
-                setRack(registration.rack().orElse(null)), (short) 0));
-            if (!registration.fenced()) {
-                batch.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().
-                    setId(brokerId).
-                    setEpoch(registration.epoch()), (short) 0));
-            }
+                setRack(registration.rack().orElse(null)).
+                setFenced(registration.fenced()),
+                    REGISTER_BROKER_RECORD.highestSupportedVersion()));
             return batch;
         }
     }

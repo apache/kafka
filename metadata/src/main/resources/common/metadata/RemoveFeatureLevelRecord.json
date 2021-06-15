@@ -14,15 +14,13 @@
 // limitations under the License.
 
 {
-  "apiKey": 7,
+  "apiKey": 16,
   "type": "metadata",
-  "name": "FenceBrokerRecord",
-  "validVersions": "0-1",
-  "flexibleVersions": "1+",
+  "name": "RemoveFeatureLevelRecord",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
   "fields": [
-    { "name": "Id", "type": "int32", "versions": "0+", "entityType": "brokerId",
-      "about": "The broker ID to fence. It will be removed from all ISRs." },
-	{ "name": "Epoch", "type": "int64", "versions": "0+",
-      "about": "The epoch of the broker to fence." }
+    { "name": "Name", "type": "string", "versions": "0+",
+      "about": "The feature name." }
   ]
 }
