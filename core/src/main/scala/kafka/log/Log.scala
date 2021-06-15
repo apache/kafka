@@ -316,29 +316,36 @@ class Log(@volatile private var _dir: File,
     initializePartitionMetadata()
     updateLogStartOffset(logStartOffset)
     maybeIncrementFirstUnstableOffset()
-    // Delete partition metadata file if the version does not support topic IDs.
-    // Set _topicId based on a few scenarios:
-    //  * Recover topic ID if present and topic IDs are supported. Ensure we do not try to assign a provided topicId that is inconsistent
-    //    with the ID on file.
-    //  * If we were provided a topic ID when creating the log, partition metadata files are supported, and one does not yet exist
-    //    set _topicId and write to the partition metadata file.
-    //  * Otherwise set to None
+    initializeTopicId()
+  }
+
+  /**
+   * Initialize topic ID information for the log by maintaining the partition metadata file and setting the in-memory _topicId.
+   * Delete partition metadata file if the version does not support topic IDs.
+   * Set _topicId based on a few scenarios:
+   *   - Recover topic ID if present and topic IDs are supported. Ensure we do not try to assign a provided topicId that is inconsistent
+   *     with the ID on file.
+   *   - If we were provided a topic ID when creating the log, partition metadata files are supported, and one does not yet exist
+   *     set _topicId and write to the partition metadata file.
+   *   - Otherwise set _topicId to None
+   */
+  def initializeTopicId(): Unit =  {
     if (partitionMetadataFile.exists()) {
-        if (keepPartitionMetadataFile) {
-          val fileTopicId = partitionMetadataFile.read().topicId
-          if (_topicId.isDefined && !_topicId.contains(fileTopicId))
-            throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
-              s"but log already contained topic ID $fileTopicId")
+      if (keepPartitionMetadataFile) {
+        val fileTopicId = partitionMetadataFile.read().topicId
+        if (_topicId.isDefined && !_topicId.contains(fileTopicId))
+          throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+            s"but log already contained topic ID $fileTopicId")
 
-          _topicId = Some(fileTopicId)
+        _topicId = Some(fileTopicId)
 
-        } else {
-          try partitionMetadataFile.delete()
-          catch {
-            case e: IOException =>
-              error(s"Error while trying to delete partition metadata file ${partitionMetadataFile}", e)
-          }
+      } else {
+        try partitionMetadataFile.delete()
+        catch {
+          case e: IOException =>
+            error(s"Error while trying to delete partition metadata file ${partitionMetadataFile}", e)
         }
+      }
     } else if (keepPartitionMetadataFile) {
       _topicId.foreach(partitionMetadataFile.write)
     } else {
