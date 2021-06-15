@@ -79,7 +79,7 @@ public class SnapshotGeneratorTest {
         SnapshotGenerator generator = new SnapshotGenerator(new LogContext(),
             writer, 2, exponentialBackoff, sections);
         assertFalse(writer.isFrozen());
-        assertEquals(123L, generator.lastOffsetFromLog());
+        assertEquals(123L, generator.lastContainedLogOffset());
         assertEquals(writer, generator.writer());
         assertEquals(OptionalLong.of(0L), generator.generateBatches());
         assertEquals(OptionalLong.of(0L), generator.generateBatches());

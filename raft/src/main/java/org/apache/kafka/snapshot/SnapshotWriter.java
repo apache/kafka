@@ -88,14 +88,14 @@ final public class SnapshotWriter<T> implements AutoCloseable {
     /**
      * Returns the last log offset which is represented in the snapshot.
      */
-    public long lastOffsetFromLog() {
+    public long lastContainedLogOffset() {
         return snapshot.snapshotId().offset - 1;
     }
 
     /**
      * Returns the epoch of the last log offset which is represented in the snapshot.
      */
-    public int lastEpochFromLog() {
+    public int lastContainedLogEpoch() {
         return snapshot.snapshotId().epoch;
     }
 

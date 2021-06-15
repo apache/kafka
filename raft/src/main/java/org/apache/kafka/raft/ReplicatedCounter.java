@@ -146,7 +146,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     uncommitted = value;
                 }
             }
-            lastOffsetSnapshotted = reader.lastOffsetFromLog();
+            lastOffsetSnapshotted = reader.lastContainedLogOffset();
             log.debug("Finished loading snapshot. Set value: {}", committed);
         } finally {
             reader.close();

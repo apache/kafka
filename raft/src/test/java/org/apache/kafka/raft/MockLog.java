@@ -414,41 +414,44 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public Optional<RawSnapshotWriter> createSnapshot(OffsetAndEpoch snapshotId, boolean validate) {
-        if (validate) {
-            long highWatermarkOffset = highWatermark().offset;
-            if (snapshotId.offset > highWatermarkOffset) {
-                throw new IllegalArgumentException(
-                    String.format(
-                        "Cannot create a snapshot with an id (%s) greater than the high-watermark (%s)",
-                        snapshotId,
-                        highWatermarkOffset
-                    )
-                );
-            }
-
-            if (snapshotId.offset < logStartOffset()) {
-                throw new IllegalArgumentException(
-                    String.format(
-                        "Cannot create a snapshot with and id (%s) less than the log start offset (%s)",
-                        snapshotId,
-                        logStartOffset()
-                    )
-                );
-            }
-
-            ValidOffsetAndEpoch validOffsetAndEpoch = validateOffsetAndEpoch(snapshotId.offset, snapshotId.epoch);
-            if (validOffsetAndEpoch.kind() != ValidOffsetAndEpoch.Kind.VALID) {
-                throw new IllegalArgumentException(
-                    String.format(
-                        "Snapshot id (%s) is not valid according to the log: %s",
-                        snapshotId,
-                        validOffsetAndEpoch
-                    )
-                );
-            }
+    public Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId) {
+        long highWatermarkOffset = highWatermark().offset;
+        if (snapshotId.offset > highWatermarkOffset) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Cannot create a snapshot with an id (%s) greater than the high-watermark (%s)",
+                    snapshotId,
+                    highWatermarkOffset
+                )
+            );
         }
 
+        if (snapshotId.offset < logStartOffset()) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Cannot create a snapshot with and id (%s) less than the log start offset (%s)",
+                    snapshotId,
+                    logStartOffset()
+                )
+            );
+        }
+
+        ValidOffsetAndEpoch validOffsetAndEpoch = validateOffsetAndEpoch(snapshotId.offset, snapshotId.epoch);
+        if (validOffsetAndEpoch.kind() != ValidOffsetAndEpoch.Kind.VALID) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Snapshot id (%s) is not valid according to the log: %s",
+                    snapshotId,
+                    validOffsetAndEpoch
+                )
+            );
+        }
+
+        return storeSnapshot(snapshotId);
+    }
+
+    @Override
+    public Optional<RawSnapshotWriter> storeSnapshot(OffsetAndEpoch snapshotId) {
         if (snapshots.containsKey(snapshotId)) {
             return Optional.empty();
         } else {

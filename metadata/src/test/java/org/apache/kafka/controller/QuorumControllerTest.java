@@ -265,10 +265,10 @@ public class QuorumControllerTest {
                 fooId = fooData.topics().find("foo").topicId();
                 active.allocateProducerIds(
                     new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
-                long snapshotEpoch = active.beginWritingSnapshot().get();
-                reader = logEnv.waitForSnapshot(snapshotEpoch);
+                long snapshotLogOffset = active.beginWritingSnapshot().get();
+                reader = logEnv.waitForSnapshot(snapshotLogOffset);
                 SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(reader);
-                assertEquals(snapshotEpoch, snapshot.lastOffsetFromLog());
+                assertEquals(snapshotLogOffset, snapshot.lastContainedLogOffset());
                 checkSnapshotContents(fooId, brokerEpochs, snapshot);
             }
         }
@@ -277,11 +277,11 @@ public class QuorumControllerTest {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 QuorumController active = controlEnv.activeController();
-                long snapshotEpoch = active.beginWritingSnapshot().get();
+                long snapshotLogOffset = active.beginWritingSnapshot().get();
                 SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(
-                    logEnv.waitForSnapshot(snapshotEpoch)
+                    logEnv.waitForSnapshot(snapshotLogOffset)
                 );
-                assertEquals(snapshotEpoch, snapshot.lastOffsetFromLog());
+                assertEquals(snapshotLogOffset, snapshot.lastContainedLogOffset());
                 checkSnapshotContents(fooId, brokerEpochs, snapshot);
             }
         }

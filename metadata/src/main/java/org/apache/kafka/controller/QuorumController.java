@@ -374,7 +374,7 @@ public final class QuorumController implements Controller {
 
         void cancel() {
             if (generator == null) return;
-            log.error("Cancelling snapshot {}", generator.lastOffsetFromLog());
+            log.error("Cancelling snapshot {}", generator.lastContainedLogOffset());
             generator.writer().close();
             generator = null;
             queue.cancelDeferred(GENERATE_SNAPSHOT);
@@ -396,13 +396,13 @@ public final class QuorumController implements Controller {
             try {
                 nextDelay = generator.generateBatches();
             } catch (Exception e) {
-                log.error("Error while generating snapshot {}", generator.lastOffsetFromLog(), e);
+                log.error("Error while generating snapshot {}", generator.lastContainedLogOffset(), e);
                 generator.writer().close();
                 generator = null;
                 return;
             }
             if (!nextDelay.isPresent()) {
-                log.info("Finished generating snapshot {}.", generator.lastOffsetFromLog());
+                log.info("Finished generating snapshot {}.", generator.lastContainedLogOffset());
                 generator.writer().close();
                 generator = null;
                 return;
@@ -414,7 +414,7 @@ public final class QuorumController implements Controller {
             if (generator == null) {
                 return Long.MAX_VALUE;
             }
-            return generator.lastOffsetFromLog();
+            return generator.lastContainedLogOffset();
         }
     }
 
@@ -727,8 +727,8 @@ public final class QuorumController implements Controller {
                         }
                     }
 
-                    lastCommittedOffset = reader.lastOffsetFromLog();
-                    lastCommittedEpoch = reader.lastEpochFromLog();
+                    lastCommittedOffset = reader.lastContainedLogOffset();
+                    lastCommittedEpoch = reader.lastContainedLogEpoch();
                     snapshotRegistry.createSnapshot(lastCommittedOffset);
                 } finally {
                     reader.close();
@@ -1243,7 +1243,7 @@ public final class QuorumController implements Controller {
             if (snapshotGeneratorManager.generator == null) {
                 snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch);
             }
-            future.complete(snapshotGeneratorManager.generator.lastOffsetFromLog());
+            future.complete(snapshotGeneratorManager.generator.lastContainedLogOffset());
         });
         return future;
     }

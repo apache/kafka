@@ -79,8 +79,8 @@ final class SnapshotGenerator {
     /**
      * Returns the last offset from the log that will be included in the snapshot.
      */
-    long lastOffsetFromLog() {
-        return writer.lastOffsetFromLog();
+    long lastContainedLogOffset() {
+        return writer.lastContainedLogOffset();
     }
 
     SnapshotWriter writer() {

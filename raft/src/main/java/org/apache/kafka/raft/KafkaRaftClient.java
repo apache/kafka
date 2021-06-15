@@ -1101,7 +1101,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                         partitionResponse.snapshotId().epoch()
                     );
 
-                    state.setFetchingSnapshot(log.createSnapshot(snapshotId, false));
+                    // Do not validate the snapshot id against the local replicated log
+                    // since this snapshot is expected to reference offsets and epochs
+                    // greater than the log end offset and high-watermark
+                    state.setFetchingSnapshot(log.storeSnapshot(snapshotId));
                 }
             } else {
                 Records records = FetchResponse.recordsOrFail(partitionResponse);
@@ -2258,9 +2261,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch) {
-        return log.createSnapshot(
-            new OffsetAndEpoch(committedOffset + 1, committedEpoch),
-            true
+        return log.createNewSnapshot(
+            new OffsetAndEpoch(committedOffset + 1, committedEpoch)
         ).map(snapshot -> {
             return new SnapshotWriter<>(
                 snapshot,
@@ -2285,7 +2287,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     public OptionalLong highWatermark() {
-        return quorum.highWatermark().isPresent() ? OptionalLong.of(quorum.highWatermark().get().offset) : OptionalLong.empty();
+        if (quorum.highWatermark().isPresent()) {
+            return OptionalLong.of(quorum.highWatermark().get().offset);
+        } else {
+            return OptionalLong.empty();
+        }
     }
 
     private class GracefulShutdown {

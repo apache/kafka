@@ -233,29 +233,31 @@ final class KafkaMetadataLog private (
     log.topicId.get
   }
 
-  override def createSnapshot(snapshotId: OffsetAndEpoch, validate: Boolean): Optional[RawSnapshotWriter] = {
-    if (validate) {
-      val highWatermarkOffset = highWatermark.offset
-      if (snapshotId.offset > highWatermarkOffset) {
-        throw new IllegalArgumentException(
-          s"Cannot create a snapshot for an end offset ($endOffset) greater than the high-watermark ($highWatermarkOffset)"
-        )
-      }
-
-      if (snapshotId.offset < startOffset) {
-        throw new IllegalArgumentException(
-          s"Cannot create a snapshot for an end offset ($endOffset) less than the log start offset ($startOffset)"
-        )
-      }
-
-      val validOffsetAndEpoch = validateOffsetAndEpoch(snapshotId.offset, snapshotId.epoch)
-      if (validOffsetAndEpoch.kind() != ValidOffsetAndEpoch.Kind.VALID) {
-        throw new IllegalArgumentException(
-          s"Snapshot id ($snapshotId) is not valid according to the log: $validOffsetAndEpoch"
-        )
-      }
+  override def createNewSnapshot(snapshotId: OffsetAndEpoch): Optional[RawSnapshotWriter] = {
+    val highWatermarkOffset = highWatermark.offset
+    if (snapshotId.offset > highWatermarkOffset) {
+      throw new IllegalArgumentException(
+        s"Cannot create a snapshot for an end offset ($endOffset) greater than the high-watermark ($highWatermarkOffset)"
+      )
     }
 
+    if (snapshotId.offset < startOffset) {
+      throw new IllegalArgumentException(
+        s"Cannot create a snapshot for an end offset ($endOffset) less than the log start offset ($startOffset)"
+      )
+    }
+
+    val validOffsetAndEpoch = validateOffsetAndEpoch(snapshotId.offset, snapshotId.epoch)
+    if (validOffsetAndEpoch.kind() != ValidOffsetAndEpoch.Kind.VALID) {
+      throw new IllegalArgumentException(
+        s"Snapshot id ($snapshotId) is not valid according to the log: $validOffsetAndEpoch"
+      )
+    }
+
+    storeSnapshot(snapshotId)
+  }
+
+  override def storeSnapshot(snapshotId: OffsetAndEpoch): Optional[RawSnapshotWriter] = {
     if (snapshots.contains(snapshotId)) {
       Optional.empty()
     } else {

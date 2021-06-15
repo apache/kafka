@@ -35,8 +35,9 @@ import org.apache.kafka.raft.internals.RecordsIterator;
  * objects returned by this iterator are independent of the offset of the records in the
  * log used to generate this batch.
  *
- * Use {@code lastOffsetFromLog()} and {@code lastEpochFromLog()} to query which offsets and
- * epoch from the log are include in this snapshot. Both of these values are inclusive.
+ * Use {@code lastContainedLogOffset()} and {@code lastContainedLogEpoch()} to query which
+ * offsets and epoch from the log are included in this snapshot. Both of these values are
+ * inclusive.
  */
 public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>> {
     private final OffsetAndEpoch snapshotId;
@@ -60,14 +61,14 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
     /**
      * Returns the last log offset which is represented in the snapshot.
      */
-    public long lastOffsetFromLog() {
+    public long lastContainedLogOffset() {
         return snapshotId.offset - 1;
     }
 
     /**
      * Returns the epoch of the last log offset which is represented in the snapshot.
      */
-    public int lastEpochFromLog() {
+    public int lastContainedLogEpoch() {
         return snapshotId.epoch;
     }
 

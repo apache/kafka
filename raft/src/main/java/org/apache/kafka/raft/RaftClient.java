@@ -181,11 +181,12 @@ public interface RaftClient<T> extends AutoCloseable {
     void resign(int epoch);
 
     /**
-     * Create a writable snapshot file for a commmitted offset.
+     * Create a writable snapshot file for a committed offset and epoch.
      *
-     * The RaftClient assumes that the snapshot return will contain the records up to and
-     * including the committed offset. See {@link SnapshotWriter} for details on how to use
-     * this object. If a snapshot already exists then return an {@link Optional#empty()}.
+     * The RaftClient assumes that the snapshot returned will contain the records up to and
+     * including the committed offset and epoch. See {@link SnapshotWriter} for details on
+     * how to use this object. If a snapshot already exists then returns an
+     * {@link Optional#empty()}.
      *
      * @param committedOffset the last committed offset that will be included in the snapshot
      * @param committedEpoch the epoch of the committed offset
