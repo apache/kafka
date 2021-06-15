@@ -193,7 +193,7 @@ public class ConfigEntry {
 
     /**
      * Override toString to redact sensitive value.
-     * WARNING, user should be responsible to set correct "senstive" field for each config entry.
+     * WARNING, user should be responsible to set the correct "isSensitive" field for each config entry.
      */
     @Override
     public String toString() {
