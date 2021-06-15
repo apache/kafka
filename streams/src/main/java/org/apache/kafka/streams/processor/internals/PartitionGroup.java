@@ -298,10 +298,12 @@ public class PartitionGroup {
         StampedRecord record = null;
 
         final RecordQueue queue = nonEmptyQueuesByTime.poll();
-        if (queue != null) {
-            System.err.println(logPrefix + queue.partition() + "," + queue.size());
-        } else {
-            System.err.print(logPrefix + "nu");
+        if (logPrefix.contains("1_4")) {
+            if (queue != null) {
+                System.err.println(logPrefix + queue.partition() + "," + queue.size());
+            } else {
+                System.err.print(logPrefix + "nu");
+            }
         }
         info.queue = queue;
 

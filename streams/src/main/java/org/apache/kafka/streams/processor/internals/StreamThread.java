@@ -719,8 +719,8 @@ public class StreamThread extends Thread {
     // Visible for testing
     void runOnce() {
 
-        final String shortLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 20) : logPrefix;
-        System.err.print(shortLogPrefix + "runO ");
+        final String shortLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 16) : logPrefix;
+//        System.err.print(shortLogPrefix + "runO ");
 
         final long startMs = time.milliseconds();
         now = startMs;
@@ -731,12 +731,16 @@ public class StreamThread extends Thread {
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
         // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
         // could affect the task manager state beyond this point within #runOnce().
+
+        System.err.print(shortLogPrefix + "b r");
         if (!isRunning()) {
             log.info("Thread state is already {}, skipping the run once call after poll request", state);
             return;
         }
 
+        System.err.print(shortLogPrefix + "b i");
         initializeAndRestorePhase();
+        System.err.print(shortLogPrefix + "a i:" + state);
 
         // TODO: we should record the restore latency and its relative time spent ratio after
         //       we figure out how to move this method out of the stream thread
@@ -747,7 +751,7 @@ public class StreamThread extends Thread {
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
         if (state == State.RUNNING) {
-            System.err.print(shortLogPrefix + "do ");
+//            System.err.print(shortLogPrefix + "do ");
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
              *  1. If it is time to punctuate, do it;
