@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.nio.BufferUnderflowException;
-import java.util.Comparator;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
@@ -28,7 +26,10 @@ import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.SchemaException;
 
 import java.nio.ByteBuffer;
+import java.nio.BufferUnderflowException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -73,7 +74,7 @@ public class ConsumerProtocol {
         ConsumerProtocolSubscription data = new ConsumerProtocolSubscription();
 
         List<String> topics = new ArrayList<>(subscription.topics());
-        topics.sort(null);
+        Collections.sort(topics);
         data.setTopics(topics);
 
         data.setUserData(subscription.userData() != null ? subscription.userData().duplicate() : null);
