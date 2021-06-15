@@ -1,4 +1,4 @@
-Apache Kajfka
+Apache Kafka
 ===================
 Sae our [web site](https://kafka.apache.org) for details on the project.
 
