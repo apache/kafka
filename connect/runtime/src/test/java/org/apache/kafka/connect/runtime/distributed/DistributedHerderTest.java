@@ -2786,6 +2786,41 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void processRestartRequestsFailureSuppression() {
+        member.wakeup();
+        PowerMock.expectLastCall().anyTimes();
+
+        final String connectorName = "foo";
+        RestartRequest restartRequest = new RestartRequest(connectorName, false, false);
+        EasyMock.expect(herder.buildRestartPlanFor(restartRequest)).andThrow(new RuntimeException()).anyTimes();
+
+        PowerMock.replayAll();
+
+        configUpdateListener.onRestartRequest(restartRequest);
+        assertEquals(1, herder.pendingRestartRequests.size());
+        herder.processRestartRequests();
+        assertTrue(herder.pendingRestartRequests.isEmpty());
+    }
+
+    @Test
+    public void processRestartRequestsDequeue() {
+        member.wakeup();
+        PowerMock.expectLastCall().anyTimes();
+
+        EasyMock.expect(herder.buildRestartPlanFor(EasyMock.anyObject(RestartRequest.class))).andReturn(Optional.empty()).anyTimes();
+
+        PowerMock.replayAll();
+
+        RestartRequest restartRequest = new RestartRequest("foo", false, false);
+        configUpdateListener.onRestartRequest(restartRequest);
+        restartRequest = new RestartRequest("bar", false, false);
+        configUpdateListener.onRestartRequest(restartRequest);
+        assertEquals(2, herder.pendingRestartRequests.size());
+        herder.processRestartRequests();
+        assertTrue(herder.pendingRestartRequests.isEmpty());
+    }
+
+    @Test
     public void preserveOnlyLatestRestartRequest() {
         member.wakeup();
         PowerMock.expectLastCall().anyTimes();

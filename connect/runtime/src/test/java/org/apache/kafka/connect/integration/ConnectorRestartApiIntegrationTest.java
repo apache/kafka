@@ -52,7 +52,6 @@ import static org.apache.kafka.connect.util.clusters.EmbeddedConnectClusterAsser
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-
 /**
  * Test connectors restart API use cases.
  */
@@ -88,7 +87,7 @@ public class ConnectorRestartApiIntegrationTest {
         brokerProps.put("auto.create.topics.enable", String.valueOf(false));
 
         // build a Connect cluster backed by Kafka and Zk
-        connectBuilder = connectBuilderWithNumWorkers(ONE_WORKER); // true is the default, setting here as example
+        connectBuilder = connectBuilderWithNumWorkers(ONE_WORKER);
         // get connector handles before starting test.
         connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
     }
@@ -99,6 +98,7 @@ public class ConnectorRestartApiIntegrationTest {
                 .numWorkers(numWorkers)
                 .workerProps(workerProps)
                 .brokerProps(brokerProps)
+                // true is the default, setting here as example
                 .maskExitProcedures(true);
     }
 
@@ -146,22 +146,22 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     @Test
-    public void testRestartOnlyConnector() throws Exception {
+    public void testRunningConnectorAndTasksRestartOnlyConnector() throws Exception {
         runningConnectorAndTasksRestart(false, false, 1, allTasksExpectedRestarts(0), false);
     }
 
     @Test
-    public void testRestartBoth() throws Exception {
+    public void testRunningConnectorAndTasksRestartBothConnectorAndTasks() throws Exception {
         runningConnectorAndTasksRestart(false, true, 1, allTasksExpectedRestarts(1), false);
     }
 
     @Test
-    public void testRestartNoopOnlyConnector() throws Exception {
+    public void testRunningConnectorAndTasksRestartOnlyFailedConnectorNoop() throws Exception {
         runningConnectorAndTasksRestart(true, false, 0, allTasksExpectedRestarts(0), true);
     }
 
     @Test
-    public void testRestartNoopBoth() throws Exception {
+    public void testRunningConnectorAndTasksRestartBothConnectorAndTasksNoop() throws Exception {
         runningConnectorAndTasksRestart(true, true, 0, allTasksExpectedRestarts(0), true);
     }
 
@@ -171,12 +171,12 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     @Test
-    public void testFailedConnectorRestartBoth() throws Exception {
+    public void testFailedConnectorRestartBothConnectorAndTasks() throws Exception {
         failedConnectorRestart(false, true, 1);
     }
 
     @Test
-    public void testFailedConnectorRestartBoth2() throws Exception {
+    public void testFailedConnectorRestartOnlyFailedConnectorAndTasks() throws Exception {
         failedConnectorRestart(true, true, 1);
     }
 
@@ -191,12 +191,12 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     @Test
-    public void testFailedTasksRestartNoop() throws Exception {
+    public void testFailedTasksRestartWithoutIncludeTasksNoop() throws Exception {
         failedTasksRestart(true, false, 0, allTasksExpectedRestarts(0), buildAllTasksToFail(), true);
     }
 
     @Test
-    public void testFailedTasksRestartBoth() throws Exception {
+    public void testFailedTasksRestartBothConnectorAndTasks() throws Exception {
         failedTasksRestart(false, true, 1, allTasksExpectedRestarts(1), buildAllTasksToFail(), false);
     }
 
@@ -212,7 +212,7 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     @Test
-    public void testMultiWorkerRestartBoth() throws Exception {
+    public void testMultiWorkerRestartBothConnectorAndTasks() throws Exception {
         runningConnectorAndTasksRestart(false, true, 1, allTasksExpectedRestarts(1), false, 4);
     }
 

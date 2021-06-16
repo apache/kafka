@@ -75,7 +75,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
@@ -194,7 +193,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private short backoffRetries;
 
     // visible for testing
-    // The latest pending restart requests for the connectors;
+    // The latest pending restart request for each named connector
     final Map<String, RestartRequest> pendingRestartRequests = new HashMap<>();
 
     private final DistributedConfig config;
@@ -1116,15 +1115,24 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     /**
      * Process all pending restart requests. There can be at most one request per connector.
      *
-     * <p>This method is called from within the {@link #tick()} method. It is synchronized so that all pending restart requests
-     * are processed at once before any additional requests are added.
+     * <p>This method is called from within the {@link #tick()} method.
      */
-    private synchronized void processRestartRequests() {
-        for (Iterator<Map.Entry<String, RestartRequest>> iterator = pendingRestartRequests.entrySet().iterator(); iterator.hasNext();) {
-            Map.Entry<String, RestartRequest> entry = iterator.next();
-            RestartRequest request = entry.getValue();
-            doRestartConnectorAndTasks(request);
-            iterator.remove();
+    void processRestartRequests() {
+        List<RestartRequest> restartRequests;
+        synchronized (this) {
+            if (pendingRestartRequests.isEmpty()) {
+                return;
+            }
+            //dequeue into a local list to minimize the work being done within the synchronized block
+            restartRequests = new ArrayList<>(pendingRestartRequests.values());
+            pendingRestartRequests.clear();
+        }
+        for (RestartRequest restartRequest : restartRequests) {
+            try {
+                doRestartConnectorAndTasks(restartRequest);
+            } catch (Exception e) {
+                log.warn("Unexpected error while trying to process " + restartRequest + ", the restart request will be skipped.", e);
+            }
         }
     }
 
@@ -1137,7 +1145,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
         RestartPlan plan = maybePlan.get();
         log.info("Executing {}", plan);
-
 
         // If requested, stop the connector and any tasks, marking each as restarting
         final ExtendedAssignment currentAssignments = assignment;
@@ -1707,7 +1714,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         @Override
         public void onRestartRequest(RestartRequest request) {
-            log.info("Received {}", request);
+            log.info("Received and enqueuing {}", request);
 
             synchronized (DistributedHerder.this) {
                 pendingRestartRequests.put(request.connectorName(), request);

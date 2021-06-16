@@ -259,8 +259,8 @@ public class ConnectorsResource {
     @Path("/{connector}/restart")
     public Response restartConnector(final @PathParam("connector") String connector,
                                  final @Context HttpHeaders headers,
-                                 final @DefaultValue ("false") @QueryParam("includeTasks") Boolean includeTasks,
-                                 final @DefaultValue ("false") @QueryParam("onlyFailed") Boolean onlyFailed,
+                                 final @DefaultValue("false") @QueryParam("includeTasks") Boolean includeTasks,
+                                 final @DefaultValue("false") @QueryParam("onlyFailed") Boolean onlyFailed,
                                  final @QueryParam("forward") Boolean forward) throws Throwable {
         RestartRequest restartRequest = new RestartRequest(connector, onlyFailed, includeTasks);
         String forwardingPath = "/connectors/" + connector + "/restart";
@@ -272,11 +272,12 @@ public class ConnectorsResource {
             return Response.ok().build();
         }
 
+        // In all other cases, submit the async restart request and return connector state
         FutureCallback<ConnectorStateInfo> cb = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, cb);
         Map<String, String> queryParameters = new HashMap<>();
-        queryParameters.put("includeTasks", String.valueOf(includeTasks));
-        queryParameters.put("onlyFailed", String.valueOf(onlyFailed));
+        queryParameters.put("includeTasks", includeTasks.toString());
+        queryParameters.put("onlyFailed", onlyFailed.toString());
         ConnectorStateInfo stateInfo = completeOrForwardRequest(cb, forwardingPath, "POST", headers, queryParameters, null, new TypeReference<ConnectorStateInfo>() {
         }, new IdentityTranslator<>(), forward);
         return Response.accepted().entity(stateInfo).build();

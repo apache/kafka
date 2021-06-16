@@ -132,11 +132,7 @@ public class RestartPlan {
         return stateInfo.tasks().size();
     }
 
-    private boolean isRestarting(ConnectorStateInfo.ConnectorState state) {
-        return isRestarting(state.state());
-    }
-
-    private boolean isRestarting(ConnectorStateInfo.TaskState state) {
+    private boolean isRestarting(ConnectorStateInfo.AbstractState state) {
         return isRestarting(state.state());
     }
 

@@ -23,7 +23,6 @@ import org.apache.kafka.connect.connector.Task;
 
 /**
  * A request to restart a connector and/or task instances.
- *
  */
 public class RestartRequest {
 
@@ -102,6 +101,6 @@ public class RestartRequest {
 
     @Override
     public String toString() {
-        return "RestartRequest{" + "connectorName='" + connectorName + "', onlyFailed=" + onlyFailed + ", includeTasks=" + includeTasks + '}';
+        return "restart request for {" + "connectorName='" + connectorName + "', onlyFailed=" + onlyFailed + ", includeTasks=" + includeTasks + '}';
     }
 }
