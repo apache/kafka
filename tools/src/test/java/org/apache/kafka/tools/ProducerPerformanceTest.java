@@ -121,7 +121,7 @@ public class ProducerPerformanceTest {
         Random random = new Random(0);
 
         payload = ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random);
-        assertEquals("Hello Kafka", new String(payload));
+        assertEquals(inputString, new String(payload));
     }
 
     @Test
