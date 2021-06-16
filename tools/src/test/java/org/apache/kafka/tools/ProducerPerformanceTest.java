@@ -116,7 +116,7 @@ public class ProducerPerformanceTest {
         String inputString = "Hello Kafka";
         byte[] byteArray = inputString.getBytes(StandardCharsets.UTF_8);
         List<byte[]> payloadByteList = new ArrayList<>();
-        payloadByteList.add(byteArrray);
+        payloadByteList.add(byteArray);
         byte[] payload = null;
         Random random = new Random(0);
 
