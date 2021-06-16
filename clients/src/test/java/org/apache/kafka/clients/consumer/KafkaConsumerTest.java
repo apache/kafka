@@ -190,7 +190,7 @@ public class KafkaConsumerTest {
 
     @Test
     public void testPollReturnsRecords() {
-        KafkaConsumer<String, String> consumer = setUpConsumerWithRecordsToPoll(tp0, 5).consumer;
+        KafkaConsumer<String, String> consumer = setUpConsumerWithRecordsToPoll(tp0, 5);
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
 
@@ -206,7 +206,7 @@ public class KafkaConsumerTest {
         int invalidRecordNumber = 4;
         StringDeserializer deserializer = mockErrorDeserializer(invalidRecordNumber);
 
-        KafkaConsumer<String, String> consumer = setUpConsumerWithRecordsToPoll(tp0, 5, deserializer).consumer;
+        KafkaConsumer<String, String> consumer = setUpConsumerWithRecordsToPoll(tp0, 5, deserializer);
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
 
@@ -225,7 +225,7 @@ public class KafkaConsumerTest {
         int invalidRecordOffset = 3;
         StringDeserializer deserializer = mockErrorDeserializer(invalidRecordNumber);
 
-        KafkaConsumer<String, String> consumer = setUpConsumerWithRecordsToPoll(tp0, 5, deserializer).consumer;
+        KafkaConsumer<String, String> consumer = setUpConsumerWithRecordsToPoll(tp0, 5, deserializer);
         ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
 
         assertEquals(invalidRecordNumber - 1, records.count());
@@ -269,23 +269,11 @@ public class KafkaConsumerTest {
         };
     }
 
-    private static class ConsumerHarness {
-        MockClient client;
-        public Node node;
-        KafkaConsumer<String, String> consumer;
-
-        ConsumerHarness(KafkaConsumer<String, String> consumer, MockClient client, Node node) {
-            this.consumer = consumer;
-            this.client = client;
-            this.node = node;
-        }
-    }
-
-    private ConsumerHarness setUpConsumerWithRecordsToPoll(TopicPartition tp, int recordCount) {
+    private KafkaConsumer<String, String> setUpConsumerWithRecordsToPoll(TopicPartition tp, int recordCount) {
         return setUpConsumerWithRecordsToPoll(tp, recordCount, new StringDeserializer());
     }
 
-    private ConsumerHarness setUpConsumerWithRecordsToPoll(TopicPartition tp, int recordCount, Deserializer<String> deserializer) {
+    private KafkaConsumer<String, String> setUpConsumerWithRecordsToPoll(TopicPartition tp, int recordCount, Deserializer<String> deserializer) {
         Time time = new MockTime();
         Cluster cluster = TestUtils.singletonCluster(tp.topic(), 1);
         Node node = cluster.nodes().get(0);
@@ -301,11 +289,8 @@ public class KafkaConsumerTest {
         prepareRebalance(client, node, assignor, singletonList(tp), null);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
         client.prepareResponseFrom(fetchResponse(tp, 0, recordCount), node);
-
-        return new ConsumerHarness(consumer, client, node);
+        return consumer;
     }
-
-
 
     @Test
     public void testConstructorClose() {

@@ -19,7 +19,8 @@ package org.apache.kafka.common.errors;
 import org.apache.kafka.common.TopicPartition;
 
 /**
- *  Any exception encountered on an invalid record (deserialization error, corrupt record, etc...)
+ *  This exception is raised for any error that occurs while deserializing records received by the consumer using 
+ *  the configured {@link Deserializer}.
  */
 public class RecordDeserializationException extends SerializationException {
 
