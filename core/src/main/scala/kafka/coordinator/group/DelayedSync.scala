@@ -17,8 +17,6 @@
 
 package kafka.coordinator.group
 
-import kafka.server.DelayedOperation
-
 /**
  * Delayed rebalance operation that is added to the purgatory when is completing the rebalance.
  *
@@ -33,9 +31,9 @@ private[group] class DelayedSync(
   group: GroupMetadata,
   generationId: Int,
   rebalanceTimeoutMs: Long
-) extends DelayedOperation(
+) extends DelayedRebalance(
   rebalanceTimeoutMs,
-  Some(group.lock)
+  group.lock
 ) {
   override def tryComplete(): Boolean = {
     coordinator.tryCompletePendingSync(group, generationId, forceComplete _)

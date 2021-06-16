@@ -53,8 +53,7 @@ class GroupCoordinator(val brokerId: Int,
                        val offsetConfig: OffsetConfig,
                        val groupManager: GroupMetadataManager,
                        val heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
-                       val joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
-                       val syncPurgatory: DelayedOperationPurgatory[DelayedSync],
+                       val rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance],
                        time: Time,
                        metrics: Metrics) extends Logging {
   import GroupCoordinator._
@@ -120,8 +119,7 @@ class GroupCoordinator(val brokerId: Int,
     isActive.set(false)
     groupManager.shutdown()
     heartbeatPurgatory.shutdown()
-    joinPurgatory.shutdown()
-    syncPurgatory.shutdown()
+    rebalancePurgatory.shutdown()
     info("Shutdown complete.")
   }
 
@@ -217,7 +215,7 @@ class GroupCoordinator(val brokerId: Int,
 
             // attempt to complete JoinGroup
             if (group.is(PreparingRebalance)) {
-              joinPurgatory.checkAndComplete(GroupKey(group.groupId))
+              rebalancePurgatory.checkAndComplete(GroupJoinKey(group.groupId))
             }
           }
       }
@@ -1109,7 +1107,7 @@ class GroupCoordinator(val brokerId: Int,
             group.maybeInvokeJoinCallback(member, JoinGroupResult(member.memberId, Errors.NOT_COORDINATOR))
           }
 
-          joinPurgatory.checkAndComplete(GroupKey(group.groupId))
+          rebalancePurgatory.checkAndComplete(GroupJoinKey(group.groupId))
 
         case Stable | CompletingRebalance =>
           for (member <- group.allMemberMetadata) {
@@ -1354,7 +1352,7 @@ class GroupCoordinator(val brokerId: Int,
 
     val delayedRebalance = if (group.is(Empty))
       new InitialDelayedJoin(this,
-        joinPurgatory,
+        rebalancePurgatory,
         group,
         groupConfig.groupInitialRebalanceDelayMs,
         groupConfig.groupInitialRebalanceDelayMs,
@@ -1367,8 +1365,8 @@ class GroupCoordinator(val brokerId: Int,
     info(s"Preparing to rebalance group ${group.groupId} in state ${group.currentState} with old generation " +
       s"${group.generationId} (${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) (reason: $reason)")
 
-    val groupKey = GroupKey(group.groupId)
-    joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
+    val groupKey = GroupJoinKey(group.groupId)
+    rebalancePurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
   }
 
   private def removeMemberAndUpdateGroup(group: GroupMetadata, member: MemberMetadata, reason: String): Unit = {
@@ -1381,7 +1379,7 @@ class GroupCoordinator(val brokerId: Int,
     group.currentState match {
       case Dead | Empty =>
       case Stable | CompletingRebalance => maybePrepareRebalance(group, reason)
-      case PreparingRebalance => joinPurgatory.checkAndComplete(GroupKey(group.groupId))
+      case PreparingRebalance => rebalancePurgatory.checkAndComplete(GroupJoinKey(group.groupId))
     }
   }
 
@@ -1389,7 +1387,7 @@ class GroupCoordinator(val brokerId: Int,
     group.remove(memberId)
 
     if (group.is(PreparingRebalance)) {
-      joinPurgatory.checkAndComplete(GroupKey(group.groupId))
+      rebalancePurgatory.checkAndComplete(GroupJoinKey(group.groupId))
     }
   }
 
@@ -1421,9 +1419,9 @@ class GroupCoordinator(val brokerId: Int,
         // of rebalance preparing stage, and send out another delayed operation
         // until session timeout removes all the non-responsive members.
         error(s"Group ${group.groupId} could not complete rebalance because no members rejoined")
-        joinPurgatory.tryCompleteElseWatch(
+        rebalancePurgatory.tryCompleteElseWatch(
           new DelayedJoin(this, group, group.rebalanceTimeoutMs),
-          Seq(GroupKey(group.groupId)))
+          Seq(GroupJoinKey(group.groupId)))
       } else {
         group.initNextGeneration()
         if (group.is(Empty)) {
@@ -1488,16 +1486,16 @@ class GroupCoordinator(val brokerId: Int,
   private def maybeCompleteSyncExpiration(
     group: GroupMetadata
   ): Unit = {
-    val groupKey = GroupKey(group.groupId)
-    syncPurgatory.checkAndComplete(groupKey)
+    val groupKey = GroupSyncKey(group.groupId)
+    rebalancePurgatory.checkAndComplete(groupKey)
   }
 
   private def schedulePendingSync(
     group: GroupMetadata
   ): Unit = {
     val delayedSync = new DelayedSync(this, group, group.generationId, group.rebalanceTimeoutMs)
-    val groupKey = GroupKey(group.groupId)
-    syncPurgatory.tryCompleteElseWatch(delayedSync, Seq(groupKey))
+    val groupKey = GroupSyncKey(group.groupId)
+    rebalancePurgatory.tryCompleteElseWatch(delayedSync, Seq(groupKey))
   }
 
   def tryCompletePendingSync(
@@ -1630,9 +1628,8 @@ object GroupCoordinator {
             time: Time,
             metrics: Metrics): GroupCoordinator = {
     val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
-    val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance", config.brokerId)
-    val syncPurgatory = DelayedOperationPurgatory[DelayedSync]("RebalanceDelayedSync", config.brokerId)
-    GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, syncPurgatory, time, metrics)
+    val rebalancePurgatory = DelayedOperationPurgatory[DelayedRebalance]("Rebalance", config.brokerId)
+    GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, time, metrics)
   }
 
   private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
@@ -1651,8 +1648,7 @@ object GroupCoordinator {
   def apply(config: KafkaConfig,
             replicaManager: ReplicaManager,
             heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
-            joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
-            syncPurgatory: DelayedOperationPurgatory[DelayedSync],
+            rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance],
             time: Time,
             metrics: Metrics): GroupCoordinator = {
     val offsetConfig = this.offsetConfig(config)
@@ -1664,7 +1660,7 @@ object GroupCoordinator {
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
       offsetConfig, replicaManager, time, metrics)
     new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory,
-      joinPurgatory, syncPurgatory, time, metrics)
+      rebalancePurgatory, time, metrics)
   }
 
   private def memberLeaveError(memberIdentity: MemberIdentity,
