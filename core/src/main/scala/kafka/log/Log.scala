@@ -1879,9 +1879,10 @@ class Log(@volatile private var _dir: File,
                                       reason: SegmentDeletionReason): Unit = {
     if (segments.nonEmpty) {
       lock synchronized {
-        // As most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
+        // Most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
         // removing the deleted segment, we should force materialization of the iterator here, so that results of the
-        // iteration remain valid and deterministic.
+        // iteration remain valid and deterministic. We should also pass only the materialized view of the
+        // iterator to the logic that actually deletes the segments.
         val toDelete = segments.toList
         reason.logReason(this, toDelete)
         toDelete.foreach { segment =>
