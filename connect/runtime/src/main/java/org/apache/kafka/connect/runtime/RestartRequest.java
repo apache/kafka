@@ -76,7 +76,7 @@ public class RestartRequest {
      * @param status the connector status; may not be null
      * @return true if the connector is to be restarted, or false otherwise
      */
-    public boolean includeConnector(ConnectorStatus status) {
+    public boolean shouldRestartConnector(ConnectorStatus status) {
         return !onlyFailed || status.state() == AbstractStatus.State.FAILED;
     }
 
@@ -95,7 +95,7 @@ public class RestartRequest {
      * @param status the task status; may not be null
      * @return true if the task is to be restarted, or false otherwise
      */
-    public boolean includeTask(TaskStatus status) {
+    public boolean shouldRestartTask(TaskStatus status) {
         return includeTasks && (!onlyFailed || status.state() == AbstractStatus.State.FAILED);
     }
 

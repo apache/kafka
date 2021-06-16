@@ -39,44 +39,44 @@ public class RestartRequestTest {
     @Test
     public void restartOnlyFailedConnector() {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
-        assertTrue(restartRequest.includeConnector(createConnectorStatus(AbstractStatus.State.FAILED)));
-        assertFalse(restartRequest.includeConnector(createConnectorStatus(AbstractStatus.State.RUNNING)));
-        assertFalse(restartRequest.includeConnector(createConnectorStatus(AbstractStatus.State.PAUSED)));
+        assertTrue(restartRequest.shouldRestartConnector(createConnectorStatus(AbstractStatus.State.FAILED)));
+        assertFalse(restartRequest.shouldRestartConnector(createConnectorStatus(AbstractStatus.State.RUNNING)));
+        assertFalse(restartRequest.shouldRestartConnector(createConnectorStatus(AbstractStatus.State.PAUSED)));
     }
 
     @Test
     public void restartAnyStatusConnector() {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, false);
-        assertTrue(restartRequest.includeConnector(createConnectorStatus(AbstractStatus.State.FAILED)));
-        assertTrue(restartRequest.includeConnector(createConnectorStatus(AbstractStatus.State.RUNNING)));
-        assertTrue(restartRequest.includeConnector(createConnectorStatus(AbstractStatus.State.PAUSED)));
+        assertTrue(restartRequest.shouldRestartConnector(createConnectorStatus(AbstractStatus.State.FAILED)));
+        assertTrue(restartRequest.shouldRestartConnector(createConnectorStatus(AbstractStatus.State.RUNNING)));
+        assertTrue(restartRequest.shouldRestartConnector(createConnectorStatus(AbstractStatus.State.PAUSED)));
     }
 
     @Test
     public void restartOnlyFailedTasks() {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, true);
-        assertTrue(restartRequest.includeTask(createTaskStatus(AbstractStatus.State.FAILED)));
-        assertFalse(restartRequest.includeTask(createTaskStatus(AbstractStatus.State.RUNNING)));
-        assertFalse(restartRequest.includeTask(createTaskStatus(AbstractStatus.State.PAUSED)));
+        assertTrue(restartRequest.shouldRestartTask(createTaskStatus(AbstractStatus.State.FAILED)));
+        assertFalse(restartRequest.shouldRestartTask(createTaskStatus(AbstractStatus.State.RUNNING)));
+        assertFalse(restartRequest.shouldRestartTask(createTaskStatus(AbstractStatus.State.PAUSED)));
     }
 
     @Test
     public void restartAnyStatusTasks() {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
-        assertTrue(restartRequest.includeTask(createTaskStatus(AbstractStatus.State.FAILED)));
-        assertTrue(restartRequest.includeTask(createTaskStatus(AbstractStatus.State.RUNNING)));
-        assertTrue(restartRequest.includeTask(createTaskStatus(AbstractStatus.State.PAUSED)));
+        assertTrue(restartRequest.shouldRestartTask(createTaskStatus(AbstractStatus.State.FAILED)));
+        assertTrue(restartRequest.shouldRestartTask(createTaskStatus(AbstractStatus.State.RUNNING)));
+        assertTrue(restartRequest.shouldRestartTask(createTaskStatus(AbstractStatus.State.PAUSED)));
     }
 
     @Test
     public void doNotRestartTasks() {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, false);
-        assertFalse(restartRequest.includeTask(createTaskStatus(AbstractStatus.State.FAILED)));
-        assertFalse(restartRequest.includeTask(createTaskStatus(AbstractStatus.State.RUNNING)));
+        assertFalse(restartRequest.shouldRestartTask(createTaskStatus(AbstractStatus.State.FAILED)));
+        assertFalse(restartRequest.shouldRestartTask(createTaskStatus(AbstractStatus.State.RUNNING)));
 
         restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
-        assertFalse(restartRequest.includeTask(createTaskStatus(AbstractStatus.State.FAILED)));
-        assertFalse(restartRequest.includeTask(createTaskStatus(AbstractStatus.State.RUNNING)));
+        assertFalse(restartRequest.shouldRestartTask(createTaskStatus(AbstractStatus.State.FAILED)));
+        assertFalse(restartRequest.shouldRestartTask(createTaskStatus(AbstractStatus.State.RUNNING)));
     }
 
 
