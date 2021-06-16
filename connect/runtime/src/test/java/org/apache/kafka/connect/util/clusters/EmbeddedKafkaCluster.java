@@ -42,6 +42,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -91,6 +92,7 @@ public class EmbeddedKafkaCluster {
     private final Time time = new MockTime();
     private final int[] currentBrokerPorts;
     private final String[] currentBrokerLogDirs;
+    private final boolean hasListenerConfig;
 
     private EmbeddedZookeeper zookeeper = null;
     private ListenerName listenerName = new ListenerName("PLAINTEXT");
@@ -102,6 +104,10 @@ public class EmbeddedKafkaCluster {
         currentBrokerPorts = new int[numBrokers];
         currentBrokerLogDirs = new String[numBrokers];
         this.brokerConfig = brokerConfig;
+        // Since we support `stop` followed by `startOnlyKafkaOnSamePorts`, we track whether
+        // a listener config is defined during initialization in order to know if it's
+        // safe to override it
+        hasListenerConfig = brokerConfig.get(KafkaConfig.ListenersProp()) != null;
     }
 
     /**
@@ -111,7 +117,7 @@ public class EmbeddedKafkaCluster {
      * @throws ConnectException if a directory to store the data cannot be created
      */
     public void startOnlyKafkaOnSamePorts() {
-        start(currentBrokerPorts, currentBrokerLogDirs);
+        doStart();
     }
 
     public void start() {
@@ -119,10 +125,10 @@ public class EmbeddedKafkaCluster {
         zookeeper = new EmbeddedZookeeper();
         Arrays.fill(currentBrokerPorts, 0);
         Arrays.fill(currentBrokerLogDirs, null);
-        start(currentBrokerPorts, currentBrokerLogDirs);
+        doStart();
     }
 
-    private void start(int[] brokerPorts, String[] logDirs) {
+    private void doStart() {
         brokerConfig.put(KafkaConfig.ZkConnectProp(), zKConnectString());
 
         putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
@@ -131,29 +137,30 @@ public class EmbeddedKafkaCluster {
         putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), false);
 
         Object listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerListenerNameProp());
-        if (listenerConfig != null) {
-            listenerName = new ListenerName(listenerConfig.toString());
-        }
+        if (listenerConfig == null)
+            listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerSecurityProtocolProp());
+        if (listenerConfig == null)
+            listenerConfig = "PLAINTEXT";
+        listenerName = new ListenerName(listenerConfig.toString());
 
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
-            currentBrokerLogDirs[i] = logDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
+            currentBrokerLogDirs[i] = currentBrokerLogDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
             brokerConfig.put(KafkaConfig.LogDirProp(), currentBrokerLogDirs[i]);
-            putIfAbsent(brokerConfig, KafkaConfig.ListenersProp(), "PLAINTEXT://localhost:" + brokerPorts[i]);
+            if (!hasListenerConfig)
+                brokerConfig.put(KafkaConfig.ListenersProp(), listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
             brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time);
             currentBrokerPorts[i] = brokers[i].boundPort(listenerName);
         }
 
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         if (sslEnabled()) {
             producerProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             producerProps.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
             producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
         }
-        producer = new KafkaProducer<>(producerProps);
+        producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
     }
 
     public void stopOnlyKafka() {
