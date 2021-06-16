@@ -2008,14 +2008,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void pause(Collection<TopicPartition> partitions) {
+        System.err.print("pausing:" + partitions);
         acquireAndEnsureOpen();
         try {
-            log.debug("Pausing partitions {}", partitions);
+            log.debug("before pausing:", partitions);
+            System.err.print("before pausing:" + partitions);
             for (TopicPartition partition: partitions) {
                 subscriptions.pause(partition);
             }
         } finally {
+            System.err.print("before release:" + partitions);
             release();
+            System.err.print("after release:" + partitions);
         }
     }
 

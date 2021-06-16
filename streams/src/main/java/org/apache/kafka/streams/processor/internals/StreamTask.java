@@ -983,11 +983,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (log.isTraceEnabled()) {
             log.trace("Added records into the buffered queue of partition {}, new queue size is {}", partition, newQueueSize);
         }
+        if (logPrefix.contains("1_4")) {
+            System.err.print("added records:" + newQueueSize + "," + maxBufferedSize);
+        }
+
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
         if (newQueueSize > maxBufferedSize) {
+            System.err.print(logPrefix + "pausing:" + partition + "," + newQueueSize + "," + maxBufferedSize);
             mainConsumer.pause(singleton(partition));
+        }
+        if (logPrefix.contains("1_4")) {
+            System.err.print("end add r");
         }
     }
 

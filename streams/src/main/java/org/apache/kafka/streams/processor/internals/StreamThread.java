@@ -740,16 +740,16 @@ public class StreamThread extends Thread {
         // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
         // could affect the task manager state beyond this point within #runOnce().
 
-        System.err.print(shortLogPrefix + "b r");
+//        System.err.print(shortLogPrefix + "b r");
         if (!isRunning()) {
             System.err.print(shortLogPrefix + "eb r:" + state);
             log.info("Thread state is already {}, skipping the run once call after poll request", state);
             return;
         }
 
-        System.err.print(shortLogPrefix + "b i");
+//        System.err.print(shortLogPrefix + "b i");
         initializeAndRestorePhase();
-        System.err.print(shortLogPrefix + "a i:" + state);
+//        System.err.print(shortLogPrefix + "a i:" + state);
 
         // TODO: we should record the restore latency and its relative time spent ratio after
         //       we figure out how to move this method out of the stream thread
