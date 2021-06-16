@@ -1225,6 +1225,42 @@ class LogCleanerTest {
   }
 
   /**
+    * Validate the logic for grouping log segments together for cleaning when segments is empty,
+    * even if the range of offsets is greater than Int.MaxValue.
+    */
+  @Test
+  def testSegmentGroupingWithEmptySegments(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 400: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    // create three empty segment
+    while (log.numberOfSegments < 3)
+      log.roll(Some(log.activeSegment.baseOffset + Int.MaxValue + 1))
+
+    // grouping should result in a single group with maximum relative offset greater than Int.MaxValue and size is zero
+    var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.activeSegment.baseOffset)
+    assertEquals(1, groups.size)
+    checkSegmentOrder(groups)
+
+    // append one message to the third segment
+    log.appendAsFollower(messageWithOffset("hello".getBytes, "hello".getBytes, log.activeSegment.baseOffset))
+    // create another three empty segment
+    while (log.numberOfSegments < 6)
+      log.roll(Some(log.activeSegment.baseOffset + Int.MaxValue + 1))
+    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.activeSegment.baseOffset)
+    assertEquals(3, groups.size)
+    for (group <- groups)
+      assertTrue("Relative offset greater than Int.MaxValue with sum of segment size greater than 0",
+        group.last.offsetIndex.lastOffset - group.head.offsetIndex.baseOffset <= Int.MaxValue || group.map(_.size).sum == 0)
+    checkSegmentOrder(groups)
+  }
+
+  /**
    * Following the loading of a log segment where the index file is zero sized,
    * the index returned would be the base offset.  Sometimes the log file would
    * contain data with offsets in excess of the baseOffset which would cause
