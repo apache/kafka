@@ -54,25 +54,38 @@ public class RemoteLogManagerConfigTest {
 
     private Map<String, Object> extractProps(RemoteLogManagerConfig remoteLogManagerConfig) {
         Map<String, Object> props = new HashMap<>();
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, remoteLogManagerConfig.enableRemoteStorageSystem());
-        props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, remoteLogManagerConfig.remoteStorageManagerClassName());
-        props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP, remoteLogManagerConfig.remoteStorageManagerClassPath());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, remoteLogManagerConfig.remoteLogMetadataManagerClassName());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP, remoteLogManagerConfig.remoteLogMetadataManagerClassPath());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP,
+                  remoteLogManagerConfig.enableRemoteStorageSystem());
+        props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
+                  remoteLogManagerConfig.remoteStorageManagerClassName());
+        props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP,
+                  remoteLogManagerConfig.remoteStorageManagerClassPath());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+                  remoteLogManagerConfig.remoteLogMetadataManagerClassName());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP,
+                  remoteLogManagerConfig.remoteLogMetadataManagerClassPath());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
                   remoteLogManagerConfig.remoteLogMetadataManagerListenerName());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
                   remoteLogManagerConfig.remoteLogIndexFileCacheTotalSizeBytes());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP, remoteLogManagerConfig.remoteLogManagerThreadPoolSize());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, remoteLogManagerConfig.remoteLogManagerTaskIntervalMs());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP, remoteLogManagerConfig.remoteLogManagerTaskRetryBackoffMs());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP,
+                  remoteLogManagerConfig.remoteLogManagerThreadPoolSize());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP,
+                  remoteLogManagerConfig.remoteLogManagerTaskIntervalMs());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP,
+                  remoteLogManagerConfig.remoteLogManagerTaskRetryBackoffMs());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP,
                   remoteLogManagerConfig.remoteLogManagerTaskRetryBackoffMaxMs());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP, remoteLogManagerConfig.remoteLogManagerTaskRetryJitterMs());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, remoteLogManagerConfig.remoteLogReaderThreads());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP, remoteLogManagerConfig.remoteLogReaderMaxPendingTasks());
-        props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP, remoteLogManagerConfig.remoteStorageManagerPrefix());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP, remoteLogManagerConfig.remoteLogMetadataManagerPrefix());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP,
+                  remoteLogManagerConfig.remoteLogManagerTaskRetryJitter());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP,
+                  remoteLogManagerConfig.remoteLogReaderThreads());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP,
+                  remoteLogManagerConfig.remoteLogReaderMaxPendingTasks());
+        props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP,
+                  remoteLogManagerConfig.remoteStorageManagerPrefix());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP,
+                  remoteLogManagerConfig.remoteLogMetadataManagerPrefix());
         return props;
     }
 }

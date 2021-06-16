@@ -106,8 +106,11 @@ public final class RemoteLogManagerConfig {
     public static final long DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS = 30 * 1000L;
 
     public static final String REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP = "remote.log.manager.task.retry.jitter";
-    public static final String REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_DOC = "Random jitter amount applied to the `remote.log.manager.task.retry.backoff.ms` " +
-            "for computing the resultant backoff interval. This will avoid thundering herds of requests.";
+    public static final String REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_DOC = "The value used in defining the range for computing random jitter factor. " +
+            "It is applied to the effective exponential term for computing the resultant retry backoff interval. This will avoid thundering herds " +
+            "of requests. The default value is 0.2 and valid value should be between 0(inclusive) and 0.5(inclusive). " +
+            "For ex: remote.log.manager.task.retry.jitter = 0.25, then the range to compute random jitter will be [1-0.25, 1+0.25) viz [0.75, 1.25). " +
+            "So, jitter factor can be any random value with in that range.";
     public static final double DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_JITTER = 0.2;
 
     public static final String REMOTE_LOG_READER_THREADS_PROP = "remote.log.reader.threads";
@@ -122,43 +125,97 @@ public final class RemoteLogManagerConfig {
     public static final ConfigDef CONFIG_DEF = new ConfigDef();
 
     static {
-        CONFIG_DEF.define(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, BOOLEAN, DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE, MEDIUM, REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC)
-                  .define(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP, STRING, null, new ConfigDef.NonEmptyString(), MEDIUM, REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_DOC)
-                  .define(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP, STRING, null, new ConfigDef.NonEmptyString(),
-                          MEDIUM, REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_DOC)
-                  .define(REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, STRING, null, MEDIUM,
-                          REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC)
-                  .define(REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP, STRING, null, MEDIUM,
-                          REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC)
-                  .define(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, STRING, null, MEDIUM,
-                          REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_DOC)
-                  .define(REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP, STRING, null, MEDIUM,
-                          REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_DOC)
-                  .define(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, STRING, null, MEDIUM,
-                          REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_DOC)
-                  .define(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP, LONG,
-                          DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES, atLeast(1), LOW,
-                          REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_DOC)
-                  .define(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP, INT,
-                          DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE, atLeast(1), MEDIUM,
-                          REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC)
-                  .define(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, LONG,
-                          DEFAULT_REMOTE_LOG_MANAGER_TASK_INTERVAL_MS, atLeast(1), LOW,
-                          REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_DOC)
-                  .define(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP, LONG,
-                          DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS, atLeast(1), LOW,
-                          REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_DOC)
-                  .define(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP, LONG,
-                          DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS, atLeast(1), LOW,
-                          REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_DOC)
-                  .define(REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP, DOUBLE,
-                          DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_JITTER, between(0, 0.5), LOW,
-                          REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_DOC)
-                  .define(REMOTE_LOG_READER_THREADS_PROP, INT, DEFAULT_REMOTE_LOG_READER_THREADS,
-                          atLeast(1), MEDIUM, REMOTE_LOG_READER_THREADS_DOC)
-                  .define(REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP, INT,
-                          DEFAULT_REMOTE_LOG_READER_MAX_PENDING_TASKS, atLeast(1), MEDIUM,
-                          REMOTE_LOG_READER_MAX_PENDING_TASKS_DOC);
+        CONFIG_DEF.defineInternal(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP,
+                                  BOOLEAN,
+                                  DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE,
+                                  null,
+                                  MEDIUM,
+                                  REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC)
+                  .defineInternal(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP,
+                                  STRING,
+                                  null,
+                                  new ConfigDef.NonEmptyString(),
+                                  MEDIUM,
+                                  REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_DOC)
+                  .defineInternal(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP,
+                                  STRING,
+                                  null,
+                                  new ConfigDef.NonEmptyString(),
+                                  MEDIUM,
+                                  REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_DOC)
+                  .defineInternal(REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, STRING,
+                                  null,
+                                  new ConfigDef.NonEmptyString(),
+                                  MEDIUM,
+                                  REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC)
+                  .defineInternal(REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP, STRING,
+                                  null,
+                                  new ConfigDef.NonEmptyString(),
+                                  MEDIUM,
+                                  REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC)
+                  .defineInternal(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+                                  STRING, null,
+                                  new ConfigDef.NonEmptyString(),
+                                  MEDIUM,
+                                  REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_DOC)
+                  .defineInternal(REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP,
+                                  STRING,
+                                  null,
+                                  new ConfigDef.NonEmptyString(),
+                                  MEDIUM,
+                                  REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_DOC)
+                  .defineInternal(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, STRING,
+                                  null,
+                                  new ConfigDef.NonEmptyString(),
+                                  MEDIUM,
+                                  REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_DOC)
+                  .defineInternal(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
+                                  LONG,
+                                  DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES,
+                                  atLeast(1),
+                                  LOW,
+                                  REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_DOC)
+                  .defineInternal(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP,
+                                  INT,
+                                  DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE,
+                                  atLeast(1),
+                                  MEDIUM,
+                                  REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC)
+                  .defineInternal(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP,
+                                  LONG,
+                                  DEFAULT_REMOTE_LOG_MANAGER_TASK_INTERVAL_MS,
+                                  atLeast(1),
+                                  LOW,
+                                  REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_DOC)
+                  .defineInternal(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP,
+                                  LONG,
+                                  DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS,
+                                  atLeast(1),
+                                  LOW,
+                                  REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_DOC)
+                  .defineInternal(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP,
+                                  LONG,
+                                  DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS,
+                                  atLeast(1), LOW,
+                                  REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_DOC)
+                  .defineInternal(REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP,
+                                  DOUBLE,
+                                  DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_JITTER,
+                                  between(0, 0.5),
+                                  LOW,
+                                  REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_DOC)
+                  .defineInternal(REMOTE_LOG_READER_THREADS_PROP,
+                                  INT,
+                                  DEFAULT_REMOTE_LOG_READER_THREADS,
+                                  atLeast(1),
+                                  MEDIUM,
+                                  REMOTE_LOG_READER_THREADS_DOC)
+                  .defineInternal(REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP,
+                                  INT,
+                                  DEFAULT_REMOTE_LOG_READER_MAX_PENDING_TASKS,
+                                  atLeast(1),
+                                  MEDIUM,
+                                  REMOTE_LOG_READER_MAX_PENDING_TASKS_DOC);
     }
 
     private final boolean enableRemoteStorageSystem;
@@ -171,7 +228,7 @@ public final class RemoteLogManagerConfig {
     private final long remoteLogManagerTaskIntervalMs;
     private final long remoteLogManagerTaskRetryBackoffMs;
     private final long remoteLogManagerTaskRetryBackoffMaxMs;
-    private final double remoteLogManagerTaskRetryJitterMs;
+    private final double remoteLogManagerTaskRetryJitter;
     private final int remoteLogReaderThreads;
     private final int remoteLogReaderMaxPendingTasks;
     private final String remoteStorageManagerPrefix;
@@ -231,7 +288,7 @@ public final class RemoteLogManagerConfig {
         this.remoteLogManagerTaskIntervalMs = remoteLogManagerTaskIntervalMs;
         this.remoteLogManagerTaskRetryBackoffMs = remoteLogManagerTaskRetryBackoffMs;
         this.remoteLogManagerTaskRetryBackoffMaxMs = remoteLogManagerTaskRetryBackoffMaxMs;
-        this.remoteLogManagerTaskRetryJitterMs = remoteLogManagerTaskRetryJitter;
+        this.remoteLogManagerTaskRetryJitter = remoteLogManagerTaskRetryJitter;
         this.remoteLogReaderThreads = remoteLogReaderThreads;
         this.remoteLogReaderMaxPendingTasks = remoteLogReaderMaxPendingTasks;
         this.remoteStorageManagerPrefix = remoteStorageManagerPrefix;
@@ -281,8 +338,8 @@ public final class RemoteLogManagerConfig {
         return remoteLogManagerTaskRetryBackoffMaxMs;
     }
 
-    public double remoteLogManagerTaskRetryJitterMs() {
-        return remoteLogManagerTaskRetryJitterMs;
+    public double remoteLogManagerTaskRetryJitter() {
+        return remoteLogManagerTaskRetryJitter;
     }
 
     public int remoteLogReaderThreads() {
@@ -324,7 +381,7 @@ public final class RemoteLogManagerConfig {
                 && remoteLogManagerTaskIntervalMs == that.remoteLogManagerTaskIntervalMs
                 && remoteLogManagerTaskRetryBackoffMs == that.remoteLogManagerTaskRetryBackoffMs
                 && remoteLogManagerTaskRetryBackoffMaxMs == that.remoteLogManagerTaskRetryBackoffMaxMs
-                && remoteLogManagerTaskRetryJitterMs == that.remoteLogManagerTaskRetryJitterMs
+                && remoteLogManagerTaskRetryJitter == that.remoteLogManagerTaskRetryJitter
                 && remoteLogReaderThreads == that.remoteLogReaderThreads
                 && remoteLogReaderMaxPendingTasks == that.remoteLogReaderMaxPendingTasks
                 && Objects.equals(remoteStorageManagerClassName, that.remoteStorageManagerClassName)
@@ -343,7 +400,7 @@ public final class RemoteLogManagerConfig {
         return Objects.hash(enableRemoteStorageSystem, remoteStorageManagerClassName, remoteStorageManagerClassPath,
                             remoteLogMetadataManagerClassName, remoteLogMetadataManagerClassPath, remoteLogMetadataManagerListenerName,
                             remoteLogIndexFileCacheTotalSizeBytes, remoteLogManagerThreadPoolSize, remoteLogManagerTaskIntervalMs,
-                            remoteLogManagerTaskRetryBackoffMs, remoteLogManagerTaskRetryBackoffMaxMs, remoteLogManagerTaskRetryJitterMs,
+                            remoteLogManagerTaskRetryBackoffMs, remoteLogManagerTaskRetryBackoffMaxMs, remoteLogManagerTaskRetryJitter,
                             remoteLogReaderThreads, remoteLogReaderMaxPendingTasks, remoteStorageManagerProps, remoteLogMetadataManagerProps,
                             remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix);
     }
