@@ -174,11 +174,15 @@ public class ConfigEntry {
         return result;
     }
 
+    /**
+     * Override toString to redact sensitive value.
+     * WARNING, user should be responsible to set the correct "isSensitive" field for each config entry.
+     */
     @Override
     public String toString() {
         return "ConfigEntry(" +
                 "name=" + name +
-                ", value=" + value +
+                ", value=" + (isSensitive ? "Redacted" : value) +
                 ", source=" + source +
                 ", isSensitive=" + isSensitive +
                 ", isReadOnly=" + isReadOnly +
