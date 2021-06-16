@@ -17,7 +17,6 @@
 
 package kafka.tools
 
-import joptsimple.OptionParser
 import kafka.api._
 import kafka.utils.{IncludeList, _}
 import org.apache.kafka.clients._
@@ -42,6 +41,8 @@ import java.util.{Date, Optional, Properties}
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
+
+import joptsimple.OptionSpec
 
 /**
  * For verifying the consistency among replicas.
@@ -73,66 +74,64 @@ object ReplicaVerificationTool extends Logging {
     ReplicaVerificationTool.dateFormat.format(new Date(Time.SYSTEM.milliseconds))
   }
 
-  def main(args: Array[String]): Unit = {
-    val parser = new OptionParser(false)
-    val brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The list of hostname and port of the server to connect to.")
-                         .withRequiredArg
-                         .describedAs("HOST1:PORT1,...,HOST3:PORT3")
-                         .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The list of hostname and port of the server to connect to.")
-                         .requiredUnless("broker-list")
-                         .withRequiredArg
-                         .describedAs("HOST1:PORT1,...,HOST3:PORT3")
-                         .ofType(classOf[String])
-    val fetchSizeOpt = parser.accepts("fetch-size", "The fetch size of each request.")
-                         .withRequiredArg
-                         .describedAs("bytes")
-                         .ofType(classOf[java.lang.Integer])
-                         .defaultsTo(ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES)
-    val maxWaitMsOpt = parser.accepts("max-wait-ms", "The max amount of time each fetch request waits.")
-                         .withRequiredArg
-                         .describedAs("ms")
-                         .ofType(classOf[java.lang.Integer])
-                         .defaultsTo(1000)
+  // Non-private for testing
+  sealed class ReplicaVerificationToolOptions(args: Array[String]) extends CommandDefaultOptions(args) {
+    private val brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The list of hostname and port of the server to connect to.")
+      .withRequiredArg
+      .describedAs("HOST1:PORT1,...,HOST3:PORT3")
+      .ofType(classOf[String])
+    private val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The list of hostname and port of the server to connect to.")
+      .requiredUnless("broker-list")
+      .withRequiredArg
+      .describedAs("HOST1:PORT1,...,HOST3:PORT3")
+      .ofType(classOf[String])
+    private val fetchSizeOpt = parser.accepts("fetch-size", "The fetch size of each request.")
+      .withRequiredArg
+      .describedAs("bytes")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES)
+    private val maxWaitMsOpt = parser.accepts("max-wait-ms", "The max amount of time each fetch request waits.")
+      .withRequiredArg
+      .describedAs("ms")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(1000)
     val topicWhiteListOpt = parser.accepts("topic-white-list", "DEPRECATED use --topics-include instead; ignored if --topics-include specified. List of topics to verify replica consistency. Defaults to '.*' (all topics)")
-                         .withRequiredArg
-                         .describedAs("Java regex (String)")
-                         .ofType(classOf[String])
-                         .defaultsTo(".*")
+      .withRequiredArg
+      .describedAs("Java regex (String)")
+      .ofType(classOf[String])
+      .defaultsTo(".*")
     val topicsIncludeOpt = parser.accepts("topics-include", "List of topics to verify replica consistency. Defaults to '.*' (all topics)")
-                        .withRequiredArg
-                        .describedAs("Java regex (String)")
-                        .ofType(classOf[String])
-                        .defaultsTo(".*")
-    val initialOffsetTimeOpt = parser.accepts("time", "Timestamp for getting the initial offsets.")
-                           .withRequiredArg
-                           .describedAs("timestamp/-1(latest)/-2(earliest)")
-                           .ofType(classOf[java.lang.Long])
-                           .defaultsTo(-1L)
-    val reportIntervalOpt = parser.accepts("report-interval-ms", "The reporting interval.")
-                         .withRequiredArg
-                         .describedAs("ms")
-                         .ofType(classOf[java.lang.Long])
-                         .defaultsTo(30 * 1000L)
-    val helpOpt = parser.accepts("help", "Print usage information.").forHelp()
-    val versionOpt = parser.accepts("version", "Print version information and exit.").forHelp()
+      .withRequiredArg
+      .describedAs("Java regex (String)")
+      .ofType(classOf[String])
+      .defaultsTo(".*")
+    private val initialOffsetTimeOpt = parser.accepts("time", "Timestamp for getting the initial offsets.")
+      .withRequiredArg
+      .describedAs("timestamp/-1(latest)/-2(earliest)")
+      .ofType(classOf[java.lang.Long])
+      .defaultsTo(-1L)
+    private val reportIntervalOpt = parser.accepts("report-interval-ms", "The reporting interval.")
+      .withRequiredArg
+      .describedAs("ms")
+      .ofType(classOf[java.lang.Long])
+      .defaultsTo(30 * 1000L)
 
-    val options = parser.parse(args: _*)
-
-    if (args.length == 0 || options.has(helpOpt)) {
+    if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Validate that all replicas for a set of topics have the same data.")
-    }
 
-    if (options.has(versionOpt)) {
-      CommandLineUtils.printVersionAndDie()
-    }
+    options = parser.parse(args : _*)
 
-    val effectiveBrokerListOpt = if (options.has(bootstrapServerOpt))
+    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool validates that all replicas for a set of topics have the same data.")
+
+    private val effectiveBrokerListOpt: OptionSpec[String] = if (options.has(bootstrapServerOpt))
       bootstrapServerOpt
     else
       brokerListOpt
 
     CommandLineUtils.checkRequiredArgs(parser, options, effectiveBrokerListOpt)
+
+    val brokerList = options.valueOf(effectiveBrokerListOpt)
+    ToolsUtils.validatePortOrDie(parser, brokerList)
 
     val regex = if (options.has(topicsIncludeOpt))
       options.valueOf(topicsIncludeOpt)
@@ -151,27 +150,28 @@ object ReplicaVerificationTool extends Logging {
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue
     val initialOffsetTime = options.valueOf(initialOffsetTimeOpt).longValue
     val reportInterval = options.valueOf(reportIntervalOpt).longValue
-    val brokerList = options.valueOf(effectiveBrokerListOpt)
-    ToolsUtils.validatePortOrDie(parser, brokerList)
+  }
+
+  def main(args: Array[String]): Unit = {
+    val opts = new ReplicaVerificationToolOptions(args)
 
     // getting topic metadata
     info("Getting topic metadata...")
 
     val (topicsMetadata, brokerInfo) = {
-      val adminClient = createAdminClient(brokerList)
+      val adminClient = createAdminClient(opts.brokerList)
       try (listTopicsMetadata(adminClient), brokerDetails(adminClient))
       finally CoreUtils.swallow(adminClient.close(), this)
     }
 
     val topicIds = topicsMetadata.map(metadata => metadata.name() -> metadata.topicId()).toMap
 
-    val topicWhiteListFiler = new IncludeList(regex)
     val filteredTopicMetadata = topicsMetadata.filter { topicMetaData =>
-      topicsIncludeFilter.isTopicAllowed(topicMetaData.name, excludeInternalTopics = false)
+      opts.topicsIncludeFilter.isTopicAllowed(topicMetaData.name, excludeInternalTopics = false)
     }
 
     if (filteredTopicMetadata.isEmpty) {
-      error(s"No topics found. $topicsIncludeOpt if specified, is either filtering out all topics or there is no topic.")
+      error(s"No topics found. ${opts.topicWhiteListOpt} if specified, is either filtering out all topics or there is no topic.")
       Exit.exit(1)
     }
 
@@ -198,12 +198,12 @@ object ReplicaVerificationTool extends Logging {
       }
     }
 
-    val consumerProps = consumerConfig(brokerList)
+    val consumerProps = consumerConfig(opts.brokerList)
 
     val replicaBuffer = new ReplicaBuffer(expectedReplicasPerTopicPartition,
-      initialOffsets(topicPartitions, consumerProps, initialOffsetTime),
+      initialOffsets(topicPartitions, consumerProps, opts.initialOffsetTime),
       brokerToTopicPartitions.size,
-      reportInterval)
+      opts.reportInterval)
     // create all replica fetcher threads
     val verificationBrokerId = brokerToTopicPartitions.head._1
     val counter = new AtomicInteger(0)
@@ -215,8 +215,8 @@ object ReplicaVerificationTool extends Logging {
         replicaBuffer = replicaBuffer,
         socketTimeout = 30000,
         socketBufferSize = 256000,
-        fetchSize = fetchSize,
-        maxWait = maxWaitMs,
+        fetchSize = opts.fetchSize,
+        maxWait = opts.maxWaitMs,
         minBytes = 1,
         doVerification = brokerId == verificationBrokerId,
         consumerProps,
