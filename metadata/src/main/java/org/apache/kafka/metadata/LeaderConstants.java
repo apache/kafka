@@ -15,41 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
-
-import org.apache.kafka.common.protocol.ApiMessage;
-
-import java.util.Iterator;
-import java.util.List;
+package org.apache.kafka.metadata;
 
 
-public class MockSnapshotReader implements SnapshotReader {
-    private final long epoch;
-    private final Iterator<List<ApiMessage>> iterator;
+public class LeaderConstants {
+    /**
+     * A special value used to represent the leader for a partition with no leader.
+     */
+    public static final int NO_LEADER = -1;
 
-    public MockSnapshotReader(long epoch,
-                              Iterator<List<ApiMessage>> iterator) {
-        this.epoch = epoch;
-        this.iterator = iterator;
-    }
-
-    @Override
-    public long epoch() {
-        return epoch;
-    }
-
-    @Override
-    public void close() {
-        // nothing to do
-    }
-
-    @Override
-    public boolean hasNext() {
-        return iterator.hasNext();
-    }
-
-    @Override
-    public List<ApiMessage> next() {
-        return iterator.next();
-    }
+    /**
+     * A special value used to represent a PartitionChangeRecord that does not change the
+     * partition leader.
+     */
+    public static final int NO_LEADER_CHANGE = -2;
 }

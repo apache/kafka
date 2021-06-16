@@ -411,6 +411,14 @@ class ControllerApisTest {
   }
 
   @Test
+  def testUnauthorizedHandleAllocateProducerIds(): Unit = {
+    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
+      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
+      handleAllocateProducerIdsRequest(buildRequest(new AllocateProducerIdsRequest.Builder(
+        new AllocateProducerIdsRequestData()).build())))
+  }
+
+  @Test
   def testUnauthorizedHandleListPartitionReassignments(): Unit = {
     assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
       Some(createDenyAllAuthorizer()), new MockController.Builder().build()).

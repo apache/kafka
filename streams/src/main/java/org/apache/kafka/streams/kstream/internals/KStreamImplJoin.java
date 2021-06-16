@@ -150,12 +150,11 @@ class KStreamImplJoin {
         // Time shared between joins to keep track of the maximum stream time
         final MaxObservedStreamTime maxObservedStreamTime = new MaxObservedStreamTime();
 
+        final JoinWindowsInternal internalWindows = new JoinWindowsInternal(windows);
         final KStreamKStreamJoin<K1, R, V1, V2> joinThis = new KStreamKStreamJoin<>(
             true,
             otherWindowStore.name(),
-            windows.beforeMs,
-            windows.afterMs,
-            windows.gracePeriodMs(),
+            internalWindows,
             joiner,
             leftOuter,
             outerJoinWindowStore.map(StoreBuilder::name),
@@ -165,9 +164,7 @@ class KStreamImplJoin {
         final KStreamKStreamJoin<K1, R, V2, V1> joinOther = new KStreamKStreamJoin<>(
             false,
             thisWindowStore.name(),
-            windows.afterMs,
-            windows.beforeMs,
-            windows.gracePeriodMs(),
+            internalWindows,
             AbstractStream.reverseJoinerWithKey(joiner),
             rightOuter,
             outerJoinWindowStore.map(StoreBuilder::name),
@@ -192,6 +189,10 @@ class KStreamImplJoin {
                    .withOuterJoinWindowStoreBuilder(outerJoinWindowStore)
                    .withValueJoiner(joiner)
                    .withNodeName(joinMergeName);
+
+        if (internalWindows.spuriousResultFixEnabled()) {
+            joinBuilder.withSpuriousResultFixEnabled();
+        }
 
         final GraphNode joinGraphNode = joinBuilder.build();
 

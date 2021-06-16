@@ -827,7 +827,7 @@ public class KafkaStreams implements AutoCloseable {
             (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
 
         try {
-            stateDirectory = new StateDirectory(config, time, hasPersistentStores);
+            stateDirectory = new StateDirectory(config, time, hasPersistentStores, internalTopologyBuilder.hasNamedTopologies());
             processId = stateDirectory.initializeProcessId();
         } catch (final ProcessorStateException fatal) {
             throw new StreamsException(fatal);

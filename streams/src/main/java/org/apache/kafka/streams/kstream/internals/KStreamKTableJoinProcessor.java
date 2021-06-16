@@ -35,7 +35,6 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
     private final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper;
     private final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner;
     private final boolean leftJoin;
-    private StreamsMetricsImpl metrics;
     private Sensor droppedRecordsSensor;
 
     KStreamKTableJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
@@ -51,7 +50,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
     @Override
     public void init(final ProcessorContext context) {
         super.init(context);
-        metrics = (StreamsMetricsImpl) context.metrics();
+        final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
         droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
         valueGetter.init(context);
     }

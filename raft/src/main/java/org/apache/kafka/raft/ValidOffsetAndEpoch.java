@@ -68,4 +68,13 @@ public final class ValidOffsetAndEpoch {
     public int hashCode() {
         return Objects.hash(kind, offsetAndEpoch);
     }
+
+    @Override
+    public String toString() {
+        return String.format(
+            "ValidOffsetAndEpoch(kind=%s, offsetAndEpoch=%s)",
+            kind,
+            offsetAndEpoch
+        );
+    }
 }

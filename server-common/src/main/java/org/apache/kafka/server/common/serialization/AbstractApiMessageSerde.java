@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.common.serialization;
 
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
@@ -46,6 +45,19 @@ public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageA
     private static final short DEFAULT_FRAME_VERSION = 0;
     private static final int DEFAULT_FRAME_VERSION_SIZE = ByteUtils.sizeOfUnsignedVarint(DEFAULT_FRAME_VERSION);
 
+    private static short unsignedIntToShort(Readable input, String entity) {
+        int val;
+        try {
+            val = input.readUnsignedVarint();
+        } catch (Exception e) {
+            throw new MetadataParseException("Error while reading " + entity, e);
+        }
+        if (val > Short.MAX_VALUE) {
+            throw new MetadataParseException("Value for " + entity + " was too large.");
+        }
+        return (short) val;
+    }
+
     @Override
     public int recordSize(ApiMessageAndVersion data,
                           ObjectSerializationCache serializationCache) {
@@ -69,16 +81,30 @@ public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageA
     @Override
     public ApiMessageAndVersion read(Readable input,
                                      int size) {
-        short frameVersion = (short) input.readUnsignedVarint();
-        if (frameVersion != DEFAULT_FRAME_VERSION) {
-            throw new SerializationException("Could not deserialize metadata record due to unknown frame version "
-                                                     + frameVersion + "(only frame version " + DEFAULT_FRAME_VERSION + " is supported)");
-        }
+        short frameVersion = unsignedIntToShort(input, "frame version");
 
-        short apiKey = (short) input.readUnsignedVarint();
-        short version = (short) input.readUnsignedVarint();
-        ApiMessage record = apiMessageFor(apiKey);
-        record.read(input, version);
+        if (frameVersion != DEFAULT_FRAME_VERSION) {
+            throw new MetadataParseException("Could not deserialize metadata record due to unknown frame version "
+                    + frameVersion + "(only frame version " + DEFAULT_FRAME_VERSION + " is supported)");
+        }
+        short apiKey = unsignedIntToShort(input, "type");
+        short version = unsignedIntToShort(input, "version");
+
+        ApiMessage record;
+        try {
+            record = apiMessageFor(apiKey);
+        } catch (Exception e) {
+            throw new MetadataParseException(e);
+        }
+        try {
+            record.read(input, version);
+        } catch (Exception e) {
+            throw new MetadataParseException("Failed to deserialize record with type " + apiKey, e);
+        }
+        if (input.remaining() > 0) {
+            throw new MetadataParseException("Found " + input.remaining() +
+                    " byte(s) of garbage after " + apiKey);
+        }
         return new ApiMessageAndVersion(record, version);
     }
 

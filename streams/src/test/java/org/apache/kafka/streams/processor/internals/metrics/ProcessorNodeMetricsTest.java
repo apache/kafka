@@ -18,66 +18,51 @@ package org.apache.kafka.streams.processor.internals.metrics;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
-import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 
 import java.util.Collections;
 import java.util.Map;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.powermock.api.easymock.PowerMock.createMock;
-import static org.powermock.api.easymock.PowerMock.mockStatic;
-import static org.powermock.api.easymock.PowerMock.replay;
-import static org.powermock.api.easymock.PowerMock.verify;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({StreamsMetricsImpl.class, Sensor.class})
 public class ProcessorNodeMetricsTest {
 
     private static final String THREAD_ID = "test-thread";
     private static final String TASK_ID = "test-task";
     private static final String PROCESSOR_NODE_ID = "test-processor";
 
-    private final Sensor expectedSensor = mock(Sensor.class);
-    private final Sensor expectedParentSensor = mock(Sensor.class);
-    private final StreamsMetricsImpl streamsMetrics = createMock(StreamsMetricsImpl.class);
     private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
     private final Map<String, String> parentTagMap = Collections.singletonMap("hi", "universe");
 
-    @Before
-    public void setUp() {
-        expect(streamsMetrics.version()).andStubReturn(Version.LATEST);
-        mockStatic(StreamsMetricsImpl.class);
-    }
+    private final Sensor expectedSensor = mock(Sensor.class);
+    private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
+    private final Sensor expectedParentSensor = mock(Sensor.class);
 
     @Test
     public void shouldGetSuppressionEmitSensor() {
         final String metricNamePrefix = "suppression-emit";
         final String descriptionOfCount = "The total number of emitted records from the suppression buffer";
         final String descriptionOfRate = "The average number of emitted records from the suppression buffer per second";
-        expect(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, metricNamePrefix, RecordingLevel.DEBUG))
-            .andReturn(expectedSensor);
-        expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
+        when(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, metricNamePrefix, RecordingLevel.DEBUG))
+                .thenReturn(expectedSensor);
+        when(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-            expectedSensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            tagMap,
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount
+                expectedSensor,
+                PROCESSOR_NODE_LEVEL_GROUP,
+                tagMap,
+                metricNamePrefix,
+                descriptionOfRate,
+                descriptionOfCount
         );
 
         verifySensor(
-            () -> ProcessorNodeMetrics.suppressionEmitSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
+                () -> ProcessorNodeMetrics.suppressionEmitSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
     }
 
     @Test
@@ -85,20 +70,19 @@ public class ProcessorNodeMetricsTest {
         final String metricNamePrefix = "idempotent-update-skip";
         final String descriptionOfCount = "The total number of skipped idempotent updates";
         final String descriptionOfRate = "The average number of skipped idempotent updates per second";
-        expect(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, metricNamePrefix, RecordingLevel.DEBUG))
-            .andReturn(expectedSensor);
-        expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
+        when(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, metricNamePrefix, RecordingLevel.DEBUG))
+                .thenReturn(expectedSensor);
+        when(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-            expectedSensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            tagMap,
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount
+                expectedSensor,
+                PROCESSOR_NODE_LEVEL_GROUP,
+                tagMap,
+                metricNamePrefix,
+                descriptionOfRate,
+                descriptionOfCount
         );
-
         verifySensor(
-            () -> ProcessorNodeMetrics.skippedIdempotentUpdatesSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics)
+                () -> ProcessorNodeMetrics.skippedIdempotentUpdatesSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics)
         );
     }
 
@@ -107,24 +91,24 @@ public class ProcessorNodeMetricsTest {
         final String metricNamePrefix = "process";
         final String descriptionOfCount = "The total number of calls to process";
         final String descriptionOfRate = "The average number of calls to process per second";
-        expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, metricNamePrefix, RecordingLevel.DEBUG))
-            .andReturn(expectedParentSensor);
-        expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID))
-            .andReturn(parentTagMap);
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, metricNamePrefix, RecordingLevel.DEBUG))
+                .thenReturn(expectedParentSensor);
+        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID))
+                .thenReturn(parentTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-            expectedParentSensor,
-            StreamsMetricsImpl.TASK_LEVEL_GROUP,
-            parentTagMap,
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount
+                expectedParentSensor,
+                StreamsMetricsImpl.TASK_LEVEL_GROUP,
+                parentTagMap,
+                metricNamePrefix,
+                descriptionOfRate,
+                descriptionOfCount
         );
         setUpThroughputSensor(
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount,
-            RecordingLevel.DEBUG,
-            expectedParentSensor
+                metricNamePrefix,
+                descriptionOfRate,
+                descriptionOfCount,
+                RecordingLevel.DEBUG,
+                expectedParentSensor
         );
 
         verifySensor(() -> ProcessorNodeMetrics.processAtSourceSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
@@ -169,34 +153,34 @@ public class ProcessorNodeMetricsTest {
     private void setUpThroughputParentSensor(final String metricNamePrefix,
                                              final String descriptionOfRate,
                                              final String descriptionOfCount) {
-        expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, metricNamePrefix, RecordingLevel.DEBUG))
-            .andReturn(expectedParentSensor);
-        expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, StreamsMetricsImpl.ROLLUP_VALUE))
-            .andReturn(parentTagMap);
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, metricNamePrefix, RecordingLevel.DEBUG))
+                .thenReturn(expectedParentSensor);
+        when(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, StreamsMetricsImpl.ROLLUP_VALUE))
+                .thenReturn(parentTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-            expectedParentSensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            parentTagMap,
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount
+                expectedParentSensor,
+                PROCESSOR_NODE_LEVEL_GROUP,
+                parentTagMap,
+                metricNamePrefix,
+                descriptionOfRate,
+                descriptionOfCount
         );
     }
 
     private void setUpThroughputSensor(final String metricNamePrefix,
-                                       final String descriptionOfRate,
-                                       final String descriptionOfCount,
-                                       final RecordingLevel recordingLevel,
-                                       final Sensor... parentSensors) {
-        expect(streamsMetrics.nodeLevelSensor(
-            THREAD_ID,
-            TASK_ID,
-            PROCESSOR_NODE_ID,
-            metricNamePrefix,
-            recordingLevel,
-            parentSensors
-        )).andReturn(expectedSensor);
-        expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
+                                           final String descriptionOfRate,
+                                           final String descriptionOfCount,
+                                           final RecordingLevel recordingLevel,
+                                           final Sensor... parentSensors) {
+        when(streamsMetrics.nodeLevelSensor(
+                THREAD_ID,
+                TASK_ID,
+                PROCESSOR_NODE_ID,
+                metricNamePrefix,
+                recordingLevel,
+                parentSensors
+        )).thenReturn(expectedSensor);
+        when(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).thenReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             PROCESSOR_NODE_LEVEL_GROUP,
@@ -208,11 +192,7 @@ public class ProcessorNodeMetricsTest {
     }
 
     private void verifySensor(final Supplier<Sensor> sensorSupplier) {
-        replay(StreamsMetricsImpl.class, streamsMetrics);
-
         final Sensor sensor = sensorSupplier.get();
-
-        verify(StreamsMetricsImpl.class, streamsMetrics);
         assertThat(sensor, is(expectedSensor));
     }
 }
