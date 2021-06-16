@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TransactionTimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -241,6 +242,7 @@ public class TransactionManager {
 
     private volatile State currentState = State.UNINITIALIZED;
     private volatile RuntimeException lastError = null;
+    private volatile RuntimeException abortableError = null;
     private volatile ProducerIdAndEpoch producerIdAndEpoch;
     private volatile boolean transactionStarted = false;
     private volatile boolean epochBumpRequired = false;
@@ -323,10 +325,11 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
-        return initializeTransactions(ProducerIdAndEpoch.NONE);
+        return initializeTransactions(ProducerIdAndEpoch.NONE, false);
     }
 
-    synchronized TransactionalRequestResult initializeTransactions(ProducerIdAndEpoch producerIdAndEpoch) {
+    synchronized TransactionalRequestResult initializeTransactions(ProducerIdAndEpoch producerIdAndEpoch,
+                                                                   boolean needResetTxn) {
         boolean isEpochBump = producerIdAndEpoch != ProducerIdAndEpoch.NONE;
         return handleCachedTransactionRequestResult(() -> {
             // If this is an epoch bump, we will transition the state as part of handling the EndTxnRequest
@@ -334,6 +337,9 @@ public class TransactionManager {
                 transitionTo(State.INITIALIZING);
                 log.info("Invoking InitProducerId for the first time in order to acquire a producer ID");
             } else {
+                // If abortTxn skips to initProduerId directly, we need to reset this transaction
+                if (needResetTxn)
+                    resetTransactions();
                 log.info("Invoking InitProducerId with current producer ID and epoch {} in order to bump the epoch", producerIdAndEpoch);
             }
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
@@ -378,10 +384,12 @@ public class TransactionManager {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
 
-        // If the error is an INVALID_PRODUCER_ID_MAPPING error, the server will not accept an EndTxnRequest, so skip
+        // If the error is an INVALID_PRODUCER_ID_MAPPING/TRANSACTION_TIMED_OUT error, the server will not accept an EndTxnRequest, so skip
         // directly to InitProducerId. Otherwise, we must first abort the transaction, because the producer will be
         // fenced if we directly call InitProducerId.
-        if (!(lastError instanceof InvalidPidMappingException)) {
+        boolean needEndTxn = !(abortableError instanceof InvalidPidMappingException)
+                && !(abortableError instanceof TransactionTimeoutException);
+        if (needEndTxn) {
             EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
                     new EndTxnRequestData()
                             .setTransactionalId(transactionalId)
@@ -396,7 +404,7 @@ public class TransactionManager {
             }
         }
 
-        return initializeTransactions(this.producerIdAndEpoch);
+        return initializeTransactions(this.producerIdAndEpoch, !needEndTxn);
     }
 
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -1070,7 +1078,7 @@ public class TransactionManager {
 
     private void transitionTo(State target, RuntimeException error) {
         if (!currentState.isTransitionValid(currentState, target)) {
-            String idString = transactionalId == null ?  "" : "TransactionalId " + transactionalId + ": ";
+            String idString = transactionalId == null ? "" : "TransactionalId " + transactionalId + ": ";
             throw new KafkaException(idString + "Invalid transition attempted from state "
                     + currentState.name() + " to state " + target.name());
         }
@@ -1079,7 +1087,13 @@ public class TransactionManager {
             if (error == null)
                 throw new IllegalArgumentException("Cannot transition to " + target + " with a null exception");
             lastError = error;
+            if (target == State.ABORTABLE_ERROR) {
+                abortableError = error;
+            }
         } else {
+            if (target != State.ABORTING_TRANSACTION) {
+                abortableError = null;
+            }
             lastError = null;
         }
 
@@ -1206,6 +1220,13 @@ public class TransactionManager {
         return coordinatorSupportsBumpingEpoch;
     }
 
+    private void resetTransactions() {
+        transactionStarted = false;
+        newPartitionsInTransaction.clear();
+        pendingPartitionsInTransaction.clear();
+        partitionsInTransaction.clear();
+    }
+
     private void completeTransaction() {
         if (epochBumpRequired) {
             transitionTo(State.INITIALIZING);
@@ -1213,11 +1234,9 @@ public class TransactionManager {
             transitionTo(State.READY);
         }
         lastError = null;
+        abortableError = null;
         epochBumpRequired = false;
-        transactionStarted = false;
-        newPartitionsInTransaction.clear();
-        pendingPartitionsInTransaction.clear();
-        partitionsInTransaction.clear();
+        resetTransactions();
     }
 
     abstract class TxnRequestHandler implements RequestCompletionHandler {
@@ -1249,6 +1268,12 @@ public class TransactionManager {
             } else {
                 fatalError(e);
             }
+        }
+
+        boolean maybeAbortableErrorIfPossible(Errors error) {
+            return error == Errors.UNKNOWN_PRODUCER_ID
+                    || error == Errors.INVALID_PRODUCER_ID_MAPPING
+                    || error == Errors.TRANSACTION_TIMED_OUT;
         }
 
         void fail(RuntimeException e) {
@@ -1362,7 +1387,9 @@ public class TransactionManager {
                 setProducerIdAndEpoch(producerIdAndEpoch);
                 transitionTo(State.READY);
                 lastError = null;
+                abortableError = null;
                 if (this.isEpochBump) {
+                    epochBumpRequired = false;
                     resetSequenceNumbers();
                 }
                 result.done();
@@ -1446,7 +1473,7 @@ public class TransactionManager {
                     log.debug("Did not attempt to add partition {} to transaction because other partitions in the " +
                             "batch had errors.", topicPartition);
                     hasPartitionErrors = true;
-                } else if (error == Errors.UNKNOWN_PRODUCER_ID || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
+                } else if (maybeAbortableErrorIfPossible(error)) {
                     abortableErrorIfPossible(error.exception());
                     return;
                 } else {
@@ -1597,7 +1624,7 @@ public class TransactionManager {
                 fatalError(error.exception());
             } else if (error == Errors.INVALID_TXN_STATE) {
                 fatalError(error.exception());
-            } else if (error == Errors.UNKNOWN_PRODUCER_ID || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
+            } else if (maybeAbortableErrorIfPossible(error)) {
                 abortableErrorIfPossible(error.exception());
             } else {
                 fatalError(new KafkaException("Unhandled error in EndTxnResponse: " + error.message()));
@@ -1646,8 +1673,6 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
-            } else if (error == Errors.UNKNOWN_PRODUCER_ID || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
-                abortableErrorIfPossible(error.exception());
             } else if (error == Errors.INVALID_PRODUCER_EPOCH || error == Errors.PRODUCER_FENCED) {
                 // We could still receive INVALID_PRODUCER_EPOCH from old versioned transaction coordinator,
                 // just treat it the same as PRODUCE_FENCED.
@@ -1656,6 +1681,8 @@ public class TransactionManager {
                 fatalError(error.exception());
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
+            } else if (maybeAbortableErrorIfPossible(error)) {
+                abortableErrorIfPossible(error.exception());
             } else {
                 fatalError(new KafkaException("Unexpected error in AddOffsetsToTxnResponse: " + error.message()));
             }

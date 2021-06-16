@@ -168,7 +168,8 @@ class TransactionCoordinator(brokerId: Int,
               TransactionResult.ABORT,
               isFromClient = false,
               sendRetriableErrorCallback,
-              requestLocal)
+              requestLocal,
+              isFromTimeoutAbort = false)
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
               if (error == Errors.NONE) {
@@ -342,7 +343,11 @@ class TransactionCoordinator(brokerId: Int,
             if (txnMetadata.producerId != producerId) {
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             } else if (txnMetadata.producerEpoch != producerEpoch) {
-              Left(Errors.PRODUCER_FENCED)
+              if (txnMetadata.lastProducerEpoch == producerEpoch) {
+                Left(Errors.TRANSACTION_TIMED_OUT)
+              } else {
+                Left(Errors.PRODUCER_FENCED)
+              }
             } else if (txnMetadata.pendingTransitionInProgress) {
               // return a retriable exception to let the client backoff and retry
               Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -425,7 +430,8 @@ class TransactionCoordinator(brokerId: Int,
       txnMarkerResult,
       isFromClient = true,
       responseCallback,
-      requestLocal)
+      requestLocal,
+      isFromTimeoutAbort = false)
   }
 
   private def endTransaction(transactionalId: String,
@@ -434,7 +440,8 @@ class TransactionCoordinator(brokerId: Int,
                              txnMarkerResult: TransactionResult,
                              isFromClient: Boolean,
                              responseCallback: EndTxnCallback,
-                             requestLocal: RequestLocal): Unit = {
+                             requestLocal: RequestLocal,
+                             isFromTimeoutAbort: Boolean): Unit = {
     var isEpochFence = false
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
@@ -451,9 +458,15 @@ class TransactionCoordinator(brokerId: Int,
             if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
-            else if ((isFromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata.producerEpoch)
-              Left(Errors.PRODUCER_FENCED)
-            else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
+            else if ((isFromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata
+              .producerEpoch) {
+              if (producerEpoch == txnMetadata.lastProducerEpoch) {
+                Left(Errors.TRANSACTION_TIMED_OUT)
+              } else {
+                Left(Errors.PRODUCER_FENCED)
+              }
+            } else if (txnMetadata.pendingTransitionInProgress
+              && !txnMetadata.pendingState.contains(PrepareEpochFence))
               Left(Errors.CONCURRENT_TRANSACTIONS)
             else txnMetadata.state match {
               case Ongoing =>
@@ -468,7 +481,10 @@ class TransactionCoordinator(brokerId: Int,
                   isEpochFence = true
                   txnMetadata.pendingState = None
                   txnMetadata.producerEpoch = producerEpoch
-                  txnMetadata.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
+                  txnMetadata.lastProducerEpoch = if (isFromTimeoutAbort)
+                    (producerEpoch - 1).toShort
+                  else
+                    RecordBatch.NO_PRODUCER_EPOCH
                 }
 
                 Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, time.milliseconds()))
@@ -525,9 +541,13 @@ class TransactionCoordinator(brokerId: Int,
                     txnMetadata.inLock {
                       if (txnMetadata.producerId != producerId)
                         Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-                      else if (txnMetadata.producerEpoch != producerEpoch)
-                        Left(Errors.PRODUCER_FENCED)
-                      else if (txnMetadata.pendingTransitionInProgress)
+                      else if (txnMetadata.producerEpoch != producerEpoch) {
+                        if (isFromClient && txnMetadata.lastProducerEpoch == producerEpoch) {
+                          Left(Errors.TRANSACTION_TIMED_OUT)
+                        } else {
+                          Left(Errors.PRODUCER_FENCED)
+                        }
+                      } else if (txnMetadata.pendingTransitionInProgress)
                         Left(Errors.CONCURRENT_TRANSACTIONS)
                       else txnMetadata.state match {
                         case Empty| Ongoing | CompleteCommit | CompleteAbort =>
@@ -652,7 +672,8 @@ class TransactionCoordinator(brokerId: Int,
               TransactionResult.ABORT,
               isFromClient = false,
               onComplete(txnIdAndPidEpoch),
-              RequestLocal.NoCaching)
+              RequestLocal.NoCaching,
+              isFromTimeoutAbort = true)
           }
       }
     }

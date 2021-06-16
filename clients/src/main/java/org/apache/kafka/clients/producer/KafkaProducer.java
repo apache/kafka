@@ -46,6 +46,7 @@ import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.TransactionTimeoutException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -630,6 +631,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
      *
      * @throws IllegalStateException if no transactional.id has been configured, no transaction has been started
+     * @throws TransactionTimeoutException if the producer has encountered a previously aborted transaction on coordinator side.
+     *         Application should catch and abort it, then retry starting another transaction in this case.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
@@ -672,6 +675,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Additionally, it will raise {@link InterruptException} if interrupted.
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started.
+     * @throws TransactionTimeoutException if the producer has encountered a previously aborted transaction on coordinator side.
+     *         Application should catch and abort it, then retry starting another transaction in this case.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0) or
@@ -715,6 +720,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * since the commit may already be in the progress of completing. If not retrying, the only option is to close the producer.
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws TransactionTimeoutException if the producer has encountered a previously aborted transaction on coordinator side.
+     *         Application should catch and abort it, then retry starting another transaction in this case.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
@@ -746,6 +753,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * since the abort may already be in the progress of completing. If not retrying, the only option is to close the producer.
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws TransactionTimeoutException if the producer has encountered a previously aborted transaction on coordinator side.
+     *         Application should catch and abort it, then retry starting another transaction in this case.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.InvalidProducerEpochException if the producer has attempted to produce with an old epoch
      *         to the partition leader. See the exception for more details
