@@ -45,7 +45,7 @@ import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPar
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import scala.collection.{Seq, mutable}
+import scala.collection.{Seq, immutable, mutable}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
@@ -1893,7 +1893,7 @@ class Log(@volatile private var _dir: File,
     }
   }
 
-  private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean, deleteProducerStateSnapshots: Boolean = true): Unit = {
+  private def deleteSegmentFiles(segments: immutable.Iterable[LogSegment], asyncDelete: Boolean, deleteProducerStateSnapshots: Boolean = true): Unit = {
     Log.deleteSegmentFiles(segments, asyncDelete, deleteProducerStateSnapshots, dir, topicPartition,
       config, scheduler, logDirFailureChannel, producerStateManager, this.logIdent)
   }
@@ -2379,7 +2379,7 @@ object Log extends Logging {
    * @param logPrefix The logging prefix
    * @throws IOException if the file can't be renamed and still exists
    */
-  private[log] def deleteSegmentFiles(segmentsToDelete: Iterable[LogSegment],
+  private[log] def deleteSegmentFiles(segmentsToDelete: immutable.Iterable[LogSegment],
                                       asyncDelete: Boolean,
                                       deleteProducerStateSnapshots: Boolean = true,
                                       dir: File,
