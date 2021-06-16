@@ -820,7 +820,7 @@ public class ConnectorsResourceTest {
         ConnectRestException ex = assertThrows(ConnectRestException.class, () ->
                 connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), FORWARD)
         );
-        assertEquals(ex.statusCode(), Response.Status.CONFLICT.getStatusCode());
+        assertEquals(Response.Status.CONFLICT.getStatusCode(), ex.statusCode());
         PowerMock.verifyAll();
     }
 
@@ -843,7 +843,7 @@ public class ConnectorsResourceTest {
         Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), FORWARD);
         assertEquals(CONNECTOR_NAME, ((ConnectorStateInfo) response.getEntity()).name());
         assertEquals(state.state(), ((ConnectorStateInfo) response.getEntity()).connector().state());
-        assertEquals(response.getStatus(), Response.Status.ACCEPTED.getStatusCode());
+        assertEquals(Response.Status.ACCEPTED.getStatusCode(), response.getStatus());
         PowerMock.verifyAll();
     }
 
