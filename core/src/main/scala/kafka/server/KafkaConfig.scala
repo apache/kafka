@@ -696,7 +696,7 @@ object KafkaConfig {
   "Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
   "need to be different from the interface to which the broker binds. If this is not set, " +
   "it will use the value for <code>host.name</code> if configured. Otherwise " +
-  "it will use the value returned from java.net.InetAddress.getCanonicalHostName()."
+  "it will use the value returned from java.net.InetAddress.getLocalHost().getCanonicalHostName()."
   val AdvertisedPortDoc = "DEPRECATED: only used when <code>advertised.listeners</code> or <code>listeners</code> are not set. " +
   "Use <code>advertised.listeners</code> instead. \n" +
   "The port to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
