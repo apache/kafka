@@ -121,6 +121,7 @@ class GroupCoordinator(val brokerId: Int,
     groupManager.shutdown()
     heartbeatPurgatory.shutdown()
     joinPurgatory.shutdown()
+    syncPurgatory.shutdown()
     info("Shutdown complete.")
   }
 
@@ -1116,6 +1117,8 @@ class GroupCoordinator(val brokerId: Int,
             heartbeatPurgatory.checkAndComplete(MemberKey(group.groupId, member.memberId))
           }
       }
+
+      removeSyncExpiration(group)
     }
   }
 
@@ -1525,7 +1528,7 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       if (generationId != group.generationId) {
         debug(s"Received unexpected notification of sync expiration for ${group.groupId} " +
-          s" with an old generation $generationId.")
+          s"with an old generation $generationId while the group has ${group.generationId}.")
       } else {
         group.currentState match {
           case Dead | Empty | PreparingRebalance =>
@@ -1533,7 +1536,7 @@ class GroupCoordinator(val brokerId: Int,
               s"already transitioned to the ${group.currentState} state.")
 
           case CompletingRebalance | Stable =>
-            if (!group.hasAllMembersJoined) {
+            if (!group.hasReceivedSyncFromAllMembers()) {
               val pendingSyncMembers = group.allPendingSyncMembers()
 
               debug(s"Group ${group.groupId} removed members who haven't " +
@@ -1627,8 +1630,8 @@ object GroupCoordinator {
             time: Time,
             metrics: Metrics): GroupCoordinator = {
     val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
-    val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance (DelayedJoin)", config.brokerId)
-    val syncPurgatory = DelayedOperationPurgatory[DelayedSync]("Rebalance (DelayedSync)", config.brokerId)
+    val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance", config.brokerId)
+    val syncPurgatory = DelayedOperationPurgatory[DelayedSync]("RebalanceDelayedSync", config.brokerId)
     GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, syncPurgatory, time, metrics)
   }
 
