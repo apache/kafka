@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 
 /**
  *  This exception is raised for any error that occurs while deserializing records received by the consumer using 
- *  the configured {@link Deserializer}.
+ *  the configured {@link org.apache.kafka.common.serialization.Deserializer}.
  */
 public class RecordDeserializationException extends SerializationException {
 
@@ -28,17 +28,13 @@ public class RecordDeserializationException extends SerializationException {
     private TopicPartition partition;
     private long offset;
 
-    public RecordDeserializationException(TopicPartition partition, long offset, String message) {
-        this(partition, offset, message, null);
-    }
-
     public RecordDeserializationException(TopicPartition partition, long offset, String message, Throwable cause) {
         super(message, cause);
         this.partition = partition;
         this.offset = offset;
     }
 
-    public TopicPartition partition() {
+    public TopicPartition topicPartition() {
         return partition;
     }
 

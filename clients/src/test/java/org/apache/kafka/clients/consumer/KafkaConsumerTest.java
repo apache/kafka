@@ -234,14 +234,9 @@ public class KafkaConsumerTest {
         long lastOffset = records.records(tp0).get(records.records(tp0).size() - 1).offset();
         assertEquals(invalidRecordNumber - 2, lastOffset);
 
-        try {
-            consumer.poll(Duration.ZERO);
-            fail("Second poll should raise " + RecordDeserializationException.class.getName());
-        } catch (RecordDeserializationException rde) {
-            assertEquals(invalidRecordOffset, rde.offset());
-            assertEquals(tp0, rde.partition());
-        }
-
+        RecordDeserializationException rde = assertThrows(RecordDeserializationException.class, () -> consumer.poll(Duration.ZERO));
+        assertEquals(invalidRecordOffset, rde.offset());
+        assertEquals(tp0, rde.topicPartition());
         consumer.close(Duration.ofMillis(0));
     }
 
@@ -249,22 +244,18 @@ public class KafkaConsumerTest {
         Create a mock deserializer which throws a SerializationException on the Nth record's value deserialization
      */
     private StringDeserializer mockErrorDeserializer(int recordNumber) {
-        int recordIndex = (recordNumber * 2)  - 1; // * 2 because we deserialize key and values
+        //int recordIndex = (recordNumber * 2)  - 1; // * 2 because we deserialize key and values
+        int recordIndex = recordNumber - 1; // * 2 because we deserialize key and values
         return new StringDeserializer() {
             int i = 0;
-            byte[] invalidData;
             @Override
             public String deserialize(String topic, byte[] data) {
-                if (i == recordIndex && invalidData == null) {
-                    invalidData = data;
-                }
-                if (Arrays.equals(data, invalidData)) {
-                    invalidData = data;
+                if (i == recordIndex) {
                     throw new SerializationException();
+                } else {
+                    i++;
+                    return super.deserialize(topic, data);
                 }
-                i++;
-
-                return super.deserialize(topic, data);
             }
         };
     }
@@ -2485,7 +2476,7 @@ public class KafkaConsumerTest {
         boolean checkCrcs = true;
         int rebalanceTimeoutMs = 60000;
 
-        Deserializer<String> keyDeserializer = deserializer.orElse(new StringDeserializer());
+        Deserializer<String> keyDeserializer = new StringDeserializer();
         Deserializer<String> valueDeserializer = deserializer.orElse(new StringDeserializer());
 
         List<ConsumerPartitionAssignor> assignors = singletonList(assignor);
