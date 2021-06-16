@@ -60,7 +60,7 @@ public class MirrorClient implements AutoCloseable {
     private ReplicationPolicy replicationPolicy;
     private Map<String, Object> consumerConfig;
 
-    public MirrorClient(Map<String, ?> props) {
+    public MirrorClient(Map<String, Object> props) {
         this(new MirrorClientConfig(props));
     }
 
