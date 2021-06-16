@@ -105,7 +105,7 @@ public class TimelineInteger implements Revertable {
 
     @Override
     public void reset() {
-        value = init;
+        set(init);
     }
 
     @Override

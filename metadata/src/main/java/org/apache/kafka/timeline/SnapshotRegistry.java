@@ -270,7 +270,7 @@ public class SnapshotRegistry {
     }
 
     /**
-     * Resets all of the Revertable object registered to their initial value.
+     * Delete all snapshots and resets all of the Revertable object registered.
      */
     public void reset() {
         deleteSnapshotsUpTo(LATEST_EPOCH);
