@@ -104,13 +104,6 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                     true
                 )) {
                 outerJoinWindowStore = outerJoinWindowName.map(context::getStateStore);
-            } else {
-                if (outerJoinWindowName.isPresent()) {
-                    throw new IllegalStateException(String.format(
-                        "Fix for KAFKA-10847 disabled; `outerJoinWindowName` should be `null` but is %s",
-                        outerJoinWindowName.get()
-                        ));
-                }
             }
         }
 
