@@ -752,13 +752,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     updateListener.onTaskConfigUpdate(updatedTasks);
             } else if (record.key().startsWith(RESTART_PREFIX)) {
                 RestartRequest request = recordToRestartRequest(record, value);
-                if (request == null) return;
-
+                if (request == null) {
+                    return;
+                }
                 // Only notify the listener if this backing store is already successfully started (having caught up the first time)
                 if (started) {
                     updateListener.onRestartRequest(request);
                 }
-
             } else if (record.key().equals(SESSION_KEY_KEY)) {
                 if (value.value() == null) {
                     log.error("Ignoring session key because it is unexpectedly null");
