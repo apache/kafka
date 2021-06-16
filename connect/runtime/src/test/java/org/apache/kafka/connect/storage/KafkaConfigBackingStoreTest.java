@@ -61,6 +61,8 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.INCLUDE_TASKS_FIELD_NAME;
+import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.ONLY_FAILED_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -96,7 +98,10 @@ public class KafkaConfigBackingStoreTest {
     private static final List<String> CONNECTOR_CONFIG_KEYS = Arrays.asList("connector-connector1", "connector-connector2");
     private static final List<String> COMMIT_TASKS_CONFIG_KEYS = Arrays.asList("commit-connector1", "commit-connector2");
     private static final List<String> TARGET_STATE_KEYS =  Arrays.asList("target-state-connector1", "target-state-connector2");
-    private static final List<String> RESTART_CONNECTOR_KEYS = Arrays.asList(RESTART_KEY("connector1"), RESTART_KEY("connector2"));
+
+    private static final String CONNECTOR_1_NAME = "connector1";
+    private static final String CONNECTOR_2_NAME = "connector2";
+    private static final List<String> RESTART_CONNECTOR_KEYS = Arrays.asList(RESTART_KEY(CONNECTOR_1_NAME), RESTART_KEY(CONNECTOR_2_NAME));
 
     // Need a) connector with multiple tasks and b) multiple connectors
     private static final List<ConnectorTaskId> TASK_IDS = Arrays.asList(
@@ -129,12 +134,12 @@ public class KafkaConfigBackingStoreTest {
     private static final Struct TASKS_COMMIT_STRUCT_ZERO_TASK_CONNECTOR
             = new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 0);
 
+    private static final Struct ONLY_FAILED_MISSING_STRUCT = new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(INCLUDE_TASKS_FIELD_NAME, false);
+    private static final Struct INLUDE_TASKS_MISSING_STRUCT = new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(ONLY_FAILED_FIELD_NAME, true);
     private static final List<Struct> RESTART_REQUEST_STRUCTS = Arrays.asList(
-            new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put("only-failed", true).put("include-tasks", false),
-            //missing only-failed value
-            new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put("include-tasks", false),
-            //missing include-tasks value
-            new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put("only-failed", true));
+                new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(ONLY_FAILED_FIELD_NAME, true).put(INCLUDE_TASKS_FIELD_NAME, false),
+                ONLY_FAILED_MISSING_STRUCT,
+                INLUDE_TASKS_MISSING_STRUCT);
 
     // The exact format doesn't matter here since both conversions are mocked
     private static final List<byte[]> CONFIGS_SERIALIZED = Arrays.asList(
@@ -948,7 +953,7 @@ public class KafkaConfigBackingStoreTest {
 
         expectConvertWriteAndRead(
                 RESTART_CONNECTOR_KEYS.get(0), KafkaConfigBackingStore.RESTART_REQUEST_V0, CONFIGS_SERIALIZED.get(0),
-                "only-failed", restartRequest.onlyFailed());
+                ONLY_FAILED_FIELD_NAME, restartRequest.onlyFailed());
         final Capture<RestartRequest> capturedRestartRequest = EasyMock.newCapture();
         configUpdateListener.onRestartRequest(EasyMock.capture(capturedRestartRequest));
         EasyMock.expectLastCall();
@@ -974,9 +979,45 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
+    public void testRecordToRestartRequest() throws Exception {
+        ConsumerRecord record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
+                CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
+        Struct struct = RESTART_REQUEST_STRUCTS.get(0);
+        SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
+        RestartRequest restartRequest = configStorage.recordToRestartRequest(record, schemaAndValue);
+        assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());
+        assertEquals(struct.getBoolean(INCLUDE_TASKS_FIELD_NAME), restartRequest.includeTasks());
+        assertEquals(struct.getBoolean(ONLY_FAILED_FIELD_NAME), restartRequest.onlyFailed());
+    }
+
+    @Test
+    public void testRecordToRestartRequestOnlyFailedInconsistent() throws Exception {
+        ConsumerRecord record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
+                CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
+        Struct struct = ONLY_FAILED_MISSING_STRUCT;
+        SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
+        RestartRequest restartRequest = configStorage.recordToRestartRequest(record, schemaAndValue);
+        assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());
+        assertEquals(struct.getBoolean(INCLUDE_TASKS_FIELD_NAME), restartRequest.includeTasks());
+        assertEquals(false, restartRequest.onlyFailed());
+    }
+
+    @Test
+    public void testRecordToRestartRequestIncludeTasksInconsistent() throws Exception {
+        ConsumerRecord record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
+                CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
+        Struct struct = INLUDE_TASKS_MISSING_STRUCT;
+        SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
+        RestartRequest restartRequest = configStorage.recordToRestartRequest(record, schemaAndValue);
+        assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());
+        assertEquals(false, restartRequest.includeTasks());
+        assertEquals(struct.getBoolean(ONLY_FAILED_FIELD_NAME), restartRequest.onlyFailed());
+    }
+
+    @Test
     public void testRestoreRestartRequestInconsistentState() throws Exception {
         // Restoring data should notify only of the latest values after loading is complete. This also validates
-        // that inconsistent state is ignored.
+        // that inconsistent state doesnt prevent startup.
 
         expectConfigure();
         // Overwrite each type at least once to ensure we see the latest data after loading

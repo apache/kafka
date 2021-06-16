@@ -215,9 +215,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         return RESTART_PREFIX + connectorName;
     }
 
+    public static final Boolean ONLY_FAILED_DEFAULT = Boolean.FALSE;
+    public static final Boolean INCLUDE_TASKS_DEFAULT = Boolean.FALSE;
+    public static final String ONLY_FAILED_FIELD_NAME = "only-failed";
+    public static final String INCLUDE_TASKS_FIELD_NAME = "include-tasks";
     public static final Schema RESTART_REQUEST_V0 = SchemaBuilder.struct()
-            .field("include-tasks", Schema.BOOLEAN_SCHEMA)
-            .field("only-failed", Schema.BOOLEAN_SCHEMA)
+            .field(INCLUDE_TASKS_FIELD_NAME, Schema.BOOLEAN_SCHEMA)
+            .field(ONLY_FAILED_FIELD_NAME, Schema.BOOLEAN_SCHEMA)
             .build();
 
     private static final long READ_TO_END_TIMEOUT_MS = 30000;
@@ -487,8 +491,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         log.debug("Writing {} to Kafka", restartRequest);
         String key = RESTART_KEY(restartRequest.connectorName());
         Struct value = new Struct(RESTART_REQUEST_V0);
-        value.put("include-tasks", restartRequest.includeTasks());
-        value.put("only-failed", restartRequest.onlyFailed());
+        value.put(INCLUDE_TASKS_FIELD_NAME, restartRequest.includeTasks());
+        value.put(ONLY_FAILED_FIELD_NAME, restartRequest.onlyFailed());
         byte[] serializedValue = converter.fromConnectData(topic, value.schema(), value);
         try {
             configLog.send(key, serializedValue);
@@ -747,43 +751,11 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 if (started)
                     updateListener.onTaskConfigUpdate(updatedTasks);
             } else if (record.key().startsWith(RESTART_PREFIX)) {
-                String connectorName = record.key().substring(RESTART_PREFIX.length());
-                if (value.value() == null) {
-                    log.error("Ignoring restart request because it is unexpectedly null");
-                    return;
-                }
-                if (!(value.value() instanceof Map)) {
-                    log.error("Ignoring restart request because the value is not a Map but is {}", value.value().getClass());
-                    return;
-                }
-
-                Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
-
-                Object failed = valueAsMap.get("only-failed");
-                if (failed == null) {
-                    log.error("Invalid data for restart request 'only-failed' field was missing");
-                    return;
-                }
-                if (!(failed instanceof Boolean)) {
-                    log.error("Invalid data for restart request 'only-failed' field should be a Boolean but is {}", failed.getClass());
-                    return;
-                }
-                boolean onlyFailed = (Boolean) failed;
-
-                Object withTasks = valueAsMap.get("include-tasks");
-                if (withTasks == null) {
-                    log.error("Invalid data for restart request 'include-tasks' field was missing");
-                    return;
-                }
-                if (!(withTasks instanceof Boolean)) {
-                    log.error("Invalid data for restart request 'include-tasks' field should be a Boolean but is {}", withTasks.getClass());
-                    return;
-                }
-                boolean includeTasks = (Boolean) withTasks;
+                RestartRequest request = recordToRestartRequest(record, value);
+                if (request == null) return;
 
                 // Only notify the listener if this backing store is already successfully started (having caught up the first time)
                 if (started) {
-                    RestartRequest request = new RestartRequest(connectorName, onlyFailed, includeTasks);
                     updateListener.onRestartRequest(request);
                 }
 
@@ -829,6 +801,44 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             }
         }
 
+    }
+
+    @SuppressWarnings("unchecked")
+    RestartRequest recordToRestartRequest(ConsumerRecord<String, byte[]> record, SchemaAndValue value) {
+        String connectorName = record.key().substring(RESTART_PREFIX.length());
+        if (value.value() == null) {
+            log.error("Ignoring restart request because it is unexpectedly null");
+            return null;
+        }
+        if (!(value.value() instanceof Map)) {
+            log.error("Ignoring restart request because the value is not a Map but is {}", value.value().getClass());
+            return null;
+        }
+
+        Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
+
+        Object failed = valueAsMap.get(ONLY_FAILED_FIELD_NAME);
+        if (failed == null) {
+            log.warn("Invalid data for restart request '{}' field was missing, defaulting to {}", ONLY_FAILED_FIELD_NAME, ONLY_FAILED_DEFAULT);
+            failed = ONLY_FAILED_DEFAULT;
+        }
+        if (!(failed instanceof Boolean)) {
+            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", ONLY_FAILED_FIELD_NAME, failed.getClass(), ONLY_FAILED_DEFAULT);
+            failed = ONLY_FAILED_DEFAULT;
+        }
+        boolean onlyFailed = (Boolean) failed;
+
+        Object withTasks = valueAsMap.get(INCLUDE_TASKS_FIELD_NAME);
+        if (withTasks == null) {
+            log.warn("Invalid data for restart request '{}' field was missing, defaulting to {}", INCLUDE_TASKS_FIELD_NAME, INCLUDE_TASKS_DEFAULT);
+            withTasks = INCLUDE_TASKS_DEFAULT;
+        }
+        if (!(withTasks instanceof Boolean)) {
+            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", INCLUDE_TASKS_FIELD_NAME, withTasks.getClass(), INCLUDE_TASKS_DEFAULT);
+            withTasks = INCLUDE_TASKS_DEFAULT;
+        }
+        boolean includeTasks = (Boolean) withTasks;
+        return new RestartRequest(connectorName, onlyFailed, includeTasks);
     }
 
     private ConnectorTaskId parseTaskId(String key) {
