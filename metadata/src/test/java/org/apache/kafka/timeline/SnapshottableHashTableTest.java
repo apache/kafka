@@ -18,6 +18,7 @@
 package org.apache.kafka.timeline;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -222,7 +223,7 @@ public class SnapshottableHashTableTest {
 
         registry.reset();
 
-        assertTrue(registry.epochsList().isEmpty());
+        assertEquals(Collections.emptyList(), registry.epochsList());
         // Check that the table is empty
         assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE));
     }
