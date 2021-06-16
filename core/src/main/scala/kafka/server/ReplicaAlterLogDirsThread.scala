@@ -76,6 +76,8 @@ class ReplicaAlterLogDirsThread(name: String,
     var partitionData: Seq[(TopicPartition, FetchData)] = null
     val request = fetchRequest.build()
 
+    val (topicIds, topicNames) = replicaMgr.metadataCache.topicIdInfo()
+
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       partitionData = responsePartitionData.map { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
@@ -92,7 +94,7 @@ class ReplicaAlterLogDirsThread(name: String,
     }
 
     // Will throw UnknownTopicIdException if a topic ID is unknown.
-    val fetchData = request.fetchData(replicaMgr.metadataCache.topicIdsToNames())
+    val fetchData = request.fetchData(topicNames)
 
     replicaMgr.fetchMessages(
       0L, // timeout is 0 so that the callback will be executed immediately
@@ -101,7 +103,7 @@ class ReplicaAlterLogDirsThread(name: String,
       request.maxBytes,
       false,
       fetchData.asScala.toSeq,
-      replicaMgr.metadataCache.topicNamesToIds(),
+      topicIds,
       UnboundedQuota,
       processResponseCallback,
       request.isolationLevel,
@@ -279,7 +281,7 @@ class ReplicaAlterLogDirsThread(name: String,
     val fetchRequestOpt = if (requestMap.isEmpty) {
       None
     } else {
-      val version: Short = if (ApiKeys.FETCH.latestVersion >= 13 && topicIds.containsKey(tp.topic()))
+      val version: Short = if (topicIds.containsKey(tp.topic()))
         12
       else
         ApiKeys.FETCH.latestVersion

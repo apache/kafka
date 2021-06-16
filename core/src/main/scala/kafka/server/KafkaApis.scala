@@ -840,7 +840,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // Down-convert messages for each partition if required
         val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
         unconvertedFetchResponse.data().responses().forEach { topicResponse =>
-          topicResponse.partitions().forEach{ unconvertedPartitionData =>
+          topicResponse.partitions().forEach { unconvertedPartitionData =>
             val tp = new TopicPartition(topicResponse.topic(), unconvertedPartitionData.partitionIndex())
             val error = Errors.forCode(unconvertedPartitionData.errorCode)
             if (error != Errors.NONE)

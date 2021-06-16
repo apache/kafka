@@ -1906,6 +1906,7 @@ class ReplicaManagerTest {
 
     val metadataCache: MetadataCache = Mockito.mock(classOf[MetadataCache])
     Mockito.when(metadataCache.getAliveBrokers).thenReturn(aliveBrokers)
+    Mockito.when(metadataCache.topicIdInfo()).thenReturn((topicIds.asJava, topicNames.asJava))
     Mockito.when(metadataCache.topicNamesToIds()).thenReturn(topicIds.asJava)
     Mockito.when(metadataCache.topicIdsToNames()).thenReturn(topicNames.asJava)
 

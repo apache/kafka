@@ -59,6 +59,9 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  *     the fetch offset after the index lookup
  * - {@link Errors#UNKNOWN_TOPIC_ID} If the request contains a topic ID unknown to the broker or a partition in the session has
  *     an ID that differs from the broker
+ * - {@link Errors#FETCH_SESSION_TOPIC_ID_ERROR} If the request version supports topic IDs but the session does not or vice versa,
+ *     or a topic ID in the request is inconsistent with a topic ID in the session
+ * - {@link Errors#INCONSISTENT_TOPIC_ID} If a topic ID in the session does not match the topic ID in the log
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
 public class FetchResponse extends AbstractResponse {
@@ -78,9 +81,11 @@ public class FetchResponse extends AbstractResponse {
 
     /**
      * From version 3 or later, the authorized and existing entries in `FetchRequest.fetchData` should be in the same order in `responseData`.
-     * Version 13 introduces topic IDs which mean there may be unresolved partitions. If there is any unknown topic ID in the request, the
+     * Version 13 introduces topic IDs which can lead to a few new errors. If there is any unknown topic ID in the request, the
      * response will contain a top-level UNKNOWN_TOPIC_ID error and UNKNOWN_TOPIC_ID errors on all the partitions.
-     * We may also return UNKNOWN_TOPIC_ID for a given partition when that partition in the session has a topic ID inconsistent with the broker.
+     * If a request's topic ID usage is inconsistent with the session, we will return a top level FETCH_SESSION_TOPIC_ID_ERROR error.
+     * We may also return INCONSISTENT_TOPIC_ID error for a given partition when that partition in the session has a topic ID
+     * inconsistent with the log.
      */
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
@@ -92,7 +97,26 @@ public class FetchResponse extends AbstractResponse {
     }
 
     public LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames, short version) {
-        return toResponseDataMap(topicNames, version);
+        if (responseData == null) {
+            synchronized (this) {
+                if (responseData == null) {
+                    responseData = new LinkedHashMap<>();
+                    data.responses().forEach(topicResponse -> {
+                        String name;
+                        if (version < 13) {
+                            name = topicResponse.topic();
+                        } else {
+                            name = topicNames.get(topicResponse.topicId());
+                        }
+                        if (name != null) {
+                            topicResponse.partitions().forEach(partition ->
+                                    responseData.put(new TopicPartition(name, partition.partitionIndex()), partition));
+                        }
+                    });
+                }
+            }
+        }
+        return responseData;
 
     }
 
@@ -118,29 +142,6 @@ public class FetchResponse extends AbstractResponse {
 
     public static FetchResponse parse(ByteBuffer buffer, short version) {
         return new FetchResponse(new FetchResponseData(new ByteBufferAccessor(buffer), version));
-    }
-
-    private LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> toResponseDataMap(Map<Uuid, String> topicIdToNameMap, short version) {
-        if (responseData == null) {
-            synchronized (this) {
-                if (responseData == null) {
-                    responseData = new LinkedHashMap<>();
-                    data.responses().forEach(topicResponse -> {
-                        String name;
-                        if (version < 13) {
-                            name = topicResponse.topic();
-                        } else {
-                            name = topicIdToNameMap.get(topicResponse.topicId());
-                        }
-                        if (name != null) {
-                            topicResponse.partitions().forEach(partition ->
-                                    responseData.put(new TopicPartition(name, partition.partitionIndex()), partition));
-                        }
-                    });
-                }
-            }
-        }
-        return responseData;
     }
 
     // Fetch versions 13 and above should have topic IDs for all topics.

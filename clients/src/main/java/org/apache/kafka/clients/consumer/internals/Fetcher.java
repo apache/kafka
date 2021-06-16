@@ -290,7 +290,7 @@ public class Fetcher<K, V> implements Closeable {
                                         fetchTarget.id());
                                 return;
                             }
-                            if (!handler.handleResponse(response, maxVersion)) {
+                            if (!handler.handleResponse(response, resp.requestHeader().apiVersion())) {
                                 if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR || response.error() == Errors.UNKNOWN_TOPIC_ID) {
                                     metadata.requestUpdate();
                                 }

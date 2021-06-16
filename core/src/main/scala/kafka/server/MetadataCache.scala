@@ -268,11 +268,11 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
   }
 
   def topicNamesToIds(): util.Map[String, Uuid] = {
-    metadataSnapshot.topicIds.asJava
+    new util.HashMap(metadataSnapshot.topicIds.asJava)
   }
 
   def topicIdsToNames(): util.Map[Uuid, String] = {
-    metadataSnapshot.topicNames.asJava
+    new util.HashMap(metadataSnapshot.topicNames.asJava)
   }
 
   /**
@@ -420,7 +420,7 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
       topicIds ++= metadataSnapshot.topicIds
       val (newTopicIds, newZeroIds) = updateMetadataRequest.topicStates().asScala
         .map(topicState => (topicState.topicName(), topicState.topicId()))
-        .partition(_._2 != Uuid.ZERO_UUID)
+        .partition { case (_, topicId) => topicId != Uuid.ZERO_UUID }
       newZeroIds.foreach(zeroId => topicIds.remove(zeroId._1))
       topicIds ++= newTopicIds.toMap
 

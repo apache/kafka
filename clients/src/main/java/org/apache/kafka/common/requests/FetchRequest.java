@@ -118,40 +118,6 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
-    // For versions < 13, builds the partitionData map using only the FetchRequestData.
-    // For versions 13+, builds the partitionData map using both the FetchRequestData and a mapping of topic IDs to names.
-    // Throws UnknownTopicIdException for versions 13+ if the topic ID was unknown to the server.
-    private Map<TopicPartition, PartitionData> toPartitionDataMap(List<FetchRequestData.FetchTopic> fetchableTopics,
-                                                                  Map<Uuid, String> topicNames) throws UnknownTopicIdException {
-        Map<TopicPartition, PartitionData> fetchData = new LinkedHashMap<>();
-        short version = version();
-        fetchableTopics.forEach(fetchTopic -> {
-            String name;
-            if (version < 13) {
-                name = fetchTopic.topic(); // can't be null
-            } else {
-                name = topicNames.get(fetchTopic.topicId());
-            }
-            if (name != null) {
-                // If topic name is resolved, simply add to fetchData map
-                fetchTopic.partitions().forEach(fetchPartition ->
-                        fetchData.put(new TopicPartition(name, fetchPartition.partition()),
-                                new PartitionData(
-                                        fetchPartition.fetchOffset(),
-                                        fetchPartition.logStartOffset(),
-                                        fetchPartition.partitionMaxBytes(),
-                                        optionalEpoch(fetchPartition.currentLeaderEpoch()),
-                                        optionalEpoch(fetchPartition.lastFetchedEpoch())
-                                )
-                        )
-                );
-            } else {
-                throw new UnknownTopicIdException(String.format("Topic Id %s in FetchRequest was unknown to the server", fetchTopic.topicId()));
-            }
-        });
-        return Collections.unmodifiableMap(fetchData);
-    }
-
     public static class Builder extends AbstractRequest.Builder<FetchRequest> {
         private final int maxWait;
         private final int minBytes;
@@ -340,9 +306,37 @@ public class FetchRequest extends AbstractRequest {
         return data.maxBytes();
     }
 
-    // For versions 13+, throws UnknownTopicIdException if the topic ID was unknown to the server.
+    // For versions < 13, builds the partitionData map using only the FetchRequestData.
+    // For versions 13+, builds the partitionData map using both the FetchRequestData and a mapping of topic IDs to names.
+    // Throws UnknownTopicIdException for versions 13+ if the topic ID was unknown to the server.
     public Map<TopicPartition, PartitionData> fetchData(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
-        return toPartitionDataMap(data.topics(), topicNames);
+        Map<TopicPartition, PartitionData> fetchData = new LinkedHashMap<>();
+        short version = version();
+        data.topics().forEach(fetchTopic -> {
+            String name;
+            if (version < 13) {
+                name = fetchTopic.topic(); // can't be null
+            } else {
+                name = topicNames.get(fetchTopic.topicId());
+            }
+            if (name != null) {
+                // If topic name is resolved, simply add to fetchData map
+                fetchTopic.partitions().forEach(fetchPartition ->
+                        fetchData.put(new TopicPartition(name, fetchPartition.partition()),
+                                new PartitionData(
+                                        fetchPartition.fetchOffset(),
+                                        fetchPartition.logStartOffset(),
+                                        fetchPartition.partitionMaxBytes(),
+                                        optionalEpoch(fetchPartition.currentLeaderEpoch()),
+                                        optionalEpoch(fetchPartition.lastFetchedEpoch())
+                                )
+                        )
+                );
+            } else {
+                throw new UnknownTopicIdException(String.format("Topic Id %s in FetchRequest was unknown to the server", fetchTopic.topicId()));
+            }
+        });
+        return Collections.unmodifiableMap(fetchData);
     }
 
     // For versions 13+, throws UnknownTopicIdException if the topic ID was unknown to the server.

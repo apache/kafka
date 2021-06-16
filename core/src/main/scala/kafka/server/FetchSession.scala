@@ -26,7 +26,7 @@ import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOC
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
 import java.util
-import java.util.{Collections, Optional}
+import java.util.{Collections, Objects, Optional}
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 
 import scala.collection.{mutable, _}
@@ -90,11 +90,11 @@ class CachedPartition(val topic: String,
   override def prev: Int = cachedPrev
   override def setPrev(prev: Int): Unit = this.cachedPrev = prev
 
-  def this(topic: String, partition: Int) =
-    this(topic, Uuid.ZERO_UUID, partition, -1, -1, -1, Optional.empty(), -1, -1, Optional.empty[Integer])
+  def this(topic: String, partition: Int, topicId: Uuid) =
+    this(topic, topicId, partition, -1, -1, -1, Optional.empty(), -1, -1, Optional.empty[Integer])
 
-  def this(part: TopicPartition) =
-    this(part.topic, part.partition)
+  def this(part: TopicPartition, topicId: Uuid) =
+    this(part.topic, part.partition, topicId)
 
   def this(part: TopicPartition, id: Uuid, reqData: FetchRequest.PartitionData) =
     this(part.topic, id, part.partition, reqData.maxBytes, reqData.fetchOffset, -1,
@@ -163,7 +163,7 @@ class CachedPartition(val topic: String,
     mustRespond
   }
 
-  override def hashCode: Int = (31 * partition) + topic.hashCode
+  override def hashCode: Int = Objects.hash(topic, partition, topicId)
 
   def canEqual(that: Any): Boolean = that.isInstanceOf[CachedPartition]
 
@@ -173,7 +173,8 @@ class CachedPartition(val topic: String,
         this.eq(that) ||
           (that.canEqual(this) &&
             this.partition.equals(that.partition) &&
-            this.topic.equals(that.topic))
+            this.topic.equals(that.topic) &&
+            this.topicId.equals(that.topicId))
       case _ => false
     }
 
@@ -237,7 +238,8 @@ class FetchSession(val id: Int,
   def metadata: JFetchMetadata = synchronized { new JFetchMetadata(id, epoch) }
 
   def getFetchOffset(topicPartition: TopicPartition): Option[Long] = synchronized {
-    Option(partitionMap.find(new CachedPartition(topicPartition))).map(_.fetchOffset)
+    Option(partitionMap.find(new CachedPartition(topicPartition,
+      sessionTopicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID)))).map(_.fetchOffset)
   }
 
   type TL = util.ArrayList[TopicPartition]
@@ -271,8 +273,9 @@ class FetchSession(val id: Int,
       }
     }
     toForget.forEach { p =>
-      if (partitionMap.remove(new CachedPartition(p.topic, p.partition)))
+      if (partitionMap.remove(new CachedPartition(p.topic, p.partition, topicIds.getOrDefault(p.topic, Uuid.ZERO_UUID)))) {
         removed.add(p)
+      }
     }
     (added, updated, removed, inconsistentTopicIds)
   }
@@ -450,7 +453,8 @@ class IncrementalFetchContext(private val time: Time,
         val element = iter.next()
         val topicPart = element.getKey
         val respData = element.getValue
-        val cachedPart = session.partitionMap.find(new CachedPartition(topicPart))
+        val cachedPart = session.partitionMap.find(new CachedPartition(topicPart,
+          session.sessionTopicIds.getOrDefault(topicPart.topic(), Uuid.ZERO_UUID)))
         val mustRespond = cachedPart.maybeUpdateResponseData(respData, updateFetchContextAndRemoveUnselected)
         if (mustRespond) {
           nextElement = element
@@ -621,7 +625,7 @@ class FetchSessionCache(private val maxEntries: Int,
     * @param size               The number of cached partitions in the new entry we are trying to create.
     * @param version            The version of the request
     * @param createPartitions   A callback function which creates the map of cached partitions and the mapping from
-    *                           topic name for topic ID for the topics.
+    *                           topic name to topic ID for the topics.
     * @return                   If we created a session, the ID; INVALID_SESSION_ID otherwise.
     */
   def maybeCreateSession(now: Long,
