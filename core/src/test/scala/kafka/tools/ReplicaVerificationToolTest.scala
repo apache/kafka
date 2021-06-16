@@ -42,13 +42,13 @@ class ReplicaVerificationToolTest {
   @Test
   def testConfigOptWithBootstrapServers(): Unit = {
     val opts1 = new ReplicaVerificationToolOptions(Array("--bootstrap-server", "localhost:9092"))
-    assertEquals("localhost:9092", opts1.brokerList)
+    assertEquals("localhost:9092", opts1.bootstrapServer)
 
     val opts2 = new ReplicaVerificationToolOptions(Array("--broker-list", "127.0.0.1:9092"))
-    assertEquals("127.0.0.1:9092", opts2.brokerList)
+    assertEquals("127.0.0.1:9092", opts2.bootstrapServer)
 
     val opts3 = new ReplicaVerificationToolOptions(Array("--broker-list", "127.0.0.1:9092", "--bootstrap-server", "localhost:9092"))
-    assertEquals("localhost:9092", opts3.brokerList)
+    assertEquals("localhost:9092", opts3.bootstrapServer)
   }
 
   @Test

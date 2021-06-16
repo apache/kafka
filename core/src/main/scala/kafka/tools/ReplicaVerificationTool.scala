@@ -130,8 +130,8 @@ object ReplicaVerificationTool extends Logging {
 
     CommandLineUtils.checkRequiredArgs(parser, options, effectiveBrokerListOpt)
 
-    val brokerList = options.valueOf(effectiveBrokerListOpt)
-    ToolsUtils.validatePortOrDie(parser, brokerList)
+    val bootstrapServer = options.valueOf(effectiveBrokerListOpt)
+    ToolsUtils.validatePortOrDie(parser, bootstrapServer)
 
     val regex = if (options.has(topicsIncludeOpt))
       options.valueOf(topicsIncludeOpt)
@@ -159,7 +159,7 @@ object ReplicaVerificationTool extends Logging {
     info("Getting topic metadata...")
 
     val (topicsMetadata, brokerInfo) = {
-      val adminClient = createAdminClient(opts.brokerList)
+      val adminClient = createAdminClient(opts.bootstrapServer)
       try (listTopicsMetadata(adminClient), brokerDetails(adminClient))
       finally CoreUtils.swallow(adminClient.close(), this)
     }
@@ -198,7 +198,7 @@ object ReplicaVerificationTool extends Logging {
       }
     }
 
-    val consumerProps = consumerConfig(opts.brokerList)
+    val consumerProps = consumerConfig(opts.bootstrapServer)
 
     val replicaBuffer = new ReplicaBuffer(expectedReplicasPerTopicPartition,
       initialOffsets(topicPartitions, consumerProps, opts.initialOffsetTime),
