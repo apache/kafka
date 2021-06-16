@@ -47,7 +47,7 @@ class AclApis(authHelper: AuthHelper,
               name: String,
               config: KafkaConfig) extends Logging {
   this.logIdent = "[AclApis-%s-%s] ".format(name, config.nodeId)
-  private[server] val alterAclsPurgatory =
+  private val alterAclsPurgatory =
       new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.nodeId)
   private val _isClosed = new AtomicBoolean(false)
 
