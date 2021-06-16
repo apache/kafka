@@ -2383,7 +2383,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcess() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Object, Object>) null));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2391,7 +2391,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Object, Object>) null,
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                                      "storeName"));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
@@ -2400,7 +2400,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Object, Object>) null,
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                                      Named.as("processor")));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
@@ -2409,7 +2409,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Object, Object>) null,
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                                      Named.as("processor"), "stateStore"));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
