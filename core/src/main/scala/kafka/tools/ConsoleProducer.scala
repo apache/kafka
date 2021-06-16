@@ -352,7 +352,7 @@ object ConsoleProducer {
       if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
       filePaths = checkFilesPath(props.getProperty("filesPath"))
-      reader = new BufferedReader(new FileReader(filePaths(next)))
+      reader = new BufferedReader(new InputStreamReader(new FileInputStream(filePaths(next)), StandardCharsets.UTF_8))
     }
 
     override def readMessage() = {
@@ -364,7 +364,7 @@ object ConsoleProducer {
           if (next >= filePaths.length)
             null
           else {
-            reader = new BufferedReader(new FileReader(filePaths(next)))
+            reader = new BufferedReader(new InputStreamReader(new FileInputStream(filePaths(next)), StandardCharsets.UTF_8))
             readMessage()
           }
         case (line, true) =>
