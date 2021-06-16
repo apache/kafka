@@ -44,7 +44,7 @@ import static org.junit.Assert.assertTrue;
 public class SourceNodeTest {
     @Test
     public void shouldProvideTopicHeadersAndDataToKeyDeserializer() {
-        final SourceNode<String, String, ?, ?> sourceNode = new MockSourceNode<>(new TheDeserializer(), new TheDeserializer());
+        final SourceNode<String, String> sourceNode = new MockSourceNode<>(new TheDeserializer(), new TheDeserializer());
         final RecordHeaders headers = new RecordHeaders();
         final String deserializeKey = sourceNode.deserializeKey("topic", headers, "data".getBytes(StandardCharsets.UTF_8));
         assertThat(deserializeKey, is("topic" + headers + "data"));
@@ -52,7 +52,7 @@ public class SourceNodeTest {
 
     @Test
     public void shouldProvideTopicHeadersAndDataToValueDeserializer() {
-        final SourceNode<String, String, ?, ?> sourceNode = new MockSourceNode<>(new TheDeserializer(), new TheDeserializer());
+        final SourceNode<String, String> sourceNode = new MockSourceNode<>(new TheDeserializer(), new TheDeserializer());
         final RecordHeaders headers = new RecordHeaders();
         final String deserializedValue = sourceNode.deserializeValue("topic", headers, "data".getBytes(StandardCharsets.UTF_8));
         assertThat(deserializedValue, is("topic" + headers + "data"));
@@ -71,61 +71,39 @@ public class SourceNodeTest {
     }
 
     @Test
-    public void shouldExposeProcessMetricsWithBuiltInMetricsVersionLatest() {
-        shouldExposeProcessMetrics(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldExposeProcessWithBuiltInMetricsVersion0100To24() {
-        shouldExposeProcessMetrics(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldExposeProcessMetrics(final String builtInMetricsVersion) {
+    public void shouldExposeProcessMetrics() {
         final Metrics metrics = new Metrics();
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-client", builtInMetricsVersion, new MockTime());
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(streamsMetrics);
-        final SourceNode<String, String, ?, ?> node =
+            new StreamsMetricsImpl(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
+        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(streamsMetrics);
+        final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
         node.init(context);
 
         final String threadId = Thread.currentThread().getName();
         final String groupName = "stream-processor-node-metrics";
-        final String threadIdTagKey =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? "client-id" : "thread-id";
         final Map<String, String> metricTags = mkMap(
-            mkEntry(threadIdTagKey, threadId),
+            mkEntry("thread-id", threadId),
             mkEntry("task-id", context.taskId().toString()),
             mkEntry("processor-node-id", node.name())
         );
 
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertTrue(StreamsTestUtils.containsMetric(metrics, "forward-rate", groupName, metricTags));
-            assertTrue(StreamsTestUtils.containsMetric(metrics, "forward-total", groupName, metricTags));
+        assertTrue(StreamsTestUtils.containsMetric(metrics, "process-rate", groupName, metricTags));
+        assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", groupName, metricTags));
 
-            // test parent sensors
-            metricTags.put("processor-node-id", StreamsMetricsImpl.ROLLUP_VALUE);
-            assertTrue(StreamsTestUtils.containsMetric(metrics, "forward-rate", groupName, metricTags));
-            assertTrue(StreamsTestUtils.containsMetric(metrics, "forward-total", groupName, metricTags));
+        // test parent sensors
+        final String parentGroupName = "stream-task-metrics";
+        metricTags.remove("processor-node-id");
+        assertTrue(StreamsTestUtils.containsMetric(metrics, "process-rate", parentGroupName, metricTags));
+        assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", parentGroupName, metricTags));
 
-        } else {
-            assertTrue(StreamsTestUtils.containsMetric(metrics, "process-rate", groupName, metricTags));
-            assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", groupName, metricTags));
-
-            // test parent sensors
-            final String parentGroupName = "stream-task-metrics";
-            metricTags.remove("processor-node-id");
-            assertTrue(StreamsTestUtils.containsMetric(metrics, "process-rate", parentGroupName, metricTags));
-            assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", parentGroupName, metricTags));
-
-            final String sensorNamePrefix = "internal." + threadId + ".task." + context.taskId().toString();
-            final Sensor processSensor =
-                metrics.getSensor(sensorNamePrefix + ".node." + context.currentNode().name() + ".s.process");
-            final SensorAccessor sensorAccessor = new SensorAccessor(processSensor);
-            assertThat(
-                sensorAccessor.parents().stream().map(Sensor::name).collect(Collectors.toList()),
-                contains(sensorNamePrefix + ".s.process")
-            );
-        }
+        final String sensorNamePrefix = "internal." + threadId + ".task." + context.taskId().toString();
+        final Sensor processSensor =
+            metrics.getSensor(sensorNamePrefix + ".node." + context.currentNode().name() + ".s.process");
+        final SensorAccessor sensorAccessor = new SensorAccessor(processSensor);
+        assertThat(
+            sensorAccessor.parents().stream().map(Sensor::name).collect(Collectors.toList()),
+            contains(sensorNamePrefix + ".s.process")
+        );
     }
 }

@@ -42,17 +42,20 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorKey, TransactionDescription> {
-    private final LogContext logContext;
     private final Logger log;
-    private final Set<CoordinatorKey> keys;
+    private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public DescribeTransactionsHandler(
-        Collection<String> transactionalIds,
         LogContext logContext
     ) {
-        this.keys = buildKeySet(transactionalIds);
         this.log = logContext.logger(DescribeTransactionsHandler.class);
-        this.logContext = logContext;
+        this.lookupStrategy = new CoordinatorStrategy(logContext);
+    }
+
+    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, TransactionDescription> newFuture(
+        Collection<String> transactionalIds
+    ) {
+        return AdminApiFuture.forKeys(buildKeySet(transactionalIds));
     }
 
     private static Set<CoordinatorKey> buildKeySet(Collection<String> transactionalIds) {
@@ -67,8 +70,8 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
     }
 
     @Override
-    public Keys<CoordinatorKey> initializeKeys() {
-        return Keys.dynamicMapped(keys, new CoordinatorStrategy(logContext));
+    public AdminApiLookupStrategy<CoordinatorKey> lookupStrategy() {
+        return lookupStrategy;
     }
 
     @Override

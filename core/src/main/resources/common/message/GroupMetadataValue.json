@@ -17,6 +17,7 @@
   "type": "data",
   "name": "GroupMetadataValue",
   "validVersions": "0-3",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "protocolType", "versions": "0+", "type": "string"},
     { "name": "generation", "versions": "0+", "type": "int32" },

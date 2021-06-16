@@ -36,7 +36,7 @@ public class KTableReduceTest {
 
     @Test
     public void shouldAddAndSubtract() {
-        final InternalMockProcessorContext context = new InternalMockProcessorContext();
+        final InternalMockProcessorContext<String, Change<Set<String>>> context = new InternalMockProcessorContext<>();
 
         final Processor<String, Change<Set<String>>> reduceProcessor =
             new KTableReduce<String, Set<String>>(

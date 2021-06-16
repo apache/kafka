@@ -68,15 +68,19 @@ public final class Snapshots {
         return snapshotDir(logDir).resolve(filenameFromSnapshotId(snapshotId) + SUFFIX);
     }
 
-    public static Path createTempFile(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
+    public static Path createTempFile(Path logDir, OffsetAndEpoch snapshotId) {
         Path dir = snapshotDir(logDir);
 
-        // Create the snapshot directory if it doesn't exists
-        Files.createDirectories(dir);
-
-        String prefix = String.format("%s-", filenameFromSnapshotId(snapshotId));
-
-        return Files.createTempFile(dir, prefix, PARTIAL_SUFFIX);
+        try {
+            // Create the snapshot directory if it doesn't exists
+            Files.createDirectories(dir);
+            String prefix = String.format("%s-", filenameFromSnapshotId(snapshotId));
+            return Files.createTempFile(dir, prefix, PARTIAL_SUFFIX);
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                String.format("Error creating temporary file, logDir = %s, snapshotId = %s.",
+                     dir.toAbsolutePath(), snapshotId), e);
+        }
     }
 
     public static Optional<SnapshotPath> parse(Path path) {
@@ -130,7 +134,7 @@ public final class Snapshots {
         } catch (IOException e) {
             throw new UncheckedIOException(
                 String.format(
-                    "Error renaming snapshot file from %s to %s",
+                    "Error renaming snapshot file from %s to %s.",
                     immutablePath,
                     deletedPath
                 ),

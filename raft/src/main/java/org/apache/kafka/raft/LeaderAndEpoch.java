@@ -20,12 +20,24 @@ import java.util.Objects;
 import java.util.OptionalInt;
 
 public class LeaderAndEpoch {
-    public final OptionalInt leaderId;
-    public final int epoch;
+    private final OptionalInt leaderId;
+    private final int epoch;
 
     public LeaderAndEpoch(OptionalInt leaderId, int epoch) {
         this.leaderId = Objects.requireNonNull(leaderId);
         this.epoch = epoch;
+    }
+
+    public OptionalInt leaderId() {
+        return leaderId;
+    }
+
+    public int epoch() {
+        return epoch;
+    }
+
+    public boolean isLeader(int nodeId) {
+        return leaderId.isPresent() && leaderId.getAsInt() == nodeId;
     }
 
     @Override
@@ -40,5 +52,13 @@ public class LeaderAndEpoch {
     @Override
     public int hashCode() {
         return Objects.hash(leaderId, epoch);
+    }
+
+    @Override
+    public String toString() {
+        return "LeaderAndEpoch(" +
+            "leaderId=" + leaderId +
+            ", epoch=" + epoch +
+            ')';
     }
 }
