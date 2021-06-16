@@ -978,13 +978,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
+        if (logPrefix.contains("1_4")) {
+            System.err.print("addR");
+        }
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
+
+        if (logPrefix.contains("1_4")) {
+            System.err.print("isTrace");
+        }
 
         if (log.isTraceEnabled()) {
             log.trace("Added records into the buffered queue of partition {}, new queue size is {}", partition, newQueueSize);
         }
         if (logPrefix.contains("1_4")) {
-            System.err.print("added records:" + newQueueSize + "," + maxBufferedSize);
+            System.err.print("ad rec:" + newQueueSize + "," + maxBufferedSize);
         }
 
 

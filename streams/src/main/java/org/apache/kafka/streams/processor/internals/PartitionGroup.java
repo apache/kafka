@@ -364,7 +364,7 @@ public class PartitionGroup {
         if (oldSize == 0 && newSize > 0) {
             nonEmptyQueuesByTime.offer(recordQueue);
             if (logPrefix.contains("1_4")) {
-                System.err.println(longLogPrefix + "offer");
+                System.err.print(longLogPrefix + "offer");
             }
 
             // if all partitions now are non-empty, set the flag
@@ -377,7 +377,7 @@ public class PartitionGroup {
 
         totalBuffered += newSize - oldSize;
         if (logPrefix.contains("1_4")) {
-            System.err.println(longLogPrefix + "end add R");
+            System.err.print(longLogPrefix + "end add R");
         }
 
         return newSize;
