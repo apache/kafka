@@ -151,19 +151,21 @@ object ReplicaVerificationTool extends Logging {
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue
     val initialOffsetTime = options.valueOf(initialOffsetTimeOpt).longValue
     val reportInterval = options.valueOf(reportIntervalOpt).longValue
-    // getting topic metadata
-    info("Getting topic metadata...")
     val brokerList = options.valueOf(effectiveBrokerListOpt)
     ToolsUtils.validatePortOrDie(parser, brokerList)
 
+    // getting topic metadata
+    info("Getting topic metadata...")
+
     val (topicsMetadata, brokerInfo) = {
       val adminClient = createAdminClient(brokerList)
-      try ((listTopicsMetadata(adminClient), brokerDetails(adminClient)))
+      try (listTopicsMetadata(adminClient), brokerDetails(adminClient))
       finally CoreUtils.swallow(adminClient.close(), this)
     }
 
-    val topicIds = topicsMetadata.map( metadata => metadata.name() -> metadata.topicId()).toMap
+    val topicIds = topicsMetadata.map(metadata => metadata.name() -> metadata.topicId()).toMap
 
+    val topicWhiteListFiler = new IncludeList(regex)
     val filteredTopicMetadata = topicsMetadata.filter { topicMetaData =>
       topicsIncludeFilter.isTopicAllowed(topicMetaData.name, excludeInternalTopics = false)
     }
@@ -227,7 +229,6 @@ object ReplicaVerificationTool extends Logging {
     })
     fetcherThreads.foreach(_.start())
     println(s"${ReplicaVerificationTool.getCurrentTimeString()}: verification process is started.")
-
   }
 
   private def listTopicsMetadata(adminClient: Admin): Seq[TopicDescription] = {
