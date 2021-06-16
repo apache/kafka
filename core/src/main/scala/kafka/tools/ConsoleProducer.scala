@@ -335,7 +335,7 @@ object ConsoleProducer {
         else if(filesPathSeq.contains(fileName))
           duplicateFiles += fileName
         else
-          filesPathSeq = filesPathSeq.appended(fileName)
+          filesPathSeq = filesPathSeq :+ fileName
       }
       if (nonExistentFiles.nonEmpty || duplicateFiles.nonEmpty){
         throw new IllegalArgumentException("NonExistent files (" + nonExistentFiles.mkString(",") + ") Duplicate files (" + duplicateFiles.mkString(",") + "). Please check the file path!")
