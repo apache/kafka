@@ -62,11 +62,11 @@ public class WordCountTransformerTest {
 
             @Override
             public <K, V> void forward(final K key, final V value) {
-                context.forward(new Record<>(key.toString(), value.toString(), 0L));
+                context.forward(new Record<>((String) key, (String) value, 0L));
             }
 
             @Override
-            public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) throws IllegalArgumentException {
+            public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
                 return context.schedule(interval, type, callback);
             }
         });
