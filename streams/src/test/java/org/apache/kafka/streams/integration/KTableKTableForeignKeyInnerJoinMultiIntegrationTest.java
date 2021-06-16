@@ -175,8 +175,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(asList(streamsConfig, streamsConfigTwo, streamsConfigThree));
     }
 
-    private String innerJoinType = "INNER";
-
     @Test
     public void shouldInnerJoinMultiPartitionQueryable() throws Exception {
         final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
@@ -186,6 +184,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     }
 
     private void verifyKTableKTableJoin(final Set<KeyValue<Integer, String>> expectedResult) throws Exception {
+        final String innerJoinType = "INNER";
         final String queryableName = innerJoinType + "-store1";
         final String queryableNameTwo = innerJoinType + "-store2";
 
@@ -211,8 +210,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
-        // increase the session timeout value, to avoid unnecessary rebalance
-        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 20000);
+
         return streamsConfig;
     }
 

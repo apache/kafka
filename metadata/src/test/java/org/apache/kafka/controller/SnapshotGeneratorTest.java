@@ -19,12 +19,19 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
+import org.apache.kafka.metadata.MetadataRecordSerde;
+import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.MockRawSnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -62,7 +69,7 @@ public class SnapshotGeneratorTest {
 
     @Test
     public void testGenerateBatches() throws Exception {
-        MockSnapshotWriter writer = new MockSnapshotWriter(123);
+        SnapshotWriter<ApiMessageAndVersion> writer = createSnapshotWriter(123);
         ExponentialBackoff exponentialBackoff =
             new ExponentialBackoff(100, 2, 400, 0.0);
         List<Section> sections = Arrays.asList(new Section("replication",
@@ -71,40 +78,24 @@ public class SnapshotGeneratorTest {
                 Arrays.asList(BATCHES.get(3), BATCHES.get(4)).iterator()));
         SnapshotGenerator generator = new SnapshotGenerator(new LogContext(),
             writer, 2, exponentialBackoff, sections);
-        assertFalse(writer.completed());
-        assertEquals(123L, generator.epoch());
+        assertFalse(writer.isFrozen());
+        assertEquals(123L, generator.lastContainedLogOffset());
         assertEquals(writer, generator.writer());
         assertEquals(OptionalLong.of(0L), generator.generateBatches());
         assertEquals(OptionalLong.of(0L), generator.generateBatches());
-        assertFalse(writer.completed());
+        assertFalse(writer.isFrozen());
         assertEquals(OptionalLong.empty(), generator.generateBatches());
-        assertTrue(writer.completed());
+        assertTrue(writer.isFrozen());
     }
 
-    @Test
-    public void testGenerateBatchesWithBackoff() throws Exception {
-        MockSnapshotWriter writer = new MockSnapshotWriter(123);
-        ExponentialBackoff exponentialBackoff =
-            new ExponentialBackoff(100, 2, 400, 0.0);
-        List<Section> sections = Arrays.asList(new Section("replication",
-                Arrays.asList(BATCHES.get(0), BATCHES.get(1), BATCHES.get(2)).iterator()),
-            new Section("configuration",
-                Arrays.asList(BATCHES.get(3), BATCHES.get(4)).iterator()));
-        SnapshotGenerator generator = new SnapshotGenerator(new LogContext(),
-            writer, 2, exponentialBackoff, sections);
-        assertEquals(123L, generator.epoch());
-        assertEquals(writer, generator.writer());
-        assertFalse(writer.completed());
-        assertEquals(OptionalLong.of(0L), generator.generateBatches());
-        writer.setReady(false);
-        assertEquals(OptionalLong.of(100L), generator.generateBatches());
-        assertEquals(OptionalLong.of(200L), generator.generateBatches());
-        assertEquals(OptionalLong.of(400L), generator.generateBatches());
-        assertEquals(OptionalLong.of(400L), generator.generateBatches());
-        writer.setReady(true);
-        assertFalse(writer.completed());
-        assertEquals(OptionalLong.of(0L), generator.generateBatches());
-        assertEquals(OptionalLong.empty(), generator.generateBatches());
-        assertTrue(writer.completed());
+    private SnapshotWriter<ApiMessageAndVersion> createSnapshotWriter(long committedOffset) {
+        return new SnapshotWriter<>(
+            new MockRawSnapshotWriter(new OffsetAndEpoch(committedOffset + 1, 1), buffer -> { }),
+            1024,
+            MemoryPool.NONE,
+            new MockTime(),
+            CompressionType.NONE,
+            new MetadataRecordSerde()
+        );
     }
 }

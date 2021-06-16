@@ -415,8 +415,12 @@ class ZkAdminManager(val config: KafkaConfig,
           info(message)
           resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
         case e: Throwable =>
+          val configProps = new Properties
+          config.entries.asScala.filter(_.value != null).foreach { configEntry =>
+            configProps.setProperty(configEntry.name, configEntry.value)
+          }
           // Log client errors at a lower level than unexpected exceptions
-          val message = s"Error processing alter configs request for resource $resource, config $config"
+          val message = s"Error processing alter configs request for resource $resource, config ${toLoggableProps(resource, configProps).mkString(",")}"
           if (e.isInstanceOf[ApiException])
             info(message, e)
           else

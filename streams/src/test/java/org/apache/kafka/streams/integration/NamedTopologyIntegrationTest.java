@@ -14,24 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.integration;
 
-package org.apache.kafka.controller;
-
-import org.apache.kafka.common.protocol.ApiMessage;
-
-import java.util.Iterator;
-import java.util.List;
-
-
-interface SnapshotReader extends Iterator<List<ApiMessage>>, AutoCloseable {
+public class NamedTopologyIntegrationTest {
+    //TODO KAFKA-12648
     /**
-     * Returns the snapshot epoch, which is the offset of this snapshot within the log.
+     * Things to test in Pt. 2 -  Introduce TopologyMetadata to wrap InternalTopologyBuilders of named topologies:
+     * 1. Verify changelog & repartition topics decorated with named topology
+     * 2. Make sure app run and works with
+     *         -multiple subtopologies
+     *         -persistent state
+     *         -multi-partition input & output topics
+     *         -standbys
+     *         -piped input and verified output records
+     * 3. Is the task assignment balanced? Does KIP-441/warmup replica placement work as intended?
      */
-    long epoch();
-
-    /**
-     * Invoked when the snapshot reader is no longer needed.  This should clean
-     * up all reader resources.
-     */
-    void close();
 }

@@ -26,9 +26,7 @@ public class NamedTopology extends Topology {
 
     private final Logger log = LoggerFactory.getLogger(NamedTopology.class);
     private String name;
-
-
-
+    
     void setTopologyName(final String newTopologyName) {
         if (name != null) {
             log.error("Unable to set topologyName = {} because the name is already set to {}", newTopologyName, name);
@@ -40,7 +38,6 @@ public class NamedTopology extends Topology {
     public String name() {
         return name;
     }
-
 
     public List<String> sourceTopics() {
         return super.internalTopologyBuilder.fullSourceTopicNames();

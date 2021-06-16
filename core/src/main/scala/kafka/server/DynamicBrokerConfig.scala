@@ -295,7 +295,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       dynamicBrokerConfigs ++= props.asScala
       updateCurrentConfig()
     } catch {
-      case e: Exception => error(s"Per-broker configs of $brokerId could not be applied: $persistentProps", e)
+      case e: Exception => error(s"Per-broker configs of $brokerId could not be applied: ${persistentProps.keys()}", e)
     }
   }
 
@@ -306,7 +306,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       dynamicDefaultConfigs ++= props.asScala
       updateCurrentConfig()
     } catch {
-      case e: Exception => error(s"Cluster default configs could not be applied: $persistentProps", e)
+      case e: Exception => error(s"Cluster default configs could not be applied: ${persistentProps.keys()}", e)
     }
   }
 
@@ -469,7 +469,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         }
         invalidProps.keys.foreach(props.remove)
         val configSource = if (perBrokerConfig) "broker" else "default cluster"
-        error(s"Dynamic $configSource config contains invalid values: $invalidProps, these configs will be ignored", e)
+        error(s"Dynamic $configSource config contains invalid values in: ${invalidProps.keys}, these configs will be ignored", e)
     }
   }
 
@@ -555,7 +555,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       } catch {
         case e: Exception =>
           if (!validateOnly)
-            error(s"Failed to update broker configuration with configs : ${newConfig.originalsFromThisConfig}", e)
+            error(s"Failed to update broker configuration with configs : " +
+                  s"${ConfigUtils.configMapToRedactedString(newConfig.originalsFromThisConfig, KafkaConfig.configDef)}", e)
           throw new ConfigException("Invalid dynamic configuration", e)
       }
     }

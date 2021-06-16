@@ -37,7 +37,6 @@ import java.util.Set;
 public class StreamsUpgradeToCooperativeRebalanceTest {
 
 
-    @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
             System.err.println("StreamsUpgradeToCooperativeRebalanceTest requires one argument (properties-file) but no args provided");

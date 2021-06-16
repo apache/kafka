@@ -80,6 +80,11 @@ public final class MockRawSnapshotWriter implements RawSnapshotWriter {
     @Override
     public void close() {}
 
+    @Override
+    public String toString() {
+        return String.format("MockRawSnapshotWriter(snapshotId=%s, data=%s)", snapshotId, data.buffer());
+    }
+
     private void ensureNotFrozen() {
         if (frozen) {
             throw new IllegalStateException("Snapshot is already frozen " + snapshotId);

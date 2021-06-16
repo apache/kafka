@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.io.DataInputStream;
@@ -43,6 +44,8 @@ public class ConsumerProtocolUtils {
             } else {
                 out.writeInt(0);
             }
+        } else if (taskId.namedTopology() != null) {
+            throw new TaskAssignmentException("Named topologies are not compatible with protocol version " + version);
         }
     }
 
@@ -78,6 +81,8 @@ public class ConsumerProtocolUtils {
             } else {
                 buf.putInt(0);
             }
+        } else if (taskId.namedTopology() != null) {
+            throw new TaskAssignmentException("Named topologies are not compatible with protocol version " + version);
         }
     }
     

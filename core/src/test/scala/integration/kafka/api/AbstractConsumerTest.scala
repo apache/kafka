@@ -52,7 +52,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   val group = "my-test"
   val producerClientId = "ConsumerTestProducer"
   val consumerClientId = "ConsumerTestConsumer"
-  val groupMaxSessionTimeoutMs = 30000L
+  val groupMaxSessionTimeoutMs = 60000L
 
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)

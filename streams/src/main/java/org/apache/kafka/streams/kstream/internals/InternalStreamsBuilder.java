@@ -314,16 +314,17 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             if (graphNode instanceof StreamSourceNode) {
                 final StreamSourceNode<?, ?> currentSourceNode = (StreamSourceNode<?, ?>) graphNode;
 
-                if (currentSourceNode.topicPattern() != null) {
-                    if (!patternsToSourceNodes.containsKey(currentSourceNode.topicPattern())) {
-                        patternsToSourceNodes.put(currentSourceNode.topicPattern(), currentSourceNode);
+                if (currentSourceNode.topicPattern().isPresent()) {
+                    final Pattern topicPattern = currentSourceNode.topicPattern().get();
+                    if (!patternsToSourceNodes.containsKey(topicPattern)) {
+                        patternsToSourceNodes.put(topicPattern, currentSourceNode);
                     } else {
-                        final StreamSourceNode<?, ?> mainSourceNode = patternsToSourceNodes.get(currentSourceNode.topicPattern());
+                        final StreamSourceNode<?, ?> mainSourceNode = patternsToSourceNodes.get(topicPattern);
                         mainSourceNode.merge(currentSourceNode);
                         root.removeChild(graphNode);
                     }
                 } else {
-                    for (final String topic : currentSourceNode.topicNames()) {
+                    for (final String topic : currentSourceNode.topicNames().get()) {
                         if (!topicsToSourceNodes.containsKey(topic)) {
                             topicsToSourceNodes.put(topic, currentSourceNode);
                         } else {

@@ -14,16 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.kstream.internals;
 
-package org.apache.kafka.metadata;
+import org.apache.kafka.streams.kstream.JoinWindows;
 
-/**
- * An exception indicating that we failed to parse a metadata entry.
- */
-public class MetadataParseException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
+public class JoinWindowsInternal extends JoinWindows {
 
-    public MetadataParseException(String message) {
-        super(message);
+    public JoinWindowsInternal(final JoinWindows joinWindows) {
+        super(joinWindows);
+    }
+
+    public boolean spuriousResultFixEnabled() {
+        return enableSpuriousResultFix;
     }
 }
