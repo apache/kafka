@@ -30,8 +30,9 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.server.authorizer._
-import java.util
 
+import java.util
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable
 import scala.compat.java8.OptionConverters._
@@ -46,12 +47,13 @@ class AclApis(authHelper: AuthHelper,
               name: String,
               config: KafkaConfig) extends Logging {
   this.logIdent = "[AclApis-%s-%s] ".format(name, config.nodeId)
-  private val alterAclsPurgatory =
+  private[server] val alterAclsPurgatory =
       new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.nodeId)
+  private val _isClosed = new AtomicBoolean(false)
 
-  def close(): Unit = {
-    alterAclsPurgatory.shutdown()
-  }
+  def isClosed: Boolean = _isClosed.get()
+
+  def close(): Unit = if (_isClosed.compareAndSet(false, true)) alterAclsPurgatory.shutdown()
 
   def handleDescribeAcls(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, DESCRIBE)
