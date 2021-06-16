@@ -80,7 +80,6 @@ object ConsoleProducer {
     props.put("topic", config.topic)
     if(config.options.has(config.filesPathOpt)) {
       props.put("filesPath", config.options.valueOf(config.filesPathOpt))
-      props.put("files.separator", config.options.valueOf(config.filesSeparatorOpt))
     }
     props ++= config.cmdLineProps
     props
@@ -231,16 +230,10 @@ object ConsoleProducer {
       .describedAs("config file")
       .ofType(classOf[String])
 
-    val filesPathOpt = parser.accepts("files", s"Files to be read.")
+    val filesPathOpt = parser.accepts("files", s"Comma separated list of files to be read. Expect a list of files that already exist and are not duplicated")
       .withRequiredArg
       .describedAs("files to be read")
       .ofType(classOf[String])
-
-    val filesSeparatorOpt = parser.accepts("files-separator", s"Multiple file path separator. The default separator is comma.")
-      .withRequiredArg
-      .describedAs("Multiple file path separator.")
-      .ofType(classOf[String])
-      .defaultsTo(",")
 
     options = tryParse(parser, args)
 
@@ -329,19 +322,25 @@ object ConsoleProducer {
     var filePaths = Array.empty[String]
     var next = 0
 
-    def checkFilesPath(filesPath: String, filesSeparator: String): Array[String] = {
-      val files = filesPath.split(filesSeparator)
+    def checkFilesPath(filesPath: String): Array[String] = {
+      val files = filesPath.split(",").toSeq.iterator
+      var filesPathSeq = Seq.empty[String]
       var nonExistentFiles = Set.empty[String]
-      for (fileName <- files){
+      var duplicateFiles = Set.empty[String]
+      while (files.hasNext) {
+        val fileName = files.next()
         val file = new File(fileName)
         if (!file.exists())
           nonExistentFiles += fileName
+        else if(filesPathSeq.contains(fileName))
+          duplicateFiles += fileName
+        else
+          filesPathSeq = filesPathSeq.appended(fileName)
       }
-      if (nonExistentFiles.nonEmpty){
-        System.err.println(s"ERROR: The given file path $nonExistentFiles does not exist. Please check the file path!")
-        Exit.exit(1)
+      if (nonExistentFiles.nonEmpty || duplicateFiles.nonEmpty){
+        throw new IllegalArgumentException("NonExistent files (" + nonExistentFiles.mkString(",") + ") Duplicate files (" + duplicateFiles.mkString(",") + "). Please check the file path!")
       }
-      files
+      filesPathSeq.toArray
     }
 
     override def init(inputStream: InputStream, props: Properties): Unit = {
@@ -352,7 +351,7 @@ object ConsoleProducer {
         keySeparator = props.getProperty("key.separator")
       if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
-      filePaths = checkFilesPath(props.getProperty("filesPath"), props.getProperty("files.separator"))
+      filePaths = checkFilesPath(props.getProperty("filesPath"))
       reader = new BufferedReader(new FileReader(filePaths(next)))
     }
 
