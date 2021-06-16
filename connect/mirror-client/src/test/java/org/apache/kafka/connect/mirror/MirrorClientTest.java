@@ -169,11 +169,14 @@ public class MirrorClientTest {
     public void testIdentityReplicationRemoteTopics() throws InterruptedException {
         // IdentityReplicationPolicy should consider any topic to be remote.
         MirrorClient client = new FakeMirrorClient(new IdentityReplicationPolicy("source"), Arrays.asList(
-            "topic1", "topic2", "topic3"));
+            "topic1", "topic2", "topic3", "heartbeats", "backup.heartbeats"));
         Set<String> remoteTopics = client.remoteTopics();
         assertTrue(remoteTopics.contains("topic1"));
         assertTrue(remoteTopics.contains("topic2"));
         assertTrue(remoteTopics.contains("topic3"));
+        // Heartbeats are treated as a special case
+        assertFalse(remoteTopics.contains("heartbeats"));
+        assertTrue(remoteTopics.contains("backup.heartbeats"));
     }
 
     @Test
@@ -191,6 +194,7 @@ public class MirrorClientTest {
         assertTrue(remoteTopics.contains("source3__source4__source5__topic6"));
     }
 
+    @Test
     public void testIdentityReplicationTopicSource() {
         MirrorClient client = new FakeMirrorClient(
             new IdentityReplicationPolicy("primary"), Arrays.asList());
@@ -198,5 +202,10 @@ public class MirrorClientTest {
             .formatRemoteTopic("primary", "topic1"));
         assertEquals("primary", client.replicationPolicy()
             .topicSource("topic1"));
+        // Heartbeats are handled as a special case
+        assertEquals("backup.heartbeats", client.replicationPolicy()
+            .formatRemoteTopic("backup", "heartbeats"));
+        assertEquals("backup", client.replicationPolicy()
+            .topicSource("backup.heartbeats"));
     }
 }
