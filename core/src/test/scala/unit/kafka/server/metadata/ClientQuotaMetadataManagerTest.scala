@@ -23,7 +23,7 @@ import kafka.server.{ConfigEntityName, KafkaConfig, QuotaFactory}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
-import org.apache.kafka.common.metadata.QuotaRecord
+import org.apache.kafka.common.metadata.ClientQuotaRecord
 import org.apache.kafka.common.metrics.{Metrics, Quota}
 import org.apache.kafka.common.quota.{ClientQuotaEntity, ClientQuotaFilterComponent}
 import org.junit.jupiter.api.Assertions._
@@ -369,7 +369,7 @@ class ClientQuotaMetadataManagerTest {
   }
 
   def setupAndVerify(manager: ClientQuotaMetadataManager,
-                     verifier: (List[QuotaRecord.EntityData], (String, Double)) => Unit ): Unit = {
+                     verifier: (List[ClientQuotaRecord.EntityData], (String, Double)) => Unit ): Unit = {
     val toVerify = List(
       (userClientEntity("user-1", "client-id-1"), 50.50),
       (userClientEntity("user-2", "client-id-1"), 51.51),
@@ -394,7 +394,7 @@ class ClientQuotaMetadataManagerTest {
     }
   }
 
-  def describeEntity(entity: List[QuotaRecord.EntityData]): Map[String, Double] = {
+  def describeEntity(entity: List[ClientQuotaRecord.EntityData]): Map[String, Double] = {
     val components = mutable.ListBuffer[ClientQuotaFilterComponent]()
     entityToFilter(entity, components)
     val results = cache.describeClientQuotas(components.toSeq, strict=true)
@@ -407,21 +407,21 @@ class ClientQuotaMetadataManagerTest {
     }
   }
 
-  def addQuotaRecord(manager: ClientQuotaMetadataManager, entity: List[QuotaRecord.EntityData], quota: (String, Double)): Unit = {
-    manager.handleQuotaRecord(new QuotaRecord()
+  def addQuotaRecord(manager: ClientQuotaMetadataManager, entity: List[ClientQuotaRecord.EntityData], quota: (String, Double)): Unit = {
+    manager.handleQuotaRecord(new ClientQuotaRecord()
       .setEntity(entity.asJava)
       .setKey(quota._1)
       .setValue(quota._2))
   }
 
-  def addQuotaRemovalRecord(manager: ClientQuotaMetadataManager, entity: List[QuotaRecord.EntityData], quota: String): Unit = {
-    manager.handleQuotaRecord(new QuotaRecord()
+  def addQuotaRemovalRecord(manager: ClientQuotaMetadataManager, entity: List[ClientQuotaRecord.EntityData], quota: String): Unit = {
+    manager.handleQuotaRecord(new ClientQuotaRecord()
       .setEntity(entity.asJava)
       .setKey(quota)
       .setRemove(true))
   }
 
-  def entityToFilter(entity: List[QuotaRecord.EntityData], components: mutable.ListBuffer[ClientQuotaFilterComponent]): Unit = {
+  def entityToFilter(entity: List[ClientQuotaRecord.EntityData], components: mutable.ListBuffer[ClientQuotaFilterComponent]): Unit = {
     entity.foreach(entityData => {
       if (entityData.entityName() == null) {
         components.append(ClientQuotaFilterComponent.ofDefaultEntity(entityData.entityType()))
@@ -431,22 +431,22 @@ class ClientQuotaMetadataManagerTest {
     })
   }
 
-  def clientEntity(clientId: String): List[QuotaRecord.EntityData] = {
-    List(new QuotaRecord.EntityData().setEntityType(ClientQuotaEntity.CLIENT_ID).setEntityName(clientId))
+  def clientEntity(clientId: String): List[ClientQuotaRecord.EntityData] = {
+    List(new ClientQuotaRecord.EntityData().setEntityType(ClientQuotaEntity.CLIENT_ID).setEntityName(clientId))
   }
 
-  def userEntity(user: String): List[QuotaRecord.EntityData] = {
-    List(new QuotaRecord.EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName(user))
+  def userEntity(user: String): List[ClientQuotaRecord.EntityData] = {
+    List(new ClientQuotaRecord.EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName(user))
   }
 
-  def userClientEntity(user: String, clientId: String): List[QuotaRecord.EntityData] = {
+  def userClientEntity(user: String, clientId: String): List[ClientQuotaRecord.EntityData] = {
     List(
-      new QuotaRecord.EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName(user),
-      new QuotaRecord.EntityData().setEntityType(ClientQuotaEntity.CLIENT_ID).setEntityName(clientId)
+      new ClientQuotaRecord.EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName(user),
+      new ClientQuotaRecord.EntityData().setEntityType(ClientQuotaEntity.CLIENT_ID).setEntityName(clientId)
     )
   }
 
-  def ipEntity(ip: String): List[QuotaRecord.EntityData] = {
-    List(new QuotaRecord.EntityData().setEntityType(ClientQuotaEntity.IP).setEntityName(ip))
+  def ipEntity(ip: String): List[ClientQuotaRecord.EntityData] = {
+    List(new ClientQuotaRecord.EntityData().setEntityType(ClientQuotaEntity.IP).setEntityName(ip))
   }
 }

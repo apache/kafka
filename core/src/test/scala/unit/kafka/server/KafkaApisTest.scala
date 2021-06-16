@@ -1053,6 +1053,44 @@ class KafkaApisTest {
   }
 
   @Test
+  def testInvalidMetadataRequestReturnsError(): Unit = {
+    // Construct invalid MetadataRequestTopics. We will try each one separately and ensure the error is thrown.
+    val topics = List(new MetadataRequestData.MetadataRequestTopic().setName(null).setTopicId(Uuid.randomUuid()),
+      new MetadataRequestData.MetadataRequestTopic().setName(null),
+      new MetadataRequestData.MetadataRequestTopic().setTopicId(Uuid.randomUuid()),
+      new MetadataRequestData.MetadataRequestTopic().setName("topic1").setTopicId(Uuid.randomUuid()))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager,
+      autoTopicCreationManager, forwardingManager, clientControllerQuotaManager, groupCoordinator, txnCoordinator)
+
+    // if version is 10 or 11, the invalid topic metadata should return an error
+    val invalidVersions = Set(10, 11)
+    invalidVersions.foreach( version =>
+      topics.foreach(topic => {
+        val metadataRequestData = new MetadataRequestData().setTopics(Collections.singletonList(topic))
+        val request = buildRequest(new MetadataRequest(metadataRequestData, version.toShort))
+        val kafkaApis = createKafkaApis()
+
+        val capturedResponse = EasyMock.newCapture[AbstractResponse]()
+        EasyMock.expect(requestChannel.sendResponse(
+          EasyMock.eq(request),
+          EasyMock.capture(capturedResponse),
+          EasyMock.anyObject()
+        ))
+
+        EasyMock.replay(requestChannel)
+        kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+
+        val response = capturedResponse.getValue.asInstanceOf[MetadataResponse]
+        assertEquals(1, response.topicMetadata.size)
+        assertEquals(1, response.errorCounts.get(Errors.INVALID_REQUEST))
+        response.data.topics.forEach(topic => assertNotEquals(null, topic.name))
+        reset(requestChannel)
+      })
+    )
+  }
+
+  @Test
   def testOffsetCommitWithInvalidPartition(): Unit = {
     val topic = "topic"
     addTopicToMetadataCache(topic, numPartitions = 1)
