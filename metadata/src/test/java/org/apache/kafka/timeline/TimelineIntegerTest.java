@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -69,5 +70,21 @@ public class TimelineIntegerTest {
         assertEquals(1, integer.get());
         registry.revertToSnapshot(2);
         assertEquals(0, integer.get());
+    }
+
+    @Test
+    public void testReset() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        int initialValue = 10;
+        TimelineInteger value = new TimelineInteger(registry, initialValue);
+        registry.createSnapshot(2);
+        value.set(1);
+        registry.createSnapshot(3);
+        value.set(2);
+
+        registry.reset();
+
+        assertTrue(registry.epochsList().isEmpty());
+        assertEquals(initialValue, value.get());
     }
 }

@@ -44,11 +44,19 @@ public class TimelineInteger implements Revertable {
     }
 
     private final SnapshotRegistry snapshotRegistry;
+    private final int init;
     private int value;
 
     public TimelineInteger(SnapshotRegistry snapshotRegistry) {
+        this(snapshotRegistry, 0);
+    }
+
+    public TimelineInteger(SnapshotRegistry snapshotRegistry, int value) {
         this.snapshotRegistry = snapshotRegistry;
-        this.value = 0;
+        this.init = value;
+        this.value = value;
+
+        snapshotRegistry.register(this);
     }
 
     public int get() {
@@ -93,6 +101,11 @@ public class TimelineInteger implements Revertable {
     public void executeRevert(long targetEpoch, Delta delta) {
         IntegerContainer container = (IntegerContainer) delta;
         this.value = container.value;
+    }
+
+    @Override
+    public void reset() {
+        value = init;
     }
 
     @Override

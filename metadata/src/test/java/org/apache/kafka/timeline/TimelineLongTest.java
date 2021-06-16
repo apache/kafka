@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -69,5 +70,21 @@ public class TimelineLongTest {
         assertEquals(1L, value.get());
         registry.revertToSnapshot(2);
         assertEquals(0L, value.get());
+    }
+
+    @Test
+    public void testReset() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        long initialValue = 10;
+        TimelineLong value = new TimelineLong(registry, initialValue);
+        registry.createSnapshot(2);
+        value.set(1L);
+        registry.createSnapshot(3);
+        value.set(2L);
+
+        registry.reset();
+
+        assertTrue(registry.epochsList().isEmpty());
+        assertEquals(initialValue, value.get());
     }
 }

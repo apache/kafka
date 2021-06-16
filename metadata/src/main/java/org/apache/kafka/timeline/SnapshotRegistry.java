@@ -19,8 +19,10 @@ package org.apache.kafka.timeline;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.common.utils.LogContext;
@@ -104,6 +106,11 @@ public class SnapshotRegistry {
      * The head of a list of snapshots, sorted by epoch.
      */
     private final Snapshot head = new Snapshot(Long.MIN_VALUE);
+
+    /**
+     * Collection of all Revertable registered with this registry
+     */
+    private final Set<Revertable> revertables = new HashSet<>();
 
     public SnapshotRegistry(LogContext logContext) {
         this.log = logContext.logger(SnapshotRegistry.class);
@@ -253,5 +260,23 @@ public class SnapshotRegistry {
      */
     public long latestEpoch() {
         return head.prev().epoch();
+    }
+
+    /**
+     * Associate with this registry.
+     */
+    public void register(Revertable revertable) {
+        revertables.add(revertable);
+    }
+
+    /**
+     * Resets all of the Revertable object registered to their initial value.
+     */
+    public void reset() {
+        deleteSnapshotsUpTo(LATEST_EPOCH);
+
+        for (Revertable revertable : revertables) {
+            revertable.reset();
+        }
     }
 }

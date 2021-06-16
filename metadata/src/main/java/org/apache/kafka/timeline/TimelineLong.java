@@ -44,15 +44,19 @@ public class TimelineLong implements Revertable {
     }
 
     private final SnapshotRegistry snapshotRegistry;
+    private final long init;
     private long value;
 
     public TimelineLong(SnapshotRegistry snapshotRegistry) {
-        this(snapshotRegistry, 0L);
+        this(snapshotRegistry, 0);
     }
 
     public TimelineLong(SnapshotRegistry snapshotRegistry, long value) {
         this.snapshotRegistry = snapshotRegistry;
+        this.init = value;
         this.value = value;
+
+        snapshotRegistry.register(this);
     }
 
     public long get() {
@@ -97,6 +101,11 @@ public class TimelineLong implements Revertable {
     public void executeRevert(long targetEpoch, Delta delta) {
         LongContainer container = (LongContainer) delta;
         this.value = container.value();
+    }
+
+    @Override
+    public void reset() {
+        value = init;
     }
 
     @Override
