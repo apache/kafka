@@ -67,21 +67,85 @@ class ConsumerGroupServiceTest {
     val args = Array("--bootstrap-server", "localhost:9092", "--group", group, "--describe", "--offsets")
     val groupService = consumerGroupService(args)
 
+    val testTopicPartition0 = new TopicPartition("testTopic1", 0);
+    val testTopicPartition1 = new TopicPartition("testTopic1", 1);
+    val testTopicPartition2 = new TopicPartition("testTopic1", 2);
+    val testTopicPartition3 = new TopicPartition("testTopic2", 0);
+    val testTopicPartition4 = new TopicPartition("testTopic2", 1);
+    val testTopicPartition5 = new TopicPartition("testTopic2", 2);
+
+    val offsets = Map(
+      //testTopicPartition0 -> there is no offset information for an asssigned topic partition
+      testTopicPartition1 -> new OffsetAndMetadata(100), // regular information for a assigned partition
+      testTopicPartition2 -> null, //there is a null value for an asssigned topic partition
+      // testTopicPartition3 ->  there is no offset information for an unasssigned topic partition
+      testTopicPartition4 -> new OffsetAndMetadata(100), // regular information for a unassigned partition
+      testTopicPartition5 -> null, //there is a null value for an unasssigned topic partition
+    ).asJava
+
+    val resultInfo = new ListOffsetsResult.ListOffsetsResultInfo(100, System.currentTimeMillis, Optional.of(1))
+    val endOffsets = Map(
+      testTopicPartition0 -> KafkaFuture.completedFuture(resultInfo),
+      testTopicPartition1 -> KafkaFuture.completedFuture(resultInfo),
+      testTopicPartition2 -> KafkaFuture.completedFuture(resultInfo),
+      testTopicPartition3 -> KafkaFuture.completedFuture(resultInfo),
+      testTopicPartition4 -> KafkaFuture.completedFuture(resultInfo),
+      testTopicPartition5 -> KafkaFuture.completedFuture(resultInfo),
+    )
+    val assignedTopicPartitions = Set(testTopicPartition0, testTopicPartition1, testTopicPartition2 )
+    val unassignedTopicPartitions = offsets.asScala.filterNot { case (tp, _) => assignedTopicPartitions.contains(tp) }.toMap.keySet
+
+    def describeGroupsResult(groupState: ConsumerGroupState): DescribeConsumerGroupsResult = {
+      val member1 = new MemberDescription("member1", Optional.of("instance1"), "client1", "host1", new MemberAssignment(assignedTopicPartitions.asJava))
+      val description = new ConsumerGroupDescription(group,
+        true,
+        Collections.singleton(member1),
+        classOf[RangeAssignor].getName,
+        groupState,
+        new Node(1, "localhost", 9092))
+      new DescribeConsumerGroupsResult(Collections.singletonMap(group, KafkaFuture.completedFuture(description)))
+    }
+
+    def offsetsArgMatcherAssignedTopics: util.Map[TopicPartition, OffsetSpec] = {
+      val expectedOffsets = endOffsets.filter{ case (tp, _) => assignedTopicPartitions.contains(tp) }.keySet.map(tp => tp -> OffsetSpec.latest).toMap
+      ArgumentMatchers.argThat[util.Map[TopicPartition, OffsetSpec]] { map =>
+        map.keySet.asScala == expectedOffsets.keySet && map.values.asScala.forall(_.isInstanceOf[OffsetSpec.LatestSpec])
+      }
+    }
+    def offsetsArgMatcherUnassignedTopics: util.Map[TopicPartition, OffsetSpec] = {
+      val expectedOffsets = offsets.asScala.filter{ case (tp, _) => unassignedTopicPartitions.contains(tp) }.keySet.map(tp => tp -> OffsetSpec.latest).toMap
+      ArgumentMatchers.argThat[util.Map[TopicPartition, OffsetSpec]] { map =>
+        map.keySet.asScala == expectedOffsets.keySet && map.values.asScala.forall(_.isInstanceOf[OffsetSpec.LatestSpec])
+      }
+    }
     when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any()))
       .thenReturn(describeGroupsResult(ConsumerGroupState.STABLE))
     when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(group), any()))
-      .thenReturn(listGroupNegativeOffsetsResult)
-    when(admin.listOffsets(offsetsArgMatcher, any()))
-      .thenReturn(listOffsetsResult)
+      .thenReturn(AdminClientTestUtils.listConsumerGroupOffsetsResult(offsets))
+    doReturn(new ListOffsetsResult(endOffsets.asJava)).when(admin).listOffsets(offsetsArgMatcherAssignedTopics, any())
+    doReturn(new ListOffsetsResult(endOffsets.asJava)).when(admin).listOffsets(offsetsArgMatcherUnassignedTopics, any())
 
     val (state, assignments) = groupService.collectGroupOffsets(group)
     assertEquals(Some("Stable"), state)
     assertTrue(assignments.nonEmpty)
-    assertEquals(topicPartitions.size, assignments.get.size)
+    // Results should have information for all assigned topic partition (even if there is not Offset's information at all, because they get fills with None)
+    // Results should have information only for unassigned topic partitions if and only if there is information about them (included with null values)
+    assertEquals(assignedTopicPartitions.size + unassignedTopicPartitions.size , assignments.get.size)
+    assignments.map( results =>
+      results.map( partitionAssignmentState =>
+        (partitionAssignmentState.topic, partitionAssignmentState.partition) match {
+          case (Some("testTopic1"), Some(0)) => assertEquals(None, partitionAssignmentState.offset)
+          case (Some("testTopic1"), Some(1)) => assertEquals(Some(100), partitionAssignmentState.offset)
+          case (Some("testTopic1"), Some(2)) => assertEquals(None, partitionAssignmentState.offset)
+          case (Some("testTopic2"), Some(1)) => assertEquals(Some(100), partitionAssignmentState.offset)
+          case (Some("testTopic2"), Some(2)) => assertEquals(None, partitionAssignmentState.offset)
+          case _ => assertTrue(false)
+    }))
 
     verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any())
     verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(group), any())
-    verify(admin, times(1)).listOffsets(offsetsArgMatcher, any())
+    verify(admin, times(1)).listOffsets(offsetsArgMatcherAssignedTopics, any())
+    verify(admin, times(1)).listOffsets(offsetsArgMatcherUnassignedTopics, any())
   }
 
   @Test
@@ -129,12 +193,6 @@ class ConsumerGroupServiceTest {
 
   private def listGroupOffsetsResult: ListConsumerGroupOffsetsResult = {
     val offsets = topicPartitions.map(_ -> new OffsetAndMetadata(100)).toMap.asJava
-    AdminClientTestUtils.listConsumerGroupOffsetsResult(offsets)
-  }
-
-  private def listGroupNegativeOffsetsResult: ListConsumerGroupOffsetsResult = {
-    // Half of the partitions of the testing topics are set to have a negative integer offset (null value [KAFKA-9507 for reference])
-    val offsets = topicPartitions.zipWithIndex.map{ case (tp, i) => tp -> ( if(i % 2 == 0) null else new OffsetAndMetadata(100) ) }.toMap.asJava
     AdminClientTestUtils.listConsumerGroupOffsetsResult(offsets)
   }
 
