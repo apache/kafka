@@ -192,8 +192,7 @@ public class ProducerPerformance {
 
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        if (transactionsEnabled)
-            props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+        if (transactionsEnabled) props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
         return props;
     }
 
