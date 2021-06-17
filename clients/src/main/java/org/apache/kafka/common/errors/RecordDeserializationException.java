@@ -16,29 +16,29 @@
  */
 package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 
 /**
- *  Any exception during serialization in the producer
+ *  This exception is raised for any error that occurs while deserializing records received by the consumer using 
+ *  the configured {@link org.apache.kafka.common.serialization.Deserializer}.
  */
-public class SerializationException extends KafkaException {
+public class RecordDeserializationException extends SerializationException {
 
     private static final long serialVersionUID = 1L;
+    private final TopicPartition partition;
+    private final long offset;
 
-    public SerializationException(String message, Throwable cause) {
+    public RecordDeserializationException(TopicPartition partition, long offset, String message, Throwable cause) {
         super(message, cause);
+        this.partition = partition;
+        this.offset = offset;
     }
 
-    public SerializationException(String message) {
-        super(message);
+    public TopicPartition topicPartition() {
+        return partition;
     }
 
-    public SerializationException(Throwable cause) {
-        super(cause);
+    public long offset() {
+        return offset;
     }
-
-    public SerializationException() {
-        super();
-    }
-
 }
