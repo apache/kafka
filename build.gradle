@@ -77,19 +77,36 @@ allprojects {
     // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
     // that are unrelated to the project dependencies, we should not change them
     if (name != "zinc") {
-      resolutionStrategy {
-        force(
-          // be explicit about the javassist dependency version instead of relying on the transitive version
-          libs.javassist,
-          // ensure we have a single version in the classpath despite transitive dependencies
-          libs.scalaLibrary,
-          libs.scalaReflect,
-          libs.jacksonAnnotations,
-          // be explicit about the Netty dependency version instead of relying on the version set by
-          // ZooKeeper (potentially older and containing CVEs)
-          libs.nettyHandler,
-          libs.nettyTransportNativeEpoll
-        )
+      if (versions.baseScala != '3') {
+        resolutionStrategy {
+          force(
+                  // be explicit about the javassist dependency version instead of relying on the transitive version
+                  libs.javassist,
+                  // ensure we have a single version in the classpath despite transitive dependencies
+                  libs.scalaLibrary,
+                  libs.scalaReflect,
+                  libs.jacksonAnnotations,
+                  // be explicit about the Netty dependency version instead of relying on the version set by
+                  // ZooKeeper (potentially older and containing CVEs)
+                  libs.nettyHandler,
+                  libs.nettyTransportNativeEpoll
+          )
+        }
+      } else {
+        resolutionStrategy {
+          force(
+                  // be explicit about the javassist dependency version instead of relying on the transitive version
+                  libs.javassist,
+                  // ensure we have a single version in the classpath despite transitive dependencies
+                  libs.scala3Library,
+                  libs.scala3Compiler,
+                  libs.jacksonAnnotations,
+                  // be explicit about the Netty dependency version instead of relying on the version set by
+                  // ZooKeeper (potentially older and containing CVEs)
+                  libs.nettyHandler,
+                  libs.nettyTransportNativeEpoll
+          )
+        }
       }
     }
   }
@@ -590,6 +607,10 @@ subprojects {
       scalaCompileOptions.additionalParameters += ["-Xfatal-warnings"]
     }
 
+    if (versions.baseScala == '3') {
+      scalaCompileOptions.additionalParameters += ["-Ytasty-reader"]
+    }
+
     // these options are valid for Scala versions < 2.13 only
     // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
     if (versions.baseScala == '2.12') {
@@ -802,7 +823,15 @@ project(':core') {
     // `core` is often used in users' tests, define the following dependencies as `api` for backwards compatibility
     // even though the `core` module doesn't expose any public API
     api project(':clients')
-    api libs.scalaLibrary
+    if (versions.baseScala != '3') {
+      api libs.scalaLibrary
+      implementation libs.scalaCollectionCompat
+      // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
+      implementation libs.scalaReflect
+    } else {
+      api libs.scala3Library
+      api libs.scala3Compiler
+    }
 
     implementation project(':server-common')
     implementation project(':metadata')
@@ -816,10 +845,9 @@ project(':core') {
     implementation libs.jacksonJDK8Datatypes
     implementation libs.joptSimple
     implementation libs.metrics
-    implementation libs.scalaCollectionCompat
+
     implementation libs.scalaJava8Compat
-    // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
-    implementation libs.scalaReflect
+
     implementation libs.scalaLogging
     implementation libs.slf4jApi
     implementation(libs.zookeeper) {
@@ -1838,8 +1866,13 @@ project(':streams:streams-scala') {
   dependencies {
     api project(':streams')
 
-    api libs.scalaLibrary
-    api libs.scalaCollectionCompat
+    if (versions.baseScala != '3') {
+      api libs.scalaLibrary
+      api libs.scalaCollectionCompat
+    } else {
+      api libs.scala3Library
+      api libs.scala3Compiler
+    }
 
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
@@ -2153,7 +2186,12 @@ project(':jmh-benchmarks') {
     implementation libs.metrics
     implementation libs.mockitoCore
     implementation libs.slf4jlog4j
-    implementation libs.scalaLibrary
+    if (versions.baseScala != '3') {
+      implementation libs.scalaLibrary
+    } else {
+      implementation libs.scala3Library
+      implementation libs.scala3Compiler
+    }
     implementation libs.scalaJava8Compat
   }
 

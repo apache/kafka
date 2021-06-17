@@ -57,7 +57,6 @@ object Implicits {
    */
   @nowarn("cat=unused-imports")
   implicit class MapExtensionMethods[K, V](private val self: scala.collection.Map[K, V]) extends AnyVal {
-    import scala.collection.compat._
     def forKeyValue[U](f: (K, V) => U): Unit = {
       self.foreachEntry { (k, v) => f(k, v) }
     }

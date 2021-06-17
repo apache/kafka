@@ -18,7 +18,7 @@
 package kafka.utils.json
 
 import scala.collection.{Map, Seq}
-import scala.collection.compat._
+import scala.collection.Factory
 import scala.jdk.CollectionConverters._
 
 import com.fasterxml.jackson.databind.{JsonMappingException, JsonNode}
