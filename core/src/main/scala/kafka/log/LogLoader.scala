@@ -391,7 +391,7 @@ object LogLoader extends Logging {
         time = params.time,
         fileSuffix = Log.SwapFileSuffix)
 
-      def doRecover(): Unit = {
+      def doRecovery(): Unit = {
         info(s"${params.logIdentifier}Found log file ${swapFile.getPath} from interrupted swap operation, which is not recoverable from ${Log.CleanedFileSuffix} files, repairing.")
         recoverSegment(swapSegment, params)
 
@@ -421,7 +421,7 @@ object LogLoader extends Logging {
       }
 
       if (needsRecovery) {
-        doRecover()
+        doRecovery()
       } else {
         try {
           swapSegment.sanityCheck(false)
@@ -429,7 +429,7 @@ object LogLoader extends Logging {
           swapSegment.changeFileSuffixes(Log.SwapFileSuffix, "")
         } catch {
           case _: NoSuchFileException => {}
-            doRecover()
+            doRecovery()
         }
       }
     }
