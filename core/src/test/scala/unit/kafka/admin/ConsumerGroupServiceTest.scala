@@ -122,8 +122,8 @@ class ConsumerGroupServiceTest {
       .thenReturn(describeGroupsResult(ConsumerGroupState.STABLE))
     when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(group), any()))
       .thenReturn(AdminClientTestUtils.listConsumerGroupOffsetsResult(offsets))
-    doReturn(new ListOffsetsResult(endOffsets.asJava)).when(admin).listOffsets(offsetsArgMatcherAssignedTopics, any())
-    doReturn(new ListOffsetsResult(endOffsets.asJava)).when(admin).listOffsets(offsetsArgMatcherUnassignedTopics, any())
+    doAnswer(_ => new ListOffsetsResult(endOffsets.asJava)).when(admin).listOffsets(offsetsArgMatcherAssignedTopics, any())
+    doAnswer(_ => new ListOffsetsResult(endOffsets.asJava)).when(admin).listOffsets(offsetsArgMatcherUnassignedTopics, any())
 
     val (state, assignments) = groupService.collectGroupOffsets(group)
     assertEquals(Some("Stable"), state)
