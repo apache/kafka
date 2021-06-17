@@ -1537,13 +1537,13 @@ class GroupCoordinator(val brokerId: Int,
             if (!group.hasReceivedSyncFromAllMembers) {
               val pendingSyncMembers = group.allPendingSyncMembers
 
-              debug(s"Group ${group.groupId} removed members who haven't " +
-                s"sent their sync request: $pendingSyncMembers")
-
               pendingSyncMembers.foreach { memberId =>
                 group.remove(memberId)
                 removeHeartbeatForLeavingMember(group, memberId)
               }
+
+              debug(s"Group ${group.groupId} removed members who haven't " +
+                s"sent their sync request: $pendingSyncMembers")
 
               prepareRebalance(group, s"Removing $pendingSyncMembers on pending sync request expiration")
             }

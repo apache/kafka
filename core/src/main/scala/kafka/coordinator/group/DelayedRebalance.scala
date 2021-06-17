@@ -23,7 +23,7 @@ import java.util.concurrent.locks.Lock
 
 /**
  * Delayed rebalance operation that is shared by DelayedJoin and DelayedSync
- * operations. This allows to use a common purgatory for both cases.
+ * operations. This allows us to use a common purgatory for both cases.
  */
 private[group] abstract class DelayedRebalance(
   rebalanceTimeoutMs: Long,
