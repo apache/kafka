@@ -900,6 +900,14 @@ class ProducerStateManagerTest {
     assertEquals(Seq(42), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
   }
 
+  @Test
+  def testRemoveAndMarkSnapshotForDeletion(): Unit = {
+    Log.producerSnapshotFile(logDir, 5).createNewFile()
+    val manager = new ProducerStateManager(partition, logDir, time = time)
+    val snapshot = manager.removeAndMarkSnapshotForDeletion(5).get
+    assertTrue(snapshot.file.toPath.toString.endsWith(Log.DeletedFileSuffix))
+  }
+
   private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {
     val epoch = 0.toShort
     val producerId = 1L

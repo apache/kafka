@@ -2390,6 +2390,11 @@ object Log extends Logging {
                                       producerStateManager: ProducerStateManager,
                                       logPrefix: String): Unit = {
     segmentsToDelete.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
+    val snapshotsToDelete = if (deleteProducerStateSnapshots)
+      segmentsToDelete.flatMap { segment =>
+        producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset)}
+    else
+      Seq()
 
     def deleteSegments(): Unit = {
       info(s"${logPrefix}Deleting segment files ${segmentsToDelete.mkString(",")}")
@@ -2397,9 +2402,11 @@ object Log extends Logging {
       maybeHandleIOException(logDirFailureChannel, parentDir, s"Error while deleting segments for $topicPartition in dir $parentDir") {
         segmentsToDelete.foreach { segment =>
           segment.deleteIfExists()
-          if (deleteProducerStateSnapshots)
-            producerStateManager.removeAndDeleteSnapshot(segment.baseOffset)
         }
+        snapshotsToDelete.foreach( snapshot => {
+          snapshot.deleteIfExists()
+        }
+        )
       }
     }
 
