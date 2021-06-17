@@ -1690,13 +1690,35 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DeleteTopicsResult deleteTopics(final Collection<String> topicNames,
                                            final DeleteTopicsOptions options) {
+        return DeleteTopicsResult.ofTopicNames(new HashMap<>(handleDeleteTopicsUsingNames(topicNames, options)));
+    }
+
+    @Override
+    public DeleteTopicsResult deleteTopics(final TopicCollection topics,
+                                           final DeleteTopicsOptions options) {
+        DeleteTopicsResult result;
+        switch (topics.attribute()) {
+            case TOPIC_ID:
+                result = DeleteTopicsResult.ofTopicIds(new HashMap<>(handleDeleteTopicsUsingIds(topics.topicIds(), options)));
+                break;
+            case TOPIC_NAME:
+                result = DeleteTopicsResult.ofTopicNames(new HashMap<>(handleDeleteTopicsUsingNames(topics.topicNames(), options)));
+                break;
+            default:
+                throw new UnsupportedOperationException("TopicAttribute" + topics.attribute() + " did not match the supported attributes.");
+        }
+        return result;
+    }
+
+    private Map<String, KafkaFutureImpl<Void>> handleDeleteTopicsUsingNames(final Collection<String> topicNames,
+                                                                            final DeleteTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         final List<String> validTopicNames = new ArrayList<>(topicNames.size());
         for (String topicName : topicNames) {
             if (topicNameIsUnrepresentable(topicName)) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new InvalidTopicException("The given topic name '" +
-                    topicName + "' cannot be represented in a request."));
+                        topicName + "' cannot be represented in a request."));
                 topicFutures.put(topicName, future);
             } else if (!topicFutures.containsKey(topicName)) {
                 topicFutures.put(topicName, new KafkaFutureImpl<>());
@@ -1707,15 +1729,14 @@ public class KafkaAdminClient extends AdminClient {
             final long now = time.milliseconds();
             final long deadline = calcDeadlineMs(now, options.timeoutMs());
             final Call call = getDeleteTopicsCall(options, topicFutures, validTopicNames,
-                Collections.emptyMap(), now, deadline);
+                    Collections.emptyMap(), now, deadline);
             runnable.call(call, now);
         }
-        return new DeleteTopicsResult(new HashMap<>(topicFutures));
+        return topicFutures;
     }
 
-    @Override
-    public DeleteTopicsWithIdsResult deleteTopicsWithIds(final Collection<Uuid> topicIds,
-                                                         final DeleteTopicsOptions options) {
+    private Map<Uuid, KafkaFutureImpl<Void>> handleDeleteTopicsUsingIds(final Collection<Uuid> topicIds,
+                                                                        final DeleteTopicsOptions options) {
         final Map<Uuid, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicIds.size());
         final List<Uuid> validTopicIds = new ArrayList<>(topicIds.size());
         for (Uuid topicId : topicIds) {
@@ -1736,7 +1757,7 @@ public class KafkaAdminClient extends AdminClient {
                     Collections.emptyMap(), now, deadline);
             runnable.call(call, now);
         }
-        return new DeleteTopicsWithIdsResult(new HashMap<>(topicFutures));
+        return topicFutures;
     }
 
     private Call getDeleteTopicsCall(final DeleteTopicsOptions options,

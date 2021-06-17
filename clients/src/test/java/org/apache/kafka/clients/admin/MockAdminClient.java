@@ -394,20 +394,40 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public DeleteTopicsResult deleteTopics(Collection<String> topicsToDelete, DeleteTopicsOptions options) {
+        return DeleteTopicsResult.ofTopicNames(handleDeleteTopicsUsingNames(topicsToDelete, options));
+    }
+
+    @Override
+    synchronized public DeleteTopicsResult deleteTopics(TopicCollection topics, DeleteTopicsOptions options) {
+        DeleteTopicsResult futures;
+        switch (topics.attribute()) {
+            case TOPIC_ID:
+                futures = DeleteTopicsResult.ofTopicIds(new HashMap<>(handleDeleteTopicsUsingIds(topics.topicIds(), options)));
+                break;
+            case TOPIC_NAME:
+                futures = DeleteTopicsResult.ofTopicNames(new HashMap<>(handleDeleteTopicsUsingNames(topics.topicNames(), options)));
+                break;
+            default:
+                throw new UnsupportedOperationException("TopicAttribute" + topics.attribute() + " did not match the supported attributes.");
+        }
+        return futures;
+    }
+
+    private Map<String, KafkaFuture<Void>> handleDeleteTopicsUsingNames(Collection<String> topicNames, DeleteTopicsOptions options) {
         Map<String, KafkaFuture<Void>> deleteTopicsResult = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
-            for (final String topicName : topicsToDelete) {
+            for (final String topicName : topicNames) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new TimeoutException());
                 deleteTopicsResult.put(topicName, future);
             }
 
             --timeoutNextRequests;
-            return new DeleteTopicsResult(deleteTopicsResult);
+            return deleteTopicsResult;
         }
 
-        for (final String topicName : topicsToDelete) {
+        for (final String topicName : topicNames) {
             KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
 
             if (allTopics.remove(topicName) == null) {
@@ -418,26 +438,24 @@ public class MockAdminClient extends AdminClient {
             }
             deleteTopicsResult.put(topicName, future);
         }
-
-        return new DeleteTopicsResult(deleteTopicsResult);
+        return deleteTopicsResult;
     }
 
-    @Override
-    synchronized public DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topicsToDelete, DeleteTopicsOptions options) {
-        Map<Uuid, KafkaFuture<Void>> deleteTopicsWithIdsResult = new HashMap<>();
+    private Map<Uuid, KafkaFuture<Void>> handleDeleteTopicsUsingIds(Collection<Uuid> topicIds, DeleteTopicsOptions options) {
+        Map<Uuid, KafkaFuture<Void>> deleteTopicsResult = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
-            for (final Uuid topicId : topicsToDelete) {
+            for (final Uuid topicId : topicIds) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new TimeoutException());
-                deleteTopicsWithIdsResult.put(topicId, future);
+                deleteTopicsResult.put(topicId, future);
             }
 
             --timeoutNextRequests;
-            return new DeleteTopicsWithIdsResult(deleteTopicsWithIdsResult);
+            return deleteTopicsResult;
         }
 
-        for (final Uuid topicId : topicsToDelete) {
+        for (final Uuid topicId : topicIds) {
             KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
 
             String name = topicNames.remove(topicId);
@@ -447,10 +465,9 @@ public class MockAdminClient extends AdminClient {
                 topicIds.remove(name);
                 future.complete(null);
             }
-            deleteTopicsWithIdsResult.put(topicId, future);
+            deleteTopicsResult.put(topicId, future);
         }
-
-        return new DeleteTopicsWithIdsResult(deleteTopicsWithIdsResult);
+        return deleteTopicsResult;
     }
 
     @Override

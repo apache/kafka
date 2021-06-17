@@ -27,6 +27,7 @@ import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicCollection;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -1731,8 +1732,17 @@ public class InternalTopicManagerTest {
     }
 
     private static class MockDeleteTopicsResult extends DeleteTopicsResult {
+
+        Map<String, KafkaFuture<Void>> futures;
+
         MockDeleteTopicsResult(final Map<String, KafkaFuture<Void>> futures) {
-            super(futures);
+            super(TopicCollection.TopicAttribute.TOPIC_NAME);
+            this.futures = futures;
+        }
+
+        @Override
+        public Map<String, KafkaFuture<Void>> topicNameValues() {
+            return futures;
         }
     }
 

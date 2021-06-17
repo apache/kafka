@@ -920,21 +920,21 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId),
                     prepareDeleteTopicsResponseWithTopicId(topicId, Errors.NONE));
-            future = env.adminClient().deleteTopicsWithIds(singletonList(topicId),
+            future = env.adminClient().deleteTopics(TopicCollection.ofTopicIds(singletonList(topicId)),
                     new DeleteTopicsOptions()).all();
             assertNull(future.get());
 
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId),
                     prepareDeleteTopicsResponseWithTopicId(topicId, Errors.TOPIC_DELETION_DISABLED));
-            future = env.adminClient().deleteTopicsWithIds(singletonList(topicId),
+            future = env.adminClient().deleteTopics(TopicCollection.ofTopicIds(singletonList(topicId)),
                     new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, TopicDeletionDisabledException.class);
 
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId),
                     prepareDeleteTopicsResponseWithTopicId(topicId, Errors.UNKNOWN_TOPIC_ID));
-            future = env.adminClient().deleteTopicsWithIds(singletonList(topicId),
+            future = env.adminClient().deleteTopics(TopicCollection.ofTopicIds(singletonList(topicId)),
                     new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, UnknownTopicIdException.class);
         }
@@ -954,8 +954,8 @@ public class KafkaAdminClientTest {
             DeleteTopicsResult result = env.adminClient().deleteTopics(
                 asList("myTopic", "myOtherTopic"), new DeleteTopicsOptions());
 
-            result.values().get("myTopic").get();
-            TestUtils.assertFutureThrows(result.values().get("myOtherTopic"), ApiException.class);
+            result.topicNameValues().get("myTopic").get();
+            TestUtils.assertFutureThrows(result.topicNameValues().get("myOtherTopic"), ApiException.class);
             
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
@@ -965,11 +965,11 @@ public class KafkaAdminClientTest {
                     prepareDeleteTopicsResponse(1000,
                             deletableTopicResultWithId(topicId1, Errors.NONE)));
 
-            DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
-                    asList(topicId1, topicId2), new DeleteTopicsOptions());
+            DeleteTopicsResult resultIds = env.adminClient().deleteTopics(
+                    TopicCollection.ofTopicIds(asList(topicId1, topicId2)), new DeleteTopicsOptions());
 
-            resultIds.values().get(topicId1).get();
-            TestUtils.assertFutureThrows(resultIds.values().get(topicId2), ApiException.class);
+            resultIds.topicIdValues().get(topicId1).get();
+            TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId2), ApiException.class);
         }
     }
 
@@ -999,9 +999,9 @@ public class KafkaAdminClientTest {
                 asList("topic1", "topic2", "topic3"),
                 new DeleteTopicsOptions().retryOnQuotaViolation(true));
 
-            assertNull(result.values().get("topic1").get());
-            assertNull(result.values().get("topic2").get());
-            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+            assertNull(result.topicNameValues().get("topic1").get());
+            assertNull(result.topicNameValues().get("topic2").get());
+            TestUtils.assertFutureThrows(result.topicNameValues().get("topic3"), TopicExistsException.class);
             
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
@@ -1025,13 +1025,13 @@ public class KafkaAdminClientTest {
                     prepareDeleteTopicsResponse(0,
                             deletableTopicResultWithId(topicId2, Errors.NONE)));
 
-            DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
-                    asList(topicId1, topicId2, topicId3),
+            DeleteTopicsResult resultIds = env.adminClient().deleteTopics(
+                    TopicCollection.ofTopicIds(asList(topicId1, topicId2, topicId3)),
                     new DeleteTopicsOptions().retryOnQuotaViolation(true));
 
-            assertNull(resultIds.values().get(topicId1).get());
-            assertNull(resultIds.values().get(topicId2).get());
-            TestUtils.assertFutureThrows(resultIds.values().get(topicId3), UnknownTopicIdException.class);
+            assertNull(resultIds.topicIdValues().get(topicId1).get());
+            assertNull(resultIds.topicIdValues().get(topicId2).get());
+            TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId3), UnknownTopicIdException.class);
         }
     }
 
@@ -1072,11 +1072,11 @@ public class KafkaAdminClientTest {
             // Advance time past the default api timeout to time out the inflight request
             time.sleep(defaultApiTimeout + 1);
 
-            assertNull(result.values().get("topic1").get());
-            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.values().get("topic2"),
+            assertNull(result.topicNameValues().get("topic1").get());
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.topicNameValues().get("topic2"),
                 ThrottlingQuotaExceededException.class);
             assertEquals(0, e.throttleTimeMs());
-            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+            TestUtils.assertFutureThrows(result.topicNameValues().get("topic3"), TopicExistsException.class);
             
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
@@ -1094,8 +1094,8 @@ public class KafkaAdminClientTest {
                     prepareDeleteTopicsResponse(1000,
                             deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED)));
 
-            DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
-                    asList(topicId1, topicId2, topicId3),
+            DeleteTopicsResult resultIds = env.adminClient().deleteTopics(
+                    TopicCollection.ofTopicIds(asList(topicId1, topicId2, topicId3)),
                     new DeleteTopicsOptions().retryOnQuotaViolation(true));
 
             // Wait until the prepared attempts have consumed
@@ -1109,11 +1109,11 @@ public class KafkaAdminClientTest {
             // Advance time past the default api timeout to time out the inflight request
             time.sleep(defaultApiTimeout + 1);
 
-            assertNull(resultIds.values().get(topicId1).get());
-            e = TestUtils.assertFutureThrows(resultIds.values().get(topicId2),
+            assertNull(resultIds.topicIdValues().get(topicId1).get());
+            e = TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId2),
                     ThrottlingQuotaExceededException.class);
             assertEquals(0, e.throttleTimeMs());
-            TestUtils.assertFutureThrows(resultIds.values().get(topicId3), UnknownTopicIdException.class);
+            TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId3), UnknownTopicIdException.class);
         }
     }
 
@@ -1133,11 +1133,11 @@ public class KafkaAdminClientTest {
                 asList("topic1", "topic2", "topic3"),
                 new DeleteTopicsOptions().retryOnQuotaViolation(false));
 
-            assertNull(result.values().get("topic1").get());
-            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.values().get("topic2"),
+            assertNull(result.topicNameValues().get("topic1").get());
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.topicNameValues().get("topic2"),
                 ThrottlingQuotaExceededException.class);
             assertEquals(1000, e.throttleTimeMs());
-            TestUtils.assertFutureError(result.values().get("topic3"), TopicExistsException.class);
+            TestUtils.assertFutureError(result.topicNameValues().get("topic3"), TopicExistsException.class);
 
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
@@ -1150,15 +1150,15 @@ public class KafkaAdminClientTest {
                             deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED),
                             deletableTopicResultWithId(topicId3, Errors.UNKNOWN_TOPIC_ID)));
 
-            DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
-                    asList(topicId1, topicId2, topicId3),
+            DeleteTopicsResult resultIds = env.adminClient().deleteTopics(
+                    TopicCollection.ofTopicIds(asList(topicId1, topicId2, topicId3)),
                     new DeleteTopicsOptions().retryOnQuotaViolation(false));
 
-            assertNull(resultIds.values().get(topicId1).get());
-            e = TestUtils.assertFutureThrows(resultIds.values().get(topicId2),
+            assertNull(resultIds.topicIdValues().get(topicId1).get());
+            e = TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId2),
                     ThrottlingQuotaExceededException.class);
             assertEquals(1000, e.throttleTimeMs());
-            TestUtils.assertFutureError(resultIds.values().get(topicId3), UnknownTopicIdException.class);
+            TestUtils.assertFutureError(resultIds.topicIdValues().get(topicId3), UnknownTopicIdException.class);
         }
     }
 
@@ -1188,7 +1188,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             List<String> sillyTopicNames = asList("", null);
-            Map<String, KafkaFuture<Void>> deleteFutures = env.adminClient().deleteTopics(sillyTopicNames).values();
+            Map<String, KafkaFuture<Void>> deleteFutures = env.adminClient().deleteTopics(sillyTopicNames).topicNameValues();
             for (String sillyTopicName : sillyTopicNames) {
                 TestUtils.assertFutureError(deleteFutures.get(sillyTopicName), InvalidTopicException.class);
             }
