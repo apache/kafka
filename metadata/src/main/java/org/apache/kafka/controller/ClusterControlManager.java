@@ -52,6 +52,8 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import static org.apache.kafka.common.metadata.MetadataRecordType.REGISTER_BROKER_RECORD;
+
 
 /**
  * The ClusterControlManager manages all the hard state associated with the Kafka cluster.
@@ -103,9 +105,9 @@ public class ClusterControlManager {
     private final long sessionTimeoutNs;
 
     /**
-     * The replica placement policy to use.
+     * The replica placer to use.
      */
-    private final ReplicaPlacementPolicy placementPolicy;
+    private final ReplicaPlacer replicaPlacer;
 
     /**
      * Maps broker IDs to broker registrations.
@@ -127,12 +129,12 @@ public class ClusterControlManager {
                           Time time,
                           SnapshotRegistry snapshotRegistry,
                           long sessionTimeoutNs,
-                          ReplicaPlacementPolicy placementPolicy) {
+                          ReplicaPlacer replicaPlacer) {
         this.logContext = logContext;
         this.log = logContext.logger(ClusterControlManager.class);
         this.time = time;
         this.sessionTimeoutNs = sessionTimeoutNs;
-        this.placementPolicy = placementPolicy;
+        this.replicaPlacer = replicaPlacer;
         this.brokerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
@@ -219,7 +221,8 @@ public class ClusterControlManager {
         }
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        records.add(new ApiMessageAndVersion(record, (short) 0));
+        records.add(new ApiMessageAndVersion(record,
+            REGISTER_BROKER_RECORD.highestSupportedVersion()));
         return ControllerResult.of(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
@@ -236,20 +239,11 @@ public class ClusterControlManager {
             features.put(feature.name(), new VersionRange(
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }
-        // Normally, all newly registered brokers start off in the fenced state.
-        // If this registration record is for a broker incarnation that was already
-        // registered, though, we preserve the existing fencing state.
-        boolean fenced = true;
-        BrokerRegistration prevRegistration = brokerRegistrations.get(brokerId);
-        if (prevRegistration != null &&
-                prevRegistration.incarnationId().equals(record.incarnationId())) {
-            fenced = prevRegistration.fenced();
-        }
         // Update broker registrations.
         brokerRegistrations.put(brokerId, new BrokerRegistration(brokerId,
             record.brokerEpoch(), record.incarnationId(), listeners, features,
-            Optional.ofNullable(record.rack()), fenced));
-
+            Optional.ofNullable(record.rack()), record.fenced()));
+        BrokerRegistration prevRegistration = brokerRegistrations.get(brokerId);
         if (prevRegistration == null) {
             log.info("Registered new broker: {}", record);
         } else if (prevRegistration.incarnationId().equals(record.incarnationId())) {
@@ -317,7 +311,7 @@ public class ClusterControlManager {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
         return heartbeatManager.placeReplicas(startPartition, numPartitions, numReplicas,
-            id -> brokerRegistrations.get(id).rack(), placementPolicy);
+            id -> brokerRegistrations.get(id).rack(), replicaPlacer);
     }
 
     public boolean unfenced(int brokerId) {
@@ -391,12 +385,9 @@ public class ClusterControlManager {
                 setBrokerEpoch(registration.epoch()).
                 setEndPoints(endpoints).
                 setFeatures(features).
-                setRack(registration.rack().orElse(null)), (short) 0));
-            if (!registration.fenced()) {
-                batch.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().
-                    setId(brokerId).
-                    setEpoch(registration.epoch()), (short) 0));
-            }
+                setRack(registration.rack().orElse(null)).
+                setFenced(registration.fenced()),
+                    REGISTER_BROKER_RECORD.highestSupportedVersion()));
             return batch;
         }
     }

@@ -25,8 +25,8 @@ import java.util.Objects;
  */
 public class StoreQueryParameters<T> {
 
-    private Integer partition;
-    private boolean staleStores;
+    private final Integer partition;
+    private final boolean staleStores;
     private final String storeName;
     private final QueryableStoreType<T> queryableStoreType;
 
@@ -39,7 +39,7 @@ public class StoreQueryParameters<T> {
 
     public static <T> StoreQueryParameters<T> fromNameAndType(final String storeName,
                                                               final QueryableStoreType<T>  queryableStoreType) {
-        return new StoreQueryParameters<T>(storeName, queryableStoreType, null, false);
+        return new StoreQueryParameters<>(storeName, queryableStoreType, null, false);
     }
 
     /**
@@ -50,7 +50,7 @@ public class StoreQueryParameters<T> {
      * @return StoreQueryParameters a new {@code StoreQueryParameters} instance configured with the specified partition
      */
     public StoreQueryParameters<T> withPartition(final Integer partition) {
-        return new StoreQueryParameters<T>(storeName, queryableStoreType, partition, staleStores);
+        return new StoreQueryParameters<>(storeName, queryableStoreType, partition, staleStores);
     }
 
     /**
@@ -59,7 +59,7 @@ public class StoreQueryParameters<T> {
      * @return StoreQueryParameters a new {@code StoreQueryParameters} instance configured with serving from stale stores enabled
      */
     public StoreQueryParameters<T> enableStaleStores() {
-        return new StoreQueryParameters<T>(storeName, queryableStoreType, partition, true);
+        return new StoreQueryParameters<>(storeName, queryableStoreType, partition, true);
     }
 
     /**

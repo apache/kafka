@@ -138,7 +138,9 @@ class PartitionMetadataFile(val file: File,
     file.exists()
   }
 
-  def delete(): Boolean = {
-    file.delete()
+  def delete(): Unit = {
+    Files.delete(file.toPath)
   }
+
+  override def toString: String = s"PartitionMetadataFile(path=$path)"
 }

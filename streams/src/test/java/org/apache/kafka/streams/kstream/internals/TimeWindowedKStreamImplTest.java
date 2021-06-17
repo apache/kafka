@@ -300,7 +300,6 @@ public class TimeWindowedKStreamImplTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(
             MockReducer.STRING_ADDER,

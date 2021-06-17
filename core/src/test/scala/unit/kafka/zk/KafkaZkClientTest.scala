@@ -16,8 +16,9 @@
 */
 package kafka.zk
 
-import java.util.{Collections, Properties}
+import java.util.{Base64, Collections, Properties}
 import java.nio.charset.StandardCharsets.UTF_8
+import java.security.MessageDigest
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import kafka.api.{ApiVersion, LeaderAndIsr}
@@ -32,7 +33,7 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException, NodeExistsException}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -52,7 +53,9 @@ import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.client.ZKClientConfig
-import org.apache.zookeeper.data.Stat
+import org.apache.zookeeper.data.{ACL, Id, Stat}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
 
@@ -96,7 +99,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   def testConnectionViaNettyClient(): Unit = {
     // Confirm that we can explicitly set client connection configuration, which is necessary for TLS.
     // TLS connectivity itself is tested in system tests rather than here to avoid having to add TLS support
-    // to kafka.zk.EmbeddedZoopeeper
+    // to kafka.zk.EmbeddedZookeeper
     val clientConfig = new ZKClientConfig()
     val propKey = KafkaConfig.ZkClientCnxnSocketProp
     val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
@@ -114,6 +117,52 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     } finally {
       client.close()
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testChroot(createChrootIfNecessary: Boolean): Unit = {
+    val chroot = "/chroot"
+    val clientConfig = new ZKClientConfig()
+    val client = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(clientConfig), createChrootIfNecessary = createChrootIfNecessary)
+    try {
+      client.createTopLevelPaths()
+      if (!createChrootIfNecessary) {
+        fail("We should not have been able to create top-level paths with a chroot when not explicitly creating the chroot path, but we were able to do so")
+      }
+    } catch {
+      case e: Exception =>
+        if (createChrootIfNecessary) {
+          fail("We should have been able to create top-level paths with a chroot when explicitly creating the chroot path, but we failed to do so",
+            e)
+        }
+    } finally {
+      client.close()
+    }
+  }
+
+  @Disabled
+  @Test
+  def testChrootExistsAndRootIsLocked(): Unit = {
+    // chroot is accessible
+    val root = "/testChrootExistsAndRootIsLocked"
+    val chroot = s"$root/chroot"
+    zkClient.makeSurePersistentPathExists(chroot)
+    zkClient.setAcl(chroot, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
+
+    // root is inaccessible
+    val scheme = "digest"
+    val id = "test"
+    val pwd = "12345"
+    val digest = Base64.getEncoder.encode(MessageDigest.getInstance("SHA1").digest(s"$id:$pwd".getBytes()))
+    zkClient.currentZooKeeper.addAuthInfo(scheme, digest)
+    zkClient.setAcl(root, Seq(new ACL(ZooDefs.Perms.ALL, new Id(scheme, s"$id:$digest"))))
+
+    // this client won't have access to the root, but the chroot already exists
+    val chrootClient = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, createChrootIfNecessary = true)
+    chrootClient.close()
   }
 
   @Test

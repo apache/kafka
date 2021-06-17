@@ -87,10 +87,14 @@ public final class AssignmentTestUtils {
     public static final TaskId TASK_2_2 = new TaskId(2, 2);
     public static final TaskId TASK_2_3 = new TaskId(2, 3);
 
-    public static final TaskId NAMED_TASK_0_0 = new TaskId(0, 0, "topology0");
-    public static final TaskId NAMED_TASK_0_1 = new TaskId(0, 1, "topology0");
-    public static final TaskId NAMED_TASK_1_0 = new TaskId(1, 0, "topology1");
-    public static final TaskId NAMED_TASK_1_1 = new TaskId(1, 1, "topology1");
+    public static final TaskId NAMED_TASK_T0_0_0 = new TaskId(0, 0, "topology0");
+    public static final TaskId NAMED_TASK_T0_0_1 = new TaskId(0, 1, "topology0");
+    public static final TaskId NAMED_TASK_T0_1_0 = new TaskId(1, 0, "topology0");
+    public static final TaskId NAMED_TASK_T0_1_1 = new TaskId(1, 1, "topology0");
+    public static final TaskId NAMED_TASK_T1_0_0 = new TaskId(0, 0, "topology1");
+    public static final TaskId NAMED_TASK_T1_0_1 = new TaskId(0, 1, "topology1");
+    public static final TaskId NAMED_TASK_T2_0_0 = new TaskId(0, 0, "topology2");
+    public static final TaskId NAMED_TASK_T2_2_0 = new TaskId(2, 0, "topology2");
 
     public static final Subtopology SUBTOPOLOGY_0 = new Subtopology(0, null);
     public static final Subtopology SUBTOPOLOGY_1 = new Subtopology(1, null);
@@ -375,7 +379,7 @@ public final class AssignmentTestUtils {
             final UUID client = entry.getKey();
             final ClientState clientState = entry.getValue();
             for (final TaskId task : clientState.activeTasks()) {
-                final int subtopology = task.topicGroupId;
+                final int subtopology = task.subtopology();
                 subtopologyToClientsWithPartition
                     .computeIfAbsent(subtopology, initialClientCounts)
                     .get(client)

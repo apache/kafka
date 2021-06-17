@@ -16,15 +16,14 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import org.apache.kafka.clients.admin.internals.AdminApiHandler.Keys;
 import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,6 +34,8 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * The `KafkaAdminClient`'s internal `Call` primitive is not a good fit for multi-stage
@@ -79,8 +80,7 @@ public class AdminApiDriver<K, V> {
     private final long retryBackoffMs;
     private final long deadlineMs;
     private final AdminApiHandler<K, V> handler;
-    private final Keys<K> keys;
-    private final Map<K, KafkaFutureImpl<V>> futures;
+    private final AdminApiFuture<K, V> future;
 
     private final BiMultimap<ApiRequestScope, K> lookupMap = new BiMultimap<>();
     private final BiMultimap<FulfillmentScope, K> fulfillmentMap = new BiMultimap<>();
@@ -88,38 +88,23 @@ public class AdminApiDriver<K, V> {
 
     public AdminApiDriver(
         AdminApiHandler<K, V> handler,
+        AdminApiFuture<K, V> future,
         long deadlineMs,
         long retryBackoffMs,
         LogContext logContext
     ) {
         this.handler = handler;
+        this.future = future;
         this.deadlineMs = deadlineMs;
         this.retryBackoffMs = retryBackoffMs;
         this.log = logContext.logger(AdminApiDriver.class);
-        this.futures = new HashMap<>();
-        this.keys = initializeKeys(handler);
-    }
-
-    private Keys<K> initializeKeys(AdminApiHandler<K, V> handler) {
-        Keys<K> keys = handler.initializeKeys();
-
-        keys.staticKeys.forEach((key, brokerId) -> {
-            futures.put(key, new KafkaFutureImpl<>());
-            map(key, brokerId);
-        });
-
-        keys.dynamicKeys.forEach(key -> {
-            futures.put(key, new KafkaFutureImpl<>());
-            lookupMap.put(keys.lookupStrategy.lookupScope(key), key);
-        });
-
-        return keys;
+        retryLookup(future.lookupKeys());
     }
 
     /**
      * Associate a key with a brokerId. This is called after a response in the Lookup
-     * stage reveals the mapping (e.g. when the `FindCoordinator` tells us the the
-     * group coordinator for a specific consumer group).
+     * stage reveals the mapping (e.g. when the `FindCoordinator` tells us the group
+     * coordinator for a specific consumer group).
      */
     private void map(K key, Integer brokerId) {
         lookupMap.remove(key);
@@ -131,26 +116,30 @@ public class AdminApiDriver<K, V> {
      * back to the Lookup stage, which will allow us to attempt lookup again.
      */
     private void unmap(K key) {
-        if (!keys.dynamicKeys.contains(key)) {
-            throw new IllegalStateException("Attempt to unmap key " + key + " which is not dynamically mapped");
-        }
-
         fulfillmentMap.remove(key);
-        lookupMap.put(keys.lookupStrategy.lookupScope(key), key);
+
+        ApiRequestScope lookupScope = handler.lookupStrategy().lookupScope(key);
+        OptionalInt destinationBrokerId = lookupScope.destinationBrokerId();
+
+        if (destinationBrokerId.isPresent()) {
+            fulfillmentMap.put(new FulfillmentScope(destinationBrokerId.getAsInt()), key);
+        } else {
+            lookupMap.put(handler.lookupStrategy().lookupScope(key), key);
+        }
     }
 
-    private void clear(K key) {
-        lookupMap.remove(key);
-        fulfillmentMap.remove(key);
+    private void clear(Collection<K> keys) {
+        keys.forEach(key -> {
+            lookupMap.remove(key);
+            fulfillmentMap.remove(key);
+        });
     }
 
     OptionalInt keyToBrokerId(K key) {
         Optional<FulfillmentScope> scope = fulfillmentMap.getKey(key);
-        if (scope.isPresent()) {
-            return OptionalInt.of(scope.get().destinationBrokerId);
-        } else {
-            return OptionalInt.empty();
-        }
+        return scope
+            .map(fulfillmentScope -> OptionalInt.of(fulfillmentScope.destinationBrokerId))
+            .orElseGet(OptionalInt::empty);
     }
 
     /**
@@ -158,27 +147,39 @@ public class AdminApiDriver<K, V> {
      * the key will be taken out of both the Lookup and Fulfillment stages so that request
      * are not retried.
      */
-    private void completeExceptionally(K key, Throwable t) {
-        KafkaFutureImpl<V> future = futures.get(key);
-        if (future == null) {
-            log.warn("Attempt to complete future for {}, which was not requested", key);
-        } else {
-            clear(key);
-            future.completeExceptionally(t);
+    private void completeExceptionally(Map<K, Throwable> errors) {
+        if (!errors.isEmpty()) {
+            future.completeExceptionally(errors);
+            clear(errors.keySet());
         }
     }
 
+    private void completeLookupExceptionally(Map<K, Throwable> errors) {
+        if (!errors.isEmpty()) {
+            future.completeLookupExceptionally(errors);
+            clear(errors.keySet());
+        }
+    }
+
+    private void retryLookup(Collection<K> keys) {
+        keys.forEach(this::unmap);
+    }
+
     /**
-     * Complete the future associated with the given key. After is called, the key will
+     * Complete the future associated with the given key. After this is called, all keys will
      * be taken out of both the Lookup and Fulfillment stages so that request are not retried.
      */
-    private void complete(K key, V value) {
-        KafkaFutureImpl<V> future = futures.get(key);
-        if (future == null) {
-            log.warn("Attempt to complete future for {}, which was not requested", key);
-        } else {
-            clear(key);
-            future.complete(value);
+    private void complete(Map<K, V> values) {
+        if (!values.isEmpty()) {
+            future.complete(values);
+            clear(values.keySet());
+        }
+    }
+
+    private void completeLookup(Map<K, Integer> brokerIdMapping) {
+        if (!brokerIdMapping.isEmpty()) {
+            future.completeLookup(brokerIdMapping);
+            brokerIdMapping.forEach(this::map);
         }
     }
 
@@ -198,13 +199,6 @@ public class AdminApiDriver<K, V> {
     }
 
     /**
-     * Get a map of the futures that are awaiting completion.
-     */
-    public Map<K, KafkaFutureImpl<V>> futures() {
-        return futures;
-    }
-
-    /**
      * Callback that is invoked when a `Call` returns a response successfully.
      */
     public void onResponse(
@@ -221,16 +215,18 @@ public class AdminApiDriver<K, V> {
                 spec.keys,
                 response
             );
-            result.completedKeys.forEach(this::complete);
-            result.failedKeys.forEach(this::completeExceptionally);
-            result.unmappedKeys.forEach(this::unmap);
+            complete(result.completedKeys);
+            completeExceptionally(result.failedKeys);
+            retryLookup(result.unmappedKeys);
         } else {
-            AdminApiLookupStrategy.LookupResult<K> result = keys.lookupStrategy.handleResponse(
+            AdminApiLookupStrategy.LookupResult<K> result = handler.lookupStrategy().handleResponse(
                 spec.keys,
                 response
             );
-            result.failedKeys.forEach(this::completeExceptionally);
-            result.mappedKeys.forEach(this::map);
+
+            result.completedKeys.forEach(lookupMap::remove);
+            completeLookup(result.mappedKeys);
+            completeLookupExceptionally(result.failedKeys);
         }
     }
 
@@ -248,13 +244,23 @@ public class AdminApiDriver<K, V> {
                 "Will attempt retry", spec.request);
 
             // After a disconnect, we want the driver to attempt to lookup the key
-            // again (if the key is dynamically mapped). This gives us a chance to
-            // find a new coordinator or partition leader for example.
-            spec.keys.stream()
-                .filter(keys.dynamicKeys::contains)
-                .forEach(this::unmap);
+            // again. This gives us a chance to find a new coordinator or partition
+            // leader for example.
+            Set<K> keysToUnmap = spec.keys.stream()
+                .filter(future.lookupKeys()::contains)
+                .collect(Collectors.toSet());
+            retryLookup(keysToUnmap);
         } else {
-            spec.keys.forEach(key -> completeExceptionally(key, t));
+            Map<K, Throwable> errors = spec.keys.stream().collect(Collectors.toMap(
+                Function.identity(),
+                key -> t
+            ));
+
+            if (spec.scope instanceof FulfillmentScope) {
+                completeExceptionally(errors);
+            } else {
+                completeLookupExceptionally(errors);
+            }
         }
     }
 
@@ -303,13 +309,11 @@ public class AdminApiDriver<K, V> {
     }
 
     private void collectLookupRequests(List<RequestSpec<K>> requests) {
-        if (!keys.dynamicKeys.isEmpty()) {
-            collectRequests(
-                requests,
-                lookupMap,
-                (keys, scope) -> this.keys.lookupStrategy.buildRequest(keys)
-            );
-        }
+        collectRequests(
+            requests,
+            lookupMap,
+            (keys, scope) -> handler.lookupStrategy().buildRequest(keys)
+        );
     }
 
     private void collectFulfillmentRequests(List<RequestSpec<K>> requests) {

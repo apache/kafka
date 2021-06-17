@@ -23,18 +23,22 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
@@ -53,18 +57,24 @@ import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.metadata.PartitionRecord;
-import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
-import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
+import org.apache.kafka.metadata.MetadataRecordSerde;
+import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
+import org.apache.kafka.raft.Batch;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.RawSnapshotReader;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
@@ -91,7 +101,7 @@ public class QuorumControllerTest {
      */
     @Test
     public void testCreateAndClose() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, __ -> { })) {
             }
@@ -103,7 +113,7 @@ public class QuorumControllerTest {
      */
     @Test
     public void testConfigurationOperations() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 testConfigurationOperations(controlEnv.activeController());
@@ -134,7 +144,7 @@ public class QuorumControllerTest {
      */
     @Test
     public void testDelayedConfigurationOperations() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
@@ -160,7 +170,7 @@ public class QuorumControllerTest {
 
     @Test
     public void testUnregisterBroker() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 ListenerCollection listeners = new ListenerCollection();
@@ -179,9 +189,11 @@ public class QuorumControllerTest {
                         new CreatableTopicCollection(Collections.singleton(
                             new CreatableTopic().setName("foo").setNumPartitions(1).
                                 setReplicationFactor((short) 1)).iterator()));
-                // TODO: place on a fenced broker if we have no choice
                 assertEquals(Errors.INVALID_REPLICATION_FACTOR.code(), active.createTopics(
                     createTopicsRequestData).get().topics().find("foo").errorCode());
+                assertEquals("Unable to replicate the partition 1 time(s): All brokers " +
+                    "are currently fenced.", active.createTopics(
+                    createTopicsRequestData).get().topics().find("foo").errorMessage());
                 assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                     active.processBrokerHeartbeat(new BrokerHeartbeatRequestData().
                             setWantFence(false).setBrokerEpoch(0L).setBrokerId(0).
@@ -209,28 +221,15 @@ public class QuorumControllerTest {
         }
     }
 
-    static class MockSnapshotWriterBuilder implements Function<Long, SnapshotWriter> {
-        final LinkedBlockingDeque<MockSnapshotWriter> writers = new LinkedBlockingDeque<>();
-
-        @Override
-        public SnapshotWriter apply(Long epoch) {
-            MockSnapshotWriter writer = new MockSnapshotWriter(epoch);
-            writers.add(writer);
-            return writer;
-        }
-    }
-
     @Test
     public void testSnapshotSaveAndLoad() throws Throwable {
-        MockSnapshotWriterBuilder snapshotWriterBuilder = new MockSnapshotWriterBuilder();
         final int numBrokers = 4;
-        MockSnapshotWriter writer = null;
         Map<Integer, Long> brokerEpochs = new HashMap<>();
+        RawSnapshotReader reader = null;
         Uuid fooId;
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
-                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS).
-                         setSnapshotWriterBuilder(snapshotWriterBuilder))) {
+                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 QuorumController active = controlEnv.activeController();
                 for (int i = 0; i < numBrokers; i++) {
                     BrokerRegistrationReply reply = active.registerBroker(
@@ -264,79 +263,108 @@ public class QuorumControllerTest {
                                         setBrokerIds(Arrays.asList(1, 2, 0))).
                                             iterator()))).iterator()))).get();
                 fooId = fooData.topics().find("foo").topicId();
-                long snapshotEpoch = active.beginWritingSnapshot().get();
-                writer = snapshotWriterBuilder.writers.takeFirst();
-                assertEquals(snapshotEpoch, writer.epoch());
-                writer.waitForCompletion();
-                checkSnapshotContents(fooId, brokerEpochs, writer.batches().iterator());
+                active.allocateProducerIds(
+                    new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
+                long snapshotLogOffset = active.beginWritingSnapshot().get();
+                reader = logEnv.waitForSnapshot(snapshotLogOffset);
+                SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(reader);
+                assertEquals(snapshotLogOffset, snapshot.lastContainedLogOffset());
+                checkSnapshotContents(fooId, brokerEpochs, snapshot);
             }
+        }
 
-            final MockSnapshotReader reader = writer.toReader();
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.of(reader))) {
             try (QuorumControllerTestEnv controlEnv =
-                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS).
-                         setSnapshotReader(reader).
-                         setSnapshotWriterBuilder(snapshotWriterBuilder))) {
+                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 QuorumController active = controlEnv.activeController();
-                long snapshotEpoch = active.beginWritingSnapshot().get();
-                writer = snapshotWriterBuilder.writers.takeFirst();
-                assertEquals(snapshotEpoch, writer.epoch());
-                writer.waitForCompletion();
-                checkSnapshotContents(fooId, brokerEpochs, writer.batches().iterator());
+                long snapshotLogOffset = active.beginWritingSnapshot().get();
+                SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(
+                    logEnv.waitForSnapshot(snapshotLogOffset)
+                );
+                assertEquals(snapshotLogOffset, snapshot.lastContainedLogOffset());
+                checkSnapshotContents(fooId, brokerEpochs, snapshot);
             }
         }
     }
 
-    private void checkSnapshotContents(Uuid fooId,
-                                       Map<Integer, Long> brokerEpochs,
-                                       Iterator<List<ApiMessageAndVersion>> iterator) throws Exception {
-        ControllerTestUtils.assertBatchIteratorContains(Arrays.asList(
-            Arrays.asList(new ApiMessageAndVersion(new TopicRecord().
-                    setName("foo").setTopicId(fooId), (short) 0),
-                new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
-                    setTopicId(fooId).setReplicas(Arrays.asList(0, 1, 2)).
-                    setIsr(Arrays.asList(0, 1, 2)).setRemovingReplicas(null).
-                    setAddingReplicas(null).setLeader(0).setLeaderEpoch(0).
-                    setPartitionEpoch(0), (short) 0),
-                new ApiMessageAndVersion(new PartitionRecord().setPartitionId(1).
-                    setTopicId(fooId).setReplicas(Arrays.asList(1, 2, 0)).
-                    setIsr(Arrays.asList(1, 2, 0)).setRemovingReplicas(null).
-                    setAddingReplicas(null).setLeader(1).setLeaderEpoch(0).
-                    setPartitionEpoch(0), (short) 0)),
-            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
-                    setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0)).
-                    setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
-                    setEndPoints(new BrokerEndpointCollection(Arrays.asList(
-                        new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+    private SnapshotReader<ApiMessageAndVersion> createSnapshotReader(RawSnapshotReader reader) {
+        return SnapshotReader.of(
+            reader,
+            new MetadataRecordSerde(),
+            BufferSupplier.create(),
+            Integer.MAX_VALUE
+        );
+    }
+
+    private void checkSnapshotContents(
+        Uuid fooId,
+        Map<Integer, Long> brokerEpochs,
+        Iterator<Batch<ApiMessageAndVersion>> iterator
+    ) throws Exception {
+        List<ApiMessageAndVersion> expected = Arrays.asList(
+            new ApiMessageAndVersion(new TopicRecord().
+                setName("foo").setTopicId(fooId), (short) 1),
+            new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
+                setTopicId(fooId).setReplicas(Arrays.asList(0, 1, 2)).
+                setIsr(Arrays.asList(0, 1, 2)).setRemovingReplicas(null).
+                setAddingReplicas(null).setLeader(0).setLeaderEpoch(0).
+                setPartitionEpoch(0), (short) 1),
+            new ApiMessageAndVersion(new PartitionRecord().setPartitionId(1).
+                setTopicId(fooId).setReplicas(Arrays.asList(1, 2, 0)).
+                setIsr(Arrays.asList(1, 2, 0)).setRemovingReplicas(null).
+                setAddingReplicas(null).setLeader(1).setLeaderEpoch(0).
+                setPartitionEpoch(0), (short) 1),
+            new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0)).
+                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
+                setEndPoints(
+                    new BrokerEndpointCollection(
+                        Arrays.asList(
+                            new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9092).setSecurityProtocol((short) 0)).iterator())).
-                    setRack(null), (short) 0),
-                new ApiMessageAndVersion(new UnfenceBrokerRecord().
-                    setId(0).setEpoch(brokerEpochs.get(0)), (short) 0)),
-            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
-                    setBrokerId(1).setBrokerEpoch(brokerEpochs.get(1)).
-                    setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB1")).
-                    setEndPoints(new BrokerEndpointCollection(Arrays.asList(
-                        new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                setRack(null).
+                setFenced(false), (short) 1),
+            new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerId(1).setBrokerEpoch(brokerEpochs.get(1)).
+                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB1")).
+                setEndPoints(
+                    new BrokerEndpointCollection(
+                        Arrays.asList(
+                            new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9093).setSecurityProtocol((short) 0)).iterator())).
-                    setRack(null), (short) 0),
-                new ApiMessageAndVersion(new UnfenceBrokerRecord().
-                    setId(1).setEpoch(brokerEpochs.get(1)), (short) 0)),
-            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
-                    setBrokerId(2).setBrokerEpoch(brokerEpochs.get(2)).
-                    setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB2")).
-                    setEndPoints(new BrokerEndpointCollection(Arrays.asList(
-                        new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                setRack(null).
+                setFenced(false), (short) 1),
+            new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerId(2).setBrokerEpoch(brokerEpochs.get(2)).
+                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB2")).
+                setEndPoints(
+                    new BrokerEndpointCollection(
+                        Arrays.asList(
+                            new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9094).setSecurityProtocol((short) 0)).iterator())).
-                    setRack(null), (short) 0),
-                new ApiMessageAndVersion(new UnfenceBrokerRecord().
-                    setId(2).setEpoch(brokerEpochs.get(2)), (short) 0)),
-            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setRack(null).
+                setFenced(false), (short) 1),
+            new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(3).setBrokerEpoch(brokerEpochs.get(3)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB3")).
                 setEndPoints(new BrokerEndpointCollection(Arrays.asList(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9095).setSecurityProtocol((short) 0)).iterator())).
-                setRack(null), (short) 0))),
-            iterator);
+                setRack(null), (short) 1),
+            new ApiMessageAndVersion(new ProducerIdsRecord().
+                setBrokerId(0).
+                setBrokerEpoch(brokerEpochs.get(0)).
+                setProducerIdsEnd(1000), (short) 0)
+        );
+
+        RecordTestUtils.assertBatchIteratorContains(
+            Arrays.asList(expected),
+            Arrays.asList(
+                StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+                             .flatMap(batch ->  batch.records().stream())
+                             .collect(Collectors.toList())
+            ).iterator()
+        );
     }
 
     /**
@@ -345,7 +373,7 @@ public class QuorumControllerTest {
      */
     @Test
     public void testTimeouts() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 QuorumController controller = controlEnv.activeController();
@@ -401,7 +429,7 @@ public class QuorumControllerTest {
      */
     @Test
     public void testEarlyControllerResults() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 QuorumController controller = controlEnv.activeController();
