@@ -288,6 +288,19 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 //  -> don't pass in `task.timeout.ms` to stay responsive if `KafkaStreams#close` gets called
                 final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(requestTimeoutPlusTaskTimeout);
                 if (records.isEmpty()) {
+                    // get consumer position to step over potential TX markers
+                    offset = retryUntilSuccessOrThrowOnTaskTimeout(
+                        () -> globalConsumer.position(topicPartition),
+                        String.format(
+                            "Failed to get position for partition %s. The broker may be transiently unavailable at the moment.",
+                            topicPartition
+                        )
+                    );
+
+                    if (offset == highWatermark) {
+                        break;
+                    }
+
                     // this will always throw
                     maybeUpdateDeadlineOrThrow(time.milliseconds());
                 }
