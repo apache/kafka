@@ -1186,10 +1186,10 @@ class LogCleanerTest {
     //create 3 segments
     for(i<-0 until 3){
       log.appendAsLeader(TestUtils.singletonRecords(value = v, key = k), leaderEpoch = 0)
-      //0 to Int.MaxValue is Int.MaxValue+1 message, -1 will be the last message of ith segment
+      //0 to Int.MaxValue is Int.MaxValue+1 message, -1 will be the last message of i-th segment
       val records = messageWithOffset(k, v, (i + 1L) * (Int.MaxValue + 1L) -1 )
       log.appendAsFollower(records)
-      assertEquals(i + 1,log.numberOfSegments)
+      assertEquals(i + 1, log.numberOfSegments)
     }
 
     //4th active segment, not clean
@@ -1202,12 +1202,13 @@ class LogCleanerTest {
 
     assertEquals(totalSegments,log.numberOfSegments)
     var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, firstUncleanableOffset)
-    //every cleanable segment one group since relative offset range limit
+    //because index file uses 4 byte relative index offset and current segments all none empty,
+    //segments will not group even their size is very small.
     assertEquals(totalSegments - notCleanableSegments, groups.size)
     //do clean to clean first 2 segments to empty
     cleaner.clean(LogToClean(log.topicPartition, log, 0, firstUncleanableOffset))
-    assertEquals(totalSegments,log.numberOfSegments)
-    assertEquals(0,log.logSegments.head.size)
+    assertEquals(totalSegments, log.numberOfSegments)
+    assertEquals(0, log.logSegments.head.size)
 
     //after clean we got 2 empty segment, they will group together this time
     groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, firstUncleanableOffset)
@@ -1216,8 +1217,7 @@ class LogCleanerTest {
 
     //trigger a clean and 2 empty segments should cleaned to 1
     cleaner.clean(LogToClean(log.topicPartition, log, 0, firstUncleanableOffset))
-    assertEquals(totalSegments - 1,log.numberOfSegments)
-
+    assertEquals(totalSegments - 1, log.numberOfSegments)
   }
 
   /**
