@@ -217,16 +217,17 @@ final public class KafkaRaftClientSnapshotTest {
         int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        List<String> appendRecords = Arrays.asList("a", "b", "c");
-        OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
-
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(oldestSnapshotId.epoch, appendRecords)
             .withAppendLingerMs(1)
             .build();
 
         context.becomeLeader();
         int epoch = context.currentEpoch();
+
+        List<String> appendRecords = Arrays.asList("a", "b", "c");
+        context.client.scheduleAppend(epoch, appendRecords);
+        context.time.sleep(context.appendLingerMs());
+        context.client.poll();
 
         long localLogEndOffset = context.log.endOffset().offset;
         assertTrue(
@@ -245,7 +246,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         context.client.poll();
 
-        assertEquals(oldestSnapshotId.offset, context.log.startOffset());
+        assertEquals(snapshotId.offset, context.log.startOffset());
 
         // Send Fetch request less than start offset
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 0, epoch, 0));
@@ -254,8 +255,8 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(localId, partitionResponse.currentLeader().leaderId());
-        assertEquals(oldestSnapshotId.epoch, partitionResponse.snapshotId().epoch());
-        assertEquals(oldestSnapshotId.offset, partitionResponse.snapshotId().endOffset());
+        assertEquals(snapshotId.epoch, partitionResponse.snapshotId().epoch());
+        assertEquals(snapshotId.offset, partitionResponse.snapshotId().endOffset());
     }
 
     @Test
