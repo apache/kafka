@@ -211,8 +211,8 @@ class LogConfigTest {
     val props = new Properties()
     val retentionBytes = 1024
     val retentionMs = 1000L
-    props.put(LogConfig.RetentionBytesProp, retentionBytes)
-    props.put(LogConfig.RetentionMsProp, retentionMs)
+    props.put(LogConfig.RetentionBytesProp, retentionBytes.toString)
+    props.put(LogConfig.RetentionMsProp, retentionMs.toString)
     val logConfig = new LogConfig(props)
 
     assertEquals(retentionMs, logConfig.localRetentionMs)
@@ -233,11 +233,11 @@ class LogConfigTest {
     val props = new Properties()
     val localRetentionMs = 500
     val localRetentionBytes = 1000
-    props.put(LogConfig.RetentionBytesProp, 2000)
-    props.put(LogConfig.RetentionMsProp, 1000)
+    props.put(LogConfig.RetentionBytesProp, 2000.toString)
+    props.put(LogConfig.RetentionMsProp, 1000.toString)
 
-    props.put(LogConfig.LocalLogRetentionMsProp, localRetentionMs)
-    props.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes)
+    props.put(LogConfig.LocalLogRetentionMsProp, localRetentionMs.toString)
+    props.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes.toString)
     val logConfig = new LogConfig(props)
 
     assertEquals(localRetentionMs, logConfig.localRetentionMs)
@@ -267,11 +267,11 @@ class LogConfigTest {
 
   private def doTestInvalidLocalLogRetentionProps(localRetentionMs: Long, localRetentionBytes: Int, retentionBytes: Int, retentionMs: Long) = {
     val props = new Properties()
-    props.put(LogConfig.RetentionBytesProp, retentionBytes)
-    props.put(LogConfig.RetentionMsProp, retentionMs)
+    props.put(LogConfig.RetentionBytesProp, retentionBytes.toString)
+    props.put(LogConfig.RetentionMsProp, retentionMs.toString)
 
-    props.put(LogConfig.LocalLogRetentionMsProp, localRetentionMs)
-    props.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes)
+    props.put(LogConfig.LocalLogRetentionMsProp, localRetentionMs.toString)
+    props.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes.toString)
     assertThrows(classOf[ConfigException], () => new LogConfig(props));
   }
 }
