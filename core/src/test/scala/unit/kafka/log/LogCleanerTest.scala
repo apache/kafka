@@ -1200,7 +1200,7 @@ class LogCleanerTest {
     val firstUncleanableOffset = log.logEndOffset - 1
     val notCleanableSegments = 1
 
-    assertEquals(totalSegments,log.numberOfSegments)
+    assertEquals(totalSegments, log.numberOfSegments)
     var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, firstUncleanableOffset)
     //because index file uses 4 byte relative index offset and current segments all none empty,
     //segments will not group even their size is very small.
