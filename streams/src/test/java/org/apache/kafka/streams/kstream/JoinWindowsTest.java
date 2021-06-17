@@ -50,7 +50,7 @@ public class JoinWindowsTest {
 
     @Test
     public void beforeShouldNotModifyGrace() {
-        JoinWindows joinWindows = JoinWindows.of(ofMillis(ANY_SIZE))
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(ANY_SIZE))
             .grace(ofMillis(ANY_OTHER_SIZE))
             .before(ofSeconds(ANY_SIZE));
 
@@ -59,7 +59,7 @@ public class JoinWindowsTest {
 
     @Test
     public void afterShouldNotModifyGrace() {
-        JoinWindows joinWindows = JoinWindows.of(ofMillis(ANY_SIZE))
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(ANY_SIZE))
             .grace(ofMillis(ANY_OTHER_SIZE))
             .after(ofSeconds(ANY_SIZE));
 
