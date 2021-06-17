@@ -21,7 +21,6 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -54,12 +53,6 @@ public class DeleteConsumerGroupsHandlerTest {
         DeleteGroupsRequest request = handler.buildRequest(1, singleton(CoordinatorKey.byGroupId(groupId1))).build();
         assertEquals(1, request.data().groupsNames().size());
         assertEquals(groupId1, request.data().groupsNames().get(0));
-    }
-
-    @Test
-    public void testInvalidBuildRequest() {
-        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(groupIds, logContext);
-        assertThrows(IllegalArgumentException.class, () -> handler.buildRequest(1, singleton(CoordinatorKey.byTransactionalId(groupId1))));
     }
 
     @Test

@@ -43,8 +43,9 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
 
     private final Logger log;
     private final FindCoordinatorRequest.CoordinatorType type;
-    private boolean batch = true;
     private Set<CoordinatorKey> unrepresentableKeys = Collections.emptySet();
+
+    boolean batch = true;
 
     public CoordinatorStrategy(
         FindCoordinatorRequest.CoordinatorType type,
@@ -71,8 +72,8 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
 
     @Override
     public FindCoordinatorRequest.Builder buildRequest(Set<CoordinatorKey> keys) {
-        unrepresentableKeys = keys.stream().filter(k -> !isRepresentableKey(k.idValue)).collect(Collectors.toSet());
-        Set<CoordinatorKey> representableKeys = keys.stream().filter(k -> isRepresentableKey(k.idValue)).collect(Collectors.toSet());
+        unrepresentableKeys = keys.stream().filter(k -> k == null || !isRepresentableKey(k.idValue)).collect(Collectors.toSet());
+        Set<CoordinatorKey> representableKeys = keys.stream().filter(k -> k != null && isRepresentableKey(k.idValue)).collect(Collectors.toSet());
         if (batch) {
             ensureSameType(representableKeys);
             FindCoordinatorRequestData data = new FindCoordinatorRequestData()

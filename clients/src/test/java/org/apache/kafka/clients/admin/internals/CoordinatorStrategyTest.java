@@ -64,7 +64,17 @@ public class CoordinatorStrategyTest {
     }
 
     @Test
-    public void testBuildLookupOldRequestRequiresOneKey() {
+    public void testBuildLookupRequestNonRepresentable() {
+        CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
+        FindCoordinatorRequest.Builder request = strategy.buildRequest(new HashSet<>(Arrays.asList(
+                CoordinatorKey.byGroupId("foo"),
+                null)));
+        assertEquals("", request.data().key());
+        assertEquals(1, request.data().coordinatorKeys().size());
+    }
+
+    @Test
+    public void testBuildOldLookupRequestRequiresOneKey() {
         CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
         strategy.disableBatch();
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(Collections.emptySet()));
@@ -75,10 +85,29 @@ public class CoordinatorStrategyTest {
     }
 
     @Test
+    public void testBuildOldLookupRequestRequiresAtLeastOneKey() {
+        CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
+        strategy.disableBatch();
+
+        assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(
+                new HashSet<>(Arrays.asList(CoordinatorKey.byTransactionalId("txnid")))));
+    }
+
+    @Test
     public void testBuildLookupRequestRequiresAtLeastOneKey() {
         CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
 
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(Collections.emptySet()));
+    }
+
+    @Test
+    public void testBuildLookupRequestRequiresKeySameType() {
+        CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
+
+        assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(
+                new HashSet<>(Arrays.asList(
+                        CoordinatorKey.byGroupId("group"),
+                        CoordinatorKey.byTransactionalId("txnid")))));
     }
 
     @Test

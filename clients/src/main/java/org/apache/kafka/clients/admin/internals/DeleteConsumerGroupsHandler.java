@@ -31,7 +31,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
-import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
@@ -73,13 +72,7 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
 
     @Override
     public DeleteGroupsRequest.Builder buildRequest(int brokerId, Set<CoordinatorKey> keys) {
-        List<String> groupIds = keys.stream().map(key -> {
-            if (key.type != FindCoordinatorRequest.CoordinatorType.GROUP) {
-                throw new IllegalArgumentException("Invalid transaction coordinator key " + key +
-                    " when building `DeleteGroups` request");
-            }
-            return key.idValue;
-        }).collect(Collectors.toList());
+        List<String> groupIds = keys.stream().map(key -> key.idValue).collect(Collectors.toList());
         DeleteGroupsRequestData data = new DeleteGroupsRequestData()
                 .setGroupsNames(new ArrayList<>(groupIds));
         return new DeleteGroupsRequest.Builder(data);

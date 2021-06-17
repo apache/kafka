@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.LookupResult;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.MetadataResponseData;
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -43,6 +45,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -324,6 +327,42 @@ class AdminApiDriverTest {
         RequestSpec<String> retryLookupSpec = retryLookupSpecs.get(0);
         assertEquals(ctx.time.milliseconds(), retryLookupSpec.nextAllowedTryMs);
         assertEquals(1, retryLookupSpec.tries);
+    }
+
+    @Test
+    public void testRetryLookupAndDisableBatchAfterNoBatchedFindCoordinatorsException() {
+        MockTime time = new MockTime();
+        LogContext lc = new LogContext();
+        Set<String> groupIds = new HashSet<>(Arrays.asList("g1", "g2"));
+        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(groupIds, lc);
+        AdminApiFuture<CoordinatorKey, Void> future = AdminApiFuture.forKeys(
+                groupIds.stream().map(g -> CoordinatorKey.byGroupId(g)).collect(Collectors.toSet()));
+
+        AdminApiDriver<CoordinatorKey, Void> driver = new AdminApiDriver<>(
+            handler,
+            future,
+            time.milliseconds() + API_TIMEOUT_MS,
+            RETRY_BACKOFF_MS,
+            new LogContext()
+        );
+
+        assertTrue(((CoordinatorStrategy) handler.lookupStrategy()).batch);
+        List<RequestSpec<CoordinatorKey>> requestSpecs = driver.poll();
+        // Expect CoordinatorStrategy to try resolving all coordinators in a single request
+        assertEquals(1, requestSpecs.size());
+
+        RequestSpec<CoordinatorKey> requestSpec = requestSpecs.get(0);
+        driver.onFailure(time.milliseconds(), requestSpec, new NoBatchedFindCoordinatorsException("message"));
+        assertFalse(((CoordinatorStrategy) handler.lookupStrategy()).batch);
+
+        // Batching is now disabled, so we now have a request per groupId
+        List<RequestSpec<CoordinatorKey>> retryLookupSpecs = driver.poll();
+        assertEquals(groupIds.size(), retryLookupSpecs.size());
+        // These new requests are treated a new requests and not retries
+        for (RequestSpec<CoordinatorKey> retryLookupSpec : retryLookupSpecs) {
+            assertEquals(0, retryLookupSpec.nextAllowedTryMs);
+            assertEquals(0, retryLookupSpec.tries);
+        }
     }
 
     @Test
