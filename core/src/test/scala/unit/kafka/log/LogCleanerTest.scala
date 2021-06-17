@@ -1184,7 +1184,7 @@ class LogCleanerTest {
     val v="val".getBytes()
 
     //create 3 segments
-    for(i<-0 until 3){
+    for(i <- 0 until 3){
       log.appendAsLeader(TestUtils.singletonRecords(value = v, key = k), leaderEpoch = 0)
       //0 to Int.MaxValue is Int.MaxValue+1 message, -1 will be the last message of i-th segment
       val records = messageWithOffset(k, v, (i + 1L) * (Int.MaxValue + 1L) -1 )
