@@ -362,11 +362,11 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     pendingSyncMembers.remove(memberId)
   }
 
-  def hasReceivedSyncFromAllMembers(): Boolean = {
+  def hasReceivedSyncFromAllMembers: Boolean = {
     pendingSyncMembers.isEmpty
   }
 
-  def allPendingSyncMembers(): Set[String] = {
+  def allPendingSyncMembers: Set[String] = {
     pendingSyncMembers.toSet
   }
 

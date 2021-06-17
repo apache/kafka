@@ -18,7 +18,8 @@
 package kafka.coordinator.group
 
 /**
- * Delayed rebalance operation that is added to the purgatory when is completing the rebalance.
+ * Delayed rebalance operation that is added to the purgatory when the group is completing the
+ * rebalance.
  *
  * Whenever a SyncGroup is received, checks that we received all the SyncGroup request from
  * each member of the group; if yes, complete this operation.

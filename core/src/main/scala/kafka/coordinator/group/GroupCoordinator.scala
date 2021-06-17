@@ -1511,7 +1511,7 @@ class GroupCoordinator(val brokerId: Int,
           case Dead | Empty | PreparingRebalance =>
             forceComplete()
           case CompletingRebalance | Stable =>
-            if (group.hasReceivedSyncFromAllMembers())
+            if (group.hasReceivedSyncFromAllMembers)
               forceComplete()
             else false
         }
@@ -1525,17 +1525,17 @@ class GroupCoordinator(val brokerId: Int,
   ): Unit = {
     group.inLock {
       if (generationId != group.generationId) {
-        debug(s"Received unexpected notification of sync expiration for ${group.groupId} " +
+        error(s"Received unexpected notification of sync expiration for ${group.groupId} " +
           s"with an old generation $generationId while the group has ${group.generationId}.")
       } else {
         group.currentState match {
           case Dead | Empty | PreparingRebalance =>
-            debug(s"Received unexpected notification of sync expiration after group ${group.groupId} " +
+            error(s"Received unexpected notification of sync expiration after group ${group.groupId} " +
               s"already transitioned to the ${group.currentState} state.")
 
           case CompletingRebalance | Stable =>
-            if (!group.hasReceivedSyncFromAllMembers()) {
-              val pendingSyncMembers = group.allPendingSyncMembers()
+            if (!group.hasReceivedSyncFromAllMembers) {
+              val pendingSyncMembers = group.allPendingSyncMembers
 
               debug(s"Group ${group.groupId} removed members who haven't " +
                 s"sent their sync request: $pendingSyncMembers")
