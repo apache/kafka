@@ -26,8 +26,10 @@ import java.util.Iterator;
  * This class requires external synchronization.
  */
 public class TimelineInteger implements Revertable {
+    public static final int INIT = 0;
+
     static class IntegerContainer implements Delta {
-        private int value = 0;
+        private int value = INIT;
 
         int value() {
             return value;
@@ -44,17 +46,11 @@ public class TimelineInteger implements Revertable {
     }
 
     private final SnapshotRegistry snapshotRegistry;
-    private final int init;
     private int value;
 
     public TimelineInteger(SnapshotRegistry snapshotRegistry) {
-        this(snapshotRegistry, 0);
-    }
-
-    public TimelineInteger(SnapshotRegistry snapshotRegistry, int value) {
         this.snapshotRegistry = snapshotRegistry;
-        this.init = value;
-        this.value = value;
+        this.value = INIT;
 
         snapshotRegistry.register(this);
     }
@@ -105,7 +101,7 @@ public class TimelineInteger implements Revertable {
 
     @Override
     public void reset() {
-        set(init);
+        set(INIT);
     }
 
     @Override

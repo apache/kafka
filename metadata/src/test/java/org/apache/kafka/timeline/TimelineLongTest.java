@@ -76,8 +76,7 @@ public class TimelineLongTest {
     @Test
     public void testReset() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
-        long initialValue = 10;
-        TimelineLong value = new TimelineLong(registry, initialValue);
+        TimelineLong value = new TimelineLong(registry);
         registry.createSnapshot(2);
         value.set(1L);
         registry.createSnapshot(3);
@@ -86,6 +85,6 @@ public class TimelineLongTest {
         registry.reset();
 
         assertEquals(Collections.emptyList(), registry.epochsList());
-        assertEquals(initialValue, value.get());
+        assertEquals(TimelineLong.INIT, value.get());
     }
 }

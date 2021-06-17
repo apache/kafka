@@ -19,10 +19,8 @@ package org.apache.kafka.timeline;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.common.utils.LogContext;
@@ -110,7 +108,7 @@ public class SnapshotRegistry {
     /**
      * Collection of all Revertable registered with this registry
      */
-    private final Set<Revertable> revertables = new HashSet<>();
+    private final List<Revertable> revertables = new ArrayList<>();
 
     public SnapshotRegistry(LogContext logContext) {
         this.log = logContext.logger(SnapshotRegistry.class);

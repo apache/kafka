@@ -26,8 +26,10 @@ import java.util.Iterator;
  * This class requires external synchronization.
  */
 public class TimelineLong implements Revertable {
+    public static final long INIT = 0;
+
     static class LongContainer implements Delta {
-        private long value = 0;
+        private long value = INIT;
 
         long value() {
             return value;
@@ -44,17 +46,11 @@ public class TimelineLong implements Revertable {
     }
 
     private final SnapshotRegistry snapshotRegistry;
-    private final long init;
     private long value;
 
     public TimelineLong(SnapshotRegistry snapshotRegistry) {
-        this(snapshotRegistry, 0);
-    }
-
-    public TimelineLong(SnapshotRegistry snapshotRegistry, long value) {
         this.snapshotRegistry = snapshotRegistry;
-        this.init = value;
-        this.value = value;
+        this.value = INIT;
 
         snapshotRegistry.register(this);
     }
@@ -105,7 +101,7 @@ public class TimelineLong implements Revertable {
 
     @Override
     public void reset() {
-        set(init);
+        set(INIT);
     }
 
     @Override

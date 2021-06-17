@@ -76,8 +76,7 @@ public class TimelineIntegerTest {
     @Test
     public void testReset() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
-        int initialValue = 10;
-        TimelineInteger value = new TimelineInteger(registry, initialValue);
+        TimelineInteger value = new TimelineInteger(registry);
         registry.createSnapshot(2);
         value.set(1);
         registry.createSnapshot(3);
@@ -86,6 +85,6 @@ public class TimelineIntegerTest {
         registry.reset();
 
         assertEquals(Collections.emptyList(), registry.epochsList());
-        assertEquals(initialValue, value.get());
+        assertEquals(TimelineInteger.INIT, value.get());
     }
 }
