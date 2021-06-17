@@ -435,6 +435,7 @@
 
   <subpackage name="snapshot">
     <allow pkg="org.apache.kafka.common.record" />
+    <allow pkg="org.apache.kafka.common.message" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.test"/>

@@ -2254,19 +2254,20 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch) {
-        return log.createNewSnapshot(
-            new OffsetAndEpoch(committedOffset + 1, committedEpoch)
-        ).map(snapshot -> {
-            return new SnapshotWriter<>(
-                snapshot,
+    public Optional<SnapshotWriter<T>> createSnapshot(
+        long committedOffset,
+        int committedEpoch,
+        long lastContainedLogTime
+    ) {
+        return SnapshotWriter.createWithHeader(
+                () -> log.createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, committedEpoch)),
                 MAX_BATCH_SIZE_BYTES,
                 memoryPool,
                 time,
+                lastContainedLogTime,
                 CompressionType.NONE,
                 serde
             );
-        });
     }
 
     @Override

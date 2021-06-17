@@ -25,6 +25,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -33,6 +35,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.function.Supplier;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -204,32 +207,101 @@ public class BatchAccumulator<T> implements Closeable {
         currentBatch = null;
     }
 
-    public void appendLeaderChangeMessage(LeaderChangeMessage leaderChangeMessage, long currentTimeMs) {
+    private void appendControlMessage(
+        Supplier<MemoryRecords> supplier,
+        ByteBuffer buffer
+    ) {
         appendLock.lock();
         try {
             forceDrain();
-            ByteBuffer buffer = memoryPool.tryAllocate(256);
-            if (buffer != null) {
-                MemoryRecords data = MemoryRecords.withLeaderChangeMessage(
-                    this.nextOffset, 
-                    currentTimeMs, 
-                    this.epoch, 
-                    buffer, 
-                    leaderChangeMessage
-                );
-                completed.add(new CompletedBatch<>(
-                    nextOffset,
-                    1,
-                    data,
-                    memoryPool,
-                    buffer
-                ));
-                nextOffset += 1;
-            } else {
-                throw new IllegalStateException("Could not allocate buffer for the leader change record.");
-            }
+            completed.add(new CompletedBatch<>(
+                nextOffset,
+                1,
+                supplier.get(),
+                memoryPool,
+                buffer
+            ));
+            nextOffset += 1;
         } finally {
             appendLock.unlock();
+        }
+    }
+
+    /**
+     * Append a {@link LeaderChangeMessage} record to the batch
+     *
+     * @param @LeaderChangeMessage The message to append
+     * @param @currentTimeMs The timestamp of message generation
+     * @throws IllegalStateException on failure to allocate a buffer for the record
+     */
+    public void appendLeaderChangeMessage(
+        LeaderChangeMessage leaderChangeMessage,
+        long currentTimeMs
+    ) {
+        ByteBuffer buffer = memoryPool.tryAllocate(256);
+        if (buffer != null) {
+            appendControlMessage(
+                () -> MemoryRecords.withLeaderChangeMessage(
+                    this.nextOffset,
+                    currentTimeMs,
+                    this.epoch,
+                    buffer,
+                    leaderChangeMessage),
+                buffer);
+        } else {
+            throw new IllegalStateException("Could not allocate buffer for the leader change record.");
+        }
+    }
+
+
+    /**
+     * Append a {@link SnapshotHeaderRecord} record to the batch
+     *
+     * @param @SnapshotHeaderRecord The message to append
+     * @throws IllegalStateException on failure to allocate a buffer for the record
+     */
+    public void appendSnapshotHeaderMessage(
+        SnapshotHeaderRecord snapshotHeaderRecord,
+        long currentTimeMs
+    ) {
+        ByteBuffer buffer = memoryPool.tryAllocate(256);
+        if (buffer != null) {
+            appendControlMessage(
+                () -> MemoryRecords.withSnapshotHeaderRecord(
+                    this.nextOffset,
+                    currentTimeMs,
+                    this.epoch,
+                    buffer,
+                    snapshotHeaderRecord),
+                buffer);
+        } else {
+            throw new IllegalStateException("Could not allocate buffer for the metadata snapshot header record.");
+        }
+    }
+
+    /**
+     * Append a {@link SnapshotFooterRecord} record to the batch
+     *
+     * @param @SnapshotFooterRecord The message to append
+     * @param currentTimeMs
+     * @throws IllegalStateException on failure to allocate a buffer for the record
+     */
+    public void appendSnapshotFooterMessage(
+        SnapshotFooterRecord snapshotFooterRecord,
+        long currentTimeMs
+    ) {
+        ByteBuffer buffer = memoryPool.tryAllocate(256);
+        if (buffer != null) {
+            appendControlMessage(
+                () -> MemoryRecords.withSnapshotFooterRecord(
+                    this.nextOffset,
+                    currentTimeMs,
+                    this.epoch,
+                    buffer,
+                    snapshotFooterRecord),
+                buffer);
+        } else {
+            throw new IllegalStateException("Could not allocate buffer for the metadata snapshot footer record.");
         }
     }
 
