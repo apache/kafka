@@ -112,7 +112,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             if (expiredRecordSensor != null && context != null) {
                 expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             }
-            LOG.warn("Skipping record for expired segment.");
+            LOG.debug("Skipping record for expired segment.");
         } else {
             if (aggregate != null) {
                 endTimeMap.computeIfAbsent(windowEndTimestamp, t -> new ConcurrentSkipListMap<>());

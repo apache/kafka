@@ -122,7 +122,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
             if (inputRecordTimestamp + 1L + windows.timeDifferenceMs() <= closeTime) {
-                log.warn(
+                log.debug(
                     "Skipping record for expired window. " +
                         "key=[{}] " +
                         "topic=[{}] " +
@@ -476,7 +476,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     sendOldValues ? oldAgg : null,
                     newTimestamp);
             } else {
-                log.warn(
+                log.debug(
                     "Skipping record for expired window. " +
                         "key=[{}] " +
                         "topic=[{}] " +

@@ -137,7 +137,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
             }
 
             if (mergedWindow.end() < closeTime) {
-                LOG.warn(
+                LOG.debug(
                     "Skipping record for expired window. " +
                         "key=[{}] " +
                         "topic=[{}] " +

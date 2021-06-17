@@ -150,7 +150,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                         sendOldValues ? oldAgg : null,
                         newTimestamp);
                 } else {
-                    log.warn(
+                    log.debug(
                         "Skipping record for expired window. " +
                             "key=[{}] " +
                             "topic=[{}] " +
