@@ -72,15 +72,15 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
     @Override
     public FindCoordinatorRequest.Builder buildRequest(Set<CoordinatorKey> keys) {
         unrepresentableKeys = keys.stream().filter(k -> !isRepresentableKey(k.idValue)).collect(Collectors.toSet());
-        keys = keys.stream().filter(k -> isRepresentableKey(k.idValue)).collect(Collectors.toSet());
+        Set<CoordinatorKey> representableKeys = keys.stream().filter(k -> isRepresentableKey(k.idValue)).collect(Collectors.toSet());
         if (batch) {
-            keys = requireSameType(keys);
+            ensureSameType(representableKeys);
             FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                     .setKeyType(type.id())
-                    .setCoordinatorKeys(keys.stream().map(k -> k.idValue).collect(Collectors.toList()));
+                    .setCoordinatorKeys(representableKeys.stream().map(k -> k.idValue).collect(Collectors.toList()));
             return new FindCoordinatorRequest.Builder(data);
         } else {
-            CoordinatorKey key = requireSingleton(keys);
+            CoordinatorKey key = requireSingletonAndType(representableKeys);
             return new FindCoordinatorRequest.Builder(
                 new FindCoordinatorRequestData()
                     .setKey(key.idValue)
@@ -111,7 +111,7 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
                             failedKeys);
             }
         } else {
-            CoordinatorKey key = requireSingleton(keys);
+            CoordinatorKey key = requireSingletonAndType(keys);
             Errors error = response.error();
             handleError(error, key, response.node().id(), mappedKeys, failedKeys);
         }
@@ -122,18 +122,24 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
         batch = false;
     }
 
-    private static CoordinatorKey requireSingleton(Set<CoordinatorKey> keys) {
+    private CoordinatorKey requireSingletonAndType(Set<CoordinatorKey> keys) {
         if (keys.size() != 1) {
-            throw new IllegalArgumentException("Unexpected lookup key set");
+            throw new IllegalArgumentException("Unexpected size of key set: expected 1, but got " + keys.size());
         }
-        return keys.iterator().next();
+        CoordinatorKey key = keys.iterator().next();
+        if (key.type != type) {
+            throw new IllegalArgumentException("Unexpected key type: expected key to be of type " + type + ", but got " + key.type);
+        }
+        return key;
     }
 
-    private static Set<CoordinatorKey> requireSameType(Set<CoordinatorKey> keys) {
-        if (keys.stream().map(k -> k.type).collect(Collectors.toSet()).size() != 1) {
-            throw new IllegalArgumentException("Unexpected lookup key set");
+    private void ensureSameType(Set<CoordinatorKey> keys) {
+        if (keys.size() < 1) {
+            throw new IllegalArgumentException("Unexpected size of key set: expected >= 1, but got " + keys.size());
         }
-        return keys;
+        if (keys.stream().filter(k -> k.type == type).collect(Collectors.toSet()).size() != keys.size()) {
+            throw new IllegalArgumentException("Unexpected key set: expected all key to be of type " + type + ", but some key were not");
+        }
     }
 
     private static boolean isRepresentableKey(String groupId) {

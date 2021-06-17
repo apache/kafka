@@ -133,7 +133,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                 log.error("Received unexpected error for group {} in `DeleteConsumerGroupOffsets` response", 
                         groupId, error.exception());
                 failed.put(groupId, error.exception(
-                        "Unexpected error during DeleteConsumerGroupOffsets lookup for " + groupId));
+                        "Received unexpected error for group " + groupId + " in `DeleteConsumerGroupOffsets` response"));
         }
     }
 

@@ -174,7 +174,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 log.error("Received unexpected error for group {} in `DescribeGroups` response", 
                         groupId, error.exception());
                 failed.put(groupId, error.exception(
-                        "Unexpected error during DescribeGroups lookup for " + groupId));
+                        "Received unexpected error for group " + groupId + " in `DescribeGroups` response"));
         }
     }
 

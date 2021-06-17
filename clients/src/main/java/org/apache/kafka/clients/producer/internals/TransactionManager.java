@@ -1537,8 +1537,8 @@ public class TransactionManager {
             CoordinatorType coordinatorType = CoordinatorType.forId(builder.data().keyType());
 
             if (batchFindCoordinator && findCoordinatorResponse.data().coordinators().size() != 1) {
-                log.error("Group coordinator lookup failed: Invalid response");
-                fatalError(new IllegalStateException("Group coordinator lookup failed: Invalid response"));
+                log.error("Group coordinator lookup failed: Invalid response containing more than a single coordinator");
+                fatalError(new IllegalStateException("Group coordinator lookup failed: Invalid response containing more than a single coordinator"));
             }
             String key = batchFindCoordinator
                     ? findCoordinatorResponse.data().coordinators().get(0).key()

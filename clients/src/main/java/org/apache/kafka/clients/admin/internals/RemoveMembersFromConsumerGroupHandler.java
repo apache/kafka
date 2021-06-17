@@ -115,10 +115,10 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
                 unmapped.add(groupId);
                 break;
             default:
-                log.error("Received unexpected error for group {} in `DeleteConsumerGroupOffsets` response", 
+                log.error("Received unexpected error for group {} in `DeleteConsumerGroupOffsets` response",
                         groupId, error.exception());
                 failed.put(groupId, error.exception(
-                        "Unexpected error during DeleteConsumerGroupOffsets lookup for " + groupId));
+                        "Received unexpected error for group " + groupId + " in `DeleteConsumerGroupOffsets` response"));
                 break;
         }
     }

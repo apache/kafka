@@ -135,21 +135,21 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
     private void handleError(CoordinatorKey groupId, Errors error, Map<CoordinatorKey, Throwable> failed, List<CoordinatorKey> unmapped) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `DeleteConsumerGroupOffsets` response", groupId,
+                log.error("Received authorization failure for group {} in `OffsetCommit` response", groupId,
                         error.exception());
                 failed.put(groupId, error.exception());
                 break;
             case COORDINATOR_LOAD_IN_PROGRESS:
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
-                log.debug("DeleteConsumerGroupOffsets request for group {} returned error {}. Will retry", groupId, error);
+                log.debug("OffsetCommit request for group {} returned error {}. Will retry", groupId, error);
                 unmapped.add(groupId);
                 break;
             default:
-                log.error("Received unexpected error for group {} in `DeleteConsumerGroupOffsets` response", 
+                log.error("Received unexpected error for group {} in `OffsetCommit` response",
                         groupId, error.exception());
                 failed.put(groupId, error.exception(
-                        "Unexpected error during DeleteConsumerGroupOffsets lookup for " + groupId));
+                        "Received unexpected error for group " + groupId + " in `OffsetCommit` response"));
         }
     }
 

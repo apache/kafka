@@ -840,8 +840,8 @@ public abstract class AbstractCoordinator implements Closeable {
 
             FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) resp.responseBody();
             if (batch && findCoordinatorResponse.data().coordinators().size() != 1) {
-                log.error("Group coordinator lookup failed: Invalid response");
-                future.raise(new IllegalStateException("Group coordinator lookup failed: Invalid response"));
+                log.error("Group coordinator lookup failed: Invalid response containing more than a single coordinator");
+                future.raise(new IllegalStateException("Group coordinator lookup failed: Invalid response containing more than a single coordinator"));
             }
             Errors error = batch
                     ? Errors.forCode(findCoordinatorResponse.data().coordinators().get(0).errorCode())
