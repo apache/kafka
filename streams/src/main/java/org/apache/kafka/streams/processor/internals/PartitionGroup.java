@@ -362,6 +362,9 @@ public class PartitionGroup {
 
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
+            if (logPrefix.contains("1_4")) {
+                System.err.print(longLogPrefix + "ready of");
+            }
             nonEmptyQueuesByTime.offer(recordQueue);
             if (logPrefix.contains("1_4")) {
                 System.err.print(longLogPrefix + "offer");
