@@ -111,6 +111,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }
     }
     client = AdminClientTestUtils.create(config, returnBadAddressFirst)
+    // simply check that a call, e.g. describeCluster, returns normally
     client.describeCluster().nodes().get()
   }
 
