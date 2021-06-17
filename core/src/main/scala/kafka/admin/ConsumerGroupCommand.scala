@@ -561,14 +561,14 @@ object ConsumerGroupCommand extends Logging {
         val state = consumerGroup.state
         val committedOffsets = getCommittedOffsets(groupId)
         // The admin client returns `null` as a value to indicate that there is not committed offset for a partition.
-        def getPartitionOffsets(tp: Seq[TopicPartition]): TopicPartition => Option[Long] = tp.map { topicPartition => topicPartition -> committedOffsets.get(topicPartition).filter(_ != null).map(_.offset)}.toMap
+        def getPartitionOffset(tp: TopicPartition): Option[Long] = committedOffsets.get(tp).filter(_ != null).map(_.offset)
         var assignedTopicPartitions = ListBuffer[TopicPartition]()
         val rowsWithConsumer = consumerGroup.members.asScala.filter(!_.assignment.topicPartitions.isEmpty).toSeq
           .sortWith(_.assignment.topicPartitions.size > _.assignment.topicPartitions.size).flatMap { consumerSummary =>
           val topicPartitions = consumerSummary.assignment.topicPartitions.asScala
           assignedTopicPartitions = assignedTopicPartitions ++ topicPartitions
           collectConsumerAssignment(groupId, Option(consumerGroup.coordinator), topicPartitions.toList,
-            getPartitionOffsets(consumerSummary.assignment.topicPartitions.asScala.toSeq), Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
+            getPartitionOffset, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
             Some(s"${consumerSummary.clientId}"))
         }
         val unassignedPartitions = committedOffsets.filterNot { case (tp, _) => assignedTopicPartitions.contains(tp) }
@@ -577,7 +577,7 @@ object ConsumerGroupCommand extends Logging {
             groupId,
             Option(consumerGroup.coordinator),
             unassignedPartitions.keySet.toSeq,
-            getPartitionOffsets(unassignedPartitions.keySet.toSeq),
+            getPartitionOffset,
             Some(MISSING_COLUMN_VALUE),
             Some(MISSING_COLUMN_VALUE),
             Some(MISSING_COLUMN_VALUE)).toSeq
