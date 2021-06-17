@@ -31,7 +31,6 @@ import org.apache.kafka.common.requests.WriteTxnMarkersResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -52,17 +51,20 @@ public class AbortTransactionHandler implements AdminApiHandler<TopicPartition, 
         this.lookupStrategy = new PartitionLeaderStrategy(logContext);
     }
 
+    public static AdminApiFuture.SimpleAdminApiFuture<TopicPartition, Void> newFuture(
+        Set<TopicPartition> topicPartitions
+    ) {
+        return AdminApiFuture.forKeys(topicPartitions);
+    }
+
     @Override
     public String apiName() {
         return "abortTransaction";
     }
 
     @Override
-    public Keys<TopicPartition> initializeKeys() {
-        return Keys.dynamicMapped(
-            Collections.singleton(abortSpec.topicPartition()),
-            lookupStrategy
-        );
+    public AdminApiLookupStrategy<TopicPartition> lookupStrategy() {
+        return lookupStrategy;
     }
 
     @Override

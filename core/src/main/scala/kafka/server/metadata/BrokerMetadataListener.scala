@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{RaftReplicaManager, RequestHandlerHelper}
+import kafka.server.{RaftReplicaManager, RequestHandlerHelper, RequestLocal}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.metadata.MetadataRecordType._
 import org.apache.kafka.common.metadata._
@@ -181,7 +181,8 @@ class BrokerMetadataListener(
       case rec: PartitionChangeRecord => handlePartitionChangeRecord(imageBuilder, rec)
       case rec: RemoveTopicRecord => handleRemoveTopicRecord(imageBuilder, rec)
       case rec: ConfigRecord => handleConfigRecord(rec)
-      case rec: QuotaRecord => handleQuotaRecord(imageBuilder, rec)
+      case rec: ClientQuotaRecord => handleClientQuotaRecord(imageBuilder, rec)
+      case rec: ProducerIdsRecord => handleProducerIdRecord(rec)
       case _ => throw new RuntimeException(s"Unhandled record $record with type $recordType")
     }
   }
@@ -248,15 +249,20 @@ class BrokerMetadataListener(
       case Some(topicName) =>
         info(s"Processing deletion of topic $topicName with id ${record.topicId}")
         val removedPartitions = imageBuilder.partitionsBuilder().removeTopicById(record.topicId())
-        groupCoordinator.handleDeletedPartitions(removedPartitions.map(_.toTopicPartition).toSeq)
+        groupCoordinator.handleDeletedPartitions(removedPartitions.map(_.toTopicPartition).toSeq, RequestLocal.NoCaching)
         configRepository.remove(new ConfigResource(ConfigResource.Type.TOPIC, topicName))
     }
   }
 
-  def handleQuotaRecord(imageBuilder: MetadataImageBuilder,
-                        record: QuotaRecord): Unit = {
+  def handleClientQuotaRecord(imageBuilder: MetadataImageBuilder,
+                        record: ClientQuotaRecord): Unit = {
     // TODO add quotas to MetadataImageBuilder
     clientQuotaManager.handleQuotaRecord(record)
+  }
+
+  def handleProducerIdRecord(record: ProducerIdsRecord): Unit = {
+    // This is a no-op since brokers get their producer ID blocks directly from the controller via
+    // AllocateProducerIds RPC response
   }
 
   class HandleNewLeaderEvent(leaderAndEpoch: LeaderAndEpoch)

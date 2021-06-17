@@ -76,7 +76,7 @@ class ControllerApis(val requestChannel: RequestChannel,
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
 
-  override def handle(request: RequestChannel.Request): Unit = {
+  override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     try {
       request.header.apiKey match {
         case ApiKeys.FETCH => handleFetch(request)
@@ -97,9 +97,10 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignments(request)
-        case ApiKeys.ENVELOPE => handleEnvelopeRequest(request)
+        case ApiKeys.ENVELOPE => handleEnvelopeRequest(request, requestLocal)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
+        case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
         case ApiKeys.CREATE_PARTITIONS => handleCreatePartitions(request)
         case ApiKeys.DESCRIBE_ACLS => aclApis.handleDescribeAcls(request)
         case ApiKeys.CREATE_ACLS => aclApis.handleCreateAcls(request)
@@ -113,12 +114,12 @@ class ControllerApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleEnvelopeRequest(request: RequestChannel.Request): Unit = {
+  def handleEnvelopeRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     if (!authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       requestHelper.sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException(
         s"Principal ${request.context.principal} does not have required CLUSTER_ACTION for envelope"))
     } else {
-      EnvelopeUtils.handleEnvelopeRequest(request, requestChannel.metrics, handle)
+      EnvelopeUtils.handleEnvelopeRequest(request, requestChannel.metrics, handle(_, requestLocal))
     }
   }
 
@@ -766,5 +767,21 @@ class ControllerApis(val requestChannel: RequestChannel,
     val response = controller.listPartitionReassignments(listRequest.data()).get()
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new ListPartitionReassignmentsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+  }
+
+  def handleAllocateProducerIdsRequest(request: RequestChannel.Request): Unit = {
+    val allocatedProducerIdsRequest = request.body[AllocateProducerIdsRequest]
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    controller.allocateProducerIds(allocatedProducerIdsRequest.data)
+      .whenComplete((results, exception) => {
+        if (exception != null) {
+          requestHelper.handleError(request, exception)
+        } else {
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+            results.setThrottleTimeMs(requestThrottleMs)
+            new AllocateProducerIdsResponse(results)
+          })
+        }
+      })
   }
 }

@@ -324,7 +324,11 @@ object LogLoader extends Logging {
    * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
    */
   private def recoverSegment(segment: LogSegment, params: LoadLogParams): Int = {
-    val producerStateManager = new ProducerStateManager(params.topicPartition, params.dir, params.maxProducerIdExpirationMs)
+    val producerStateManager = new ProducerStateManager(
+      params.topicPartition,
+      params.dir,
+      params.maxProducerIdExpirationMs,
+      params.time)
     Log.rebuildProducerState(
       producerStateManager,
       params.segments,
@@ -369,7 +373,7 @@ object LogLoader extends Logging {
         params.config,
         time = params.time,
         fileSuffix = Log.SwapFileSuffix)
-      info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
+      info(s"${params.logIdentifier}Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
       recoverSegment(swapSegment, params)
 
       // We create swap files for two cases:
@@ -421,8 +425,9 @@ object LogLoader extends Logging {
         if (logEndOffset >= params.logStartOffsetCheckpoint)
           Some(logEndOffset)
         else {
-          warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ${params.logStartOffsetCheckpoint}. " +
-            "This could happen if segment files were deleted from the file system.")
+          warn(s"${params.logIdentifier}Deleting all segments because logEndOffset ($logEndOffset) " +
+            s" smaller than logStartOffset ${params.logStartOffsetCheckpoint}." +
+            " This could happen if segment files were deleted from the file system.")
           removeAndDeleteSegmentsAsync(params.segments.values, params)
           params.leaderEpochCache.foreach(_.clearAndFlush())
           params.producerStateManager.truncateFullyAndStartAt(params.logStartOffsetCheckpoint)
@@ -505,17 +510,18 @@ object LogLoader extends Logging {
   private def removeAndDeleteSegmentsAsync(segmentsToDelete: Iterable[LogSegment],
                                            params: LoadLogParams): Unit = {
     if (segmentsToDelete.nonEmpty) {
-      // As most callers hold an iterator into the `params.segments` collection and
-      // `removeAndDeleteSegmentAsync` mutates it by removing the deleted segment, we should force
-      // materialization of the iterator here, so that results of the iteration remain valid and
-      // deterministic.
+      // Most callers hold an iterator into the `params.segments` collection and
+      // `removeAndDeleteSegmentAsync` mutates it by removing the deleted segment. Therefore,
+      // we should force materialization of the iterator here, so that results of the iteration
+      // remain valid and deterministic. We should also pass only the materialized view of the
+      // iterator to the logic that deletes the segments.
       val toDelete = segmentsToDelete.toList
-      info(s"Deleting segments as part of log recovery: ${toDelete.mkString(",")}")
+      info(s"${params.logIdentifier}Deleting segments as part of log recovery: ${toDelete.mkString(",")}")
       toDelete.foreach { segment =>
         params.segments.remove(segment.baseOffset)
       }
       Log.deleteSegmentFiles(
-        segmentsToDelete,
+        toDelete,
         asyncDelete = true,
         deleteProducerStateSnapshots = true,
         params.dir,

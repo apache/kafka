@@ -748,39 +748,6 @@ class LogTest {
   }
 
   @Test
-  def testLogEndLessThanStartAfterReopen(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig()
-    var log = createLog(logDir, logConfig)
-    for (i <- 0 until 5) {
-      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
-      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
-      log.roll()
-    }
-    assertEquals(6, log.logSegments.size)
-
-    // Increment the log start offset
-    val startOffset = 4
-    log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(startOffset, ClientRecordDeletion)
-    assertTrue(log.logEndOffset > log.logStartOffset)
-
-    // Append garbage to a segment below the current log start offset
-    val segmentToForceTruncation = log.logSegments.take(2).last
-    val bw = new BufferedWriter(new FileWriter(segmentToForceTruncation.log.file))
-    bw.write("corruptRecord")
-    bw.close()
-    log.close()
-
-    // Reopen the log. This will cause truncate the segment to which we appended garbage and delete all other segments.
-    // All remaining segments will be lower than the current log start offset, which will force deletion of all segments
-    // and recreation of a single, active segment starting at logStartOffset.
-    log = createLog(logDir, logConfig, logStartOffset = startOffset, lastShutdownClean = false)
-    assertEquals(1, log.logSegments.size)
-    assertEquals(startOffset, log.logStartOffset)
-    assertEquals(startOffset, log.logEndOffset)
-  }
-
-  @Test
   def testNonActiveSegmentsFrom(): Unit = {
     val logConfig = LogTestUtils.createLogConfig()
     val log = createLog(logDir, logConfig)
@@ -2319,9 +2286,8 @@ class LogTest {
     val log = createLog(logDir, logConfig)
 
     // Write a topic ID to the partition metadata file to ensure it is transferred correctly.
-    val id = Uuid.randomUuid()
-    log.topicId = Some(id)
-    log.partitionMetadataFile.write(id)
+    val topicId = Uuid.randomUuid()
+    log.assignTopicId(topicId)
 
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
     assertEquals(Some(5), log.latestEpoch)
@@ -2336,8 +2302,8 @@ class LogTest {
 
     // Check the topic ID remains in memory and was copied correctly.
     assertTrue(log.topicId.isDefined)
-    assertEquals(id, log.topicId.get)
-    assertEquals(id, log.partitionMetadataFile.read().topicId)
+    assertEquals(topicId, log.topicId.get)
+    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
   }
 
   @Test

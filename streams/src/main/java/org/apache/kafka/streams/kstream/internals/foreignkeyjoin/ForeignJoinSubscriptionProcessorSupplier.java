@@ -63,8 +63,8 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements Proc
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
-            droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
+            final InternalProcessorContext<?, ?> internalProcessorContext = (InternalProcessorContext<?, ?>) context;
+            droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
                 Thread.currentThread().getName(),
                 internalProcessorContext.taskId().toString(),
                 internalProcessorContext.metrics()

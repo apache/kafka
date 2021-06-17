@@ -177,7 +177,7 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder appendToLog(int epoch, List<String> records) {
+        public Builder appendToLog(int epoch, List<String> records) {
             MemoryRecords batch = buildBatch(
                 time.milliseconds(),
                 log.endOffset().offset,
@@ -189,7 +189,7 @@ public final class RaftClientTestContext {
         }
 
         Builder withEmptySnapshot(OffsetAndEpoch snapshotId) throws IOException {
-            try (RawSnapshotWriter snapshot = log.createSnapshot(snapshotId)) {
+            try (RawSnapshotWriter snapshot = log.storeSnapshot(snapshotId).get()) {
                 snapshot.freeze();
             }
             return this;
@@ -357,28 +357,24 @@ public final class RaftClientTestContext {
         return context;
     }
 
-    void becomeLeader() throws Exception {
+    public void becomeLeader() throws Exception {
         int currentEpoch = currentEpoch();
         time.sleep(electionTimeoutMs * 2);
         expectAndGrantVotes(currentEpoch + 1);
         expectBeginEpoch(currentEpoch + 1);
     }
 
-    OptionalInt currentLeader() {
+    public OptionalInt currentLeader() {
         return currentLeaderAndEpoch().leaderId();
     }
 
-    int currentEpoch() {
+    public int currentEpoch() {
         return currentLeaderAndEpoch().epoch();
     }
 
     LeaderAndEpoch currentLeaderAndEpoch() {
-        try {
-            ElectionState election = quorumStateStore.readElectionState();
-            return new LeaderAndEpoch(election.leaderIdOpt, election.epoch);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        ElectionState election = quorumStateStore.readElectionState();
+        return new LeaderAndEpoch(election.leaderIdOpt, election.epoch);
     }
 
     void expectAndGrantVotes(
@@ -413,7 +409,7 @@ public final class RaftClientTestContext {
         client.poll();
     }
 
-    void pollUntil(TestCondition condition) throws InterruptedException {
+    public void pollUntil(TestCondition condition) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             client.poll();
             return condition.conditionMet();
@@ -1050,6 +1046,23 @@ public final class RaftClientTestContext {
                 .setEpoch(divergingEpoch)
                 .setEndOffset(divergingEpochEndOffset);
         });
+    }
+
+    public void advanceLocalLeaderHighWatermarkToLogEndOffset() throws InterruptedException {
+        assertEquals(localId, currentLeader());
+        long localLogEndOffset = log.endOffset().offset;
+        Set<Integer> followers = voters.stream().filter(voter -> voter != localId.getAsInt()).collect(Collectors.toSet());
+
+        // Send a request from every follower
+        for (int follower : followers) {
+            deliverRequest(
+                fetchRequest(currentEpoch(), follower, localLogEndOffset, currentEpoch(), 0)
+            );
+            pollUntilResponse();
+            assertSentFetchPartitionResponse(Errors.NONE, currentEpoch(), localId);
+        }
+
+        pollUntil(() -> OptionalLong.of(localLogEndOffset).equals(client.highWatermark()));
     }
 
     static class MockListener implements RaftClient.Listener<String> {

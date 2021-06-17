@@ -17,7 +17,8 @@
   "apiKey": 4,
   "type": "metadata",
   "name": "ConfigRecord",
-  "validVersions": "0",
+  "validVersions": "0-1",
+  "flexibleVersions": "1+",
   "fields": [
     { "name": "ResourceType", "type": "int8", "versions": "0+",
       "about": "The type of resource this configuration applies to." },
@@ -25,7 +26,7 @@
       "about": "The name of the resource this configuration applies to." },
     { "name": "Name", "type": "string", "versions": "0+",
       "about": "The name of the configuration key." },
-    { "name": "Value", "type": "string", "versions": "0+",
-      "about": "The value of the configuration." }
+    { "name": "Value", "type": "string", "versions": "0+", "nullableVersions": "1+",
+      "about": "The value of the configuration, or null if the it should be deleted." }
   ]
 }
