@@ -66,6 +66,7 @@ public class ConnectorRestartApiIntegrationTest {
     private static final int ONE_WORKER = 1;
     private static final int NUM_TASKS = 4;
     private static final int MESSAGES_PER_POLL = 10;
+    public static final long NOOP_REQUEST_SLEEP_MS = TimeUnit.SECONDS.toMillis(5);
     private static final String CONNECTOR_NAME_PREFIX = "conn-";
 
     private static final String TOPIC_NAME = "test-topic";
@@ -267,8 +268,8 @@ public class ConnectorRestartApiIntegrationTest {
         connect.requestPost(restartEndpoint, "", Collections.emptyMap());
 
         if (noopRequest) {
-            //for noop requests as everything is in RUNNING state, we need to wait for CONNECTOR_SETUP_DURATION_MS to ensure no unexpected restart events were fired
-            Thread.sleep(CONNECTOR_SETUP_DURATION_MS);
+            //for noop requests as everything is in RUNNING state, we need to wait for NOOP_REQUEST_SLEEP_MS to ensure no unexpected restart events were fired
+            Thread.sleep(NOOP_REQUEST_SLEEP_MS);
         }
 
         // Wait for the connector to be stopped
@@ -360,8 +361,8 @@ public class ConnectorRestartApiIntegrationTest {
         connect.requestPost(restartEndpoint, "", Collections.emptyMap());
 
         if (noopRequest) {
-            //for noop requests as everything is in RUNNING state, we need to wait for CONNECTOR_SETUP_DURATION_MS to ensure no unexpected restart events were fired
-            Thread.sleep(CONNECTOR_SETUP_DURATION_MS);
+            //for noop requests as everything is in RUNNING state, we need to wait for NOOP_REQUEST_SLEEP_MS to ensure no unexpected restart events were fired
+            Thread.sleep(NOOP_REQUEST_SLEEP_MS);
         }
 
         // Wait for the connector to be stopped
