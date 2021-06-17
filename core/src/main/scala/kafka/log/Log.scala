@@ -45,7 +45,7 @@ import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPar
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import scala.collection.{Seq, mutable}
+import scala.collection.{Seq, immutable, mutable}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
@@ -1879,9 +1879,10 @@ class Log(@volatile private var _dir: File,
                                       reason: SegmentDeletionReason): Unit = {
     if (segments.nonEmpty) {
       lock synchronized {
-        // As most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
+        // Most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
         // removing the deleted segment, we should force materialization of the iterator here, so that results of the
-        // iteration remain valid and deterministic.
+        // iteration remain valid and deterministic. We should also pass only the materialized view of the
+        // iterator to the logic that actually deletes the segments.
         val toDelete = segments.toList
         reason.logReason(this, toDelete)
         toDelete.foreach { segment =>
@@ -1892,7 +1893,7 @@ class Log(@volatile private var _dir: File,
     }
   }
 
-  private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean, deleteProducerStateSnapshots: Boolean = true): Unit = {
+  private def deleteSegmentFiles(segments: immutable.Iterable[LogSegment], asyncDelete: Boolean, deleteProducerStateSnapshots: Boolean = true): Unit = {
     Log.deleteSegmentFiles(segments, asyncDelete, deleteProducerStateSnapshots, dir, topicPartition,
       config, scheduler, logDirFailureChannel, producerStateManager, this.logIdent)
   }
@@ -2378,7 +2379,7 @@ object Log extends Logging {
    * @param logPrefix The logging prefix
    * @throws IOException if the file can't be renamed and still exists
    */
-  private[log] def deleteSegmentFiles(segmentsToDelete: Iterable[LogSegment],
+  private[log] def deleteSegmentFiles(segmentsToDelete: immutable.Iterable[LogSegment],
                                       asyncDelete: Boolean,
                                       deleteProducerStateSnapshots: Boolean = true,
                                       dir: File,

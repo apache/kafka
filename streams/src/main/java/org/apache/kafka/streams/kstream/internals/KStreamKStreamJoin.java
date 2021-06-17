@@ -47,6 +47,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     private final long joinBeforeMs;
     private final long joinAfterMs;
     private final long joinGraceMs;
+    private final boolean enableSpuriousResultFix;
 
     private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner;
     private final boolean outer;
@@ -57,18 +58,22 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
     KStreamKStreamJoin(final boolean isLeftSide,
                        final String otherWindowName,
-                       final long joinBeforeMs,
-                       final long joinAfterMs,
-                       final long joinGraceMs,
+                       final JoinWindowsInternal windows,
                        final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner,
                        final boolean outer,
                        final Optional<String> outerJoinWindowName,
                        final KStreamImplJoin.MaxObservedStreamTime maxObservedStreamTime) {
         this.isLeftSide = isLeftSide;
         this.otherWindowName = otherWindowName;
-        this.joinBeforeMs = joinBeforeMs;
-        this.joinAfterMs = joinAfterMs;
-        this.joinGraceMs = joinGraceMs;
+        if (isLeftSide) {
+            this.joinBeforeMs = windows.beforeMs;
+            this.joinAfterMs = windows.afterMs;
+        } else {
+            this.joinBeforeMs = windows.afterMs;
+            this.joinAfterMs = windows.beforeMs;
+        }
+        this.joinGraceMs = windows.gracePeriodMs();
+        this.enableSpuriousResultFix = windows.spuriousResultFixEnabled();
         this.joiner = joiner;
         this.outer = outer;
         this.outerJoinWindowName = outerJoinWindowName;
@@ -92,7 +97,12 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             otherWindowStore = context.getStateStore(otherWindowName);
 
-            if (StreamsConfig.InternalConfig.getBoolean(context().appConfigs(), ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, true)) {
+            if (enableSpuriousResultFix
+                && StreamsConfig.InternalConfig.getBoolean(
+                    context().appConfigs(),
+                    ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
+                    true
+                )) {
                 outerJoinWindowStore = outerJoinWindowName.map(context::getStateStore);
             }
         }
