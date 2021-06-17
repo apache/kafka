@@ -337,14 +337,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def hasStaticMember(groupInstanceId: Option[String]) = groupInstanceId.isDefined && staticMembers.contains(groupInstanceId.get)
 
   def getStaticMemberId(groupInstanceId: Option[String]) = {
-    if (groupInstanceId.isEmpty) {
+    if(groupInstanceId.isEmpty) {
       throw new IllegalArgumentException(s"unexpected null group.instance.id in getStaticMemberId")
     }
     staticMembers(groupInstanceId.get)
-  }
-
-  def hasStaticMember(groupInstanceId: String): Boolean = {
-    staticMembers.contains(groupInstanceId)
   }
 
   def addStaticMember(groupInstanceId: Option[String], newMemberId: String) = {

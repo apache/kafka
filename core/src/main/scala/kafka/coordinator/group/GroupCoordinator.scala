@@ -993,11 +993,6 @@ class GroupCoordinator(val brokerId: Int,
     heartbeatPurgatory.checkAndComplete(memberKey)
   }
 
-  private def removeHeartbeatForLeavingMember(group: GroupMetadata, memberId: String): Unit = {
-    val memberKey = MemberKey(group.groupId, memberId)
-    heartbeatPurgatory.checkAndComplete(memberKey)
-  }
-
   private def addMemberAndRebalance(rebalanceTimeoutMs: Int,
                                     sessionTimeoutMs: Int,
                                     memberId: String,
@@ -1326,8 +1321,9 @@ class GroupCoordinator(val brokerId: Int,
               val pendingSyncMembers = group.allPendingSyncMembers
 
               pendingSyncMembers.foreach { memberId =>
+                val member = group.get(memberId)
+                removeHeartbeatForLeavingMember(group, member)
                 group.remove(memberId)
-                removeHeartbeatForLeavingMember(group, memberId)
               }
 
               debug(s"Group ${group.groupId} removed members who haven't " +
