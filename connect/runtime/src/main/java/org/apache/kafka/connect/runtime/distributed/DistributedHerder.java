@@ -1136,6 +1136,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
+    /**
+     * Builds and and executes a restart plan for connector and its tasks from <code>request</code>.
+     * Execution of a plan involves triggering the stop of eligible connector/tasks and then queuing the start for eligible connector/tasks.
+     *
+     * @param request the request to restart connector and tasks
+     */
     protected synchronized void doRestartConnectorAndTasks(RestartRequest request) {
         final String connectorName = request.connectorName();
         Optional<RestartPlan> maybePlan = buildRestartPlanFor(request);
@@ -1168,9 +1174,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         if (restartConnector) {
             startConnector(connectorName, (error, targetState) -> {
                 if (error == null) {
-                    log.info("Connector '{}' successfully restarted", connectorName);
+                    log.info("Connector '{}' restart successful", connectorName);
                 } else {
-                    log.error("Failed to restart connector '" + connectorName + "'", error);
+                    log.error("Connector '{}' restart failed", connectorName, error);
                 }
             });
         }
@@ -1717,15 +1723,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.info("Received and enqueuing {}", request);
 
             synchronized (DistributedHerder.this) {
-                //preserve the highest impact request
                 String connectorName = request.connectorName();
+                //preserve the highest impact request
                 if (pendingRestartRequests.containsKey(connectorName)) {
                     RestartRequest existingRequest = pendingRestartRequests.get(connectorName);
                     if (request.compareTo(existingRequest) > 0) {
                         log.debug("Overwriting existing {} and enqueuing the higher impact {}", existingRequest, request);
                         pendingRestartRequests.put(connectorName, request);
                     } else {
-                        log.debug("Preserving existing {} as it has higher impact than incoming {}", existingRequest, request);
+                        log.debug("Preserving existing higher impact {} and ignoring incoming {}", existingRequest, request);
                     }
                 } else {
                     pendingRestartRequests.put(connectorName, request);

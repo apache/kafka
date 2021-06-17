@@ -334,9 +334,9 @@ public class StandaloneHerder extends AbstractHerder {
             log.debug("Restarting connector '{}'", connectorName);
             startConnector(connectorName, (error, targetState) -> {
                 if (error == null) {
-                    log.debug("Connector '{}' successfully restarted", connectorName);
+                    log.info("Connector '{}' restart successful", connectorName);
                 } else {
-                    log.debug("Connector '{}' failed to restart", connectorName, error);
+                    log.error("Connector '{}' restart failed", connectorName , error);
                 }
             });
         }
