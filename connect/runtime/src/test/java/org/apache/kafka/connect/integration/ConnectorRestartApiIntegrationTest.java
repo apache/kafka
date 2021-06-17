@@ -20,10 +20,12 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +37,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -63,59 +66,71 @@ public class ConnectorRestartApiIntegrationTest {
     private static final int ONE_WORKER = 1;
     private static final int NUM_TASKS = 4;
     private static final int MESSAGES_PER_POLL = 10;
-    private static final String CONNECTOR_NAME = "simple-source";
+    private static final String CONNECTOR_NAME_PREFIX = "simple-source";
+
     private static final String TOPIC_NAME = "test-topic";
 
-    private EmbeddedConnectCluster.Builder connectBuilder;
-    private EmbeddedConnectCluster connect;
-    private Map<String, String> workerProps;
-    private Properties brokerProps;
-    private ConnectorHandle connectorHandle;
+    private static Map<Integer, EmbeddedConnectCluster> connectClusterMap = new ConcurrentHashMap<>();
 
+    private EmbeddedConnectCluster connect;
+    private ConnectorHandle connectorHandle;
+    private String connectorName;
     @Rule
     public TestRule watcher = ConnectIntegrationTestUtils.newTestWatcher(log);
+    @Rule
+    public TestName testName = new TestName();
 
     @Before
     public void setup() {
-        // setup Connect worker properties
-        workerProps = new HashMap<>();
-        workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(OFFSET_COMMIT_INTERVAL_MS));
-        workerProps.put(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, "All");
-
-        // setup Kafka broker properties
-        brokerProps = new Properties();
-        brokerProps.put("auto.create.topics.enable", String.valueOf(false));
-
-        // build a Connect cluster backed by Kafka and Zk
-        connectBuilder = connectBuilderWithNumWorkers(ONE_WORKER);
+        connectorName = CONNECTOR_NAME_PREFIX + testName.getMethodName();
         // get connector handles before starting test.
-        connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
+        connectorHandle = RuntimeHandles.get().connectorHandle(connectorName);
     }
 
-    private EmbeddedConnectCluster.Builder connectBuilderWithNumWorkers(int numWorkers) {
-        return new EmbeddedConnectCluster.Builder()
-                .name("connect-cluster")
-                .numWorkers(numWorkers)
-                .workerProps(workerProps)
-                .brokerProps(brokerProps)
-                // true is the default, setting here as example
-                .maskExitProcedures(true);
+    private void startOrReuseConnectWithNumWorkers(int numWorkers) throws Exception {
+        connect = connectClusterMap.computeIfAbsent(numWorkers, n -> {
+            // setup Connect worker properties
+            Map<String, String> workerProps = new HashMap<>();
+            workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(OFFSET_COMMIT_INTERVAL_MS));
+            workerProps.put(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, "All");
+
+            // setup Kafka broker properties
+            Properties brokerProps = new Properties();
+            brokerProps.put("auto.create.topics.enable", String.valueOf(false));
+
+            EmbeddedConnectCluster.Builder connectBuilder = new EmbeddedConnectCluster.Builder()
+                    .name("connect-cluster")
+                    .numWorkers(numWorkers)
+                    .workerProps(workerProps)
+                    .brokerProps(brokerProps)
+                    // true is the default, setting here as example
+                    .maskExitProcedures(true);
+            EmbeddedConnectCluster connect = connectBuilder.build();
+            // start the clusters
+            connect.start();
+            return connect;
+        });
+        connect.assertions().assertExactlyNumWorkersAreUp(numWorkers,
+                "Initial group of workers did not start in time.");
     }
 
     @After
-    public void close() {
-        RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
+    public void tearDown() {
+        RuntimeHandles.get().deleteConnector(connectorName);
+    }
+
+    @AfterClass
+    public static void close() {
         // stop all Connect, Kafka and Zk threads.
-        connect.stop();
+        connectClusterMap.values().forEach(c -> c.stop());
     }
 
     @Test
     public void testRestartUnknownConnectorNoParams() throws Exception {
         String connectorName = "Unknown";
-        connect = connectBuilder.build();
-        // start the clusters
-        connect.start();
 
+        // build a Connect cluster backed by Kafka and Zk
+        startOrReuseConnectWithNumWorkers(ONE_WORKER);
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
                 String.format("connectors/%s/restart", connectorName));
@@ -134,10 +149,9 @@ public class ConnectorRestartApiIntegrationTest {
 
     private void restartUnknownConnector(boolean onlyFailed, boolean includeTasks) throws Exception {
         String connectorName = "Unknown";
-        connect = connectBuilder.build();
-        // start the clusters
-        connect.start();
 
+        // build a Connect cluster backed by Kafka and Zk
+        startOrReuseConnectWithNumWorkers(ONE_WORKER);
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
                 String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, connectorName));
@@ -221,21 +235,13 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     private void runningConnectorAndTasksRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts, Map<String, Integer> expectedTasksRestarts, boolean noopRequest, int numWorkers) throws Exception {
-        connectBuilder = connectBuilderWithNumWorkers(numWorkers);
-        connect = connectBuilder.build();
-        // start the clusters
-        connect.start();
-
+        startOrReuseConnectWithNumWorkers(numWorkers);
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
-
-        connect.assertions().assertExactlyNumWorkersAreUp(numWorkers,
-                "Initial group of workers did not start in time.");
-
         // Try to start the connector and its single task.
-        connect.configureConnector(CONNECTOR_NAME, props);
+        connect.configureConnector(connectorName, props);
 
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connectorName, NUM_TASKS,
                 "Connector tasks are not all in running state.");
 
         StartAndStopCounterSnapshot beforeSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
@@ -246,7 +252,7 @@ public class ConnectorRestartApiIntegrationTest {
 
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
-                String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, CONNECTOR_NAME));
+                String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, connectorName));
         connect.requestPost(restartEndpoint, "", Collections.emptyMap());
 
         if (noopRequest) {
@@ -259,7 +265,7 @@ public class ConnectorRestartApiIntegrationTest {
                         + CONNECTOR_SETUP_DURATION_MS + "ms",
                 stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
 
-        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connectorName, NUM_TASKS,
                 "Connector tasks are not all in running state.");
         // Expect that the connector has started again
         assertTrue("Failed to start connector and tasks within "
@@ -283,21 +289,16 @@ public class ConnectorRestartApiIntegrationTest {
         //as connector is failed we expect 0 task to be started
         Map<String, Integer> expectedTasksStarts = allTasksExpectedRestarts(0);
 
-        connect = connectBuilder.build();
-        // start the clusters
-        connect.start();
-
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
         props.put("connector.start.inject.error", "true");
-
-        connect.assertions().assertExactlyNumWorkersAreUp(ONE_WORKER,
-                "Initial group of workers did not start in time.");
+        // build a Connect cluster backed by Kafka and Zk
+        startOrReuseConnectWithNumWorkers(ONE_WORKER);
 
         // Try to start the connector and its single task.
-        connect.configureConnector(CONNECTOR_NAME, props);
+        connect.configureConnector(connectorName, props);
 
-        connect.assertions().assertConnectorIsFailedAndTasksHaveFailed(CONNECTOR_NAME, 0,
+        connect.assertions().assertConnectorIsFailedAndTasksHaveFailed(connectorName, 0,
                 "Connector or tasks are in running state.");
 
         StartAndStopCounterSnapshot beforeSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
@@ -306,10 +307,10 @@ public class ConnectorRestartApiIntegrationTest {
 
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
-                String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, CONNECTOR_NAME));
+                String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, connectorName));
         connect.requestPost(restartEndpoint, "", Collections.emptyMap());
 
-        connect.assertions().assertConnectorIsFailedAndTasksHaveFailed(CONNECTOR_NAME, 0,
+        connect.assertions().assertConnectorIsFailedAndTasksHaveFailed(connectorName, 0,
                 "Connector tasks are not all in running state.");
         // Expect that the connector has started again
         assertTrue("Failed to start connector and tasks after coordinator failure within "
@@ -321,21 +322,16 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     private void failedTasksRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts, Map<String, Integer> expectedTasksRestarts, Set<String> tasksToFail, boolean noopRequest) throws Exception {
-        connect = connectBuilder.build();
-        // start the clusters
-        connect.start();
-
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
         tasksToFail.forEach(taskId -> props.put("task-" + taskId + ".start.inject.error", "true"));
-
-        connect.assertions().assertExactlyNumWorkersAreUp(ONE_WORKER,
-                "Initial group of workers did not start in time.");
+        // build a Connect cluster backed by Kafka and Zk
+        startOrReuseConnectWithNumWorkers(ONE_WORKER);
 
         // Try to start the connector and its single task.
-        connect.configureConnector(CONNECTOR_NAME, props);
+        connect.configureConnector(connectorName, props);
 
-        connect.assertions().assertConnectorIsRunningAndNumTasksHaveFailed(CONNECTOR_NAME, NUM_TASKS, tasksToFail.size(),
+        connect.assertions().assertConnectorIsRunningAndNumTasksHaveFailed(connectorName, NUM_TASKS, tasksToFail.size(),
                 "Connector tasks are in running state.");
 
         StartAndStopCounterSnapshot beforeSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
@@ -346,7 +342,7 @@ public class ConnectorRestartApiIntegrationTest {
 
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
-                String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, CONNECTOR_NAME));
+                String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, connectorName));
         connect.requestPost(restartEndpoint, "", Collections.emptyMap());
 
         if (noopRequest) {
@@ -359,7 +355,7 @@ public class ConnectorRestartApiIntegrationTest {
                         + CONNECTOR_SETUP_DURATION_MS + "ms",
                 stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
 
-        connect.assertions().assertConnectorIsRunningAndNumTasksHaveFailed(CONNECTOR_NAME, NUM_TASKS, tasksToFail.size(),
+        connect.assertions().assertConnectorIsRunningAndNumTasksHaveFailed(connectorName, NUM_TASKS, tasksToFail.size(),
                 "Connector tasks are not all in running state.");
         // Expect that the connector has started again
         assertTrue("Failed to start connector and tasks within "
@@ -405,7 +401,7 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     private String taskId(int i) {
-        return CONNECTOR_NAME + "-" + i;
+        return connectorName + "-" + i;
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {
