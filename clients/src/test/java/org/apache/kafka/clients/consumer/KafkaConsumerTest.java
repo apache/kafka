@@ -195,7 +195,7 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
 
         assertEquals(records.count(), 5);
-        assertEquals(records.partitions(), new HashSet<>(Collections.singletonList(tp0)));
+        assertEquals(records.partitions(), Collections.singleton(tp0));
         assertEquals(records.records(tp0).size(), 5);
 
         consumer.close(Duration.ofMillis(0));
@@ -211,7 +211,7 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
 
         assertEquals(invalidRecordNumber - 1, records.count());
-        assertEquals(new HashSet<>(Collections.singletonList(tp0)), records.partitions());
+        assertEquals(Collections.singleton(tp0), records.partitions());
         assertEquals(invalidRecordNumber - 1, records.records(tp0).size());
         long lastOffset = records.records(tp0).get(records.records(tp0).size() - 1).offset();
         assertEquals(invalidRecordNumber - 2, lastOffset);
