@@ -24,7 +24,7 @@ import org.apache.kafka.connect.connector.Task;
 /**
  * A request to restart a connector and/or task instances.
  */
-public class RestartRequest {
+public class RestartRequest implements Comparable<RestartRequest> {
 
     private final String connectorName;
     private final boolean onlyFailed;
@@ -97,6 +97,27 @@ public class RestartRequest {
      */
     public boolean shouldRestartTask(TaskStatus status) {
         return includeTasks && (!onlyFailed || status.state() == AbstractStatus.State.FAILED);
+    }
+
+    @Override
+    public int compareTo(RestartRequest o) {
+        int result = connectorName.compareTo(o.connectorName);
+        if (result == 0) {
+            result = impactRank() - o.impactRank();
+        }
+        return result;
+    }
+
+    private int impactRank() {
+        if (onlyFailed && !includeTasks) { //restarts only failed connector so least impactful
+            return 0;
+        } else if (onlyFailed && includeTasks) { //restarts only failed connector and tasks
+            return 1;
+        } else if (!onlyFailed && !includeTasks) { //restart connector in any state but no tasks
+            return 2;
+        }
+        //onlyFailed==false&&includeTasks  restarts both connector and tasks in any state so highest impact
+        return 3;
     }
 
     @Override

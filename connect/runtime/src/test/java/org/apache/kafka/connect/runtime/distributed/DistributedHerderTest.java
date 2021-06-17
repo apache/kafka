@@ -2821,7 +2821,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void preserveOnlyLatestRestartRequest() {
+    public void preserveHighestImpactRestartRequest() {
         member.wakeup();
         PowerMock.expectLastCall().anyTimes();
         PowerMock.replayAll();
@@ -2830,17 +2830,20 @@ public class DistributedHerderTest {
         RestartRequest restartRequest = new RestartRequest(connectorName, false, false);
         configUpdateListener.onRestartRequest(restartRequest);
 
+        //will overwrite as this is higher impact
         restartRequest = new RestartRequest(connectorName, false, true);
         configUpdateListener.onRestartRequest(restartRequest);
         assertEquals(1, herder.pendingRestartRequests.size());
         assertFalse(herder.pendingRestartRequests.get(connectorName).onlyFailed());
         assertTrue(herder.pendingRestartRequests.get(connectorName).includeTasks());
 
+        //will be ignored as the existing request has higher impact
         restartRequest = new RestartRequest(connectorName, true, false);
         configUpdateListener.onRestartRequest(restartRequest);
         assertEquals(1, herder.pendingRestartRequests.size());
-        assertTrue(herder.pendingRestartRequests.get(connectorName).onlyFailed());
-        assertFalse(herder.pendingRestartRequests.get(connectorName).includeTasks());
+        //compare against existing request
+        assertFalse(herder.pendingRestartRequests.get(connectorName).onlyFailed());
+        assertTrue(herder.pendingRestartRequests.get(connectorName).includeTasks());
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class

@@ -18,6 +18,11 @@ package org.apache.kafka.connect.runtime;
 
 import org.junit.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -79,6 +84,22 @@ public class RestartRequestTest {
         assertFalse(restartRequest.shouldRestartTask(createTaskStatus(AbstractStatus.State.RUNNING)));
     }
 
+    @Test
+    public void compareImpact() {
+        RestartRequest onlyFailedConnector = new RestartRequest(CONNECTOR_NAME, true, false);
+        RestartRequest failedConnectorAndTasks = new RestartRequest(CONNECTOR_NAME, true, true);
+        RestartRequest onlyConnector = new RestartRequest(CONNECTOR_NAME, false, false);
+        RestartRequest connectorAndTasks = new RestartRequest(CONNECTOR_NAME, false, true);
+        List<RestartRequest> restartRequests = Arrays.asList(connectorAndTasks, onlyConnector, onlyFailedConnector, failedConnectorAndTasks);
+        Collections.sort(restartRequests);
+        assertEquals(onlyFailedConnector, restartRequests.get(0));
+        assertEquals(failedConnectorAndTasks, restartRequests.get(1));
+        assertEquals(onlyConnector, restartRequests.get(2));
+        assertEquals(connectorAndTasks, restartRequests.get(3));
+
+        RestartRequest onlyFailedDiffConnector = new RestartRequest(CONNECTOR_NAME + "foo", true, false);
+        assertTrue(onlyFailedConnector.compareTo(onlyFailedDiffConnector) != 0);
+    }
 
     private TaskStatus createTaskStatus(AbstractStatus.State state) {
         return new TaskStatus(null, state, null, 0);
