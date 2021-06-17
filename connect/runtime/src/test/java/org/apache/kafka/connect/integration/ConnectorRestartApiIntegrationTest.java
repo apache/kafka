@@ -66,7 +66,7 @@ public class ConnectorRestartApiIntegrationTest {
     private static final int ONE_WORKER = 1;
     private static final int NUM_TASKS = 4;
     private static final int MESSAGES_PER_POLL = 10;
-    private static final String CONNECTOR_NAME_PREFIX = "simple-source";
+    private static final String CONNECTOR_NAME_PREFIX = "conn-";
 
     private static final String TOPIC_NAME = "test-topic";
 
@@ -222,12 +222,17 @@ public class ConnectorRestartApiIntegrationTest {
 
     @Test
     public void testMultiWorkerRestartOnlyConnector() throws Exception {
-        runningConnectorAndTasksRestart(false, false, 1, allTasksExpectedRestarts(0), false, 4);
+        //run two additional workers to ensure that one worker will always be free and not running any tasks or connector instance for this connector
+        //we will call restart on that worker and that will test the distributed behavior of the restart API
+        int numWorkers = NUM_TASKS + 2;
+        runningConnectorAndTasksRestart(false, false, 1, allTasksExpectedRestarts(0), false, numWorkers);
     }
 
     @Test
     public void testMultiWorkerRestartBothConnectorAndTasks() throws Exception {
-        runningConnectorAndTasksRestart(false, true, 1, allTasksExpectedRestarts(1), false, 4);
+        //run 2 additional workers to ensure 1 worker will be free that is not running any tasks or connector instance for this connector
+        int numWorkers = NUM_TASKS + 2;
+        runningConnectorAndTasksRestart(false, true, 1, allTasksExpectedRestarts(1), false, numWorkers);
     }
 
     private void runningConnectorAndTasksRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts, Map<String, Integer> expectedTasksRestarts, boolean noopRequest) throws Exception {
@@ -251,8 +256,14 @@ public class ConnectorRestartApiIntegrationTest {
         StartAndStopLatch startLatch = connectorHandle.expectedStarts(expectedConnectorRestarts, expectedTasksRestarts, includeTasks);
 
         // Call the Restart API
-        String restartEndpoint = connect.endpointForResource(
-                String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, connectorName));
+        String restartPath = String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, connectorName);
+        String restartEndpoint;
+        if (numWorkers == 1) {
+            restartEndpoint = connect.endpointForResource(restartPath);
+        } else {
+            restartEndpoint = connect.endpointForWorkerRunningNoResourceForConnector(restartPath, connectorName);
+        }
+
         connect.requestPost(restartEndpoint, "", Collections.emptyMap());
 
         if (noopRequest) {
@@ -275,14 +286,17 @@ public class ConnectorRestartApiIntegrationTest {
 
         assertEquals(beforeSnapshot.starts() + expectedConnectorRestarts, afterSnapshot.starts());
         assertEquals(beforeSnapshot.stops() + expectedConnectorRestarts, afterSnapshot.stops());
-        if (numWorkers == 1) {
-            //validate tasks stop/start counts only in single worker test because the multi worker rebalance triggers stop/start on task and this make the exact counts unpredictable
-            connectorHandle.tasks().forEach(t -> {
-                StartAndStopCounterSnapshot afterTaskSnapshot = t.startAndStopCounter().countsSnapshot();
+        connectorHandle.tasks().forEach(t -> {
+            StartAndStopCounterSnapshot afterTaskSnapshot = t.startAndStopCounter().countsSnapshot();
+            if (numWorkers == 1) {
                 assertEquals(beforeTasksSnapshot.get(t.taskId()).starts() + expectedTasksRestarts.get(t.taskId()), afterTaskSnapshot.starts());
                 assertEquals(beforeTasksSnapshot.get(t.taskId()).stops() + expectedTasksRestarts.get(t.taskId()), afterTaskSnapshot.stops());
-            });
-        }
+            } else {
+                //validate tasks stop/start counts only in single worker test because the multi worker rebalance triggers stop/start on task and this make the exact counts unpredictable
+                assertTrue(afterTaskSnapshot.starts() >= beforeTasksSnapshot.get(t.taskId()).starts() + expectedTasksRestarts.get(t.taskId()));
+                assertTrue(afterTaskSnapshot.stops() >= beforeTasksSnapshot.get(t.taskId()).stops() + expectedTasksRestarts.get(t.taskId()));
+            }
+        });
     }
 
     private void failedConnectorRestart(boolean onlyFailed, boolean includeTasks, int expectedConnectorRestarts) throws Exception {

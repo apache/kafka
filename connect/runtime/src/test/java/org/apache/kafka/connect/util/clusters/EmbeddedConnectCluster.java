@@ -38,6 +38,7 @@ import java.net.URL;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -553,6 +554,31 @@ public class EmbeddedConnectCluster {
                 .filter(Objects::nonNull)
                 .findFirst()
                 .orElseThrow(() -> new ConnectException("Connect workers have not been provisioned"))
+                .toString();
+        return url + resource;
+    }
+
+    /**
+     * Get the full URL of the endpoint that corresponds to the given REST resource using a worker
+     * that is not running any tasks or connector instance for the connectorName provided in the arguments
+     *
+     * @param resource the resource under the worker's admin endpoint
+     * @param connectorName the name of the connector
+     * @return the admin endpoint URL
+     * @throws ConnectException if no REST endpoint is available
+     */
+    public String endpointForWorkerRunningNoResourceForConnector(String resource, String connectorName) {
+        ConnectorStateInfo info = connectorStatus(connectorName);
+        Set<String> activeWorkerUrls = new HashSet<>();
+        activeWorkerUrls.add(String.format("http://%s/", info.connector().workerId()));
+        info.tasks().forEach(t -> activeWorkerUrls.add(String.format("http://%s/", t.workerId())));
+        String url = connectCluster.stream()
+                .map(WorkerHandle::url)
+                .filter(Objects::nonNull)
+                .filter(workerUrl -> !activeWorkerUrls.contains(workerUrl.toString()))
+                .findFirst()
+                .orElseThrow(() -> new ConnectException(
+                        String.format("Connect workers have not been provisioned or no free worker found that is not running this connector(%s) or its tasks", connectorName)))
                 .toString();
         return url + resource;
     }
