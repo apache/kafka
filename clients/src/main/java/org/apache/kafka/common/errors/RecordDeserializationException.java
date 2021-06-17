@@ -25,8 +25,8 @@ import org.apache.kafka.common.TopicPartition;
 public class RecordDeserializationException extends SerializationException {
 
     private static final long serialVersionUID = 1L;
-    private TopicPartition partition;
-    private long offset;
+    private final TopicPartition partition;
+    private final long offset;
 
     public RecordDeserializationException(TopicPartition partition, long offset, String message, Throwable cause) {
         super(message, cause);

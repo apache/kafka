@@ -202,24 +202,6 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void testPollReturnsRecordsUpUntilError() {
-        int invalidRecordNumber = 4;
-        StringDeserializer deserializer = mockErrorDeserializer(invalidRecordNumber);
-
-        KafkaConsumer<String, String> consumer = setUpConsumerWithRecordsToPoll(tp0, 5, deserializer);
-
-        ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
-
-        assertEquals(invalidRecordNumber - 1, records.count());
-        assertEquals(new HashSet<>(Collections.singletonList(tp0)), records.partitions());
-        assertEquals(invalidRecordNumber - 1, records.records(tp0).size());
-        long lastValidOffset = records.records(tp0).get(records.records(tp0).size() - 1).offset();
-        assertEquals(invalidRecordNumber - 2, lastValidOffset);
-
-        consumer.close(Duration.ofMillis(0));
-    }
-
-    @Test
     public void testSecondPollWithDeserializationErrorThrowsRecordDeserializationException() {
         int invalidRecordNumber = 4;
         int invalidRecordOffset = 3;
@@ -237,6 +219,7 @@ public class KafkaConsumerTest {
         RecordDeserializationException rde = assertThrows(RecordDeserializationException.class, () -> consumer.poll(Duration.ZERO));
         assertEquals(invalidRecordOffset, rde.offset());
         assertEquals(tp0, rde.topicPartition());
+        assertEquals(rde.offset(), consumer.position(tp0));
         consumer.close(Duration.ofMillis(0));
     }
 
@@ -244,8 +227,7 @@ public class KafkaConsumerTest {
         Create a mock deserializer which throws a SerializationException on the Nth record's value deserialization
      */
     private StringDeserializer mockErrorDeserializer(int recordNumber) {
-        //int recordIndex = (recordNumber * 2)  - 1; // * 2 because we deserialize key and values
-        int recordIndex = recordNumber - 1; // * 2 because we deserialize key and values
+        int recordIndex = recordNumber - 1;
         return new StringDeserializer() {
             int i = 0;
             @Override
@@ -2461,7 +2443,7 @@ public class KafkaConsumerTest {
                                                       boolean autoCommitEnabled,
                                                       String groupId,
                                                       Optional<String> groupInstanceId,
-                                                      Optional<Deserializer<String>> deserializer,
+                                                      Optional<Deserializer<String>> valueDeserializer,
                                                       boolean throwOnStableOffsetNotSupported) {
         String clientId = "mock-consumer";
         String metricGroupPrefix = "consumer";
@@ -2477,7 +2459,7 @@ public class KafkaConsumerTest {
         int rebalanceTimeoutMs = 60000;
 
         Deserializer<String> keyDeserializer = new StringDeserializer();
-        Deserializer<String> valueDeserializer = deserializer.orElse(new StringDeserializer());
+        Deserializer<String> deserializer = valueDeserializer.orElse(new StringDeserializer());
 
         List<ConsumerPartitionAssignor> assignors = singletonList(assignor);
         ConsumerInterceptors<String, String> interceptors = new ConsumerInterceptors<>(Collections.emptyList());
@@ -2520,7 +2502,7 @@ public class KafkaConsumerTest {
                 checkCrcs,
                 "",
                 keyDeserializer,
-                valueDeserializer,
+                deserializer,
                 metadata,
                 subscription,
                 metrics,
@@ -2536,7 +2518,7 @@ public class KafkaConsumerTest {
                 clientId,
                 consumerCoordinator,
                 keyDeserializer,
-                valueDeserializer,
+                deserializer,
                 fetcher,
                 interceptors,
                 time,
