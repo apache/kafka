@@ -81,9 +81,7 @@ object Defaults {
   val AuthorizerClassName = ""
 
   /** ********* Socket Server Configuration ***********/
-  val Port = 9092
-  val HostName: String = new String("")
-
+  val Listeners = "PLAINTEXT://:9092"
   val ListenerSecurityProtocolMap: String = EndPoint.DefaultSecurityProtocolMap.map { case (listenerName, securityProtocol) =>
     s"${listenerName.value}:${securityProtocol.name}"
   }.mkString(",")
@@ -381,11 +379,7 @@ object KafkaConfig {
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
   /** ********* Socket Server Configuration ***********/
-  val PortProp = "port"
-  val HostNameProp = "host.name"
   val ListenersProp = "listeners"
-  val AdvertisedHostNameProp: String = "advertised.host.name"
-  val AdvertisedPortProp = "advertised.port"
   val AdvertisedListenersProp = "advertised.listeners"
   val ListenerSecurityProtocolMapProp = "listener.security.protocol.map"
   val ControlPlaneListenerNameProp = "control.plane.listener.name"
@@ -677,12 +671,6 @@ object KafkaConfig {
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements s${classOf[Authorizer].getName}" +
   " interface, which is used by the broker for authorization."
   /** ********* Socket Server Configuration ***********/
-  val PortDoc = "DEPRECATED: only used when <code>listeners</code> is not set. " +
-  "Use <code>listeners</code> instead. \n" +
-  "the port to listen and accept connections on"
-  val HostNameDoc = "DEPRECATED: only used when <code>listeners</code> is not set. " +
-  "Use <code>listeners</code> instead. \n" +
-  "hostname of broker. If this is set, it will only bind to this address. If this is not set, it will bind to all interfaces"
   val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
     s" If the listener name is not a security protocol, <code>$ListenerSecurityProtocolMapProp</code> must also be set.\n" +
     " Listener names and port numbers must be unique.\n" +
@@ -691,17 +679,6 @@ object KafkaConfig {
     " Examples of legal listener lists:\n" +
     " PLAINTEXT://myhost:9092,SSL://:9091\n" +
     " CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093\n"
-  val AdvertisedHostNameDoc = "DEPRECATED: only used when <code>advertised.listeners</code> or <code>listeners</code> are not set. " +
-  "Use <code>advertised.listeners</code> instead. \n" +
-  "Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
-  "need to be different from the interface to which the broker binds. If this is not set, " +
-  "it will use the value for <code>host.name</code> if configured. Otherwise " +
-  "it will use the value returned from java.net.InetAddress.getCanonicalHostName()."
-  val AdvertisedPortDoc = "DEPRECATED: only used when <code>advertised.listeners</code> or <code>listeners</code> are not set. " +
-  "Use <code>advertised.listeners</code> instead. \n" +
-  "The port to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
-  "need to be different from the port to which the broker binds. If this is not set, " +
-  "it will publish the same port that the broker binds to."
   val AdvertisedListenersDoc = s"Listeners to publish to ZooKeeper for clients to use, if different than the <code>$ListenersProp</code> config property." +
     " In IaaS environments, this may need to be different from the interface to which the broker binds." +
     s" If this is not set, the value for <code>$ListenersProp</code> will be used." +
@@ -1078,11 +1055,7 @@ object KafkaConfig {
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
 
       /** ********* Socket Server Configuration ***********/
-      .define(PortProp, INT, Defaults.Port, HIGH, PortDoc)
-      .define(HostNameProp, STRING, Defaults.HostName, HIGH, HostNameDoc)
-      .define(ListenersProp, STRING, null, HIGH, ListenersDoc)
-      .define(AdvertisedHostNameProp, STRING, null, HIGH, AdvertisedHostNameDoc)
-      .define(AdvertisedPortProp, INT, null, HIGH, AdvertisedPortDoc)
+      .define(ListenersProp, STRING, Defaults.Listeners, HIGH, ListenersDoc)
       .define(AdvertisedListenersProp, STRING, null, HIGH, AdvertisedListenersDoc)
       .define(ListenerSecurityProtocolMapProp, STRING, Defaults.ListenerSecurityProtocolMap, LOW, ListenerSecurityProtocolMapDoc)
       .define(ControlPlaneListenerNameProp, STRING, null, HIGH, controlPlaneListenerNameDoc)
@@ -1567,11 +1540,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   }
 
   /** ********* Socket Server Configuration ***********/
-  val hostName = getString(KafkaConfig.HostNameProp)
-  val port = getInt(KafkaConfig.PortProp)
-  val advertisedHostName = Option(getString(KafkaConfig.AdvertisedHostNameProp)).getOrElse(hostName)
-  val advertisedPort: java.lang.Integer = Option(getInt(KafkaConfig.AdvertisedPortProp)).getOrElse(port)
-
   val socketSendBufferBytes = getInt(KafkaConfig.SocketSendBufferBytesProp)
   val socketReceiveBufferBytes = getInt(KafkaConfig.SocketReceiveBufferBytesProp)
   val socketRequestMaxBytes = getInt(KafkaConfig.SocketRequestMaxBytesProp)
@@ -1788,13 +1756,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
-  // If the user did not define listeners but did define host or port, let's use them in backward compatible way
-  // If none of those are defined, we default to PLAINTEXT://:9092
-  def listeners: Seq[EndPoint] = {
-    Option(getString(KafkaConfig.ListenersProp)).map { listenerProp =>
-      CoreUtils.listenerListToEndPoints(listenerProp, listenerSecurityProtocolMap)
-    }.getOrElse(CoreUtils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port, listenerSecurityProtocolMap))
-  }
+  def listeners: Seq[EndPoint] =
+    CoreUtils.listenerListToEndPoints(getString(KafkaConfig.ListenersProp), listenerSecurityProtocolMap)
 
   def controllerListenerNames: Seq[String] =
     Option(getString(KafkaConfig.ControllerListenerNamesProp)).getOrElse("").split(",")
@@ -1818,15 +1781,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
-  // If the user defined advertised listeners, we use those
-  // If they didn't but did define advertised host or port, we'll use those and fill in the missing value from regular host / port or defaults
-  // If none of these are defined, we'll use the listeners
+  // Use advertised listeners if defined, fallback to listeners otherwise
   def advertisedListeners: Seq[EndPoint] = {
     val advertisedListenersProp = getString(KafkaConfig.AdvertisedListenersProp)
     if (advertisedListenersProp != null)
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, listenerSecurityProtocolMap, requireDistinctPorts=false)
-    else if (getString(KafkaConfig.AdvertisedHostNameProp) != null || getInt(KafkaConfig.AdvertisedPortProp) != null)
-      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort, listenerSecurityProtocolMap, requireDistinctPorts=false)
     else
       listeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
   }

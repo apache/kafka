@@ -145,69 +145,35 @@ class KafkaConfigTest {
 
   @Test
   def testAdvertiseDefaults(): Unit = {
-    val port = "9999"
+    val port = 9999
     val hostName = "fake-host"
-
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.remove(KafkaConfig.ListenersProp)
-    props.put(KafkaConfig.HostNameProp, hostName)
-    props.put(KafkaConfig.PortProp, port)
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.put(KafkaConfig.ListenersProp, s"PLAINTEXT://$hostName:$port")
     val serverConfig = KafkaConfig.fromProps(props)
+
     val endpoints = serverConfig.advertisedListeners
+    assertEquals(1, endpoints.size)
     val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
     assertEquals(endpoint.host, hostName)
-    assertEquals(endpoint.port, port.toInt)
+    assertEquals(endpoint.port, port)
   }
 
   @Test
   def testAdvertiseConfigured(): Unit = {
     val advertisedHostName = "routable-host"
-    val advertisedPort = "1234"
+    val advertisedPort = 1234
 
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put(KafkaConfig.AdvertisedHostNameProp, advertisedHostName)
-    props.put(KafkaConfig.AdvertisedPortProp, advertisedPort)
+    props.put(KafkaConfig.AdvertisedListenersProp, s"PLAINTEXT://$advertisedHostName:$advertisedPort")
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
     val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
 
     assertEquals(endpoint.host, advertisedHostName)
-    assertEquals(endpoint.port, advertisedPort.toInt)
-  }
-
-  @Test
-  def testAdvertisePortDefault(): Unit = {
-    val advertisedHostName = "routable-host"
-    val port = "9999"
-
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put(KafkaConfig.AdvertisedHostNameProp, advertisedHostName)
-    props.put(KafkaConfig.PortProp, port)
-
-    val serverConfig = KafkaConfig.fromProps(props)
-    val endpoints = serverConfig.advertisedListeners
-    val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
-
-    assertEquals(endpoint.host, advertisedHostName)
-    assertEquals(endpoint.port, port.toInt)
-  }
-
-  @Test
-  def testAdvertiseHostNameDefault(): Unit = {
-    val hostName = "routable-host"
-    val advertisedPort = "9999"
-
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put(KafkaConfig.HostNameProp, hostName)
-    props.put(KafkaConfig.AdvertisedPortProp, advertisedPort)
-
-    val serverConfig = KafkaConfig.fromProps(props)
-    val endpoints = serverConfig.advertisedListeners
-    val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
-
-    assertEquals(endpoint.host, hostName)
-    assertEquals(endpoint.port, advertisedPort.toInt)
+    assertEquals(endpoint.port, advertisedPort)
   }
 
   @Test
@@ -408,27 +374,11 @@ class KafkaConfigTest {
     props.put(KafkaConfig.BrokerIdProp, "1")
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
 
-    // configuration with host and port, but no listeners
-    props.put(KafkaConfig.HostNameProp, "myhost")
-    props.put(KafkaConfig.PortProp, "1111")
-
+    // configuration with no listeners
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(listenerListToEndPoints("PLAINTEXT://myhost:1111"), conf.listeners)
-
-    // configuration with null host
-    props.remove(KafkaConfig.HostNameProp)
-
-    val conf2 = KafkaConfig.fromProps(props)
-    assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
-    assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.advertisedListeners)
-    assertNull(conf2.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
-
-    // configuration with advertised host and port, and no advertised listeners
-    props.put(KafkaConfig.AdvertisedHostNameProp, "otherhost")
-    props.put(KafkaConfig.AdvertisedPortProp, "2222")
-
-    val conf3 = KafkaConfig.fromProps(props)
-    assertEquals(conf3.advertisedListeners, listenerListToEndPoints("PLAINTEXT://otherhost:2222"))
+    assertEquals(listenerListToEndPoints("PLAINTEXT://:9092"), conf.listeners)
+    assertNull(conf.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
+    assertEquals(conf.advertisedListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
   }
 
   @Test
@@ -657,10 +607,6 @@ class KafkaConfigTest {
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
         case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
 
-        case KafkaConfig.PortProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.HostNameProp => // ignore string
-        case KafkaConfig.AdvertisedHostNameProp => //ignore string
-        case KafkaConfig.AdvertisedPortProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.SocketSendBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.SocketReceiveBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.MaxConnectionsPerIpOverridesProp =>
@@ -923,8 +869,7 @@ class KafkaConfigTest {
     defaults.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
     defaults.put(KafkaConfig.MaxReservedBrokerIdProp, "1")
     defaults.put(KafkaConfig.BrokerIdProp, "1")
-    defaults.put(KafkaConfig.HostNameProp, "127.0.0.1")
-    defaults.put(KafkaConfig.PortProp, "1122")
+    defaults.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:1122")
     defaults.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, "127.0.0.1:2, 127.0.0.2:3")
     defaults.put(KafkaConfig.LogDirProp, "/tmp1,/tmp2")
     defaults.put(KafkaConfig.LogRollTimeHoursProp, "12")
@@ -942,9 +887,7 @@ class KafkaConfigTest {
     assertEquals(false, config.brokerIdGenerationEnable)
     assertEquals(1, config.maxReservedBrokerId)
     assertEquals(1, config.brokerId)
-    assertEquals("127.0.0.1", config.hostName)
-    assertEquals(1122, config.advertisedPort)
-    assertEquals("127.0.0.1", config.advertisedHostName)
+    assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.advertisedListeners.map(_.connectionString))
     assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
     assertEquals(List("/tmp1", "/tmp2"), config.logDirs)
     assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
