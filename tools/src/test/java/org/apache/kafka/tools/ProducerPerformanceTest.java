@@ -76,7 +76,6 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testReadProps() throws Exception {
-        
         List<String> producerProps = Collections.singletonList("bootstrap.servers=localhost:9000");
         String producerConfig = createTempFile("acks=1").getAbsolutePath();
         String transactionalId = "1234";
@@ -90,7 +89,6 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testNumberOfCallsForSendAndClose() throws IOException {
-
         doReturn(null).when(producerMock).send(any(), any());
         doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
 
@@ -102,7 +100,6 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testUnexpectedArg() {
-
         String[] args = new String[] {"--test", "test", "--topic", "Hello-Kafka", "--num-records", "5", "--throughput", "100", "--record-size", "100", "--producer-props", "bootstrap.servers=localhost:9000"};
         ArgumentParser parser = ProducerPerformance.argParser();
         ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () -> parser.parseArgs(args));
@@ -111,7 +108,6 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testGenerateRandomPayloadByPayloadFile() {
-
         Integer recordSize = null;
         String inputString = "Hello Kafka";
         byte[] byteArray = inputString.getBytes(StandardCharsets.UTF_8);
@@ -126,7 +122,6 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testGenerateRandomPayloadByRecordSize() {
-
         Integer recordSize = 100;
         byte[] payload = new byte[recordSize];
         List<byte[]> payloadByteList = new ArrayList<>();
@@ -140,7 +135,6 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testGenerateRandomPayloadException() {
-
         Integer recordSize = null;
         byte[] payload = null;
         List<byte[]> payloadByteList = new ArrayList<>();
