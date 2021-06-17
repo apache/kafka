@@ -17,8 +17,11 @@
 
 package org.apache.kafka.metalog;
 
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.queue.EventQueue;
@@ -29,9 +32,11 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.MockRawSnapshotReader;
+import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
-import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +47,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -57,6 +63,7 @@ import java.util.stream.Collectors;
  */
 public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, AutoCloseable {
     interface LocalBatch {
+        int epoch();
         int size();
     }
 
@@ -65,6 +72,11 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
         LeaderChangeBatch(LeaderAndEpoch newLeader) {
             this.newLeader = newLeader;
+        }
+
+        @Override
+        public int epoch() {
+            return newLeader.epoch();
         }
 
         @Override
@@ -92,12 +104,17 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     static class LocalRecordBatch implements LocalBatch {
-        private final long leaderEpoch;
+        private final int leaderEpoch;
         private final List<ApiMessageAndVersion> records;
 
-        LocalRecordBatch(long leaderEpoch, List<ApiMessageAndVersion> records) {
+        LocalRecordBatch(int leaderEpoch, List<ApiMessageAndVersion> records) {
             this.leaderEpoch = leaderEpoch;
             this.records = records;
+        }
+
+        @Override
+        public int epoch() {
+            return leaderEpoch;
         }
 
         @Override
@@ -148,12 +165,16 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
          */
         private long prevOffset;
 
-        private final Optional<RawSnapshotReader> snapshot;
+        /**
+         * Maps committed offset to snapshot reader.
+         */
+        private NavigableMap<Long, RawSnapshotReader> snapshots = new TreeMap<>();
 
         public SharedLogData(Optional<RawSnapshotReader> snapshot) {
-            this.snapshot = snapshot;
             if (snapshot.isPresent()) {
-                prevOffset = snapshot.get().snapshotId().offset - 1;
+                RawSnapshotReader initialSnapshot = snapshot.get();
+                prevOffset = initialSnapshot.snapshotId().offset - 1;
+                snapshots.put(prevOffset, initialSnapshot);
             } else {
                 prevOffset = -1;
             }
@@ -231,14 +252,46 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         /**
          * Optionally return a snapshot reader if the offset if less than the first batch.
          */
-        Optional<RawSnapshotReader> maybeNextSnapshot(long offset) {
-            return snapshot.flatMap(reader ->  {
-                if (offset < reader.snapshotId().offset) {
-                    return Optional.of(reader);
+        synchronized Optional<RawSnapshotReader> nextSnapshot(long offset) {
+            return Optional.ofNullable(snapshots.lastEntry()).flatMap(entry -> {
+                if (offset <= entry.getKey()) {
+                    return Optional.of(entry.getValue());
                 }
 
                 return Optional.empty();
             });
+        }
+
+        /**
+         * Stores a new snapshot and notifies all threads waiting for a snapshot.
+         */
+        synchronized void addSnapshot(RawSnapshotReader newSnapshot) {
+            if (newSnapshot.snapshotId().offset - 1 > prevOffset) {
+                log.error(
+                    "Ignored attempt to add a snapshot {} that is greater than the latest offset {}",
+                    newSnapshot,
+                    prevOffset
+                );
+            } else {
+                snapshots.put(newSnapshot.snapshotId().offset - 1, newSnapshot);
+                this.notifyAll();
+            }
+        }
+
+        /**
+         * Returns the snapshot whos last offset is the committed offset.
+         *
+         * If such snapshot doesn't exists it wait until it does.
+         */
+        synchronized RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
+            while (true) {
+                RawSnapshotReader reader = snapshots.get(committedOffset);
+                if (reader != null) {
+                    return reader;
+                } else {
+                    this.wait();
+                }
+            }
         }
     }
 
@@ -313,7 +366,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 for (MetaLogListenerData listenerData : listeners) {
                     while (true) {
                         // Load the snapshot if needed
-                        Optional<RawSnapshotReader> snapshot = shared.maybeNextSnapshot(listenerData.offset);
+                        Optional<RawSnapshotReader> snapshot = shared.nextSnapshot(listenerData.offset);
                         if (snapshot.isPresent()) {
                             log.trace("Node {}: handling snapshot with id {}.", nodeId, snapshot.get().snapshotId());
                             listenerData.listener.handleSnapshot(
@@ -486,8 +539,20 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public SnapshotWriter<ApiMessageAndVersion> createSnapshot(OffsetAndEpoch snapshotId) {
-        throw new UnsupportedOperationException();
+    public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(long committedOffset, int committedEpoch) {
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, committedEpoch);
+        return Optional.of(
+            new SnapshotWriter<>(
+                new MockRawSnapshotWriter(snapshotId, buffer -> {
+                    shared.addSnapshot(new MockRawSnapshotReader(snapshotId, buffer));
+                }),
+                1024,
+                MemoryPool.NONE,
+                new MockTime(),
+                CompressionType.NONE,
+                new MetadataRecordSerde()
+            )
+        );
     }
 
     @Override

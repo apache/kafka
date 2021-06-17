@@ -87,6 +87,13 @@ import java.util.OptionalInt;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
+import static org.apache.kafka.common.metadata.MetadataRecordType.FENCE_BROKER_RECORD;
+import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
+import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
+import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_RECORD;
+import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
+import static org.apache.kafka.common.metadata.MetadataRecordType.UNFENCE_BROKER_RECORD;
+import static org.apache.kafka.common.metadata.MetadataRecordType.UNREGISTER_BROKER_RECORD;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
@@ -412,7 +419,7 @@ public class ReplicationControlManager {
             setReplicationFactor((short) newParts.get(0).replicas.length));
         records.add(new ApiMessageAndVersion(new TopicRecord().
             setName(topic.name()).
-            setTopicId(topicId), (short) 0));
+            setTopicId(topicId), TOPIC_RECORD.highestSupportedVersion()));
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
@@ -510,7 +517,7 @@ public class ReplicationControlManager {
             throw new UnknownTopicIdException(UNKNOWN_TOPIC_ID.message());
         }
         records.add(new ApiMessageAndVersion(new RemoveTopicRecord().
-            setTopicId(id), (short) 0));
+            setTopicId(id), REMOVE_TOPIC_RECORD.highestSupportedVersion()));
     }
 
     // VisibleForTesting
@@ -588,7 +595,7 @@ public class ReplicationControlManager {
                 records.add(new ApiMessageAndVersion(new PartitionChangeRecord().
                     setPartitionId(partitionData.partitionIndex()).
                     setTopicId(topic.id).
-                    setIsr(partitionData.newIsr()), (short) 0));
+                    setIsr(partitionData.newIsr()), PARTITION_CHANGE_RECORD.highestSupportedVersion()));
                 responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                     setPartitionIndex(partitionData.partitionIndex()).
                     setErrorCode(Errors.NONE.code()).
@@ -619,7 +626,8 @@ public class ReplicationControlManager {
         generateLeaderAndIsrUpdates("handleBrokerFenced", brokerId, NO_LEADER, records,
             brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
         records.add(new ApiMessageAndVersion(new FenceBrokerRecord().
-            setId(brokerId).setEpoch(brokerRegistration.epoch()), (short) 0));
+            setId(brokerId).setEpoch(brokerRegistration.epoch()),
+            FENCE_BROKER_RECORD.highestSupportedVersion()));
     }
 
     /**
@@ -637,7 +645,8 @@ public class ReplicationControlManager {
         generateLeaderAndIsrUpdates("handleBrokerUnregistered", brokerId, NO_LEADER, records,
             brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
         records.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
-            setBrokerId(brokerId).setBrokerEpoch(brokerEpoch), (short) 0));
+            setBrokerId(brokerId).setBrokerEpoch(brokerEpoch),
+            UNREGISTER_BROKER_RECORD.highestSupportedVersion()));
     }
 
     /**
@@ -652,8 +661,8 @@ public class ReplicationControlManager {
      * @param records       The record list to append to.
      */
     void handleBrokerUnfenced(int brokerId, long brokerEpoch, List<ApiMessageAndVersion> records) {
-        records.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().
-            setId(brokerId).setEpoch(brokerEpoch), (short) 0));
+        records.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().setId(brokerId).
+            setEpoch(brokerEpoch), UNFENCE_BROKER_RECORD.highestSupportedVersion()));
         generateLeaderAndIsrUpdates("handleBrokerUnfenced", NO_LEADER, brokerId, records,
             brokersToIsrs.partitionsWithNoLeader());
     }
@@ -754,7 +763,8 @@ public class ReplicationControlManager {
             // new leader. This can result in data loss!
             record.setIsr(Collections.singletonList(newLeader));
         }
-        records.add(new ApiMessageAndVersion(record, (short) 0));
+        records.add(new ApiMessageAndVersion(record,
+            PARTITION_CHANGE_RECORD.highestSupportedVersion()));
         return ApiError.NONE;
     }
 
@@ -922,7 +932,7 @@ public class ReplicationControlManager {
                 setAddingReplicas(null).
                 setLeader(placement.get(0)).
                 setLeaderEpoch(0).
-                setPartitionEpoch(0), (short) 0));
+                setPartitionEpoch(0), PARTITION_RECORD.highestSupportedVersion()));
             partitionId++;
         }
     }
@@ -1013,7 +1023,8 @@ public class ReplicationControlManager {
             if (newLeader != partition.leader) record.setLeader(newLeader);
             if (!Arrays.equals(newIsr, partition.isr)) record.setIsr(Replicas.toList(newIsr));
             if (record.leader() != NO_LEADER_CHANGE || record.isr() != null) {
-                records.add(new ApiMessageAndVersion(record, (short) 0));
+                records.add(new ApiMessageAndVersion(record,
+                    PARTITION_CHANGE_RECORD.highestSupportedVersion()));
             }
         }
         if (records.size() != oldSize) {
@@ -1056,7 +1067,7 @@ public class ReplicationControlManager {
             List<ApiMessageAndVersion> records = new ArrayList<>();
             records.add(new ApiMessageAndVersion(new TopicRecord().
                 setName(topic.name).
-                setTopicId(topic.id), (short) 0));
+                setTopicId(topic.id), TOPIC_RECORD.highestSupportedVersion()));
             for (Entry<Integer, PartitionRegistration> entry : topic.parts.entrySet(epoch)) {
                 records.add(entry.getValue().toRecord(topic.id, entry.getKey()));
             }

@@ -29,6 +29,15 @@
       "about": "null if the ISR didn't change; the new in-sync replicas otherwise." },
     { "name": "Leader", "type": "int32", "default": "-2", "entityType": "brokerId",
       "versions": "0+", "taggedVersions": "0+", "tag": 1,
-      "about": "-1 if there is now no leader; -2 if the leader didn't change; the new leader otherwise." }
+      "about": "-1 if there is now no leader; -2 if the leader didn't change; the new leader otherwise." },
+    { "name": "Replicas", "type": "[]int32", "default": "null", "entityType": "brokerId",
+      "versions": "0+", "nullableVersions": "0+", "taggedVersions": "0+", "tag": 2,
+      "about": "null if the replicas didn't change; the new replicas otherwise." },
+    { "name": "RemovingReplicas", "type": "[]int32", "default": "null", "entityType": "brokerId",
+      "versions": "0+", "nullableVersions": "0+", "taggedVersions": "0+", "tag": 3,
+      "about": "null if the removing replicas didn't change; the new removing replicas otherwise." },
+    { "name": "AddingReplicas", "type": "[]int32", "default": "null", "entityType": "brokerId",
+      "versions": "0+", "nullableVersions": "0+", "taggedVersions": "0+", "tag": 4,
+      "about": "null if the adding replicas didn't change; the new adding replicas otherwise." }
   ]
 }

@@ -18,6 +18,7 @@
   "type": "metadata",
   "name": "UnregisterBrokerRecord",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker id." },

@@ -236,7 +236,6 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldPutFetchFromCache() {
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
@@ -275,7 +274,6 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldPutFetchRangeFromCache() {
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
@@ -317,7 +315,6 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldGetAllBackwardFromCache() {
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
@@ -340,7 +337,6 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldFetchAllWithinTimestampRange() {
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
         for (int i = 0; i < array.length; i++) {
@@ -382,7 +378,6 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldFetchAllBackwardWithinTimestampRange() {
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
         for (int i = 0; i < array.length; i++) {
@@ -439,7 +434,6 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldForwardDirtyItemsWhenFlushCalled() {
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
@@ -456,7 +450,6 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldForwardOldValuesWhenEnabled() {
         cachingStore.setFlushListener(cacheListener, true);
         final Windowed<String> windowedKey =
@@ -485,7 +478,6 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldForwardOldValuesWhenDisabled() {
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
@@ -616,7 +608,6 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldClearNamespaceCacheOnClose() {
         cachingStore.put(bytesKey("a"), bytesValue("a"), 0L);
         assertEquals(1, cache.size());
@@ -637,7 +628,6 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldThrowIfTryingToWriteToClosedCachingStore() {
         cachingStore.close();
         assertThrows(InvalidStateStoreException.class, () -> cachingStore.put(bytesKey("a"), bytesValue("a"), 0L));
@@ -786,13 +776,11 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
         assertThrows(NullPointerException.class, () -> cachingStore.put(null, bytesValue("anyValue"), 0L));
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldNotThrowNullPointerExceptionOnPutNullValue() {
         cachingStore.put(bytesKey("a"), null, 0L);
     }

@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.snapshot;
 
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Random;
 import java.util.Set;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -39,15 +38,26 @@ final public class SnapshotWriterReaderTest {
     private final Set<Integer> voters = Collections.singleton(localId);
 
     @Test
-    public void testWritingSnapshot() throws IOException, InterruptedException {
-        OffsetAndEpoch id = new OffsetAndEpoch(3L, 1);
-        List<List<String>> expected = buildRecords(3, 3);
-        RaftClientTestContext context = buildSingleMemberQuorumTestContext();
+    public void testWritingSnapshot() throws Exception {
+        int recordsPerBatch = 3;
+        int batches = 3;
+        OffsetAndEpoch id = new OffsetAndEpoch(recordsPerBatch * batches, 3);
+        List<List<String>> expected = buildRecords(recordsPerBatch, batches);
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
-            expected.forEach(batch -> {
-                assertDoesNotThrow(() -> snapshot.append(batch));
-            });
+        RaftClientTestContext.Builder contextBuilder = new RaftClientTestContext.Builder(localId, voters);
+        for (List<String> batch : expected) {
+            contextBuilder.appendToLog(id.epoch, batch);
+        }
+        RaftClientTestContext context = contextBuilder.build();
+
+        context.pollUntil(() -> context.currentLeader().equals(OptionalInt.of(localId)));
+        int epoch = context.currentEpoch();
+
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch).get()) {
+            assertEquals(id, snapshot.snapshotId());
+            expected.forEach(batch -> assertDoesNotThrow(() -> snapshot.append(batch)));
             snapshot.freeze();
         }
 
@@ -57,12 +67,25 @@ final public class SnapshotWriterReaderTest {
     }
 
     @Test
-    public void testAbortedSnapshot() throws IOException, InterruptedException {
-        OffsetAndEpoch id = new OffsetAndEpoch(3L, 1);
-        List<List<String>> expected = buildRecords(3, 3);
-        RaftClientTestContext context = buildSingleMemberQuorumTestContext();
+    public void testAbortedSnapshot() throws Exception {
+        int recordsPerBatch = 3;
+        int batches = 3;
+        OffsetAndEpoch id = new OffsetAndEpoch(recordsPerBatch * batches, 3);
+        List<List<String>> expected = buildRecords(recordsPerBatch, batches);
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
+        RaftClientTestContext.Builder contextBuilder = new RaftClientTestContext.Builder(localId, voters);
+        for (List<String> batch : expected) {
+            contextBuilder.appendToLog(id.epoch, batch);
+        }
+        RaftClientTestContext context = contextBuilder.build();
+
+        context.pollUntil(() -> context.currentLeader().equals(OptionalInt.of(localId)));
+        int epoch = context.currentEpoch();
+
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch).get()) {
+            assertEquals(id, snapshot.snapshotId());
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
@@ -72,12 +95,25 @@ final public class SnapshotWriterReaderTest {
     }
 
     @Test
-    public void testAppendToFrozenSnapshot() throws IOException, InterruptedException {
-        OffsetAndEpoch id = new OffsetAndEpoch(3L, 1);
-        List<List<String>> expected = buildRecords(3, 3);
-        RaftClientTestContext context = buildSingleMemberQuorumTestContext();
+    public void testAppendToFrozenSnapshot() throws Exception {
+        int recordsPerBatch = 3;
+        int batches = 3;
+        OffsetAndEpoch id = new OffsetAndEpoch(recordsPerBatch * batches, 3);
+        List<List<String>> expected = buildRecords(recordsPerBatch, batches);
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
+        RaftClientTestContext.Builder contextBuilder = new RaftClientTestContext.Builder(localId, voters);
+        for (List<String> batch : expected) {
+            contextBuilder.appendToLog(id.epoch, batch);
+        }
+        RaftClientTestContext context = contextBuilder.build();
+
+        context.pollUntil(() -> context.currentLeader().equals(OptionalInt.of(localId)));
+        int epoch = context.currentEpoch();
+
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch).get()) {
+            assertEquals(id, snapshot.snapshotId());
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
@@ -135,16 +171,5 @@ final public class SnapshotWriterReaderTest {
         }
 
         assertEquals(expected, actual);
-    }
-    
-    private RaftClientTestContext buildSingleMemberQuorumTestContext() throws IOException, InterruptedException {
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
-        context.pollUntil(() -> context.log.endOffset().offset == 1L);
-        context.assertElectedLeader(1, localId);
-        context.client.poll();
-        String[] appendRecords = new String[] {"a", "b", "c"};
-        context.client.scheduleAppend(context.currentEpoch(), Arrays.asList(appendRecords));
-        context.client.poll();
-        return context;
     }
 }

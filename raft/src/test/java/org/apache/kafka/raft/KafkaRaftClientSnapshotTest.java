@@ -193,8 +193,9 @@ final public class KafkaRaftClientSnapshotTest {
         }
 
         // Generate a new snapshot
-        OffsetAndEpoch secondSnapshot = new OffsetAndEpoch(localLogEndOffset, epoch);
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(secondSnapshot)) {
+        OffsetAndEpoch secondSnapshotId = new OffsetAndEpoch(localLogEndOffset, epoch);
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(secondSnapshotId.offset - 1, secondSnapshotId.epoch).get()) {
+            assertEquals(secondSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
         context.client.poll();
@@ -205,7 +206,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.client.poll();
         // Check that listener was notified of the second snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
-            assertEquals(secondSnapshot, snapshot.snapshotId());
+            assertEquals(secondSnapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
         }
     }
@@ -233,9 +234,11 @@ final public class KafkaRaftClientSnapshotTest {
             String.format("Record length = %s, log end offset = %s", appendRecords.size(), localLogEndOffset)
         );
 
-        context.advanceLeaderHighWatermarkToEndOffset();
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(localLogEndOffset, epoch);
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1, snapshotId.epoch).get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
 
@@ -272,10 +275,11 @@ final public class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch + 1, epoch);
 
-        context.advanceLeaderHighWatermarkToEndOffset();
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1, oldestSnapshotId.epoch).get()) {
+            assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
         context.client.poll();
@@ -309,10 +313,11 @@ final public class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch + 2 + 1, epoch);
 
-        context.advanceLeaderHighWatermarkToEndOffset();
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1, oldestSnapshotId.epoch).get()) {
+            assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
         context.client.poll();
@@ -350,10 +355,11 @@ final public class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch + 2 + 1, epoch);
 
-        context.advanceLeaderHighWatermarkToEndOffset();
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1, oldestSnapshotId.epoch).get()) {
+            assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
         context.client.poll();
@@ -386,10 +392,11 @@ final public class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch + 2 + 1, epoch);
 
-        context.advanceLeaderHighWatermarkToEndOffset();
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1, oldestSnapshotId.epoch).get()) {
+            assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
         context.client.poll();
@@ -427,10 +434,11 @@ final public class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch + 2 + 1, epoch);
 
-        context.advanceLeaderHighWatermarkToEndOffset();
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1, oldestSnapshotId.epoch).get()) {
+            assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
         context.client.poll();
@@ -508,15 +516,20 @@ final public class KafkaRaftClientSnapshotTest {
         int localId = 0;
         int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
-        int epoch = 2;
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(0, 0);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = Arrays.asList("foo", "bar");
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch, Arrays.asList("a"))
+            .build();
 
-        context.advanceLeaderHighWatermarkToEndOffset();
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId)) {
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1, snapshotId.epoch).get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
             snapshot.append(records);
             snapshot.freeze();
         }
@@ -553,15 +566,20 @@ final public class KafkaRaftClientSnapshotTest {
         int localId = 0;
         int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
-        int epoch = 2;
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(0, 0);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(2, 1);
         List<String> records = Arrays.asList("foo", "bar");
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch, records)
+            .build();
 
-        context.advanceLeaderHighWatermarkToEndOffset();
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId)) {
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1, snapshotId.epoch).get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
             snapshot.append(records);
             snapshot.freeze();
         }
@@ -658,15 +676,20 @@ final public class KafkaRaftClientSnapshotTest {
         int localId = 0;
         int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
-        int epoch = 2;
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(0, 0);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = Arrays.asList("foo", "bar");
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch, Arrays.asList("a"))
+            .build();
 
-        context.advanceLeaderHighWatermarkToEndOffset();
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId)) {
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1, snapshotId.epoch).get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
             snapshot.append(records);
             snapshot.freeze();
         }
@@ -1502,10 +1525,10 @@ final public class KafkaRaftClientSnapshotTest {
         // When leader creating snapshot:
         // 1.1 high watermark cannot be empty
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId1));
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId1.offset, invalidSnapshotId1.epoch));
 
         // 1.2 high watermark must larger than or equal to the snapshotId's endOffset
-        context.advanceLeaderHighWatermarkToEndOffset();
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
         // append some more records to make the LEO > high watermark
         List<String> newRecords = Arrays.asList("d", "e", "f");
         context.client.scheduleAppend(currentEpoch, newRecords);
@@ -1514,17 +1537,17 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong() + newRecords.size());
 
         OffsetAndEpoch invalidSnapshotId2 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + 1, currentEpoch);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId2));
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId2.offset, invalidSnapshotId2.epoch));
 
         // 2 the quorum epoch must larger than or equal to the snapshotId's epoch
         OffsetAndEpoch invalidSnapshotId3 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() - 1, currentEpoch + 1);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId3));
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId3.offset, invalidSnapshotId3.epoch));
 
         // 3 the snapshotId should be validated against endOffsetForEpoch
         OffsetAndEpoch endOffsetForEpoch = context.log.endOffsetForEpoch(epoch);
         assertEquals(epoch, endOffsetForEpoch.epoch);
         OffsetAndEpoch invalidSnapshotId4 = new OffsetAndEpoch(endOffsetForEpoch.offset + 1, epoch);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId4));
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId4.offset, invalidSnapshotId4.epoch));
     }
 
     @Test
@@ -1543,7 +1566,7 @@ final public class KafkaRaftClientSnapshotTest {
         // 1.1) high watermark cannot be empty
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
         OffsetAndEpoch invalidSnapshotId1 = new OffsetAndEpoch(0, 0);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId1));
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId1.offset, invalidSnapshotId1.epoch));
 
         // Poll for our first fetch request
         context.pollUntilRequest();
@@ -1561,11 +1584,11 @@ final public class KafkaRaftClientSnapshotTest {
         // 1.2) high watermark must larger than or equal to the snapshotId's endOffset
         int currentEpoch = context.currentEpoch();
         OffsetAndEpoch invalidSnapshotId2 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + 1, currentEpoch);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId2));
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId2.offset, invalidSnapshotId2.epoch));
 
         // 2) the quorum epoch must larger than or equal to the snapshotId's epoch
         OffsetAndEpoch invalidSnapshotId3 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() - 1, currentEpoch + 1);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId3));
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId3.offset, invalidSnapshotId3.epoch));
 
         // The high watermark advances to be larger than log.endOffsetForEpoch(3), to test the case 3
         context.pollUntilRequest();
@@ -1584,7 +1607,7 @@ final public class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch endOffsetForEpoch = context.log.endOffsetForEpoch(3);
         assertEquals(3, endOffsetForEpoch.epoch);
         OffsetAndEpoch invalidSnapshotId4 = new OffsetAndEpoch(endOffsetForEpoch.offset + 1, epoch);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId4));
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId4.offset, invalidSnapshotId4.epoch));
     }
 
     private static FetchSnapshotRequestData fetchSnapshotRequest(
