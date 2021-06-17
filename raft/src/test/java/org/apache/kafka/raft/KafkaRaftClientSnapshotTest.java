@@ -234,6 +234,7 @@ final public class KafkaRaftClientSnapshotTest {
             String.format("Record length = %s, log end offset = %s", appendRecords.size(), localLogEndOffset)
         );
 
+        // Advance the highWatermark
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(localLogEndOffset, epoch);
@@ -275,6 +276,7 @@ final public class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch + 1, epoch);
 
+        // Advance the highWatermark
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         // Create a snapshot at the high watermark
@@ -313,6 +315,7 @@ final public class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch + 2 + 1, epoch);
 
+        // Advance the highWatermark
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         // Create a snapshot at the high watermark
@@ -355,6 +358,7 @@ final public class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch + 2 + 1, epoch);
 
+        // Advance the highWatermark
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         // Create a snapshot at the high watermark
@@ -392,6 +396,7 @@ final public class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch + 2 + 1, epoch);
 
+        // Advance the highWatermark
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         // Create a snapshot at the high watermark
@@ -434,6 +439,7 @@ final public class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch + 2 + 1, epoch);
 
+        // Advance the highWatermark
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         // Create a snapshot at the high watermark
@@ -514,7 +520,6 @@ final public class KafkaRaftClientSnapshotTest {
     @Test
     public void testFetchSnapshotRequestAsLeader() throws Exception {
         int localId = 0;
-        int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = Arrays.asList("foo", "bar");
@@ -564,7 +569,6 @@ final public class KafkaRaftClientSnapshotTest {
     @Test
     public void testPartialFetchSnapshotRequestAsLeader() throws Exception {
         int localId = 0;
-        int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(2, 1);
         List<String> records = Arrays.asList("foo", "bar");
@@ -674,7 +678,6 @@ final public class KafkaRaftClientSnapshotTest {
     @Test
     public void testFetchSnapshotRequestWithInvalidPosition() throws Exception {
         int localId = 0;
-        int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = Arrays.asList("foo", "bar");
