@@ -428,8 +428,7 @@ object LogLoader extends Logging {
           info(s"Found log file ${swapFile.getPath} from interrupted swap operation, which is recoverable from ${Log.CleanedFileSuffix} files.")
           swapSegment.changeFileSuffixes(Log.SwapFileSuffix, "")
         } catch {
-          case _: NoSuchFileException => {}
-            doRecovery()
+          case _: NoSuchFileException => doRecovery()
         }
       }
     }
