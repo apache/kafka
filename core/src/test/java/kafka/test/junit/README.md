@@ -107,7 +107,7 @@ previously garnered from the test hierarchy.
 
 * ClusterConfig: a mutable cluster configuration, includes cluster type, number of brokers, properties, etc
 * ClusterInstance: a shim to the underlying class that actually runs the cluster, provides access to things like SocketServers
-* IntegrationTestHelper: connection related functions taken from IntegrationTestHarness and BaseRequestTest
+* IntegrationTestUtils: connection related functions taken from IntegrationTestHarness and BaseRequestTest
 
 In order to have one of these objects injected, simply add it as a parameter to your test class, `@BeforeEach` method, or test method.
 
@@ -115,11 +115,11 @@ In order to have one of these objects injected, simply add it as a parameter to 
 | --- | --- | --- | --- | --- |
 | ClusterConfig | yes | yes | yes* | Once in the test, changing config has no effect |
 | ClusterInstance | yes* | no | yes | Injectable at class level for convenience, can only be accessed inside test |
-| IntegrationTestHelper | yes | yes | yes | - |
+| IntegrationTestUtils | yes | yes | yes | - |
 
 ```scala
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-class SomeTestClass(helper: IntegrationTestHelper) {
+class SomeTestClass(utils: IntegrationTestUtils) {
  
   @BeforeEach
   def setup(config: ClusterConfig): Unit = {
@@ -135,5 +135,5 @@ class SomeTestClass(helper: IntegrationTestHelper) {
 
 # Gotchas
 * Test methods annotated with JUnit's `@Test` will still be run, but no cluster will be started and no dependency 
-  injection will happen. This is generally not what you want
-* Even though ClusterConfig is accessible and mutable inside the test method, changing it will have no affect on the cluster 
+  injection will happen. This is generally not what you want.
+* Even though ClusterConfig is accessible and mutable inside the test method, changing it will have no affect on the cluster.
