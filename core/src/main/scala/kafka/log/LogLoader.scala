@@ -369,64 +369,69 @@ object LogLoader extends Logging {
       val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, Log.SwapFileSuffix, ""))
       val baseOffset = Log.offsetFromFile(logFile)
 
-       def maybeCompleteInterruptedSwap(fn: (File, Long, String) => File): Boolean = {
-        val swapOffsetIndexFile = fn(swapFile.getParentFile, baseOffset, Log.SwapFileSuffix)
-        if (swapOffsetIndexFile.exists())
+      def maybeCompleteInterruptedSwap(fn: (File, Long, String) => File): Boolean = {
+        val swapIndexFile = fn(swapFile.getParentFile, baseOffset, Log.SwapFileSuffix)
+        if (swapIndexFile.exists()) {
           true
-        else {
-          val cleanedOffsetIndexFile = Log.offsetIndexFile(swapFile.getParentFile, baseOffset, Log.CleanedFileSuffix)
-          if (cleanedOffsetIndexFile.exists() && cleanedOffsetIndexFile.renameTo(swapOffsetIndexFile)) true
+        } else {
+          val cleanedIndexFile = fn(swapFile.getParentFile, baseOffset, Log.CleanedFileSuffix)
+          if (cleanedIndexFile.exists() && cleanedIndexFile.renameTo(swapIndexFile)) true
           else false
         }
       }
 
       // Check whether swap index files exist: if not, the cleaned files must exist due to the
       // existence of swap log file. Therefore, we rename the cleaned files to swap files and continue.
-      val recoverable = maybeCompleteInterruptedSwap(Log.offsetIndexFile) &&
+      val needsRecovery = !(maybeCompleteInterruptedSwap(Log.offsetIndexFile) &&
         maybeCompleteInterruptedSwap(Log.timeIndexFile) &&
-        maybeCompleteInterruptedSwap(Log.transactionIndexFile)
+        maybeCompleteInterruptedSwap(Log.transactionIndexFile))
       val swapSegment = LogSegment.open(swapFile.getParentFile,
         baseOffset = baseOffset,
         params.config,
         time = params.time,
         fileSuffix = Log.SwapFileSuffix)
-      if (recoverable) {
+
+      def doRecover(): Unit = {
+        info(s"${params.logIdentifier}Found log file ${swapFile.getPath} from interrupted swap operation, which is not recoverable from ${Log.CleanedFileSuffix} files, repairing.")
+        recoverSegment(swapSegment, params)
+
+        // We create swap files for two cases:
+        // (1) Log cleaning where multiple segments are merged into one, and
+        // (2) Log splitting where one segment is split into multiple.
+        //
+        // Both of these mean that the resultant swap segments be composed of the original set, i.e. the swap segment
+        // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
+        // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
+        // do a replace with an existing segment.
+        val oldSegments = params.segments.values(swapSegment.baseOffset, swapSegment.readNextOffset).filter { segment =>
+          segment.readNextOffset > swapSegment.baseOffset
+        }
+        Log.replaceSegments(
+          params.segments,
+          Seq(swapSegment),
+          oldSegments.toSeq,
+          isRecoveredSwapFile = true,
+          params.dir,
+          params.topicPartition,
+          params.config,
+          params.scheduler,
+          params.logDirFailureChannel,
+          params.producerStateManager,
+          params.logIdentifier)
+      }
+
+      if (needsRecovery) {
+        doRecover()
+      } else {
         try {
-          swapSegment.sanityCheck(true)
+          swapSegment.sanityCheck(false)
           info(s"Found log file ${swapFile.getPath} from interrupted swap operation, which is recoverable from ${Log.CleanedFileSuffix} files.")
           swapSegment.changeFileSuffixes(Log.SwapFileSuffix, "")
-          return
         } catch {
           case _: NoSuchFileException => {}
-          // do nothing and fall back to the recover index logic
+            doRecover()
         }
       }
-      info(s"${params.logIdentifier}Found log file ${swapFile.getPath} from interrupted swap operation, which is not recoverable from ${Log.CleanedFileSuffix} files, repairing.")
-      recoverSegment(swapSegment, params)
-
-      // We create swap files for two cases:
-      // (1) Log cleaning where multiple segments are merged into one, and
-      // (2) Log splitting where one segment is split into multiple.
-      //
-      // Both of these mean that the resultant swap segments be composed of the original set, i.e. the swap segment
-      // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
-      // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
-      // do a replace with an existing segment.
-      val oldSegments = params.segments.values(swapSegment.baseOffset, swapSegment.readNextOffset).filter { segment =>
-        segment.readNextOffset > swapSegment.baseOffset
-      }
-      Log.replaceSegments(
-        params.segments,
-        Seq(swapSegment),
-        oldSegments.toSeq,
-        isRecoveredSwapFile = true,
-        params.dir,
-        params.topicPartition,
-        params.config,
-        params.scheduler,
-        params.logDirFailureChannel,
-        params.producerStateManager,
-        params.logIdentifier)
     }
   }
 
