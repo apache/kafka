@@ -19,8 +19,11 @@ package org.apache.kafka.streams.kstream;
 import org.junit.Test;
 
 import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
@@ -43,6 +46,24 @@ public class JoinWindowsTest {
                    .after(ofMillis(0))                           // [ -anyOtherSize ; 0 ]
                    .after(ofMillis(-ANY_SIZE))                    // [ -anyOtherSize ; -anySize ]
                    .after(ofMillis(-ANY_OTHER_SIZE));              // [ -anyOtherSize ; -anyOtherSize ]
+    }
+
+    @Test
+    public void beforeShouldNotModifyGrace() {
+        JoinWindows joinWindows = JoinWindows.of(ofMillis(ANY_SIZE))
+            .grace(ofMillis(ANY_OTHER_SIZE))
+            .before(ofSeconds(ANY_SIZE));
+
+        assertThat(joinWindows.gracePeriodMs(), equalTo(ANY_OTHER_SIZE));
+    }
+
+    @Test
+    public void afterShouldNotModifyGrace() {
+        JoinWindows joinWindows = JoinWindows.of(ofMillis(ANY_SIZE))
+            .grace(ofMillis(ANY_OTHER_SIZE))
+            .after(ofSeconds(ANY_SIZE));
+
+        assertThat(joinWindows.gracePeriodMs(), equalTo(ANY_OTHER_SIZE));
     }
 
     @Test
