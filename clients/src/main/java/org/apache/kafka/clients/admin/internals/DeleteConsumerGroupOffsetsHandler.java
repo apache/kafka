@@ -73,7 +73,7 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
     }
 
     @Override
-    public OffsetDeleteRequest.Builder buildRequest(int brokerId, Set<CoordinatorKey> keys) {
+    public OffsetDeleteRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         final OffsetDeleteRequestTopicCollection topics = new OffsetDeleteRequestTopicCollection();
         partitions.stream().collect(Collectors.groupingBy(TopicPartition::topic)).forEach((topic, topicPartitions) -> topics.add(
             new OffsetDeleteRequestTopic()
@@ -92,7 +92,7 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(Node broker, Set<CoordinatorKey> groupIds,
+    public ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(Node coordinator, Set<CoordinatorKey> groupIds,
             AbstractResponse abstractResponse) {
 
         final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
@@ -108,8 +108,7 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
             response.data().topics().forEach(topic -> 
                 topic.partitions().forEach(partition -> {
                     Errors partitionError = Errors.forCode(partition.errorCode());
-                    boolean hasError = handleError(groupId, partitionError, failed, unmapped);
-                    if (!hasError) {
+                    if (!handleError(groupId, partitionError, failed, unmapped)) {
                         partitions.put(new TopicPartition(topic.name(), partition.partitionIndex()), partitionError);
                     }
                 })

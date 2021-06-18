@@ -32,11 +32,11 @@ import org.apache.kafka.common.protocol.Errors;
  */
 @InterfaceStability.Evolving
 public class DeleteConsumerGroupOffsetsResult {
-    private final KafkaFutureImpl<Map<TopicPartition, Errors>> future;
+    private final KafkaFuture<Map<TopicPartition, Errors>> future;
     private final Set<TopicPartition> partitions;
 
 
-    DeleteConsumerGroupOffsetsResult(KafkaFutureImpl<Map<TopicPartition, Errors>> future, Set<TopicPartition> partitions) {
+    DeleteConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future, Set<TopicPartition> partitions) {
         this.future = future;
         this.partitions = partitions;
     }

@@ -74,24 +74,18 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
     }
 
     @Override
-    public OffsetCommitRequest.Builder buildRequest(int brokerId, Set<CoordinatorKey> keys) {
+    public OffsetCommitRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         List<OffsetCommitRequestTopic> topics = new ArrayList<>();
         Map<String, List<OffsetCommitRequestPartition>> offsetData = new HashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             String topic = entry.getKey().topic();
             OffsetAndMetadata oam = entry.getValue();
-            offsetData.compute(topic, (key, value) -> {
-                if (value == null) {
-                    value = new ArrayList<>();
-                }
-                OffsetCommitRequestPartition partition = new OffsetCommitRequestPartition()
-                        .setCommittedOffset(oam.offset())
-                        .setCommittedLeaderEpoch(oam.leaderEpoch().orElse(-1))
-                        .setCommittedMetadata(oam.metadata())
-                        .setPartitionIndex(entry.getKey().partition());
-                value.add(partition);
-                return value;
-            });
+            OffsetCommitRequestPartition partition = new OffsetCommitRequestPartition()
+                    .setCommittedOffset(oam.offset())
+                    .setCommittedLeaderEpoch(oam.leaderEpoch().orElse(-1))
+                    .setCommittedMetadata(oam.metadata())
+                    .setPartitionIndex(entry.getKey().partition());
+            offsetData.computeIfAbsent(topic, key -> new ArrayList<>()).add(partition);
         }
         for (Map.Entry<String, List<OffsetCommitRequestPartition>> entry : offsetData.entrySet()) {
             OffsetCommitRequestTopic topic = new OffsetCommitRequestTopic()
@@ -106,7 +100,7 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(Node broker, Set<CoordinatorKey> groupIds,
+    public ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(Node coordinator, Set<CoordinatorKey> groupIds,
             AbstractResponse abstractResponse) {
 
         final OffsetCommitResponse response = (OffsetCommitResponse) abstractResponse;

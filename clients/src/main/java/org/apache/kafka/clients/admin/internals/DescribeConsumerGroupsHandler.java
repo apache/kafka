@@ -89,7 +89,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
     }
 
     @Override
-    public DescribeGroupsRequest.Builder buildRequest(int brokerId, Set<CoordinatorKey> keys) {
+    public DescribeGroupsRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         List<String> groupIds = keys.stream().map(key -> {
             if (key.type != FindCoordinatorRequest.CoordinatorType.GROUP) {
                 throw new IllegalArgumentException("Invalid transaction coordinator key " + key +
@@ -104,7 +104,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
     }
 
     @Override
-    public ApiResult<CoordinatorKey, ConsumerGroupDescription> handleResponse(Node broker, Set<CoordinatorKey> groupIds,
+    public ApiResult<CoordinatorKey, ConsumerGroupDescription> handleResponse(Node coordinator, Set<CoordinatorKey> groupIds,
             AbstractResponse abstractResponse) {
         DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
         Map<CoordinatorKey, ConsumerGroupDescription> completed = new HashMap<>();
@@ -143,7 +143,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                         memberDescriptions,
                         describedGroup.protocolData(),
                         ConsumerGroupState.parse(describedGroup.groupState()),
-                        broker,
+                        coordinator,
                         authorizedOperations);
                 completed.put(groupIdKey, consumerGroupDescription);
             } else {

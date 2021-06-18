@@ -70,16 +70,18 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     }
 
     @Override
-    public OffsetFetchRequest.Builder buildRequest(int brokerId, Set<CoordinatorKey> keys) {
+    public OffsetFetchRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         // Set the flag to false as for admin client request,
         // we don't need to wait for any pending offset state to clear.
         return new OffsetFetchRequest.Builder(groupId.idValue, false, partitions, false);
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleResponse(Node broker, Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse) {
-
+    public ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleResponse(
+            Node coordinator,
+            Set<CoordinatorKey> groupIds,
+            AbstractResponse abstractResponse
+    ) {
         final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
         Map<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> completed = new HashMap<>();
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
@@ -94,7 +96,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                 final TopicPartition topicPartition = entry.getKey();
                 OffsetFetchResponse.PartitionData partitionData = entry.getValue();
                 final Errors error = partitionData.error;
-    
+
                 if (error == Errors.NONE) {
                     final long offset = partitionData.offset;
                     final String metadata = partitionData.metadata;

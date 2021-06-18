@@ -71,15 +71,15 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
     }
 
     @Override
-    public DeleteGroupsRequest.Builder buildRequest(int brokerId, Set<CoordinatorKey> keys) {
+    public DeleteGroupsRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         List<String> groupIds = keys.stream().map(key -> key.idValue).collect(Collectors.toList());
         DeleteGroupsRequestData data = new DeleteGroupsRequestData()
-                .setGroupsNames(new ArrayList<>(groupIds));
+                .setGroupsNames(groupIds);
         return new DeleteGroupsRequest.Builder(data);
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Void> handleResponse(Node broker, Set<CoordinatorKey> groupIds,
+    public ApiResult<CoordinatorKey, Void> handleResponse(Node coordinator, Set<CoordinatorKey> groupIds,
             AbstractResponse abstractResponse) {
         DeleteGroupsResponse response = (DeleteGroupsResponse) abstractResponse;
         Map<CoordinatorKey, Void> completed = new HashMap<>();

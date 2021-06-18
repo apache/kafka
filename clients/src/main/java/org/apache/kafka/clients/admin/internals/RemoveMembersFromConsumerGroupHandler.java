@@ -69,13 +69,16 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
     }
 
     @Override
-    public LeaveGroupRequest.Builder buildRequest(int brokerId, Set<CoordinatorKey> keys) {
+    public LeaveGroupRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         return new LeaveGroupRequest.Builder(groupId.idValue, members);
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Map<MemberIdentity, Errors>> handleResponse(Node broker, Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse) {
+    public ApiResult<CoordinatorKey, Map<MemberIdentity, Errors>> handleResponse(
+            Node coordinator,
+            Set<CoordinatorKey> groupIds,
+            AbstractResponse abstractResponse
+    ) {
 
         final LeaveGroupResponse response = (LeaveGroupResponse) abstractResponse;
         Map<CoordinatorKey, Map<MemberIdentity, Errors>> completed = new HashMap<>();
