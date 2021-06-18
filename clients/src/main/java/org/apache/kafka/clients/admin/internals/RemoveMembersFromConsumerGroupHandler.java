@@ -63,7 +63,7 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
     }
 
     public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> newFuture(
-            String groupId
+        String groupId
     ) {
         return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
@@ -75,11 +75,10 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
 
     @Override
     public ApiResult<CoordinatorKey, Map<MemberIdentity, Errors>> handleResponse(
-            Node coordinator,
-            Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse
+        Node coordinator,
+        Set<CoordinatorKey> groupIds,
+        AbstractResponse abstractResponse
     ) {
-
         final LeaveGroupResponse response = (LeaveGroupResponse) abstractResponse;
         Map<CoordinatorKey, Map<MemberIdentity, Errors>> completed = new HashMap<>();
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
@@ -102,7 +101,12 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
         return new ApiResult<>(completed, failed, unmapped);
     }
 
-    private void handleError(CoordinatorKey groupId, Errors error, Map<CoordinatorKey, Throwable> failed, List<CoordinatorKey> unmapped) {
+    private void handleError(
+        CoordinatorKey groupId,
+        Errors error, Map<CoordinatorKey,
+        Throwable> failed,
+        List<CoordinatorKey> unmapped
+    ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
                 log.error("Received authorization failure for group {} in `DeleteConsumerGroupOffsets` response", groupId,

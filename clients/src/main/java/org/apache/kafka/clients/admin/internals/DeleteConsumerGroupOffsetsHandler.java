@@ -92,9 +92,11 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(Node coordinator, Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse) {
-
+    public ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(
+        Node coordinator,
+        Set<CoordinatorKey> groupIds,
+        AbstractResponse abstractResponse
+    ) {
         final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
         Map<CoordinatorKey, Map<TopicPartition, Errors>> completed = new HashMap<>();
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
@@ -119,7 +121,12 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         return new ApiResult<>(completed, failed, unmapped);
     }
 
-    private boolean handleError(CoordinatorKey groupId, Errors error, Map<CoordinatorKey, Throwable> failed, List<CoordinatorKey> unmapped) {
+    private boolean handleError(
+        CoordinatorKey groupId,
+        Errors error,
+        Map<CoordinatorKey, Throwable> failed,
+        List<CoordinatorKey> unmapped
+    ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
             case GROUP_ID_NOT_FOUND:

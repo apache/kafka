@@ -59,7 +59,7 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
     }
 
     public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Void> newFuture(
-            Collection<String> groupIds
+        Collection<String> groupIds
     ) {
         return AdminApiFuture.forKeys(buildKeySet(groupIds));
     }
@@ -71,7 +71,10 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
     }
 
     @Override
-    public DeleteGroupsRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
+    public DeleteGroupsRequest.Builder buildRequest(
+        int coordinatorId,
+        Set<CoordinatorKey> keys
+    ) {
         List<String> groupIds = keys.stream().map(key -> key.idValue).collect(Collectors.toList());
         DeleteGroupsRequestData data = new DeleteGroupsRequestData()
                 .setGroupsNames(groupIds);
@@ -79,8 +82,11 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Void> handleResponse(Node coordinator, Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse) {
+    public ApiResult<CoordinatorKey, Void> handleResponse(
+        Node coordinator,
+        Set<CoordinatorKey> groupIds,
+        AbstractResponse abstractResponse
+    ) {
         DeleteGroupsResponse response = (DeleteGroupsResponse) abstractResponse;
         Map<CoordinatorKey, Void> completed = new HashMap<>();
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
@@ -99,7 +105,12 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
         return new ApiResult<>(completed, failed, unmapped);
     }
 
-    private void handleError(CoordinatorKey groupId, Errors error, Map<CoordinatorKey, Throwable> failed, List<CoordinatorKey> unmapped) {
+    private void handleError(
+        CoordinatorKey groupId,
+        Errors error,
+        Map<CoordinatorKey, Throwable> failed,
+        List<CoordinatorKey> unmapped
+    ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
                 log.error("Received authorization failure for group {} in `DescribeGroups` response", groupId,

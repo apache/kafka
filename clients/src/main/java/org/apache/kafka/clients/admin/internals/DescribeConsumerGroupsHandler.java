@@ -104,8 +104,11 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
     }
 
     @Override
-    public ApiResult<CoordinatorKey, ConsumerGroupDescription> handleResponse(Node coordinator, Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse) {
+    public ApiResult<CoordinatorKey, ConsumerGroupDescription> handleResponse(
+        Node coordinator,
+        Set<CoordinatorKey> groupIds,
+        AbstractResponse abstractResponse
+    ) {
         DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
         Map<CoordinatorKey, ConsumerGroupDescription> completed = new HashMap<>();
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
@@ -155,7 +158,12 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         return new ApiResult<>(completed, failed, unmapped);
     }
 
-    private void handleError(CoordinatorKey groupId, Errors error, Map<CoordinatorKey, Throwable> failed, List<CoordinatorKey> unmapped) {
+    private void handleError(
+        CoordinatorKey groupId,
+        Errors error,
+        Map<CoordinatorKey, Throwable> failed,
+        List<CoordinatorKey> unmapped
+    ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
                 log.error("Received authorization failure for group {} in `DescribeGroups` response", groupId,
