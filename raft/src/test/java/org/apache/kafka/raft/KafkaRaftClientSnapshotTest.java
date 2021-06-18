@@ -1544,7 +1544,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId2.offset, invalidSnapshotId2.epoch));
 
         // 2 the quorum epoch must larger than or equal to the snapshotId's epoch
-        OffsetAndEpoch invalidSnapshotId3 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() - 1, currentEpoch + 1);
+        OffsetAndEpoch invalidSnapshotId3 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() - 2, currentEpoch + 1);
         assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId3.offset, invalidSnapshotId3.epoch));
 
         // 3 the snapshotId should be validated against endOffsetForEpoch
@@ -1591,7 +1591,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId2.offset, invalidSnapshotId2.epoch));
 
         // 2) the quorum epoch must larger than or equal to the snapshotId's epoch
-        OffsetAndEpoch invalidSnapshotId3 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() - 1, currentEpoch + 1);
+        OffsetAndEpoch invalidSnapshotId3 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() - 2, currentEpoch + 1);
         assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId3.offset, invalidSnapshotId3.epoch));
 
         // The high watermark advances to be larger than log.endOffsetForEpoch(3), to test the case 3
