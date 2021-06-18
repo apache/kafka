@@ -281,4 +281,9 @@
               files="(KafkaEventQueue|ReplicationControlManager).java"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
             files="metadata[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+
+    <!-- Storage -->
+    <suppress checks="(CyclomaticComplexity|ParameterNumber)"
+              files="(RemoteLogManagerConfig).java"/>
+
 </suppressions>
