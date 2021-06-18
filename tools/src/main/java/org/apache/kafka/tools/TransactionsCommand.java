@@ -29,8 +29,8 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult;
 import org.apache.kafka.clients.admin.ProducerState;
-import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.clients.admin.TransactionDescription;
+import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
@@ -109,16 +109,18 @@ public abstract class TransactionsCommand {
                 .type(Integer.class)
                 .required(true);
 
-            ArgumentGroup newBrokerArgumentGroup = subparser.addArgumentGroup("new brokers")
-                .description("For newer brokers, you must provide the start offset of the transaction " +
-                    "to be aborted");
+            ArgumentGroup newBrokerArgumentGroup = subparser
+                .addArgumentGroup("Brokers on versions 3.0 and above")
+                .description("For newer brokers, only the start offset of the transaction " +
+                    "to be aborted is required");
 
             newBrokerArgumentGroup.addArgument("--start-offset")
                 .help("start offset of the transaction to abort")
                 .action(store())
                 .type(Long.class);
 
-            ArgumentGroup olderBrokerArgumentGroup = subparser.addArgumentGroup("older brokers")
+            ArgumentGroup olderBrokerArgumentGroup = subparser
+                .addArgumentGroup("Brokers on versions older than 3.0")
                 .description("For older brokers, you must provide all of these arguments");
 
             olderBrokerArgumentGroup.addArgument("--producer-id")
@@ -197,7 +199,7 @@ public abstract class TransactionsCommand {
 
             if (startOffset == null && producerId == null) {
                 printErrorAndExit("The transaction to abort must be identified either with " +
-                    "--start-offset (for newer brokers) or with " +
+                    "--start-offset (for brokers on 3.0 or above) or with " +
                     "--producer-id, --producer-epoch, and --coordinator-epoch (for older brokers)");
                 return;
             }
@@ -531,7 +533,8 @@ public abstract class TransactionsCommand {
             try {
                 properties = Utils.loadProps(configFile);
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                printErrorAndExit("Failed to load admin client properties", e);
+                return null;
             }
         }
 
@@ -608,7 +611,7 @@ public abstract class TransactionsCommand {
             .findFirst();
 
         if (!commandOpt.isPresent()) {
-            throw new IllegalArgumentException("Unexpected command " + commandName);
+            printErrorAndExit("Unexpected command " + commandName);
         }
 
         TransactionsCommand command = commandOpt.get();

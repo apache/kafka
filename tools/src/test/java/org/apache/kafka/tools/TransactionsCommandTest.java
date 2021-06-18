@@ -256,6 +256,7 @@ public class TransactionsCommandTest {
         Mockito.when(describeResult.description(transactionalId)).thenReturn(describeFuture);
         Mockito.when(admin.describeTransactions(singleton(transactionalId))).thenReturn(describeResult);
 
+        // Add a little time so that we can see a positive transaction duration in the output
         time.sleep(5000);
 
         execute(args);
