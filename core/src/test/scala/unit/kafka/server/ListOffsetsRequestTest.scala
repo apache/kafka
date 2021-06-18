@@ -162,10 +162,8 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
     val firstLeaderId = partitionToLeader(partition.partition)
 
-    // produce in 2 batches to ensure the max timestamp matches the last message
     TestUtils.generateAndProduceMessages(servers, topic, 9)
-    Thread.sleep(10)
-    TestUtils.generateAndProduceMessages(servers, topic, 1)
+    TestUtils.produceMessage(servers, topic, "test-10", System.currentTimeMillis() + 10L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -197,10 +195,8 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
     val firstLeaderId = partitionToLeader(partition.partition)
 
-    // produce in 2 batches to ensure the max timestamp matches the last message
     TestUtils.generateAndProduceMessages(servers, topic, 9)
-    Thread.sleep(10)
-    TestUtils.generateAndProduceMessages(servers, topic, 1)
+    TestUtils.produceMessage(servers, topic, "test-10", System.currentTimeMillis() + 10L)
 
     for (version <- ApiKeys.LIST_OFFSETS.oldestVersion to ApiKeys.LIST_OFFSETS.latestVersion) {
       if (version == 0) {

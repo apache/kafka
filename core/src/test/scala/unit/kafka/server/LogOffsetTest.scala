@@ -65,13 +65,7 @@ class LogOffsetTest extends BaseRequestTest {
   def testGetOffsetsAfterDeleteRecords(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
-
-    createTopic(topic, 1, 1)
-
-    val logManager = server.getLogManager
-    TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
-                  "Log for partition [topic,0] should be created")
-    val log = logManager.getLog(topicPartition).get
+    val log = createTopicAndGetLog(topic, topicPartition)
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
@@ -96,13 +90,7 @@ class LogOffsetTest extends BaseRequestTest {
   def testFetchOffsetByTimestampForMaxTimestampAfterTruncate(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
-
-    createTopic(topic, 1, 1)
-
-    val logManager = server.getLogManager
-    TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
-      "Log for partition [topic,0] should be created")
-    val log = logManager.getLog(topicPartition).get
+    val log = createTopicAndGetLog(topic, topicPartition)
 
     for (timestamp <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes(), timestamp = timestamp.toLong), leaderEpoch = 0)
@@ -112,11 +100,13 @@ class LogOffsetTest extends BaseRequestTest {
 
     val firstOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
     assertEquals(19L, firstOffset.get.offset)
+    assertEquals(19L, firstOffset.get.timestamp)
 
     log.truncateTo(0)
 
     val secondOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
     assertEquals(0L, secondOffset.get.offset)
+    assertEquals(-1L, secondOffset.get.timestamp)
 
   }
 
@@ -124,13 +114,7 @@ class LogOffsetTest extends BaseRequestTest {
   def testFetchOffsetByTimestampForMaxTimestampWithUnorderedTimestamps(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
-
-    createTopic(topic, 1, 1)
-
-    val logManager = server.getLogManager
-    TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
-      "Log for partition [topic,0] should be created")
-    val log = logManager.getLog(topicPartition).get
+    val log = createTopicAndGetLog(topic, topicPartition)
 
     for (timestamp <- List(0L, 1L, 2L, 3L, 4L, 6L, 5L))
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes(), timestamp = timestamp), leaderEpoch = 0)
@@ -141,19 +125,14 @@ class LogOffsetTest extends BaseRequestTest {
     val maxTimestampOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
     assertEquals(7L, log.logEndOffset)
     assertEquals(5L, maxTimestampOffset.get.offset)
+    assertEquals(6L, maxTimestampOffset.get.timestamp)
   }
 
   @Test
   def testGetOffsetsBeforeLatestTime(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
-
-    createTopic(topic, 1, 1)
-
-    val logManager = server.getLogManager
-    TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
-      s"Log for partition $topicPartition should be created")
-    val log = logManager.getLog(topicPartition).get
+    val log = createTopicAndGetLog(topic, topicPartition)
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
@@ -162,7 +141,7 @@ class LogOffsetTest extends BaseRequestTest {
     val offsets = log.legacyFetchOffsetsBefore(ListOffsetsRequest.LATEST_TIMESTAMP, 15)
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), offsets)
 
-    TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
+    TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, 0, server),
       "Leader should be elected")
     val request = ListOffsetsRequest.Builder.forReplica(0, 0)
       .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.LATEST_TIMESTAMP, 15).asJava).build()
@@ -204,13 +183,7 @@ class LogOffsetTest extends BaseRequestTest {
   def testFetchOffsetByTimestampForMaxTimestampWithEmptyLog(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
-
-    createTopic(topic, 1, 1)
-
-    val logManager = server.getLogManager
-    TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
-      "Log for partition [topic,0] should be created")
-    val log = logManager.getLog(topicPartition).get
+    val log = createTopicAndGetLog(topic, topicPartition)
 
     log.updateHighWatermark(log.logEndOffset)
 
@@ -218,6 +191,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(0L, log.logEndOffset)
     assertEquals(0L, maxTimestampOffset.get.offset)
     assertEquals(-1L, maxTimestampOffset.get.timestamp)
+
   }
 
   @deprecated("legacyFetchOffsetsBefore", since = "")
@@ -335,6 +309,16 @@ class LogOffsetTest extends BaseRequestTest {
   private def findPartition(topics: Buffer[ListOffsetsTopicResponse], tp: TopicPartition): ListOffsetsPartitionResponse = {
     topics.find(_.name == tp.topic).get
       .partitions.asScala.find(_.partitionIndex == tp.partition).get
+  }
+
+  private def createTopicAndGetLog(topic: String, topicPartition: TopicPartition): Log = {
+
+    createTopic(topic, 1, 1)
+
+    val logManager = server.getLogManager
+    TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
+      "Log for partition [topic,0] should be created")
+    logManager.getLog(topicPartition).get
   }
 
 }

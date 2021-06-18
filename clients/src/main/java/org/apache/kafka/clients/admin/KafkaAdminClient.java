@@ -4287,10 +4287,7 @@ public class KafkaAdminClient extends AdminClient {
                         for (ListOffsetsTopic topic : partitionsToQuery) {
                             for (ListOffsetsPartition partition : topic.partitions()) {
                                 TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
-                                // we don't retry MAX_TIMESTAMP requests if the broker doesn't support it so this may be why there was no response.
-                                ApiException error = !supportsMaxTimestamp && partition.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP ?
-                                    new UnsupportedVersionException("Broker " + brokerId + " does not support MAX_TIMESTAMP offset spec") :
-                                    new ApiException("The response from broker " + brokerId +
+                                ApiException error = new ApiException("The response from broker " + brokerId +
                                         " did not contain a result for topic partition " + tp);
                                 futures.get(tp).completeExceptionally(error);
                             }
@@ -4319,6 +4316,20 @@ public class KafkaAdminClient extends AdminClient {
                 boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
                     if (supportsMaxTimestamp) {
                         supportsMaxTimestamp = false;
+
+                        // fail any unsupported futures
+                        partitionsToQuery.stream().forEach(
+                            t -> t.partitions().stream()
+                                .filter(p -> p.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP)
+                                .forEach(
+                                    p -> futures.get(new TopicPartition(t.name(), p.partitionIndex()))
+                                        .completeExceptionally(
+                                            new UnsupportedVersionException(
+                                                "Broker " + brokerId
+                                                    + " does not support MAX_TIMESTAMP offset spec"))
+                                )
+                        );
+
                         // check if there are any non MAX_TIMESTAMPS partitions left to be downgraded
                         return partitionsToQuery.stream().anyMatch(
                             t -> t.partitions().stream().anyMatch(
