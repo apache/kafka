@@ -297,7 +297,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                         )
                     );
 
-                    if (offset == highWatermark) {
+                    // we need to check `>=` because new (aborted) data could have been appended
+                    // to the global topic during restore, and thus the `highWatermark` might no
+                    // longer mark the current end-offset of the global topic
+                    if (offset >= highWatermark) {
                         break;
                     }
 
