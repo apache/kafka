@@ -1964,6 +1964,26 @@ class LogTest {
   }
 
   @Test
+  def testNoOpWhenKeepPartitionMetadataFileIsFalse(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = createLog(logDir, logConfig, keepPartitionMetadataFile = false)
+
+    val topicId = Uuid.randomUuid()
+    log.assignTopicId(topicId)
+    // We should not write to this file or set the topic ID
+    assertFalse(log.partitionMetadataFile.exists())
+    assertEquals(None, log.topicId)
+    log.close()
+
+    val log2 = createLog(logDir, logConfig, topicId = Some(Uuid.randomUuid()),  keepPartitionMetadataFile = false)
+
+    // We should not write to this file or set the topic ID
+    assertFalse(log2.partitionMetadataFile.exists())
+    assertEquals(None, log2.topicId)
+    log2.close()
+  }
+
+  @Test
   def testLogFailsWhenInconsistentTopicIdSet(): Unit = {
     val logConfig = LogTestUtils.createLogConfig()
     var log = createLog(logDir, logConfig)
@@ -3476,9 +3496,10 @@ class LogTest {
                         maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                         producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                         lastShutdownClean: Boolean = true,
-                        topicId: Option[Uuid] = None): Log = {
+                        topicId: Option[Uuid] = None,
+                        keepPartitionMetadataFile: Boolean = true): Log = {
     LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
-      maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean, topicId = topicId)
+      maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean, topicId = topicId, keepPartitionMetadataFile = keepPartitionMetadataFile)
   }
 
   private def createLogWithOffsetOverflow(logConfig: LogConfig): (Log, LogSegment) = {
