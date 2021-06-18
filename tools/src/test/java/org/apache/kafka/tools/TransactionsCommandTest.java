@@ -163,8 +163,7 @@ public class TransactionsCommandTest {
         List<List<String>> table = readOutputAsTable();
         assertEquals(3, table.size());
 
-        List<String> expectedHeaders = asList("ProducerId", "ProducerEpoch", "LatestCoordinatorEpoch",
-            "LastSequence", "LastTimestamp", "CurrentTransactionStartOffset");
+        List<String> expectedHeaders = asList(TransactionsCommand.DescribeProducersCommand.HEADERS);
         assertEquals(expectedHeaders, table.get(0));
 
         Set<List<String>> expectedRows = Utils.mkSet(
@@ -206,7 +205,7 @@ public class TransactionsCommandTest {
         assertEquals(4, table.size());
 
         // Assert expected headers
-        List<String> expectedHeaders = asList("TransactionalId", "Coordinator", "ProducerId", "TransactionState");
+        List<String> expectedHeaders = asList(TransactionsCommand.ListTransactionsCommand.HEADERS);
         assertEquals(expectedHeaders, table.get(0));
 
         Set<List<String>> expectedRows = Utils.mkSet(
@@ -265,17 +264,7 @@ public class TransactionsCommandTest {
         List<List<String>> table = readOutputAsTable();
         assertEquals(2, table.size());
 
-        List<String> expectedHeaders = asList(
-            "CoordinatorId",
-            "TransactionalId",
-            "ProducerId",
-            "ProducerEpoch",
-            "TransactionState",
-            "TransactionTimeoutMs",
-            "CurrentTransactionStartTimeMs",
-            "TransactionDurationMs",
-            "TopicPartitions"
-        );
+        List<String> expectedHeaders = asList(TransactionsCommand.DescribeTransactionsCommand.HEADERS);
         assertEquals(expectedHeaders, table.get(0));
 
         List<String> expectedRow = asList(

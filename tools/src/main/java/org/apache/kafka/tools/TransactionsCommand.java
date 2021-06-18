@@ -242,6 +242,14 @@ public abstract class TransactionsCommand {
     }
 
     static class DescribeProducersCommand extends TransactionsCommand {
+        static final String[] HEADERS = new String[]{
+            "ProducerId",
+            "ProducerEpoch",
+            "LatestCoordinatorEpoch",
+            "LastSequence",
+            "LastTimestamp",
+            "CurrentTransactionStartOffset"
+        };
 
         DescribeProducersCommand(Time time) {
             super(time);
@@ -300,15 +308,6 @@ public abstract class TransactionsCommand {
                 return;
             }
 
-            String[] headers = new String[]{
-                "ProducerId",
-                "ProducerEpoch",
-                "LatestCoordinatorEpoch",
-                "LastSequence",
-                "LastTimestamp",
-                "CurrentTransactionStartOffset"
-            };
-
             List<String[]> rows = result.activeProducers().stream().map(producerState -> {
                 String currentTransactionStartOffsetColumnValue =
                     producerState.currentTransactionStartOffset().isPresent() ?
@@ -325,11 +324,22 @@ public abstract class TransactionsCommand {
                 };
             }).collect(Collectors.toList());
 
-            prettyPrintTable(headers, rows, out);
+            prettyPrintTable(HEADERS, rows, out);
         }
     }
 
     static class DescribeTransactionsCommand extends TransactionsCommand {
+        static final String[] HEADERS = new String[]{
+            "CoordinatorId",
+            "TransactionalId",
+            "ProducerId",
+            "ProducerEpoch",
+            "TransactionState",
+            "TransactionTimeoutMs",
+            "CurrentTransactionStartTimeMs",
+            "TransactionDurationMs",
+            "TopicPartitions"
+        };
 
         DescribeTransactionsCommand(Time time) {
             super(time);
@@ -368,18 +378,6 @@ public abstract class TransactionsCommand {
                 return;
             }
 
-            String[] headers = new String[]{
-                "CoordinatorId",
-                "TransactionalId",
-                "ProducerId",
-                "ProducerEpoch",
-                "TransactionState",
-                "TransactionTimeoutMs",
-                "CurrentTransactionStartTimeMs",
-                "TransactionDurationMs",
-                "TopicPartitions"
-            };
-
             final String transactionDurationMsColumnValue;
             final String transactionStartTimeMsColumnValue;
 
@@ -404,11 +402,17 @@ public abstract class TransactionsCommand {
                 Utils.join(result.topicPartitions(), ",")
             };
 
-            prettyPrintTable(headers, singletonList(row), out);
+            prettyPrintTable(HEADERS, singletonList(row), out);
         }
     }
 
     static class ListTransactionsCommand extends TransactionsCommand {
+        static final String[] HEADERS = new String[] {
+            "TransactionalId",
+            "Coordinator",
+            "ProducerId",
+            "TransactionState"
+        };
 
         ListTransactionsCommand(Time time) {
             super(time);
@@ -438,13 +442,6 @@ public abstract class TransactionsCommand {
                 return;
             }
 
-            String[] headers = new String[] {
-                "TransactionalId",
-                "Coordinator",
-                "ProducerId",
-                "TransactionState"
-            };
-
             List<String[]> rows = new ArrayList<>();
             for (Map.Entry<Integer, Collection<TransactionListing>> brokerListingsEntry : result.entrySet()) {
                 String coordinatorIdString = brokerListingsEntry.getKey().toString();
@@ -460,7 +457,7 @@ public abstract class TransactionsCommand {
                 }
             }
 
-            prettyPrintTable(headers, rows, out);
+            prettyPrintTable(HEADERS, rows, out);
         }
     }
 
