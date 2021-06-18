@@ -1558,7 +1558,7 @@ public interface KStream<K, V> {
      * @param windows     the specification of the {@link JoinWindows}
      * @param <VO>        the value type of the other stream
      * @param <VR>        the value type of the result stream
-     * @return a {@code KStream} that contains join-recordshttps://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/clients/admin/Admin.java for each key and values computed by the given
+     * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * this {@code KStream} and within the joining window intervals
      * @see #join(KStream, ValueJoiner, JoinWindows)
