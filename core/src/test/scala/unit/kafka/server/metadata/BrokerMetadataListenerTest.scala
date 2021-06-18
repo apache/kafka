@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata.{ConfigRecord, PartitionRecord, RemoveTo
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.raft.Batch
+import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Assertions._
@@ -77,6 +78,11 @@ class BrokerMetadataListenerTest {
     deleteTopic(topicId, topic, numPartitions, localPartitions)
   }
 
+  @Test
+  def testEmptyBatchReader(): Unit = {
+    applyBatch(List.empty);
+  }
+
   private def deleteTopic(
     topicId: Uuid,
     topic: String,
@@ -114,9 +120,14 @@ class BrokerMetadataListenerTest {
     records: List[ApiMessageAndVersion]
   ): Unit = {
     val baseOffset = lastMetadataOffset + 1
-    lastMetadataOffset += records.size
-    listener.execCommits(
-      new MemoryBatchReader(
+    // For testing purposes if "records" is empty just assume that there
+    // is one control record in the batch
+    lastMetadataOffset += Math.max(1, records.size)
+
+    val batchReader = if (records.isEmpty) {
+      MemoryBatchReader.empty[ApiMessageAndVersion](baseOffset, baseOffset, _ => ())
+    } else {
+      MemoryBatchReader.of(
         List(
           Batch.of(
             baseOffset,
@@ -124,9 +135,11 @@ class BrokerMetadataListenerTest {
             records.asJava
           )
         ).asJava,
-        reader => ()
+        (_: BatchReader[ApiMessageAndVersion]) => ()
       )
-    )
+    }
+
+    listener.execCommits(batchReader)
   }
 
   private def createAndAssert(

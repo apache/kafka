@@ -44,7 +44,7 @@ class MemoryBatchReaderTest {
 
         @SuppressWarnings("unchecked")
         CloseListener<BatchReader<String>> listener = Mockito.mock(CloseListener.class);
-        MemoryBatchReader<String> reader = new MemoryBatchReader<>(
+        MemoryBatchReader<String> reader = MemoryBatchReader.of(
             Arrays.asList(batch1, batch2, batch3),
             listener
         );

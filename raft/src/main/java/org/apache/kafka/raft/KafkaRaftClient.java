@@ -2410,7 +2410,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          */
         public void fireHandleCommit(long baseOffset, int epoch, List<T> records) {
             Batch<T> batch = Batch.of(baseOffset, epoch, records);
-            MemoryBatchReader<T> reader = new MemoryBatchReader<>(Collections.singletonList(batch), this);
+            MemoryBatchReader<T> reader = MemoryBatchReader.of(Collections.singletonList(batch), this);
             fireHandleCommit(reader);
         }
 
