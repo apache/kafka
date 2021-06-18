@@ -107,8 +107,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 
+import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -2793,15 +2793,6 @@ public class SenderTest {
                 .setErrorCode(error.code())
                 .setThrottleTimeMs(0))
         );
-    }
-
-    private void runUntil(Sender sender, Supplier<Boolean> condition) {
-        int maxTries = 10;
-        int tries = 0;
-        do {
-            tries++;
-            sender.runOnce();
-        } while (!condition.get() && tries < maxTries);
     }
 
     @Test
