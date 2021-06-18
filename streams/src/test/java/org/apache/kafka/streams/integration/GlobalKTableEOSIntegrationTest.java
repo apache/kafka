@@ -370,7 +370,7 @@ public class GlobalKTableEOSIntegrationTest {
                     // we need to write aborted messages only after we init the `highWatermark`
                     // to move the `endOffset` beyond the `highWatermark
                     //
-                    // we cannot write committed messages because we want to test the cast that
+                    // we cannot write committed messages because we want to test the case that
                     // poll() returns no records
                     //
                     // cf. GlobalStateManagerImpl#restoreState()
