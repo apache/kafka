@@ -555,6 +555,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                         final byte[] value,
                         final WriteBatch batch) throws RocksDBException;
 
+        void addToBatchDirect(final ByteBuffer key,
+                              final ByteBuffer value,
+                              final WriteBatch batch) throws RocksDBException;
+
         void close();
     }
 
@@ -577,9 +581,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 }
             } else {
                 try {
-                    ByteBuffer keyBuffer = createDirectByteBufferAndPut(key);
-                    ByteBuffer valueBuffer = createDirectByteBufferAndPut(value);
-                    db.put(columnFamily, wOptions, keyBuffer, valueBuffer);
+                    db.put(columnFamily, wOptions, key, value);
                 } catch (final RocksDBException e) {
                     // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                     throw new ProcessorStateException("Error while putting key/value into store " + name, e);
@@ -590,9 +592,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
                                  final WriteBatch batch) throws RocksDBException {
+            ByteBuffer keyDirectBuffer = ByteBuffer.allocateDirect(128);
+            ByteBuffer valueDirectBuffer = ByteBuffer.allocateDirect(128);
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
-                addToBatch(entry.key.get(), entry.value, batch);
+                keyDirectBuffer.clear();
+                valueDirectBuffer.clear();
+                keyDirectBuffer.put(entry.key.get());
+                valueDirectBuffer.put(entry.value);
+                addToBatchDirect(keyDirectBuffer, valueDirectBuffer, batch);
+                keyDirectBuffer.flip();
+                valueDirectBuffer.flip();
             }
         }
 
@@ -683,6 +693,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             } else {
                 batch.put(columnFamily, key, value);
             }
+        }
+
+        @Override
+        public void addToBatchDirect(ByteBuffer key, ByteBuffer value, WriteBatch batch) throws RocksDBException {
+            batch.put(columnFamily, key, value);
         }
 
         @Override

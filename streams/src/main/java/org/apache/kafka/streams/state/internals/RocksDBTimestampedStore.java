@@ -35,6 +35,7 @@ import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -280,6 +281,11 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                 batch.delete(oldColumnFamily, key);
                 batch.put(newColumnFamily, key, value);
             }
+        }
+
+        @Override
+        public void addToBatchDirect(ByteBuffer key, ByteBuffer value, WriteBatch batch) throws RocksDBException {
+
         }
 
         @Override
