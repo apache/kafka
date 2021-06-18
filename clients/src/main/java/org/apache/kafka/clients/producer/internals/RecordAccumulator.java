@@ -465,7 +465,13 @@ public final class RecordAccumulator {
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
                         boolean full = deque.size() > 1 || batch.isFull();
                         boolean expired = waitedTimeMs >= timeToWaitMs;
-                        boolean sendable = full || expired || exhausted || closed || flushInProgress();
+                        boolean transactionCompleting = transactionManager != null && transactionManager.isCompleting();
+                        boolean sendable = full
+                            || expired
+                            || exhausted
+                            || closed
+                            || flushInProgress()
+                            || transactionCompleting;
                         if (sendable && !backingOff) {
                             readyNodes.add(leader);
                         } else {
