@@ -127,7 +127,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * @param records the list of records to append
      * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
      *         be committed; null if no memory could be allocated for the batch at this time
-     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
      */
@@ -149,7 +149,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * @param records the list of records to append
      * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
      *         be committed; null if no memory could be allocated for the batch at this time
-     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
      */
@@ -194,5 +194,5 @@ public interface RaftClient<T> extends AutoCloseable {
      * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
      *         or less than the log start offset.
      */
-    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int commitedEpoch);
+    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch);
 }
