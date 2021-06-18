@@ -398,10 +398,13 @@ class FullFetchContext(private val time: Time,
   }
 
   override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+    var error = Errors.NONE
     def createNewSession: (FetchSession.CACHE_MAP, FetchSession.TOPIC_ID_MAP) = {
       val cachedPartitions = new FetchSession.CACHE_MAP(updates.size)
       val sessionTopicIds = new util.HashMap[String, Uuid](updates.size)
       updates.forEach { (part, respData) =>
+        if (respData.errorCode() == Errors.INCONSISTENT_TOPIC_ID.code())
+          error = Errors.INCONSISTENT_TOPIC_ID
         val reqData = fetchData.get(part)
         val id = topicIds.getOrDefault(part.topic(), Uuid.ZERO_UUID)
         cachedPartitions.mustAdd(new CachedPartition(part, id, reqData, respData))
@@ -414,7 +417,7 @@ class FullFetchContext(private val time: Time,
         updates.size, version, () => createNewSession)
     debug(s"Full fetch context with session id $responseSessionId returning " +
       s"${partitionsToLogString(updates.keySet)}")
-    FetchResponse.of(Errors.NONE, 0, responseSessionId, updates, topicIds)
+    FetchResponse.of(error, 0, responseSessionId, updates, topicIds)
   }
 }
 
@@ -503,14 +506,17 @@ class IncrementalFetchContext(private val time: Time,
           s"got ${session.epoch}.  Possible duplicate request.")
         FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, 0, session.id, new FetchSession.RESP_MAP, Collections.emptyMap())
       } else {
+        var error = Errors.NONE
         // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
+        // It will also set the top-level error to INCONSISTENT_TOPIC_ID if any partitions had this error.
         val partitionIter = new PartitionIterator(updates.entrySet.iterator, true)
         while (partitionIter.hasNext) {
-          partitionIter.next()
+          if (partitionIter.next().getValue.errorCode() == Errors.INCONSISTENT_TOPIC_ID.code())
+            error = Errors.INCONSISTENT_TOPIC_ID
         }
         debug(s"Incremental fetch context with session id ${session.id} returning " +
           s"${partitionsToLogString(updates.keySet)}")
-        FetchResponse.of(Errors.NONE, 0, session.id, updates, session.sessionTopicIds)
+        FetchResponse.of(error, 0, session.id, updates, session.sessionTopicIds)
       }
     }
   }

@@ -84,7 +84,7 @@ public class FetchResponse extends AbstractResponse {
      * Version 13 introduces topic IDs which can lead to a few new errors. If there is any unknown topic ID in the request, the
      * response will contain a top-level UNKNOWN_TOPIC_ID error and UNKNOWN_TOPIC_ID errors on all the partitions.
      * If a request's topic ID usage is inconsistent with the session, we will return a top level FETCH_SESSION_TOPIC_ID_ERROR error.
-     * We may also return INCONSISTENT_TOPIC_ID error for a given partition when that partition in the session has a topic ID
+     * We may also return INCONSISTENT_TOPIC_ID error as a top-level error as well as an error for a given partition when that partition in the session has a topic ID
      * inconsistent with the log.
      */
     public FetchResponse(FetchResponseData fetchResponseData) {

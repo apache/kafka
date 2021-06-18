@@ -291,13 +291,15 @@ public class Fetcher<K, V> implements Closeable {
                                 return;
                             }
                             if (!handler.handleResponse(response, resp.requestHeader().apiVersion())) {
-                                if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR || response.error() == Errors.UNKNOWN_TOPIC_ID) {
+                                if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR
+                                        || response.error() == Errors.UNKNOWN_TOPIC_ID
+                                        || response.error() == Errors.INCONSISTENT_TOPIC_ID) {
                                     metadata.requestUpdate();
                                 }
                                 return;
                             }
 
-                            Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(data.topicNames(), maxVersion);
+                            Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(data.topicNames(), resp.requestHeader().apiVersion());
                             Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
@@ -1316,9 +1318,6 @@ public class Fetcher<K, V> implements Closeable {
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
-                this.metadata.requestUpdate();
-            } else if (error == Errors.INCONSISTENT_TOPIC_ID) {
-                log.warn("Received inconsistent topic ID error in fetch for partition {}", tp);
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
                 Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);

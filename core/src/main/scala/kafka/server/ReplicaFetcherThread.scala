@@ -28,7 +28,7 @@ import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.errors.{FetchSessionTopicIdException, KafkaStorageException, UnknownTopicIdException}
+import org.apache.kafka.common.errors.{FetchSessionTopicIdException, InconsistentTopicIdException, KafkaStorageException, UnknownTopicIdException}
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
@@ -218,20 +218,20 @@ class ReplicaFetcherThread(name: String,
       val clientResponse = leaderEndpoint.sendRequest(fetchRequest)
       val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse]
       if (!fetchSessionHandler.handleResponse(fetchResponse, clientResponse.requestHeader().apiVersion())) {
-        if (fetchResponse.error() == Errors.UNKNOWN_TOPIC_ID)
+        if (fetchResponse.error == Errors.UNKNOWN_TOPIC_ID)
           throw new UnknownTopicIdException("There was a topic ID in the request that was unknown to the server.")
-        else if (fetchResponse.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR)
+        else if (fetchResponse.error == Errors.FETCH_SESSION_TOPIC_ID_ERROR)
           throw new FetchSessionTopicIdException("There was a topic ID in the request that was inconsistent with the session.")
+        else if (fetchResponse.error == Errors.INCONSISTENT_TOPIC_ID)
+          throw new InconsistentTopicIdException("There was a topic ID in the request that was inconsistent with the one in the logs.")
         else
           Map.empty
       } else {
         fetchResponse.responseData(fetchSessionHandler.sessionTopicNames, clientResponse.requestHeader().apiVersion()).asScala
       }
     } catch {
-      case unknownId: UnknownTopicIdException =>
-        throw unknownId
-      case sessionUnknownId: FetchSessionTopicIdException =>
-        throw sessionUnknownId
+      case topicIdError @ (_:UnknownTopicIdException | _:FetchSessionTopicIdException | _:InconsistentTopicIdException) =>
+        throw topicIdError
       case t: Throwable =>
         fetchSessionHandler.handleError(t)
         throw t
