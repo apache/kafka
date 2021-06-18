@@ -78,9 +78,9 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
 
     @Override
     public ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleResponse(
-            Node coordinator,
-            Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse
+        Node coordinator,
+        Set<CoordinatorKey> groupIds,
+        AbstractResponse abstractResponse
     ) {
         final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
         Map<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> completed = new HashMap<>();
@@ -116,7 +116,13 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         return new ApiResult<>(completed, failed, unmapped);
     }
 
-    private void handleError(CoordinatorKey groupId, Errors error, Map<CoordinatorKey, Throwable> failed, List<CoordinatorKey> unmapped) {
+    private void handleError(
+        CoordinatorKey groupId,
+        Errors error,
+        Map<CoordinatorKey,
+        Throwable> failed,
+        List<CoordinatorKey> unmapped
+    ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
                 log.error("Received authorization failure for group {} in `DeleteConsumerGroupOffsets` response", groupId,
