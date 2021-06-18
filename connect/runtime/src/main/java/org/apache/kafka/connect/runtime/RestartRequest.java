@@ -121,6 +121,23 @@ public class RestartRequest implements Comparable<RestartRequest> {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        RestartRequest that = (RestartRequest) o;
+        return onlyFailed == that.onlyFailed && includeTasks == that.includeTasks && Objects.equals(connectorName, that.connectorName);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(connectorName, onlyFailed, includeTasks);
+    }
+
+    @Override
     public String toString() {
         return "restart request for {" + "connectorName='" + connectorName + "', onlyFailed=" + onlyFailed + ", includeTasks=" + includeTasks + '}';
     }

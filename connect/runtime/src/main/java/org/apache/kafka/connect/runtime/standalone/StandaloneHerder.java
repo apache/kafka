@@ -336,7 +336,7 @@ public class StandaloneHerder extends AbstractHerder {
                 if (error == null) {
                     log.info("Connector '{}' restart successful", connectorName);
                 } else {
-                    log.error("Connector '{}' restart failed", connectorName , error);
+                    log.error("Connector '{}' restart failed", connectorName, error);
                 }
             });
         }
