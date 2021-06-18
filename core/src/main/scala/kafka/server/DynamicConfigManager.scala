@@ -94,19 +94,24 @@ class DynamicConfigManager(private val zkClient: KafkaZkClient,
 
   object ConfigChangedNotificationHandler extends NotificationHandler {
     override def processNotification(jsonBytes: Array[Byte]) = {
-      // Ignore non-json notifications because they can be from the deprecated TopicConfigManager
-      Json.parseBytes(jsonBytes).foreach { js =>
-        val jsObject = js.asJsonObjectOption.getOrElse {
-          throw new IllegalArgumentException("Config change notification has an unexpected value. The format is:" +
-            """{"version" : 1, "entity_type":"topics/clients", "entity_name" : "topic_name/client_id"} or """ +
-            """{"version" : 2, "entity_path":"entity_type/entity_name"}. """ +
-            s"Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
-        }
-        jsObject("version").to[Int] match {
-          case 1 => processEntityConfigChangeVersion1(jsonBytes, jsObject)
-          case 2 => processEntityConfigChangeVersion2(jsonBytes, jsObject)
-          case version => throw new IllegalArgumentException("Config change notification has unsupported version " +
-            s"'$version', supported versions are 1 and 2.")
+      val jsonValue = Json.parseBytes(jsonBytes)
+      if (jsonValue.isEmpty) {
+        // Ignore non-json notifications because they can be from the deprecated TopicConfigManager
+        warn(s"The non-json notifications are ignored.")
+      } else {
+        jsonValue.foreach { js =>
+          val jsObject = js.asJsonObjectOption.getOrElse {
+            throw new IllegalArgumentException("Config change notification has an unexpected value. The format is:" +
+              """{"version" : 1, "entity_type":"topics/clients", "entity_name" : "topic_name/client_id"} or """ +
+              """{"version" : 2, "entity_path":"entity_type/entity_name"}. """ +
+              s"Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
+          }
+          jsObject("version").to[Int] match {
+            case 1 => processEntityConfigChangeVersion1(jsonBytes, jsObject)
+            case 2 => processEntityConfigChangeVersion2(jsonBytes, jsObject)
+            case version => throw new IllegalArgumentException("Config change notification has unsupported version " +
+              s"'$version', supported versions are 1 and 2.")
+          }
         }
       }
     }
