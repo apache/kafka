@@ -449,8 +449,7 @@ class Partition(val topicPartition: TopicPartition,
           // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
           // Topic ID is consistent since we are just setting it here.
           if (log.topicId == Uuid.ZERO_UUID) {
-            log.partitionMetadataFile.write(requestTopicId)
-            log.topicId = requestTopicId
+            log.assignTopicId(requestTopicId)
             true
           } else if (log.topicId != requestTopicId) {
             stateChangeLogger.error(s"Topic Id in memory: ${log.topicId} does not" +
