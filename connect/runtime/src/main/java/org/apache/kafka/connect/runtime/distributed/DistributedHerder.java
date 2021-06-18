@@ -1137,7 +1137,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     /**
-     * Builds and and executes a restart plan for connector and its tasks from <code>request</code>.
+     * Builds and and executes a restart plan for the connector and its tasks from <code>request</code>.
      * Execution of a plan involves triggering the stop of eligible connector/tasks and then queuing the start for eligible connector/tasks.
      *
      * @param request the request to restart connector and tasks
@@ -1172,17 +1172,31 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         // Now restart the connector and tasks
         if (restartConnector) {
-            startConnector(connectorName, (error, targetState) -> {
-                if (error == null) {
-                    log.info("Connector '{}' restart successful", connectorName);
-                } else {
-                    log.error("Connector '{}' restart failed", connectorName, error);
-                }
-            });
+            try {
+                startConnector(connectorName, (error, targetState) -> {
+                    if (error == null) {
+                        log.info("Connector '{}' restart successful", connectorName);
+                    } else {
+                        log.error("Connector '{}' restart failed", connectorName, error);
+                    }
+                });
+            } catch (Throwable t) {
+                log.error("Connector '{}' restart failed", connectorName, t);
+            }
         }
         if (restartTasks) {
             log.debug("Restarting {} of {} tasks for {}", plan.restartTaskCount(), plan.totalTaskCount(), request);
-            plan.taskIdsToRestart().forEach(this::startTask);
+            plan.taskIdsToRestart().forEach(taskId -> {
+                try {
+                    if (this.startTask(taskId)) {
+                        log.info("Task '{}' restart successful", taskId);
+                    } else {
+                        log.error("Task '{}' restart failed", taskId);
+                    }
+                } catch (Throwable t) {
+                    log.error("Task '{}' restart failed", taskId, t);
+                }
+            });
             log.debug("Restarted {} of {} tasks for {} as requested", plan.restartTaskCount(), plan.totalTaskCount(), request);
         }
         log.info("Completed {}", plan);
