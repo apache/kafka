@@ -243,7 +243,7 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  * @param hadCleanShutdown boolean flag to indicate if the Log had a clean/graceful shutdown last time. true means
  *                         clean shutdown whereas false means a crash.
  * @param keepPartitionMetadataFile boolean flag to indicate whether the partition.metadata file should be kept in the
- *                                  log directory. A partition.metadata file is only created when the controller's
+ *                                  log directory. A partition.metadata file is only created when the controller and this broker's
  *                                  inter-broker protocol version is at least 2.8. This file will persist the topic ID on
  *                                  the broker. If inter-broker protocol is downgraded below 2.8, a topic ID may be lost
  *                                  and a new ID generated upon re-upgrade. If the inter-broker protocol version is below
@@ -575,6 +575,14 @@ class Log(@volatile private var _dir: File,
   private def initializePartitionMetadata(): Unit = lock synchronized {
     val partitionMetadata = PartitionMetadataFile.newFile(dir)
     partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, logDirFailureChannel)
+  }
+
+  /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
+  def assignTopicId(topicId: Uuid): Unit = {
+    if (keepPartitionMetadataFile) {
+      partitionMetadataFile.write(topicId)
+      this.topicId = topicId
+    }
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
