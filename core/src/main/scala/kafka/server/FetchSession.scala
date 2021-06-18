@@ -163,7 +163,7 @@ class CachedPartition(val topic: String,
     mustRespond
   }
 
-  override def hashCode: Int = Objects.hash(topic, partition, topicId)
+  override def hashCode: Int = Objects.hash(new TopicPartition(topic, partition), topicId)
 
   def canEqual(that: Any): Boolean = that.isInstanceOf[CachedPartition]
 
