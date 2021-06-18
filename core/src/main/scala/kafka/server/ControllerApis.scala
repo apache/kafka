@@ -100,6 +100,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.ENVELOPE => handleEnvelopeRequest(request, requestLocal)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
+        case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
         case ApiKeys.CREATE_PARTITIONS => handleCreatePartitions(request)
         case ApiKeys.DESCRIBE_ACLS => aclApis.handleDescribeAcls(request)
         case ApiKeys.CREATE_ACLS => aclApis.handleCreateAcls(request)
@@ -766,5 +767,21 @@ class ControllerApis(val requestChannel: RequestChannel,
     val response = controller.listPartitionReassignments(listRequest.data()).get()
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new ListPartitionReassignmentsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+  }
+
+  def handleAllocateProducerIdsRequest(request: RequestChannel.Request): Unit = {
+    val allocatedProducerIdsRequest = request.body[AllocateProducerIdsRequest]
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    controller.allocateProducerIds(allocatedProducerIdsRequest.data)
+      .whenComplete((results, exception) => {
+        if (exception != null) {
+          requestHelper.handleError(request, exception)
+        } else {
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+            results.setThrottleTimeMs(requestThrottleMs)
+            new AllocateProducerIdsResponse(results)
+          })
+        }
+      })
   }
 }

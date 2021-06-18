@@ -17,7 +17,8 @@
   "apiKey": 8,
   "type": "metadata",
   "name": "UnfenceBrokerRecord",
-  "validVersions": "0",
+  "validVersions": "0-1",
+  "flexibleVersions": "1+",
   "fields": [
     { "name": "Id", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker ID to unfence." },

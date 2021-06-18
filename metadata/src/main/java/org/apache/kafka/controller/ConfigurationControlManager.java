@@ -44,6 +44,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
+import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 
 
 public class ConfigurationControlManager {
@@ -146,7 +147,7 @@ public class ConfigurationControlManager {
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
                     setName(key).
-                    setValue(newValue), (short) 0));
+                    setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
         outputRecords.addAll(newRecords);
@@ -199,7 +200,7 @@ public class ConfigurationControlManager {
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
                     setName(key).
-                    setValue(newValue), (short) 0));
+                    setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
         for (String key : currentConfigs.keySet()) {
@@ -208,7 +209,7 @@ public class ConfigurationControlManager {
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
                     setName(key).
-                    setValue(null), (short) 0));
+                    setValue(null), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
         outputRecords.addAll(newRecords);
@@ -403,7 +404,7 @@ public class ConfigurationControlManager {
                     setResourceName(resource.name()).
                     setResourceType(resource.type().id()).
                     setName(configEntry.getKey()).
-                    setValue(configEntry.getValue()), (short) 0));
+                    setValue(configEntry.getValue()), CONFIG_RECORD.highestSupportedVersion()));
             }
             return records;
         }

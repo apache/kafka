@@ -195,7 +195,7 @@
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
-              files="(StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TopologyTestDriverTest).java"/>
+              files="(StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TaskManagerTest|TopologyTestDriverTest).java"/>
 
     <suppress checks="MethodLength"
               files="(EosIntegrationTest|EosV2UpgradeIntegrationTest|KStreamKStreamJoinTest|RocksDBWindowStoreTest).java"/>
@@ -282,7 +282,12 @@
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
             files="metadata[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 
+    <!-- Storage -->
+    <suppress checks="(CyclomaticComplexity|ParameterNumber)"
+              files="(RemoteLogManagerConfig).java"/>
+
     <!-- benchmarks -->
     <suppress checks="ClassDataAbstractionCoupling"
               files="(ReplicaFetcherThreadBenchmark).java"/>
+
 </suppressions>

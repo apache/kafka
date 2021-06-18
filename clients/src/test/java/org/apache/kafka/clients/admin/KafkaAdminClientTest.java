@@ -115,6 +115,7 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.ListTransactionsResponseData;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
@@ -173,6 +174,8 @@ import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
+import org.apache.kafka.common.requests.ListTransactionsRequest;
+import org.apache.kafka.common.requests.ListTransactionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
@@ -5618,6 +5621,58 @@ public class KafkaAdminClientTest {
 
             AbortTransactionResult result = env.adminClient().abortTransaction(abortSpec);
             assertNull(result.all().get());
+        }
+    }
+
+    @Test
+    public void testListTransactions() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            MetadataResponseData.MetadataResponseBrokerCollection brokers =
+                new MetadataResponseData.MetadataResponseBrokerCollection();
+
+            env.cluster().nodes().forEach(node -> {
+                brokers.add(new MetadataResponseData.MetadataResponseBroker()
+                    .setHost(node.host())
+                    .setNodeId(node.id())
+                    .setPort(node.port())
+                    .setRack(node.rack())
+                );
+            });
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof MetadataRequest,
+                new MetadataResponse(new MetadataResponseData().setBrokers(brokers),
+                    MetadataResponseData.HIGHEST_SUPPORTED_VERSION)
+            );
+
+            List<TransactionListing> expected = Arrays.asList(
+                new TransactionListing("foo", 12345L, TransactionState.ONGOING),
+                new TransactionListing("bar", 98765L, TransactionState.PREPARE_ABORT),
+                new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
+            );
+            assertEquals(Utils.mkSet(0, 1, 2), env.cluster().nodes().stream().map(Node::id)
+                .collect(Collectors.toSet()));
+
+            env.cluster().nodes().forEach(node -> {
+                ListTransactionsResponseData response = new ListTransactionsResponseData()
+                    .setErrorCode(Errors.NONE.code());
+
+                TransactionListing listing = expected.get(node.id());
+                response.transactionStates().add(new ListTransactionsResponseData.TransactionState()
+                    .setTransactionalId(listing.transactionalId())
+                    .setProducerId(listing.producerId())
+                    .setTransactionState(listing.state().toString())
+                );
+
+                env.kafkaClient().prepareResponseFrom(
+                    request -> request instanceof ListTransactionsRequest,
+                    new ListTransactionsResponse(response),
+                    node
+                );
+            });
+
+            ListTransactionsResult result = env.adminClient().listTransactions();
+            assertEquals(new HashSet<>(expected), new HashSet<>(result.all().get()));
         }
     }
 

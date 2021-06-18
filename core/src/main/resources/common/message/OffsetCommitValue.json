@@ -17,6 +17,7 @@
   "type": "data",
   "name": "OffsetCommitValue",
   "validVersions": "0-3",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "offset", "type": "int64", "versions": "0+" },
     { "name": "leaderEpoch", "type": "int32", "versions": "3+", "default": -1, "ignorable": true},
