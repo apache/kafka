@@ -14,42 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.controller;
-
-import java.io.IOException;
-import java.util.List;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-
+package org.apache.kafka.server.common.serialization;
 
 /**
- * The no-op snapshot writer which does nothing.
- *
- * TODO: This will be moved to the test/ directory once we have the KRaft
- * implementation of the snapshot writer.
+ * An exception indicating that we failed to parse a metadata entry.
  */
-public final class NoOpSnapshotWriter implements SnapshotWriter {
-    private final long epoch;
+public class MetadataParseException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
 
-    public NoOpSnapshotWriter(long epoch) {
-        this.epoch = epoch;
+    public MetadataParseException(String message) {
+        super(message);
     }
 
-    @Override
-    public long epoch() {
-        return epoch;
+    public MetadataParseException(Throwable e) {
+        super(e);
     }
 
-    @Override
-    public boolean writeBatch(List<ApiMessageAndVersion> batch) throws IOException {
-        return true;
-    }
-
-    @Override
-    public void close() {
-    }
-
-    @Override
-    public void completeSnapshot() throws IOException {
+    public MetadataParseException(String message, Throwable throwable) {
+        super(message, throwable);
     }
 }

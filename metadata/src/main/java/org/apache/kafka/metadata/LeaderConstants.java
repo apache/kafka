@@ -17,13 +17,16 @@
 
 package org.apache.kafka.metadata;
 
-/**
- * An exception indicating that we failed to parse a metadata entry.
- */
-public class MetadataParseException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
 
-    public MetadataParseException(String message) {
-        super(message);
-    }
+public class LeaderConstants {
+    /**
+     * A special value used to represent the leader for a partition with no leader.
+     */
+    public static final int NO_LEADER = -1;
+
+    /**
+     * A special value used to represent a PartitionChangeRecord that does not change the
+     * partition leader.
+     */
+    public static final int NO_LEADER_CHANGE = -2;
 }
