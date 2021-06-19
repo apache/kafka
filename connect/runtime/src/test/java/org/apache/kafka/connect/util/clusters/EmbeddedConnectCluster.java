@@ -428,6 +428,40 @@ public class EmbeddedConnectCluster {
     }
 
     /**
+     * Restart an existing connector and its tasks.
+     *
+     * @param connName name of the connector to be restarted
+     * @throws ConnectRestException if the REST API returns error status
+     * @throws ConnectException for any other error.
+     */
+    public ConnectorStateInfo restartConnectorAndTasks(String connName, boolean onlyFailed, boolean includeTasks, boolean onlyCallOnEmptyWorker) {
+        ObjectMapper mapper = new ObjectMapper();
+        String restartPath = String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, connName);
+        String restartEndpoint;
+        if (onlyCallOnEmptyWorker) {
+            restartEndpoint = endpointForWorkerRunningNoResourceForConnector(restartPath, connName);
+        } else {
+            restartEndpoint = endpointForResource(restartPath);
+        }
+        Response response = requestPost(restartEndpoint, "", Collections.emptyMap());
+        try {
+            if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+                //only the 202 stauts returns a body
+                if (response.getStatus() == Response.Status.ACCEPTED.getStatusCode()) {
+                    return mapper.readerFor(ConnectorStateInfo.class)
+                            .readValue(responseToString(response));
+                } else {
+                    return null;
+                }
+            }
+            return null;
+        } catch (IOException e) {
+            log.error("Could not read connector state from response: {}",
+                    responseToString(response), e);
+            throw new ConnectException("Could not not parse connector state", e);
+        }
+    }
+    /**
      * Get the connector names of the connectors currently running on this cluster.
      *
      * @return the list of connector names
