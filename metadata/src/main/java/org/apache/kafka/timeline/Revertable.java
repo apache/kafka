@@ -29,4 +29,9 @@ interface Revertable {
      * @param delta         The delta associated with this epoch for this object.
      */
     void executeRevert(long targetEpoch, Delta delta);
+
+    /**
+     * Reverts to the initial value.
+     */
+    void reset();
 }
