@@ -17,39 +17,94 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 
 /**
  * The context associated with the current record being processed by
  * an {@link Processor}
  */
 public interface RecordContext {
-    /**
-     * @return  The offset of the original record received from Kafka;
-     *          could be -1 if it is not available
-     */
-    long offset();
 
     /**
-     * @return  The timestamp extracted from the record received from Kafka;
-     *          could be -1 if it is not available
-     */
-    long timestamp();
-
-    /**
-     * @return  The topic the record was received on;
-     *          could be null if it is not available
+     * Return the topic name of the current input record; could be {@code null} if it is not
+     * available.
+     *
+     * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, the record won't have an associated topic.
+     * Another example is
+     * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
+     * (and siblings), that do not always guarantee to provide a valid topic name, as they might be
+     * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
+     *
+     * @return the topic name
      */
     String topic();
 
     /**
-     * @return  The partition the record was received on;
-     *          could be -1 if it is not available
+     * Return the partition id of the current input record; could be {@code -1} if it is not
+     * available.
+     *
+     * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, the record won't have an associated partition id.
+     * Another example is
+     * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
+     * (and siblings), that do not always guarantee to provide a valid partition id, as they might be
+     * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
+     *
+     * @return the partition id
      */
     int partition();
 
     /**
-     * @return  The headers from the record received from Kafka;
-     *          could be null if it is not available
+     * Return the offset of the current input record; could be {@code -1} if it is not
+     * available.
+     *
+     * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, the record won't have an associated offset.
+     * Another example is
+     * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
+     * (and siblings), that do not always guarantee to provide a valid offset, as they might be
+     * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
+     *
+     * @return the offset
+     */
+    long offset();
+
+    /**
+     * Return the current timestamp.
+     *
+     * <p> If it is triggered while processing a record streamed from the source processor,
+     * timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
+     * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} by {@link TimestampExtractor}.
+     * Note, that an upstream {@link Processor} might have set a new timestamp by calling
+     * {@link ProcessorContext#forward(Object, Object, To) forward(..., To.all().withTimestamp(...))}.
+     * In particular, some Kafka Streams DSL operators set result record timestamps explicitly,
+     * to guarantee deterministic results.
+     *
+     * <p> If it is triggered while processing a record generated not from the source processor (for example,
+     * if this method is invoked from the punctuate call), timestamp is defined as the current
+     * task's stream time, which is defined as the largest timestamp of any record processed by the task.
+     *
+     * @return the timestamp
+     */
+    long timestamp();
+
+    /**
+     * Return the headers of the current input record; could be an empty header if it is not
+     * available.
+     *
+     * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, the record might not have any associated headers.
+     * Another example is
+     * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
+     * (and siblings), that do not always guarantee to provide a valid headers, as they might be
+     * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
+     *
+     * @return the headers
      */
     Headers headers();
 

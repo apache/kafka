@@ -101,7 +101,9 @@ class BrokerMetadataListener(
   ) extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
       try {
-        apply(reader.next())
+        while (reader.hasNext()) {
+          apply(reader.next())
+        }
       } finally {
         reader.close()
       }
@@ -181,7 +183,8 @@ class BrokerMetadataListener(
       case rec: PartitionChangeRecord => handlePartitionChangeRecord(imageBuilder, rec)
       case rec: RemoveTopicRecord => handleRemoveTopicRecord(imageBuilder, rec)
       case rec: ConfigRecord => handleConfigRecord(rec)
-      case rec: QuotaRecord => handleQuotaRecord(imageBuilder, rec)
+      case rec: ClientQuotaRecord => handleClientQuotaRecord(imageBuilder, rec)
+      case rec: ProducerIdsRecord => handleProducerIdRecord(rec)
       case _ => throw new RuntimeException(s"Unhandled record $record with type $recordType")
     }
   }
@@ -253,10 +256,15 @@ class BrokerMetadataListener(
     }
   }
 
-  def handleQuotaRecord(imageBuilder: MetadataImageBuilder,
-                        record: QuotaRecord): Unit = {
+  def handleClientQuotaRecord(imageBuilder: MetadataImageBuilder,
+                        record: ClientQuotaRecord): Unit = {
     // TODO add quotas to MetadataImageBuilder
     clientQuotaManager.handleQuotaRecord(record)
+  }
+
+  def handleProducerIdRecord(record: ProducerIdsRecord): Unit = {
+    // This is a no-op since brokers get their producer ID blocks directly from the controller via
+    // AllocateProducerIds RPC response
   }
 
   class HandleNewLeaderEvent(leaderAndEpoch: LeaderAndEpoch)

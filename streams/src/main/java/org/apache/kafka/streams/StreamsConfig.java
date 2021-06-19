@@ -135,7 +135,6 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  * @see ConsumerConfig
  * @see ProducerConfig
  */
-@SuppressWarnings("deprecation")
 public class StreamsConfig extends AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
@@ -323,11 +322,6 @@ public class StreamsConfig extends AbstractConfig {
      */
     @SuppressWarnings("WeakerAccess")
     public static final String EXACTLY_ONCE_V2 = "exactly_once_v2";
-
-    /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics from version 0.10.0. to 2.4
-     */
-    public static final String METRICS_0100_TO_24 = "0.10.0-2.4";
 
     /**
      * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for the latest built-in metrics version.
@@ -753,7 +747,6 @@ public class StreamsConfig extends AbstractConfig {
                     Type.STRING,
                     METRICS_LATEST,
                     in(
-                        METRICS_0100_TO_24,
                         METRICS_LATEST
                     ),
                     Importance.LOW,

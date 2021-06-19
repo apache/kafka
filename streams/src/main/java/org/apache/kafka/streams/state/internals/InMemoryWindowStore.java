@@ -93,11 +93,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         final StreamsMetricsImpl metrics = ProcessorContextUtils.getMetricsImpl(context);
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
-        expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
+        expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
             threadId,
             taskName,
-            metricScope,
-            name,
             metrics
         );
 
