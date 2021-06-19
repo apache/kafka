@@ -125,7 +125,7 @@ class ForwardingManagerImpl(
       }
     }
 
-    channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler, request.header)
+    channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler)
   }
 
   override def controllerApiVersions: Option[NodeApiVersions] =

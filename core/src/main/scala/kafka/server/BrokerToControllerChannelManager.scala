@@ -28,7 +28,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeResponse, RequestHeader}
+import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
@@ -141,13 +141,8 @@ trait BrokerToControllerChannelManager {
   def controllerApiVersions(): Option[NodeApiVersions]
   def sendRequest(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
-    callback: ControllerRequestCompletionHandler,
-    requestHeader: RequestHeader
+    callback: ControllerRequestCompletionHandler
   ): Unit
-  def sendRequest(
-   request: AbstractRequest.Builder[_ <: AbstractRequest],
-   callback: ControllerRequestCompletionHandler
- ): Unit
 }
 
 
@@ -244,32 +239,16 @@ class BrokerToControllerChannelManagerImpl(
    *
    * @param request         The request to be sent.
    * @param callback        Request completion callback.
-   * @param requestHeader   The request header to be sent, used for parsing the envelop response
    */
   def sendRequest(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
-    callback: ControllerRequestCompletionHandler,
-    requestHeader: RequestHeader
+    callback: ControllerRequestCompletionHandler
   ): Unit = {
     requestThread.enqueue(BrokerToControllerQueueItem(
       time.milliseconds(),
       request,
-      callback,
-      requestHeader
+      callback
     ))
-  }
-
-  /**
-   * Send request to the controller.
-   *
-   * @param request         The request to be sent.
-   * @param callback        Request completion callback.
-   */
-  def sendRequest(
-   request: AbstractRequest.Builder[_ <: AbstractRequest],
-   callback: ControllerRequestCompletionHandler,
- ): Unit = {
-    sendRequest(request, callback, null)
   }
 
   def controllerApiVersions(): Option[NodeApiVersions] =
@@ -293,8 +272,7 @@ abstract class ControllerRequestCompletionHandler extends RequestCompletionHandl
 case class BrokerToControllerQueueItem(
   createdTimeMs: Long,
   request: AbstractRequest.Builder[_ <: AbstractRequest],
-  callback: ControllerRequestCompletionHandler,
-  requestHeader: RequestHeader = null
+  callback: ControllerRequestCompletionHandler
 )
 
 class BrokerToControllerRequestThread(
@@ -372,7 +350,7 @@ class BrokerToControllerRequestThread(
     } else if (response.wasDisconnected()) {
       updateControllerAddress(null)
       requestQueue.putFirst(queueItem)
-    } else if (checkNotControllerErrorInResponse(queueItem.requestHeader, response.responseBody())) {
+    } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       // just close the controller connection and wait for metadata cache update in doWork
       activeControllerAddress().foreach { controllerAddress => {
         networkClient.disconnect(controllerAddress.idString)
@@ -383,26 +361,6 @@ class BrokerToControllerRequestThread(
     } else {
       queueItem.callback.onComplete(response)
     }
-  }
-
-  def checkNotControllerErrorInResponse(requestHeader: RequestHeader, responseBody: AbstractResponse): Boolean = {
-    if (responseBody.errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
-      return true
-    }
-
-    if (responseBody.isInstanceOf[EnvelopeResponse] && requestHeader != null) {
-      info(s"Trying to find NOT_CONTROLLER exception inside envelope response")
-      val envelopeResponse = responseBody.asInstanceOf[EnvelopeResponse]
-      val envelopeError = envelopeResponse.error()
-
-      if (envelopeError == Errors.NONE) {
-        val response = AbstractResponse.parseResponse(envelopeResponse.responseData, requestHeader)
-        envelopeResponse.responseData().rewind()
-        return response.errorCounts().containsKey(Errors.NOT_CONTROLLER)
-      }
-    }
-
-    false
   }
 
   override def doWork(): Unit = {

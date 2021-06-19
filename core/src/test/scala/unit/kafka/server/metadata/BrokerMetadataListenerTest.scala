@@ -21,7 +21,7 @@ import java.util.Properties
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogConfig
-import kafka.server.{RaftReplicaManager, RequestLocal}
+import kafka.server.RaftReplicaManager
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.metadata.{ConfigRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
@@ -100,7 +100,7 @@ class BrokerMetadataListenerTest {
 
     verify(groupCoordinator).handleDeletedPartitions(ArgumentMatchers.argThat[Seq[TopicPartition]] { partitions =>
       partitions.toSet == partitionSet(topic, numPartitions)
-    }, any(classOf[RequestLocal]))
+    }, any())
 
     val deleteImageCapture: ArgumentCaptor[MetadataImageBuilder] =
       ArgumentCaptor.forClass(classOf[MetadataImageBuilder])

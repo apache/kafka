@@ -23,18 +23,16 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, ManualMetadataUpdater, Metadata, MockClient, NodeApiVersions}
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.message.MetadataRequestData
-import org.apache.kafka.common.network.{ClientInformation, ListenerName}
+import org.apache.kafka.common.message.{EnvelopeResponseData, MetadataRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractRequest, EnvelopeRequest, EnvelopeResponse, MetadataRequest, MetadataResponse, RequestContext, RequestHeader, RequestTestUtils}
-import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.requests.{AbstractRequest, EnvelopeRequest, EnvelopeResponse, MetadataRequest, MetadataResponse, RequestTestUtils}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito._
 
-import java.net.InetAddress
 
 class BrokerToControllerRequestThreadTest {
 
@@ -216,7 +214,7 @@ class BrokerToControllerRequestThreadTest {
   }
 
   @Test
-  def testNotControllerWithinEnvelopeResponse(): Unit = {
+  def testEnvelopeResponseWithNotControllerError(): Unit = {
     val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val oldControllerId = 1
@@ -234,21 +232,9 @@ class BrokerToControllerRequestThreadTest {
 
     when(controllerNodeProvider.get()).thenReturn(Some(oldController), Some(newController))
 
-    val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
-      Collections.singletonMap("a", Errors.NOT_CONTROLLER),
-      Collections.singletonMap("a", 2))
-
-    val correlationId = 0
-    val clientId = "clientId"
-    val header = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion, clientId, correlationId)
-
-    val context = new RequestContext(header, "0", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
-      new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, true)
-    // build a response byteBuffer with notControllerError inside
-    val responseBytes = context.buildResponseEnvelopePayload(responseWithNotControllerError)
-
-    // create an envelopeResponse with the byteBuffer built above
-    val notControllerErrorWithinEnvelopeResponse = new EnvelopeResponse(responseBytes, Errors.NONE)
+    // create an envelopeResponse with Not Controller error
+    val envelopeResponseWithNotControllerError = new EnvelopeResponse(
+      new EnvelopeResponseData().setErrorCode(Errors.NOT_CONTROLLER.code()))
 
     // response for retry request after receiving Not_Controller error
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
@@ -265,16 +251,10 @@ class BrokerToControllerRequestThreadTest {
     val envelopeRequestBuilder = new EnvelopeRequest.Builder(ByteBuffer.allocate(0),
       kafkaPrincipalBuilder.serialize(kafkaPrincipal), "client-address".getBytes)
 
-    // mock requestHeader to return the info in responseWithNotControllerError
-    val requestHeader = mock(classOf[RequestHeader])
-    when(requestHeader.apiKey()).thenReturn(ApiKeys.METADATA)
-    when(requestHeader.apiVersion()).thenReturn(11.toShort)
-
     val queueItem = BrokerToControllerQueueItem(
       time.milliseconds(),
       envelopeRequestBuilder,
-      completionHandler,
-      requestHeader
+      completionHandler
     )
 
     testRequestThread.enqueue(queueItem)
@@ -287,9 +267,9 @@ class BrokerToControllerRequestThreadTest {
     // send and process the envelope request
     mockClient.prepareResponse((body: AbstractRequest) => {
       body.isInstanceOf[EnvelopeRequest]
-    }, notControllerErrorWithinEnvelopeResponse)
+    }, envelopeResponseWithNotControllerError)
     testRequestThread.doWork()
-    // expect the envelope response will get parsed and find NotControllerError inside, to reset the activeControllerAddress()
+    // expect to reset the activeControllerAddress after finding the NotControllerError
     assertEquals(None, testRequestThread.activeControllerAddress())
     // reinitialize the controller to a different node
     testRequestThread.doWork()
