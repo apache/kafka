@@ -14,24 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.producer.internals;
 
-package org.apache.kafka.timeline;
+import java.util.function.Supplier;
 
-/**
- * An API which all snapshot data structures implement, indicating that their contents
- * can be reverted to a point in time.
- */
-interface Revertable {
-    /**
-     * Revert to the target epoch.
-     *
-     * @param targetEpoch   The epoch to revert to.
-     * @param delta         The delta associated with this epoch for this object.
-     */
-    void executeRevert(long targetEpoch, Delta delta);
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-    /**
-     * Reverts to the initial value.
-     */
-    void reset();
+public class ProducerTestUtils {
+    private static final int MAX_TRIES = 10;
+
+    static void runUntil(
+        Sender sender,
+        Supplier<Boolean> condition
+    ) {
+        runUntil(sender, condition, MAX_TRIES);
+    }
+
+    static void runUntil(
+        Sender sender,
+        Supplier<Boolean> condition,
+        int maxTries
+    ) {
+        int tries = 0;
+        while (!condition.get() && tries < maxTries) {
+            tries++;
+            sender.runOnce();
+        }
+        assertTrue(condition.get(), "Condition not satisfied after " + maxTries + " tries");
+    }
 }
