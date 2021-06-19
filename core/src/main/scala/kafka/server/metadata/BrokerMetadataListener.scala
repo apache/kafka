@@ -101,7 +101,9 @@ class BrokerMetadataListener(
   ) extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
       try {
-        apply(reader.next())
+        while (reader.hasNext()) {
+          apply(reader.next())
+        }
       } finally {
         reader.close()
       }

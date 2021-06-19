@@ -1120,6 +1120,84 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       "topic should have been removed from controller context after deletion")
   }
 
+  @Test
+  def testTopicIdUpgradeAfterReassigningPartitions(): Unit = {
+    val tp = new TopicPartition("t", 0)
+    val reassignment = Map(tp -> Some(Seq(0)))
+    val adminZkClient = new AdminZkClient(zkClient)
+
+    // start server with old IBP
+    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    // use create topic with ZK client directly, without topic ID
+    adminZkClient.createTopic(tp.topic, 1, 1)
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon topic creation")
+    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    val id = servers.head.kafkaController.controllerContext.topicIds.get(tp.topic)
+    assertTrue(topicIdAfterCreate.isEmpty)
+    assertEquals(topicIdAfterCreate, id,
+      "expected no topic ID, but one existed")
+
+    // Upgrade to IBP 2.8
+    servers(0).shutdown()
+    servers(0).awaitShutdown()
+    servers = makeServers(1)
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon controller restart")
+    val topicIdAfterUpgrade = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertEquals(topicIdAfterUpgrade, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
+      "expected same topic ID but it can not be found")
+    assertEquals(tp.topic(), servers.head.kafkaController.controllerContext.topicNames(topicIdAfterUpgrade.get),
+      "correct topic name expected but cannot be found in the controller context")
+
+    // Downgrade back to 2.7
+    servers(0).shutdown()
+    servers(0).awaitShutdown()
+    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon topic creation")
+    val topicIdAfterDowngrade = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertTrue(topicIdAfterDowngrade.isDefined)
+    assertEquals(topicIdAfterUpgrade, topicIdAfterDowngrade,
+      "expected same topic ID but it can not be found after downgrade")
+    assertEquals(topicIdAfterDowngrade, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
+      "expected same topic ID in controller context but it is no longer found after downgrade")
+    assertEquals(tp.topic(), servers.head.kafkaController.controllerContext.topicNames(topicIdAfterUpgrade.get),
+      "correct topic name expected but cannot be found in the controller context")
+
+    // Reassign partitions
+    servers(0).kafkaController.eventManager.put(ApiPartitionReassignment(reassignment, _ => ()))
+    waitForPartitionState(tp, 3, 0, 1,
+      "failed to get expected partition state upon controller restart")
+    val topicIdAfterReassignment = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertTrue(topicIdAfterReassignment.isDefined)
+    assertEquals(topicIdAfterUpgrade, topicIdAfterReassignment,
+      "expected same topic ID but it can not be found after reassignment")
+    assertEquals(topicIdAfterUpgrade, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
+      "expected same topic ID in controller context but is no longer found after reassignment")
+    assertEquals(tp.topic(), servers.head.kafkaController.controllerContext.topicNames(topicIdAfterUpgrade.get),
+      "correct topic name expected but cannot be found in the controller context")
+
+    // Upgrade back to 2.8
+    servers(0).shutdown()
+    servers(0).awaitShutdown()
+    servers = makeServers(1)
+    waitForPartitionState(tp, 3, 0, 1,
+      "failed to get expected partition state upon controller restart")
+    val topicIdAfterReUpgrade = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertEquals(topicIdAfterUpgrade, topicIdAfterReUpgrade,
+      "expected same topic ID but it can not be found after re-upgrade")
+    assertEquals(topicIdAfterReUpgrade, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
+      "topic ID can not be found in controller context after re-upgrading IBP")
+    assertEquals(tp.topic(), servers.head.kafkaController.controllerContext.topicNames(topicIdAfterReUpgrade.get),
+      "correct topic name expected but cannot be found in the controller context")
+
+    adminZkClient.deleteTopic(tp.topic)
+    TestUtils.waitUntilTrue(() => servers.head.kafkaController.controllerContext.topicIds.get(tp.topic).isEmpty,
+      "topic ID for topic should have been removed from controller context after deletion")
+    assertTrue(servers.head.kafkaController.controllerContext.topicNames.get(topicIdAfterUpgrade.get).isEmpty)
+  }
+
   private def testControllerMove(fun: () => Unit): Unit = {
     val controller = getController().kafkaController
     val appender = LogCaptureAppender.createAndRegister()
