@@ -135,7 +135,7 @@ version.
 You can remove support for a tagged field from a specific version of a message,
 but you can't reuse a tag once it has been used for something else.  Once tags
 have been used for something, they can't be used for anything else, without
-breaking compatibilty.
+breaking compatibility.
 
 Note that tagged fields can only be added to "flexible" message versions.
 
@@ -145,7 +145,7 @@ Kafka serialization has been improved over time to be more flexible and
 efficient.  Message versions that contain these improvements are referred to as
 "flexible versions."
 
-In flexible verisons, variable-length fields such as strings, arrays, and bytes
+In flexible versions, variable-length fields such as strings, arrays, and bytes
 fields are serialized in a more efficient way that saves space.  The new
 serialization types start with compact.  For example COMPACT_STRING is a more
 efficient form of STRING.
@@ -190,7 +190,7 @@ been set:
 
 * Array fields default to empty.
 
-You can specify "null" as a default value for a string field by specifing the
+You can specify "null" as a default value for a string field by specifying the
 literal string "null".  Note that you can only specify null as a default if all
 versions of the field are nullable.
 

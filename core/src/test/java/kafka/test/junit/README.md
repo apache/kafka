@@ -135,5 +135,5 @@ class SomeTestClass(helper: IntegrationTestHelper) {
 
 # Gotchas
 * Test methods annotated with JUnit's `@Test` will still be run, but no cluster will be started and no dependency 
-  injection will happen. This is generally not what you want
-* Even though ClusterConfig is accessible and mutable inside the test method, changing it will have no affect on the cluster 
+  injection will happen. This is generally not what you want.
+* Even though ClusterConfig is accessible and mutable inside the test method, changing it will have no effect on the cluster.
