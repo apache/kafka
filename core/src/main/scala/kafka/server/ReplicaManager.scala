@@ -41,6 +41,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
+import org.apache.kafka.common.message.FetchRequestData
 import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribeProducersResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
@@ -55,7 +56,6 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
 import org.apache.kafka.common.replica.{ClientMetadata, _}
-import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
@@ -1018,7 +1018,7 @@ class ReplicaManager(val config: KafkaConfig,
                     fetchMinBytes: Int,
                     fetchMaxBytes: Int,
                     hardMaxBytesLimit: Boolean,
-                    fetchInfos: Seq[(TopicPartition, PartitionData)],
+                    fetchInfos: Seq[(TopicPartition, FetchRequestData.FetchPartition)],
                     quota: ReplicaQuota,
                     responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
                     isolationLevel: IsolationLevel,
@@ -1110,17 +1110,17 @@ class ReplicaManager(val config: KafkaConfig,
                        fetchIsolation: FetchIsolation,
                        fetchMaxBytes: Int,
                        hardMaxBytesLimit: Boolean,
-                       readPartitionInfo: Seq[(TopicPartition, PartitionData)],
+                       readPartitionInfo: Seq[(TopicPartition, FetchRequestData.FetchPartition)],
                        quota: ReplicaQuota,
                        clientMetadata: Option[ClientMetadata]): Seq[(TopicPartition, LogReadResult)] = {
     val traceEnabled = isTraceEnabled
 
-    def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
+    def read(tp: TopicPartition, fetchInfo: FetchRequestData.FetchPartition, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
       val offset = fetchInfo.fetchOffset
-      val partitionFetchSize = fetchInfo.maxBytes
+      val partitionFetchSize = fetchInfo.partitionMaxBytes
       val followerLogStartOffset = fetchInfo.logStartOffset
 
-      val adjustedMaxBytes = math.min(fetchInfo.maxBytes, limitBytes)
+      val adjustedMaxBytes = math.min(partitionFetchSize, limitBytes)
       try {
         if (traceEnabled)
           trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $partitionFetchSize, " +
@@ -1140,7 +1140,10 @@ class ReplicaManager(val config: KafkaConfig,
               s"${preferredReadReplica.get} for $clientMetadata")
           }
           // If a preferred read-replica is set, skip the read
-          val offsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, fetchOnlyFromLeader = false)
+          val offsetSnapshot = partition.fetchOffsetSnapshot(
+            currentLeaderEpoch = FetchRequest.optionalEpoch(fetchInfo.currentLeaderEpoch),
+            fetchOnlyFromLeader = false
+          )
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
             divergingEpoch = None,
             highWatermark = offsetSnapshot.highWatermark.messageOffset,
@@ -1154,9 +1157,9 @@ class ReplicaManager(val config: KafkaConfig,
         } else {
           // Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
           val readInfo: LogReadInfo = partition.readRecords(
-            lastFetchedEpoch = fetchInfo.lastFetchedEpoch,
+            lastFetchedEpoch = FetchRequest.optionalEpoch(fetchInfo.lastFetchedEpoch),
             fetchOffset = fetchInfo.fetchOffset,
-            currentLeaderEpoch = fetchInfo.currentLeaderEpoch,
+            currentLeaderEpoch = FetchRequest.optionalEpoch(fetchInfo.currentLeaderEpoch),
             maxBytes = adjustedMaxBytes,
             fetchIsolation = fetchIsolation,
             fetchOnlyFromLeader = fetchOnlyFromLeader,

@@ -18,18 +18,18 @@
 package kafka.server
 
 import java.util.concurrent.TimeUnit
-
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.message.FetchRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.replica.ClientMetadata
-import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 
 import scala.collection._
 
-case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData) {
+case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: FetchRequestData.FetchPartition) {
 
   override def toString: String = {
     "[startOffsetMetadata: " + startOffsetMetadata +
@@ -87,7 +87,9 @@ class DelayedFetch(delayMs: Long,
     fetchMetadata.fetchPartitionStatus.foreach {
       case (topicPartition, fetchStatus) =>
         val fetchOffset = fetchStatus.startOffsetMetadata
-        val fetchLeaderEpoch = fetchStatus.fetchInfo.currentLeaderEpoch
+        val fetchLeaderEpoch = FetchRequest.optionalEpoch(fetchStatus.fetchInfo.currentLeaderEpoch)
+        val lastFetchedEpoch = FetchRequest.optionalEpoch(fetchStatus.fetchInfo.lastFetchedEpoch)
+
         try {
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
             val partition = replicaManager.getPartitionOrException(topicPartition)
@@ -116,14 +118,14 @@ class DelayedFetch(delayMs: Long,
                   return forceComplete()
               } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
                 // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
-                val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
+                val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.partitionMaxBytes())
                 if (!replicaManager.shouldLeaderThrottle(quota, partition, fetchMetadata.replicaId))
                   accumulatedSize += bytesAvailable
               }
             }
 
             // Case H: If truncation has caused diverging epoch while this request was in purgatory, return to trigger truncation
-            fetchStatus.fetchInfo.lastFetchedEpoch.ifPresent { fetchEpoch =>
+            lastFetchedEpoch.ifPresent { fetchEpoch =>
               val epochEndOffset = partition.lastOffsetForLeaderEpoch(fetchLeaderEpoch, fetchEpoch, fetchOnlyFromLeader = false)
               if (epochEndOffset.errorCode != Errors.NONE.code()
                   || epochEndOffset.endOffset == UNDEFINED_EPOCH_OFFSET

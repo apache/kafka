@@ -47,8 +47,6 @@ public class FetchRequest extends AbstractRequest {
     private final FetchRequestData data;
 
     // These are immutable read-only structures derived from FetchRequestData
-    private final Map<TopicPartition, PartitionData> fetchData;
-    private final List<TopicPartition> toForget;
     private final FetchMetadata metadata;
 
     public static final class PartitionData {
@@ -110,12 +108,20 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
-    private Optional<Integer> optionalEpoch(int rawEpochValue) {
+    public static Optional<Integer> optionalEpoch(int rawEpochValue) {
         if (rawEpochValue < 0) {
             return Optional.empty();
         } else {
             return Optional.of(rawEpochValue);
         }
+    }
+
+    public static Map<TopicPartition, FetchRequestData.FetchPartition> toFetchPartitionMap(FetchRequestData fetchRequestData) {
+        Map<TopicPartition, FetchRequestData.FetchPartition> result = new LinkedHashMap<>();
+        fetchRequestData.topics().forEach(fetchTopic -> fetchTopic.partitions().forEach(fetchPartition ->
+            result.put(new TopicPartition(fetchTopic.topic(), fetchPartition.partition()), fetchPartition)
+        ));
+        return Collections.unmodifiableMap(result);
     }
 
     private Map<TopicPartition, PartitionData> toPartitionDataMap(List<FetchRequestData.FetchTopic> fetchableTopics) {
@@ -282,8 +288,6 @@ public class FetchRequest extends AbstractRequest {
     public FetchRequest(FetchRequestData fetchRequestData, short version) {
         super(ApiKeys.FETCH, version);
         this.data = fetchRequestData;
-        this.fetchData = toPartitionDataMap(fetchRequestData.topics());
-        this.toForget = toForgottenTopicList(fetchRequestData.forgottenTopicsData());
         this.metadata = new FetchMetadata(fetchRequestData.sessionId(), fetchRequestData.sessionEpoch());
     }
 
@@ -297,9 +301,10 @@ public class FetchRequest extends AbstractRequest {
         // is essential for them.
         Errors error = Errors.forException(e);
         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
-        for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
-            responseData.put(entry.getKey(), FetchResponse.partitionResponse(entry.getKey().partition(), error));
-        }
+        data.topics().forEach(topic -> topic.partitions().forEach(partition ->
+            responseData.put(new TopicPartition(topic.topic(), partition.partition()),
+                FetchResponse.partitionResponse(partition.partition(), error))
+        ));
         return FetchResponse.of(error, throttleTimeMs, data.sessionId(), responseData);
     }
 
@@ -317,14 +322,6 @@ public class FetchRequest extends AbstractRequest {
 
     public int maxBytes() {
         return data.maxBytes();
-    }
-
-    public Map<TopicPartition, PartitionData> fetchData() {
-        return fetchData;
-    }
-
-    public List<TopicPartition> toForget() {
-        return toForget;
     }
 
     public boolean isFromFollower() {
