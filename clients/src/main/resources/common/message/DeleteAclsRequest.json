@@ -20,7 +20,8 @@
   "name": "DeleteAclsRequest",
   // Version 1 adds the pattern type.
   // Version 2 enables flexible versions.
-  "validVersions": "0-2",
+  // Version 3 adds the user resource type.
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "Filters", "type": "[]DeleteAclsFilter", "versions": "0+",

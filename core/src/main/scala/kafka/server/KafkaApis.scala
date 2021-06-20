@@ -2702,8 +2702,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"Sending create token response for correlation id ${request.header.correlationId} " +
         s"to client ${request.header.clientId}.")
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, createResult.error, request.context.principal, createResult.issueTimestamp,
-          createResult.expiryTimestamp, createResult.maxTimestamp, createResult.tokenId, ByteBuffer.wrap(createResult.hmac)))
+        CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, createResult.error, createResult.owner, createResult.tokenRequester,
+          createResult.issueTimestamp, createResult.expiryTimestamp, createResult.maxTimestamp, createResult.tokenId, ByteBuffer.wrap(createResult.hmac)))
     }
 
     if (!allowTokenRequests(request))
@@ -2718,7 +2718,14 @@ class KafkaApis(val requestChannel: RequestChannel,
           CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, Errors.INVALID_PRINCIPAL_TYPE, request.context.principal))
       }
       else {
+        val ownerPrincipalName = createTokenRequest.data().ownerPrincipalName()
+        val owner = if (ownerPrincipalName == null || ownerPrincipalName.isEmpty) {
+          request.context.principal
+        } else {
+          new KafkaPrincipal(createTokenRequest.data().ownerPrincipalType(), ownerPrincipalName)
+        }
         tokenManager.createToken(
+          owner,
           request.context.principal,
           renewerList,
           createTokenRequest.data.maxLifetimeMs,
