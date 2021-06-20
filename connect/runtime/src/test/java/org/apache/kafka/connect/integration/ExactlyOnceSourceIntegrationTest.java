@@ -21,9 +21,12 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.Worker;
@@ -32,6 +35,9 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectClusterAssertions;
@@ -703,6 +709,33 @@ public class ExactlyOnceSourceIntegrationTest {
         }
     }
 
+    @Test
+    public void testPotentialDeadlockWhenProducingToOffsetsTopic() throws Exception {
+        connectBuilder.numWorkers(1);
+        startConnect();
+
+        String topic = "test-topic";
+        connect.kafka().createTopic(topic, 3);
+
+        int recordsProduced = 100;
+
+        Map<String, String> props = new HashMap<>();
+        // See below; this connector does nothing except request offsets from the worker in SourceTask::poll
+        // and then return a single record targeted at its offsets topic
+        props.put(CONNECTOR_CLASS_CONFIG, NaughtyConnector.class.getName());
+        props.put(TASKS_MAX_CONFIG, "1");
+        props.put(NAME_CONFIG, CONNECTOR_NAME);
+        props.put(TRANSACTION_BOUNDARY_CONFIG, INTERVAL.toString());
+        props.put("messages.per.poll", Integer.toString(recordsProduced));
+        props.put(OFFSETS_TOPIC_CONFIG, "whoops");
+
+        // start a source connector
+        connect.configureConnector(CONNECTOR_NAME, props);
+
+        connect.assertions().assertConnectorIsRunningAndTasksHaveFailed(
+            CONNECTOR_NAME, 1, "Task should have failed after trying to produce to its own offsets topic");
+    }
+
     private ConfigInfo findConfigInfo(String property, ConfigInfos validationResult) {
         return validationResult.values().stream()
                 .filter(info -> property.equals(info.configKey().name()))
@@ -828,5 +861,67 @@ public class ExactlyOnceSourceIntegrationTest {
                 }
         );
         producer.close(Duration.ZERO);
+    }
+
+    public static class NaughtyConnector extends SourceConnector {
+        private Map<String, String> props;
+
+        @Override
+        public void start(Map<String, String> props) {
+            this.props = props;
+        }
+
+        @Override
+        public Class<? extends Task> taskClass() {
+            return NaughtyTask.class;
+        }
+
+        @Override
+        public List<Map<String, String>> taskConfigs(int maxTasks) {
+            return IntStream.range(0, maxTasks).mapToObj(i -> props).collect(Collectors.toList());
+        }
+
+        @Override
+        public void stop() {
+        }
+
+        @Override
+        public ConfigDef config() {
+            return new ConfigDef();
+        }
+
+        @Override
+        public String version() {
+            return "none";
+        }
+    }
+
+    public static class NaughtyTask extends SourceTask {
+        private String topic;
+
+        @Override
+        public void start(Map<String, String> props) {
+            if (!props.containsKey(OFFSETS_TOPIC_CONFIG)) {
+                throw new ConnectException("No offsets topic");
+            }
+            this.topic = props.get(OFFSETS_TOPIC_CONFIG);
+        }
+
+        @Override
+        public List<SourceRecord> poll() {
+            // Request a read to the end of the offsets topic
+            context.offsetStorageReader().offset(Collections.singletonMap("", null));
+            // Produce a record to the offsets topic
+            return Collections.singletonList(new SourceRecord(null, null, topic, null, "", null, null));
+        }
+
+        @Override
+        public void stop() {
+        }
+
+        @Override
+        public String version() {
+            return "none";
+        }
     }
 }

@@ -70,6 +70,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     private HashMap<ByteBuffer, ByteBuffer> data;
     private final Supplier<TopicAdmin> topicAdminSupplier;
     private SharedTopicAdmin ownTopicAdmin;
+    private String topic;
 
     @Deprecated
     public KafkaOffsetBackingStore() {
@@ -98,6 +99,8 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
                           final Map<String, Object> consumerOverrides) {
         if (topic == null || topic.trim().length() == 0)
             throw new ConfigException("Offset storage topic must be specified");
+
+        this.topic = topic;
 
         String clusterId = ConnectUtils.lookupKafkaClusterId(config);
         data = new HashMap<>();
@@ -219,6 +222,10 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
 
     public Producer<byte[], byte[]> producer() {
         return offsetLog.producer();
+    }
+
+    public String topic() {
+        return topic;
     }
 
     private final Callback<ConsumerRecord<byte[], byte[]>> consumedCallback = new Callback<ConsumerRecord<byte[], byte[]>>() {

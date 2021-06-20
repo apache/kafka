@@ -35,7 +35,6 @@ import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
-import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -64,7 +63,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     private final TransactionManager transactionManager;
     private final TransactionMetricsGroup transactionMetrics;
 
-    private final OffsetBackingStore offsetBackingStore;
+    private final KafkaOffsetBackingStore offsetBackingStore;
     private final Runnable preProducerCheck;
     private final Runnable postProducerCheck;
 
@@ -147,6 +146,16 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
     @Override
     protected void prepareToSendRecord(SourceRecord sourceRecord, ProducerRecord<byte[], byte[]> producerRecord, boolean newRecord) {
+        if (offsetBackingStore.topic().equals(producerRecord.topic())) {
+            // This is to prevent deadlock that occurs when:
+            //     1. A task provides a record whose topic is the task's offsets topic
+            //     2. That record is dispatched to the task's producer in a transaction that remains open
+            //        at least until the worker polls the task again
+            //     3. In the subsequent call to SourceTask::poll, the task requests offsets from the worker
+            //        (which requires a read to the end of the offsets topic, and will block until any open
+            //        transactions on the topic are either committed or aborted)
+            throw new ConnectException("Source tasks may not produce to their own offsets topics when exactly-once support is enabled");
+        }
         maybeBeginTransaction();
     }
 

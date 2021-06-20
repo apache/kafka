@@ -188,6 +188,7 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         metrics = new MockConnectMetrics();
         time = Time.SYSTEM;
         EasyMock.expect(offsetBackingStore.producer()).andStubReturn(producer);
+        EasyMock.expect(offsetBackingStore.topic()).andStubReturn("offsets-topic");
         pollLatch = new CountDownLatch(1);
         flushLatch = new CountDownLatch(1);
     }
