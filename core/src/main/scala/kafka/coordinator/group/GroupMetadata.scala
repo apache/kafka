@@ -214,6 +214,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private val pendingTransactionalOffsetCommits = new mutable.HashMap[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]()
   private var receivedTransactionalOffsetCommits = false
   private var receivedConsumerOffsetCommits = false
+  private val pendingSyncMembers = new mutable.HashSet[String]
 
   // When protocolType == `consumer`, a set of subscribed topics is maintained. The set is
   // computed when a new generation is created or when the group is restored from the log.
@@ -274,6 +275,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       leaderId = members.keys.headOption
 
     pendingMembers.remove(memberId)
+    pendingSyncMembers.remove(memberId)
   }
 
   /**
@@ -342,6 +344,34 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         s"a stable member of the group")
     }
     pendingMembers.add(memberId)
+  }
+
+  def addPendingSyncMember(memberId: String): Boolean = {
+    if (!has(memberId)) {
+      throw new IllegalStateException(s"Attempt to add a pending sync for member $memberId which " +
+        "is not a member of the group")
+    }
+    pendingSyncMembers.add(memberId)
+  }
+
+  def removePendingSyncMember(memberId: String): Boolean = {
+    if (!has(memberId)) {
+      throw new IllegalStateException(s"Attempt to remove a pending sync for member $memberId which " +
+        "is not a member of the group")
+    }
+    pendingSyncMembers.remove(memberId)
+  }
+
+  def hasReceivedSyncFromAllMembers: Boolean = {
+    pendingSyncMembers.isEmpty
+  }
+
+  def allPendingSyncMembers: Set[String] = {
+    pendingSyncMembers.toSet
+  }
+
+  def clearPendingSyncMembers(): Unit = {
+    pendingSyncMembers.clear()
   }
 
   def hasStaticMember(groupInstanceId: String): Boolean = {
@@ -546,6 +576,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
     receivedConsumerOffsetCommits = false
     receivedTransactionalOffsetCommits = false
+    clearPendingSyncMembers()
   }
 
   def currentMemberMetadata: List[JoinGroupResponseMember] = {

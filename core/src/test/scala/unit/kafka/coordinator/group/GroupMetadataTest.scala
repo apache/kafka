@@ -663,6 +663,52 @@ class GroupMetadataTest {
     assertThrows(classOf[IllegalStateException], () => group.add(member))
   }
 
+  @Test
+  def testCannotAddPendingSyncOfUnknownMember(): Unit = {
+    assertThrows(classOf[IllegalStateException],
+      () => group.addPendingSyncMember(memberId))
+  }
+
+  @Test
+  def testCannotRemovePendingSyncOfUnknownMember(): Unit = {
+    assertThrows(classOf[IllegalStateException],
+      () => group.removePendingSyncMember(memberId))
+  }
+
+  @Test
+  def testCanAddAndRemovePendingSyncMember(): Unit = {
+    val member = new MemberMetadata(memberId, Some(groupInstanceId), clientId, clientHost,
+      rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+    group.add(member)
+    group.addPendingSyncMember(memberId)
+    assertEquals(Set(memberId), group.allPendingSyncMembers)
+    group.removePendingSyncMember(memberId)
+    assertEquals(Set(), group.allPendingSyncMembers)
+  }
+
+  @Test
+  def testRemovalFromPendingSyncWhenMemberIsRemoved(): Unit = {
+    val member = new MemberMetadata(memberId, Some(groupInstanceId), clientId, clientHost,
+      rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+    group.add(member)
+    group.addPendingSyncMember(memberId)
+    assertEquals(Set(memberId), group.allPendingSyncMembers)
+    group.remove(memberId)
+    assertEquals(Set(), group.allPendingSyncMembers)
+  }
+
+  @Test
+  def testNewGenerationClearsPendingSyncMembers(): Unit = {
+    val member = new MemberMetadata(memberId, Some(groupInstanceId), clientId, clientHost,
+      rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+    group.add(member)
+    group.transitionTo(PreparingRebalance)
+    group.addPendingSyncMember(memberId)
+    assertEquals(Set(memberId), group.allPendingSyncMembers)
+    group.initNextGeneration()
+    assertEquals(Set(), group.allPendingSyncMembers)
+  }
+
   private def assertState(group: GroupMetadata, targetState: GroupState): Unit = {
     val states: Set[GroupState] = Set(Stable, PreparingRebalance, CompletingRebalance, Dead)
     val otherStates = states - targetState

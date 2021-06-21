@@ -17,6 +17,8 @@
 
 package org.apache.kafka.timeline;
 
+import java.util.Collections;
+
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -69,5 +71,20 @@ public class TimelineIntegerTest {
         assertEquals(1, integer.get());
         registry.revertToSnapshot(2);
         assertEquals(0, integer.get());
+    }
+
+    @Test
+    public void testReset() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        TimelineInteger value = new TimelineInteger(registry);
+        registry.createSnapshot(2);
+        value.set(1);
+        registry.createSnapshot(3);
+        value.set(2);
+
+        registry.reset();
+
+        assertEquals(Collections.emptyList(), registry.epochsList());
+        assertEquals(TimelineInteger.INIT, value.get());
     }
 }

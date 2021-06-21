@@ -22,7 +22,7 @@ import kafka.cluster.EndPoint
 import kafka.log.LogConfig
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
-import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.Records
@@ -31,11 +31,12 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UNKNOWN_ADDRESS_SPEC_INSTANCE}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+
 import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Properties}
-
 import org.apache.kafka.common.Node
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.junit.jupiter.api.function.Executable
 
 import scala.jdk.CollectionConverters._
@@ -145,69 +146,35 @@ class KafkaConfigTest {
 
   @Test
   def testAdvertiseDefaults(): Unit = {
-    val port = "9999"
+    val port = 9999
     val hostName = "fake-host"
-
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.remove(KafkaConfig.ListenersProp)
-    props.put(KafkaConfig.HostNameProp, hostName)
-    props.put(KafkaConfig.PortProp, port)
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.put(KafkaConfig.ListenersProp, s"PLAINTEXT://$hostName:$port")
     val serverConfig = KafkaConfig.fromProps(props)
+
     val endpoints = serverConfig.advertisedListeners
+    assertEquals(1, endpoints.size)
     val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
     assertEquals(endpoint.host, hostName)
-    assertEquals(endpoint.port, port.toInt)
+    assertEquals(endpoint.port, port)
   }
 
   @Test
   def testAdvertiseConfigured(): Unit = {
     val advertisedHostName = "routable-host"
-    val advertisedPort = "1234"
+    val advertisedPort = 1234
 
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put(KafkaConfig.AdvertisedHostNameProp, advertisedHostName)
-    props.put(KafkaConfig.AdvertisedPortProp, advertisedPort)
+    props.put(KafkaConfig.AdvertisedListenersProp, s"PLAINTEXT://$advertisedHostName:$advertisedPort")
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
     val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
 
     assertEquals(endpoint.host, advertisedHostName)
-    assertEquals(endpoint.port, advertisedPort.toInt)
-  }
-
-  @Test
-  def testAdvertisePortDefault(): Unit = {
-    val advertisedHostName = "routable-host"
-    val port = "9999"
-
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put(KafkaConfig.AdvertisedHostNameProp, advertisedHostName)
-    props.put(KafkaConfig.PortProp, port)
-
-    val serverConfig = KafkaConfig.fromProps(props)
-    val endpoints = serverConfig.advertisedListeners
-    val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
-
-    assertEquals(endpoint.host, advertisedHostName)
-    assertEquals(endpoint.port, port.toInt)
-  }
-
-  @Test
-  def testAdvertiseHostNameDefault(): Unit = {
-    val hostName = "routable-host"
-    val advertisedPort = "9999"
-
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put(KafkaConfig.HostNameProp, hostName)
-    props.put(KafkaConfig.AdvertisedPortProp, advertisedPort)
-
-    val serverConfig = KafkaConfig.fromProps(props)
-    val endpoints = serverConfig.advertisedListeners
-    val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
-
-    assertEquals(endpoint.host, hostName)
-    assertEquals(endpoint.port, advertisedPort.toInt)
+    assertEquals(endpoint.port, advertisedPort)
   }
 
   @Test
@@ -408,27 +375,11 @@ class KafkaConfigTest {
     props.put(KafkaConfig.BrokerIdProp, "1")
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
 
-    // configuration with host and port, but no listeners
-    props.put(KafkaConfig.HostNameProp, "myhost")
-    props.put(KafkaConfig.PortProp, "1111")
-
+    // configuration with no listeners
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(listenerListToEndPoints("PLAINTEXT://myhost:1111"), conf.listeners)
-
-    // configuration with null host
-    props.remove(KafkaConfig.HostNameProp)
-
-    val conf2 = KafkaConfig.fromProps(props)
-    assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
-    assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.advertisedListeners)
-    assertNull(conf2.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
-
-    // configuration with advertised host and port, and no advertised listeners
-    props.put(KafkaConfig.AdvertisedHostNameProp, "otherhost")
-    props.put(KafkaConfig.AdvertisedPortProp, "2222")
-
-    val conf3 = KafkaConfig.fromProps(props)
-    assertEquals(conf3.advertisedListeners, listenerListToEndPoints("PLAINTEXT://otherhost:2222"))
+    assertEquals(listenerListToEndPoints("PLAINTEXT://:9092"), conf.listeners)
+    assertNull(conf.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
+    assertEquals(conf.advertisedListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
   }
 
   @Test
@@ -657,10 +608,6 @@ class KafkaConfigTest {
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
         case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
 
-        case KafkaConfig.PortProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.HostNameProp => // ignore string
-        case KafkaConfig.AdvertisedHostNameProp => //ignore string
-        case KafkaConfig.AdvertisedPortProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.SocketSendBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.SocketReceiveBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.MaxConnectionsPerIpOverridesProp =>
@@ -827,6 +774,27 @@ class KafkaConfigTest {
         case RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
+        // Remote Log Manager Configs
+        case RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
+        case RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP => // ignore string
+        case RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP => // ignore string
+        case RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP => // ignore string
+        case RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP => // ignore string
+        case RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP => // ignore string
+        case RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP => // ignore string
+        case RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP => // ignore string
+        case RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", -1, 0.51)
+        case RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+
+        case TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -2)
+        case TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -2)
+
         case _ => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
       }
     }
@@ -923,8 +891,7 @@ class KafkaConfigTest {
     defaults.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
     defaults.put(KafkaConfig.MaxReservedBrokerIdProp, "1")
     defaults.put(KafkaConfig.BrokerIdProp, "1")
-    defaults.put(KafkaConfig.HostNameProp, "127.0.0.1")
-    defaults.put(KafkaConfig.PortProp, "1122")
+    defaults.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:1122")
     defaults.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, "127.0.0.1:2, 127.0.0.2:3")
     defaults.put(KafkaConfig.LogDirProp, "/tmp1,/tmp2")
     defaults.put(KafkaConfig.LogRollTimeHoursProp, "12")
@@ -942,9 +909,7 @@ class KafkaConfigTest {
     assertEquals(false, config.brokerIdGenerationEnable)
     assertEquals(1, config.maxReservedBrokerId)
     assertEquals(1, config.brokerId)
-    assertEquals("127.0.0.1", config.hostName)
-    assertEquals(1122, config.advertisedPort)
-    assertEquals("127.0.0.1", config.advertisedHostName)
+    assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.advertisedListeners.map(_.connectionString))
     assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
     assertEquals(List("/tmp1", "/tmp2"), config.logDirs)
     assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)

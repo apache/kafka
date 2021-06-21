@@ -173,6 +173,7 @@ libs += [
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   mockitoCore: "org.mockito:mockito-core:$versions.mockito",
   mockitoInline: "org.mockito:mockito-inline:$versions.mockito",
+  mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$versions.mockito",
   nettyHandler: "io.netty:netty-handler:$versions.netty",
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
   powermockJunit4: "org.powermock:powermock-module-junit4:$versions.powermock",
