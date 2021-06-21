@@ -321,11 +321,8 @@ public class Worker {
                         Map<String, Object> adminOverrides = adminConfigs(connName, "connector-adminclient-" + connName, config,
                                 sourceConfig, connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
 
-                        Admin adminClient = Admin.create(adminOverrides);
-                        TopicAdmin admin = new TopicAdmin(adminOverrides.get(BOOTSTRAP_SERVERS_CONFIG), adminClient);
-
-                        connectorLocalBackingStore = new KafkaOffsetBackingStore(() -> admin);
-                        connectorLocalBackingStore.configureForConnector(config, connectorOffsetsTopic, producerOverrides, consumerOverrides);
+                        connectorLocalBackingStore = new KafkaOffsetBackingStore();
+                        connectorLocalBackingStore.configureForConnector(config, connectorOffsetsTopic, producerOverrides, consumerOverrides, adminOverrides);
                     }
 
                     offsetReader = new OffsetStorageReaderImpl(globalOffsetBackingStore, connectorLocalBackingStore,
@@ -740,7 +737,7 @@ public class Worker {
 
                 Map<String, Object> adminConfig = adminConfigs(
                         connName,
-                        "connector-adminclient-" + connName,
+                        "connector-worker-adminclient-" + connName,
                         config,
                         connConfig,
                         connClass,
@@ -1302,7 +1299,7 @@ public class Worker {
                     consumerOverrides.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT));
 
                     taskLocalOffsetBackingStore = new KafkaOffsetBackingStore(() -> admin);
-                    taskLocalOffsetBackingStore.configureForConnector(config, sourceConfig.offsetsTopic(), producerOverrides, consumerOverrides);
+                    taskLocalOffsetBackingStore.configureForTask(config, sourceConfig.offsetsTopic(), producerOverrides, consumerOverrides);
                     primaryBackingStore = taskLocalOffsetBackingStore;
                     secondaryBackingStore = globalOffsetBackingStore;
                 }
@@ -1397,7 +1394,7 @@ public class Worker {
 
             String offsetsTopic = Optional.ofNullable(sourceConfig.offsetsTopic()).orElse(config.offsetsTopic());
             KafkaOffsetBackingStore taskLocalBackingStore = new KafkaOffsetBackingStore(() -> topicAdmin);
-            taskLocalBackingStore.configureForConnector(config, offsetsTopic, producerOverrides, consumerOverrides);
+            taskLocalBackingStore.configureForTask(config, offsetsTopic, producerOverrides, consumerOverrides);
 
             OffsetBackingStore secondaryBackingStore = globalOffsetBackingStore;
             // No need to do secondary writes to the global offsets topic if we're certain that the task's local offset store

@@ -72,7 +72,6 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     private SharedTopicAdmin ownTopicAdmin;
     private String topic;
 
-    @Deprecated
     public KafkaOffsetBackingStore() {
         this.topicAdminSupplier = null;
     }
@@ -83,20 +82,29 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
 
     @Override
     public void configure(final WorkerConfig config) {
-        configure(config, config.offsetsTopic(), Collections.emptyMap(), Collections.emptyMap());
+        configure(config, config.offsetsTopic(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+    }
+
+    public void configureForTask(final WorkerConfig config,
+                                 final String topic,
+                                 final Map<String, Object> producerOverrides,
+                                 final Map<String, Object> consumerOverrides) {
+        configure(config, topic, producerOverrides, consumerOverrides, null);
     }
 
     public void configureForConnector(final WorkerConfig config,
-                                      final String topic,
-                                      final Map<String, Object> producerOverrides,
-                                      final Map<String, Object> consumerOverrides) {
-        configure(config, topic, producerOverrides, consumerOverrides);
+                                 final String topic,
+                                 final Map<String, Object> producerOverrides,
+                                 final Map<String, Object> consumerOverrides,
+                                 final Map<String, Object> adminOverrides) {
+        configure(config, topic, producerOverrides, consumerOverrides, adminOverrides);
     }
 
     private void configure(final WorkerConfig config,
                           final String topic,
                           final Map<String, Object> producerOverrides,
-                          final Map<String, Object> consumerOverrides) {
+                          final Map<String, Object> consumerOverrides,
+                          final Map<String, Object> adminOverrides) {
         if (topic == null || topic.trim().length() == 0)
             throw new ConfigException("Offset storage topic must be specified");
 
@@ -124,6 +132,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
             adminSupplier = topicAdminSupplier;
         } else {
             Map<String, Object> adminProps = new HashMap<>(originals);
+            adminProps.putAll(adminOverrides);
             ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
             // Create our own topic admin supplier that we'll close when we're stopped
             ownTopicAdmin = new SharedTopicAdmin(adminProps);
