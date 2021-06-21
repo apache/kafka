@@ -1460,7 +1460,7 @@ public class RequestResponseTest {
                             .setMaxNumOffsets(10)
                             .setCurrentLeaderEpoch(5)));
             return ListOffsetsRequest.Builder
-                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
         } else if (version == 1) {
@@ -1471,7 +1471,7 @@ public class RequestResponseTest {
                             .setTimestamp(timestamp)
                             .setCurrentLeaderEpoch(5)));
             return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
+                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
         } else if (version >= 2 && version <= 6) {
@@ -1484,7 +1484,7 @@ public class RequestResponseTest {
                     .setName("test")
                     .setPartitions(Arrays.asList(partition));
             return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_COMMITTED)
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
         } else if (version >= 7 && version <= LIST_OFFSETS.latestVersion()) {
@@ -1498,12 +1498,12 @@ public class RequestResponseTest {
                 .setPartitions(Arrays.asList(partition));
             if (timestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
                 return ListOffsetsRequest.Builder
-                    .forMaxTimestamp(IsolationLevel.READ_COMMITTED)
-                    .setTargetTimes(Collections.singletonList(topic))
-                    .build((short) version);
+                        .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
+                        .setTargetTimes(Collections.singletonList(topic))
+                        .build((short) version);
             } else {
                 return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_COMMITTED)
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
             }

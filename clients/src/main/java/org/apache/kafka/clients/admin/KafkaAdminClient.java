@@ -4236,15 +4236,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 ListOffsetsRequest.Builder createRequest(int timeoutMs) {
-                    if(supportsMaxTimestamp) {
-                        return ListOffsetsRequest.Builder
-                            .forMaxTimestamp(context.options().isolationLevel())
+                    return ListOffsetsRequest.Builder
+                            .forConsumer(true, context.options().isolationLevel(), supportsMaxTimestamp)
                             .setTargetTimes(partitionsToQuery);
-                    }else {
-                        return ListOffsetsRequest.Builder
-                            .forConsumer(true, context.options().isolationLevel())
-                            .setTargetTimes(partitionsToQuery);
-                    }
                 }
 
                 @Override
@@ -4320,6 +4314,7 @@ public class KafkaAdminClient extends AdminClient {
                                                     + " does not support MAX_TIMESTAMP offset spec"))
                                 )
                         );
+                        return true;
                     }
                     return false;
                 }

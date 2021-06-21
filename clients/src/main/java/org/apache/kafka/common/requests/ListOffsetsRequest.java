@@ -55,17 +55,15 @@ public class ListOffsetsRequest extends AbstractRequest {
             return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
         }
 
-        public static Builder forConsumer(boolean requireTimestamp, IsolationLevel isolationLevel) {
+        public static Builder forConsumer(boolean requireTimestamp, IsolationLevel isolationLevel, boolean requireMaxTimestamp) {
             short minVersion = 0;
-            if (isolationLevel == IsolationLevel.READ_COMMITTED)
+            if (requireMaxTimestamp)
+                minVersion = 7;
+            else if (isolationLevel == IsolationLevel.READ_COMMITTED)
                 minVersion = 2;
             else if (requireTimestamp)
                 minVersion = 1;
             return new Builder(minVersion, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
-        }
-
-        public static Builder forMaxTimestamp(IsolationLevel isolationLevel) {
-            return new Builder((short) 7, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
         }
 
         private Builder(short oldestAllowedVersion,
