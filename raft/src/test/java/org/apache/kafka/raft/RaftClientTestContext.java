@@ -670,14 +670,14 @@ public final class RaftClientTestContext {
         return response.responses().get(0).partitions().get(0);
     }
 
-    void assertSentFetchPartitionResponse(Errors error) {
+    void assertSentFetchPartitionResponse(Errors topLevelError) {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
         assertEquals(
             1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
         RaftResponse.Outbound raftMessage = sentMessages.get(0);
         assertEquals(ApiKeys.FETCH.id, raftMessage.data.apiKey());
         FetchResponseData response = (FetchResponseData) raftMessage.data();
-        assertEquals(error, Errors.forCode(response.errorCode()));
+        assertEquals(topLevelError, Errors.forCode(response.errorCode()));
     }
 
 

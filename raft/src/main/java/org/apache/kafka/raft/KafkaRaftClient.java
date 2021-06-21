@@ -90,6 +90,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -143,6 +144,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
     public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
+    private final AtomicInteger resignedEpoch = new AtomicInteger(-1);
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final Logger logger;
     private final Time time;
@@ -473,7 +475,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void transitionToResigned(List<Integer> preferredSuccessors) {
-        fetchPurgatory.completeAllExceptionally(Errors.BROKER_NOT_AVAILABLE.exception("The broker is shutting down"));
+        fetchPurgatory.completeAllExceptionally(
+            Errors.NOT_LEADER_OR_FOLLOWER.exception("Not handling request since this node is resigning"));
         quorum.transitionToResigned(preferredSuccessors);
         maybeFireLeaderChange();
         resetConnections();
@@ -1914,8 +1917,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> state = quorum.leaderStateOrThrow();
         maybeFireLeaderChange(state);
 
-        GracefulShutdown shutdown = this.shutdown.get();
-        if (shutdown != null) {
+        if (shutdown.get() != null || resignedEpoch.get() == state.epoch()) {
             transitionToResigned(state.nonLeaderVotersByDescendingFetchOffset());
             return 0L;
         }
@@ -2250,7 +2252,34 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public void resign(int epoch) {
-        throw new UnsupportedOperationException();
+        if (epoch < 0) {
+            throw new IllegalArgumentException("Attempt to resign from an invalid negative epoch " + epoch);
+        }
+
+        if (!quorum.isVoter()) {
+            throw new IllegalArgumentException("Attempt to resign by a non-voter");
+        }
+
+        LeaderAndEpoch leaderAndEpoch = leaderAndEpoch();
+        int currentEpoch = leaderAndEpoch.epoch();
+
+        if (epoch > currentEpoch) {
+            throw new IllegalArgumentException("Attempt to resign from epoch " + epoch +
+                " which is larger than the current epoch " + currentEpoch);
+        } else if (epoch < currentEpoch) {
+            // If the passed epoch is smaller than the current epoch, then it might mean
+            // that the listener has not been notified about a leader change that already
+            // took place. In this case, we consider the call as already fulfilled and
+            // take no further action.
+            return;
+        } else if (!leaderAndEpoch.isLeader(quorum.localIdOrThrow())) {
+            throw new IllegalArgumentException("Cannot resign from epoch " + epoch +
+                " since we are not the leader");
+        } else {
+            logger.info("Received user request to resign from the current epoch {}", currentEpoch);
+            resignedEpoch.set(epoch);
+            wakeup();
+        }
     }
 
     @Override

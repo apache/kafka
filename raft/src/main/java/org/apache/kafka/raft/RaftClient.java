@@ -171,9 +171,9 @@ public interface RaftClient<T> extends AutoCloseable {
     CompletableFuture<Void> shutdown(int timeoutMs);
 
     /**
-     * Resign the leadership. The leader will give up its leadership in the current epoch,
-     * and a new election will be held. Note that nothing prevents this leader from getting
-     * reelected.
+     * Resign the leadership. The leader will give up its leadership in the passed epoch
+     * (if it matches the current epoch), and a new election will be held. Note that nothing
+     * prevents this node from being reelected as the leader.
      *
      * @param epoch the epoch to resign from. If this does not match the current epoch, this
      *              call will be ignored.
