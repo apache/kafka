@@ -1739,17 +1739,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             synchronized (DistributedHerder.this) {
                 String connectorName = request.connectorName();
                 //preserve the highest impact request
-                if (pendingRestartRequests.containsKey(connectorName)) {
-                    RestartRequest existingRequest = pendingRestartRequests.get(connectorName);
-                    if (request.compareTo(existingRequest) > 0) {
+                pendingRestartRequests.compute(connectorName, (k, existingRequest) -> {
+                    if (existingRequest == null || request.compareTo(existingRequest) > 0) {
                         log.debug("Overwriting existing {} and enqueuing the higher impact {}", existingRequest, request);
-                        pendingRestartRequests.put(connectorName, request);
+                        return request;
                     } else {
                         log.debug("Preserving existing higher impact {} and ignoring incoming {}", existingRequest, request);
+                        return existingRequest;
                     }
-                } else {
-                    pendingRestartRequests.put(connectorName, request);
-                }
+                });
             }
             member.wakeup();
         }

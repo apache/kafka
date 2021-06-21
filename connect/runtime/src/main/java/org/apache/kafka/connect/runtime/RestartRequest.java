@@ -23,6 +23,7 @@ import org.apache.kafka.connect.connector.Task;
 
 /**
  * A request to restart a connector and/or task instances.
+ * <p>The natural order is based upon the connector name, if two requests have the same connector name, then the requests are ordered based on the probable number of tasks/connector this request is going to restart.
  */
 public class RestartRequest implements Comparable<RestartRequest> {
 
@@ -107,7 +108,7 @@ public class RestartRequest implements Comparable<RestartRequest> {
         }
         return result;
     }
-
+    //calculates an internal rank for the restart request based on the probable number of tasks/connector this request is going to restart
     private int impactRank() {
         if (onlyFailed && !includeTasks) { //restarts only failed connector so least impactful
             return 0;
