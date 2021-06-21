@@ -25,6 +25,8 @@
     <li>A number of implementation dependency jars are <a href="https://github.com/apache/kafka/pull/10203">now available in the runtime classpath
         instead of compile and runtime classpaths</a>. Compilation errors after the upgrade can be fixed by adding the missing dependency jar(s) explicitly
         or updating the application not to use internal classes.</li>
+    <li>The default value for the consumer configuration <code>session.timeout.ms</code> was increased from 10s to 45s. See
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-735%3A+Increase+default+consumer+session+timeout">KIP-735</a> for more details.</li>
     <li>The Streams API removed all deprecated APIs that were deprecated in version 2.5.0 or earlier.
         For a complete list of removed APIs compare the detailed Kafka Streams upgrade notes.</li>
     <li>Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
@@ -69,8 +71,8 @@
             <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> instead.</li>
         <li>The <code>quota.producer.default</code> and <code>quota.consumer.default</code> configurations were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12591">KAFKA-12591</a>).
             Dynamic quota defaults must be used instead.</li>
-        <li>The default value for the consumer configuration <code>session.timeout.ms</code> was increased from 10s to 45s. See 
-            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-735%3A+Increase+default+consumer+session+timeout">KIP-735</a> for more details.</li>
+        <li>The <code>port</code> and <code>host.name</code> configurations were removed. Please use <code>listeners</code> instead.</li>
+        <li>The <code>advertised.port</code> and <code>advertised.host.name</code> configurations were removed. Please use <code>advertised.listeners</code> instead.</li>
     </ul>
     <li> The <code>Producer#sendOffsetsToTransaction(Map offsets, String consumerGroupId)</code> method has been deprecated. Please use
         <code>Producer#sendOffsetsToTransaction(Map offsets, ConsumerGroupMetadata metadata)</code> instead, where the <code>ConsumerGroupMetadata</code>
