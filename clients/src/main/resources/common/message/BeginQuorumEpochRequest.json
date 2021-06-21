@@ -19,6 +19,7 @@
   "listeners": ["controller"],
   "name": "BeginQuorumEpochRequest",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "0+",
       "nullableVersions": "0+", "default": "null"},
