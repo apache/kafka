@@ -19,9 +19,8 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
-
 import kafka.common.LogSegmentOffsetOverflowException
-import kafka.log.Log.{CleanedFileSuffix, DeletedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile, offsetFromFileName}
+import kafka.log.Log.{CleanedFileSuffix, DeletedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
 import kafka.server.{LogDirFailureChannel, LogOffsetMetadata}
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.{CoreUtils, Logging, Scheduler}
@@ -90,9 +89,79 @@ object LogLoader extends Logging {
    *                                           overflow index offset
    */
   def load(params: LoadLogParams): LoadedLogOffsets = {
-    // first do a pass through the files in the log directory and remove any temporary files
-    // and find any interrupted swap operations
-    val swapFiles = removeTempFilesAndCollectSwapFiles(params)
+
+    // First pass: find .cleaned and .swap files, which may appear if the broker is shutdown during compaction.
+    var (cleanedFiles, swapFiles) = collectCleanedAndSwapFiles(params)
+
+    // KAFKA-6264: Delete all .swap files whose base offset is greater than the minimum .cleaned segment offset. Such .swap
+    // files could be part of an incomplete split operation that could not complete. See Log#splitOverflowedSegment
+    // for more details about the split operation.
+    var minCleanedFileOffset = Long.MaxValue
+    cleanedFiles.foreach(f => minCleanedFileOffset = Math.min(offsetFromFile(f), minCleanedFileOffset))
+    val (invalidSwapFiles, validSwapFiles) = swapFiles.partition(f => offsetFromFile(f) >= minCleanedFileOffset)
+    invalidSwapFiles.foreach { file =>
+      debug(s"${params.logIdentifier}Deleting invalid swap file ${file.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
+      Files.deleteIfExists(file.toPath)
+    }
+    swapFiles = validSwapFiles
+
+    // After deleting all invalid swap files, we should also delete all .cleaned files since they are temporary.
+    cleanedFiles.foreach(_.delete())
+
+    def doRecovery(swapFile: File, swapSegment: LogSegment): Unit = {
+      info(s"${params.logIdentifier}Found log file ${swapFile.getPath} from interrupted swap operation, which is not recoverable from ${Log.CleanedFileSuffix} files, repairing.")
+      recoverSegment(swapSegment, params)
+
+      // We create swap files for two cases:
+      // (1) Log cleaning where multiple segments are merged into one, and
+      // (2) Log splitting where one segment is split into multiple.
+      //
+      // Both of these mean that the resultant swap segments be composed of the original set, i.e. the swap segment
+      // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
+      // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
+      // do a replace with an existing segment.
+      val oldSegments = params.segments.values(swapSegment.baseOffset, swapSegment.readNextOffset).filter { segment =>
+        segment.readNextOffset > swapSegment.baseOffset
+      }
+      Log.replaceSegments(
+        params.segments,
+        Seq(swapSegment),
+        oldSegments.toSeq,
+        isRecoveredSwapFile = true,
+        params.dir,
+        params.topicPartition,
+        params.config,
+        params.scheduler,
+        params.logDirFailureChannel,
+        params.producerStateManager,
+        params.logIdentifier)
+    }
+
+    // The remaining swap files must come from partially completed compaction operation. We can simply rename them to regular segment files.
+    swapFiles.filter(f => Log.isLogFile(new File(CoreUtils.replaceSuffix(f.getPath, SwapFileSuffix, "")))).foreach(
+      f => {
+        val baseOffset = offsetFromFile(f)
+        val segment = LogSegment.open(f.getParentFile,
+          baseOffset = baseOffset,
+          params.config,
+          time = params.time,
+          fileSuffix = Log.SwapFileSuffix)
+        try {
+          segment.sanityCheck(false)
+          info(s"Found log file ${f.getPath} from interrupted swap operation, which is recoverable from ${Log.CleanedFileSuffix} files.")
+          segment.changeFileSuffixes(Log.SwapFileSuffix, "")
+        } catch {
+          case _: NoSuchFileException => doRecovery(f, segment)
+        }
+      }
+    )
+
+    // Second pass: delete remaining index files
+    for (file <- params.dir.listFiles if file.isFile) {
+      if (file.getName.endsWith(SwapFileSuffix)) {
+        file.delete()
+      }
+    }
 
     // Now do a second pass and load all the log and index files.
     // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. When
@@ -105,8 +174,6 @@ object LogLoader extends Logging {
       params.segments.clear()
       loadSegmentFiles(params)
     })
-
-    completeSwapOperations(swapFiles, params)
 
     val (newRecoveryPoint: Long, nextOffset: Long) = {
       if (!params.dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
@@ -162,27 +229,9 @@ object LogLoader extends Logging {
       LogOffsetMetadata(nextOffset, activeSegment.baseOffset, activeSegment.size))
   }
 
-  /**
-   * Removes any temporary files found in log directory, and creates a list of all .swap files which could be swapped
-   * in place of existing segment(s). For log splitting, we know that any .swap file whose base offset is higher than
-   * the smallest offset .clean file could be part of an incomplete split operation. Such .swap files are also deleted
-   * by this method.
-   * @param params The parameters for the log being loaded from disk
-   * @return Set of .swap files that are valid to be swapped in as segment files
-   */
-  private def removeTempFilesAndCollectSwapFiles(params: LoadLogParams): Set[File] = {
-
-    def deleteIndicesIfExist(baseFile: File, suffix: String = ""): Unit = {
-      info(s"${params.logIdentifier}Deleting index files with suffix $suffix for baseFile $baseFile")
-      val offset = offsetFromFile(baseFile)
-      Files.deleteIfExists(Log.offsetIndexFile(params.dir, offset, suffix).toPath)
-      Files.deleteIfExists(Log.timeIndexFile(params.dir, offset, suffix).toPath)
-      Files.deleteIfExists(Log.transactionIndexFile(params.dir, offset, suffix).toPath)
-    }
-
+  private def collectCleanedAndSwapFiles(params: LoadLogParams): (Set[File], Set[File]) = {
     val swapFiles = mutable.Set[File]()
-    val cleanFiles = mutable.Set[File]()
-    var minCleanedFileOffset = Long.MaxValue
+    val cleanedFiles = mutable.Set[File]()
 
     for (file <- params.dir.listFiles if file.isFile) {
       if (!file.canRead)
@@ -192,41 +241,13 @@ object LogLoader extends Logging {
         debug(s"${params.logIdentifier}Deleting stray temporary file ${file.getAbsolutePath}")
         Files.deleteIfExists(file.toPath)
       } else if (filename.endsWith(CleanedFileSuffix)) {
-        minCleanedFileOffset = Math.min(offsetFromFileName(filename), minCleanedFileOffset)
-        cleanFiles += file
+        cleanedFiles += file
       } else if (filename.endsWith(SwapFileSuffix)) {
-        // we crashed in the middle of a swap operation, to recover:
-        // if a log, delete the index files, complete the swap operation later
-        // if an index just delete the index files, they will be rebuilt
-        val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
-        info(s"${params.logIdentifier}Found file ${file.getAbsolutePath} from interrupted swap operation.")
-        if (Log.isIndexFile(baseFile)) {
-          deleteIndicesIfExist(baseFile)
-        } else if (Log.isLogFile(baseFile)) {
-          deleteIndicesIfExist(baseFile)
-          swapFiles += file
-        }
+        swapFiles += file
       }
     }
 
-    // KAFKA-6264: Delete all .swap files whose base offset is greater than the minimum .cleaned segment offset. Such .swap
-    // files could be part of an incomplete split operation that could not complete. See Log#splitOverflowedSegment
-    // for more details about the split operation.
-    val (invalidSwapFiles, validSwapFiles) = swapFiles.partition(file => offsetFromFile(file) >= minCleanedFileOffset)
-    invalidSwapFiles.foreach { file =>
-      debug(s"${params.logIdentifier}Deleting invalid swap file ${file.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
-      val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
-      deleteIndicesIfExist(baseFile, SwapFileSuffix)
-      Files.deleteIfExists(file.toPath)
-    }
-
-    // Now that we have deleted all .swap files that constitute an incomplete split operation, let's delete all .clean files
-    cleanFiles.foreach { file =>
-      debug(s"${params.logIdentifier}Deleting stray .clean file ${file.getAbsolutePath}")
-      Files.deleteIfExists(file.toPath)
-    }
-
-    validSwapFiles
+    (cleanedFiles, swapFiles)
   }
 
   /**
@@ -345,94 +366,6 @@ object LogLoader extends Logging {
     bytesTruncated
   }
 
-  /**
-   * This method completes any interrupted swap operations. In order to be crash-safe, the log files
-   * that are replaced by the swap segment should be renamed to .deleted before the swap file is
-   * restored as the new segment file.
-   *
-   * This method does not need to convert IOException to KafkaStorageException because it is only
-   * called before all logs are loaded.
-   *
-   * @param swapFiles the set of swap
-   * @param params The parameters for the log being loaded from disk
-   *
-   * @throws LogSegmentOffsetOverflowException if the swap file contains messages that cause the log segment offset to
-   *                                           overflow. Note that this is currently a fatal exception as we do not have
-   *                                           a way to deal with it. The exception is propagated all the way up to
-   *                                           KafkaServer#startup which will cause the broker to shut down if we are in
-   *                                           this situation. This is expected to be an extremely rare scenario in practice,
-   *                                           and manual intervention might be required to get out of it.
-   */
-  private def completeSwapOperations(swapFiles: Set[File],
-                                     params: LoadLogParams): Unit = {
-    for (swapFile <- swapFiles) {
-      val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, Log.SwapFileSuffix, ""))
-      val baseOffset = Log.offsetFromFile(logFile)
-
-      def maybeCompleteInterruptedSwap(fn: (File, Long, String) => File): Boolean = {
-        val swapIndexFile = fn(swapFile.getParentFile, baseOffset, Log.SwapFileSuffix)
-        if (swapIndexFile.exists()) {
-          true
-        } else {
-          val cleanedIndexFile = fn(swapFile.getParentFile, baseOffset, Log.CleanedFileSuffix)
-          if (cleanedIndexFile.exists() && cleanedIndexFile.renameTo(swapIndexFile)) true
-          else false
-        }
-      }
-
-      // Check whether swap index files exist: if not, the cleaned files must exist due to the
-      // existence of swap log file. Therefore, we rename the cleaned files to swap files and continue.
-      val needsRecovery = !(maybeCompleteInterruptedSwap(Log.offsetIndexFile) &&
-        maybeCompleteInterruptedSwap(Log.timeIndexFile) &&
-        maybeCompleteInterruptedSwap(Log.transactionIndexFile))
-      val swapSegment = LogSegment.open(swapFile.getParentFile,
-        baseOffset = baseOffset,
-        params.config,
-        time = params.time,
-        fileSuffix = Log.SwapFileSuffix)
-
-      def doRecovery(): Unit = {
-        info(s"${params.logIdentifier}Found log file ${swapFile.getPath} from interrupted swap operation, which is not recoverable from ${Log.CleanedFileSuffix} files, repairing.")
-        recoverSegment(swapSegment, params)
-
-        // We create swap files for two cases:
-        // (1) Log cleaning where multiple segments are merged into one, and
-        // (2) Log splitting where one segment is split into multiple.
-        //
-        // Both of these mean that the resultant swap segments be composed of the original set, i.e. the swap segment
-        // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
-        // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
-        // do a replace with an existing segment.
-        val oldSegments = params.segments.values(swapSegment.baseOffset, swapSegment.readNextOffset).filter { segment =>
-          segment.readNextOffset > swapSegment.baseOffset
-        }
-        Log.replaceSegments(
-          params.segments,
-          Seq(swapSegment),
-          oldSegments.toSeq,
-          isRecoveredSwapFile = true,
-          params.dir,
-          params.topicPartition,
-          params.config,
-          params.scheduler,
-          params.logDirFailureChannel,
-          params.producerStateManager,
-          params.logIdentifier)
-      }
-
-      if (needsRecovery) {
-        doRecovery()
-      } else {
-        try {
-          swapSegment.sanityCheck(false)
-          info(s"Found log file ${swapFile.getPath} from interrupted swap operation, which is recoverable from ${Log.CleanedFileSuffix} files.")
-          swapSegment.changeFileSuffixes(Log.SwapFileSuffix, "")
-        } catch {
-          case _: NoSuchFileException => doRecovery()
-        }
-      }
-    }
-  }
 
   /**
    * Recover the log segments (if there was an unclean shutdown). Ensures there is at least one

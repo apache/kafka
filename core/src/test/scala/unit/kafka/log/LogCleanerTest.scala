@@ -1452,7 +1452,14 @@ class LogCleanerTest {
   }
 
   @Test
-  def testRecoveryRebuildsIndices(): Unit = {
+  def testRecoveryFromSwap(): Unit = {
+    def fn (logSegment: LogSegment): Unit = {
+      logSegment.changeFileSuffixes("", Log.SwapFileSuffix)
+    }
+    doTestRecoveryRebuildsIndices(fn)
+  }
+
+  def doTestRecoveryRebuildsIndices(fn: (LogSegment) => Unit): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
@@ -1462,7 +1469,7 @@ class LogCleanerTest {
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
     // create a log and append some messages
-    var log = makeLog(config = config)
+    val log = makeLog(config = config)
     var messageCount = 0
     while (log.numberOfSegments < 10) {
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
@@ -1493,10 +1500,9 @@ class LogCleanerTest {
     // Simulate log recovery after swap file is created and old segment is deleted. Also delete the corresponding
     // offset index and validate that it is recreated after recovery.
     log.close()
-    segmentBeingCleaned.changeFileSuffixes("", Log.SwapFileSuffix)
-    segmentBeingCleaned.offsetIndex.deleteIfExists()
-    log = recoverAndCheck(config, cleanedKeys)
-    val recoveredSegment = log.logSegments.find(_.baseOffset == segmentBeingCleaned.baseOffset).get
+    fn(segmentBeingCleaned)
+    val recoveredLog = recoverAndCheck(config, cleanedKeys)
+    val recoveredSegment = recoveredLog.logSegments.find(_.baseOffset == segmentBeingCleaned.baseOffset).get
     val recoveredOffsetIndex = recoveredSegment.offsetIndex
     val recoveredEntries =
       for (entryNum <- 0 until recoveredOffsetIndex.entries)
