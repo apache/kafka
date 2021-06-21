@@ -432,14 +432,6 @@ public class Sender implements Runnable {
             }
         }
 
-        if (transactionManager.isCompleting() && !accumulator.flushInProgress()) {
-            // There may still be requests left which are being retried. Since we do not know whether they had
-            // been successfully appended to the broker log, we must resend them until their final status is clear.
-            // If they had been appended and we did not receive the error, then our sequence number would no longer
-            // be correct which would lead to an OutOfSequenceException.
-            accumulator.beginFlush();
-        }
-
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequest(accumulator.hasIncomplete());
         if (nextRequestHandler == null)
             return false;

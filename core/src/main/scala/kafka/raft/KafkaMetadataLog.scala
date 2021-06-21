@@ -500,7 +500,7 @@ object KafkaMetadataLog {
       logDirFailureChannel = new LogDirFailureChannel(5),
       lastShutdownClean = false,
       topicId = Some(topicId),
-      keepPartitionMetadataFile = false
+      keepPartitionMetadataFile = true
     )
 
     val metadataLog = new KafkaMetadataLog(

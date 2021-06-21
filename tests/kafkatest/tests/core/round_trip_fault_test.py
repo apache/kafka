@@ -46,7 +46,8 @@ class RoundTripFaultTest(Test):
                                       client_services=trogdor_client_services)
         topic_name = "round_trip_topic%d" % RoundTripFaultTest.topic_name_index
         RoundTripFaultTest.topic_name_index = RoundTripFaultTest.topic_name_index + 1
-        active_topics={topic_name : {"partitionAssignments":{"0": [0,1,2]}}}
+        # note that the broker.id values will be 1..num_nodes
+        active_topics={topic_name : {"partitionAssignments":{"0": [1,2,3]}}}
         self.round_trip_spec = RoundTripWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                      self.workload_service.client_node,
                                      self.workload_service.bootstrap_servers,
