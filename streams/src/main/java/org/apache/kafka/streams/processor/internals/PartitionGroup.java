@@ -353,6 +353,7 @@ public class PartitionGroup {
 
         if (logPrefix.contains("1_4")) {
             System.err.println(longLogPrefix + "add records:" + rawRecords + ";" + oldSize + newSize);
+            System.err.flush();
         }
 //        final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
 //        for (int i = 1; i < elements.length; i++) {
@@ -363,11 +364,13 @@ public class PartitionGroup {
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
             if (logPrefix.contains("1_4")) {
-                System.err.print(longLogPrefix + "ready of");
+                System.err.println(longLogPrefix + "ready of");
+                System.err.flush();
             }
             nonEmptyQueuesByTime.offer(recordQueue);
             if (logPrefix.contains("1_4")) {
-                System.err.print(longLogPrefix + "offer");
+                System.err.println(longLogPrefix + "offer");
+                System.err.flush();
             }
 
             // if all partitions now are non-empty, set the flag
@@ -381,6 +384,7 @@ public class PartitionGroup {
         totalBuffered += newSize - oldSize;
         if (logPrefix.contains("1_4")) {
             System.err.print(longLogPrefix + "end add R");
+            System.err.flush();
         }
 
         return newSize;

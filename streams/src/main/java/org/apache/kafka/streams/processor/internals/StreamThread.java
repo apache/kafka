@@ -207,6 +207,7 @@ public class StreamThread extends Thread {
     State setState(final State newState) {
         final State oldState;
         System.err.print(shortLogPrefix + "ss ");
+        System.err.flush();
         synchronized (stateLock) {
             oldState = state;
 
@@ -228,6 +229,7 @@ public class StreamThread extends Thread {
             } else {
                 log.info("State transition from {} to {}", oldState, newState);
                 System.err.println(shortLogPrefix + ", " + oldState + "," + newState);
+                System.err.flush();
             }
 
             state = newState;
@@ -236,10 +238,13 @@ public class StreamThread extends Thread {
             }
 
             System.err.print(shortLogPrefix + "not ");
+            System.err.flush();
             stateLock.notifyAll();
             System.err.print(shortLogPrefix + "note ");
+            System.err.flush();
         }
         System.err.print(shortLogPrefix + "ess ");
+        System.err.flush();
 
         if (stateListener != null) {
             stateListener.onChange(this, state, oldState);
