@@ -137,33 +137,81 @@ object LogLoader extends Logging {
         params.logIdentifier)
     }
 
+    def deleteIndicesIfExist(segment: LogSegment, suffix: String = ""): Unit = {
+      info(s"${params.logIdentifier}Deleting index files with suffix $suffix for baseFile ${segment.baseOffset}")
+      Files.deleteIfExists(segment.offsetIndex.file.toPath)
+      Files.deleteIfExists(segment.timeIndex.file.toPath)
+      Files.deleteIfExists(segment.txnIndex.file.toPath)
+    }
+
     // The remaining swap files must come from partially completed compaction operation. We can simply rename them to regular segment files.
-    swapFiles.filter(f => Log.isLogFile(new File(CoreUtils.replaceSuffix(f.getPath, SwapFileSuffix, "")))).foreach(
-      f => {
-        val baseOffset = offsetFromFile(f)
-        val segment = LogSegment.open(f.getParentFile,
-          baseOffset = baseOffset,
-          params.config,
-          time = params.time,
-          fileSuffix = Log.SwapFileSuffix)
-        try {
-          segment.sanityCheck(false)
-          info(s"Found log file ${f.getPath} from interrupted swap operation, which is recoverable from ${Log.CleanedFileSuffix} files.")
-          segment.changeFileSuffixes(Log.SwapFileSuffix, "")
-        } catch {
-          case _: NoSuchFileException => doRecovery(f, segment)
+    var minSwapFileOffset = Long.MaxValue
+    var maxSwapFileOffset = Long.MinValue
+    val toRenameSwapFiles = mutable.Set[File]()
+    val toRecoverSwapFiles = mutable.Set[File]()
+    swapFiles.filter(f => Log.isLogFile(new File(CoreUtils.replaceSuffix(f.getPath, SwapFileSuffix, "")))).foreach { f =>
+      val baseOffset = offsetFromFile(f)
+      val segment = LogSegment.open(f.getParentFile,
+        baseOffset = baseOffset,
+        params.config,
+        time = params.time,
+        fileSuffix = Log.SwapFileSuffix)
+      try {
+        segment.sanityCheck(false)
+        info(s"Found log file ${f.getPath} from interrupted swap operation, which is recoverable from ${Log.CleanedFileSuffix} files.")
+        toRenameSwapFiles += f
+        minSwapFileOffset = Math.min(segment.baseOffset, minSwapFileOffset)
+        maxSwapFileOffset = Math.max(segment.offsetIndex.lastOffset, maxSwapFileOffset)
+      } catch {
+        case _: NoSuchFileException => {
+          deleteIndicesIfExist(segment)
+          toRecoverSwapFiles += f
         }
       }
-    )
+    }
 
-    // Second pass: delete remaining index files
+    // Second pass: delete segments that are between minSwapFileOffset and maxSwapFileOffset. These
+    // segments were compacted but haven't been renamed to .delete before shutting down the broker.
+    for (file <- params.dir.listFiles if file.isFile) {
+      try {
+        if (!file.getName.endsWith(SwapFileSuffix)) {
+          val offset = offsetFromFile(file)
+          if (offset >= minSwapFileOffset && offset <= maxSwapFileOffset) {
+            file.delete()
+          }
+        }
+      } catch {
+        case _: Throwable =>
+      }
+    }
+
+    toRenameSwapFiles.foreach { f =>
+    val baseOffset = offsetFromFile(f)
+    val segment = LogSegment.open(f.getParentFile,
+      baseOffset = baseOffset,
+      params.config,
+      time = params.time,
+      fileSuffix = Log.SwapFileSuffix)
+      segment.changeFileSuffixes(Log.SwapFileSuffix, "")
+    }
+    toRecoverSwapFiles.foreach { f =>
+      val baseOffset = offsetFromFile(f)
+      val segment = LogSegment.open(f.getParentFile,
+        baseOffset = baseOffset,
+        params.config,
+        time = params.time,
+        fileSuffix = Log.SwapFileSuffix)
+      doRecovery(f, segment)
+    }
+
+    // Third pass: delete remaining index swap files
     for (file <- params.dir.listFiles if file.isFile) {
       if (file.getName.endsWith(SwapFileSuffix)) {
         file.delete()
       }
     }
 
-    // Now do a second pass and load all the log and index files.
+    // Third pass: load all the log and index files.
     // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. When
     // this happens, restart loading segment files from scratch.
     retryOnOffsetOverflow(params, {
