@@ -138,7 +138,7 @@ public class MirrorClientTest {
     @Test
     public void testIdentityReplicationUpstreamClusters() throws InterruptedException {
         // IdentityReplicationPolicy treats heartbeats as a special case, so these should work as usual.
-        MirrorClient client = new FakeMirrorClient(new IdentityReplicationPolicy("source"), Arrays.asList("topic1",
+        MirrorClient client = new FakeMirrorClient(identityReplicationPolicy("source"), Arrays.asList("topic1",
             "topic2", "heartbeats", "source1.heartbeats", "source1.source2.heartbeats",
             "source3.source4.source5.heartbeats"));
         Set<String> sources = client.upstreamClusters();
@@ -168,7 +168,7 @@ public class MirrorClientTest {
     @Test
     public void testIdentityReplicationRemoteTopics() throws InterruptedException {
         // IdentityReplicationPolicy should consider any topic to be remote.
-        MirrorClient client = new FakeMirrorClient(new IdentityReplicationPolicy("source"), Arrays.asList(
+        MirrorClient client = new FakeMirrorClient(identityReplicationPolicy("source"), Arrays.asList(
             "topic1", "topic2", "topic3", "heartbeats", "backup.heartbeats"));
         Set<String> remoteTopics = client.remoteTopics();
         assertTrue(remoteTopics.contains("topic1"));
@@ -197,7 +197,7 @@ public class MirrorClientTest {
     @Test
     public void testIdentityReplicationTopicSource() {
         MirrorClient client = new FakeMirrorClient(
-            new IdentityReplicationPolicy("primary"), Arrays.asList());
+            identityReplicationPolicy("primary"), Arrays.asList());
         assertEquals("topic1", client.replicationPolicy()
             .formatRemoteTopic("primary", "topic1"));
         assertEquals("primary", client.replicationPolicy()
@@ -207,5 +207,12 @@ public class MirrorClientTest {
             .formatRemoteTopic("backup", "heartbeats"));
         assertEquals("backup", client.replicationPolicy()
             .topicSource("backup.heartbeats"));
+    }
+
+    private ReplicationPolicy identityReplicationPolicy(String source) {
+        IdentityReplicationPolicy policy = new IdentityReplicationPolicy();
+        policy.configure(Collections.singletonMap(
+            IdentityReplicationPolicy.SOURCE_CLUSTER_ALIAS_CONFIG, source));
+        return policy;
     }
 }

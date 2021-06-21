@@ -35,15 +35,6 @@ public class IdentityReplicationPolicy extends DefaultReplicationPolicy {
 
     private String sourceClusterAlias = null;
 
-    public IdentityReplicationPolicy() {
-        //nop
-    }
-
-    // Visible for testing
-    IdentityReplicationPolicy(String sourceClusterAlias) {
-        this.sourceClusterAlias = sourceClusterAlias;
-    }
-
     @Override
     public void configure(Map<String, ?> props) {
         super.configure(props);
