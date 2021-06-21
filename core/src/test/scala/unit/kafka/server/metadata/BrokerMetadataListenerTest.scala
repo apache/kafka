@@ -86,10 +86,6 @@ class BrokerMetadataListenerTest {
     applyBatch(List.empty);
   }
 
-  private def messageSize(messageAndVersion: ApiMessageAndVersion, objectCache: ObjectSerializationCache): Int = {
-    metadataSerde.recordSize(messageAndVersion, objectCache);
-  }
-
   private def deleteTopic(
     topicId: Uuid,
     topic: String,
@@ -138,7 +134,7 @@ class BrokerMetadataListenerTest {
           Batch.of(
             baseOffset,
             leaderEpoch,
-            records.map(messageSize(_, objectCache)).sum,
+            records.map(metadataSerde.recordSize(_, objectCache)).sum,
             records.asJava
           )
         ).asJava,

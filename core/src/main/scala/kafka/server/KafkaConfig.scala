@@ -1052,7 +1052,7 @@ object KafkaConfig {
       .defineInternal(BrokerHeartbeatIntervalMsProp, INT, Defaults.BrokerHeartbeatIntervalMs, null, MEDIUM, BrokerHeartbeatIntervalMsDoc)
       .defineInternal(BrokerSessionTimeoutMsProp, INT, Defaults.BrokerSessionTimeoutMs, null, MEDIUM, BrokerSessionTimeoutMsDoc)
       .defineInternal(MetadataLogDirProp, STRING, null, null, HIGH, MetadataLogDirDoc)
-      .defineInternal(MetadataSnapshotMinNewRecordBytesProp, INT, Defaults.MetadataSnapshotMinNewRecordBytes, atLeast(0), HIGH, MetadataSnapshotMinNewRecordBytesDoc)
+      .defineInternal(MetadataSnapshotMinNewRecordBytesProp, INT, Defaults.MetadataSnapshotMinNewRecordBytes, atLeast(1), HIGH, MetadataSnapshotMinNewRecordBytesDoc)
       .defineInternal(ControllerListenerNamesProp, STRING, null, null, HIGH, ControllerListenerNamesDoc)
       .defineInternal(SaslMechanismControllerProtocolProp, STRING, SaslConfigs.DEFAULT_SASL_MECHANISM, null, HIGH, SaslMechanismControllerProtocolDoc)
 
