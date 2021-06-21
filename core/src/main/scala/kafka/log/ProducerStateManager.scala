@@ -853,11 +853,11 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       // during log recovery, and use it to issue asynch deletions prior to creating the "real"
       // producer state manager.
       //
-      // In any case, removeAndStageSnapshotDeletion is intended to be used for snapshot file
+      // In any case, removeAndMarkSnapshotForDeletion is intended to be used for snapshot file
       // deletion, so ignoring the exception here just means that the intended operation was
       // already completed.
       try {
-        snapshot.renameTo("", Log.DeletedFileSuffix)
+        snapshot.renameTo(Log.DeletedFileSuffix)
       } catch {
         case _: NoSuchFileException =>
           return None
@@ -869,9 +869,15 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 }
 
 case class SnapshotFile private[log] (@volatile private var _file: File,
-                                      offset: Long) {
+                                      offset: Long) extends Logging {
   def deleteIfExists(): Boolean = {
-    Files.deleteIfExists(file.toPath)
+    val deleted = Files.deleteIfExists(file.toPath)
+    if (deleted) {
+      info(s"Deleted producer state snapshot ${file.getAbsolutePath}")
+    } else {
+      info(s"Failed to delete producer state snapshot ${file.getAbsolutePath} because it does not exist.")
+    }
+    deleted
   }
 
   def updateParentDir(parentDir: File): Unit = {
@@ -882,8 +888,8 @@ case class SnapshotFile private[log] (@volatile private var _file: File,
     _file
   }
 
-  def renameTo(oldSuffix: String, newSuffix: String): Unit = {
-    val renamed = new File(CoreUtils.replaceSuffix(_file.getPath, oldSuffix, newSuffix))
+  def renameTo(newSuffix: String): Unit = {
+    val renamed = new File(CoreUtils.replaceSuffix(_file.getPath, "", newSuffix))
     try {
       Utils.atomicMoveWithFallback(_file.toPath, renamed.toPath)
     } finally {

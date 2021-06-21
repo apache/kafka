@@ -1624,6 +1624,13 @@ class LogLoaderTest {
       assertTrue(snapshotFileBeforeDeletion.get.file.exists)
     }
 
+    val offsetsWithSnapshotFiles = (1 until 5)
+        .map(offset => SnapshotFile(Log.producerSnapshotFile(logDir, offset)))
+        .filter(snapshotFile => snapshotFile.file.exists())
+        .map(_.offset)
+        .toList
+    assertTrue(offsetsWithSnapshotFiles.isEmpty, s"Found offsets with producer state snapshot files: $offsetsWithSnapshotFiles, while none was expected.")
+
     // Wait for all async segment deletions scheduled during Log recovery to complete.
     // The expected segments and producer state snapshot after the deletions, is as shown below:
     // [4-4], [5-5], [6-6], [7-7], [8-8], [9-]
