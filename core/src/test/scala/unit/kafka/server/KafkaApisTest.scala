@@ -502,14 +502,19 @@ class KafkaApisTest {
   private def testForwardableApi(
     kafkaApis: KafkaApis,
     apiKey: ApiKeys,
-    requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest],
+    requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]
   ): Unit = {
     val topicHeader = new RequestHeader(apiKey, apiKey.latestVersion,
       clientId, 0)
 
     val request = buildRequest(requestBuilder.build(topicHeader.apiVersion))
 
-    EasyMock.expect(controller.isActive).andStubReturn(false)
+    if (kafkaApis.metadataSupport.isInstanceOf[ZkSupport]) {
+      // The controller check only makes sense for ZK clusters. For KRaft,
+      // controller requests are handled on a separate listener, so there
+      // is no choice but to forward them.
+      EasyMock.expect(controller.isActive).andReturn(false)
+    }
 
     expectNoThrottling(request)
 
