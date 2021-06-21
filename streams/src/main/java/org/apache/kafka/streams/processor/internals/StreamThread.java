@@ -235,7 +235,9 @@ public class StreamThread extends Thread {
                 updateThreadMetadata(taskManager.activeTaskMap(), taskManager.standbyTaskMap());
             }
 
+            System.err.print(shortLogPrefix + "not ");
             stateLock.notifyAll();
+            System.err.print(shortLogPrefix + "note ");
         }
         System.err.print(shortLogPrefix + "ess ");
 
