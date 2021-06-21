@@ -2715,7 +2715,7 @@ public class DistributedHerderTest extends ThreadedTest {
         expectAnyTicks();
 
         member.wakeup();
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().anyTimes();
 
         expectConfigRefreshAndSnapshot(configState);
 
@@ -2724,7 +2724,7 @@ public class DistributedHerderTest extends ThreadedTest {
             EasyMock.expectLastCall();
         }
 
-        expectHerderShutdown(true);
+        expectHerderShutdown(false);
 
         PowerMock.replayAll();
 
