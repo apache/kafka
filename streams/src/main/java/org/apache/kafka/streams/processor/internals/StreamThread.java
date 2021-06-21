@@ -640,7 +640,7 @@ public class StreamThread extends Thread {
 
     public boolean waitOnThreadState(final StreamThread.State targetState, final long timeoutMs) {
         final long begin = time.milliseconds();
-        System.err.print(shortLogPrefix + "wt ");
+        System.err.print(shortLogPrefix + "!! wt ");
         synchronized (stateLock) {
             boolean interrupted = false;
             long elapsedMs = 0L;

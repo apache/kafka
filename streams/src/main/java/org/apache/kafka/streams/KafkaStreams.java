@@ -261,6 +261,7 @@ public class KafkaStreams implements AutoCloseable {
                     if (waitMs > elapsedMs) {
                         final long remainingMs = waitMs - elapsedMs;
                         try {
+                            System.err.print("client" + clientId + "wa ");
                             stateLock.wait(remainingMs);
                         } catch (final InterruptedException e) {
                             interrupted = true;
@@ -276,8 +277,10 @@ public class KafkaStreams implements AutoCloseable {
                 // We do not always own the current thread that executes this method, i.e., we do not know the
                 // interruption policy of the thread. The least we can do is restore the interruption status before
                 // the current thread exits this method.
+                System.err.print("client" + clientId + "wae ");
                 if (interrupted) {
                     Thread.currentThread().interrupt();
+                    System.err.print("client" + clientId + "waei ");
                 }
             }
             return true;
@@ -313,14 +316,15 @@ public class KafkaStreams implements AutoCloseable {
                 // refused but we do not throw exception here, to allow appropriate error handling
                 return false;
             } else if (!state.isValidTransition(newState)) {
-                throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
+                throw new IllegalStateException("client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("State transition from {} to {}", oldState, newState);
-                System.err.println("Stream-client " + clientId + oldState + "," + newState);
+                System.err.println("client" + clientId + oldState + "," + newState);
             }
             state = newState;
             stateLock.notifyAll();
         }
+        System.err.print("client" + clientId + "notiall ");
 
         // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
         if (stateListener != null) {
@@ -1078,6 +1082,7 @@ public class KafkaStreams implements AutoCloseable {
                         streamThread.shutdown();
                         if (!streamThread.getName().equals(Thread.currentThread().getName())) {
                             final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
+                            System.err.println("client" + clientId + "wots ");
                             if (remainingTimeMs <= 0 || !streamThread.waitOnThreadState(StreamThread.State.DEAD, remainingTimeMs)) {
                                 log.warn("{} did not shutdown in the allotted time.", streamThread.getName());
                                 // Don't remove from threads until shutdown is complete. We will trim it from the
