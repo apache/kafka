@@ -78,12 +78,12 @@ object ReplicaVerificationTool extends Logging {
   sealed class ReplicaVerificationToolOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     private val brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The list of hostname and port of the server to connect to.")
       .withRequiredArg
-      .describedAs("HOST1:PORT1,...,HOST3:PORT3")
+      .describedAs("server to connect to")
       .ofType(classOf[String])
     private val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The list of hostname and port of the server to connect to.")
       .requiredUnless("broker-list")
       .withRequiredArg
-      .describedAs("HOST1:PORT1,...,HOST3:PORT3")
+      .describedAs("server to connect to")
       .ofType(classOf[String])
     private val fetchSizeOpt = parser.accepts("fetch-size", "The fetch size of each request.")
       .withRequiredArg
