@@ -2403,10 +2403,9 @@ object Log extends Logging {
         segmentsToDelete.foreach { segment =>
           segment.deleteIfExists()
         }
-        snapshotsToDelete.foreach( snapshot => {
+        snapshotsToDelete.foreach { snapshot =>
           snapshot.deleteIfExists()
         }
-        )
       }
     }
 

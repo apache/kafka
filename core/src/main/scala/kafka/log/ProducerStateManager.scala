@@ -850,7 +850,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     Option(snapshots.remove(snapshotOffset)).flatMap { snapshot => {
       // If the file cannot be renamed, it likely means that the file was deleted already.
       // This can happen due to the way we construct an intermediate producer state manager
-      // during log recovery, and use it to issue asynch deletions prior to creating the "real"
+      // during log recovery, and use it to issue deletions prior to creating the "real"
       // producer state manager.
       //
       // In any case, removeAndMarkSnapshotForDeletion is intended to be used for snapshot file
