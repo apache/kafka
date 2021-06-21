@@ -4236,23 +4236,14 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 ListOffsetsRequest.Builder createRequest(int timeoutMs) {
-                    if (supportsMaxTimestamp) {
+                    if(supportsMaxTimestamp) {
                         return ListOffsetsRequest.Builder
                             .forMaxTimestamp(context.options().isolationLevel())
                             .setTargetTimes(partitionsToQuery);
-                    } else {
-                        // we shouldn't request offsets for max timestamp partitions
-                        final List<ListOffsetsTopic> remainingPartitionsToQuery = new ArrayList<>();
-                        partitionsToQuery.stream().forEach(t ->
-                                remainingPartitionsToQuery.add(new ListOffsetsTopic()
-                                    .setName(t.name())
-                                    .setPartitions(t.partitions().stream()
-                                        .filter(p -> p.timestamp() != ListOffsetsRequest.MAX_TIMESTAMP)
-                                        .collect(Collectors.toList()))
-                                    ));
+                    }else {
                         return ListOffsetsRequest.Builder
                             .forConsumer(true, context.options().isolationLevel())
-                            .setTargetTimes(remainingPartitionsToQuery);
+                            .setTargetTimes(partitionsToQuery);
                     }
                 }
 
@@ -4329,11 +4320,6 @@ public class KafkaAdminClient extends AdminClient {
                                                     + " does not support MAX_TIMESTAMP offset spec"))
                                 )
                         );
-
-                        // check if there are any non MAX_TIMESTAMPS partitions left to be downgraded
-                        return partitionsToQuery.stream().anyMatch(
-                            t -> t.partitions().stream().anyMatch(
-                                p -> p.timestamp() != ListOffsetsRequest.MAX_TIMESTAMP));
                     }
                     return false;
                 }
