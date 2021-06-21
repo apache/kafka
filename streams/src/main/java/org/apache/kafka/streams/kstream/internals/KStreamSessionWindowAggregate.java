@@ -80,7 +80,6 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
 
         private SessionStore<K, Agg> store;
         private SessionTupleForwarder<K, Agg> tupleForwarder;
-        private Sensor lateRecordDropSensor;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
@@ -89,11 +88,6 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
             super.init(context);
             final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
             final String threadId = Thread.currentThread().getName();
-            lateRecordDropSensor = droppedRecordsSensor(
-                threadId,
-                context.taskId().toString(),
-                metrics
-            );
             droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
             store = context.getStateStore(storeName);
             tupleForwarder = new SessionTupleForwarder<>(store, context, new SessionCacheFlushListener<>(context), sendOldValues);
@@ -157,7 +151,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                     closeTime,
                     observedStreamTime
                 );
-                lateRecordDropSensor.record();
+                droppedRecordsSensor.record();
             } else {
                 if (!mergedWindow.equals(newSessionWindow)) {
                     for (final KeyValue<Windowed<K>, Agg> session : merged) {
