@@ -201,9 +201,9 @@ public class ReplicationControlManagerTest {
                     setPartitionId(0).setTopicId(fooId).
                     setReplicas(Arrays.asList(1, 2, 0)).setIsr(Arrays.asList(1, 2, 0)).
                     setRemovingReplicas(null).setAddingReplicas(null).setLeader(1).
-                    setLeaderEpoch(0).setPartitionEpoch(0), (short) 0),
+                    setLeaderEpoch(0).setPartitionEpoch(0), (short) 1),
                 new ApiMessageAndVersion(new TopicRecord().
-                    setTopicId(fooId).setName("foo"), (short) 0))),
+                    setTopicId(fooId).setName("foo"), (short) 1))),
             ctx.replicationControl.iterator(Long.MAX_VALUE));
     }
 

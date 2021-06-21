@@ -246,6 +246,7 @@
   <subpackage name="metalog">
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.protocol" />
+    <allow pkg="org.apache.kafka.common.record" />
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metalog" />
     <allow pkg="org.apache.kafka.raft" />
@@ -366,6 +367,7 @@
     <subpackage name="integration">
       <allow pkg="kafka.admin" />
       <allow pkg="kafka.api" />
+      <allow pkg="kafka.cluster" />
       <allow pkg="kafka.server" />
       <allow pkg="kafka.tools" />
       <allow pkg="kafka.utils" />
@@ -546,6 +548,7 @@
       <allow pkg="com.fasterxml.jackson.annotation" />
       <allow pkg="com.fasterxml.jackson.databind" />
       <subpackage name="clusters">
+        <allow pkg="kafka.cluster" />
         <allow pkg="kafka.server" />
         <allow pkg="kafka.zk" />
         <allow pkg="kafka.utils" />

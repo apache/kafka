@@ -1582,7 +1582,7 @@ project(':tools') {
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
-
+    testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testRuntimeOnly libs.slf4jlog4j
   }
 

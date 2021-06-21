@@ -1,10 +1,10 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements. See the NOTICE file distributed with
+ * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * the License.  You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -15,14 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package kafka.coordinator.group
 
-import java.util.function.Function;
+import kafka.server.DelayedOperation
 
+import java.util.concurrent.locks.Lock
 
-public final class NoOpSnapshotWriterBuilder implements Function<Long, SnapshotWriter> {
-    @Override
-    public SnapshotWriter apply(Long epoch) {
-        return new NoOpSnapshotWriter(epoch);
-    }
-}
+/**
+ * Delayed rebalance operation that is shared by DelayedJoin and DelayedSync
+ * operations. This allows us to use a common purgatory for both cases.
+ */
+private[group] abstract class DelayedRebalance(
+  rebalanceTimeoutMs: Long,
+  groupLock: Lock
+) extends DelayedOperation(
+  rebalanceTimeoutMs,
+  Some(groupLock)
+)

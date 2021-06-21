@@ -37,7 +37,7 @@ public class ProducerIdControlManager {
 
     ProducerIdControlManager(ClusterControlManager clusterControlManager, SnapshotRegistry snapshotRegistry) {
         this.clusterControlManager = clusterControlManager;
-        this.lastProducerId = new TimelineLong(snapshotRegistry, 0L);
+        this.lastProducerId = new TimelineLong(snapshotRegistry);
     }
 
     ControllerResult<ProducerIdsBlock> generateNextProducerId(int brokerId, long brokerEpoch) {
