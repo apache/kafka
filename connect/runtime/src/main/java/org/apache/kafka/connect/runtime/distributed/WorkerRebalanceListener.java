@@ -36,9 +36,4 @@ public interface WorkerRebalanceListener {
      * or tasks might refer to all or some of the connectors and tasks running on the worker.
      */
     void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks);
-
-    /**
-     * Invoked before the worker is about to (re)join the cluster during a rebalance.
-     */
-    void onJoin();
 }

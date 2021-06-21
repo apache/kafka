@@ -2222,25 +2222,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
         }
 
-        @Override
-        public void onJoin() {
-            if (!config.exactlyOnceSourceEnabled())
-                return;
-
-            Set<String> reconfiguredSourceConnectors;
-            synchronized (DistributedHerder.this) {
-                reconfiguredSourceConnectors = taskConfigUpdates.stream()
-                        .map(ConnectorTaskId::connector)
-                        .filter(DistributedHerder.this::isSourceConnector)
-                        .collect(Collectors.toSet());
-                taskConfigUpdates.removeIf(taskId -> reconfiguredSourceConnectors.contains(taskId.connector()));
-            }
-            if (!reconfiguredSourceConnectors.isEmpty()) {
-                log.info("Preemptively stopping all tasks for reconfigured source connectors since exactly-once support is enabled: {}", reconfiguredSourceConnectors);
-                stopReconfiguredTasks(reconfiguredSourceConnectors);
-            }
-        }
-
         private void resetActiveTopics(Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
             connectors.stream()
                     .filter(connectorName -> !configState.contains(connectorName))

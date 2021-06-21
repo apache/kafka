@@ -274,7 +274,6 @@ public class WorkerCoordinatorTest {
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
-        assertEquals(1, rebalanceListener.joinCount);
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(1L, rebalanceListener.assignment.offset());
         assertEquals("leader", rebalanceListener.assignment.leader());
@@ -309,7 +308,6 @@ public class WorkerCoordinatorTest {
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
-        assertEquals(1, rebalanceListener.joinCount);
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(1L, rebalanceListener.assignment.offset());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.connectors());
@@ -370,7 +368,6 @@ public class WorkerCoordinatorTest {
 
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
-        assertEquals(1, rebalanceListener.joinCount);
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(1L, rebalanceListener.assignment.offset());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.connectors());
@@ -391,7 +388,6 @@ public class WorkerCoordinatorTest {
         assertEquals(1L, rebalanceListener.assignment.offset());
         assertEquals(Collections.singletonList(connectorId1), rebalanceListener.assignment.connectors());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.tasks());
-        assertEquals(2, rebalanceListener.joinCount);
 
         PowerMock.verifyAll();
     }
@@ -579,7 +575,6 @@ public class WorkerCoordinatorTest {
 
         public int revokedCount = 0;
         public int assignedCount = 0;
-        public int joinCount = 0;
 
         @Override
         public void onAssigned(ExtendedAssignment assignment, int generation) {
@@ -596,11 +591,6 @@ public class WorkerCoordinatorTest {
             this.revokedConnectors = connectors;
             this.revokedTasks = tasks;
             revokedCount++;
-        }
-
-        @Override
-        public void onJoin() {
-            joinCount++;
         }
     }
 }

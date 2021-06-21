@@ -231,7 +231,6 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             log.debug("Cooperative rebalance triggered. Keeping assignment {} until it's "
                       + "explicitly revoked.", localAssignmentSnapshot);
         }
-        listener.onJoin();
     }
 
     @Override

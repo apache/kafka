@@ -544,7 +544,6 @@ public class WorkerCoordinatorIncrementalTest {
 
         public int revokedCount = 0;
         public int assignedCount = 0;
-        public int joinCount = 0;
 
         @Override
         public void onAssigned(ExtendedAssignment assignment, int generation) {
@@ -561,11 +560,6 @@ public class WorkerCoordinatorIncrementalTest {
             this.revokedConnectors = connectors;
             this.revokedTasks = tasks;
             revokedCount++;
-        }
-
-        @Override
-        public void onJoin() {
-            joinCount++;
         }
     }
 
