@@ -116,8 +116,18 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     @Override
     protected void prepareToInitializeTask() {
         preProducerCheck.run();
+
+        // Try not to start up the offset store (which has its own producer and consumer) if we've already been shut down at this point
+        if (isStopping())
+            return;
         offsetBackingStore.start();
+
+        // Try not to initialize the transactional producer (which may accidentally fence out other, later task generations) if we've already
+        // been shut down at this point
+        if (isStopping())
+            return;
         producer().initTransactions();
+
         postProducerCheck.run();
     }
 

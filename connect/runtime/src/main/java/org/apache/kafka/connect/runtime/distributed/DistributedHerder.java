@@ -1587,6 +1587,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 );
             case SOURCE:
                 if (config.exactlyOnceSourceEnabled()) {
+                    int taskGeneration = configState.taskConfigGeneration(taskId.connector());
                     return worker.startExactlyOnceSourceTask(
                             taskId,
                             configState,
@@ -1610,7 +1611,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                                     }
                                 }
                             },
-                            () -> verifyTaskGenerationAndOwnership(taskId, configState.taskConfigGeneration(taskId.connector()))
+                            () -> verifyTaskGenerationAndOwnership(taskId, taskGeneration)
                     );
                 } else {
                     return worker.startSourceTask(
