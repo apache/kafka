@@ -14,24 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.producer.internals;
 
-package org.apache.kafka.controller;
+import java.util.function.Supplier;
 
-import org.apache.kafka.common.protocol.ApiMessage;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Iterator;
-import java.util.List;
+public class ProducerTestUtils {
+    private static final int MAX_TRIES = 10;
 
+    static void runUntil(
+        Sender sender,
+        Supplier<Boolean> condition
+    ) {
+        runUntil(sender, condition, MAX_TRIES);
+    }
 
-interface SnapshotReader extends Iterator<List<ApiMessage>>, AutoCloseable {
-    /**
-     * Returns the snapshot epoch, which is the offset of this snapshot within the log.
-     */
-    long epoch();
-
-    /**
-     * Invoked when the snapshot reader is no longer needed.  This should clean
-     * up all reader resources.
-     */
-    void close();
+    static void runUntil(
+        Sender sender,
+        Supplier<Boolean> condition,
+        int maxTries
+    ) {
+        int tries = 0;
+        while (!condition.get() && tries < maxTries) {
+            tries++;
+            sender.runOnce();
+        }
+        assertTrue(condition.get(), "Condition not satisfied after " + maxTries + " tries");
+    }
 }

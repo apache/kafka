@@ -22,7 +22,7 @@ import java.net.{InetAddress, SocketTimeoutException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
-import kafka.cluster.Broker
+import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
@@ -752,6 +752,13 @@ class KafkaServer(
   def getLogManager: LogManager = logManager
 
   def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
+
+  /** Return advertised listeners with the bound port (this may differ from the configured port if the latter is `0`). */
+  def advertisedListeners: Seq[EndPoint] = {
+    config.advertisedListeners.map { endPoint =>
+      endPoint.copy(port = boundPort(endPoint.listenerName))
+    }
+  }
 
   /**
    * Checkpoint the BrokerMetadata to all the online log.dirs

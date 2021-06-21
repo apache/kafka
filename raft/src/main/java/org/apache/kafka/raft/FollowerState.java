@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.slf4j.Logger;
 
-import java.io.IOException;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -138,7 +137,7 @@ public class FollowerState implements EpochState {
         return fetchingSnapshot;
     }
 
-    public void setFetchingSnapshot(Optional<RawSnapshotWriter> fetchingSnapshot) throws IOException {
+    public void setFetchingSnapshot(Optional<RawSnapshotWriter> fetchingSnapshot) {
         if (fetchingSnapshot.isPresent()) {
             fetchingSnapshot.get().close();
         }
@@ -165,7 +164,7 @@ public class FollowerState implements EpochState {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         if (fetchingSnapshot.isPresent()) {
             fetchingSnapshot.get().close();
         }

@@ -22,6 +22,7 @@
   // it encounters a newer version, it parses it using the current format. This basically means
   // that new versions cannot remove or reorder any of the existing fields.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "Topics", "type": "[]string", "versions": "0+" },
     { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+",

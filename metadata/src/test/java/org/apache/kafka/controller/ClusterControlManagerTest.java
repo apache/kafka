@@ -184,25 +184,24 @@ public class ClusterControlManagerTest {
                     new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                         setPort((short) 9092).
                         setName("PLAINTEXT").
-                        setHost("example.com")).iterator())), (short) 0),
-                new ApiMessageAndVersion(new UnfenceBrokerRecord().
-                    setId(0).setEpoch(100), (short) 0)),
+                        setHost("example.com")).iterator())).
+                setFenced(false), (short) 1)),
             Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(1).setRack(null).
                 setEndPoints(new BrokerEndpointCollection(Collections.singleton(
                     new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                         setPort((short) 9093).
                         setName("PLAINTEXT").
-                        setHost("example.com")).iterator())), (short) 0),
-                new ApiMessageAndVersion(new UnfenceBrokerRecord().
-                    setId(1).setEpoch(100), (short) 0)),
+                        setHost("example.com")).iterator())).
+                setFenced(false), (short) 1)),
             Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(2).setRack(null).
                 setEndPoints(new BrokerEndpointCollection(Collections.singleton(
                     new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                         setPort((short) 9094).
                         setName("PLAINTEXT").
-                        setHost("example.com")).iterator())), (short) 0))),
+                        setHost("example.com")).iterator())).
+                setFenced(true), (short) 1))),
                 clusterControl.iterator(Long.MAX_VALUE));
     }
 }

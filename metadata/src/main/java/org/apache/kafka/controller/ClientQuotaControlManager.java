@@ -20,8 +20,8 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.internals.QuotaConfigs;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.metadata.QuotaRecord;
-import org.apache.kafka.common.metadata.QuotaRecord.EntityData;
+import org.apache.kafka.common.metadata.ClientQuotaRecord;
+import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
@@ -44,6 +44,8 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.metadata.MetadataRecordType.CLIENT_QUOTA_RECORD;
 
 
 public class ClientQuotaControlManager {
@@ -95,9 +97,9 @@ public class ClientQuotaControlManager {
     /**
      * Apply a quota record to the in-memory state.
      *
-     * @param record    A QuotaRecord instance.
+     * @param record    A ClientQuotaRecord instance.
      */
-    public void replay(QuotaRecord record) {
+    public void replay(ClientQuotaRecord record) {
         Map<String, String> entityMap = new HashMap<>(2);
         record.entity().forEach(entityData -> entityMap.put(entityData.entityType(), entityData.entityName()));
         ClientQuotaEntity entity = new ClientQuotaEntity(entityMap);
@@ -154,10 +156,11 @@ public class ClientQuotaControlManager {
             if (newValue == null) {
                 if (currentQuotas.containsKey(key)) {
                     // Null value indicates removal
-                    newRecords.add(new ApiMessageAndVersion(new QuotaRecord()
+                    newRecords.add(new ApiMessageAndVersion(new ClientQuotaRecord()
                             .setEntity(recordEntitySupplier.get())
                             .setKey(key)
-                            .setRemove(true), (short) 0));
+                            .setRemove(true),
+                        CLIENT_QUOTA_RECORD.highestSupportedVersion()));
                 }
             } else {
                 ApiError validationError = validateQuotaKeyValue(configKeys, key, newValue);
@@ -168,10 +171,11 @@ public class ClientQuotaControlManager {
                     final Double currentValue = currentQuotas.get(key);
                     if (!Objects.equals(currentValue, newValue)) {
                         // Only record the new value if it has changed
-                        newRecords.add(new ApiMessageAndVersion(new QuotaRecord()
+                        newRecords.add(new ApiMessageAndVersion(new ClientQuotaRecord()
                                 .setEntity(recordEntitySupplier.get())
                                 .setKey(key)
-                                .setValue(newValue), (short) 0));
+                                .setValue(newValue),
+                            CLIENT_QUOTA_RECORD.highestSupportedVersion()));
                     }
                 }
             }
@@ -308,7 +312,7 @@ public class ClientQuotaControlManager {
             ClientQuotaEntity entity = entry.getKey();
             List<ApiMessageAndVersion> records = new ArrayList<>();
             for (Entry<String, Double> quotaEntry : entry.getValue().entrySet(epoch)) {
-                QuotaRecord record = new QuotaRecord();
+                ClientQuotaRecord record = new ClientQuotaRecord();
                 for (Entry<String, String> entityEntry : entity.entries().entrySet()) {
                     record.entity().add(new EntityData().
                         setEntityType(entityEntry.getKey()).
@@ -317,7 +321,8 @@ public class ClientQuotaControlManager {
                 record.setKey(quotaEntry.getKey());
                 record.setValue(quotaEntry.getValue());
                 record.setRemove(false);
-                records.add(new ApiMessageAndVersion(record, (short) 0));
+                records.add(new ApiMessageAndVersion(record,
+                    CLIENT_QUOTA_RECORD.highestSupportedVersion()));
             }
             return records;
         }

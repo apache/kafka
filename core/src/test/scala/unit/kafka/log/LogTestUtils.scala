@@ -84,7 +84,8 @@ object LogTestUtils {
                 maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                 producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                 lastShutdownClean: Boolean = true,
-                topicId: Option[Uuid] = None): Log = {
+                topicId: Option[Uuid] = None,
+                keepPartitionMetadataFile: Boolean = true): Log = {
     Log(dir = dir,
       config = config,
       logStartOffset = logStartOffset,
@@ -97,7 +98,7 @@ object LogTestUtils {
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
       topicId = topicId,
-      keepPartitionMetadataFile = true)
+      keepPartitionMetadataFile = keepPartitionMetadataFile)
   }
 
   /**
