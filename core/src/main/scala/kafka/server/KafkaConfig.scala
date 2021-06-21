@@ -74,7 +74,6 @@ object Defaults {
   val InitialBrokerRegistrationTimeoutMs = 60000
   val BrokerHeartbeatIntervalMs = 2000
   val BrokerSessionTimeoutMs = 9000
-  // TODO: Create a Jira to change this default
   val MetadataSnapshotMinNewRecordBytes = Int.MaxValue
 
   /** KRaft mode configs */

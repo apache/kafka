@@ -17,13 +17,14 @@
 
 package kafka.server
 
+import kafka.raft.KafkaRaftManager;
 import kafka.testkit.KafkaClusterTestKit
 import kafka.testkit.TestKitNodes
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.Admin
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
-import org.junit.jupiter.api.Assertions._
+import scala.jdk.CollectionConverters._
 
 @Timeout(120000)
 class RaftClusterSnapshotTest {
@@ -34,7 +35,7 @@ class RaftClusterSnapshotTest {
     val cluster = new KafkaClusterTestKit
       .Builder(
         new TestKitNodes.Builder()
-          .setNumBrokerNodes(0)
+          .setNumBrokerNodes(3)
           .setNumControllerNodes(3)
           .build()
       )
@@ -48,33 +49,31 @@ class RaftClusterSnapshotTest {
       cluster.format()
       cluster.startup()
       TestUtils.waitUntilTrue(
-        () => {
-          cluster
-          .raftManagers()
-          .values()
-          .iterator()
-          .next()
-          .kafkaRaftClient
-          .leaderAndEpoch()
-          .leaderId
-          .isPresent
-        },
-        "RaftManager was not initialized."
+        () => controllerRaftManagers(cluster).forall(_.kafkaRaftClient.leaderAndEpoch.leaderId.isPresent),
+        "Raft leader was never elected"
       )
 
-      // TODO: check that a snapshot was generated
+      TestUtils.waitUntilTrue(
+        () => controllerRaftManagers(cluster).forall(_.replicatedLog.latestSnapshotId.isPresent),
+        s"Expected for every controller to generate a snapshot: ${
+          controllerRaftManagers(cluster).map(_.replicatedLog.latestSnapshotId)
+        }}"
+      )
 
-      val admin = Admin.create(cluster.controllerClientProperties())
-      try {
-        assertEquals(
-          cluster.nodes().clusterId().toString,
-          admin.describeCluster().clusterId().get()
-        )
-      } finally {
-        admin.close()
-      }
     } finally {
       cluster.close()
     }
+  }
+
+  private def controllerRaftManagers(cluster: KafkaClusterTestKit): List[KafkaRaftManager[ApiMessageAndVersion]] = {
+    val controllerIds = cluster.controllers.keySet.asScala
+
+    cluster.raftManagers().asScala.flatMap { case (replicaId, raftManager) =>
+      if (controllerIds.contains(replicaId)) {
+        Some(raftManager)
+      } else {
+        None
+      }
+    }.toList
   }
 }

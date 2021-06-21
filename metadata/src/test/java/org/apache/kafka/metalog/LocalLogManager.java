@@ -18,6 +18,7 @@
 package org.apache.kafka.metalog;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
@@ -450,14 +451,19 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             LocalRecordBatch batch = (LocalRecordBatch) entry.getValue();
                             log.trace("Node {}: handling LocalRecordBatch with offset {}.",
                                 nodeId, entryOffset);
+                            ObjectSerializationCache objectCache = new ObjectSerializationCache();
+
                             listenerData.handleCommit(
                                 MemoryBatchReader.of(
                                     Collections.singletonList(
                                         Batch.of(
                                             entryOffset - batch.records.size() + 1,
                                             Math.toIntExact(batch.leaderEpoch),
-                                            // Assume each entry takes one byte; TODO: should we fix this?
-                                            batch.records.size(),
+                                            batch
+                                                .records
+                                                .stream()
+                                                .mapToInt(record -> messageSize(record, objectCache))
+                                                .sum(),
                                             batch.records
                                         )
                                     ),
@@ -473,6 +479,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 log.error("Exception while handling log check", e);
             }
         });
+    }
+
+    private int messageSize(ApiMessageAndVersion messageAndVersion, ObjectSerializationCache objectCache) {
+        return new MetadataRecordSerde().recordSize(messageAndVersion, objectCache);
     }
 
     public void beginShutdown() {

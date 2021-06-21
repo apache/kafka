@@ -734,7 +734,6 @@ public final class QuorumController implements Controller {
                     lastCommittedEpoch = reader.lastContainedLogEpoch();
                     snapshotRegistry.createSnapshot(lastCommittedOffset);
                 } finally {
-                    resetSnapshotGeneration();
                     reader.close();
                 }
             });
@@ -899,15 +898,14 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private void resetSnapshotGeneration() {
-        snapshotGeneratorManager.cancel();
-        newBytesSinceLastSnapshot = 0;
-    }
-
     private void resetState() {
+        snapshotGeneratorManager.cancel();
         snapshotRegistry.reset();
+
+        newBytesSinceLastSnapshot = 0;
         lastCommittedOffset = -1;
         lastCommittedEpoch = -1;
+
         snapshotRegistry.createSnapshot(lastCommittedOffset);
     }
 
