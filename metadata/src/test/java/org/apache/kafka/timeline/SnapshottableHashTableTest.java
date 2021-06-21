@@ -18,6 +18,7 @@
 package org.apache.kafka.timeline;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -205,6 +206,26 @@ public class SnapshottableHashTableTest {
         assertEquals(3, table.snapshottableSize(1));
         registry.revertToSnapshot(0);
         assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE), E_1A, E_2A, E_3A);
+    }
+
+    @Test
+    public void testReset() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        SnapshottableHashTable<TestElement> table =
+            new SnapshottableHashTable<>(registry, 1);
+        assertEquals(null, table.snapshottableAddOrReplace(E_1A));
+        assertEquals(null, table.snapshottableAddOrReplace(E_2A));
+        assertEquals(null, table.snapshottableAddOrReplace(E_3A));
+        registry.createSnapshot(0);
+        assertEquals(E_1A, table.snapshottableAddOrReplace(E_1B));
+        assertEquals(E_3A, table.snapshottableAddOrReplace(E_3B));
+        registry.createSnapshot(1);
+
+        registry.reset();
+
+        assertEquals(Collections.emptyList(), registry.epochsList());
+        // Check that the table is empty
+        assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE));
     }
 
     /**

@@ -406,7 +406,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             log.trace("Node {}: handling LocalRecordBatch with offset {}.",
                                 nodeId, entryOffset);
                             listenerData.listener.handleCommit(
-                                new MemoryBatchReader<>(
+                                MemoryBatchReader.of(
                                     Collections.singletonList(
                                         Batch.of(
                                             entryOffset - batch.records.size() + 1,

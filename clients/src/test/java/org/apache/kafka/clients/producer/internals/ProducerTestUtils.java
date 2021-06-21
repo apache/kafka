@@ -14,31 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.common.KafkaException;
+import java.util.function.Supplier;
 
-/**
- *  Any exception during serialization in the producer
- */
-public class SerializationException extends KafkaException {
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-    private static final long serialVersionUID = 1L;
+public class ProducerTestUtils {
+    private static final int MAX_TRIES = 10;
 
-    public SerializationException(String message, Throwable cause) {
-        super(message, cause);
+    static void runUntil(
+        Sender sender,
+        Supplier<Boolean> condition
+    ) {
+        runUntil(sender, condition, MAX_TRIES);
     }
 
-    public SerializationException(String message) {
-        super(message);
+    static void runUntil(
+        Sender sender,
+        Supplier<Boolean> condition,
+        int maxTries
+    ) {
+        int tries = 0;
+        while (!condition.get() && tries < maxTries) {
+            tries++;
+            sender.runOnce();
+        }
+        assertTrue(condition.get(), "Condition not satisfied after " + maxTries + " tries");
     }
-
-    public SerializationException(Throwable cause) {
-        super(cause);
-    }
-
-    public SerializationException() {
-        super();
-    }
-
 }

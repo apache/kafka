@@ -105,6 +105,11 @@ public class SnapshotRegistry {
      */
     private final Snapshot head = new Snapshot(Long.MIN_VALUE);
 
+    /**
+     * Collection of all Revertable registered with this registry
+     */
+    private final List<Revertable> revertables = new ArrayList<>();
+
     public SnapshotRegistry(LogContext logContext) {
         this.log = logContext.logger(SnapshotRegistry.class);
     }
@@ -253,5 +258,23 @@ public class SnapshotRegistry {
      */
     public long latestEpoch() {
         return head.prev().epoch();
+    }
+
+    /**
+     * Associate with this registry.
+     */
+    public void register(Revertable revertable) {
+        revertables.add(revertable);
+    }
+
+    /**
+     * Delete all snapshots and resets all of the Revertable object registered.
+     */
+    public void reset() {
+        deleteSnapshotsUpTo(LATEST_EPOCH);
+
+        for (Revertable revertable : revertables) {
+            revertable.reset();
+        }
     }
 }
