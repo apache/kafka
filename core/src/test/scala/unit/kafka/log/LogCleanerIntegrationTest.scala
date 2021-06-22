@@ -73,6 +73,8 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     val log = cleaner.logs.get(topicPartitions(0))
     val log2 = cleaner.logs.get(topicPartitions(1))
+    log.updateHighWatermark(log.activeSegment.baseOffset)
+    log2.updateHighWatermark(log2.activeSegment.baseOffset)
     val uncleanableDirectory = log.dir.getParent
     val uncleanablePartitionsCountGauge = getGauge[Int]("uncleanable-partitions-count", uncleanableDirectory)
     val uncleanableBytesGauge = getGauge[Long]("uncleanable-bytes", uncleanableDirectory)
@@ -133,6 +135,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val startSizeBlock0 = log.size
 
     val activeSegAtT0 = log.activeSegment
+    log.updateHighWatermark(activeSegAtT0.baseOffset)
 
     cleaner.startup()
 
@@ -152,6 +155,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     log.roll()
     val activeSegAtT1 = log.activeSegment
     val firstBlockCleanableSegmentOffset = activeSegAtT0.baseOffset
+    log.updateHighWatermark(activeSegAtT1.baseOffset)
 
     // the first block should get cleaned
     cleaner.awaitCleaned(new TopicPartition("log", 0), firstBlockCleanableSegmentOffset)

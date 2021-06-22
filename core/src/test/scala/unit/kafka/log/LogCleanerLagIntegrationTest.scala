@@ -58,6 +58,7 @@ class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest wit
     debug(s"total log size at T0: $startSizeBlock0")
 
     val activeSegAtT0 = log.activeSegment
+    log.updateHighWatermark(activeSegAtT0.baseOffset)
     debug(s"active segment at T0 has base offset: ${activeSegAtT0.baseOffset}")
     val sizeUpToActiveSegmentAtT0 = log.logSegments(0L, activeSegAtT0.baseOffset).map(_.size).sum
     debug(s"log size up to base offset of active segment at T0: $sizeUpToActiveSegmentAtT0")

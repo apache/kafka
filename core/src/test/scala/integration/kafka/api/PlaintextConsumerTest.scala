@@ -34,10 +34,9 @@ import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
-import kafka.server.QuotaType
-import kafka.server.KafkaServer
+import kafka.server.{KafkaServer, QuotaType}
 
-import scala.collection.mutable
+import scala.collection.{Seq, mutable}
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {

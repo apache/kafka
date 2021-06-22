@@ -540,11 +540,36 @@ class LogCleanerManagerTest extends Logging {
 
     while(log.numberOfSegments < 8)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), leaderEpoch = 0)
+    log.updateHighWatermark(log.activeSegment.baseOffset)
 
     val lastCleanOffset = Some(0L)
     val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
     assertEquals(0L, cleanableOffsets.firstDirtyOffset, "The first cleanable offset starts at the beginning of the log.")
     assertEquals(log.activeSegment.baseOffset, cleanableOffsets.firstUncleanableDirtyOffset, "The first uncleanable offset begins with the active segment.")
+  }
+
+  /**
+   * Test computation of cleanable range with no minimum compaction lag settings active and high watermark one offset less than active
+   * segment's base offset. We do not clean past the high watermark, so this should be the first uncleanable offset.
+   */
+  @Test
+  def testCleanableOffsetsWithLowerHighWatermark(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    while(log.numberOfSegments < 8)
+      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), leaderEpoch = 0)
+    // Update high watermark to be one less than the active segment's baseOffset.
+    log.updateHighWatermark(log.activeSegment.baseOffset - 1)
+
+    val lastCleanOffset = Some(0L)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
+    assertEquals(0L, cleanableOffsets.firstDirtyOffset, "The first cleanable offset starts at the beginning of the log.")
+    assertEquals(log.highWatermark, cleanableOffsets.firstUncleanableDirtyOffset, "The first uncleanable offset begins with the high watermark.")
+    assertEquals(log.activeSegment.baseOffset - 1, cleanableOffsets.firstUncleanableDirtyOffset,
+      "The first uncleanable offset should be one less than the active segment's base offset.")
   }
 
   /**
@@ -570,6 +595,7 @@ class LogCleanerManagerTest extends Logging {
 
     while (log.numberOfSegments < 8)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t1), leaderEpoch = 0)
+    log.updateHighWatermark(log.activeSegment.baseOffset)
 
     val lastCleanOffset = Some(0L)
     val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
@@ -593,6 +619,7 @@ class LogCleanerManagerTest extends Logging {
     val t0 = time.milliseconds
     while (log.numberOfSegments < 8)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t0), leaderEpoch = 0)
+    log.updateHighWatermark(log.activeSegment.baseOffset)
 
     time.sleep(compactionLag + 1)
 

@@ -56,6 +56,9 @@ import scala.util.control.ControlThrowable
  * Once the key=>last_offset map is built, the log is cleaned by recopying each log segment but omitting any key that appears in the offset map with a
  * higher offset than what is found in the segment (i.e. messages with a key that appears in the dirty section of the log).
  *
+ * When cleaning, the segment base offset will always be the base offset of the first batch in the segment.
+ * The log start offset will also be the base offset of the first batch in the log.
+ *
  * To avoid segments shrinking to very small sizes with repeated cleanings we implement a rule by which if we will merge successive segments when
  * doing a cleaning if their log and index size are less than the maximum log and index size prior to the clean beginning.
  *
@@ -487,7 +490,7 @@ private[log] class Cleaner(val id: Int,
   /* buffer used for write i/o */
   private var writeBuffer = ByteBuffer.allocate(ioBufferSize)
 
-  private val decompressionBufferSupplier = BufferSupplier.create();
+  private val decompressionBufferSupplier = BufferSupplier.create()
 
   require(offsetMap.slots * dupBufferLoadFactor > 1, "offset map is too small to fit in even a single message, so log cleaning will never make progress. You can increase log.cleaner.dedupe.buffer.size or decrease log.cleaner.threads")
 
@@ -561,10 +564,7 @@ private[log] class Cleaner(val id: Int,
                                  deleteHorizonMs: Long,
                                  stats: CleanerStats,
                                  transactionMetadata: CleanedTransactionMetadata): Unit = {
-    // create a new segment with a suffix appended to the name of the log and indexes
-    val cleaned = LogCleaner.createNewCleanedSegment(log.dir, log.config, segments.head.baseOffset)
-    transactionMetadata.cleanedIndex = Some(cleaned.txnIndex)
-
+    var cleanedSegment: Option[LogSegment] = Option.empty
     try {
       // clean segments into the new destination segment
       val iter = segments.iterator
@@ -581,13 +581,21 @@ private[log] class Cleaner(val id: Int,
         transactionMetadata.addAbortedTransactions(abortedTransactions)
 
         val retainDeletesAndTxnMarkers = currentSegment.lastModified > deleteHorizonMs
-        info(s"Cleaning $currentSegment in log ${log.name} into ${cleaned.baseOffset} " +
-          s"with deletion horizon $deleteHorizonMs, " +
-          s"${if(retainDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
 
         try {
-          cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletesAndTxnMarkers, log.config.maxMessageSize,
+           cleanedSegment = cleanInto(log, currentSegment.log, cleanedSegment, map, retainDeletesAndTxnMarkers, log.config.maxMessageSize,
             transactionMetadata, lastOffsetOfActiveProducers, stats)
+          cleanedSegment match {
+            case Some(cleaned) =>
+              info(s" Cleaned $currentSegment in log ${log.name} into ${cleaned.baseOffset}" +
+                s"with deletion horizon $deleteHorizonMs, " +
+                s"${if(retainDeletesAndTxnMarkers) "retained" else "discarded"} deletes.")
+            case _ =>
+              info(s"Cleaned $currentSegment in log ${log.name}" +
+                s"with deletion horizon $deleteHorizonMs, " +
+                s"${if(retainDeletesAndTxnMarkers) "retained" else "discarded"} deletes. " +
+                s"No records were retained in the segment.")
+          }
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -599,20 +607,27 @@ private[log] class Cleaner(val id: Int,
         currentSegmentOpt = nextSegmentOpt
       }
 
-      cleaned.onBecomeInactiveSegment()
-      // flush new segment to disk before swap
-      cleaned.flush()
+      cleanedSegment match {
+        case Some(cleaned) =>
+          // Result of cleaning included at least one record.
+          cleaned.onBecomeInactiveSegment()
+          // flush new segment to disk before swap
+          cleaned.flush()
 
-      // update the modification date to retain the last modified date of the original files
-      val modified = segments.last.lastModified
-      cleaned.lastModified = modified
+          // update the modification date to retain the last modified date of the original files
+          val modified = segments.last.lastModified
+          cleaned.lastModified = modified
 
-      // swap in new segment
-      info(s"Swapping in cleaned segment $cleaned for segment(s) $segments in log $log")
-      log.replaceSegments(List(cleaned), segments)
+          // swap in new segment
+          info(s"Swapping in cleaned segment $cleaned for segment(s) $segments in log $log")
+          log.replaceSegments(List(cleaned), segments)
+        case None =>
+          info(s"Deleting segment(s) $segments in log $log since no records were retained after cleaning")
+          log.deleteSegments(segments, SegmentCompaction)
+      }
     } catch {
       case e: LogCleaningAbortedException =>
-        try cleaned.deleteIfExists()
+        try cleanedSegment.foreach(_.deleteIfExists())
         catch {
           case deleteException: Exception =>
             e.addSuppressed(deleteException)
@@ -624,23 +639,23 @@ private[log] class Cleaner(val id: Int,
    * Clean the given source log segment into the destination segment using the key=>offset mapping
    * provided
    *
-   * @param topicPartition The topic and partition of the log segment to clean
+   * @param log The log being cleaned
    * @param sourceRecords The dirty log segment
-   * @param dest The cleaned log segment
+   * @param dest The cleaned log segment if it exists
    * @param map The key=>offset mapping
    * @param retainDeletesAndTxnMarkers Should tombstones and markers be retained while cleaning this segment
    * @param maxLogMessageSize The maximum message size of the corresponding topic
    * @param stats Collector for cleaning statistics
    */
-  private[log] def cleanInto(topicPartition: TopicPartition,
+  private[log] def cleanInto(log: Log,
                              sourceRecords: FileRecords,
-                             dest: LogSegment,
+                             dest: Option[LogSegment],
                              map: OffsetMap,
                              retainDeletesAndTxnMarkers: Boolean,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
-                             stats: CleanerStats): Unit = {
+                             stats: CleanerStats): Option[LogSegment] = {
     val logCleanerFilter: RecordFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
 
@@ -682,8 +697,9 @@ private[log] class Cleaner(val id: Int,
     }
 
     var position = 0
+    var destSegment = dest
     while (position < sourceRecords.sizeInBytes) {
-      checkDone(topicPartition)
+      checkDone(log.topicPartition)
       // read a chunk of messages and copy any that are to be retained to the write buffer to be written out
       readBuffer.clear()
       writeBuffer.clear()
@@ -691,7 +707,7 @@ private[log] class Cleaner(val id: Int,
       sourceRecords.readInto(readBuffer, position)
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
-      val result = records.filterTo(topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier)
+      val result = records.filterTo(log.topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier)
       stats.readMessages(result.messagesRead, result.bytesRead)
       stats.recopyMessages(result.messagesRetained, result.bytesRetained)
 
@@ -700,11 +716,21 @@ private[log] class Cleaner(val id: Int,
       // if any messages are to be retained, write them out
       val outputBuffer = result.outputBuffer
       if (outputBuffer.position() > 0) {
+        val segment = destSegment.getOrElse {
+          // create a new segment with a suffix appended to the name of the log and indexes
+          val newSegment = LogCleaner.createNewCleanedSegment(log.dir, log.config,
+            result.baseOffsetOfFirstBatch.orElseThrow(() => new IllegalStateException("Could not find baseOffset of first batch in segment.")))
+          transactionMetadata.cleanedIndex = Some(newSegment.txnIndex)
+          transactionMetadata.appendTransactionIndex()
+          destSegment = Some(newSegment)
+          newSegment
+        }
+        
         outputBuffer.flip()
         val retained = MemoryRecords.readableRecords(outputBuffer)
         // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
         // after `Log.replaceSegments` (which acquires the lock) is called
-        dest.append(largestOffset = result.maxOffset,
+        segment.append(largestOffset = result.maxOffset,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
           records = retained)
@@ -717,6 +743,7 @@ private[log] class Cleaner(val id: Int,
         growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records)
     }
     restoreBuffers()
+    destSegment
   }
 
 
@@ -1097,6 +1124,9 @@ private[log] class CleanedTransactionMetadata {
   // Output cleaned index to write retained aborted transactions
   var cleanedIndex: Option[TransactionIndex] = None
 
+  // List of aborted transactions to append when cleanedIndex is created
+  var toAppend: ListBuffer[AbortedTxn] = ListBuffer.empty
+
   def addAbortedTransactions(abortedTransactions: List[AbortedTxn]): Unit = {
     this.abortedTransactions ++= abortedTransactions
   }
@@ -1120,7 +1150,10 @@ private[log] class CleanedTransactionMetadata {
             // We may retain a record from an aborted transaction if it is the last entry
             // written by a given producerId.
             case Some(abortedTxnMetadata) if abortedTxnMetadata.lastObservedBatchOffset.isDefined =>
-              cleanedIndex.foreach(_.append(abortedTxnMetadata.abortedTxn))
+              cleanedIndex match {
+                case Some(index) => index.append(abortedTxnMetadata.abortedTxn)
+                case _ => toAppend += abortedTxnMetadata.abortedTxn
+              }
               false
             case _ => true
           }
@@ -1162,6 +1195,14 @@ private[log] class CleanedTransactionMetadata {
     } else {
       false
     }
+  }
+
+  /**
+   * Apply transactions that accumulated before cleanedIndex was applied
+   */
+  def appendTransactionIndex(): Unit = {
+    toAppend.foreach(transaction => cleanedIndex.foreach(_.append(transaction)))
+    toAppend.clear()
   }
 
 }

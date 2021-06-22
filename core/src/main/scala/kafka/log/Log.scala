@@ -205,6 +205,11 @@ case object LeaderOffsetIncremented extends LogStartOffsetIncrementReason {
 case object SegmentDeletion extends LogStartOffsetIncrementReason {
   override def toString: String = "segment deletion"
 }
+
+case object SegmentReplacement extends LogStartOffsetIncrementReason {
+  override def toString: String = "segment replacement"
+}
+
 case object SnapshotGenerated extends LogStartOffsetIncrementReason {
   override def toString: String = "snapshot generated"
 }
@@ -232,6 +237,9 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  *                       - Earliest offset of the log in response to ListOffsetRequest. To avoid OffsetOutOfRange exception after user seeks to earliest offset,
  *                         we make sure that logStartOffset <= log's highWatermark
  *                       Other activities such as log cleaning are not affected by logStartOffset.
+ *                       Log cleaning may update the logStartOffset.
+ *                       All updates to logStartOffset must maintain the invariant logStartOffset <= end offset of first
+ *                       batch that can be returned by Fetch.
  * @param recoveryPoint The offset at which to begin the next recovery i.e. the first offset which has not been flushed to disk
  * @param nextOffsetMetadata The offset where the next message could be appended
  * @param scheduler The thread pool scheduler used for background actions
@@ -1425,7 +1433,7 @@ class Log(@volatile private var _dir: File,
     }
   }
 
-  private def deleteSegments(deletable: Iterable[LogSegment], reason: SegmentDeletionReason): Int = {
+  private[log] def deleteSegments(deletable: Iterable[LogSegment], reason: SegmentDeletionReason): Int = {
     maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
       val numToDelete = deletable.size
       if (numToDelete > 0) {
@@ -1919,6 +1927,11 @@ class Log(@volatile private var _dir: File,
       checkIfMemoryMappedBufferClosed()
       Log.replaceSegments(segments, newSegments, oldSegments, isRecoveredSwapFile, dir, topicPartition,
         config, scheduler, logDirFailureChannel, producerStateManager, this.logIdent)
+
+      // If not recovered swap file we need to increment logStartOffset here.
+      // Otherwise, we do this when loading the log where we can update the highWatermark.
+      if (!isRecoveredSwapFile)
+        maybeIncrementLogStartOffset(segments.firstSegment.get.baseOffset, SegmentReplacement)
     }
   }
 
@@ -2712,5 +2725,11 @@ case object LogRoll extends SegmentDeletionReason {
 case object LogDeletion extends SegmentDeletionReason {
   override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
     log.info(s"Deleting segments as the log has been deleted: ${toDelete.mkString(",")}")
+  }
+}
+
+case object SegmentCompaction extends SegmentDeletionReason {
+  override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
+    log.info(s"Deleting segments as all records were deleted during log compaction: ${toDelete.mkString(",")}")
   }
 }

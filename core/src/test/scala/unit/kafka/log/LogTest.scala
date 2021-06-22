@@ -1115,19 +1115,24 @@ class LogTest {
     log.roll()
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes, "c".getBytes())), producerId = pid1,
       producerEpoch = epoch, sequence = 2), leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes, "d".getBytes())), producerId = pid1,
+      producerEpoch = epoch, sequence = 3), leaderEpoch = 0)
     log.updateHighWatermark(log.logEndOffset)
     assertEquals(log.logSegments.map(_.baseOffset).toSeq.sorted.drop(1), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted,
       "expected a snapshot file per segment base offset, except the first segment")
-    assertEquals(2, ProducerStateManager.listSnapshotFiles(logDir).size)
+    assertEquals(3, ProducerStateManager.listSnapshotFiles(logDir).size)
 
-    // Clean segments, this should delete everything except the active segment since there only
-    // exists the key "a".
+    // Clean segments, this should delete the first two segments since although there only exists the key "a", only the first
+    // three segments are considered for cleaning since we do not clean the active segment.
     cleaner.clean(LogToClean(log.topicPartition, log, 0, log.logEndOffset))
     log.deleteOldSegments()
     // Sleep to breach the file delete delay and run scheduled file deletion tasks
     mockTime.sleep(1)
-    assertEquals(log.logSegments.map(_.baseOffset).toSeq.sorted.drop(1), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted,
-      "expected a snapshot file per segment base offset, excluding the first")
+    // We delete the snapshot from the second segment, so now we have 2 snapshot files
+    assertEquals(2, ProducerStateManager.listSnapshotFiles(logDir).size)
+    assertEquals(log.logSegments.map(_.baseOffset).toSeq.sorted, ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted,
+      "expected a snapshot file per segment base offset")
   }
 
   /**
@@ -2432,6 +2437,7 @@ class LogTest {
 
     val logConfig = LogTestUtils.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
     val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
+    log.updateHighWatermark(log.logEndOffset)
 
     val segmentWithOverflow = LogTestUtils.firstOverflowSegment(log).getOrElse {
       throw new AssertionError("Failed to create log with a segment which has overflowed offsets")

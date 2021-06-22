@@ -54,10 +54,11 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     val log = cleaner.logs.get(topicPartitions(0))
 
     val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec)
+    val firstDirty = log.activeSegment.baseOffset
+    log.updateHighWatermark(firstDirty)
     val startSize = log.size
     cleaner.startup()
 
-    val firstDirty = log.activeSegment.baseOffset
     checkLastCleaned("log", 0, firstDirty)
     val compactedSize = log.logSegments.map(_.size).sum
     assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
@@ -70,6 +71,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     val dups = writeDups(startKey = largeMessageKey + 1, numKeys = 100, numDups = 3, log = log, codec = codec)
     val appends2 = appends ++ Seq((largeMessageKey, largeMessageValue, largeMessageOffset)) ++ dups
     val firstDirty2 = log.activeSegment.baseOffset
+    log.updateHighWatermark(firstDirty2)
     checkLastCleaned("log", 0, firstDirty2)
 
     checkLogAfterAppendingDups(log, startSize, appends2)
@@ -151,10 +153,11 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     log.config = new LogConfig(props)
 
     val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
+    val firstDirty = log.activeSegment.baseOffset
+    log.updateHighWatermark(firstDirty)
     val startSize = log.size
     cleaner.startup()
 
-    val firstDirty = log.activeSegment.baseOffset
     checkLastCleaned("log", 0, firstDirty)
     val compactedSize = log.logSegments.map(_.size).sum
     assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
@@ -174,6 +177,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
       appends ++ dupsV0 ++ Seq((largeMessageKey, largeMessageValue, largeMessageOffset)) ++ dupsV1 ++ dupsV2
     }
     val firstDirty2 = log.activeSegment.baseOffset
+    log.updateHighWatermark(firstDirty2)
     checkLastCleaned("log", 0, firstDirty2)
 
     checkLogAfterAppendingDups(log, startSize, appends2)
@@ -203,11 +207,12 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     appendsV1 ++= writeDupsSingleMessageSet(startKey = 6, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
 
     val appends = appendsV0 ++ appendsV1
+    val firstDirty = log.activeSegment.baseOffset
+    log.updateHighWatermark(firstDirty)
 
     val startSize = log.size
     cleaner.startup()
 
-    val firstDirty = log.activeSegment.baseOffset
     assertTrue(firstDirty > appendsV0.size) // ensure we clean data from V0 and V1
 
     checkLastCleaned("log", 0, firstDirty)
@@ -229,12 +234,13 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     val log = cleaner.logs.get(topicPartitions(0))
 
     writeDups(numKeys = 100, numDups = 3, log = log, codec = codec)
+    val firstDirty = log.activeSegment.baseOffset
+    log.updateHighWatermark(firstDirty)
     val startSize = log.size
     cleaner.startup()
     assertEquals(1, cleaner.cleanerCount)
 
     // Verify no cleaning with LogCleanerIoBufferSizeProp=1
-    val firstDirty = log.activeSegment.baseOffset
     val topicPartition = new TopicPartition("log", 0)
     cleaner.awaitCleaned(topicPartition, firstDirty, maxWaitMs = 10)
     assertTrue(cleaner.cleanerManager.allCleanerCheckpoints.isEmpty, "Should not have cleaned")
