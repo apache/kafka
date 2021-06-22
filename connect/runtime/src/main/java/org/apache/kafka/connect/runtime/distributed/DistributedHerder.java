@@ -1158,16 +1158,16 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 .stream()
                 .filter(taskId -> currentAssignments.tasks().contains(taskId))
                 .collect(Collectors.toList());
-        final boolean restartConnector = plan.restartConnector() && currentAssignments.connectors().contains(connectorName);
+        final boolean restartConnector = plan.shouldRestartConnector() && currentAssignments.connectors().contains(connectorName);
         final boolean restartTasks = !assignedIdsToRestart.isEmpty();
         if (restartConnector) {
             worker.stopAndAwaitConnector(connectorName);
-            recordRestarting(connectorName);
+            onRestart(connectorName);
         }
         if (restartTasks) {
             // Stop the tasks and mark as restarting
             worker.stopAndAwaitTasks(assignedIdsToRestart);
-            assignedIdsToRestart.forEach(this::recordRestarting);
+            assignedIdsToRestart.forEach(this::onRestart);
         }
 
         // Now restart the connector and tasks

@@ -322,8 +322,8 @@ public class AbstractHerderTest {
 
         assertTrue(mayBeRestartPlan.isPresent());
         RestartPlan restartPlan = mayBeRestartPlan.get();
-        assertTrue(restartPlan.restartConnector());
-        assertTrue(restartPlan.restartAnyTasks());
+        assertTrue(restartPlan.shouldRestartConnector());
+        assertTrue(restartPlan.shouldRestartAnyTasks());
         assertEquals(2, restartPlan.taskIdsToRestart().size());
         assertTrue(restartPlan.taskIdsToRestart().contains(taskId1));
         assertTrue(restartPlan.taskIdsToRestart().contains(taskId2));
@@ -364,8 +364,8 @@ public class AbstractHerderTest {
 
         assertTrue(mayBeRestartPlan.isPresent());
         RestartPlan restartPlan = mayBeRestartPlan.get();
-        assertFalse(restartPlan.restartConnector());
-        assertFalse(restartPlan.restartAnyTasks());
+        assertFalse(restartPlan.shouldRestartConnector());
+        assertFalse(restartPlan.shouldRestartAnyTasks());
         assertTrue(restartPlan.taskIdsToRestart().isEmpty());
 
         PowerMock.verifyAll();

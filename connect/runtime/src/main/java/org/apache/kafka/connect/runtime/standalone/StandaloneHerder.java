@@ -319,18 +319,18 @@ public class StandaloneHerder extends AbstractHerder {
 
         // If requested, stop the connector and any tasks, marking each as restarting
         log.info("Received {}", plan);
-        if (plan.restartConnector()) {
+        if (plan.shouldRestartConnector()) {
             worker.stopAndAwaitConnector(connectorName);
-            recordRestarting(connectorName);
+            onRestart(connectorName);
         }
-        if (plan.restartAnyTasks()) {
+        if (plan.shouldRestartAnyTasks()) {
             // Stop the tasks and mark as restarting
             worker.stopAndAwaitTasks(plan.taskIdsToRestart());
-            plan.taskIdsToRestart().forEach(this::recordRestarting);
+            plan.taskIdsToRestart().forEach(this::onRestart);
         }
 
         // Now restart the connector and tasks
-        if (plan.restartConnector()) {
+        if (plan.shouldRestartConnector()) {
             log.debug("Restarting connector '{}'", connectorName);
             startConnector(connectorName, (error, targetState) -> {
                 if (error == null) {
@@ -340,7 +340,7 @@ public class StandaloneHerder extends AbstractHerder {
                 }
             });
         }
-        if (plan.restartAnyTasks()) {
+        if (plan.shouldRestartAnyTasks()) {
             log.debug("Restarting {} of {} tasks for {}", plan.restartTaskCount(), plan.totalTaskCount(), request);
             createConnectorTasks(connectorName, plan.taskIdsToRestart());
             log.debug("Restarted {} of {} tasks for {} as requested", plan.restartTaskCount(), plan.totalTaskCount(), request);

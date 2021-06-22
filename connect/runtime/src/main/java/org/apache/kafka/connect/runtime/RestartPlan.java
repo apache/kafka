@@ -99,7 +99,7 @@ public class RestartPlan {
      *
      * @return true if the {@link Connector} instance is to be restarted, or false otherwise
      */
-    public boolean restartConnector() {
+    public boolean shouldRestartConnector() {
         return isRestarting(stateInfo.connector());
     }
 
@@ -109,7 +109,7 @@ public class RestartPlan {
      *
      * @return true if any {@link Task} instances are to be restarted, or false if none are to be restarted
      */
-    public boolean restartAnyTasks() {
+    public boolean shouldRestartAnyTasks() {
         return !taskIdsToRestart().isEmpty();
     }
 
@@ -142,7 +142,7 @@ public class RestartPlan {
 
     @Override
     public String toString() {
-        if (restartConnector()) {
+        if (shouldRestartConnector()) {
             return String.format(
                     "plan to restart connector and %d of %d tasks for %s", restartTaskCount(), totalTaskCount(), request
             );
