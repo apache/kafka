@@ -238,6 +238,8 @@ class TestRaftServer(
           reader.close()
 
         case Shutdown => // Ignore shutdown command
+
+        case null => // Ignore null when timeout expires.
       }
     }
 
