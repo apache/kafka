@@ -317,32 +317,31 @@ final class KafkaMetadataLog private (
     }
   }
 
-  override def deleteBeforeSnapshot(deleteBeforeSnapshotId: OffsetAndEpoch): Boolean = {
-    val (deleted, forgottenSnapshots) = snapshots synchronized {
-      latestSnapshotId().asScala match {
-        case Some(latestSnapshotId) if
-            snapshots.contains(deleteBeforeSnapshotId) &&
-            startOffset < deleteBeforeSnapshotId.offset &&
-            deleteBeforeSnapshotId.offset <= latestSnapshotId.offset =>
-          (true, forgetSnapshotsBefore(deleteBeforeSnapshotId))
-        case _ =>
-          (false, mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]])
-      }
-    }
 
-    removeSnapshots(forgottenSnapshots)
-    deleted
-  }
-
-  private def deleteSnapshot(snapshotId: OffsetAndEpoch): Boolean = {
+  /**
+   * Delete a given snapshot ID from our cache and schedule its removal from disk. If the given snapshot is also
+   * the latest snapshot, this method does nothing since we must retain at least one snapshot at all times.
+   * @param snapshotId
+   * @return
+   */
+  private[raft] def deleteSnapshot(snapshotId: OffsetAndEpoch): Boolean = {
     val (deleted, forgottenSnapshot) = snapshots synchronized {
       val forgotten = mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]]
-      snapshots.remove(snapshotId) match {
-        case Some(value) =>
-          forgotten.put(snapshotId, value)
-          (true, forgotten)
-        case None =>
-          (false, forgotten)
+      latestSnapshotId().asScala match {
+        case Some(latestSnapshot) if latestSnapshot != snapshotId =>
+          snapshots.remove(snapshotId) match {
+            case Some(value) =>
+              forgotten.put(snapshotId, value)
+              (true, forgotten)
+            case None =>
+              (false, forgotten)
+          }
+          case Some(latestSnapshot) =>
+            debug(s"Refusing to delete the latest snapshot $latestSnapshot as this would cause divergence.")
+            (false, forgotten)
+          case None =>
+            debug(s"No such snapshot $snapshotId to delete.")
+            (false, forgotten)
       }
     }
     removeSnapshots(forgottenSnapshot)
