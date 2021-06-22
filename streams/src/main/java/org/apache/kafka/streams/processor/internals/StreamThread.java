@@ -254,15 +254,15 @@ public class StreamThread extends Thread {
     }
 
     public boolean isRunning() {
-        if (state.equals(State.RUNNING)) {
-            System.err.print(shortLogPrefix + "is r ");
-            System.err.flush();
-        }
+//        if (state.equals(State.RUNNING)) {
+//            System.err.print(shortLogPrefix + "is r ");
+//            System.err.flush();
+//        }
         synchronized (stateLock) {
-            if (state.equals(State.RUNNING)) {
-                System.err.print(shortLogPrefix + "is r l ");
-                System.err.flush();
-            }
+//            if (state.equals(State.RUNNING)) {
+//                System.err.print(shortLogPrefix + "is r l ");
+//                System.err.flush();
+//            }
             return state.isAlive();
         }
     }

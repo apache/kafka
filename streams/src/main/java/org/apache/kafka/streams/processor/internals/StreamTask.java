@@ -700,7 +700,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @SuppressWarnings("unchecked")
     public boolean process(final long wallClockTime) {
         if (logPrefix.contains("1_4")) {
-            System.out.print("proc ");
+            System.err.print("proc ");
+            System.err.flush();
 //            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
 //            for (int i = 1; i < elements.length; i++) {
 //                final StackTraceElement s = elements[i];
@@ -730,6 +731,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 //            log.error("Start processing one record [{}]", record);
             if (logPrefix.contains("1_4")) {
                 System.err.println(logPrefix + "pro r:" + record);
+                System.err.flush();
             }
 
 

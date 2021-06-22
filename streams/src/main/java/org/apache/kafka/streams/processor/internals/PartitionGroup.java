@@ -301,8 +301,10 @@ public class PartitionGroup {
         if (logPrefix.contains("1_4")) {
             if (queue != null) {
                 System.err.println(logPrefix + queue.partition() + "," + queue.size());
+                System.err.flush();
             } else {
                 System.err.print(logPrefix + "nu");
+                System.err.flush();
             }
         }
         info.queue = queue;
