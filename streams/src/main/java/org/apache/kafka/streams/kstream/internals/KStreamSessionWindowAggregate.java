@@ -24,9 +24,6 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -39,6 +36,7 @@ import java.util.List;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamSessionWindowAggregate.class);
 
@@ -63,7 +61,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
     }
 
     @Override
-    public Processor<K, V> get() {
+    public org.apache.kafka.streams.processor.Processor<K, V> get() {
         return new KStreamSessionWindowAggregateProcessor();
     }
 
@@ -76,7 +74,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
         sendOldValues = true;
     }
 
-    private class KStreamSessionWindowAggregateProcessor extends AbstractProcessor<K, V> {
+    private class KStreamSessionWindowAggregateProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, V> {
 
         private SessionStore<K, Agg> store;
         private SessionTupleForwarder<K, Agg> tupleForwarder;
@@ -84,7 +82,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
             final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
             final String threadId = Thread.currentThread().getName();
@@ -193,7 +191,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
         private SessionStore<K, Agg> store;
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             store = context.getStateStore(storeName);
         }
 
