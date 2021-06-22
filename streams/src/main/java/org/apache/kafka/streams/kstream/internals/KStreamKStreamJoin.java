@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.time.Duration;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -86,6 +87,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
         private WindowStore<K, V2> otherWindowStore;
         private Sensor droppedRecordsSensor;
         private Optional<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue>> outerJoinWindowStore = Optional.empty();
+        private long minTime = Long.MAX_VALUE;
 
         @Override
         public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
@@ -172,6 +174,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
                     if (!outerJoinWindowStore.isPresent() || timeTo < maxObservedStreamTime.get()) {
                         context().forward(key, joiner.apply(key, value, null));
                     } else {
+                        minTime = Math.min(minTime, inputRecordTimestamp);
                         outerJoinWindowStore.ifPresent(store -> store.put(
                             KeyAndJoinSide.make(isLeftSide, key),
                             LeftOrRightValue.make(isLeftSide, value),
@@ -183,6 +186,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
         @SuppressWarnings("unchecked")
         private void emitNonJoinedOuterRecords(final WindowStore<KeyAndJoinSide<K>, LeftOrRightValue> store) {
+            if (minTime >= maxObservedStreamTime.get() - joinAfterMs - joinBeforeMs - joinGraceMs) {
+                return;
+            }
+
             try (final KeyValueIterator<Windowed<KeyAndJoinSide<K>>, LeftOrRightValue> it = store.all()) {
                 while (it.hasNext()) {
                     final KeyValue<Windowed<KeyAndJoinSide<K>>, LeftOrRightValue> record = it.next();
@@ -192,6 +199,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
                     // Skip next records if window has not closed
                     if (windowedKey.window().start() + joinAfterMs + joinGraceMs >= maxObservedStreamTime.get()) {
+                        minTime = windowedKey.window().start();
                         break;
                     }
 
