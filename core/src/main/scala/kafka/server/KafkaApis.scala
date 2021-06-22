@@ -37,7 +37,7 @@ import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.{AclBinding, AclOperation}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
 import org.apache.kafka.common.message.ApiVersionsResponseData.{ApiVersionsResponseKey, ApiVersionsResponseKeyCollection}
@@ -77,6 +77,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.util.{Failure, Success, Try}
@@ -1167,7 +1168,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     var topicMetadata =
       if (authorizedTopics.isEmpty)
         Seq.empty[MetadataResponse.TopicMetadata]
-      else {
+      else if (metadataRequest.excludePartitions()) {
+        val topicsOnlyMetadata = new ArrayBuffer[MetadataResponse.TopicMetadata](authorizedTopics.size)
+        for (t <- authorizedTopics) {
+          topicsOnlyMetadata += new MetadataResponse.TopicMetadata(Errors.NONE, t, Topic.isInternal(t))
+        }
+        topicsOnlyMetadata
+      } else {
         // If the metadata request is fetching metadata for all topics, auto topic creation is NOT allowed. This is an
         // internal hotfix for issue KAFKA-10606
         val allowAutoTopicCreation = (!metadataRequest.isAllTopics) && metadataRequest.allowAutoTopicCreation
