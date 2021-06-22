@@ -858,11 +858,12 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       // already completed.
       try {
         snapshot.renameTo(Log.DeletedFileSuffix)
+        Some(snapshot)
       } catch {
         case _: NoSuchFileException =>
-          return None
+          info(s"Failed to rename producer state snapshot ${snapshot.file.getAbsoluteFile} with deletion suffix because it was already deleted")
+          None
       }
-      return Some(snapshot)
     }
     }
   }
