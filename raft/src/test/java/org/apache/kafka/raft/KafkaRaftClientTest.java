@@ -373,6 +373,11 @@ public class KafkaRaftClientTest {
 
         int currentEpoch = context.currentEpoch();
         context.client.resign(currentEpoch - 1);
+        context.client.poll();
+
+        // Ensure we are still leader even after expiration of the election timeout.
+        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.client.poll();
         context.assertElectedLeader(currentEpoch, localId);
     }
 
