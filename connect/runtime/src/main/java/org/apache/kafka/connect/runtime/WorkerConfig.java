@@ -477,23 +477,20 @@ public class WorkerConfig extends AbstractConfig {
                     + "Expected one of %s", action, HEADER_ACTIONS));
         }
     }
+
     private static class ListenersValidator implements ConfigDef.Validator {
         @Override
         public void ensureValid(String name, Object value) {
-            if (value == null) {
-                throw new ConfigException("Invalid value for listeners, at least one URL is expected, ex: http://localhost:8080,https://localhost:8443.");
-            }
-
             if (!(value instanceof List)) {
-                throw new ConfigException("Invalid value type for listeners (expected list).");
+                throw new ConfigException("Invalid value type for listeners (expected list of URLs , ex: http://localhost:8080,https://localhost:8443).");
             }
 
-            List items = (List) value;
+            List<?> items = (List<?>) value;
             if (items.isEmpty()) {
                 throw new ConfigException("Invalid value for listeners, at least one URL is expected, ex: http://localhost:8080,https://localhost:8443.");
             }
 
-            for (Object item: items) {
+            for (Object item : items) {
                 if (!(item instanceof String)) {
                     throw new ConfigException("Invalid type for listeners (expected String).");
                 }
@@ -520,12 +517,12 @@ public class WorkerConfig extends AbstractConfig {
                 throw new ConfigException("Invalid value type for admin.listeners (expected list).");
             }
 
-            List items = (List) value;
+            List<?> items = (List<?>) value;
             if (items.isEmpty()) {
                 return;
             }
 
-            for (Object item: items) {
+            for (Object item : items) {
                 if (!(item instanceof String)) {
                     throw new ConfigException("Invalid type for admin.listeners (expected String).");
                 }
