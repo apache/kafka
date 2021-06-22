@@ -430,7 +430,10 @@ public class EmbeddedConnectCluster {
     /**
      * Restart an existing connector and its tasks.
      *
-     * @param connName name of the connector to be restarted
+     * @param connName  name of the connector to be restarted
+     * @param onlyFailed    true if only failed instances should be restarted
+     * @param includeTasks  true if tasks should be restarted, or false if only the connector should be restarted
+     * @param onlyCallOnEmptyWorker true if the REST API call should be called on a worker not running this connector or its tasks
      * @throws ConnectRestException if the REST API returns error status
      * @throws ConnectException for any other error.
      */
@@ -439,7 +442,7 @@ public class EmbeddedConnectCluster {
         String restartPath = String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, connName);
         String restartEndpoint;
         if (onlyCallOnEmptyWorker) {
-            restartEndpoint = endpointForWorkerRunningNoResourceForConnector(restartPath, connName);
+            restartEndpoint = endpointForResourceNotRunningConnector(restartPath, connName);
         } else {
             restartEndpoint = endpointForResource(restartPath);
         }
@@ -601,7 +604,7 @@ public class EmbeddedConnectCluster {
      * @return the admin endpoint URL
      * @throws ConnectException if no REST endpoint is available
      */
-    public String endpointForWorkerRunningNoResourceForConnector(String resource, String connectorName) {
+    public String endpointForResourceNotRunningConnector(String resource, String connectorName) {
         ConnectorStateInfo info = connectorStatus(connectorName);
         Set<String> activeWorkerUrls = new HashSet<>();
         activeWorkerUrls.add(String.format("http://%s/", info.connector().workerId()));
