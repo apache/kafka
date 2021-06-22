@@ -4302,19 +4302,30 @@ public class KafkaAdminClient extends AdminClient {
                     if (supportsMaxTimestamp) {
                         supportsMaxTimestamp = false;
 
-                        // fail any unsupported futures
+                        // fail any unsupported futures and remove partitions from the downgraded retry
+                        List<ListOffsetsTopic> topicsToRemove = new ArrayList<>();
                         partitionsToQuery.stream().forEach(
-                            t -> t.partitions().stream()
-                                .filter(p -> p.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP)
-                                .forEach(
-                                    p -> futures.get(new TopicPartition(t.name(), p.partitionIndex()))
-                                        .completeExceptionally(
-                                            new UnsupportedVersionException(
-                                                "Broker " + brokerId
-                                                    + " does not support MAX_TIMESTAMP offset spec"))
-                                )
+                            t -> {
+                                List<ListOffsetsPartition> partitionsToRemove = new ArrayList<>();
+                                t.partitions().stream()
+                                    .filter(p -> p.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP)
+                                    .forEach(
+                                        p -> {
+                                            futures.get(new TopicPartition(t.name(), p.partitionIndex()))
+                                                .completeExceptionally(
+                                                    new UnsupportedVersionException(
+                                                        "Broker " + brokerId
+                                                            + " does not support MAX_TIMESTAMP offset spec"));
+                                            partitionsToRemove.add(p);
+
+                                        });
+                                t.partitions().removeAll(partitionsToRemove);
+                                if (t.partitions().isEmpty()) topicsToRemove.add(t);
+                            }
                         );
-                        return true;
+                        partitionsToQuery.removeAll(topicsToRemove);
+
+                        return !partitionsToQuery.isEmpty();
                     }
                     return false;
                 }
