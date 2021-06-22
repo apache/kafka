@@ -434,8 +434,7 @@ public class KafkaRaftClientTest {
         context.client.poll();
         assertFalse(context.channel.hasSentRequests());
 
-        // Any `Fetch` received in the resigned st
-        // ate should result in a NOT_LEADER error.
+        // Any `Fetch` received in the resigned state should result in a NOT_LEADER error.
         context.deliverRequest(context.fetchRequest(1, -1, 0, 0, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER,
@@ -502,7 +501,6 @@ public class KafkaRaftClientTest {
             context.client.resign(epoch);
         });
     }
-
 
     @Test
     public void testInitializeAsCandidateFromStateStore() throws Exception {
