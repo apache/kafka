@@ -748,39 +748,6 @@ class LogTest {
   }
 
   @Test
-  def testLogEndLessThanStartAfterReopen(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig()
-    var log = createLog(logDir, logConfig)
-    for (i <- 0 until 5) {
-      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
-      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
-      log.roll()
-    }
-    assertEquals(6, log.logSegments.size)
-
-    // Increment the log start offset
-    val startOffset = 4
-    log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(startOffset, ClientRecordDeletion)
-    assertTrue(log.logEndOffset > log.logStartOffset)
-
-    // Append garbage to a segment below the current log start offset
-    val segmentToForceTruncation = log.logSegments.take(2).last
-    val bw = new BufferedWriter(new FileWriter(segmentToForceTruncation.log.file))
-    bw.write("corruptRecord")
-    bw.close()
-    log.close()
-
-    // Reopen the log. This will cause truncate the segment to which we appended garbage and delete all other segments.
-    // All remaining segments will be lower than the current log start offset, which will force deletion of all segments
-    // and recreation of a single, active segment starting at logStartOffset.
-    log = createLog(logDir, logConfig, logStartOffset = startOffset, lastShutdownClean = false)
-    assertEquals(1, log.logSegments.size)
-    assertEquals(startOffset, log.logStartOffset)
-    assertEquals(startOffset, log.logEndOffset)
-  }
-
-  @Test
   def testNonActiveSegmentsFrom(): Unit = {
     val logConfig = LogTestUtils.createLogConfig()
     val log = createLog(logDir, logConfig)
@@ -1994,6 +1961,26 @@ class LogTest {
     assertTrue(log.topicId.isDefined)
     assertTrue(log.topicId.get == topicId)
     log.close()
+  }
+
+  @Test
+  def testNoOpWhenKeepPartitionMetadataFileIsFalse(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = createLog(logDir, logConfig, keepPartitionMetadataFile = false)
+
+    val topicId = Uuid.randomUuid()
+    log.assignTopicId(topicId)
+    // We should not write to this file or set the topic ID
+    assertFalse(log.partitionMetadataFile.exists())
+    assertEquals(None, log.topicId)
+    log.close()
+
+    val log2 = createLog(logDir, logConfig, topicId = Some(Uuid.randomUuid()),  keepPartitionMetadataFile = false)
+
+    // We should not write to this file or set the topic ID
+    assertFalse(log2.partitionMetadataFile.exists())
+    assertEquals(None, log2.topicId)
+    log2.close()
   }
 
   @Test
@@ -3509,9 +3496,10 @@ class LogTest {
                         maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                         producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                         lastShutdownClean: Boolean = true,
-                        topicId: Option[Uuid] = None): Log = {
+                        topicId: Option[Uuid] = None,
+                        keepPartitionMetadataFile: Boolean = true): Log = {
     LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
-      maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean, topicId = topicId)
+      maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean, topicId = topicId, keepPartitionMetadataFile = keepPartitionMetadataFile)
   }
 
   private def createLogWithOffsetOverflow(logConfig: LogConfig): (Log, LogSegment) = {

@@ -14,42 +14,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.tools;
 
-package org.apache.kafka.controller;
+import net.sourceforge.argparse4j.inf.Argument;
+import net.sourceforge.argparse4j.inf.ArgumentAction;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.Exit;
 
-import org.apache.kafka.common.protocol.ApiMessage;
+import java.util.Map;
 
-import java.util.Iterator;
-import java.util.List;
+class PrintVersionAndExitAction implements ArgumentAction {
 
-
-public class MockSnapshotReader implements SnapshotReader {
-    private final long epoch;
-    private final Iterator<List<ApiMessage>> iterator;
-
-    public MockSnapshotReader(long epoch,
-                              Iterator<List<ApiMessage>> iterator) {
-        this.epoch = epoch;
-        this.iterator = iterator;
+    @Override
+    public void run(
+        ArgumentParser parser,
+        Argument arg,
+        Map<String, Object> attrs,
+        String flag,
+        Object value
+    ) {
+        String version = AppInfoParser.getVersion();
+        String commitId = AppInfoParser.getCommitId();
+        System.out.println(version + " (Commit:" + commitId + ")");
+        Exit.exit(0);
     }
 
     @Override
-    public long epoch() {
-        return epoch;
+    public void onAttach(Argument arg) {
+
     }
 
     @Override
-    public void close() {
-        // nothing to do
-    }
-
-    @Override
-    public boolean hasNext() {
-        return iterator.hasNext();
-    }
-
-    @Override
-    public List<ApiMessage> next() {
-        return iterator.next();
+    public boolean consumeArgument() {
+        return false;
     }
 }

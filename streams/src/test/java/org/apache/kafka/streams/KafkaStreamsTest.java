@@ -53,7 +53,6 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -61,7 +60,6 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingT
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -97,6 +95,8 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
+
+import static org.easymock.EasyMock.anyBoolean;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyLong;
@@ -933,21 +933,6 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldWarnAboutRocksDBConfigSetterIsNotGuaranteedToBeBackwardsCompatible() {
-        props.setProperty(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class.getName());
-
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
-
-            assertThat(appender.getMessages(), hasItem("stream-client [" + CLIENT_ID + "] "
-                + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
-                + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
-                + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
-                + "(or `org.rocksdb.ColumnFamilyOptions`)."));
-        }
-    }
-
-    @Test
     public void shouldCleanupOldStateDirs() throws Exception {
         PowerMock.mockStatic(Executors.class);
         final ScheduledExecutorService cleanupSchedule = EasyMock.mock(ScheduledExecutorService.class);
@@ -964,7 +949,8 @@ public class KafkaStreamsTest {
         PowerMock.expectNew(StateDirectory.class,
             anyObject(StreamsConfig.class),
             anyObject(Time.class),
-            EasyMock.eq(true)
+            EasyMock.eq(true),
+            anyBoolean()
         ).andReturn(stateDirectory);
         EasyMock.expect(stateDirectory.initializeProcessId()).andReturn(UUID.randomUUID());
         stateDirectory.close();
@@ -1076,7 +1062,6 @@ public class KafkaStreamsTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Deprecated // testing old PAPI
     private Topology getStatefulTopology(final String inputTopic,
                                          final String outputTopic,
@@ -1137,7 +1122,8 @@ public class KafkaStreamsTest {
         PowerMock.expectNew(StateDirectory.class,
             anyObject(StreamsConfig.class),
             anyObject(Time.class),
-            EasyMock.eq(shouldFilesExist)
+            EasyMock.eq(shouldFilesExist),
+            anyBoolean()
         ).andReturn(stateDirectory);
         EasyMock.expect(stateDirectory.initializeProcessId()).andReturn(UUID.randomUUID());
 

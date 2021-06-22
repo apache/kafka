@@ -20,6 +20,7 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 
@@ -126,7 +127,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * @param records the list of records to append
      * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
      *         be committed; null if no memory could be allocated for the batch at this time
-     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
      */
@@ -148,7 +149,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * @param records the list of records to append
      * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
      *         be committed; null if no memory could be allocated for the batch at this time
-     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
      */
@@ -180,14 +181,18 @@ public interface RaftClient<T> extends AutoCloseable {
     void resign(int epoch);
 
     /**
-     * Create a writable snapshot file for a given offset and epoch.
+     * Create a writable snapshot file for a committed offset and epoch.
      *
-     * The RaftClient assumes that the snapshot return will contain the records up to but
-     * not including the end offset in the snapshot id. See {@link SnapshotWriter} for
-     * details on how to use this object.
+     * The RaftClient assumes that the snapshot returned will contain the records up to and
+     * including the committed offset and epoch. See {@link SnapshotWriter} for details on
+     * how to use this object. If a snapshot already exists then returns an
+     * {@link Optional#empty()}.
      *
-     * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot
+     * @param committedOffset the last committed offset that will be included in the snapshot
+     * @param committedEpoch the epoch of the committed offset
+     * @return a writable snapshot if it doesn't already exists
+     * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
+     *         or less than the log start offset.
      */
-    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId);
+    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch);
 }

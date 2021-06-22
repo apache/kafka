@@ -230,12 +230,36 @@ public interface ReplicatedLog extends AutoCloseable {
      * Create a writable snapshot for the given snapshot id.
      *
      * See {@link RawSnapshotWriter} for details on how to use this object. The caller of
-     * this method is responsible for invoking {@link RawSnapshotWriter#close()}.
+     * this method is responsible for invoking {@link RawSnapshotWriter#close()}. If a
+     * snapshot already exists then return an {@link Optional#empty()}.
+     *
+     * Snapshots created using this method will be validated against the existing snapshots
+     * and the replicated log.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot
+     * @return a writable snapshot if it doesn't already exists
+     * @throws IllegalArgumentException if validate is true and end offset is greater than the
+     *         high-watermark
+     * @throws IllegalArgumentException if validate is true and end offset is less than the log
+     *         start offset
      */
-    RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
+    Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId);
+
+    /**
+     * Create a writable snapshot for the given snapshot id.
+     *
+     * See {@link RawSnapshotWriter} for details on how to use this object. The caller of
+     * this method is responsible for invoking {@link RawSnapshotWriter#close()}. If a
+     * snapshot already exists then return an {@link Optional#empty()}.
+     *
+     * Snapshots created using this method will not be validated against the existing snapshots
+     * and the replicated log. This is useful when creating snapshot from a trusted source like
+     * the quorum leader.
+     *
+     * @param snapshotId the end offset and epoch that identifies the snapshot
+     * @return a writable snapshot if it doesn't already exists
+     */
+    Optional<RawSnapshotWriter> storeSnapshot(OffsetAndEpoch snapshotId);
 
     /**
      * Opens a readable snapshot for the given snapshot id.

@@ -65,7 +65,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 
 public class StreamsUpgradeTest {
 
-    @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
             System.err.println("StreamsUpgradeTest requires one argument (properties-file) but no provided: ");
@@ -89,6 +88,7 @@ public class StreamsUpgradeTest {
         });
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     public static KafkaStreams buildStreams(final Properties streamsProperties) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Void, Void> dataStream = builder.stream("data");

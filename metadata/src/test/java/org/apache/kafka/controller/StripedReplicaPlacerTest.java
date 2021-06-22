@@ -85,6 +85,22 @@ public class StripedReplicaPlacerTest {
     }
 
     /**
+     * Test that we perform striped replica placement as expected for a multi-partition topic
+     * on a single unfenced broker
+     */
+    @Test
+    public void testMultiPartitionTopicPlacementOnSingleUnfencedBroker() {
+        MockRandom random = new MockRandom();
+        StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
+        assertEquals(Arrays.asList(Arrays.asList(0),
+                Arrays.asList(0),
+                Arrays.asList(0)),
+                placer.place(0, 3, (short) 1, Arrays.asList(
+                        new UsableBroker(0, Optional.empty(), false),
+                        new UsableBroker(1, Optional.empty(), true)).iterator()));
+    }
+
+    /**
      * Test that we will place on the fenced replica if we need to.
      */
     @Test
@@ -168,6 +184,17 @@ public class StripedReplicaPlacerTest {
     }
 
     @Test
+    public void testNonPositiveReplicationFactor() {
+        MockRandom random = new MockRandom();
+        StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
+        assertEquals("Invalid replication factor 0: the replication factor must be positive.",
+                assertThrows(InvalidReplicationFactorException.class,
+                        () -> placer.place(0, 1, (short) 0, Arrays.asList(
+                                new UsableBroker(11, Optional.of("1"), false),
+                                new UsableBroker(10, Optional.of("1"), false)).iterator())).getMessage());
+    }
+
+    @Test
     public void testSuccessfulPlacement() {
         MockRandom random = new MockRandom();
         StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
@@ -210,4 +237,42 @@ public class StripedReplicaPlacerTest {
         assertEquals(11, counts.get(Arrays.asList(3, 2)));
     }
 
+    @Test
+    public void testRackListAllBrokersFenced() {
+        // ensure we can place N replicas on a rack when the rack has less than N brokers
+        MockRandom random = new MockRandom();
+        RackList rackList = new RackList(random, Arrays.asList(
+                new UsableBroker(0, Optional.empty(), true),
+                new UsableBroker(1, Optional.empty(), true),
+                new UsableBroker(2, Optional.empty(), true)).iterator());
+        assertEquals(3, rackList.numTotalBrokers());
+        assertEquals(0, rackList.numUnfencedBrokers());
+        assertEquals(Collections.singletonList(Optional.empty()), rackList.rackNames());
+        assertEquals("All brokers are currently fenced.",
+                assertThrows(InvalidReplicationFactorException.class,
+                        () -> rackList.place(3)).getMessage());
+    }
+
+    @Test
+    public void testRackListNotEnoughBrokers() {
+        MockRandom random = new MockRandom();
+        RackList rackList = new RackList(random, Arrays.asList(
+                new UsableBroker(11, Optional.of("1"), false),
+                new UsableBroker(10, Optional.of("1"), false)).iterator());
+        assertEquals("The target replication factor of 3 cannot be reached because only " +
+                        "2 broker(s) are registered.",
+                assertThrows(InvalidReplicationFactorException.class,
+                        () -> rackList.place(3)).getMessage());
+    }
+
+    @Test
+    public void testRackListNonPositiveReplicationFactor() {
+        MockRandom random = new MockRandom();
+        RackList rackList = new RackList(random, Arrays.asList(
+                new UsableBroker(11, Optional.of("1"), false),
+                new UsableBroker(10, Optional.of("1"), false)).iterator());
+        assertEquals("Invalid replication factor -1: the replication factor must be positive.",
+                assertThrows(InvalidReplicationFactorException.class,
+                        () -> rackList.place(-1)).getMessage());
+    }
 }

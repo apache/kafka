@@ -43,11 +43,14 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+
+import java.util.ArrayList;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -210,7 +213,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotLockAnythingIfStateDirIsEmpty() {
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new File[0]).once();
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new ArrayList<>()).once();
 
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
@@ -823,7 +826,7 @@ public class TaskManagerTest {
     @Test
     public void shouldNotAttemptToCommitInHandleCorruptedDuringARebalance() {
         final ProcessorStateManager stateManager = EasyMock.createNiceMock(ProcessorStateManager.class);
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andStubReturn(new File[0]);
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andStubReturn(new ArrayList<>());
 
         final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
 
@@ -2032,7 +2035,7 @@ public class TaskManagerTest {
         expect(consumer.assignment()).andReturn(assignment);
         consumer.pause(assignment);
         expectLastCall();
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new File[0]);
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new ArrayList<>());
         replay(consumer, stateDirectory);
         assertThat(taskManager.isRebalanceInProgress(), is(false));
         taskManager.handleRebalanceStart(emptySet());
@@ -3244,9 +3247,9 @@ public class TaskManagerTest {
     }
 
     private void makeTaskFolders(final String... names) throws Exception {
-        final File[] taskFolders = new File[names.length];
+        final ArrayList<TaskDirectory> taskFolders = new ArrayList<>(names.length);
         for (int i = 0; i < names.length; ++i) {
-            taskFolders[i] = testFolder.newFolder(names[i]);
+            taskFolders.add(new TaskDirectory(testFolder.newFolder(names[i]), null));
         }
         expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(taskFolders).once();
     }

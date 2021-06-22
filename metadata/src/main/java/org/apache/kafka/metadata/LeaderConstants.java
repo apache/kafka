@@ -15,38 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
-
-import java.util.List;
-import java.util.NoSuchElementException;
-
-import org.apache.kafka.common.protocol.ApiMessage;
+package org.apache.kafka.metadata;
 
 
-public class EmptySnapshotReader implements SnapshotReader {
-    private final long epoch;
+public class LeaderConstants {
+    /**
+     * A special value used to represent the leader for a partition with no leader.
+     */
+    public static final int NO_LEADER = -1;
 
-    public EmptySnapshotReader(long epoch) {
-        this.epoch = epoch;
-    }
-
-    @Override
-    public long epoch() {
-        return epoch;
-    }
-
-    @Override
-    public void close() {
-        // Nothing to do
-    }
-
-    @Override
-    public boolean hasNext() {
-        return false;
-    }
-
-    @Override
-    public List<ApiMessage> next() {
-        throw new NoSuchElementException();
-    }
+    /**
+     * A special value used to represent a PartitionChangeRecord that does not change the
+     * partition leader.
+     */
+    public static final int NO_LEADER_CHANGE = -2;
 }

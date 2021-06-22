@@ -14,15 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.producer.internals;
 
-package org.apache.kafka.controller;
+import java.util.function.Supplier;
 
-import java.util.function.Function;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+public class ProducerTestUtils {
+    private static final int MAX_TRIES = 10;
 
-public final class NoOpSnapshotWriterBuilder implements Function<Long, SnapshotWriter> {
-    @Override
-    public SnapshotWriter apply(Long epoch) {
-        return new NoOpSnapshotWriter(epoch);
+    static void runUntil(
+        Sender sender,
+        Supplier<Boolean> condition
+    ) {
+        runUntil(sender, condition, MAX_TRIES);
+    }
+
+    static void runUntil(
+        Sender sender,
+        Supplier<Boolean> condition,
+        int maxTries
+    ) {
+        int tries = 0;
+        while (!condition.get() && tries < maxTries) {
+            tries++;
+            sender.runOnce();
+        }
+        assertTrue(condition.get(), "Condition not satisfied after " + maxTries + " tries");
     }
 }

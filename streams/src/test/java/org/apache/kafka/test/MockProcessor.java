@@ -17,7 +17,6 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -28,7 +27,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+public class MockProcessor<K, V> extends org.apache.kafka.streams.processor.AbstractProcessor<K, V> {
     private final MockApiProcessor<K, V, Object, Object> delegate;
 
     public MockProcessor(final PunctuationType punctuationType,
