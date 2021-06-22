@@ -62,12 +62,6 @@ public class ProcessorNodeMetrics {
     private static final String FORWARD_RATE_DESCRIPTION =
         RATE_DESCRIPTION_PREFIX + FORWARD_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
-    private static final String LATE_RECORD_DROP = "late-record-drop";
-    private static final String LATE_RECORD_DROP_DESCRIPTION = "dropped late records";
-    private static final String LATE_RECORD_DROP_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + LATE_RECORD_DROP_DESCRIPTION;
-    private static final String LATE_RECORD_DROP_RATE_DESCRIPTION =
-        RATE_DESCRIPTION_PREFIX + LATE_RECORD_DROP_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
-
     public static Sensor suppressionEmitSensor(final String threadId,
                                                final String taskId,
                                                final String processorNodeId,
@@ -150,21 +144,6 @@ public class ProcessorNodeMetrics {
             streamsMetrics,
             parentSensor
         );
-    }
-
-    public static Sensor lateRecordDropSensor(final String threadId,
-                                              final String taskId,
-                                              final String processorNodeId,
-                                              final StreamsMetricsImpl streamsMetrics) {
-        return throughputSensor(
-            threadId,
-            taskId,
-            processorNodeId,
-            LATE_RECORD_DROP,
-            LATE_RECORD_DROP_RATE_DESCRIPTION,
-            LATE_RECORD_DROP_TOTAL_DESCRIPTION,
-            RecordingLevel.INFO,
-            streamsMetrics);
     }
 
     public static Sensor e2ELatencySensor(final String threadId,

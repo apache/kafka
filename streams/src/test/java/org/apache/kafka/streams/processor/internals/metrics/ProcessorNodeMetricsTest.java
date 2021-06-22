@@ -135,21 +135,6 @@ public class ProcessorNodeMetricsTest {
         verifySensor(() -> ProcessorNodeMetrics.forwardSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
     }
 
-    @Test
-    public void shouldGetLateRecordDropSensor() {
-        final String metricNamePrefix = "late-record-drop";
-        final String descriptionOfCount = "The total number of dropped late records";
-        final String descriptionOfRate = "The average number of dropped late records per second";
-        setUpThroughputSensor(
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount,
-            RecordingLevel.INFO
-        );
-
-        verifySensor(() -> ProcessorNodeMetrics.lateRecordDropSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
-    }
-
     private void setUpThroughputParentSensor(final String metricNamePrefix,
                                              final String descriptionOfRate,
                                              final String descriptionOfCount) {
