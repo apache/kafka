@@ -254,7 +254,11 @@ public class StreamThread extends Thread {
     }
 
     public boolean isRunning() {
+        System.err.print(shortLogPrefix + "is r ");
+        System.err.flush();
         synchronized (stateLock) {
+            System.err.print(shortLogPrefix + "is r l ");
+            System.err.flush();
             return state.isAlive();
         }
     }
@@ -647,7 +651,8 @@ public class StreamThread extends Thread {
 
     public boolean waitOnThreadState(final StreamThread.State targetState, final long timeoutMs) {
         final long begin = time.milliseconds();
-        System.err.print(shortLogPrefix + "!! wt ");
+        System.err.print(shortLogPrefix + "wt ");
+        System.err.flush();
         synchronized (stateLock) {
             boolean interrupted = false;
             long elapsedMs = 0L;
@@ -663,11 +668,13 @@ public class StreamThread extends Thread {
                     } else {
                         log.debug("Cannot transit to {} within {}ms", targetState, timeoutMs);
                         System.err.print(shortLogPrefix + "wtf ");
+                        System.err.flush();
                         return false;
                     }
                     elapsedMs = time.milliseconds() - begin;
                 }
                 System.err.print(shortLogPrefix + "wtt ");
+                System.err.flush();
                 return true;
             } finally {
                 // Make sure to restore the interruption status before returning.
@@ -678,6 +685,7 @@ public class StreamThread extends Thread {
                     Thread.currentThread().interrupt();
                 }
                 System.err.print(shortLogPrefix + "wtF ");
+                System.err.flush();
             }
         }
 
@@ -754,9 +762,11 @@ public class StreamThread extends Thread {
             return;
         }
 
-//        System.err.print(shortLogPrefix + "b i");
+        System.err.print(shortLogPrefix + "b i");
+        System.err.flush();
         initializeAndRestorePhase();
-//        System.err.print(shortLogPrefix + "a i:" + state);
+        System.err.print(shortLogPrefix + "a i");
+        System.err.flush();
 
         // TODO: we should record the restore latency and its relative time spent ratio after
         //       we figure out how to move this method out of the stream thread
@@ -767,7 +777,8 @@ public class StreamThread extends Thread {
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
         if (state == State.RUNNING) {
-//            System.err.print(shortLogPrefix + "do ");
+            System.err.print(shortLogPrefix + "do ");
+            System.err.flush();
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
              *  1. If it is time to punctuate, do it;

@@ -1218,9 +1218,9 @@ public class TaskManager {
             int processed = 0;
             final long then = now;
             try {
-                if (task.id().toString().contains("1_4")) {
-                    System.err.print("p:" + processed + "m:" + maxNumRecords);
-                }
+//                if (task.id().toString().contains("1_4")) {
+//                    System.err.print("p:" + processed + "m:" + maxNumRecords);
+//                }
                 while (processed < maxNumRecords && task.process(now)) {
                     task.clearTaskTimeout();
                     processed++;

@@ -164,9 +164,9 @@ public class PartitionGroup {
                     logger.trace("Waiting to fetch data for {}", partition);
 
 
-                    if (logPrefix.contains("1_4")) {
-                        System.err.print(logPrefix + "W:" + parName);
-                    }
+//                    if (logPrefix.contains("1_4")) {
+//                        System.err.print(logPrefix + "W:" + parName);
+//                    }
 
 
                     return false;
