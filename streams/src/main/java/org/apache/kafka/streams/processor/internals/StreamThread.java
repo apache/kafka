@@ -254,11 +254,15 @@ public class StreamThread extends Thread {
     }
 
     public boolean isRunning() {
-        System.err.print(shortLogPrefix + "is r ");
-        System.err.flush();
-        synchronized (stateLock) {
-            System.err.print(shortLogPrefix + "is r l ");
+        if (state.equals(State.RUNNING)) {
+            System.err.print(shortLogPrefix + "is r ");
             System.err.flush();
+        }
+        synchronized (stateLock) {
+            if (state.equals(State.RUNNING)) {
+                System.err.print(shortLogPrefix + "is r l ");
+                System.err.flush();
+            }
             return state.isAlive();
         }
     }
@@ -762,11 +766,11 @@ public class StreamThread extends Thread {
             return;
         }
 
-        System.err.print(shortLogPrefix + "b i");
-        System.err.flush();
+//        System.err.print(shortLogPrefix + "b i");
+//        System.err.flush();
         initializeAndRestorePhase();
-        System.err.print(shortLogPrefix + "a i");
-        System.err.flush();
+//        System.err.print(shortLogPrefix + "a i");
+//        System.err.flush();
 
         // TODO: we should record the restore latency and its relative time spent ratio after
         //       we figure out how to move this method out of the stream thread
