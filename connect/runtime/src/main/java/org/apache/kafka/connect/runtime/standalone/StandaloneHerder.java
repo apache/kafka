@@ -310,7 +310,7 @@ public class StandaloneHerder extends AbstractHerder {
             return;
         }
 
-        Optional<RestartPlan> maybePlan = buildRestartPlanFor(request);
+        Optional<RestartPlan> maybePlan = buildRestartPlan(request);
         if (!maybePlan.isPresent()) {
             cb.onCompletion(new NotFoundException("Status for connector " + connectorName + " not found", null), null);
             return;

@@ -1095,7 +1095,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         // Write a restart request to the config backing store, to be executed asynchronously in tick()
                         configBackingStore.putRestartRequest(request);
                         // Compute and send the response that this was accepted
-                        Optional<RestartPlan> maybePlan = buildRestartPlanFor(request);
+                        Optional<RestartPlan> maybePlan = buildRestartPlan(request);
                         if (!maybePlan.isPresent()) {
                             callback.onCompletion(new NotFoundException("Status for connector " + connectorName + " not found", null), null);
                         } else {
@@ -1137,14 +1137,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     /**
-     * Builds and and executes a restart plan for the connector and its tasks from <code>request</code>.
+     * Builds and executes a restart plan for the connector and its tasks from <code>request</code>.
      * Execution of a plan involves triggering the stop of eligible connector/tasks and then queuing the start for eligible connector/tasks.
      *
      * @param request the request to restart connector and tasks
      */
     protected synchronized void doRestartConnectorAndTasks(RestartRequest request) {
-        final String connectorName = request.connectorName();
-        Optional<RestartPlan> maybePlan = buildRestartPlanFor(request);
+        String connectorName = request.connectorName();
+        Optional<RestartPlan> maybePlan = buildRestartPlan(request);
         if (!maybePlan.isPresent()) {
             log.debug("Skipping restart of connector '{}' since no status is available: {}", connectorName, request);
             return;
@@ -1155,9 +1155,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // If requested, stop the connector and any tasks, marking each as restarting
         final ExtendedAssignment currentAssignments = assignment;
         final Collection<ConnectorTaskId> assignedIdsToRestart = plan.taskIdsToRestart()
-                                                                     .stream()
-                                                                     .filter(taskId -> currentAssignments.tasks().contains(taskId))
-                                                                     .collect(Collectors.toList());
+                .stream()
+                .filter(taskId -> currentAssignments.tasks().contains(taskId))
+                .collect(Collectors.toList());
         final boolean restartConnector = plan.restartConnector() && currentAssignments.connectors().contains(connectorName);
         final boolean restartTasks = !assignedIdsToRestart.isEmpty();
         if (restartConnector) {

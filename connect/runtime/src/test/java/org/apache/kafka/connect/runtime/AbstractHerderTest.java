@@ -284,7 +284,7 @@ public class AbstractHerderTest {
         EasyMock.expect(statusStore.get(connectorName)).andReturn(null);
         replayAll();
 
-        Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlanFor(restartRequest);
+        Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
 
         assertFalse(mayBeRestartPlan.isPresent());
     }
@@ -318,7 +318,7 @@ public class AbstractHerderTest {
 
         replayAll();
 
-        Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlanFor(restartRequest);
+        Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
 
         assertTrue(mayBeRestartPlan.isPresent());
         RestartPlan restartPlan = mayBeRestartPlan.get();
@@ -360,7 +360,7 @@ public class AbstractHerderTest {
 
         replayAll();
 
-        Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlanFor(restartRequest);
+        Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
 
         assertTrue(mayBeRestartPlan.isPresent());
         RestartPlan restartPlan = mayBeRestartPlan.get();

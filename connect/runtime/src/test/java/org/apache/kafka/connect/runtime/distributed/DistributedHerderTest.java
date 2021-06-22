@@ -1160,7 +1160,7 @@ public class DistributedHerderTest {
     @Test
     public void testRestartConnectorAndTasksUnknownStatus() throws Exception {
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
-        EasyMock.expect(herder.buildRestartPlanFor(restartRequest)).andReturn(Optional.empty()).anyTimes();
+        EasyMock.expect(herder.buildRestartPlan(restartRequest)).andReturn(Optional.empty()).anyTimes();
 
         configBackingStore.putRestartRequest(restartRequest);
         PowerMock.expectLastCall();
@@ -1200,7 +1200,7 @@ public class DistributedHerderTest {
         EasyMock.expect(restartPlan.restartConnectorStateInfo()).andReturn(connectorStateInfo).anyTimes();
 
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
-        EasyMock.expect(herder.buildRestartPlanFor(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
+        EasyMock.expect(herder.buildRestartPlan(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
 
         configBackingStore.putRestartRequest(restartRequest);
         PowerMock.expectLastCall();
@@ -1234,7 +1234,7 @@ public class DistributedHerderTest {
     @Test
     public void testDoRestartConnectorAndTasksEmptyPlan() throws Exception {
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
-        EasyMock.expect(herder.buildRestartPlanFor(restartRequest)).andReturn(Optional.empty()).anyTimes();
+        EasyMock.expect(herder.buildRestartPlan(restartRequest)).andReturn(Optional.empty()).anyTimes();
 
         PowerMock.replayAll();
 
@@ -1251,7 +1251,7 @@ public class DistributedHerderTest {
         EasyMock.expect(restartPlan.restartAnyTasks()).andReturn(true).anyTimes();
         EasyMock.expect(restartPlan.taskIdsToRestart()).andReturn(Collections.singletonList(taskId)).anyTimes();
 
-        EasyMock.expect(herder.buildRestartPlanFor(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
+        EasyMock.expect(herder.buildRestartPlan(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
 
         PowerMock.replayAll();
         herder.assignment = ExtendedAssignment.empty();
@@ -1268,7 +1268,7 @@ public class DistributedHerderTest {
         EasyMock.expect(restartPlan.restartAnyTasks()).andReturn(true).anyTimes();
         EasyMock.expect(restartPlan.taskIdsToRestart()).andReturn(Collections.singletonList(taskId)).anyTimes();
 
-        EasyMock.expect(herder.buildRestartPlanFor(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
+        EasyMock.expect(herder.buildRestartPlan(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
 
         herder.assignment = PowerMock.createMock(ExtendedAssignment.class);
         EasyMock.expect(herder.assignment.connectors()).andReturn(Collections.singletonList(CONN1)).anyTimes();
@@ -1300,7 +1300,7 @@ public class DistributedHerderTest {
         EasyMock.expect(restartPlan.taskIdsToRestart()).andReturn(Collections.singletonList(taskId)).anyTimes();
         EasyMock.expect(restartPlan.restartTaskCount()).andReturn(1).anyTimes();
         EasyMock.expect(restartPlan.totalTaskCount()).andReturn(1).anyTimes();
-        EasyMock.expect(herder.buildRestartPlanFor(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
+        EasyMock.expect(herder.buildRestartPlan(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
 
         herder.assignment = PowerMock.createMock(ExtendedAssignment.class);
         EasyMock.expect(herder.assignment.connectors()).andReturn(Collections.emptyList()).anyTimes();
@@ -1331,7 +1331,7 @@ public class DistributedHerderTest {
         EasyMock.expect(restartPlan.taskIdsToRestart()).andReturn(Collections.singletonList(taskId)).anyTimes();
         EasyMock.expect(restartPlan.restartTaskCount()).andReturn(1).anyTimes();
         EasyMock.expect(restartPlan.totalTaskCount()).andReturn(1).anyTimes();
-        EasyMock.expect(herder.buildRestartPlanFor(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
+        EasyMock.expect(herder.buildRestartPlan(restartRequest)).andReturn(Optional.of(restartPlan)).anyTimes();
 
         herder.assignment = PowerMock.createMock(ExtendedAssignment.class);
         EasyMock.expect(herder.assignment.connectors()).andReturn(Collections.singletonList(CONN1)).anyTimes();
@@ -2792,7 +2792,7 @@ public class DistributedHerderTest {
 
         final String connectorName = "foo";
         RestartRequest restartRequest = new RestartRequest(connectorName, false, false);
-        EasyMock.expect(herder.buildRestartPlanFor(restartRequest)).andThrow(new RuntimeException()).anyTimes();
+        EasyMock.expect(herder.buildRestartPlan(restartRequest)).andThrow(new RuntimeException()).anyTimes();
 
         PowerMock.replayAll();
 
@@ -2807,7 +2807,7 @@ public class DistributedHerderTest {
         member.wakeup();
         PowerMock.expectLastCall().anyTimes();
 
-        EasyMock.expect(herder.buildRestartPlanFor(EasyMock.anyObject(RestartRequest.class))).andReturn(Optional.empty()).anyTimes();
+        EasyMock.expect(herder.buildRestartPlan(EasyMock.anyObject(RestartRequest.class))).andReturn(Optional.empty()).anyTimes();
 
         PowerMock.replayAll();
 

@@ -72,8 +72,8 @@ public class StartAndStopCounter {
         return stopCounter.get();
     }
 
-    public StartAndStopCounterSnapshot countsSnapshot() {
-        return new StartAndStopCounterSnapshot(starts(), stops());
+    public StartsAndStops countsSnapshot() {
+        return new StartsAndStops(starts(), stops());
     }
 
     /**

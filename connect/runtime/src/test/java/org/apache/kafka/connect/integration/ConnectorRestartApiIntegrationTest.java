@@ -252,8 +252,8 @@ public class ConnectorRestartApiIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connectorName, NUM_TASKS,
                 "Connector tasks are not all in running state.");
 
-        StartAndStopCounterSnapshot beforeSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
-        Map<String, StartAndStopCounterSnapshot> beforeTasksSnapshot = connectorHandle.tasks().stream().collect(Collectors.toMap(TaskHandle::taskId, task -> task.startAndStopCounter().countsSnapshot()));
+        StartsAndStops beforeSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
+        Map<String, StartsAndStops> beforeTasksSnapshot = connectorHandle.tasks().stream().collect(Collectors.toMap(TaskHandle::taskId, task -> task.startAndStopCounter().countsSnapshot()));
 
         StartAndStopLatch stopLatch = connectorHandle.expectedStops(expectedConnectorRestarts, expectedTasksRestarts, includeTasks);
         StartAndStopLatch startLatch = connectorHandle.expectedStarts(expectedConnectorRestarts, expectedTasksRestarts, includeTasks);
@@ -280,12 +280,12 @@ public class ConnectorRestartApiIntegrationTest {
         assertTrue("Failed to start connector and tasks within "
                         + CONNECTOR_SETUP_DURATION_MS + "ms",
                 startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
-        StartAndStopCounterSnapshot afterSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
+        StartsAndStops afterSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
 
         assertEquals(beforeSnapshot.starts() + expectedConnectorRestarts, afterSnapshot.starts());
         assertEquals(beforeSnapshot.stops() + expectedConnectorRestarts, afterSnapshot.stops());
         connectorHandle.tasks().forEach(t -> {
-            StartAndStopCounterSnapshot afterTaskSnapshot = t.startAndStopCounter().countsSnapshot();
+            StartsAndStops afterTaskSnapshot = t.startAndStopCounter().countsSnapshot();
             if (numWorkers == 1) {
                 assertEquals(beforeTasksSnapshot.get(t.taskId()).starts() + expectedTasksRestarts.get(t.taskId()), afterTaskSnapshot.starts());
                 assertEquals(beforeTasksSnapshot.get(t.taskId()).stops() + expectedTasksRestarts.get(t.taskId()), afterTaskSnapshot.stops());
@@ -313,7 +313,7 @@ public class ConnectorRestartApiIntegrationTest {
         connect.assertions().assertConnectorIsFailedAndTasksHaveFailed(connectorName, 0,
                 "Connector or tasks are in running state.");
 
-        StartAndStopCounterSnapshot beforeSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
+        StartsAndStops beforeSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
 
         StartAndStopLatch startLatch = connectorHandle.expectedStarts(expectedConnectorRestarts, expectedTasksStarts, includeTasks);
 
@@ -326,7 +326,7 @@ public class ConnectorRestartApiIntegrationTest {
         assertTrue("Failed to start connector and tasks after coordinator failure within "
                         + CONNECTOR_SETUP_DURATION_MS + "ms",
                 startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
-        StartAndStopCounterSnapshot afterSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
+        StartsAndStops afterSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
 
         assertEquals(beforeSnapshot.starts() + expectedConnectorRestarts, afterSnapshot.starts());
     }
@@ -344,8 +344,8 @@ public class ConnectorRestartApiIntegrationTest {
         connect.assertions().assertConnectorIsRunningAndNumTasksHaveFailed(connectorName, NUM_TASKS, tasksToFail.size(),
                 "Connector tasks are in running state.");
 
-        StartAndStopCounterSnapshot beforeSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
-        Map<String, StartAndStopCounterSnapshot> beforeTasksSnapshot = connectorHandle.tasks().stream().collect(Collectors.toMap(TaskHandle::taskId, task -> task.startAndStopCounter().countsSnapshot()));
+        StartsAndStops beforeSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
+        Map<String, StartsAndStops> beforeTasksSnapshot = connectorHandle.tasks().stream().collect(Collectors.toMap(TaskHandle::taskId, task -> task.startAndStopCounter().countsSnapshot()));
 
         StartAndStopLatch stopLatch = connectorHandle.expectedStops(expectedConnectorRestarts, expectedTasksRestarts, includeTasks);
         StartAndStopLatch startLatch = connectorHandle.expectedStarts(expectedConnectorRestarts, expectedTasksRestarts, includeTasks);
@@ -369,12 +369,12 @@ public class ConnectorRestartApiIntegrationTest {
                         + CONNECTOR_SETUP_DURATION_MS + "ms",
                 startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
 
-        StartAndStopCounterSnapshot afterSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
+        StartsAndStops afterSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
 
         assertEquals(beforeSnapshot.starts() + expectedConnectorRestarts, afterSnapshot.starts());
         assertEquals(beforeSnapshot.stops() + expectedConnectorRestarts, afterSnapshot.stops());
         connectorHandle.tasks().forEach(t -> {
-            StartAndStopCounterSnapshot afterTaskSnapshot = t.startAndStopCounter().countsSnapshot();
+            StartsAndStops afterTaskSnapshot = t.startAndStopCounter().countsSnapshot();
             assertEquals(beforeTasksSnapshot.get(t.taskId()).starts() + expectedTasksRestarts.get(t.taskId()), afterTaskSnapshot.starts());
             assertEquals(beforeTasksSnapshot.get(t.taskId()).stops() + expectedTasksRestarts.get(t.taskId()), afterTaskSnapshot.stops());
         });

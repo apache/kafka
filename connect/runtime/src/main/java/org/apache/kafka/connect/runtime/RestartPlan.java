@@ -27,7 +27,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 /**
- * An immutable restart plan.
+ * An immutable restart plan per connector.
  */
 public class RestartPlan {
 
@@ -36,7 +36,7 @@ public class RestartPlan {
     private final Collection<ConnectorTaskId> idsToRestart;
 
     /**
-     * Create a new request to restart a connector and optionally its tasks.
+     * Create a new plan to restart a connector and optionally its tasks.
      *
      * @param request          the restart request; may not be null
      * @param restartStateInfo the current state info for the connector; may not be null
@@ -45,7 +45,7 @@ public class RestartPlan {
         this.request = Objects.requireNonNull(request, "RestartRequest name may not be null");
         this.stateInfo = Objects.requireNonNull(restartStateInfo, "ConnectorStateInfo name may not be null");
         // Collect the task IDs to stop and restart (may be none)
-        idsToRestart = Collections.unmodifiableList(
+        this.idsToRestart = Collections.unmodifiableList(
                 stateInfo.tasks()
                         .stream()
                         .filter(this::isRestarting)

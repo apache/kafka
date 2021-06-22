@@ -17,11 +17,11 @@
 
 package org.apache.kafka.connect.integration;
 
-public class StartAndStopCounterSnapshot {
+public class StartsAndStops {
     private final int starts;
     private final int stops;
 
-    public StartAndStopCounterSnapshot(int starts, int stops) {
+    public StartsAndStops(int starts, int stops) {
         this.starts = starts;
         this.stops = stops;
     }

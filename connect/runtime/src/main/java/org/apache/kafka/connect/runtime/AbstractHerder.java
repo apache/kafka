@@ -375,7 +375,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
      * @return the restart plan, or empty if this worker has no status for the connector named in the request and therefore the
      *         connector cannot be restarted
      */
-    public Optional<RestartPlan> buildRestartPlanFor(RestartRequest request) {
+    public Optional<RestartPlan> buildRestartPlan(RestartRequest request) {
         String connectorName = request.connectorName();
         ConnectorStatus connectorStatus = statusBackingStore.get(connectorName);
         if (connectorStatus == null) {
@@ -397,20 +397,20 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         // Collect the task states, If requested, mark the task as restarting
         List<ConnectorStateInfo.TaskState> taskStates = statusBackingStore.getAll(connectorName)
-                                                                     .stream()
-                                                                     .map(taskStatus -> {
-                                                                         AbstractStatus.State state = taskStatus.state();
-                                                                         if (request.shouldRestartTask(taskStatus)) {
-                                                                             state = AbstractStatus.State.RESTARTING;
-                                                                         }
-                                                                         return new ConnectorStateInfo.TaskState(
-                                                                                 taskStatus.id().task(),
-                                                                                 state.toString(),
-                                                                                 taskStatus.workerId(),
-                                                                                 taskStatus.trace()
-                                                                         );
-                                                                     })
-                                                                     .collect(Collectors.toList());
+                .stream()
+                .map(taskStatus -> {
+                    AbstractStatus.State state = taskStatus.state();
+                    if (request.shouldRestartTask(taskStatus)) {
+                        state = AbstractStatus.State.RESTARTING;
+                    }
+                    return new ConnectorStateInfo.TaskState(
+                            taskStatus.id().task(),
+                            state.toString(),
+                            taskStatus.workerId(),
+                            taskStatus.trace()
+                    );
+                })
+                .collect(Collectors.toList());
         // Construct the response from the various states
         Map<String, String> conf = rawConfig(connectorName);
         ConnectorStateInfo stateInfo = new ConnectorStateInfo(
