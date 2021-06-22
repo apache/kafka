@@ -16,12 +16,9 @@
  */
 package kafka.raft
 
-import java.io.File
-import java.nio.file.{Files, NoSuchFileException, Path}
-import java.util.{Optional, Properties}
 import kafka.api.ApiVersion
-import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
-import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, LogDirFailureChannel, RequestLocal}
+import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, LogSegment, RetentionSizeBreach}
+import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, KafkaConfig, LogDirFailureChannel, RequestLocal}
 import kafka.utils.{CoreUtils, Logging, Scheduler}
 import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.record.{MemoryRecords, Records}
@@ -452,12 +449,14 @@ final class KafkaMetadataLog private (
 }
 
 object MetadataLogConfig {
-  def apply(abstractConfig: AbstractConfig): MetadataLogConfig = {
+  def apply(abstractConfig: AbstractConfig, maxBatchSizeInBytes: Int, maxFetchSizeInBytes: Int): MetadataLogConfig = {
     new MetadataLogConfig(
       abstractConfig.getInt(KafkaConfig.MetadataLogSegmentBytesProp),
       abstractConfig.getLong(KafkaConfig.MetadataLogSegmentMillisProp),
       abstractConfig.getLong(KafkaConfig.MetadataMaxRetentionBytesProp),
-      abstractConfig.getLong(KafkaConfig.MetadataMaxRetentionMillisProp)
+      abstractConfig.getLong(KafkaConfig.MetadataMaxRetentionMillisProp),
+      maxBatchSizeInBytes,
+      maxFetchSizeInBytes
     )
   }
 }
@@ -465,7 +464,9 @@ object MetadataLogConfig {
 case class MetadataLogConfig(logSegmentBytes: Int,
                              logSegmentMillis: Long,
                              retentionMaxBytes: Long,
-                             retentionMillis: Long)
+                             retentionMillis: Long,
+                             maxBatchSizeInBytes: Int,
+                             maxFetchSizeInBytes: Int)
 
 object KafkaMetadataLog {
   def apply(
@@ -474,12 +475,10 @@ object KafkaMetadataLog {
     dataDir: File,
     time: Time,
     scheduler: Scheduler,
-    maxBatchSizeInBytes: Int,
-    maxFetchSizeInBytes: Int,
     config: MetadataLogConfig
   ): KafkaMetadataLog = {
     val props = new Properties()
-    props.put(LogConfig.MaxMessageBytesProp, maxBatchSizeInBytes.toString)
+    props.put(LogConfig.MaxMessageBytesProp, config.maxBatchSizeInBytes.toString)
     props.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString)
     props.put(LogConfig.SegmentBytesProp, Int.box(config.logSegmentBytes))
     props.put(LogConfig.SegmentMsProp, Long.box(config.logSegmentMillis))
@@ -509,7 +508,7 @@ object KafkaMetadataLog {
       scheduler,
       recoverSnapshots(log),
       topicPartition,
-      maxFetchSizeInBytes,
+      config.maxFetchSizeInBytes,
       defaultLogConfig.fileDeleteDelayMs,
       config.retentionMaxBytes,
       config.retentionMillis

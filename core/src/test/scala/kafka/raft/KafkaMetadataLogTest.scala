@@ -584,7 +584,7 @@ final class KafkaMetadataLogTest {
     val leaderEpoch = 5
     val maxBatchSizeInBytes = 16384
     val recordSize = 64
-    val log = buildMetadataLog(tempDir, mockTime, maxBatchSizeInBytes = maxBatchSizeInBytes)
+    val log = buildMetadataLog(tempDir, mockTime, DefaultMetadataLogConfig.copy(maxBatchSizeInBytes = maxBatchSizeInBytes))
 
     val oversizeBatch = buildFullBatch(leaderEpoch, recordSize, maxBatchSizeInBytes + recordSize)
     assertThrows(classOf[RecordTooLargeException], () => {
@@ -809,9 +809,11 @@ final class KafkaMetadataLogTest {
       logSegmentBytes = 1024,
       logSegmentMillis = 10 * 1000,
       retentionMaxBytes = 4 * 1024,
-      retentionMillis = 60 * 1000
+      retentionMillis = 60 * 1000,
+      maxBatchSizeInBytes = 1000,
+      maxFetchSizeInBytes = DefaultMetadataLogConfig.maxFetchSizeInBytes
     )
-    val log = buildMetadataLog(tempDir, mockTime, config, maxBatchSizeInBytes = 1000)
+    val log = buildMetadataLog(tempDir, mockTime, config)
 
     // Generate some segments
     for(_ <- 0 to 1000) {
@@ -823,7 +825,7 @@ final class KafkaMetadataLogTest {
     assertFalse(log.maybeClean(), "Should not clean since no snapshots exist")
 
     val snapshotId = new OffsetAndEpoch(20000, 1)
-    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
+    TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
       append(snapshot, 2000)
       snapshot.freeze()
     }
@@ -841,9 +843,11 @@ final class KafkaMetadataLogTest {
       logSegmentBytes = 1024,
       logSegmentMillis = 10 * 1000,
       retentionMaxBytes = 1024,
-      retentionMillis = 60 * 1000
+      retentionMillis = 60 * 1000,
+      maxBatchSizeInBytes = 100,
+      maxFetchSizeInBytes = DefaultMetadataLogConfig.maxFetchSizeInBytes
     )
-    val log = buildMetadataLog(tempDir, mockTime, config, maxBatchSizeInBytes = 100)
+    val log = buildMetadataLog(tempDir, mockTime, config)
 
     for(_ <- 0 to 1000) {
       append(log, 1, 1)
@@ -852,7 +856,7 @@ final class KafkaMetadataLogTest {
 
     for(offset <- Seq(1000, 2000, 3000, 4000, 5000, 6000)) {
       val snapshotId = new OffsetAndEpoch(offset, 1)
-      TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
+      TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
         append(snapshot, 100)
         snapshot.freeze()
       }
@@ -873,9 +877,11 @@ final class KafkaMetadataLogTest {
       logSegmentBytes = 10240,
       logSegmentMillis = 10 * 1000,
       retentionMaxBytes = 10240,
-      retentionMillis = 60 * 1000
+      retentionMillis = 60 * 1000,
+      maxBatchSizeInBytes = 100,
+      maxFetchSizeInBytes = DefaultMetadataLogConfig.maxFetchSizeInBytes
     )
-    val log = buildMetadataLog(tempDir, mockTime, config, maxBatchSizeInBytes = 100)
+    val log = buildMetadataLog(tempDir, mockTime, config)
 
     for(_ <- 0 to 2000) {
       append(log, 1, 1)
@@ -884,7 +890,7 @@ final class KafkaMetadataLogTest {
 
     // Then generate a snapshot
     val snapshotId = new OffsetAndEpoch(2000, 1)
-    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
+    TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
       append(snapshot, 1000)
       snapshot.freeze()
     }
@@ -920,15 +926,15 @@ object KafkaMetadataLogTest {
     logSegmentBytes = 100 * 1024,
     logSegmentMillis = 10 * 1000,
     retentionMaxBytes = 100 * 1024,
-    retentionMillis = 60 * 1000
+    retentionMillis = 60 * 1000,
+    maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+    maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
   )
 
   def buildMetadataLogAndDir(
     tempDir: File,
     time: MockTime,
-    metadataLogConfig: MetadataLogConfig = DefaultMetadataLogConfig,
-    maxBatchSizeInBytes: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-    maxFetchSizeInBytes: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+    metadataLogConfig: MetadataLogConfig = DefaultMetadataLogConfig
   ): (Path, KafkaMetadataLog) = {
 
     val logDir = createLogDirectory(
@@ -942,8 +948,6 @@ object KafkaMetadataLogTest {
       logDir,
       time,
       time.scheduler,
-      maxBatchSizeInBytes,
-      maxFetchSizeInBytes,
       metadataLogConfig
     )
 
@@ -954,10 +958,8 @@ object KafkaMetadataLogTest {
     tempDir: File,
     time: MockTime,
     metadataLogConfig: MetadataLogConfig = DefaultMetadataLogConfig,
-    maxBatchSizeInBytes: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-    maxFetchSizeInBytes: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
   ): KafkaMetadataLog = {
-    val (_, log) = buildMetadataLogAndDir(tempDir, time, metadataLogConfig, maxBatchSizeInBytes, maxFetchSizeInBytes)
+    val (_, log) = buildMetadataLogAndDir(tempDir, time, metadataLogConfig)
     log
   }
 
