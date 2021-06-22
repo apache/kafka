@@ -177,10 +177,12 @@ object LogLoader extends Logging {
     // Do the actual recovery for toRecoverSwapFiles, as discussed above.
     completeSwapOperations(toRecoverSwapFiles.to(Set), params)
 
-    // Forth pass: delete remaining index swap files. They are not valid files.
+    // Forth pass: rename remaining index swap files. They must be left due to a broker crash when
+    // renaming .swap files to regular files.
     for (file <- params.dir.listFiles if file.isFile) {
       if (file.getName.endsWith(SwapFileSuffix)) {
-        file.delete()
+        info(s"${params.logIdentifier}Recovering index file ${file.getName} by renaming from ${Log.SwapFileSuffix} files.")
+        file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, Log.SwapFileSuffix, "")))
       }
     }
 
