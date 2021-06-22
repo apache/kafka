@@ -90,7 +90,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -144,7 +143,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
     public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
-    private final AtomicInteger resignedEpoch = new AtomicInteger(-1);
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final Logger logger;
     private final Time time;
@@ -1917,7 +1915,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> state = quorum.leaderStateOrThrow();
         maybeFireLeaderChange(state);
 
-        if (shutdown.get() != null || resignedEpoch.get() == state.epoch()) {
+        if (shutdown.get() != null || state.isResignRequested()) {
             transitionToResigned(state.nonLeaderVotersByDescendingFetchOffset());
             return 0L;
         }
@@ -2276,9 +2274,17 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             throw new IllegalArgumentException("Cannot resign from epoch " + epoch +
                 " since we are not the leader");
         } else {
-            logger.info("Received user request to resign from the current epoch {}", currentEpoch);
-            resignedEpoch.set(epoch);
-            wakeup();
+            try {
+                LeaderState<T> leaderState = quorum.leaderStateOrThrow();
+                if (leaderState.epoch() == epoch) {
+                    logger.info("Received user request to resign from the current epoch {}", currentEpoch);
+                    leaderState.requestResign();
+                    wakeup();
+                }
+            } catch (IllegalStateException e) {
+                // If we transition to another state before we have a chance to request
+                // resignation, then we consider the call fulfilled
+            }
         }
     }
 
