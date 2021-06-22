@@ -17,6 +17,7 @@
 
 package kafka.server.metadata
 
+import java.util
 import java.util.Collections
 import kafka.utils.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -25,6 +26,7 @@ import org.slf4j.LoggerFactory
 
 import java.util.concurrent.TimeUnit
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 
 @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
@@ -50,6 +52,34 @@ class MetadataBrokersTest {
     expected += TestUtils.createMetadataBroker(2)
     expected += TestUtils.createMetadataBroker(3)
     assertEquals(expected, found)
+  }
+
+  @Test
+  def testBrokersIdenticalEndPoints(): Unit = {
+    
+    var listenersIdenticalAcrossBrokers = true
+    var prevListeners: collection.Set[String] = null
+    val builder = new MetadataBrokersBuilder(log, emptyBrokers)
+    builder.add(TestUtils.createMetadataBroker(0))
+    builder.add(TestUtils.createMetadataBroker(1))
+    builder.add(TestUtils.createMetadataBroker(2))
+    builder.add(TestUtils.createMetadataBroker(3))
+    val brokers = builder.build()
+    val brokerMap = brokers.cloneBrokerMap()
+
+    val _aliveBrokers = new util.ArrayList[MetadataBroker](brokerMap.size())
+    
+    brokerMap.values().iterator().asScala.foreach { broker =>
+      if (!broker.fenced) {
+        if (prevListeners == null) {
+          prevListeners = broker.endpoints.keySet
+        } else if (!prevListeners.equals(broker.endpoints.keySet)) {
+          listenersIdenticalAcrossBrokers = false
+        }
+        _aliveBrokers.add(broker)
+      }
+    }
+    assertTrue(listenersIdenticalAcrossBrokers)
   }
 
   @Test
