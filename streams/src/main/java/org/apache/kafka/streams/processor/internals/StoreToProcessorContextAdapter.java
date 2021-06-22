@@ -88,12 +88,6 @@ public final class StoreToProcessorContextAdapter implements ProcessorContext {
         throw new UnsupportedOperationException("StateStores can't access getStateStore.");
     }
 
-    @Deprecated
-    @Override
-    public Cancellable schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) {
-        throw new UnsupportedOperationException("StateStores can't access schedule.");
-    }
-
     @Override
     public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
         throw new UnsupportedOperationException("StateStores can't access schedule.");
@@ -106,18 +100,6 @@ public final class StoreToProcessorContextAdapter implements ProcessorContext {
 
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        throw new UnsupportedOperationException("StateStores can't access forward.");
-    }
-
-    @Deprecated
-    @Override
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        throw new UnsupportedOperationException("StateStores can't access forward.");
-    }
-
-    @Deprecated
-    @Override
-    public <K, V> void forward(final K key, final V value, final String childName) {
         throw new UnsupportedOperationException("StateStores can't access forward.");
     }
 
@@ -159,5 +141,15 @@ public final class StoreToProcessorContextAdapter implements ProcessorContext {
     @Override
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return delegate.appConfigsWithPrefix(prefix);
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        throw new UnsupportedOperationException("StateStores can't access system time.");
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("StateStores can't access stream time.");
     }
 }

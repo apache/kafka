@@ -18,15 +18,12 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.AbstractStatus.State;
-import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -159,6 +156,10 @@ abstract class WorkerTask implements Runnable {
         return stopping;
     }
 
+    protected boolean isCancelled() {
+        return cancelled;
+    }
+
     private void doClose() {
         try {
             close();
@@ -184,8 +185,14 @@ abstract class WorkerTask implements Runnable {
 
             execute();
         } catch (Throwable t) {
-            log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not recover until manually restarted", this, t);
-            throw t;
+            if (cancelled) {
+                log.warn("{} After being scheduled for shutdown, the orphan task threw an uncaught exception. A newer instance of this task might be already running", this, t);
+            } else if (stopping) {
+                log.warn("{} After being scheduled for shutdown, task threw an uncaught exception.", this, t);
+            } else {
+                log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not recover until manually restarted", this, t);
+                throw t;
+            }
         } finally {
             doClose();
         }
@@ -344,12 +351,9 @@ abstract class WorkerTask implements Runnable {
             // prevent collisions by removing any previously created metrics in this group.
             metricGroup.close();
 
-            metricGroup.addValueMetric(registry.taskStatus, new LiteralSupplier<String>() {
-                @Override
-                public String metricValue(long now) {
-                    return taskStateTimer.currentState().toString().toLowerCase(Locale.getDefault());
-                }
-            });
+            metricGroup.addValueMetric(registry.taskStatus, now ->
+                taskStateTimer.currentState().toString().toLowerCase(Locale.getDefault())
+            );
 
             addRatioMetric(State.RUNNING, registry.taskRunningRatio);
             addRatioMetric(State.PAUSED, registry.taskPauseRatio);
@@ -372,12 +376,8 @@ abstract class WorkerTask implements Runnable {
         private void addRatioMetric(final State matchingState, MetricNameTemplate template) {
             MetricName metricName = metricGroup.metricName(template);
             if (metricGroup.metrics().metric(metricName) == null) {
-                metricGroup.metrics().addMetric(metricName, new Measurable() {
-                    @Override
-                    public double measure(MetricConfig config, long now) {
-                        return taskStateTimer.durationRatio(matchingState, now);
-                    }
-                });
+                metricGroup.metrics().addMetric(metricName, (config, now) ->
+                    taskStateTimer.durationRatio(matchingState, now));
             }
         }
 

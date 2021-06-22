@@ -44,16 +44,6 @@ public class NoOffsetForPartitionException extends InvalidOffsetException {
     }
 
     /**
-     * returns the first partition (out of {@link #partitions}) for which no offset is defined.
-     * @deprecated please use {@link #partitions}
-     * @return a partition with no offset
-     */
-    @Deprecated
-    public TopicPartition partition() {
-        return partitions.isEmpty() ? null : partitions.iterator().next();
-    }
-
-    /**
      * returns all partitions for which no offests are defined.
      * @return all partitions without offsets
      */

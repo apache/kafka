@@ -27,7 +27,6 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
@@ -153,25 +152,25 @@ public class WorkerCoordinatorTest {
                 1L,
                 null,
                 Collections.singletonMap(connectorId1, 1),
-                Collections.singletonMap(connectorId1, (Map<String, String>) new HashMap<String, String>()),
+                Collections.singletonMap(connectorId1, new HashMap<String, String>()),
                 Collections.singletonMap(connectorId1, TargetState.STARTED),
-                Collections.singletonMap(taskId1x0, (Map<String, String>) new HashMap<String, String>()),
-                Collections.<String>emptySet()
+                Collections.singletonMap(taskId1x0, new HashMap<String, String>()),
+                Collections.emptySet()
         );
 
         Map<String, Integer> configState2ConnectorTaskCounts = new HashMap<>();
         configState2ConnectorTaskCounts.put(connectorId1, 2);
         configState2ConnectorTaskCounts.put(connectorId2, 1);
         Map<String, Map<String, String>> configState2ConnectorConfigs = new HashMap<>();
-        configState2ConnectorConfigs.put(connectorId1, new HashMap<String, String>());
-        configState2ConnectorConfigs.put(connectorId2, new HashMap<String, String>());
+        configState2ConnectorConfigs.put(connectorId1, new HashMap<>());
+        configState2ConnectorConfigs.put(connectorId2, new HashMap<>());
         Map<String, TargetState> configState2TargetStates = new HashMap<>();
         configState2TargetStates.put(connectorId1, TargetState.STARTED);
         configState2TargetStates.put(connectorId2, TargetState.STARTED);
         Map<ConnectorTaskId, Map<String, String>> configState2TaskConfigs = new HashMap<>();
-        configState2TaskConfigs.put(taskId1x0, new HashMap<String, String>());
-        configState2TaskConfigs.put(taskId1x1, new HashMap<String, String>());
-        configState2TaskConfigs.put(taskId2x0, new HashMap<String, String>());
+        configState2TaskConfigs.put(taskId1x0, new HashMap<>());
+        configState2TaskConfigs.put(taskId1x1, new HashMap<>());
+        configState2TaskConfigs.put(taskId2x0, new HashMap<>());
         configState2 = new ClusterConfigState(
                 2L,
                 null,
@@ -179,7 +178,7 @@ public class WorkerCoordinatorTest {
                 configState2ConnectorConfigs,
                 configState2TargetStates,
                 configState2TaskConfigs,
-                Collections.<String>emptySet()
+                Collections.emptySet()
         );
 
         Map<String, Integer> configStateSingleTaskConnectorsConnectorTaskCounts = new HashMap<>();
@@ -187,17 +186,17 @@ public class WorkerCoordinatorTest {
         configStateSingleTaskConnectorsConnectorTaskCounts.put(connectorId2, 1);
         configStateSingleTaskConnectorsConnectorTaskCounts.put(connectorId3, 1);
         Map<String, Map<String, String>> configStateSingleTaskConnectorsConnectorConfigs = new HashMap<>();
-        configStateSingleTaskConnectorsConnectorConfigs.put(connectorId1, new HashMap<String, String>());
-        configStateSingleTaskConnectorsConnectorConfigs.put(connectorId2, new HashMap<String, String>());
-        configStateSingleTaskConnectorsConnectorConfigs.put(connectorId3, new HashMap<String, String>());
+        configStateSingleTaskConnectorsConnectorConfigs.put(connectorId1, new HashMap<>());
+        configStateSingleTaskConnectorsConnectorConfigs.put(connectorId2, new HashMap<>());
+        configStateSingleTaskConnectorsConnectorConfigs.put(connectorId3, new HashMap<>());
         Map<String, TargetState> configStateSingleTaskConnectorsTargetStates = new HashMap<>();
         configStateSingleTaskConnectorsTargetStates.put(connectorId1, TargetState.STARTED);
         configStateSingleTaskConnectorsTargetStates.put(connectorId2, TargetState.STARTED);
         configStateSingleTaskConnectorsTargetStates.put(connectorId3, TargetState.STARTED);
         Map<ConnectorTaskId, Map<String, String>> configStateSingleTaskConnectorsTaskConfigs = new HashMap<>();
-        configStateSingleTaskConnectorsTaskConfigs.put(taskId1x0, new HashMap<String, String>());
-        configStateSingleTaskConnectorsTaskConfigs.put(taskId2x0, new HashMap<String, String>());
-        configStateSingleTaskConnectorsTaskConfigs.put(taskId3x0, new HashMap<String, String>());
+        configStateSingleTaskConnectorsTaskConfigs.put(taskId1x0, new HashMap<>());
+        configStateSingleTaskConnectorsTaskConfigs.put(taskId2x0, new HashMap<>());
+        configStateSingleTaskConnectorsTaskConfigs.put(taskId3x0, new HashMap<>());
         configStateSingleTaskConnectors = new ClusterConfigState(
                 2L,
                 null,
@@ -205,7 +204,7 @@ public class WorkerCoordinatorTest {
                 configStateSingleTaskConnectorsConnectorConfigs,
                 configStateSingleTaskConnectorsTargetStates,
                 configStateSingleTaskConnectorsTaskConfigs,
-                Collections.<String>emptySet()
+                Collections.emptySet()
         );
     }
 
@@ -253,16 +252,13 @@ public class WorkerCoordinatorTest {
         memberConfigOffsets.put("leader", 1L);
         memberConfigOffsets.put("member", 1L);
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberConfigOffsets, Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(consumerId) &&
-                        sync.data().generationId() == 1 &&
-                        sync.groupAssignments().containsKey(consumerId);
-            }
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data().memberId().equals(consumerId) &&
+                    sync.data().generationId() == 1 &&
+                    sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId1),
-                Collections.<ConnectorTaskId>emptyList(), Errors.NONE));
+                Collections.emptyList(), Errors.NONE));
         coordinator.ensureActiveGroup();
 
         assertFalse(coordinator.rejoinNeededOrPending());
@@ -290,15 +286,12 @@ public class WorkerCoordinatorTest {
 
         // normal join group
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(memberId) &&
-                        sync.data().generationId() == 1 &&
-                        sync.data().assignments().isEmpty();
-            }
-        }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.<String>emptyList(),
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data().memberId().equals(memberId) &&
+                    sync.data().generationId() == 1 &&
+                    sync.data().assignments().isEmpty();
+        }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.emptyList(),
                 Collections.singletonList(taskId1x0), Errors.NONE));
         coordinator.ensureActiveGroup();
 
@@ -331,20 +324,17 @@ public class WorkerCoordinatorTest {
 
         // config mismatch results in assignment error
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE));
-        MockClient.RequestMatcher matcher = new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(memberId) &&
-                        sync.data().generationId() == 1 &&
-                        sync.data().assignments().isEmpty();
-            }
+        MockClient.RequestMatcher matcher = body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data().memberId().equals(memberId) &&
+                    sync.data().generationId() == 1 &&
+                    sync.data().assignments().isEmpty();
         };
         client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.CONFIG_MISMATCH, "leader", 10L,
-                Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList(), Errors.NONE));
+                Collections.emptyList(), Collections.emptyList(), Errors.NONE));
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE));
         client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L,
-                Collections.<String>emptyList(), Collections.singletonList(taskId1x0), Errors.NONE));
+                Collections.emptyList(), Collections.singletonList(taskId1x0), Errors.NONE));
         coordinator.ensureActiveGroup();
 
         PowerMock.verifyAll();
@@ -362,7 +352,7 @@ public class WorkerCoordinatorTest {
 
         // join the group once
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
-        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.<String>emptyList(),
+        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.emptyList(),
                 Collections.singletonList(taskId1x0), Errors.NONE));
         coordinator.ensureActiveGroup();
 
@@ -374,10 +364,10 @@ public class WorkerCoordinatorTest {
         assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.assignment.tasks());
 
         // and join the group again
-        coordinator.requestRejoin();
+        coordinator.requestRejoin("test");
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId1),
-                Collections.<ConnectorTaskId>emptyList(), Errors.NONE));
+                Collections.emptyList(), Errors.NONE));
         coordinator.ensureActiveGroup();
 
         assertEquals(1, rebalanceListener.revokedCount);

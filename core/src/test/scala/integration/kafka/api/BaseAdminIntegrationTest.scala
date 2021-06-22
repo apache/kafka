@@ -24,6 +24,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateTopicsOptions, CreateTopicsResult, DescribeClusterOptions, DescribeTopicsOptions, NewTopic, TopicDescription}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.ResourceType
@@ -90,6 +91,12 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     createResult.all.get()
     waitForTopics(client, topics, List())
     validateMetadataAndConfigs(createResult)
+    val topicIds = getTopicIds()
+    topics.foreach { topic =>
+      assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic).get())
+      assertEquals(topicIds(topic), createResult.topicId(topic).get())
+    }
+    
 
     val failedCreateResult = client.createTopics(newTopics.asJava)
     val results = failedCreateResult.values()

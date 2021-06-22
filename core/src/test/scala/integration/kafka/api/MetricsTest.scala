@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import org.apache.kafka.common.config.SaslConfigs
-import org.apache.kafka.common.errors.InvalidTopicException
+import org.apache.kafka.common.errors.{InvalidTopicException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.TestJaasConfig
@@ -42,7 +42,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   private val kafkaServerJaasEntryName =
     s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KafkaServerContextName}"
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "false")
-  this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableDoc, "false")
+  this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
   this.producerConfig.setProperty(ProducerConfig.LINGER_MS_CONFIG, "10")
   // intentionally slow message down conversion via gzip compression to ensure we can measure the time it takes
   this.producerConfig.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")
@@ -226,8 +226,8 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     val errorMetricPrefix = "kafka.network:type=RequestMetrics,name=ErrorsPerSec"
     verifyYammerMetricRecorded(s"$errorMetricPrefix,request=Metadata,error=NONE")
 
+    val consumer = createConsumer()
     try {
-      val consumer = createConsumer()
       consumer.partitionsFor("12{}!")
     } catch {
       case _: InvalidTopicException => // expected
@@ -239,10 +239,12 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     assertEquals(startErrorMetricCount + 1, currentErrorMetricCount)
     assertTrue(currentErrorMetricCount < 10, s"Too many error metrics $currentErrorMetricCount")
 
-    // Verify that error metric is updated with producer acks=0 when no response is sent
-    val producer = createProducer()
-    sendRecords(producer, numRecords = 1, recordSize = 100, new TopicPartition("non-existent", 0))
-    verifyYammerMetricRecorded(s"$errorMetricPrefix,request=Metadata,error=LEADER_NOT_AVAILABLE")
+    try {
+      consumer.partitionsFor("non-existing-topic")
+    } catch {
+      case _: UnknownTopicOrPartitionException => // expected
+    }
+    verifyYammerMetricRecorded(s"$errorMetricPrefix,request=Metadata,error=UNKNOWN_TOPIC_OR_PARTITION")
   }
 
   private def verifyKafkaMetric[T](name: String, metrics: java.util.Map[MetricName, _ <: Metric], entity: String,

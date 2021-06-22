@@ -153,7 +153,7 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorTopology processorTopology = internalTopologyBuilder.buildTopology();
 
         tasks = new HashMap<>();
-        stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true);
+        stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true, false);
 
         taskOne = createStreamsTask(
             streamsConfig,
@@ -399,7 +399,7 @@ public class StreamThreadStateStoreProviderTest {
                                          final TaskId taskId) {
         final Metrics metrics = new Metrics();
         final LogContext logContext = new LogContext("test-stream-task ");
-        final Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(topicName, taskId.partition));
+        final Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(topicName, taskId.partition()));
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Task.TaskType.ACTIVE,
@@ -447,7 +447,7 @@ public class StreamThreadStateStoreProviderTest {
             new MockTime(),
             stateManager,
             recordCollector,
-            context);
+            context, logContext);
     }
 
     private void mockThread(final boolean initialized) {

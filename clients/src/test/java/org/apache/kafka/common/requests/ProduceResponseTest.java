@@ -17,15 +17,19 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
@@ -40,8 +44,7 @@ public class ProduceResponseTest {
     public void produceResponseV5Test() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         TopicPartition tp0 = new TopicPartition("test", 0);
-        responseData.put(tp0, new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP, 100));
+        responseData.put(tp0, new ProduceResponse.PartitionResponse(Errors.NONE, 10000, RecordBatch.NO_TIMESTAMP, 100));
 
         ProduceResponse v5Response = new ProduceResponse(responseData, 10);
         short version = 5;
@@ -49,33 +52,48 @@ public class ProduceResponseTest {
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(v5Response, version, 0);
 
         ResponseHeader.parse(buffer, ApiKeys.PRODUCE.responseHeaderVersion(version)); // throw away.
-        ProduceResponse v5FromBytes = (ProduceResponse) AbstractResponse.parseResponse(ApiKeys.PRODUCE,
-                buffer, version);
+        ProduceResponse v5FromBytes = (ProduceResponse) AbstractResponse.parseResponse(ApiKeys.PRODUCE, buffer, version);
 
-        assertEquals(1, v5FromBytes.responses().size());
-        assertTrue(v5FromBytes.responses().containsKey(tp0));
-        ProduceResponse.PartitionResponse partitionResponse = v5FromBytes.responses().get(tp0);
-        assertEquals(100, partitionResponse.logStartOffset);
-        assertEquals(10000, partitionResponse.baseOffset);
-        assertEquals(10, v5FromBytes.throttleTimeMs());
-        assertEquals(responseData, v5Response.responses());
+        assertEquals(1, v5FromBytes.data().responses().size());
+        ProduceResponseData.TopicProduceResponse topicProduceResponse = v5FromBytes.data().responses().iterator().next();
+        assertEquals(1, topicProduceResponse.partitionResponses().size());  
+        ProduceResponseData.PartitionProduceResponse partitionProduceResponse = topicProduceResponse.partitionResponses().iterator().next();
+        TopicPartition tp = new TopicPartition(topicProduceResponse.name(), partitionProduceResponse.index());
+        assertEquals(tp0, tp);
+
+        assertEquals(100, partitionProduceResponse.logStartOffset());
+        assertEquals(10000, partitionProduceResponse.baseOffset());
+        assertEquals(RecordBatch.NO_TIMESTAMP, partitionProduceResponse.logAppendTimeMs());
+        assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode()));
+        assertNull(partitionProduceResponse.errorMessage());
+        assertTrue(partitionProduceResponse.recordErrors().isEmpty());
     }
 
     @SuppressWarnings("deprecation")
     @Test
     public void produceResponseVersionTest() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP, 100));
+        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE, 10000, RecordBatch.NO_TIMESTAMP, 100));
         ProduceResponse v0Response = new ProduceResponse(responseData);
         ProduceResponse v1Response = new ProduceResponse(responseData, 10);
         ProduceResponse v2Response = new ProduceResponse(responseData, 10);
         assertEquals(0, v0Response.throttleTimeMs(), "Throttle time must be zero");
         assertEquals(10, v1Response.throttleTimeMs(), "Throttle time must be 10");
         assertEquals(10, v2Response.throttleTimeMs(), "Throttle time must be 10");
-        assertEquals(responseData, v0Response.responses(), "Response data does not match");
-        assertEquals(responseData, v1Response.responses(), "Response data does not match");
-        assertEquals(responseData, v2Response.responses(), "Response data does not match");
+
+        List<ProduceResponse> arrResponse = Arrays.asList(v0Response, v1Response, v2Response);
+        for (ProduceResponse produceResponse : arrResponse) {
+            assertEquals(1, produceResponse.data().responses().size());
+            ProduceResponseData.TopicProduceResponse topicProduceResponse = produceResponse.data().responses().iterator().next();
+            assertEquals(1, topicProduceResponse.partitionResponses().size());  
+            ProduceResponseData.PartitionProduceResponse partitionProduceResponse = topicProduceResponse.partitionResponses().iterator().next();
+            assertEquals(100, partitionProduceResponse.logStartOffset());
+            assertEquals(10000, partitionProduceResponse.baseOffset());
+            assertEquals(RecordBatch.NO_TIMESTAMP, partitionProduceResponse.logAppendTimeMs());
+            assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode()));
+            assertNull(partitionProduceResponse.errorMessage());
+            assertTrue(partitionProduceResponse.recordErrors().isEmpty());
+        }
     }
 
     @SuppressWarnings("deprecation")
@@ -89,17 +107,20 @@ public class ProduceResponseTest {
                 "Produce failed");
         responseData.put(tp, partResponse);
 
-        for (short ver = 0; ver <= PRODUCE.latestVersion(); ver++) {
+        for (short version : PRODUCE.allVersions()) {
             ProduceResponse response = new ProduceResponse(responseData);
-            ProduceResponse.PartitionResponse deserialized = ProduceResponse.parse(response.serialize(ver), ver).responses().get(tp);
-            if (ver >= 8) {
-                assertEquals(1, deserialized.recordErrors.size());
-                assertEquals(3, deserialized.recordErrors.get(0).batchIndex);
-                assertEquals("Record error", deserialized.recordErrors.get(0).message);
-                assertEquals("Produce failed", deserialized.errorMessage);
+
+            ProduceResponse produceResponse = ProduceResponse.parse(response.serialize(version), version);
+            ProduceResponseData.TopicProduceResponse topicProduceResponse = produceResponse.data().responses().iterator().next();
+            ProduceResponseData.PartitionProduceResponse deserialized = topicProduceResponse.partitionResponses().iterator().next();
+            if (version >= 8) {
+                assertEquals(1, deserialized.recordErrors().size());
+                assertEquals(3, deserialized.recordErrors().get(0).batchIndex());
+                assertEquals("Record error", deserialized.recordErrors().get(0).batchIndexErrorMessage());
+                assertEquals("Produce failed", deserialized.errorMessage());
             } else {
-                assertEquals(0, deserialized.recordErrors.size());
-                assertNull(deserialized.errorMessage);
+                assertEquals(0, deserialized.recordErrors().size());
+                assertNull(deserialized.errorMessage());
             }
         }
     }

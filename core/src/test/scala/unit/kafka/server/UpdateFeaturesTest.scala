@@ -193,7 +193,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
       new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData().setFeatureUpdates(validUpdates)).build(),
       notControllerSocketServer)
 
-    assertEquals(Errors.NOT_CONTROLLER, Errors.forCode(response.data.errorCode()))
+    assertEquals(Errors.NOT_CONTROLLER, Errors.forCode(response.data.errorCode))
     assertNotNull(response.data.errorMessage())
     assertEquals(0, response.data.results.size)
     checkFeatures(

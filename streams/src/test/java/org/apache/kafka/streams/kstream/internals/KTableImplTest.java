@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
+import org.apache.kafka.streams.TopologyDescription.Subtopology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -405,7 +406,7 @@ public class KTableImplTest {
     }
 
     private void assertTopologyContainsProcessor(final Topology topology, final String processorName) {
-        for (final TopologyDescription.Subtopology subtopology: topology.describe().subtopologies()) {
+        for (final Subtopology subtopology: topology.describe().subtopologies()) {
             for (final TopologyDescription.Node node: subtopology.nodes()) {
                 if (node.name().equals(processorName)) {
                     return;
@@ -573,7 +574,6 @@ public class KTableImplTest {
         assertThrows(NullPointerException.class, () -> table.transformValues(valueTransformerSupplier, (Materialized) null));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenStoreNamesNull() {
         final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier =

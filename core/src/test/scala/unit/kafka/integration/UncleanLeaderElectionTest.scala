@@ -179,7 +179,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     debug("Follower for " + topic  + " is: %s".format(followerId))
 
     produceMessage(servers, topic, "first")
-    waitUntilMetadataIsPropagated(servers, topic, partitionId)
+    waitForPartitionMetadata(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic, 1))
 
     // shutdown follower server
@@ -218,7 +218,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     debug("Follower for " + topic  + " is: %s".format(followerId))
 
     produceMessage(servers, topic, "first")
-    waitUntilMetadataIsPropagated(servers, topic, partitionId)
+    waitForPartitionMetadata(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic, 1))
 
     // shutdown follower server
@@ -299,7 +299,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
 
     produceMessage(servers, topic, "first")
-    waitUntilMetadataIsPropagated(servers, topic, partitionId)
+    waitForPartitionMetadata(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic, 1))
 
     // shutdown follower server

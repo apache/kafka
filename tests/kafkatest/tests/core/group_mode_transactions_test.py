@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.transactional_message_copier import TransactionalMessageCopier
@@ -25,6 +25,7 @@ from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
+import time
 
 class GroupModeTransactionsTest(Test):
     """Essentially testing the same functionality as TransactionsTest by transactionally copying data
@@ -60,13 +61,14 @@ class GroupModeTransactionsTest(Test):
         self.progress_timeout_sec = 60
         self.consumer_group = "grouped-transactions-test-consumer-group"
 
-        self.zk = ZookeeperService(test_context, num_nodes=1)
+        self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
         self.kafka = KafkaService(test_context,
                                   num_nodes=self.num_brokers,
-                                  zk=self.zk)
+                                  zk=self.zk, controller_num_nodes_override=1)
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
 
     def seed_messages(self, topic, num_seed_messages):
         seed_timeout_sec = 10000
@@ -95,10 +97,17 @@ class GroupModeTransactionsTest(Test):
                 self.kafka.restart_node(node, clean_shutdown = True)
             else:
                 self.kafka.stop_node(node, clean_shutdown = False)
-                wait_until(lambda: len(self.kafka.pids(node)) == 0 and not self.kafka.is_registered(node),
-                           timeout_sec=self.kafka.zk_session_timeout + 5,
-                           err_msg="Failed to see timely deregistration of \
-                           hard-killed broker %s" % str(node.account))
+                gracePeriodSecs = 5
+                if self.zk:
+                    wait_until(lambda: len(self.kafka.pids(node)) == 0 and not self.kafka.is_registered(node),
+                               timeout_sec=self.kafka.zk_session_timeout + gracePeriodSecs,
+                               err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(node.account))
+                else:
+                    brokerSessionTimeoutSecs = 18
+                    wait_until(lambda: len(self.kafka.pids(node)) == 0,
+                               timeout_sec=brokerSessionTimeoutSecs + gracePeriodSecs,
+                               err_msg="Failed to see timely disappearance of process for hard-killed broker %s" % str(node.account))
+                    time.sleep(brokerSessionTimeoutSecs + gracePeriodSecs)
                 self.kafka.start_node(node)
 
     def create_and_start_message_copier(self, input_topic, output_topic, transactional_id):
@@ -261,7 +270,7 @@ class GroupModeTransactionsTest(Test):
     @cluster(num_nodes=10)
     @matrix(failure_mode=["hard_bounce", "clean_bounce"],
             bounce_target=["brokers", "clients"])
-    def test_transactions(self, failure_mode, bounce_target):
+    def test_transactions(self, failure_mode, bounce_target, metadata_quorum=quorum.zk):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol

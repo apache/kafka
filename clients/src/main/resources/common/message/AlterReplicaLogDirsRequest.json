@@ -16,6 +16,7 @@
 {
   "apiKey": 34,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "AlterReplicaLogDirsRequest",
   // Version 1 is the same as version 0.
   // Version 2 enables flexible versions.

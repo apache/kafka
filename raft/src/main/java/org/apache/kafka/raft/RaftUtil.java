@@ -73,19 +73,19 @@ public class RaftUtil {
     public static FetchResponseData singletonFetchResponse(
         TopicPartition topicPartition,
         Errors topLevelError,
-        Consumer<FetchResponseData.FetchablePartitionResponse> partitionConsumer
+        Consumer<FetchResponseData.PartitionData> partitionConsumer
     ) {
-        FetchResponseData.FetchablePartitionResponse fetchablePartition =
-            new FetchResponseData.FetchablePartitionResponse();
+        FetchResponseData.PartitionData fetchablePartition =
+            new FetchResponseData.PartitionData();
 
-        fetchablePartition.setPartition(topicPartition.partition());
+        fetchablePartition.setPartitionIndex(topicPartition.partition());
 
         partitionConsumer.accept(fetchablePartition);
 
         FetchResponseData.FetchableTopicResponse fetchableTopic =
             new FetchResponseData.FetchableTopicResponse()
                 .setTopic(topicPartition.topic())
-                .setPartitionResponses(Collections.singletonList(fetchablePartition));
+                .setPartitions(Collections.singletonList(fetchablePartition));
 
         return new FetchResponseData()
             .setErrorCode(topLevelError.code())
@@ -102,8 +102,8 @@ public class RaftUtil {
     static boolean hasValidTopicPartition(FetchResponseData data, TopicPartition topicPartition) {
         return data.responses().size() == 1 &&
             data.responses().get(0).topic().equals(topicPartition.topic()) &&
-            data.responses().get(0).partitionResponses().size() == 1 &&
-            data.responses().get(0).partitionResponses().get(0).partition() == topicPartition.partition();
+            data.responses().get(0).partitions().size() == 1 &&
+            data.responses().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 
     static boolean hasValidTopicPartition(VoteResponseData data, TopicPartition topicPartition) {

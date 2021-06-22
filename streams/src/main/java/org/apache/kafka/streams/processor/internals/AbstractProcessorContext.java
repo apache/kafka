@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-public abstract class AbstractProcessorContext implements InternalProcessorContext {
+public abstract class AbstractProcessorContext<KOut, VOut> implements InternalProcessorContext<KOut, VOut> {
 
     private final TaskId taskId;
     private final String applicationId;
@@ -45,8 +45,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
     protected ProcessorNode<?, ?, ?, ?> currentNode;
-    private long currentSystemTimeMs;
-
+    private long cachedSystemTimeMs;
     protected ThreadCache cache;
 
     public AbstractProcessorContext(final TaskId taskId,
@@ -66,12 +65,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     @Override
     public void setSystemTimeMs(final long timeMs) {
-        currentSystemTimeMs = timeMs;
+        cachedSystemTimeMs = timeMs;
     }
 
     @Override
     public long currentSystemTimeMs() {
-        return currentSystemTimeMs;
+        return cachedSystemTimeMs;
     }
 
     @Override

@@ -67,12 +67,22 @@ import java.util.regex.Pattern;
 public class StreamsBuilder {
 
     /** The actual topology that is constructed by this StreamsBuilder. */
-    private final Topology topology = new Topology();
+    protected final Topology topology;
 
     /** The topology's internal builder. */
-    final InternalTopologyBuilder internalTopologyBuilder = topology.internalTopologyBuilder;
+    protected final InternalTopologyBuilder internalTopologyBuilder;
 
-    private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+    protected final InternalStreamsBuilder internalStreamsBuilder;
+
+    public StreamsBuilder() {
+        topology = getNewTopology();
+        internalTopologyBuilder = topology.internalTopologyBuilder;
+        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+    }
+
+    protected Topology getNewTopology() {
+        return new Topology();
+    }
 
     /**
      * Create a {@link KStream} from the specified topic.
@@ -487,29 +497,6 @@ public class StreamsBuilder {
     public synchronized StreamsBuilder addStateStore(final StoreBuilder<?> builder) {
         Objects.requireNonNull(builder, "builder can't be null");
         internalStreamsBuilder.addStateStore(builder);
-        return this;
-    }
-
-    /**
-     * @deprecated Use {@link #addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)} instead.
-     */
-    @Deprecated
-    public synchronized <K, V>  StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                              final String topic,
-                                                              final String sourceName,
-                                                              final Consumed<K, V> consumed,
-                                                              final String processorName,
-                                                              final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> stateUpdateSupplier) {
-        Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
-        Objects.requireNonNull(consumed, "consumed can't be null");
-        internalStreamsBuilder.addGlobalStore(
-            storeBuilder,
-            sourceName,
-            topic,
-            new ConsumedInternal<>(consumed),
-            processorName,
-            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
-        );
         return this;
     }
 

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -49,7 +50,7 @@ import java.util.concurrent.Future;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 
 /**
  * {@code StreamsProducer} manages the producers within a Kafka Streams application.
@@ -63,7 +64,7 @@ public class StreamsProducer {
     private final Logger log;
     private final String logPrefix;
 
-    private final Map<String, Object> eosBetaProducerConfigs;
+    private final Map<String, Object> eosV2ProducerConfigs;
     private final KafkaClientSupplier clientSupplier;
     private final StreamThread.ProcessingMode processingMode;
 
@@ -89,7 +90,7 @@ public class StreamsProducer {
         switch (processingMode) {
             case AT_LEAST_ONCE: {
                 producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
-                eosBetaProducerConfigs = null;
+                eosV2ProducerConfigs = null;
 
                 break;
             }
@@ -104,21 +105,21 @@ public class StreamsProducer {
                 final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
                 producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
 
-                eosBetaProducerConfigs = null;
+                eosV2ProducerConfigs = null;
 
                 break;
             }
-            case EXACTLY_ONCE_BETA: {
+            case EXACTLY_ONCE_V2: {
                 producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
 
                 final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
                 producerConfigs.put(
                     ProducerConfig.TRANSACTIONAL_ID_CONFIG,
                     applicationId + "-" +
-                        Objects.requireNonNull(processId, "processId cannot be null for exactly-once beta") +
+                        Objects.requireNonNull(processId, "processId cannot be null for exactly-once v2") +
                         "-" + threadId.split("-StreamThread-")[1]);
 
-                eosBetaProducerConfigs = producerConfigs;
+                eosV2ProducerConfigs = producerConfigs;
 
                 break;
             }
@@ -134,8 +135,7 @@ public class StreamsProducer {
     }
 
     boolean eosEnabled() {
-        return processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA ||
-            processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+        return StreamThread.eosEnabled(processingMode);
     }
 
     /**
@@ -174,13 +174,13 @@ public class StreamsProducer {
     }
 
     public void resetProducer() {
-        if (processingMode != EXACTLY_ONCE_BETA) {
-            throw new IllegalStateException(formatException("Exactly-once beta is not enabled"));
+        if (processingMode != EXACTLY_ONCE_V2) {
+            throw new IllegalStateException("Expected eos-v2 to be enabled, but the processing mode was " + processingMode);
         }
 
         producer.close();
 
-        producer = clientSupplier.getProducer(eosBetaProducerConfigs);
+        producer = clientSupplier.getProducer(eosV2ProducerConfigs);
         transactionInitialized = false;
     }
 
@@ -236,14 +236,17 @@ public class StreamsProducer {
      * @throws IllegalStateException if EOS is disabled
      * @throws TaskMigratedException
      */
-    void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                           final ConsumerGroupMetadata consumerGroupMetadata) {
+    protected void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                     final ConsumerGroupMetadata consumerGroupMetadata) {
         if (!eosEnabled()) {
             throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }
         maybeBeginTransaction();
         try {
-            producer.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
+            // EOS-v2 assumes brokers are on version 2.5+ and thus can understand the full set of consumer group metadata
+            // Thus if we are using EOS-v1 and can't make this assumption, we must downgrade the request to include only the group id metadata
+            final ConsumerGroupMetadata maybeDowngradedGroupMetadata = processingMode == EXACTLY_ONCE_V2 ? consumerGroupMetadata : new ConsumerGroupMetadata(consumerGroupMetadata.groupId());
+            producer.sendOffsetsToTransaction(offsets, maybeDowngradedGroupMetadata);
             producer.commitTransaction();
             transactionInFlight = false;
         } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException error) {
@@ -300,7 +303,10 @@ public class StreamsProducer {
         }
     }
 
-    List<PartitionInfo> partitionsFor(final String topic) throws TimeoutException {
+    /**
+     * Cf {@link KafkaProducer#partitionsFor(String)}
+     */
+    List<PartitionInfo> partitionsFor(final String topic) {
         return producer.partitionsFor(topic);
     }
 

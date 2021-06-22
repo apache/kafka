@@ -25,12 +25,10 @@ import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * ConsumerProtocol contains the schemas for consumer subscriptions and assignments for use with
@@ -74,13 +72,14 @@ public class ConsumerProtocol {
         ConsumerProtocolSubscription data = new ConsumerProtocolSubscription();
         data.setTopics(subscription.topics());
         data.setUserData(subscription.userData() != null ? subscription.userData().duplicate() : null);
-        Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(subscription.ownedPartitions());
-        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
-            data.ownedPartitions().add(new ConsumerProtocolSubscription.TopicPartition()
-                .setTopic(topicEntry.getKey())
-                .setPartitions(topicEntry.getValue()));
-        }
-
+        subscription.ownedPartitions().forEach(tp -> {
+            ConsumerProtocolSubscription.TopicPartition partition = data.ownedPartitions().find(tp.topic());
+            if (partition == null) {
+                partition = new ConsumerProtocolSubscription.TopicPartition().setTopic(tp.topic());
+                data.ownedPartitions().add(partition);
+            }
+            partition.partitions().add(tp.partition());
+        });
         return MessageUtil.toVersionPrefixedByteBuffer(version, data);
     }
 
@@ -120,13 +119,14 @@ public class ConsumerProtocol {
 
         ConsumerProtocolAssignment data = new ConsumerProtocolAssignment();
         data.setUserData(assignment.userData() != null ? assignment.userData().duplicate() : null);
-        Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(assignment.partitions());
-        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
-            data.assignedPartitions().add(new ConsumerProtocolAssignment.TopicPartition()
-                .setTopic(topicEntry.getKey())
-                .setPartitions(topicEntry.getValue()));
-        }
-
+        assignment.partitions().forEach(tp -> {
+            ConsumerProtocolAssignment.TopicPartition partition = data.assignedPartitions().find(tp.topic());
+            if (partition == null) {
+                partition = new ConsumerProtocolAssignment.TopicPartition().setTopic(tp.topic());
+                data.assignedPartitions().add(partition);
+            }
+            partition.partitions().add(tp.partition());
+        });
         return MessageUtil.toVersionPrefixedByteBuffer(version, data);
     }
 

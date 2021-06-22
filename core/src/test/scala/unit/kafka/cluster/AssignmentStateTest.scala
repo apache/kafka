@@ -23,7 +23,8 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import scala.jdk.CollectionConverters._
 
-object AssignmentStateTest extends AbstractPartitionTest {
+object AssignmentStateTest {
+  import AbstractPartitionTest._
 
   def parameters: java.util.stream.Stream[Arguments] = Seq[Arguments](
     Arguments.of(
@@ -107,7 +108,7 @@ class AssignmentStateTest extends AbstractPartitionTest {
     if (original.nonEmpty)
       partition.assignmentState = SimpleAssignmentState(original)
     // do the test
-    partition.makeLeader(leaderState, offsetCheckpoints)
+    partition.makeLeader(leaderState, offsetCheckpoints, None)
     assertEquals(isReassigning, partition.isReassigning)
     if (adding.nonEmpty)
       adding.foreach(r => assertTrue(partition.isAddingReplica(r)))

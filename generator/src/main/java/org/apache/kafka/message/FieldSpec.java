@@ -589,7 +589,7 @@ public final class FieldSpec {
                         fieldPrefix, camelCaseName(), fieldPrefix, camelCaseName());
                 }
             }
-        } else if (type().isString() || type().isStruct()) {
+        } else if (type().isString() || type().isStruct() || type() instanceof FieldType.UUIDFieldType) {
             if (fieldDefault.equals("null")) {
                 buffer.printf("if (%s%s != null) {%n", fieldPrefix, camelCaseName());
             } else if (nullableVersions.empty()) {

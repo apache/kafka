@@ -110,7 +110,9 @@ abstract class AbstractLogCleanerIntegrationTest {
         brokerTopicStats = new BrokerTopicStats,
         maxProducerIdExpirationMs = 60 * 60 * 1000,
         producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-        logDirFailureChannel = new LogDirFailureChannel(10))
+        logDirFailureChannel = new LogDirFailureChannel(10),
+        topicId = None,
+        keepPartitionMetadataFile = true)
       logMap.put(partition, log)
       this.logs += log
     }
@@ -138,7 +140,7 @@ abstract class AbstractLogCleanerIntegrationTest {
       val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.toString.getBytes, codec = codec,
         key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)
       incCounter()
-      (key, value, appendInfo.firstOffset.get)
+      (key, value, appendInfo.firstOffset.get.messageOffset)
     }
   }
 

@@ -66,6 +66,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.easymock.EasyMock.eq;
@@ -73,6 +74,7 @@ import static org.easymock.EasyMock.isNull;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.notNull;
 import static org.easymock.EasyMock.reset;
+import static org.hamcrest.CoreMatchers.either;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -85,6 +87,7 @@ import static org.junit.Assert.assertTrue;
 import static org.powermock.api.easymock.PowerMock.replay;
 import static org.powermock.api.easymock.PowerMock.verify;
 
+@SuppressWarnings("unchecked")
 public class RocksDBStoreTest {
     private static boolean enableBloomFilters = false;
     final static String DB_NAME = "db-name";
@@ -105,7 +108,7 @@ public class RocksDBStoreTest {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         dir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             dir,
             Serdes.String(),
             Serdes.String(),
@@ -358,6 +361,141 @@ public class RocksDBStoreTest {
             stringDeserializer.deserialize(
                 null,
                 rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
+    }
+
+    @Test
+    public void shouldReturnKeysWithGivenPrefix() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "k1")),
+            stringSerializer.serialize(null, "a")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "prefix_3")),
+            stringSerializer.serialize(null, "b")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "k2")),
+            stringSerializer.serialize(null, "c")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "prefix_2")),
+            stringSerializer.serialize(null, "d")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "k3")),
+            stringSerializer.serialize(null, "e")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "prefix_1")),
+            stringSerializer.serialize(null, "f")));
+
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.putAll(entries);
+        rocksDBStore.flush();
+
+        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan("prefix", stringSerializer);
+        final List<String> valuesWithPrefix = new ArrayList<>();
+        int numberOfKeysReturned = 0;
+
+        while (keysWithPrefix.hasNext()) {
+            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+            valuesWithPrefix.add(new String(next.value));
+            numberOfKeysReturned++;
+        }
+        assertThat(numberOfKeysReturned, is(3));
+        assertThat(valuesWithPrefix.get(0), is("f"));
+        assertThat(valuesWithPrefix.get(1), is("d"));
+        assertThat(valuesWithPrefix.get(2), is("b"));
+    }
+
+    @Test
+    public void shouldReturnKeysWithGivenPrefixExcludingNextKeyLargestKey() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "abc")),
+            stringSerializer.serialize(null, "f")));
+
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "abcd")),
+            stringSerializer.serialize(null, "f")));
+
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "abce")),
+            stringSerializer.serialize(null, "f")));
+
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.putAll(entries);
+        rocksDBStore.flush();
+
+        final KeyValueIterator<Bytes, byte[]> keysWithPrefixAsabcd = rocksDBStore.prefixScan("abcd", stringSerializer);
+        int numberOfKeysReturned = 0;
+
+        while (keysWithPrefixAsabcd.hasNext()) {
+            keysWithPrefixAsabcd.next().key.get();
+            numberOfKeysReturned++;
+        }
+
+        assertThat(numberOfKeysReturned, is(1));
+    }
+
+    @Test
+    public void shouldReturnUUIDsWithStringPrefix() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        final Serializer<UUID> uuidSerializer = Serdes.UUID().serializer();
+        final UUID uuid1 = UUID.randomUUID();
+        final UUID uuid2 = UUID.randomUUID();
+        final String prefix = uuid1.toString().substring(0, 4);
+        final int numMatches = uuid2.toString().substring(0, 4).equals(prefix) ? 2 : 1;
+
+        entries.add(new KeyValue<>(
+            new Bytes(uuidSerializer.serialize(null, uuid1)),
+            stringSerializer.serialize(null, "a")));
+        entries.add(new KeyValue<>(
+            new Bytes(uuidSerializer.serialize(null, uuid2)),
+            stringSerializer.serialize(null, "b")));
+
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.putAll(entries);
+        rocksDBStore.flush();
+
+        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan(prefix, stringSerializer);
+        final List<String> valuesWithPrefix = new ArrayList<>();
+        int numberOfKeysReturned = 0;
+
+        while (keysWithPrefix.hasNext()) {
+            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+            valuesWithPrefix.add(new String(next.value));
+            numberOfKeysReturned++;
+        }
+
+        assertThat(numberOfKeysReturned, is(numMatches));
+        if (numMatches == 2) {
+            assertThat(valuesWithPrefix.get(0), either(is("a")).or(is("b")));
+        } else {
+            assertThat(valuesWithPrefix.get(0), is("a"));
+        }
+    }
+
+    @Test
+    public void shouldReturnNoKeys() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "a")),
+            stringSerializer.serialize(null, "a")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "b")),
+            stringSerializer.serialize(null, "c")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "c")),
+            stringSerializer.serialize(null, "e")));
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.putAll(entries);
+        rocksDBStore.flush();
+
+        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan("d", stringSerializer);
+        int numberOfKeysReturned = 0;
+
+        while (keysWithPrefix.hasNext()) {
+            keysWithPrefix.next();
+            numberOfKeysReturned++;
+        }
+        assertThat(numberOfKeysReturned, is(0));
     }
 
     @Test
@@ -725,7 +863,7 @@ public class RocksDBStoreTest {
             tableConfig.setBlockSize(4096L);
             if (enableBloomFilters) {
                 filter = new BloomFilter();
-                tableConfig.setFilter(filter);
+                tableConfig.setFilterPolicy(filter);
                 options.optimizeFiltersForHits();
                 bloomFiltersSet = true;
             } else {

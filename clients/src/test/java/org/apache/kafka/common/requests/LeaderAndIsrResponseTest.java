@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicErrorCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.junit.jupiter.api.Test;
@@ -70,7 +71,7 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsWithTopLevelError() {
-        for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
+        for (short version : LEADER_AND_ISR.allVersions()) {
             LeaderAndIsrResponse response;
             if (version < 5) {
                 List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
@@ -80,7 +81,7 @@ public class LeaderAndIsrResponseTest {
                         .setPartitionErrors(partitions), version);
             } else {
                 Uuid id = Uuid.randomUuid();
-                List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
+                LeaderAndIsrTopicErrorCollection topics = createTopic(id, asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
                 response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
                         .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
                         .setTopics(topics), version); 
@@ -91,7 +92,7 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsNoTopLevelError() {
-        for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
+        for (short version : LEADER_AND_ISR.allVersions()) {
             LeaderAndIsrResponse response;
             if (version < 5) {
                 List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
@@ -101,7 +102,7 @@ public class LeaderAndIsrResponseTest {
                         .setPartitionErrors(partitions), version);
             } else {
                 Uuid id = Uuid.randomUuid();
-                List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
+                LeaderAndIsrTopicErrorCollection topics = createTopic(id, asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
                 response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
                         .setErrorCode(Errors.NONE.code())
                         .setTopics(topics), version);
@@ -115,7 +116,7 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testToString() {
-        for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
+        for (short version : LEADER_AND_ISR.allVersions()) {
             LeaderAndIsrResponse response;
             if (version < 5) {
                 List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
@@ -130,7 +131,7 @@ public class LeaderAndIsrResponseTest {
 
             } else {
                 Uuid id = Uuid.randomUuid();
-                List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
+                LeaderAndIsrTopicErrorCollection topics = createTopic(id, asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
                 response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
                         .setErrorCode(Errors.NONE.code())
                         .setTopics(topics), version);
@@ -155,8 +156,8 @@ public class LeaderAndIsrResponseTest {
         return partitions;
     }
 
-    private List<LeaderAndIsrTopicError> createTopic(Uuid id, List<Errors> errors) {
-        List<LeaderAndIsrTopicError> topics = new ArrayList<>();
+    private LeaderAndIsrTopicErrorCollection createTopic(Uuid id, List<Errors> errors) {
+        LeaderAndIsrTopicErrorCollection topics = new LeaderAndIsrTopicErrorCollection();
         LeaderAndIsrTopicError topic = new LeaderAndIsrTopicError();
         topic.setTopicId(id);
         List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();

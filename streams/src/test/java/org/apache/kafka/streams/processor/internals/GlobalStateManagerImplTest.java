@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -42,7 +41,6 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -150,28 +148,6 @@ public class GlobalStateManagerImplTest {
         processorContext = new InternalMockProcessorContext(stateDirectory.globalStateDir(), streamsConfig);
         stateManager.setGlobalProcessorContext(processorContext);
         checkpointFile = new File(stateManager.baseDir(), StateManagerUtil.CHECKPOINT_FILE_NAME);
-    }
-
-    @After
-    public void after() throws IOException {
-        stateDirectory.unlockGlobalState();
-    }
-
-    @Test
-    public void shouldLockGlobalStateDirectory() {
-        stateManager.initialize();
-        assertTrue(new File(stateDirectory.globalStateDir(), ".lock").exists());
-    }
-
-    @Test
-    public void shouldThrowLockExceptionIfCantGetLock() throws IOException {
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, time, true);
-        try {
-            stateDir.lockGlobalState();
-            assertThrows(LockException.class, stateManager::initialize);
-        } finally {
-            stateDir.unlockGlobalState();
-        }
     }
 
     @Test
@@ -452,19 +428,6 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldUnlockGlobalStateDirectoryOnClose() throws IOException {
-        stateManager.initialize();
-        stateManager.close();
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime(), true);
-        try {
-            // should be able to get the lock now as it should've been released in close
-            assertTrue(stateDir.lockGlobalState());
-        } finally {
-            stateDir.unlockGlobalState();
-        }
-    }
-
-    @Test
     public void shouldNotCloseStoresIfCloseAlreadyCalled() throws IOException {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
@@ -505,23 +468,6 @@ public class GlobalStateManagerImplTest {
         }
         assertFalse(store.isOpen());
         assertFalse(store2.isOpen());
-    }
-
-    @Test
-    public void shouldReleaseLockIfExceptionWhenLoadingCheckpoints() throws IOException {
-        writeCorruptCheckpoint();
-        try {
-            stateManager.initialize();
-        } catch (final StreamsException e) {
-            // expected
-        }
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime(), true);
-        try {
-            // should be able to get the lock now as it should've been released
-            assertTrue(stateDir.lockGlobalState());
-        } finally {
-            stateDir.unlockGlobalState();
-        }
     }
 
     @Test
@@ -602,31 +548,6 @@ public class GlobalStateManagerImplTest {
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
                                                                                 StateManagerUtil.CHECKPOINT_FILE_NAME));
         return offsetCheckpoint.read();
-    }
-
-    @Test
-    public void shouldThrowLockExceptionIfIOExceptionCaughtWhenTryingToLockStateDir() {
-        stateManager = new GlobalStateManagerImpl(
-            new LogContext("mock"),
-            time,
-            topology,
-            consumer,
-            new StateDirectory(streamsConfig, time, true) {
-                @Override
-                public boolean lockGlobalState() throws IOException {
-                    throw new IOException("KABOOM!");
-                }
-            },
-            stateRestoreListener,
-            streamsConfig
-        );
-
-        try {
-            stateManager.initialize();
-            fail("Should have thrown LockException");
-        } catch (final LockException e) {
-            // pass
-        }
     }
 
     @Test

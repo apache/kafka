@@ -17,26 +17,22 @@
 
 package kafka.server
 
-import java.io.File
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Optional, Properties, Random}
-
 import kafka.log.{ClientRecordDeletion, Log, LogSegment}
 import kafka.utils.{MockTime, TestUtils}
-import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic
-import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
-import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse
-import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse
+import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
+import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-import scala.jdk.CollectionConverters._
+import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.{Optional, Properties, Random}
 import scala.collection.mutable.Buffer
+import scala.jdk.CollectionConverters._
 
 class LogOffsetTest extends BaseRequestTest {
 
@@ -127,7 +123,7 @@ class LogOffsetTest extends BaseRequestTest {
       Map(topicPartition -> new FetchRequest.PartitionData(consumerOffsets.head, FetchRequest.INVALID_LOG_START_OFFSET,
         300 * 1024, Optional.empty())).asJava).build()
     val fetchResponse = sendFetchRequest(fetchRequest)
-    assertFalse(fetchResponse.responseData.get(topicPartition).records.batches.iterator.hasNext)
+    assertFalse(FetchResponse.recordsOrFail(fetchResponse.responseData.get(topicPartition)).batches.iterator.hasNext)
   }
 
   @Test
@@ -163,7 +159,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topicPartition, () => logManager.initialDefaultConfig)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
@@ -192,7 +188,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topicPartition, () => logManager.initialDefaultConfig)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()
@@ -251,8 +247,8 @@ class LogOffsetTest extends BaseRequestTest {
     connectAndReceive[ListOffsetsResponse](request)
   }
 
-  private def sendFetchRequest(request: FetchRequest): FetchResponse[MemoryRecords] = {
-    connectAndReceive[FetchResponse[MemoryRecords]](request)
+  private def sendFetchRequest(request: FetchRequest): FetchResponse = {
+    connectAndReceive[FetchResponse](request)
   }
 
   private def buildTargetTimes(tp: TopicPartition, timestamp: Long, maxNumOffsets: Int): List[ListOffsetsTopic] = {

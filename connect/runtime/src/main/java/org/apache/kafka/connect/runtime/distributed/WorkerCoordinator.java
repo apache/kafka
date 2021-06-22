@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
@@ -102,7 +101,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     @Override
-    public void requestRejoin() {
+    public void requestRejoin(final String reason) {
+        log.debug("Request joining group due to: {}", reason);
         rejoinRequested = true;
     }
 
@@ -347,26 +347,20 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         public WorkerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
-            Measurable numConnectors = new Measurable() {
-                @Override
-                public double measure(MetricConfig config, long now) {
-                    final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
-                    if (localAssignmentSnapshot == null) {
-                        return 0.0;
-                    }
-                    return localAssignmentSnapshot.connectors().size();
+            Measurable numConnectors = (config, now) -> {
+                final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
+                if (localAssignmentSnapshot == null) {
+                    return 0.0;
                 }
+                return localAssignmentSnapshot.connectors().size();
             };
 
-            Measurable numTasks = new Measurable() {
-                @Override
-                public double measure(MetricConfig config, long now) {
-                    final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
-                    if (localAssignmentSnapshot == null) {
-                        return 0.0;
-                    }
-                    return localAssignmentSnapshot.tasks().size();
+            Measurable numTasks = (config, now) -> {
+                final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
+                if (localAssignmentSnapshot == null) {
+                    return 0.0;
                 }
+                return localAssignmentSnapshot.tasks().size();
             };
 
             metrics.addMetric(metrics.metricName("assigned-connectors",

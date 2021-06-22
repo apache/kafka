@@ -33,7 +33,7 @@ public class ConnectorReconfigurationTest {
     @Test
     public void testDefaultReconfigure() {
         TestConnector conn = new TestConnector(false);
-        conn.reconfigure(Collections.<String, String>emptyMap());
+        conn.reconfigure(Collections.emptyMap());
         assertEquals(conn.stopOrder, 0);
         assertEquals(conn.configureOrder, 1);
     }

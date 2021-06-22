@@ -20,15 +20,13 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicErrorCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.FlattenedIterator;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -41,7 +39,7 @@ public class LeaderAndIsrResponse extends AbstractResponse {
      * STALE_BROKER_EPOCH (77)
      */
     private final LeaderAndIsrResponseData data;
-    private short version;
+    private final short version;
 
     public LeaderAndIsrResponse(LeaderAndIsrResponseData data, short version) {
         super(ApiKeys.LEADER_AND_ISR);
@@ -49,16 +47,8 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         this.version = version;
     }
 
-    public List<LeaderAndIsrTopicError> topics() {
+    public LeaderAndIsrTopicErrorCollection topics() {
         return this.data.topics();
-    }
-
-    public Iterable<LeaderAndIsrPartitionError> partitions() {
-        if (version < 5) {
-            return data.partitionErrors();
-        }
-        return () -> new FlattenedIterator<>(data.topics().iterator(),
-            topic -> topic.partitionErrors().iterator());
     }
 
     public Errors error() {

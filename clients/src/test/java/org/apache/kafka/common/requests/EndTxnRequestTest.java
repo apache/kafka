@@ -41,7 +41,7 @@ public class EndTxnRequestTest {
                 .setProducerId(producerId)
                 .setTransactionalId(transactionId));
 
-        for (short version = 0; version <= ApiKeys.END_TXN.latestVersion(); version++) {
+        for (short version : ApiKeys.END_TXN.allVersions()) {
             EndTxnRequest request = builder.build(version);
 
             EndTxnResponse response = request.getErrorResponse(throttleTimeMs, Errors.NOT_COORDINATOR.exception());

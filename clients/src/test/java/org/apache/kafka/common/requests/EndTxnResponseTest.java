@@ -38,7 +38,7 @@ public class EndTxnResponseTest {
 
         Map<Errors, Integer> expectedErrorCounts = Collections.singletonMap(Errors.NOT_COORDINATOR, 1);
 
-        for (short version = 0; version <= ApiKeys.END_TXN.latestVersion(); version++) {
+        for (short version : ApiKeys.END_TXN.allVersions()) {
             EndTxnResponse response = new EndTxnResponse(data);
             assertEquals(expectedErrorCounts, response.errorCounts());
             assertEquals(throttleTimeMs, response.throttleTimeMs());

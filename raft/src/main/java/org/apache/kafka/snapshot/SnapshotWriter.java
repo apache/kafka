@@ -21,16 +21,14 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.raft.RecordSerde;
+import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.List;
 
 /**
- * A type for writing a snapshot fora given end offset and epoch.
+ * A type for writing a snapshot for a given end offset and epoch.
  *
  * A snapshot writer can be used to append objects until freeze is called. When freeze is
  * called the snapshot is validated and marked as immutable. After freeze is called any
@@ -42,7 +40,7 @@ import java.util.List;
  *
  * @see org.apache.kafka.raft.RaftClient#createSnapshot(OffsetAndEpoch)
  */
-final public class SnapshotWriter<T> implements Closeable {
+final public class SnapshotWriter<T> implements AutoCloseable {
     final private RawSnapshotWriter snapshot;
     final private BatchAccumulator<T> accumulator;
     final private Time time;
@@ -88,6 +86,20 @@ final public class SnapshotWriter<T> implements Closeable {
     }
 
     /**
+     * Returns the last log offset which is represented in the snapshot.
+     */
+    public long lastContainedLogOffset() {
+        return snapshot.snapshotId().offset - 1;
+    }
+
+    /**
+     * Returns the epoch of the last log offset which is represented in the snapshot.
+     */
+    public int lastContainedLogEpoch() {
+        return snapshot.snapshotId().epoch;
+    }
+
+    /**
      * Returns true if the snapshot has been frozen, otherwise false is returned.
      *
      * Modification to the snapshot are not allowed once it is frozen.
@@ -102,10 +114,9 @@ final public class SnapshotWriter<T> implements Closeable {
      * The list of record passed are guaranteed to get written together.
      *
      * @param records the list of records to append to the snapshot
-     * @throws IOException for any IO error while appending
      * @throws IllegalStateException if append is called when isFrozen is true
      */
-    public void append(List<T> records) throws IOException {
+    public void append(List<T> records) {
         if (snapshot.isFrozen()) {
             String message = String.format(
                 "Append not supported. Snapshot is already frozen: id = '%s'.",
@@ -124,10 +135,8 @@ final public class SnapshotWriter<T> implements Closeable {
 
     /**
      * Freezes the snapshot by flushing all pending writes and marking it as immutable.
-     *
-     * @throws IOException for any IO error during freezing
      */
-    public void freeze() throws IOException {
+    public void freeze() {
         appendBatches(accumulator.drain());
         snapshot.freeze();
         accumulator.close();
@@ -136,16 +145,14 @@ final public class SnapshotWriter<T> implements Closeable {
     /**
      * Closes the snapshot writer.
      *
-     * If close is called without first calling freeze the the snapshot is aborted.
-     *
-     * @throws IOException for any IO error during close
+     * If close is called without first calling freeze the snapshot is aborted.
      */
-    public void close() throws IOException {
+    public void close() {
         snapshot.close();
         accumulator.close();
     }
 
-    private void appendBatches(List<CompletedBatch<T>> batches) throws IOException {
+    private void appendBatches(List<CompletedBatch<T>> batches) {
         try {
             for (CompletedBatch<T> batch : batches) {
                 snapshot.append(batch.data);

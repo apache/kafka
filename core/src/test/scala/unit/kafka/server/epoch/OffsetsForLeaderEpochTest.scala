@@ -22,10 +22,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.log.{Log, LogManager}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
+import kafka.server.metadata.CachedConfigRepository
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic, OffsetForLeaderPartition}
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, EpochEndOffset}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic}
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
@@ -41,6 +42,7 @@ class OffsetsForLeaderEpochTest {
   private val time = new MockTime
   private val metrics = new Metrics
   private val alterIsrManager = TestUtils.createAlterIsrManager()
+  private val configRepository = new CachedConfigRepository()
   private val tp = new TopicPartition("topic", 1)
   private var replicaManager: ReplicaManager = _
   private var quotaManager: QuotaManagers = _
@@ -65,9 +67,9 @@ class OffsetsForLeaderEpochTest {
     replay(mockLog, logManager)
 
     // create a replica manager with 1 partition that has 1 replica
-    replicaManager = new ReplicaManager(config, metrics, time, null, null, logManager, new AtomicBoolean(false),
+    replicaManager = new ReplicaManager(config, metrics, time, None, null, logManager, new AtomicBoolean(false),
       quotaManager, new BrokerTopicStats,
-      new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, configRepository)
     val partition = replicaManager.createPartition(tp)
     partition.setLog(mockLog, isFutureLog = false)
     partition.leaderReplicaIdOpt = Some(config.brokerId)
@@ -88,9 +90,9 @@ class OffsetsForLeaderEpochTest {
     replay(logManager)
 
     //create a replica manager with 1 partition that has 0 replica
-    replicaManager = new ReplicaManager(config, metrics, time, null, null, logManager, new AtomicBoolean(false),
+    replicaManager = new ReplicaManager(config, metrics, time, None, null, logManager, new AtomicBoolean(false),
       quotaManager, new BrokerTopicStats,
-      new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, configRepository)
     replicaManager.createPartition(tp)
 
     //Given
@@ -113,9 +115,9 @@ class OffsetsForLeaderEpochTest {
     replay(logManager)
 
     //create a replica manager with 0 partition
-    replicaManager = new ReplicaManager(config, metrics, time, null, null, logManager, new AtomicBoolean(false),
+    replicaManager = new ReplicaManager(config, metrics, time, None, null, logManager, new AtomicBoolean(false),
       quotaManager, new BrokerTopicStats,
-      new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, configRepository)
 
     //Given
     val epochRequested: Integer = 5

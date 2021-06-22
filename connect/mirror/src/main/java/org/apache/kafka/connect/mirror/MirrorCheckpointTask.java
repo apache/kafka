@@ -113,6 +113,7 @@ public class MirrorCheckpointTask extends SourceTask {
     public void stop() {
         long start = System.currentTimeMillis();
         stopping = true;
+        Utils.closeQuietly(topicFilter, "topic filter");
         Utils.closeQuietly(offsetSyncStore, "offset sync store");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
@@ -235,7 +236,7 @@ public class MirrorCheckpointTask extends SourceTask {
                 if (consumerGroupState.equals(ConsumerGroupState.EMPTY)) {
                     idleConsumerGroupsOffset.put(group, targetAdminClient.listConsumerGroupOffsets(group)
                         .partitionsToOffsetAndMetadata().get().entrySet().stream().collect(
-                            Collectors.toMap(e -> e.getKey(), e -> e.getValue())));
+                            Collectors.toMap(Entry::getKey, Entry::getValue)));
                 }
                 // new consumer upstream has state "DEAD" and will be identified during the offset sync-up
             } catch (InterruptedException | ExecutionException e) {

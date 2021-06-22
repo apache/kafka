@@ -155,14 +155,6 @@ public final class AssignorConfiguration {
         return priorVersion;
     }
 
-    @SuppressWarnings("deprecation")
-    public org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper() {
-        return streamsConfig.getConfiguredInstance(
-            StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG,
-            org.apache.kafka.streams.processor.PartitionGrouper.class
-        );
-    }
-
     public String userEndPoint() {
         final String configuredUserEndpoint = streamsConfig.getString(StreamsConfig.APPLICATION_SERVER_CONFIG);
         if (configuredUserEndpoint != null && !configuredUserEndpoint.isEmpty()) {

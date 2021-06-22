@@ -16,6 +16,7 @@
 {
   "apiKey": 5,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "StopReplicaRequest",
   // Version 1 adds the broker epoch and reorganizes the partitions to be stored
   // per topic.

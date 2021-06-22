@@ -45,6 +45,11 @@ With flame graph output (the semicolon is escaped to ensure it is not treated as
 
     ./jmh-benchmarks/jmh.sh -prof async:libPath=/path/to/libasyncProfiler.so\;output=flamegraph
 
+Simultaneous cpu, allocation and lock profiling with async profiler 2.0 and jfr output (the semicolon is
+escaped to ensure it is not treated as a command separator):
+
+    ./jmh-benchmarks/jmh.sh -prof async:libPath=/path/to/libasyncProfiler.so\;output=jfr\;alloc\;lock LRUCacheBenchmark
+
 A number of arguments can be passed to configure async profiler, run the following for a description:
 
     ./jmh-benchmarks/jmh.sh -prof async:help
@@ -62,7 +67,7 @@ per second which can increase when you have make your code faster.
 
 The JMH benchmarks can be run outside of gradle as you would with any executable jar file:
 
-    java -jar <kafka-repo-dir>/jmh-benchmarks/build/libs/kafka-jmh-benchmarks-all.jar -f2 LRUCacheBenchmark
+    java -jar <kafka-repo-dir>/jmh-benchmarks/build/libs/kafka-jmh-benchmarks-*.jar -f2 LRUCacheBenchmark
 
 ### Writing benchmarks
 

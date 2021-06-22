@@ -18,7 +18,6 @@ import java.net.InetAddress
 import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
 import java.util.{Collections, Optional, Properties}
-
 import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
@@ -48,6 +47,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResou
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
 import org.apache.kafka.common._
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -95,21 +95,21 @@ class RequestQuotaTest extends BaseRequestTest {
 
     // Change default client-id request quota to a small value and a single unthrottledClient with a large quota
     val quotaProps = new Properties()
-    quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
-    quotaProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "2000")
-    quotaProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
+    quotaProps.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "0.01")
+    quotaProps.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "2000")
+    quotaProps.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, "2000")
     adminZkClient.changeClientIdConfig("<default>", quotaProps)
-    quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "2000")
+    quotaProps.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "2000")
     adminZkClient.changeClientIdConfig(Sanitizer.sanitize(unthrottledClientId), quotaProps)
 
     // Client ids with small producer and consumer (fetch) quotas. Quota values were picked so that both
     // producer/consumer and request quotas are violated on the first produce/consume operation, and the delay due to
     // producer/consumer quota violation will be longer than the delay due to request quota violation.
-    quotaProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1")
-    quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
+    quotaProps.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "1")
+    quotaProps.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "0.01")
     adminZkClient.changeClientIdConfig(Sanitizer.sanitize(smallQuotaProducerClientId), quotaProps)
-    quotaProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "1")
-    quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
+    quotaProps.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, "1")
+    quotaProps.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "0.01")
     adminZkClient.changeClientIdConfig(Sanitizer.sanitize(smallQuotaConsumerClientId), quotaProps)
 
     TestUtils.retry(20000) {
@@ -131,7 +131,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
   @Test
   def testResponseThrottleTime(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClientActions)
+    for (apiKey <- RequestQuotaTest.ClientActions ++ RequestQuotaTest.ClusterActionsWithThrottle)
       submitTest(apiKey, () => checkRequestThrottleTime(apiKey))
 
     waitAndCheckResults()
@@ -160,7 +160,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
   @Test
   def testExemptRequestTime(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClusterActions) {
+    for (apiKey <- RequestQuotaTest.ClusterActions -- RequestQuotaTest.ClusterActionsWithThrottle) {
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
     }
 
@@ -171,7 +171,7 @@ class RequestQuotaTest extends BaseRequestTest {
   def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
-    for (apiKey <- ApiKeys.brokerApis.asScala) {
+    for (apiKey <- ApiKeys.zkBrokerApis.asScala) {
       submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
     }
 
@@ -454,8 +454,8 @@ class RequestQuotaTest extends BaseRequestTest {
             "test-txn-group",
             2,
             0,
-            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava,
-            false)
+            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava
+          )
 
         case ApiKeys.DESCRIBE_ACLS =>
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)
@@ -507,7 +507,7 @@ class RequestQuotaTest extends BaseRequestTest {
           val data = new DescribeLogDirsRequestData()
           data.topics.add(new DescribeLogDirsRequestData.DescribableLogDirTopic()
             .setTopic(tp.topic)
-            .setPartitionIndex(Collections.singletonList(tp.partition)))
+            .setPartitions(Collections.singletonList(tp.partition)))
           new DescribeLogDirsRequest.Builder(data)
 
         case ApiKeys.CREATE_PARTITIONS =>
@@ -612,14 +612,38 @@ class RequestQuotaTest extends BaseRequestTest {
             "client-id",
             0
           )
-          val embedRequestData = RequestTestUtils.serializeRequestWithHeader(requestHeader,
-            new AlterClientQuotasRequest.Builder(List.empty.asJava, false).build())
+          val embedRequestData = new AlterClientQuotasRequest.Builder(List.empty.asJava, false).build()
+            .serializeWithHeader(requestHeader)
           new EnvelopeRequest.Builder(embedRequestData, new Array[Byte](0),
             InetAddress.getByName("192.168.1.1").getAddress)
 
         case ApiKeys.DESCRIBE_CLUSTER =>
           new DescribeClusterRequest.Builder(new DescribeClusterRequestData())
 
+        case ApiKeys.DESCRIBE_PRODUCERS =>
+          new DescribeProducersRequest.Builder(new DescribeProducersRequestData()
+            .setTopics(List(new DescribeProducersRequestData.TopicRequest()
+              .setName("test-topic")
+              .setPartitionIndexes(List(1, 2, 3).map(Int.box).asJava)).asJava))
+
+        case ApiKeys.BROKER_REGISTRATION =>
+          new BrokerRegistrationRequest.Builder(new BrokerRegistrationRequestData())
+
+        case ApiKeys.BROKER_HEARTBEAT =>
+          new BrokerHeartbeatRequest.Builder(new BrokerHeartbeatRequestData())
+
+        case ApiKeys.UNREGISTER_BROKER =>
+          new UnregisterBrokerRequest.Builder(new UnregisterBrokerRequestData())
+
+        case ApiKeys.DESCRIBE_TRANSACTIONS =>
+          new DescribeTransactionsRequest.Builder(new DescribeTransactionsRequestData()
+            .setTransactionalIds(List("test-transactional-id").asJava))
+
+        case ApiKeys.LIST_TRANSACTIONS =>
+          new ListTransactionsRequest.Builder(new ListTransactionsRequestData())
+
+        case ApiKeys.ALLOCATE_PRODUCER_IDS =>
+          new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData())
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -739,9 +763,10 @@ class RequestQuotaTest extends BaseRequestTest {
 }
 
 object RequestQuotaTest {
-  val ClusterActions = ApiKeys.brokerApis.asScala.filter(_.clusterAction).toSet
+  val ClusterActions = ApiKeys.zkBrokerApis.asScala.filter(_.clusterAction).toSet
+  val ClusterActionsWithThrottle = Set(ApiKeys.ALLOCATE_PRODUCER_IDS)
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
-  val ClientActions = ApiKeys.brokerApis.asScala.toSet -- ClusterActions -- SaslActions
+  val ClientActions = ApiKeys.zkBrokerApis.asScala.toSet -- ClusterActions -- SaslActions
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which

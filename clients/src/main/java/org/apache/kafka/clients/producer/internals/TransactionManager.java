@@ -97,7 +97,6 @@ public class TransactionManager {
     private final String transactionalId;
     private final int transactionTimeoutMs;
     private final ApiVersions apiVersions;
-    private final boolean autoDowngradeTxnCommit;
 
     private static class TopicPartitionBookkeeper {
 
@@ -304,8 +303,7 @@ public class TransactionManager {
                               final String transactionalId,
                               final int transactionTimeoutMs,
                               final long retryBackoffMs,
-                              final ApiVersions apiVersions,
-                              final boolean autoDowngradeTxnCommit) {
+                              final ApiVersions apiVersions) {
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
@@ -322,7 +320,6 @@ public class TransactionManager {
         this.retryBackoffMs = retryBackoffMs;
         this.topicPartitionBookkeeper = new TopicPartitionBookkeeper();
         this.apiVersions = apiVersions;
-        this.autoDowngradeTxnCommit = autoDowngradeTxnCommit;
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -1179,8 +1176,7 @@ public class TransactionManager {
                 pendingTxnOffsetCommits,
                 groupMetadata.memberId(),
                 groupMetadata.generationId(),
-                groupMetadata.groupInstanceId(),
-                autoDowngradeTxnCommit
+                groupMetadata.groupInstanceId()
             );
         return new TxnOffsetCommitHandler(result, builder);
     }
@@ -1550,7 +1546,7 @@ public class TransactionManager {
             } else if (findCoordinatorResponse.error() == Errors.GROUP_AUTHORIZATION_FAILED) {
                 abortableError(GroupAuthorizationException.forGroupId(builder.data().key()));
             } else {
-                fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to" +
+                fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to " +
                         "unexpected error: %s", coordinatorType, builder.data().key(),
                         findCoordinatorResponse.data().errorMessage())));
             }

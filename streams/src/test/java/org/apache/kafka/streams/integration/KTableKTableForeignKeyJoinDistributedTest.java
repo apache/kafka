@@ -35,14 +35,15 @@ import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -61,8 +62,19 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     private static final String LEFT_TABLE = "left_table";
     private static final String RIGHT_TABLE = "right_table";
     private static final String OUTPUT = "output-topic";
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    @BeforeClass
+    public static void startCluster() throws IOException, InterruptedException {
+        CLUSTER.start();
+        CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
     private static final Properties CONSUMER_CONFIG = new Properties();
 
     @Rule
@@ -76,11 +88,6 @@ public class KTableKTableForeignKeyJoinDistributedTest {
 
     private volatile boolean client1IsOk = false;
     private volatile boolean client2IsOk = false;
-
-    @BeforeClass
-    public static void createTopics() throws InterruptedException {
-        CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
-    }
 
     @Before
     public void setupTopics() throws InterruptedException {

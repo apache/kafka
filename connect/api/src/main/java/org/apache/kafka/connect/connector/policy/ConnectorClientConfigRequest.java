@@ -96,6 +96,6 @@ public class ConnectorClientConfigRequest {
     }
 
     public enum ClientType {
-        PRODUCER, CONSUMER, ADMIN;
+        PRODUCER, CONSUMER, ADMIN
     }
 }

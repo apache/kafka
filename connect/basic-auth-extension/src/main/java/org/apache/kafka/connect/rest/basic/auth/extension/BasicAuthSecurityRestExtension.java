@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.rest.basic.auth.extension;
 
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.slf4j.Logger;
@@ -26,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import javax.security.auth.login.Configuration;
 import java.io.IOException;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Provides the ability to authenticate incoming BasicAuth credentials using the configured JAAS {@link
@@ -62,14 +64,38 @@ public class BasicAuthSecurityRestExtension implements ConnectRestExtension {
 
     private static final Logger log = LoggerFactory.getLogger(BasicAuthSecurityRestExtension.class);
 
+    private static final Supplier<Configuration> CONFIGURATION = initializeConfiguration(Configuration::getConfiguration);
+
     // Capture the JVM's global JAAS configuration as soon as possible, as it may be altered later
     // by connectors, converters, other REST extensions, etc.
-    private static final Configuration CONFIGURATION = Configuration.getConfiguration();
+    static Supplier<Configuration> initializeConfiguration(Supplier<Configuration> configurationSupplier) {
+        try {
+            Configuration configuration = configurationSupplier.get();
+            return () -> configuration;
+        } catch (Exception e) {
+            // We have to be careful not to throw anything here as this static block gets executed during plugin scanning and any exceptions will
+            // cause the worker to fail during startup, even if it's not configured to use the basic auth extension.
+            return () -> {
+                throw new ConnectException("Failed to retrieve JAAS configuration", e);
+            };
+        }
+    }
+
+    private final Supplier<Configuration> configuration;
+
+    public BasicAuthSecurityRestExtension() {
+        this(CONFIGURATION);
+    }
+
+    // For testing
+    BasicAuthSecurityRestExtension(Supplier<Configuration> configuration) {
+        this.configuration = configuration;
+    }
 
     @Override
     public void register(ConnectRestExtensionContext restPluginContext) {
         log.trace("Registering JAAS basic auth filter");
-        restPluginContext.configurable().register(new JaasBasicAuthFilter(CONFIGURATION));
+        restPluginContext.configurable().register(new JaasBasicAuthFilter(configuration.get()));
         log.trace("Finished registering JAAS basic auth filter");
     }
 
@@ -80,7 +106,8 @@ public class BasicAuthSecurityRestExtension implements ConnectRestExtension {
 
     @Override
     public void configure(Map<String, ?> configs) {
-
+        // If we failed to retrieve a JAAS configuration during startup, throw that exception now
+        configuration.get();
     }
 
     @Override

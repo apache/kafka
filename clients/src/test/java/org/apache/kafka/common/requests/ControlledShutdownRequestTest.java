@@ -38,7 +38,7 @@ public class ControlledShutdownRequestTest {
 
     @Test
     public void testGetErrorResponse() {
-        for (short version = CONTROLLED_SHUTDOWN.oldestVersion(); version < CONTROLLED_SHUTDOWN.latestVersion(); version++) {
+        for (short version : CONTROLLED_SHUTDOWN.allVersions()) {
             ControlledShutdownRequest.Builder builder = new ControlledShutdownRequest.Builder(
                     new ControlledShutdownRequestData().setBrokerId(1), version);
             ControlledShutdownRequest request = builder.build();

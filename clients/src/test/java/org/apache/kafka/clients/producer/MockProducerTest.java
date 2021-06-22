@@ -24,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockSerializer;
@@ -42,6 +43,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -158,14 +160,14 @@ public class MockProducerTest {
     @Test
     public void shouldThrowOnSendOffsetsToTransactionIfTransactionsNotInitialized() {
         buildMockProducer(true);
-        assertThrows(IllegalStateException.class, () -> producer.sendOffsetsToTransaction(null, groupId));
+        assertThrows(IllegalStateException.class, () -> producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata(groupId)));
     }
 
     @Test
     public void shouldThrowOnSendOffsetsToTransactionTransactionIfNoTransactionGotStarted() {
         buildMockProducer(true);
         producer.initTransactions();
-        assertThrows(IllegalStateException.class, () -> producer.sendOffsetsToTransaction(null, groupId));
+        assertThrows(IllegalStateException.class, () -> producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata(groupId)));
     }
 
     @Test
@@ -268,7 +270,7 @@ public class MockProducerTest {
         buildMockProducer(true);
         producer.initTransactions();
         producer.fenceProducer();
-        assertThrows(ProducerFencedException.class, () -> producer.sendOffsetsToTransaction(null, groupId));
+        assertThrows(ProducerFencedException.class, () -> producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata(groupId)));
     }
 
     @Test
@@ -402,8 +404,8 @@ public class MockProducerTest {
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(21L, null));
             }
         };
-        producer.sendOffsetsToTransaction(group1Commit, group1);
-        producer.sendOffsetsToTransaction(group2Commit, group2);
+        producer.sendOffsetsToTransaction(group1Commit, new ConsumerGroupMetadata(group1));
+        producer.sendOffsetsToTransaction(group2Commit, new ConsumerGroupMetadata(group2));
 
         assertTrue(producer.consumerGroupOffsetsHistory().isEmpty());
 
@@ -415,6 +417,7 @@ public class MockProducerTest {
         assertEquals(Collections.singletonList(expectedResult), producer.consumerGroupOffsetsHistory());
     }
 
+    @Deprecated
     @Test
     public void shouldThrowOnNullConsumerGroupIdWhenSendOffsetsToTransaction() {
         buildMockProducer(true);
@@ -431,6 +434,7 @@ public class MockProducerTest {
         assertThrows(NullPointerException.class, () -> producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata(null)));
     }
 
+    @Deprecated
     @Test
     public void shouldIgnoreEmptyOffsetsWhenSendOffsetsToTransactionByGroupId() {
         buildMockProducer(true);
@@ -449,6 +453,7 @@ public class MockProducerTest {
         assertFalse(producer.sentOffsets());
     }
 
+    @Deprecated
     @Test
     public void shouldAddOffsetsWhenSendOffsetsToTransactionByGroupId() {
         buildMockProducer(true);
@@ -496,7 +501,7 @@ public class MockProducerTest {
                 put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
             }
         };
-        producer.sendOffsetsToTransaction(groupCommit, "groupId");
+        producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata("groupId"));
         producer.commitTransaction(); // commit should not reset "sentOffsets" flag
         assertTrue(producer.sentOffsets());
 
@@ -530,7 +535,7 @@ public class MockProducerTest {
                 put(new TopicPartition(topic, 2), new OffsetAndMetadata(21L, null));
             }
         };
-        producer.sendOffsetsToTransaction(groupCommit1, group);
+        producer.sendOffsetsToTransaction(groupCommit1, new ConsumerGroupMetadata(group));
         producer.sendOffsetsToTransaction(groupCommit2, new ConsumerGroupMetadata(group));
 
         assertTrue(producer.consumerGroupOffsetsHistory().isEmpty());
@@ -561,7 +566,7 @@ public class MockProducerTest {
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
             }
         };
-        producer.sendOffsetsToTransaction(groupCommit, group);
+        producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata(group));
         producer.abortTransaction();
 
         producer.beginTransaction();
@@ -590,7 +595,7 @@ public class MockProducerTest {
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
             }
         };
-        producer.sendOffsetsToTransaction(groupCommit, group);
+        producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata(group));
         producer.commitTransaction();
 
         producer.beginTransaction();
@@ -661,7 +666,7 @@ public class MockProducerTest {
     public void shouldThrowSendOffsetsToTransactionByGroupIdIfProducerIsClosed() {
         buildMockProducer(true);
         producer.close();
-        assertThrows(IllegalStateException.class, () -> producer.sendOffsetsToTransaction(null, groupId));
+        assertThrows(IllegalStateException.class, () -> producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata(groupId)));
     }
 
     @Test
@@ -733,6 +738,26 @@ public class MockProducerTest {
         producer.send(record1);
         producer.flush();
         assertTrue(producer.flushed());
+    }
+
+    @Test
+    public void testMetadataOnException() throws InterruptedException {
+        buildMockProducer(false);
+        Future<RecordMetadata> metadata = producer.send(record2, (md, exception) -> {
+            assertNotNull(md);
+            assertEquals(md.offset(), -1L, "Invalid offset");
+            assertEquals(md.timestamp(), RecordBatch.NO_TIMESTAMP, "Invalid timestamp");
+            assertEquals(md.serializedKeySize(), -1L, "Invalid Serialized Key size");
+            assertEquals(md.serializedValueSize(), -1L, "Invalid Serialized value size");
+        });
+        IllegalArgumentException e = new IllegalArgumentException("dummy exception");
+        assertTrue(producer.errorNext(e), "Complete the second request with an error");
+        try {
+            metadata.get();
+            fail("Something went wrong, expected an error");
+        } catch (ExecutionException err) {
+            assertEquals(e, err.getCause());
+        }
     }
 
     private boolean isError(Future<?> future) {

@@ -18,12 +18,11 @@ package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
-
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
 import kafka.log.Log
-import kafka.server.{FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
+import kafka.server.{FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache, RequestLocal}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -71,13 +70,14 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       .anyTimes()
     EasyMock.replay(zkClient)
 
-    txnStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time,
+    txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, txnConfig, time,
       new Metrics())
+    txnStateManager.startup(() => zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME).get)
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
-    val pidManager: ProducerIdManager = EasyMock.createNiceMock(classOf[ProducerIdManager])
-    EasyMock.expect(pidManager.generateProducerId())
+    val pidGenerator: ProducerIdManager = EasyMock.createNiceMock(classOf[ProducerIdManager])
+    EasyMock.expect(pidGenerator.generateProducerId())
       .andAnswer(() => if (bumpProducerId) producerId + 1 else producerId)
       .anyTimes()
     val brokerNode = new Node(0, "host", 10)
@@ -98,12 +98,12 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     transactionCoordinator = new TransactionCoordinator(brokerId = 0,
       txnConfig,
       scheduler,
-      pidManager,
+      () => pidGenerator,
       txnStateManager,
       txnMarkerChannelManager,
       time,
       new LogContext)
-    EasyMock.replay(pidManager)
+    EasyMock.replay(pidGenerator)
     EasyMock.replay(metadataCache)
     EasyMock.replay(networkClient)
   }
@@ -508,7 +508,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   class InitProducerIdOperation(val producerIdAndEpoch: Option[ProducerIdAndEpoch] = None) extends TxnOperation[InitProducerIdResult] {
     override def run(txn: Transaction): Unit = {
-      transactionCoordinator.handleInitProducerId(txn.transactionalId, 60000, producerIdAndEpoch, resultCallback)
+      transactionCoordinator.handleInitProducerId(txn.transactionalId, 60000, producerIdAndEpoch, resultCallback,
+        RequestLocal.withThreadConfinedCaching)
       replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(txn: Transaction): Unit = {
@@ -525,7 +526,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
             txnMetadata.producerId,
             txnMetadata.producerEpoch,
             partitions,
-            resultCallback)
+            resultCallback,
+            RequestLocal.withThreadConfinedCaching)
         replicaManager.tryCompleteActions()
       }
     }
@@ -543,7 +545,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
           txnMetadata.producerId,
           txnMetadata.producerEpoch,
           transactionResult(txn),
-          resultCallback)
+          resultCallback,
+          RequestLocal.withThreadConfinedCaching)
       }
     }
     override def awaitAndVerify(txn: Transaction): Unit = {
