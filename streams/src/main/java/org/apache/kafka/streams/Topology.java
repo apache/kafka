@@ -22,11 +22,11 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
@@ -655,7 +655,7 @@ public class Topology {
      * will be added to the topology and connected to this processor automatically.
      *
      * @param name the unique name of the processor node
-     * @param supplier the supplier used to obtain this node's {@link Processor} instance
+     * @param supplier the supplier used to obtain this node's {@link org.apache.kafka.streams.processor.Processor} instance
      * @param parentNames the name of one or more source or processor nodes whose output records this processor should receive
      * and process
      * @return itself

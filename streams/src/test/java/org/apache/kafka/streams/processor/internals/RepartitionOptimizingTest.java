@@ -44,7 +44,6 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
@@ -135,6 +134,7 @@ public class RepartitionOptimizingTest {
     }
 
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private void runTest(final String optimizationConfig, final int expectedNumberRepartitionTopics) {
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -257,7 +257,8 @@ public class RepartitionOptimizingTest {
         return keyValueList;
     }
 
-    private static class SimpleProcessor extends AbstractProcessor<String, String> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private static class SimpleProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
 
         final List<String> valueList;
 

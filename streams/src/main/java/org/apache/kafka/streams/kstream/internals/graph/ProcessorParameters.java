@@ -34,10 +34,12 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
 
     // During the transition to KIP-478, we capture arguments passed from the old API to simplify
     // the performance of casts that we still need to perform. This will eventually be removed.
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> oldProcessorSupplier;
     private final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier;
     private final String processorName;
 
+    @SuppressWarnings("deprecation") // Old PAPI compatibility.
     public ProcessorParameters(final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> processorSupplier,
                                final String processorName) {
         oldProcessorSupplier = processorSupplier;
@@ -56,6 +58,7 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
         return processorSupplier;
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     public org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> oldProcessorSupplier() {
         return oldProcessorSupplier;
     }

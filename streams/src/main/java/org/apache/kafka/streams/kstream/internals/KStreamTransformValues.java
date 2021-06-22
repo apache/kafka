@@ -18,16 +18,13 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Set;
 
-public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> {
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+public class KStreamTransformValues<K, V, R> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V> {
 
     private final ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier;
 
@@ -36,7 +33,7 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
     }
 
     @Override
-    public Processor<K, V> get() {
+    public org.apache.kafka.streams.processor.Processor<K, V> get() {
         return new KStreamTransformValuesProcessor<>(valueTransformerSupplier.get());
     }
 
@@ -45,7 +42,7 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
         return valueTransformerSupplier.stores();
     }
 
-    public static class KStreamTransformValuesProcessor<K, V, R> extends AbstractProcessor<K, V> {
+    public static class KStreamTransformValuesProcessor<K, V, R> extends org.apache.kafka.streams.processor.AbstractProcessor<K, V> {
 
         private final ValueTransformerWithKey<K, V, R> valueTransformer;
 
@@ -54,7 +51,7 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
             valueTransformer.init(new ForwardingDisabledProcessorContext(context));
         }

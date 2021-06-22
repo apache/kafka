@@ -99,6 +99,7 @@ public class EosTestClient extends SmokeTestUtil {
         }
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private KafkaStreams createKafkaStreams(final Properties props) {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);

@@ -32,7 +32,6 @@ import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -877,7 +876,8 @@ public class ProcessorTopologyTest {
     /**
      * A processor that stores each key-value pair in an in-memory key-value store registered with the context.
      */
-    protected static class OldAPIStatefulProcessor extends AbstractProcessor<String, String> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    protected static class OldAPIStatefulProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
         private KeyValueStore<String, String> store;
         private final String storeName;
 
@@ -919,10 +919,12 @@ public class ProcessorTopologyTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private <K, V> org.apache.kafka.streams.processor.ProcessorSupplier<K, V> define(final org.apache.kafka.streams.processor.Processor<K, V> processor) {
         return () -> processor;
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private <K, V> org.apache.kafka.streams.processor.ProcessorSupplier<K, V> defineWithStoresOldAPI(final Supplier<org.apache.kafka.streams.processor.Processor<K, V>> supplier,
                                                                                                      final Set<StoreBuilder<?>> stores) {
         return new org.apache.kafka.streams.processor.ProcessorSupplier<K, V>() {

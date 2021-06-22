@@ -56,6 +56,7 @@ public class GlobalKTableJoinsTest {
         keyValueMapper = (key, value) -> value;
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void shouldLeftJoinWithStream() {
         final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
@@ -71,6 +72,7 @@ public class GlobalKTableJoinsTest {
         verifyJoin(expected, supplier);
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void shouldInnerJoinWithStream() {
         final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();

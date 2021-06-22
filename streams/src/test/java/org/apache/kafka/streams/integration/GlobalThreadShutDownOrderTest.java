@@ -30,7 +30,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -108,6 +107,7 @@ public class GlobalThreadShutDownOrderTest {
     @Rule
     public TestName testName = new TestName();
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Before
     public void before() throws Exception {
         builder = new StreamsBuilder();
@@ -196,7 +196,8 @@ public class GlobalThreadShutDownOrderTest {
     }
 
 
-    private class GlobalStoreProcessor extends AbstractProcessor<String, Long> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private class GlobalStoreProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, Long> {
 
         private KeyValueStore<String, Long> store;
         private final String storeName;

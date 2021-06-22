@@ -21,7 +21,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 
 /**
  * The context associated with the current record being processed by
- * an {@link Processor}
+ * an {@link org.apache.kafka.streams.processor.api.Processor}
  */
 public interface RecordContext {
 
@@ -79,8 +79,10 @@ public interface RecordContext {
      * <p> If it is triggered while processing a record streamed from the source processor,
      * timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
      * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} by {@link TimestampExtractor}.
-     * Note, that an upstream {@link Processor} might have set a new timestamp by calling
-     * {@link ProcessorContext#forward(Object, Object, To) forward(..., To.all().withTimestamp(...))}.
+     * Note, that an upstream {@link org.apache.kafka.streams.processor.api.Processor}
+     * might have set a new timestamp by calling
+     * {@link org.apache.kafka.streams.processor.api.ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record)
+     * forward(..., To.all().withTimestamp(...))}.
      * In particular, some Kafka Streams DSL operators set result record timestamps explicitly,
      * to guarantee deterministic results.
      *

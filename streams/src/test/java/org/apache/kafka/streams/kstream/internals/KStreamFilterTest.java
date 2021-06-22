@@ -40,6 +40,7 @@ public class KStreamFilterTest {
 
     private final Predicate<Integer, String> isMultipleOfThree = (key, value) -> (key % 3) == 0;
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testFilter() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -61,6 +62,7 @@ public class KStreamFilterTest {
         assertEquals(2, supplier.theCapturedProcessor().processed().size());
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testFilterNot() {
         final StreamsBuilder builder = new StreamsBuilder();

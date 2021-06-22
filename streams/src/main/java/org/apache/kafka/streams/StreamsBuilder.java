@@ -487,7 +487,8 @@ public class StreamsBuilder {
     /**
      * Adds a state store to the underlying {@link Topology}.
      * <p>
-     * It is required to connect state stores to {@link org.apache.kafka.streams.processor.Processor Processors}, {@link Transformer Transformers},
+     * It is required to connect state stores to {@link org.apache.kafka.streams.processor.api.Processor Processors},
+     * {@link Transformer Transformers},
      * or {@link ValueTransformer ValueTransformers} before they can be used.
      *
      * @param builder the builder used to obtain this state store {@link StateStore} instance
@@ -515,7 +516,8 @@ public class StreamsBuilder {
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      * <p>
-     * It is not required to connect a global store to {@link org.apache.kafka.streams.processor.Processor Processors}, {@link Transformer Transformers},
+     * It is not required to connect a global store to {@link org.apache.kafka.streams.processor.api.Processor Processors},
+     * {@link Transformer Transformers},
      * or {@link ValueTransformer ValueTransformer}; those have read-only access to all global stores by default.
      * <p>
      * The supplier should always generate a new instance each time {@link  ProcessorSupplier#get()} gets called. Creating

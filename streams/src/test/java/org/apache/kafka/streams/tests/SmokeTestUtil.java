@@ -23,26 +23,24 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.time.Instant;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class SmokeTestUtil {
 
     final static int END = Integer.MAX_VALUE;
 
-    static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic) {
+    static org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic) {
         return printProcessorSupplier(topic, "");
     }
 
-    static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic, final String name) {
-        return new ProcessorSupplier<Object, Object>() {
+    static org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic, final String name) {
+        return new org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object>() {
             @Override
-            public Processor<Object, Object> get() {
-                return new AbstractProcessor<Object, Object>() {
+            public org.apache.kafka.streams.processor.Processor<Object, Object> get() {
+                return new org.apache.kafka.streams.processor.AbstractProcessor<Object, Object>() {
                     private int numRecordsProcessed = 0;
                     private long smallestOffset = Long.MAX_VALUE;
                     private long largestOffset = Long.MIN_VALUE;

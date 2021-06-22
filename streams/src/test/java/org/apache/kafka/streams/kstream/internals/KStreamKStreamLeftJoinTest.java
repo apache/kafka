@@ -53,6 +53,7 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KStreamKStreamLeftJoinTest {
     private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
 

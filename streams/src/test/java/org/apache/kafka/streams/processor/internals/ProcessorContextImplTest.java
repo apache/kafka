@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.StateStore;
@@ -713,7 +712,7 @@ public class ProcessorContextImplTest {
     }
 
     private <T extends StateStore> void doTest(final String name, final Consumer<T> checker) {
-        final Processor<String, Long> processor = new Processor<String, Long>() {
+        @SuppressWarnings("deprecation") final org.apache.kafka.streams.processor.Processor<String, Long> processor = new org.apache.kafka.streams.processor.Processor<String, Long>() {
             @Override
             public void init(final ProcessorContext context) {
                 final T store = context.getStateStore(name);

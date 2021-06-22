@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Collection;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final Collection<KStreamAggProcessorSupplier> parents;
     private final String storeName;
@@ -35,7 +33,7 @@ public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V>
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public org.apache.kafka.streams.processor.Processor<K, Change<V>> get() {
         return new KTablePassThroughProcessor();
     }
 
@@ -64,7 +62,7 @@ public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V>
         };
     }
 
-    private class KTablePassThroughProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTablePassThroughProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, Change<V>> {
         @Override
         public void process(final K key, final Change<V> value) {
             context().forward(key, value);
@@ -75,7 +73,7 @@ public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V>
         private TimestampedKeyValueStore<K, V> store;
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             store = context.getStateStore(storeName);
         }
 

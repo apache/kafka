@@ -22,7 +22,6 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.internals.KStreamSessionWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.Test;
@@ -32,6 +31,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class GraphGraceSearchUtilTest {
     @Test
     public void shouldThrowOnNull() {
@@ -50,7 +50,7 @@ public class GraphGraceSearchUtilTest {
         final StatefulProcessorNode<String, Long> gracelessAncestor = new StatefulProcessorNode<>(
             "stateful",
             new ProcessorParameters<>(
-                () -> new Processor<String, Long>() {
+                () -> new org.apache.kafka.streams.processor.Processor<String, Long>() {
                     @Override
                     public void init(final ProcessorContext context) {}
 
@@ -134,7 +134,7 @@ public class GraphGraceSearchUtilTest {
         final StatefulProcessorNode<String, Long> statefulParent = new StatefulProcessorNode<>(
             "stateful",
             new ProcessorParameters<>(
-                () -> new Processor<String, Long>() {
+                () -> new org.apache.kafka.streams.processor.Processor<String, Long>() {
                     @Override
                     public void init(final ProcessorContext context) {}
 

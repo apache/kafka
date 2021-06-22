@@ -41,6 +41,7 @@ import static org.junit.Assert.assertEquals;
 public class KStreamFlatMapTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testFlatMap() {
         final StreamsBuilder builder = new StreamsBuilder();

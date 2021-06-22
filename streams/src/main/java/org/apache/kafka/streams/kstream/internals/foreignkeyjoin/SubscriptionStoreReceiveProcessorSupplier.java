@@ -21,10 +21,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
@@ -34,8 +30,9 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
-    implements ProcessorSupplier<KO, SubscriptionWrapper<K>> {
+    implements org.apache.kafka.streams.processor.ProcessorSupplier<KO, SubscriptionWrapper<K>> {
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionStoreReceiveProcessorSupplier.class);
 
     private final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder;
@@ -50,15 +47,15 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
     }
 
     @Override
-    public Processor<KO, SubscriptionWrapper<K>> get() {
+    public org.apache.kafka.streams.processor.Processor<KO, SubscriptionWrapper<K>> get() {
 
-        return new AbstractProcessor<KO, SubscriptionWrapper<K>>() {
+        return new org.apache.kafka.streams.processor.AbstractProcessor<KO, SubscriptionWrapper<K>>() {
 
             private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> store;
             private Sensor droppedRecordsSensor;
 
             @Override
-            public void init(final ProcessorContext context) {
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
                 super.init(context);
                 final InternalProcessorContext<?, ?> internalProcessorContext = (InternalProcessorContext<?, ?>) context;
 

@@ -195,7 +195,7 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  * trigger manually via {@link #advanceWallClockTime(Duration)}.
  * <p>
  * Finally, when completed, make sure your tests {@link #close()} the driver to release all resources and
- * {@link org.apache.kafka.streams.processor.Processor processors}.
+ * {@link org.apache.kafka.streams.processor.api.Processor processors}.
  *
  * <h2>Processor state</h2>
  * <p>

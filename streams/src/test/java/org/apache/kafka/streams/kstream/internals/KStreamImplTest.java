@@ -56,6 +56,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -99,6 +100,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KStreamImplTest {
 
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
@@ -2381,7 +2383,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcess() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process(null));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2389,7 +2391,8 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process(null, "storeName"));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
+                                     "storeName"));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2397,7 +2400,8 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process(null, Named.as("processor")));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
+                                     Named.as("processor")));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2405,7 +2409,8 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process(null, Named.as("processor"), "stateStore"));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
+                                     Named.as("processor"), "stateStore"));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 

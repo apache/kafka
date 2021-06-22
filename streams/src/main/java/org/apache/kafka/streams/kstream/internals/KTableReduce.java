@@ -18,14 +18,12 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final String storeName;
@@ -48,18 +46,18 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public org.apache.kafka.streams.processor.Processor<K, Change<V>> get() {
         return new KTableReduceProcessor();
     }
 
-    private class KTableReduceProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTableReduceProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, Change<V>> {
 
         private TimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
             store = (TimestampedKeyValueStore<K, V>) context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(

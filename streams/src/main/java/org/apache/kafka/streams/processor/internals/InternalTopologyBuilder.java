@@ -217,6 +217,7 @@ public class InternalTopologyBuilder {
             this.supplier = supplier;
         }
 
+        @SuppressWarnings("deprecation") // Old PAPI compatibility.
         ProcessorNodeFactory(final String name,
                              final String[] predecessors,
                              final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> supplier) {

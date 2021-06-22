@@ -88,6 +88,7 @@ public class StreamsUpgradeTest {
         });
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     public static KafkaStreams buildStreams(final Properties streamsProperties) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Void, Void> dataStream = builder.stream("data");

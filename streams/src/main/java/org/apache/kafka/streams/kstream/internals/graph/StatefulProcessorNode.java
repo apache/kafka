@@ -101,6 +101,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
         }
 
         // temporary hack until KIP-478 is fully implemented
+        @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
         final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> oldProcessorSupplier =
             processorParameters().oldProcessorSupplier();
         if (oldProcessorSupplier != null && oldProcessorSupplier.stores() != null) {

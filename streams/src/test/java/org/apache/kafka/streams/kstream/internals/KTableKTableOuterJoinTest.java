@@ -28,7 +28,6 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
@@ -52,6 +51,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KTableKTableOuterJoinTest {
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
@@ -408,7 +408,7 @@ public class KTableKTableOuterJoinTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         @SuppressWarnings("unchecked")
-        final Processor<String, Change<String>> join = new KTableKTableOuterJoin<>(
+        final org.apache.kafka.streams.processor.Processor<String, Change<String>> join = new KTableKTableOuterJoin<>(
                 (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
                 (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
                 null

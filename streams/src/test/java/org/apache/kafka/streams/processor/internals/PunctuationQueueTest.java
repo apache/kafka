@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -141,7 +140,8 @@ public class PunctuationQueueTest {
         assertEquals(1, node.mockProcessor.punctuatedStreamTime().size());
     }
 
-    private static class TestProcessor extends AbstractProcessor<String, String> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private static class TestProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
 
         @Override
         public void init(final ProcessorContext context) {}

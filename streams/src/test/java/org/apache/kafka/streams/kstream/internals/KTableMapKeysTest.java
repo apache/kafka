@@ -39,6 +39,7 @@ import static org.junit.Assert.assertEquals;
 public class KTableMapKeysTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testMapKeysConvertingToStream() {
         final StreamsBuilder builder = new StreamsBuilder();

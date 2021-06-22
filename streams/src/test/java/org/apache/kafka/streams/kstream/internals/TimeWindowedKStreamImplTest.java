@@ -52,6 +52,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class TimeWindowedKStreamImplTest {
     private static final String TOPIC = "input";
     private final StreamsBuilder builder = new StreamsBuilder();
