@@ -1324,22 +1324,13 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setCompactionOptionsFIFO(final CompactionOptionsFIFO compactionOptionsFIFO) {
-        logWarning(LOG);
         columnFamilyOptions.setCompactionOptionsFIFO(compactionOptionsFIFO);
         return this;
     }
 
     @Override
     public CompactionOptionsFIFO compactionOptionsFIFO() {
-        logWarning(LOG);
         return columnFamilyOptions.compactionOptionsFIFO();
-    }
-
-    public static void logWarning(final org.slf4j.Logger log) {
-        log.warn("RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
-            + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
-            + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
-            + "(or `org.rocksdb.ColumnFamilyOptions`).");
     }
 
     @Override
