@@ -155,15 +155,19 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val id = "test"
     val pwd = "12345"
     val digest = DigestAuthenticationProvider.generateDigest(s"$id:$pwd")
-    val authInfo = s"$id:$pwd".getBytes()
+//    val authInfo = s"$id:$pwd".getBytes()
+    val acl = new ACL(ZooDefs.Perms.ALL, new Id(scheme, digest))
 
-    zkClient.currentZooKeeper.addAuthInfo(scheme, authInfo)
-    zkClient.setAcl(root, Seq(new ACL(ZooDefs.Perms.ALL, new Id(scheme, digest))))
+//    zkClient.currentZooKeeper.addAuthInfo(scheme, authInfo)
+    zkClient.setAcl(root, Seq(acl))
 
     // this client won't have access to the root, but the chroot already exists
     val chrootClient = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, createChrootIfNecessary = true)
     chrootClient.close()
+
+    zkClient.setAcl(root, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
+    zkClient.deletePath(root)
   }
 
   @Test
