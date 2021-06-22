@@ -76,7 +76,6 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
     private class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
         private TimestampedWindowStore<K, Agg> windowStore;
         private TimestampedTupleForwarder<Windowed<K>, Agg> tupleForwarder;
-        private Sensor lateRecordDropSensor;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
@@ -86,16 +85,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
             final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
             final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
-            lateRecordDropSensor = droppedRecordsSensor(
-                threadId,
-                context.taskId().toString(),
-                metrics
-            );
-            droppedRecordsSensor = droppedRecordsSensor(
-                threadId,
-                context.taskId().toString(),
-                metrics
-            );
+            droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
             windowStore = context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,
@@ -169,7 +159,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                         closeTime,
                         observedStreamTime
                     );
-                    lateRecordDropSensor.record();
+                    droppedRecordsSensor.record();
                 }
             }
         }

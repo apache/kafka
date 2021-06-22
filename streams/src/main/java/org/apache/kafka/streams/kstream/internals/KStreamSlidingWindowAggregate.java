@@ -77,7 +77,6 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
     private class KStreamSlidingWindowAggregateProcessor extends AbstractProcessor<K, V> {
         private TimestampedWindowStore<K, Agg> windowStore;
         private TimestampedTupleForwarder<Windowed<K>, Agg> tupleForwarder;
-        private Sensor lateRecordDropSensor;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
         private Boolean reverseIteratorPossible = null;
@@ -88,16 +87,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
             final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
-            lateRecordDropSensor = droppedRecordsSensor(
-                threadId,
-                context.taskId().toString(),
-                metrics
-            );
-            droppedRecordsSensor = droppedRecordsSensor(
-                threadId,
-                context.taskId().toString(),
-                metrics
-            );
+            droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
             windowStore = context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,
@@ -141,7 +131,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     closeTime,
                     observedStreamTime
                 );
-                lateRecordDropSensor.record();
+                droppedRecordsSensor.record();
                 return;
             }
 
@@ -495,7 +485,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     closeTime,
                     observedStreamTime
                 );
-                lateRecordDropSensor.record();
+                droppedRecordsSensor.record();
             }
         }
     }
