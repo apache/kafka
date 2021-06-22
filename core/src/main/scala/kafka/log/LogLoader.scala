@@ -188,49 +188,7 @@ object LogLoader extends Logging {
       segment.changeFileSuffixes(Log.SwapFileSuffix, "")
     }
 
-    // Do the actual recovery for toRecoverSwapFiles, as discussed above.
-    toRecoverSwapFiles.foreach { f =>
-      val baseOffset = offsetFromFile(f)
-      val segment = LogSegment.open(f.getParentFile,
-        baseOffset = baseOffset,
-        params.config,
-        time = params.time,
-        fileSuffix = Log.SwapFileSuffix)
-      info(s"${params.logIdentifier}Doing a full recovery for segment with base offset ${baseOffset}")
-      recoverSegment(segment, params)
-      // We create swap files for two cases:
-      // (1) Log cleaning where multiple segments are merged into one, and
-      // (2) Log splitting where one segment is split into multiple.
-      //
-      // Both of these mean that the resultant swap segments be composed of the original set, i.e. the swap segment
-      // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
-      // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
-      // do a replace with an existing segment.
-      val oldSegments = params.segments.values(segment.baseOffset, segment.readNextOffset).filter { segment =>
-        segment.readNextOffset > segment.baseOffset
-      }
-      Log.replaceSegments(
-        params.segments,
-        Seq(segment),
-        oldSegments.toSeq,
-        isRecoveredSwapFile = true,
-        params.dir,
-        params.topicPartition,
-        params.config,
-        params.scheduler,
-        params.logDirFailureChannel,
-        params.producerStateManager,
-        params.logIdentifier)
-    }
-
-    // Third pass: delete remaining index swap files. They are not valid files.
-    for (file <- params.dir.listFiles if file.isFile) {
-      if (file.getName.endsWith(SwapFileSuffix)) {
-        file.delete()
-      }
-    }
-
-    // Fourth pass: load all the log and index files.
+    // Third pass: load all the log and index files.
     // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. When
     // this happens, restart loading segment files from scratch.
     retryOnOffsetOverflow(params, {
@@ -241,6 +199,16 @@ object LogLoader extends Logging {
       params.segments.clear()
       loadSegmentFiles(params)
     })
+
+    // Do the actual recovery for toRecoverSwapFiles, as discussed above.
+    completeSwapOperations(toRecoverSwapFiles.to(Set), params)
+
+    // Forth pass: delete remaining index swap files. They are not valid files.
+    for (file <- params.dir.listFiles if file.isFile) {
+      if (file.getName.endsWith(SwapFileSuffix)) {
+        file.delete()
+      }
+    }
 
     val (newRecoveryPoint: Long, nextOffset: Long) = {
       if (!params.dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
@@ -412,6 +380,62 @@ object LogLoader extends Logging {
     bytesTruncated
   }
 
+  /**
+   * This method completes any interrupted swap operations. In order to be crash-safe, the log files
+   * that are replaced by the swap segment should be renamed to .deleted before the swap file is
+   * restored as the new segment file.
+   *
+   * This method does not need to convert IOException to KafkaStorageException because it is only
+   * called before all logs are loaded.
+   *
+   * @param swapFiles the set of swap
+   * @param params The parameters for the log being loaded from disk
+   *
+   * @throws LogSegmentOffsetOverflowException if the swap file contains messages that cause the log segment offset to
+   *                                           overflow. Note that this is currently a fatal exception as we do not have
+   *                                           a way to deal with it. The exception is propagated all the way up to
+   *                                           KafkaServer#startup which will cause the broker to shut down if we are in
+   *                                           this situation. This is expected to be an extremely rare scenario in practice,
+   *                                           and manual intervention might be required to get out of it.
+   */
+  private def completeSwapOperations(swapFiles: Set[File],
+                                     params: LoadLogParams): Unit = {
+    for (swapFile <- swapFiles) {
+      val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, Log.SwapFileSuffix, ""))
+      val baseOffset = Log.offsetFromFile(logFile)
+      val swapSegment = LogSegment.open(swapFile.getParentFile,
+        baseOffset = baseOffset,
+        params.config,
+        time = params.time,
+        fileSuffix = Log.SwapFileSuffix)
+      info(s"${params.logIdentifier}Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
+      recoverSegment(swapSegment, params)
+
+      // We create swap files for two cases:
+      // (1) Log cleaning where multiple segments are merged into one, and
+      // (2) Log splitting where one segment is split into multiple.
+      //
+      // Both of these mean that the resultant swap segments be composed of the original set, i.e. the swap segment
+      // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
+      // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
+      // do a replace with an existing segment.
+      val oldSegments = params.segments.values(swapSegment.baseOffset, swapSegment.readNextOffset).filter { segment =>
+        segment.readNextOffset > swapSegment.baseOffset
+      }
+      Log.replaceSegments(
+        params.segments,
+        Seq(swapSegment),
+        oldSegments.toSeq,
+        isRecoveredSwapFile = true,
+        params.dir,
+        params.topicPartition,
+        params.config,
+        params.scheduler,
+        params.logDirFailureChannel,
+        params.producerStateManager,
+        params.logIdentifier)
+    }
+  }
 
   /**
    * Recover the log segments (if there was an unclean shutdown). Ensures there is at least one
