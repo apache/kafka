@@ -170,7 +170,9 @@ object LogLoader extends Logging {
           }
         }
       } catch {
-        case _: StringIndexOutOfBoundsException => // offsetFromFile with files that do not include an offset in the file name
+        // offsetFromFile with files that do not include an offset in the file name
+        case _: StringIndexOutOfBoundsException =>
+        case _: NumberFormatException =>
       }
     }
 
