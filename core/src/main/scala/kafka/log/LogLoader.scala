@@ -142,12 +142,13 @@ object LogLoader extends Logging {
       try {
         segment.sanityCheck(false)
         toRenameSwapFiles += f
-        info(s"Found log file ${f.getPath} from interrupted swap operation, which is recoverable from ${Log.SwapFileSuffix} files.")
+        info(s"${params.logIdentifier}Found log file ${f.getPath} from interrupted swap operation, which is recoverable from ${Log.SwapFileSuffix} files by renaming.")
         minSwapFileOffset = Math.min(segment.baseOffset, minSwapFileOffset)
         maxSwapFileOffset = Math.max(segment.offsetIndex.lastOffset, maxSwapFileOffset)
       } catch {
         case _: NoSuchFileException => {
-          info(s"${params.logIdentifier}Deleting index files with for baseFile ${segment.baseOffset}")
+          info(s"${params.logIdentifier}Found log file ${f.getPath} from interrupted swap operation, which requires a full recovery from ${Log.SwapFileSuffix} segment log files.")
+          info(s"${params.logIdentifier}Deleting index files with for baseFile ${segment.baseOffset} because the segment needs a full recovery.")
           Files.deleteIfExists(segment.offsetIndex.file.toPath)
           Files.deleteIfExists(segment.timeIndex.file.toPath)
           Files.deleteIfExists(segment.txnIndex.file.toPath)
@@ -164,6 +165,7 @@ object LogLoader extends Logging {
         if (!file.getName.endsWith(SwapFileSuffix)) {
           val offset = offsetFromFile(file)
           if (offset >= minSwapFileOffset && offset < maxSwapFileOffset) {
+            info(s"${params.logIdentifier}Deleting segment files ${file.getName} that is compacted but has not been deleted yet.")
             file.delete()
           }
         }
@@ -180,6 +182,7 @@ object LogLoader extends Logging {
       params.config,
       time = params.time,
       fileSuffix = Log.SwapFileSuffix)
+      info(s"${params.logIdentifier}Recovering segment with base offset ${baseOffset} by renaming from ${Log.SwapFileSuffix} files.")
       segment.changeFileSuffixes(Log.SwapFileSuffix, "")
     }
 
@@ -191,7 +194,7 @@ object LogLoader extends Logging {
         params.config,
         time = params.time,
         fileSuffix = Log.SwapFileSuffix)
-      info(s"${params.logIdentifier}Found log file ${f.getPath} from interrupted swap operation, which is not recoverable from ${Log.CleanedFileSuffix} files, repairing.")
+      info(s"${params.logIdentifier}Doing a full recovery for segment with base offset ${baseOffset}")
       recoverSegment(segment, params)
       // We create swap files for two cases:
       // (1) Log cleaning where multiple segments are merged into one, and
