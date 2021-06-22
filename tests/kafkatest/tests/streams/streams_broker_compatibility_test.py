@@ -22,7 +22,8 @@ from kafkatest.services.streams import StreamsBrokerCompatibilityService
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.version import LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_1_0, LATEST_1_1, \
-    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, KafkaVersion
+    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
+    LATEST_3_0, KafkaVersion
 
 
 class StreamsBrokerCompatibility(Test):
@@ -30,9 +31,9 @@ class StreamsBrokerCompatibility(Test):
     These tests validates that
     - Streams works for older brokers 0.11 (or newer)
     - Streams w/ EOS-alpha works for older brokers 0.11 (or newer)
-    - Streams w/ EOS-beta works for older brokers 2.5 (or newer)
+    - Streams w/ EOS-v2 works for older brokers 2.5 (or newer)
     - Streams fails fast for older brokers 0.10.0, 0.10.2, and 0.10.1
-    - Streams w/ EOS-beta fails fast for older brokers 2.4 or older
+    - Streams w/ EOS-v2 fails fast for older brokers 2.4 or older
     """
 
     input = "brokerCompatibilitySourceTopic"
@@ -114,8 +115,12 @@ class StreamsBrokerCompatibility(Test):
         self.consumer.stop()
         self.kafka.stop()
 
+    @parametrize(broker_version=str(LATEST_3_0))
+    @parametrize(broker_version=str(LATEST_2_8))
+    @parametrize(broker_version=str(LATEST_2_7))
+    @parametrize(broker_version=str(LATEST_2_6))
     @parametrize(broker_version=str(LATEST_2_5))
-    def test_compatible_brokers_eos_beta_enabled(self, broker_version):
+    def test_compatible_brokers_eos_v2_enabled(self, broker_version):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
 
@@ -158,11 +163,11 @@ class StreamsBrokerCompatibility(Test):
     @parametrize(broker_version=str(LATEST_1_1))
     @parametrize(broker_version=str(LATEST_1_0))
     @parametrize(broker_version=str(LATEST_0_11_0))
-    def test_fail_fast_on_incompatible_brokers_if_eos_beta_enabled(self, broker_version):
+    def test_fail_fast_on_incompatible_brokers_if_eos_v2_enabled(self, broker_version):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
 
-        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, "exactly_once_beta")
+        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, "exactly_once_v2")
 
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
             with processor.node.account.monitor_log(processor.LOG_FILE) as log:
