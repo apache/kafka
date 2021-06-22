@@ -1069,6 +1069,7 @@ public final class RaftClientTestContext {
         private final List<Batch<String>> commits = new ArrayList<>();
         private final List<BatchReader<String>> savedBatches = new ArrayList<>();
         private final Map<Integer, Long> claimedEpochStartOffsets = new HashMap<>();
+        private LeaderAndEpoch currentLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), 0);
         private OptionalInt currentClaimedEpoch = OptionalInt.empty();
         private final OptionalInt localId;
         private Optional<SnapshotReader<String>> snapshot = Optional.empty();
@@ -1084,6 +1085,10 @@ public final class RaftClientTestContext {
 
         Long claimedEpochStartOffset(int epoch) {
             return claimedEpochStartOffsets.get(epoch);
+        }
+
+        LeaderAndEpoch currentLeaderAndEpoch() {
+            return currentLeaderAndEpoch;
         }
 
         Batch<String> lastCommit() {
@@ -1159,18 +1164,20 @@ public final class RaftClientTestContext {
         }
 
         @Override
-        public void handleLeaderChange(LeaderAndEpoch leader) {
+        public void handleLeaderChange(LeaderAndEpoch leaderAndEpoch) {
             // We record the next expected offset as the claimed epoch's start
-            // offset. This is useful to verify that the `handleClaim` callback
+            // offset. This is useful to verify that the `handleLeaderChange` callback
             // was not received early.
-            if (localId.isPresent() && leader.isLeader(localId.getAsInt())) {
+            if (localId.isPresent() && leaderAndEpoch.isLeader(localId.getAsInt())) {
                 long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
                     lastCommitOffset().getAsLong() + 1 : 0L;
-                this.currentClaimedEpoch = OptionalInt.of(leader.epoch());
-                this.claimedEpochStartOffsets.put(leader.epoch(), claimedEpochStartOffset);
+                this.currentClaimedEpoch = OptionalInt.of(leaderAndEpoch.epoch());
+                this.claimedEpochStartOffsets.put(leaderAndEpoch.epoch(), claimedEpochStartOffset);
             } else {
                 this.currentClaimedEpoch = OptionalInt.empty();
             }
+
+            this.currentLeaderAndEpoch = leaderAndEpoch;
         }
 
         @Override

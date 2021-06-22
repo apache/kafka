@@ -402,6 +402,8 @@ public class KafkaRaftClientTest {
         context.pollUntilResponse();
         context.assertSentBeginQuorumEpochResponse(Errors.NONE);
         context.assertElectedLeader(resignedEpoch + 1, remoteId1);
+        assertEquals(new LeaderAndEpoch(OptionalInt.of(remoteId1), resignedEpoch + 1),
+            context.listener.currentLeaderAndEpoch());
     }
 
     @Test
@@ -449,6 +451,8 @@ public class KafkaRaftClientTest {
         context.time.sleep(2 * context.electionTimeoutMs());
         context.pollUntil(context.client.quorum()::isCandidate);
         assertEquals(resignedEpoch + 1, context.currentEpoch());
+        assertEquals(new LeaderAndEpoch(OptionalInt.empty(), resignedEpoch + 1),
+            context.listener.currentLeaderAndEpoch());
     }
 
     @Test
@@ -460,9 +464,8 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
         context.becomeLeader();
 
-        assertThrows(IllegalArgumentException.class, () -> {
-            context.client.resign(context.currentEpoch() + 1);
-        });
+        assertThrows(IllegalArgumentException.class,
+            () -> context.client.resign(context.currentEpoch() + 1));
     }
 
     @Test
@@ -477,9 +480,7 @@ public class KafkaRaftClientTest {
             .build();
 
         assertEquals(OptionalInt.of(otherNodeId), context.currentLeader());
-        assertThrows(IllegalArgumentException.class, () -> {
-            context.client.resign(leaderEpoch);
-        });
+        assertThrows(IllegalArgumentException.class, () -> context.client.resign(leaderEpoch));
     }
 
     @Test
@@ -501,10 +502,7 @@ public class KafkaRaftClientTest {
 
         context.client.poll();
         context.assertElectedLeader(epoch, leaderId);
-
-        assertThrows(IllegalArgumentException.class, () -> {
-            context.client.resign(epoch);
-        });
+        assertThrows(IllegalArgumentException.class, () -> context.client.resign(epoch));
     }
 
     @Test
