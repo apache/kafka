@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetentionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -321,7 +322,7 @@ public class MemoryRecordsTest {
                                 @Override
                                 protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                                     // retain all batches
-                                    return BatchRetentionResult(BatchRetention.RETAIN_EMPTY, false);
+                                    return new BatchRetentionResult(BatchRetention.RETAIN_EMPTY, false);
                                 }
 
                                 @Override
@@ -383,7 +384,7 @@ public class MemoryRecordsTest {
                     @Override
                     protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                         // retain all batches
-                        return BatchRetentionResult(BatchRetention.RETAIN_EMPTY, false);
+                        return new BatchRetentionResult(BatchRetention.RETAIN_EMPTY, false);
                     }
 
                     @Override
@@ -430,7 +431,7 @@ public class MemoryRecordsTest {
                     new MemoryRecords.RecordFilter(0, 0) {
                         @Override
                         protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
-                            return BatchRetentionResult(deleteRetention, false);
+                            return new BatchRetentionResult(deleteRetention, false);
                         }
 
                         @Override
@@ -491,6 +492,7 @@ public class MemoryRecordsTest {
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFirstTimestampToDeleteHorizonConversion(Args args) {
+        int partitionLeaderEpoch = 998;
         if (args.magic >= RecordBatch.MAGIC_VALUE_V2) {
             ByteBuffer buffer = ByteBuffer.allocate(2048);
             MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, args.magic, args.compression, TimestampType.CREATE_TIME,
