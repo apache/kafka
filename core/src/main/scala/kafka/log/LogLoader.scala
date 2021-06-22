@@ -183,7 +183,7 @@ object LogLoader extends Logging {
       segment.changeFileSuffixes(Log.SwapFileSuffix, "")
     }
 
-    // Do the actual recovery for toRecoverSwapFiles as discussed above.
+    // Do the actual recovery for toRecoverSwapFiles, as discussed above.
     toRecoverSwapFiles.foreach { f =>
       val baseOffset = offsetFromFile(f)
       val segment = LogSegment.open(f.getParentFile,
