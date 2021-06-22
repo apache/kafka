@@ -510,17 +510,18 @@ object LogLoader extends Logging {
   private def removeAndDeleteSegmentsAsync(segmentsToDelete: Iterable[LogSegment],
                                            params: LoadLogParams): Unit = {
     if (segmentsToDelete.nonEmpty) {
-      // As most callers hold an iterator into the `params.segments` collection and
-      // `removeAndDeleteSegmentAsync` mutates it by removing the deleted segment, we should force
-      // materialization of the iterator here, so that results of the iteration remain valid and
-      // deterministic.
+      // Most callers hold an iterator into the `params.segments` collection and
+      // `removeAndDeleteSegmentAsync` mutates it by removing the deleted segment. Therefore,
+      // we should force materialization of the iterator here, so that results of the iteration
+      // remain valid and deterministic. We should also pass only the materialized view of the
+      // iterator to the logic that deletes the segments.
       val toDelete = segmentsToDelete.toList
       info(s"${params.logIdentifier}Deleting segments as part of log recovery: ${toDelete.mkString(",")}")
       toDelete.foreach { segment =>
         params.segments.remove(segment.baseOffset)
       }
       Log.deleteSegmentFiles(
-        segmentsToDelete,
+        toDelete,
         asyncDelete = true,
         deleteProducerStateSnapshots = true,
         params.dir,

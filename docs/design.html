@@ -453,15 +453,15 @@
     <p>
     Let's discuss a concrete example of such a stream. Say we have a topic containing user email addresses; every time a user updates their email address we send a message to this topic using their user id as the
     primary key. Now say we send the following messages over some time period for a user with id 123, each message corresponding to a change in email address (messages for other ids are omitted):
-    <pre class="line-numbers"><code class="language-text">       123 => bill@microsoft.com
-                .
-                .
-                .
-        123 => bill@gatesfoundation.org
-                .
-                .
-                .
-        123 => bill@gmail.com</code></pre>
+    <pre class="line-numbers"><code class="language-text">123 => bill@microsoft.com
+        .
+        .
+        .
+123 => bill@gatesfoundation.org
+        .
+        .
+        .
+123 => bill@gmail.com</code></pre>
     Log compaction gives us a more granular retention mechanism so that we are guaranteed to retain at least the last update for each primary key (e.g. <code>bill@gmail.com</code>). By doing this we guarantee that the
     log contains a full snapshot of the final value for every key not just keys that changed recently. This means downstream consumers can restore their own state off this topic without us having to retain a complete
     log of all changes.
@@ -548,7 +548,7 @@
 
     The log cleaner is enabled by default. This will start the pool of cleaner threads.
     To enable log cleaning on a particular topic, add the log-specific property
-    <pre class="language-text"><code> log.cleanup.policy=compact</code></pre>
+    <pre class="language-text"><code>log.cleanup.policy=compact</code></pre>
 
     The <code>log.cleanup.policy</code> property is a broker configuration setting defined
     in the broker's <code>server.properties</code> file; it affects all of the topics
@@ -556,13 +556,13 @@
     <a href="/documentation.html#brokerconfigs">here</a>.
 
     The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
-    <pre class="language-text"><code>  log.cleaner.min.compaction.lag.ms</code></pre>
+    <pre class="language-text"><code>log.cleaner.min.compaction.lag.ms</code></pre>
 
     This can be used to prevent messages newer than a minimum message age from being subject to compaction. If not set, all log segments are eligible for compaction except for the last segment, i.e. the one currently
     being written to. The active segment will not be compacted even if all of its messages are older than the minimum compaction time lag.
 
     The log cleaner can be configured to ensure a maximum delay after which the uncompacted "head" of the log becomes eligible for log compaction.
-    <pre class="language-text"><code> log.cleaner.max.compaction.lag.ms</code></pre>
+    <pre class="language-text"><code>log.cleaner.max.compaction.lag.ms</code></pre>
 
     This can be used to prevent log with low produce rate from remaining ineligible for compaction for an unbounded duration. If not set, logs that do not exceed min.cleanable.dirty.ratio are not compacted.
     Note that this compaction deadline is not a hard guarantee since it is still subjected to the availability of log cleaner threads and the actual compaction time.
@@ -575,11 +575,11 @@
     <p>
     Kafka cluster has the ability to enforce quotas on requests to control the broker resources used by clients. Two types
     of client quotas can be enforced by Kafka brokers for each group of clients sharing a quota:
+    </p>
     <ol>
       <li>Network bandwidth quotas define byte-rate thresholds (since 0.9)</li>
       <li>Request rate quotas define CPU utilization thresholds as a percentage of network and I/O threads (since 0.11)</li>
     </ol>
-    </p>
 
     <h4 class="anchor-heading">
         <a class="anchor-link" id="design_quotasnecessary" href="#design_quotasnecessary"></a>
@@ -610,6 +610,7 @@
     </p>
     <p>
         The order of precedence for quota configuration is:
+    </p>
         <ol>
             <li>/config/users/&lt;user&gt;/clients/&lt;client-id&gt;</li>
             <li>/config/users/&lt;user&gt;/clients/&lt;default&gt;</li>
@@ -620,7 +621,7 @@
             <li>/config/clients/&lt;client-id&gt;</li>
             <li>/config/clients/&lt;default&gt;</li>
         </ol>
-
+    <p>
         Broker properties (quota.producer.default, quota.consumer.default) can also be used to set defaults of network bandwidth quotas for client-id groups. These properties are being deprecated and will be removed in a later release.
         Default quotas for client-id can be set in Zookeeper similar to the other quota overrides and defaults.
     </p>

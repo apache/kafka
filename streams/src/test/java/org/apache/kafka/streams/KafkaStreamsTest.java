@@ -53,7 +53,6 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -61,7 +60,6 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingT
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -932,21 +930,6 @@ public class KafkaStreamsTest {
         }
 
         PowerMock.verify(Executors.class, rocksDBMetricsRecordingTriggerThread);
-    }
-
-    @Test
-    public void shouldWarnAboutRocksDBConfigSetterIsNotGuaranteedToBeBackwardsCompatible() {
-        props.setProperty(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class.getName());
-
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
-
-            assertThat(appender.getMessages(), hasItem("stream-client [" + CLIENT_ID + "] "
-                + "RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
-                + "If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite "
-                + "your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options` "
-                + "(or `org.rocksdb.ColumnFamilyOptions`)."));
-        }
     }
 
     @Test

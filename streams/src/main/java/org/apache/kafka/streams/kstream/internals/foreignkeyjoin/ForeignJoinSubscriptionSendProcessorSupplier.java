@@ -21,10 +21,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.internals.Murmur3;
@@ -40,7 +36,8 @@ import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.Subscrip
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
 
-public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSupplier<K, Change<V>> {
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, Change<V>> {
     private static final Logger LOG = LoggerFactory.getLogger(ForeignJoinSubscriptionSendProcessorSupplier.class);
 
     private final Function<V, KO> foreignKeyExtractor;
@@ -65,11 +62,11 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public org.apache.kafka.streams.processor.Processor<K, Change<V>> get() {
         return new UnbindChangeProcessor();
     }
 
-    private class UnbindChangeProcessor extends AbstractProcessor<K, Change<V>> {
+    private class UnbindChangeProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, Change<V>> {
 
         private Sensor droppedRecordsSensor;
         private String foreignKeySerdeTopic;
@@ -77,7 +74,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
             foreignKeySerdeTopic = foreignKeySerdeTopicSupplier.get();
             valueSerdeTopic = valueSerdeTopicSupplier.get();
