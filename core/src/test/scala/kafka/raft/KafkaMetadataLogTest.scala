@@ -284,7 +284,7 @@ final class KafkaMetadataLogTest {
     append(log, offset, epoch)
     log.updateHighWatermark(new LogOffsetMetadata(offset))
 
-    assertFalse(log.deleteSnapshot(new OffsetAndEpoch(1L, epoch)))
+    assertFalse(log.deleteSnapshot(new OffsetAndEpoch(1L, epoch), Some(new OffsetAndEpoch(2L, epoch))))
     assertEquals(0, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(offset, log.endOffset().offset)
@@ -747,19 +747,26 @@ final class KafkaMetadataLogTest {
     }
     assertFalse(log.maybeClean(), "Should not clean since HW was still 0")
 
-    log.updateHighWatermark(new LogOffsetMetadata(50000))
+    log.updateHighWatermark(new LogOffsetMetadata(4000))
     assertFalse(log.maybeClean(), "Should not clean since no snapshots exist")
 
-    val snapshotId = new OffsetAndEpoch(20000, 1)
-    TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
-      append(snapshot, 2000)
+    val snapshotId1 = new OffsetAndEpoch(1000, 1)
+    TestUtils.resource(log.storeSnapshot(snapshotId1).get()) { snapshot =>
+      append(snapshot, 100)
       snapshot.freeze()
     }
+
+    val snapshotId2 = new OffsetAndEpoch(2000, 1)
+    TestUtils.resource(log.storeSnapshot(snapshotId2).get()) { snapshot =>
+      append(snapshot, 100)
+      snapshot.freeze()
+    }
+
     val lsoBefore = log.startOffset()
     assertTrue(log.maybeClean(), "Expected to clean since there was at least one snapshot")
     val lsoAfter = log.startOffset()
     assertTrue(lsoAfter > lsoBefore, "Log Start Offset should have increased after cleaning")
-    assertTrue(lsoAfter <= snapshotId.offset, "Expected the Log Start Offset to be less than or equal to the snapshot offset")
+    assertTrue(lsoAfter == snapshotId2.offset, "Expected the Log Start Offset to be less than or equal to the snapshot offset")
   }
 
   @Test
@@ -778,22 +785,23 @@ final class KafkaMetadataLogTest {
     for(_ <- 0 to 1000) {
       append(log, 1, 1)
     }
-    log.updateHighWatermark(new LogOffsetMetadata(50000))
+    log.updateHighWatermark(new LogOffsetMetadata(1001))
 
-    for(offset <- Seq(1000, 2000, 3000, 4000, 5000, 6000)) {
+    for(offset <- Seq(100, 200, 300, 400, 500, 600)) {
       val snapshotId = new OffsetAndEpoch(offset, 1)
       TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
-        append(snapshot, 100)
+        append(snapshot, 10)
         snapshot.freeze()
       }
     }
 
-    assertEquals(6, log.snapshots.size, "Expected six snapshots")
+    assertEquals(6, log.snapshots.size)
     assertTrue(log.maybeClean())
     assertEquals(1, log.snapshots.size, "Expected only one snapshot after cleaning")
     assertOptional(log.latestSnapshotId(), (snapshotId: OffsetAndEpoch) => {
-      assertEquals(6000, snapshotId.offset, "Should see latest snapshot with offset 6000")
+      assertEquals(600, snapshotId.offset)
     })
+    assertEquals(log.startOffset, 600)
   }
 
   @Test
@@ -814,10 +822,17 @@ final class KafkaMetadataLogTest {
     }
     log.updateHighWatermark(new LogOffsetMetadata(2000))
 
+    // Then generate two snapshots
+    val snapshotId1 = new OffsetAndEpoch(1000, 1)
+    TestUtils.resource(log.storeSnapshot(snapshotId1).get()) { snapshot =>
+      append(snapshot, 500)
+      snapshot.freeze()
+    }
+
     // Then generate a snapshot
-    val snapshotId = new OffsetAndEpoch(2000, 1)
-    TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
-      append(snapshot, 1000)
+    val snapshotId2 = new OffsetAndEpoch(2000, 1)
+    TestUtils.resource(log.storeSnapshot(snapshotId2).get()) { snapshot =>
+      append(snapshot, 500)
       snapshot.freeze()
     }
 

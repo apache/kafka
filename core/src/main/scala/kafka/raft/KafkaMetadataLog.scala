@@ -17,7 +17,7 @@
 package kafka.raft
 
 import kafka.api.ApiVersion
-import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, LogSegment, RetentionSizeBreach}
+import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, KafkaConfig, LogDirFailureChannel, RequestLocal}
 import kafka.utils.{CoreUtils, Logging, Scheduler}
 import org.apache.kafka.common.config.AbstractConfig
@@ -96,10 +96,6 @@ final class KafkaMetadataLog private (
   private def handleAndConvertLogAppendInfo(appendInfo: kafka.log.LogAppendInfo): LogAppendInfo = {
     appendInfo.firstOffset match {
       case Some(firstOffset) =>
-        if (firstOffset.relativePositionInSegment == 0) {
-          // Assume that a new segment was created if the relative position is 0
-          log.deleteOldSegments()
-        }
         new LogAppendInfo(firstOffset.messageOffset, appendInfo.lastOffset)
       case None =>
         throw new KafkaException(s"Append failed unexpectedly: ${appendInfo.errorMessage}")
@@ -319,87 +315,76 @@ final class KafkaMetadataLog private (
 
 
   /**
-   * Delete a given snapshot ID from our cache and schedule its removal from disk. If the given snapshot is also
-   * the latest snapshot, this method does nothing since we must retain at least one snapshot at all times.
-   * @param snapshotId
-   * @return
+   * Delete a snapshot, advance the log start offset, and clean old log segments. This will only happen if the
+   * following hold true:
+   *
+   * <li>This is not the latest snapshot (i.e., another snapshot proceeds this one)</li>
+   * <li>The offset of the next snapshot is greater than the log start offset</li>
+   * <li>The log can be advanced to the offset of the next snapshot</li>
+   *
+   * This method is not thread safe and assumes a lock on the snapshots collection is held
    */
-  private[raft] def deleteSnapshot(snapshotId: OffsetAndEpoch): Boolean = {
-    val (deleted, forgottenSnapshot) = snapshots synchronized {
-      val forgotten = mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]]
-      latestSnapshotId().asScala match {
-        case Some(latestSnapshot) if latestSnapshot != snapshotId =>
-          snapshots.remove(snapshotId) match {
-            case Some(value) =>
-              forgotten.put(snapshotId, value)
-              (true, forgotten)
-            case None =>
-              (false, forgotten)
-          }
-          case Some(latestSnapshot) =>
-            debug(s"Refusing to delete the latest snapshot $latestSnapshot as this would cause divergence.")
-            (false, forgotten)
-          case None =>
-            debug(s"No such snapshot $snapshotId to delete.")
-            (false, forgotten)
+  private[raft] def deleteSnapshot(snapshotId: OffsetAndEpoch, nextSnapshotIdOpt: Option[OffsetAndEpoch]): Boolean = {
+    nextSnapshotIdOpt.exists { nextSnapshotId =>
+      if (snapshots.contains(snapshotId) &&
+          snapshots.contains(nextSnapshotId) &&
+          startOffset < nextSnapshotId.offset &&
+          snapshotId.offset < nextSnapshotId.offset &&
+          log.maybeIncrementLogStartOffset(nextSnapshotId.offset, SnapshotGenerated)) {
+        log.deleteOldSegments()
+        val forgotten = mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]]
+        snapshots.remove(snapshotId) match {
+          case Some(removedSnapshot) => forgotten.put(snapshotId, removedSnapshot)
+          case None => throw new IllegalStateException(s"Could not remove snapshot $snapshotId from our cache.")
+        }
+        removeSnapshots(forgotten)
+        true
+      } else {
+        false
       }
     }
-    removeSnapshots(forgottenSnapshot)
-    deleted
   }
 
-
+  /**
+   * Force all known snapshots to have an open reader so we can know their sizes. This is not thread-safe
+   */
   private def loadSnapshotSizes(): Seq[(OffsetAndEpoch, Long)] = {
-    snapshots synchronized {
-      snapshots.keys.toSeq.flatMap {
-        snapshotId => readSnapshot(snapshotId).asScala.map { reader => (snapshotId, reader.sizeInBytes())}
-      }
+    snapshots.keys.toSeq.flatMap {
+      snapshotId => readSnapshot(snapshotId).asScala.map { reader => (snapshotId, reader.sizeInBytes())}
     }
   }
 
   override def maybeClean(): Boolean = {
-    val snapshotSizes = loadSnapshotSizes()
-    val logSize: Long = log.size
-    var didClean = false
-    var snapshotTotalSize: Long = snapshotSizes.map(_._2).sum
+    snapshots synchronized {
+      val snapshotSizes = loadSnapshotSizes()
+      if (snapshotSizes.size < 2) {
+        return false
+      }
 
-    // If we've violated retention, delete as many snapshots as necessary (leaving the newest)
-    if (logSize + snapshotTotalSize > retentionSize) {
-      snapshotSizes.take(snapshotSizes.size - 1).foreach { case (snapshotId, size) =>
+      var logSize: Long = log.size
+      var snapshotTotalSize: Long = snapshotSizes.map(_._2).sum
+      var didClean = false
+
+      val snapshotIterator = snapshotSizes.iterator
+      var snapshotOpt = Log.nextOption(snapshotIterator)
+      while (snapshotOpt.isDefined) {
+        val snapshot = snapshotOpt.get
+        val nextOpt = Log.nextOption(snapshotIterator)
         if (logSize + snapshotTotalSize > retentionSize) {
-          snapshotTotalSize -= size
-          deleteSnapshot(snapshotId)
-          didClean = true
-        }
-      }
-    }
-
-    // If retention is still violated, clean up old segments as long as they precede our latest snapshot
-    if (logSize + snapshotTotalSize > retentionSize) {
-      latestSnapshotId().ifPresent { snapshotId =>
-        var diff = log.size - retentionSize
-
-        def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
-          // Only delete this segment if the _next_ segment is less than the latest snapshot
-          if (nextSegmentOpt.exists(_.baseOffset <= snapshotId.offset)) {
-            if (diff - segment.size >= 0) {
-              diff -= segment.size
-              true
-            } else {
-              false
-            }
+          if (deleteSnapshot(snapshot._1, nextOpt.map(_._1))) {
+            logSize = log.size
+            snapshotTotalSize -= snapshot._2
+            didClean = true
+            snapshotOpt = nextOpt
           } else {
-            false
+            snapshotOpt = None
           }
-        }
-
-        if (log.deleteOldSegments(shouldDelete, RetentionSizeBreach) > 0) {
-          didClean = true
+        } else {
+          snapshotOpt = None
         }
       }
+      didClean
     }
-
-    didClean
   }
 
   /**
