@@ -16,9 +16,8 @@
 */
 package kafka.zk
 
-import java.util.{Base64, Collections, Properties}
+import java.util.{Collections, Properties}
 import java.nio.charset.StandardCharsets.UTF_8
-import java.security.MessageDigest
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import kafka.api.{ApiVersion, LeaderAndIsr}
@@ -33,7 +32,7 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException, NodeExistsException}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -54,6 +53,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.data.{ACL, Id, Stat}
+import org.apache.zookeeper.server.auth.DigestAuthenticationProvider
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -142,7 +142,6 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     }
   }
 
-  @Disabled
   @Test
   def testChrootExistsAndRootIsLocked(): Unit = {
     // chroot is accessible
@@ -155,9 +154,11 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val scheme = "digest"
     val id = "test"
     val pwd = "12345"
-    val digest = Base64.getEncoder.encode(MessageDigest.getInstance("SHA1").digest(s"$id:$pwd".getBytes()))
-    zkClient.currentZooKeeper.addAuthInfo(scheme, digest)
-    zkClient.setAcl(root, Seq(new ACL(ZooDefs.Perms.ALL, new Id(scheme, s"$id:$digest"))))
+    val digest = DigestAuthenticationProvider.generateDigest(s"$id:$pwd")
+    val authInfo = s"$id:$pwd".getBytes()
+
+    zkClient.currentZooKeeper.addAuthInfo(scheme, authInfo)
+    zkClient.setAcl(root, Seq(new ACL(ZooDefs.Perms.ALL, new Id(scheme, digest))))
 
     // this client won't have access to the root, but the chroot already exists
     val chrootClient = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
