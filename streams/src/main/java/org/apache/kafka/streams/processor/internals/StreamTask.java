@@ -663,23 +663,27 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // would soon be updated to not return any records for this task anymore.
             log.info("Stream task {} is already in {} state, skip processing it.", id(), state());
             System.err.print(logPrefix + "t close:" + id());
+            System.err.flush();
 
             return false;
         }
 
         if (hasPendingTxCommit) {
             System.err.println("has pending tx");
+            System.err.flush();
             // if the task has a pending TX commit, we should just retry the commit but not process any records
             // thus, the task is not processable, even if there is available data in the record queue
             return false;
         }
-//        if (logPrefix.contains("1_4")) {
-//            System.err.print("ready p");
-//        }
+        if (logPrefix.contains("1_4")) {
+            System.err.print("ready p");
+            System.err.flush();
+        }
         final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
-//        if (logPrefix.contains("1_4")) {
-//            System.err.print("redP:" + readyToProcess);
-//        }
+        if (logPrefix.contains("1_4")) {
+            System.err.print("redP:" + readyToProcess);
+            System.err.flush();
+        }
 //        System.out.println("!!! readyToProcess:" + readyToProcess);
         if (!readyToProcess) {
             if (!timeCurrentIdlingStarted.isPresent()) {
@@ -702,11 +706,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (logPrefix.contains("1_4")) {
             System.err.print("proc ");
             System.err.flush();
-//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
-//            for (int i = 1; i < elements.length; i++) {
-//                final StackTraceElement s = elements[i];
-//                System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
-//            }
         }
         if (record == null) {
             if (!isProcessable(wallClockTime)) {

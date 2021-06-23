@@ -781,8 +781,8 @@ public class StreamThread extends Thread {
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
         if (state == State.RUNNING) {
-            System.err.print(shortLogPrefix + "do ");
-            System.err.flush();
+//            System.err.print(shortLogPrefix + "do ");
+//            System.err.flush();
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
              *  1. If it is time to punctuate, do it;

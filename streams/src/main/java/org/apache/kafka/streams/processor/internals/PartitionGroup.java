@@ -180,6 +180,7 @@ public class PartitionGroup {
                     );
                     if (logPrefix.contains("1_4")) {
                         System.err.print(logPrefix + "lag for:" + parName + "," + fetchedLag.getAsLong());
+                        System.err.flush();
                     }
                     return false;
                 } else {
@@ -201,6 +202,7 @@ public class PartitionGroup {
                         );
                         if (logPrefix.contains("1_4")) {
                             System.err.println(logPrefix + "Lag current time:" + partition + "," + maxTaskIdleMs);
+                            System.err.flush();
                         }
                         return false;
                     } else {
@@ -218,12 +220,14 @@ public class PartitionGroup {
             logger.trace("All partitions were buffered locally, so this task is ready for processing.");
             if (logPrefix.contains("1_4")) {
                 System.err.print(logPrefix + "buf ");
+                System.err.flush();
             }
             return true;
         } else if (queued.isEmpty()) {
             logger.trace("No partitions were buffered locally, so this task is not ready for processing.");
             if (logPrefix.contains("1_4")) {
                 System.err.print(logPrefix + "no ");
+                System.err.flush();
             }
 
             return false;
@@ -241,6 +245,7 @@ public class PartitionGroup {
                      wallClockTime);
             if (logPrefix.contains("1_4")) {
                 System.err.print(logPrefix + "par empty");
+                System.err.flush();
             }
             return true;
         }
