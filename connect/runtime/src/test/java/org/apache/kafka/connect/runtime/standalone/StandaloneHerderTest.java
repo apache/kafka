@@ -469,7 +469,7 @@ public class StandaloneHerderTest {
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
         ConnectorStateInfo connectorStateInfo = PowerMock.createMock(ConnectorStateInfo.class);
         EasyMock.expect(restartPlan.shouldRestartConnector()).andReturn(false).anyTimes();
-        EasyMock.expect(restartPlan.shouldRestartAnyTasks()).andReturn(false).anyTimes();
+        EasyMock.expect(restartPlan.shouldRestartTasks()).andReturn(false).anyTimes();
         EasyMock.expect(restartPlan.restartConnectorStateInfo()).andReturn(connectorStateInfo).anyTimes();
         EasyMock.expect(herder.buildRestartPlan(restartRequest))
                 .andReturn(Optional.of(restartPlan)).anyTimes();
@@ -499,7 +499,7 @@ public class StandaloneHerderTest {
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
         ConnectorStateInfo connectorStateInfo = PowerMock.createMock(ConnectorStateInfo.class);
         EasyMock.expect(restartPlan.shouldRestartConnector()).andReturn(true).anyTimes();
-        EasyMock.expect(restartPlan.shouldRestartAnyTasks()).andReturn(false).anyTimes();
+        EasyMock.expect(restartPlan.shouldRestartTasks()).andReturn(false).anyTimes();
         EasyMock.expect(restartPlan.restartConnectorStateInfo()).andReturn(connectorStateInfo).anyTimes();
         EasyMock.expect(herder.buildRestartPlan(restartRequest))
                 .andReturn(Optional.of(restartPlan)).anyTimes();
@@ -544,7 +544,7 @@ public class StandaloneHerderTest {
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
         ConnectorStateInfo connectorStateInfo = PowerMock.createMock(ConnectorStateInfo.class);
         EasyMock.expect(restartPlan.shouldRestartConnector()).andReturn(false).anyTimes();
-        EasyMock.expect(restartPlan.shouldRestartAnyTasks()).andReturn(true).anyTimes();
+        EasyMock.expect(restartPlan.shouldRestartTasks()).andReturn(true).anyTimes();
         EasyMock.expect(restartPlan.restartTaskCount()).andReturn(1).anyTimes();
         EasyMock.expect(restartPlan.totalTaskCount()).andReturn(1).anyTimes();
         EasyMock.expect(restartPlan.taskIdsToRestart()).andReturn(Collections.singletonList(taskId)).anyTimes();
@@ -595,7 +595,7 @@ public class StandaloneHerderTest {
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
         ConnectorStateInfo connectorStateInfo = PowerMock.createMock(ConnectorStateInfo.class);
         EasyMock.expect(restartPlan.shouldRestartConnector()).andReturn(true).anyTimes();
-        EasyMock.expect(restartPlan.shouldRestartAnyTasks()).andReturn(true).anyTimes();
+        EasyMock.expect(restartPlan.shouldRestartTasks()).andReturn(true).anyTimes();
         EasyMock.expect(restartPlan.restartTaskCount()).andReturn(1).anyTimes();
         EasyMock.expect(restartPlan.totalTaskCount()).andReturn(1).anyTimes();
         EasyMock.expect(restartPlan.taskIdsToRestart()).andReturn(Collections.singletonList(taskId)).anyTimes();

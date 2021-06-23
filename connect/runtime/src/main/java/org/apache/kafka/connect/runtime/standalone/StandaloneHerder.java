@@ -323,7 +323,7 @@ public class StandaloneHerder extends AbstractHerder {
             worker.stopAndAwaitConnector(connectorName);
             onRestart(connectorName);
         }
-        if (plan.shouldRestartAnyTasks()) {
+        if (plan.shouldRestartTasks()) {
             // Stop the tasks and mark as restarting
             worker.stopAndAwaitTasks(plan.taskIdsToRestart());
             plan.taskIdsToRestart().forEach(this::onRestart);
@@ -340,7 +340,7 @@ public class StandaloneHerder extends AbstractHerder {
                 }
             });
         }
-        if (plan.shouldRestartAnyTasks()) {
+        if (plan.shouldRestartTasks()) {
             log.debug("Restarting {} of {} tasks for {}", plan.restartTaskCount(), plan.totalTaskCount(), request);
             createConnectorTasks(connectorName, plan.taskIdsToRestart());
             log.debug("Restarted {} of {} tasks for {} as requested", plan.restartTaskCount(), plan.totalTaskCount(), request);

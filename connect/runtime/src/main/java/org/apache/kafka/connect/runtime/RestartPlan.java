@@ -109,7 +109,7 @@ public class RestartPlan {
      *
      * @return true if any {@link Task} instances are to be restarted, or false if none are to be restarted
      */
-    public boolean shouldRestartAnyTasks() {
+    public boolean shouldRestartTasks() {
         return !taskIdsToRestart().isEmpty();
     }
 
