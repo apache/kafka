@@ -24,9 +24,6 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.SlidingWindows;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -40,6 +37,7 @@ import java.util.Set;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -61,7 +59,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
     }
 
     @Override
-    public Processor<K, V> get() {
+    public org.apache.kafka.streams.processor.Processor<K, V> get() {
         return new KStreamSlidingWindowAggregateProcessor();
     }
 
@@ -74,30 +72,20 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         sendOldValues = true;
     }
 
-    private class KStreamSlidingWindowAggregateProcessor extends AbstractProcessor<K, V> {
+    private class KStreamSlidingWindowAggregateProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, V> {
         private TimestampedWindowStore<K, Agg> windowStore;
         private TimestampedTupleForwarder<Windowed<K>, Agg> tupleForwarder;
-        private Sensor lateRecordDropSensor;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
         private Boolean reverseIteratorPossible = null;
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
             final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
             final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
-            lateRecordDropSensor = droppedRecordsSensor(
-                threadId,
-                context.taskId().toString(),
-                metrics
-            );
-            droppedRecordsSensor = droppedRecordsSensor(
-                threadId,
-                context.taskId().toString(),
-                metrics
-            );
+            droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
             windowStore = context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,
@@ -141,7 +129,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     closeTime,
                     observedStreamTime
                 );
-                lateRecordDropSensor.record();
+                droppedRecordsSensor.record();
                 return;
             }
 
@@ -495,7 +483,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     closeTime,
                     observedStreamTime
                 );
-                lateRecordDropSensor.record();
+                droppedRecordsSensor.record();
             }
         }
     }
@@ -519,7 +507,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         private TimestampedWindowStore<K, Agg> windowStore;
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             windowStore = context.getStateStore(storeName);
         }
 

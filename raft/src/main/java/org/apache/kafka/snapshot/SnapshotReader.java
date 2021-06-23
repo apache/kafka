@@ -30,6 +30,14 @@ import org.apache.kafka.raft.internals.RecordsIterator;
  * A snapshot reader can be used to scan through all of the objects T in a snapshot. It
  * is assumed that the content of the snapshot represents all of the objects T for the topic
  * partition from offset 0 up to but not including the end offset in the snapshot id.
+ *
+ * The offsets ({@code baseOffset()} and {@code lastOffset()} stored in {@code Batch<T>}
+ * objects returned by this iterator are independent of the offset of the records in the
+ * log used to generate this batch.
+ *
+ * Use {@code lastContainedLogOffset()} and {@code lastContainedLogEpoch()} to query which
+ * offsets and epoch from the log are included in this snapshot. Both of these values are
+ * inclusive.
  */
 public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>> {
     private final OffsetAndEpoch snapshotId;
@@ -48,6 +56,20 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
      */
     public OffsetAndEpoch snapshotId() {
         return snapshotId;
+    }
+
+    /**
+     * Returns the last log offset which is represented in the snapshot.
+     */
+    public long lastContainedLogOffset() {
+        return snapshotId.offset - 1;
+    }
+
+    /**
+     * Returns the epoch of the last log offset which is represented in the snapshot.
+     */
+    public int lastContainedLogEpoch() {
+        return snapshotId.epoch;
     }
 
     @Override

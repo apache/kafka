@@ -15,14 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
-
-import java.util.function.Function;
+package org.apache.kafka.metadata;
 
 
-public final class NoOpSnapshotWriterBuilder implements Function<Long, SnapshotWriter> {
-    @Override
-    public SnapshotWriter apply(Long epoch) {
-        return new NoOpSnapshotWriter(epoch);
-    }
+public class LeaderConstants {
+    /**
+     * A special value used to represent the leader for a partition with no leader.
+     */
+    public static final int NO_LEADER = -1;
+
+    /**
+     * A special value used to represent a PartitionChangeRecord that does not change the
+     * partition leader.
+     */
+    public static final int NO_LEADER_CHANGE = -2;
 }

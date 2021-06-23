@@ -92,7 +92,7 @@ public class AbstractProcessorContextTest {
 
     @Test
     public void shouldNotThrowNullPointerExceptionOnTopicIfRecordContextTopicIsNull() {
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, null, null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, null, new RecordHeaders()));
         assertThat(context.topic(), nullValue());
     }
 
