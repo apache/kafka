@@ -22,6 +22,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.rocksdb.RocksIterator;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Comparator;
 import java.util.Set;
 
@@ -33,7 +34,6 @@ class RocksDBRangeIterator extends RocksDbIterator {
     private final byte[] rawLastKey;
     private final boolean forward;
     private final boolean toInclusive;
-    private final ByteBuffer directByteBuffer;
 
     RocksDBRangeIterator(final String storeName,
                          final RocksIterator iter,
@@ -45,24 +45,27 @@ class RocksDBRangeIterator extends RocksDbIterator {
         super(storeName, iter, openIterators, forward);
         this.forward = forward;
         this.toInclusive = toInclusive;
+        ByteBuffer directByteBuffer;
         if (forward) {
             if (from == null) {
                 iter.seekToFirst();
             } else {
                 directByteBuffer = ByteBuffer.allocateDirect(from.get().length);
+                directByteBuffer.order(ByteOrder.BIG_ENDIAN);
                 iter.seek(directByteBuffer);
                 rawLastKey = to == null ? null : to.get();
             }
-        } else{
-                if (to == null) {
-                    iter.seekToLast();
-                } else {
-                    directByteBuffer = ByteBuffer.allocateDirect(to.get().length);
-                    iter.seek(directByteBuffer);
-                    rawLastKey = from == null ? null : from.get();
-                }
+        } else {
+            if (to == null) {
+                iter.seekToLast();
+            } else {
+                directByteBuffer = ByteBuffer.allocateDirect(to.get().length);
+                directByteBuffer.order(ByteOrder.BIG_ENDIAN);
+                iter.seekForPrev(directByteBuffer);
+                rawLastKey = from == null ? null : from.get();
             }
         }
+    }
 
     @Override
     public KeyValue<Bytes, byte[]> makeNext() {

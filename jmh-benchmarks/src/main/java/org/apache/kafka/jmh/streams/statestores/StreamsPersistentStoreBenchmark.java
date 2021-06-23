@@ -62,7 +62,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 public class StreamsPersistentStoreBenchmark {
 
     private int counter;
-    private static final int DISTINCT_KEYS = 10_000;
+    private static final int DISTINCT_KEYS = 1_000_000;
 
     private static final String KEY = "some_key";
 
@@ -147,7 +147,6 @@ public class StreamsPersistentStoreBenchmark {
     }
 
     @Benchmark
-    @BenchmarkMode(Mode.AverageTime)
     public int testPersistentPrefixScanPerformance() {
         int numKeys = 0;
         final KeyValueIterator<String, String> prefixScan = persistentKVStore.prefixScan(SCAN_KEY, new StringSerializer());
@@ -159,7 +158,6 @@ public class StreamsPersistentStoreBenchmark {
     }
 
     @Benchmark
-    @BenchmarkMode(Mode.AverageTime)
     public int testPersistentRangeQueryPerformance() {
         int numKeys = 0;
         final KeyValueIterator<String, String> rangeScan = persistentKVStore.range(SCAN_KEY + 0, SCAN_KEY + (DISTINCT_KEYS - 1));
@@ -171,7 +169,6 @@ public class StreamsPersistentStoreBenchmark {
     }
 
     @Benchmark
-    @BenchmarkMode(Mode.AverageTime)
     public int testPersistentReverseRangeQueryPerformance() {
         int numKeys = 0;
         final KeyValueIterator<String, String> reverseRangeScan = persistentKVStore.reverseRange(SCAN_KEY + (DISTINCT_KEYS - 1), SCAN_KEY + 0);
@@ -183,7 +180,6 @@ public class StreamsPersistentStoreBenchmark {
     }
 
     @Benchmark
-    @BenchmarkMode(Mode.AverageTime)
     public int testPersistentAllPerformance() {
         int numKeys = 0;
         final KeyValueIterator<String, String> allScan = persistentKVStore.all();
