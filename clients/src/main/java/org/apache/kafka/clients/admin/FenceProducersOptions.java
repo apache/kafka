@@ -14,22 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.storage;
 
-import java.io.Closeable;
+package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.Collection;
-import java.util.Map;
-import java.util.concurrent.Future;
 
-public interface CloseableOffsetStorageReader extends Closeable, OffsetStorageReader {
+/**
+ * Options for {@link Admin#fenceProducers(Collection, FenceProducersOptions)}
+ *
+ * The API of this class is evolving. See {@link Admin} for details.
+ */
+@InterfaceStability.Evolving
+public class FenceProducersOptions extends AbstractOptions<FenceProducersOptions> {
 
-    /**
-     * {@link Future#cancel(boolean) Cancel} all outstanding offset read requests, and throw an
-     * exception in all current and future calls to {@link #offsets(Collection)} and
-     * {@link #offset(Map)}. This is useful for unblocking task threads which need to shut down but
-     * are blocked on offset reads. Additionally, release any resources allocated specifically for
-     * tracking this connector's offsets. This method should be idempotent; after it is successfully
-     * invoked for the first time, successive invocations should have no effect.
-     */
-    void close();
+    @Override
+    public String toString() {
+        return "FenceProducersOptions{" +
+                "timeoutMs=" + timeoutMs +
+                '}';
+    }
 }

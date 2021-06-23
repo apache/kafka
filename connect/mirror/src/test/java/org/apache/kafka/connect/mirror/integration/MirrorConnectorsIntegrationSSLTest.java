@@ -24,7 +24,9 @@ import kafka.server.KafkaConfig;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -59,6 +61,8 @@ public class MirrorConnectorsIntegrationSSLTest extends MirrorConnectorsIntegrat
         // set SSL config for producer used by source task in MM2
         mm2Props.putAll(sslProps.entrySet().stream().collect(Collectors.toMap(
             e -> BACKUP_CLUSTER_ALIAS + ".producer." + e.getKey(), e ->  String.valueOf(e.getValue()))));
+
+        backupBrokerListener = ListenerName.forSecurityProtocol(SecurityProtocol.SSL);
         
         super.startClusters();
     }

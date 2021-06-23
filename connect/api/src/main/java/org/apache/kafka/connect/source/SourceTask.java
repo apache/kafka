@@ -20,12 +20,44 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.clients.producer.RecordMetadata;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * SourceTask is a Task that pulls records from another system for storage in Kafka.
  */
 public abstract class SourceTask implements Task {
+
+    /**
+     * <p>
+     * The configuration key that determines how source tasks will define transaction boundaries
+     * when exactly-once support is enabled.
+     * </p>
+     */
+    public static final String TRANSACTION_BOUNDARY_CONFIG = "transaction.boundary";
+
+    public enum TransactionBoundary {
+        POLL,
+        INTERVAL,
+        CONNECTOR;
+
+        public static final TransactionBoundary DEFAULT = POLL;
+
+        public static List<String> options() {
+            return Stream.of(values()).map(TransactionBoundary::toString).collect(Collectors.toList());
+        }
+
+        public static TransactionBoundary fromProperty(String property) {
+            return TransactionBoundary.valueOf(property.toUpperCase(Locale.ROOT).trim());
+        }
+
+        @Override
+        public String toString() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+    }
 
     protected SourceTaskContext context;
 

@@ -23,6 +23,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkConnectorContext;
 import org.apache.kafka.connect.source.SourceConnectorContext;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
@@ -74,7 +75,7 @@ public class WorkerConnector implements Runnable {
     private volatile boolean cancelled; // indicates whether the Worker has cancelled the connector (e.g. because of slow shutdown)
 
     private State state;
-    private final OffsetStorageReader offsetStorageReader;
+    private final CloseableOffsetStorageReader offsetStorageReader;
 
     public WorkerConnector(String connName,
                            Connector connector,
@@ -82,7 +83,7 @@ public class WorkerConnector implements Runnable {
                            CloseableConnectorContext ctx,
                            ConnectMetrics metrics,
                            ConnectorStatus.Listener statusListener,
-                           OffsetStorageReader offsetStorageReader,
+                           CloseableOffsetStorageReader offsetStorageReader,
                            ClassLoader loader) {
         this.connName = connName;
         this.config = connectorConfig.originalsStrings();
@@ -273,6 +274,7 @@ public class WorkerConnector implements Runnable {
         } finally {
             ctx.close();
             metrics.close();
+            offsetStorageReader.close();
         }
     }
 
@@ -282,6 +284,8 @@ public class WorkerConnector implements Runnable {
         // after this since a new instance may be started soon
         statusListener.onShutdown(connName);
         ctx.close();
+        // Preemptively close the offset reader in case the connector is blocked on an offset read.
+        offsetStorageReader.close();
         cancelled = true;
     }
 

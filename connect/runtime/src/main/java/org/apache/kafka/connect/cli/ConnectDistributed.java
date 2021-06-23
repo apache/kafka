@@ -103,7 +103,7 @@ public class ConnectDistributed {
         URI advertisedUrl = rest.advertisedUrl();
         String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
-        // Create the admin client to be shared by all backing stores.
+        // Create the admin client to be shared by all worker-global backing stores.
         Map<String, Object> adminProps = new HashMap<>(config.originals());
         ConnectUtils.addMetricsContextProperties(adminProps, config, kafkaClusterId);
         SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);

@@ -18,6 +18,8 @@ package org.apache.kafka.connect.source;
 
 import org.apache.kafka.connect.connector.Connector;
 
+import java.util.Map;
+
 /**
  * SourceConnectors implement the connector interface to pull data from another system and send
  * it to Kafka.
@@ -27,5 +29,32 @@ public abstract class SourceConnector extends Connector {
     @Override
     protected SourceConnectorContext context() {
         return (SourceConnectorContext) context;
+    }
+
+    /**
+     * Signals whether the connector supports exactly-once delivery guarantees with a proposed configuration.
+     * Developers can assume that worker-level exactly-once support is enabled when this method is invoked.
+     * The default implementation will return {@code null}.
+     * @param connectorConfig the configuration that will be used for the connector.
+     * @return {@link ExactlyOnceSupport#SUPPORTED} if the connector can provide exactly-once support,
+     * and {@link ExactlyOnceSupport#UNSUPPORTED} if it cannot. If {@code null}, it is assumed that the
+     * connector cannot.
+     */
+    public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> connectorConfig) {
+        return null;
+    }
+
+    /**
+     * Signals whether the connector can define its own transaction boundaries with the proposed
+     * configuration. Developers must override this method if they wish to add connector-defined
+     * transaction boundary support; if they do not, users will be unable to create instances of
+     * this connector that use connector-defined transaction boundaries. The default implementation
+     * will return {@code UNSUPPORTED}.
+     * @param connectorConfig the configuration that will be used for the connector
+     * @return whether the connector can define its own transaction boundaries  with the given
+     * config.
+     */
+    public ConnectorTransactionBoundaries canDefineTransactionBoundaries(Map<String, String> connectorConfig) {
+        return ConnectorTransactionBoundaries.UNSUPPORTED;
     }
 }

@@ -143,7 +143,8 @@ public class WorkerConfig extends AbstractConfig {
     private static final String OFFSET_COMMIT_TIMEOUT_MS_DOC
             = "Maximum number of milliseconds to wait for records to flush and partition offset data to be"
             + " committed to offset storage before cancelling the process and restoring the offset "
-            + "data to be committed in a future attempt.";
+            + "data to be committed in a future attempt. This property has no effect for source connectors "
+            + "running with exactly-once support.";
     public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;
 
     /**
@@ -431,12 +432,36 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
+    public String bootstrapServers() {
+        return String.join(",", getList(BOOTSTRAP_SERVERS_CONFIG));
+    }
+
     public Integer getRebalanceTimeout() {
         return null;
     }
 
     public boolean topicCreationEnable() {
         return getBoolean(TOPIC_CREATION_ENABLE_CONFIG);
+    }
+
+    public boolean exactlyOnceSourceEnabled() {
+        return false;
+    }
+
+    public String offsetsTopic() {
+        return null;
+    }
+
+    public boolean connectorOffsetsTopicsPermitted() {
+        return false;
+    }
+
+    public long offsetCommitInterval() {
+        return getLong(OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+    }
+
+    public String groupId() {
+        return null;
     }
 
     @Override

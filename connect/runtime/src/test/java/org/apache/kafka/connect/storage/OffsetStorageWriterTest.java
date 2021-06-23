@@ -54,18 +54,23 @@ public class OffsetStorageWriterTest {
     private static final byte[] OFFSET_KEY_SERIALIZED = "key-serialized".getBytes();
     private static final byte[] OFFSET_VALUE_SERIALIZED = "value-serialized".getBytes();
 
-    @Mock private OffsetBackingStore store;
+    @Mock private OffsetBackingStore primaryStore;
+    @Mock private OffsetBackingStore secondaryStore;
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
     private OffsetStorageWriter writer;
 
-    private static Exception exception = new RuntimeException("error");
+    private static final Exception EXCEPTION = new RuntimeException("error");
 
     private ExecutorService service;
 
+    private OffsetStorageWriter createWriter(boolean useSecondaryStore) {
+        return new OffsetStorageWriter(primaryStore, useSecondaryStore ? secondaryStore : null, NAMESPACE, keyConverter, valueConverter);
+    }
+
     @Before
     public void setup() {
-        writer = new OffsetStorageWriter(store, NAMESPACE, keyConverter, valueConverter);
+        writer = createWriter(false);
         service = Executors.newFixedThreadPool(1);
     }
 
@@ -79,6 +84,34 @@ public class OffsetStorageWriterTest {
         @SuppressWarnings("unchecked")
         Callback<Void> callback = PowerMock.createMock(Callback.class);
         expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, callback, false, null);
+
+        PowerMock.replayAll();
+
+        writer.offset(OFFSET_KEY, OFFSET_VALUE);
+
+        assertTrue(writer.beginFlush());
+        writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testWriteFlushWithSecondary() throws Exception {
+        testWriteFlushWithSecondary(false);
+    }
+
+    @Test
+    public void testWriteFlushWithSecondaryFailure() throws Exception {
+        // Failures to write to the secondary store should not cause problems, and certainly shouldn't fail a task
+        testWriteFlushWithSecondary(true);
+    }
+
+    private void testWriteFlushWithSecondary(boolean failOnSecondary) throws Exception {
+        writer = createWriter(true);
+        @SuppressWarnings("unchecked")
+        Callback<Void> callback = PowerMock.createMock(Callback.class);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, callback, false, null);
+        expectSecondaryStore(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED, failOnSecondary);
 
         PowerMock.replayAll();
 
@@ -242,14 +275,14 @@ public class OffsetStorageWriterTest {
         final Map<ByteBuffer, ByteBuffer> offsetsSerialized = Collections.singletonMap(
                 keySerialized == null ? null : ByteBuffer.wrap(keySerialized),
                 valueSerialized == null ? null : ByteBuffer.wrap(valueSerialized));
-        EasyMock.expect(store.set(EasyMock.eq(offsetsSerialized), EasyMock.capture(storeCallback)))
+        EasyMock.expect(primaryStore.set(EasyMock.eq(offsetsSerialized), EasyMock.capture(storeCallback)))
             .andAnswer(() ->
                 service.submit(() -> {
                     if (waitForCompletion != null)
                         assertTrue(waitForCompletion.await(10000, TimeUnit.MILLISECONDS));
 
                     if (fail) {
-                        storeCallback.getValue().onCompletion(exception, null);
+                        storeCallback.getValue().onCompletion(EXCEPTION, null);
                     } else {
                         storeCallback.getValue().onCompletion(null, null);
                     }
@@ -258,12 +291,30 @@ public class OffsetStorageWriterTest {
             );
         if (callback != null) {
             if (fail) {
-                callback.onCompletion(EasyMock.eq(exception), EasyMock.eq(null));
+                callback.onCompletion(EasyMock.eq(EXCEPTION), EasyMock.eq(null));
             } else {
                 callback.onCompletion(null, null);
             }
         }
         PowerMock.expectLastCall();
+    }
+
+    private void expectSecondaryStore(byte[] keySerialized, byte[] valueSerialized, final boolean fail) {
+        final Capture<Callback<Void>> storeCallback = Capture.newInstance();
+        final Map<ByteBuffer, ByteBuffer> offsetsSerialized = Collections.singletonMap(
+                keySerialized == null ? null : ByteBuffer.wrap(keySerialized),
+                valueSerialized == null ? null : ByteBuffer.wrap(valueSerialized));
+        EasyMock.expect(secondaryStore.set(EasyMock.eq(offsetsSerialized), EasyMock.capture(storeCallback)))
+                .andAnswer(() ->
+                        service.submit(() -> {
+                            if (fail) {
+                                storeCallback.getValue().onCompletion(EXCEPTION, null);
+                            } else {
+                                storeCallback.getValue().onCompletion(null, null);
+                            }
+                            return null;
+                        })
+            );
     }
 
 }

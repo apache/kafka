@@ -17,11 +17,15 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,8 +33,10 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
 import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -192,6 +198,19 @@ public class DistributedConfig extends WorkerConfig {
     public static final String INTER_WORKER_VERIFICATION_ALGORITHMS_DOC = "A list of permitted algorithms for verifying internal requests";
     public static final List<String> INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT = Collections.singletonList(INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
 
+    public static final String EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG = "exactly.once.source.support";
+    public static final String EXACTLY_ONCE_SOURCE_SUPPORT_DOC = "Whether to enable exactly-once support for source connectors in the cluster "
+            + "by writing source records and their offsets in a Kafka transaction, and by proactively fencing out old task generations before bringing up new ones. "
+            + "Note that this must be enabled on every worker in a cluster in order for exactly-once delivery to be guaranteed, "
+            + "and that some source connectors may still not be able to provide exactly-once delivery guarantees even with this support enabled. "
+            + "Permitted values are \"disabled\", \"preparing\", and \"enabled\". In order to safely enable exactly-once support for source connectors, "
+            + "all workers in the cluster must first be updated to use the \"preparing\" value for this property. "
+            + "Once this has been done, a second update of all of the workers in the cluster should be performed to change the value of this property to \"enabled\".";
+    private static final String EXACTLY_ONCE_SOURCE_SUPPORT_ENABLED = "enabled";
+    private static final String EXACTLY_ONCE_SOURCE_SUPPORT_PREPARING = "preparing";
+    private static final String EXACTLY_ONCE_SOURCE_SUPPORT_DISABLED = "disabled";
+    public static final String EXACTLY_ONCE_SOURCE_SUPPORT_DEFAULT = EXACTLY_ONCE_SOURCE_SUPPORT_DISABLED;
+
     @SuppressWarnings("unchecked")
     private static final ConfigDef CONFIG = baseConfigDef()
             .define(GROUP_ID_CONFIG,
@@ -213,6 +232,15 @@ public class DistributedConfig extends WorkerConfig {
                     Math.toIntExact(TimeUnit.SECONDS.toMillis(3)),
                     ConfigDef.Importance.HIGH,
                     HEARTBEAT_INTERVAL_MS_DOC)
+            .define(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG,
+                    ConfigDef.Type.STRING,
+                    EXACTLY_ONCE_SOURCE_SUPPORT_DEFAULT,
+                    ConfigDef.CaseInsensitiveValidString.in(
+                            EXACTLY_ONCE_SOURCE_SUPPORT_ENABLED,
+                            EXACTLY_ONCE_SOURCE_SUPPORT_PREPARING,
+                            EXACTLY_ONCE_SOURCE_SUPPORT_DISABLED),
+                    ConfigDef.Importance.HIGH,
+                    EXACTLY_ONCE_SOURCE_SUPPORT_DOC)
             .define(CommonClientConfigs.METADATA_MAX_AGE_CONFIG,
                     ConfigDef.Type.LONG,
                     TimeUnit.MINUTES.toMillis(5),
@@ -401,10 +429,46 @@ public class DistributedConfig extends WorkerConfig {
         return getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
     }
 
+    @Override
+    public boolean exactlyOnceSourceEnabled() {
+        return EXACTLY_ONCE_SOURCE_SUPPORT_ENABLED.equalsIgnoreCase(
+                getString(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG)
+        );
+    }
+
+    public boolean transactionalLeaderEnabled() {
+        return Arrays.asList(EXACTLY_ONCE_SOURCE_SUPPORT_ENABLED, EXACTLY_ONCE_SOURCE_SUPPORT_PREPARING)
+                .contains(getString(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG).toLowerCase(Locale.ROOT));
+    }
+
+    public String transactionalProducerId() {
+        return transactionalProducerId(groupId());
+    }
+
+    public static String transactionalProducerId(String groupId) {
+        return "connect-cluster-" + groupId;
+    }
+
+    @Override
+    public String offsetsTopic() {
+        return getString(OFFSET_STORAGE_TOPIC_CONFIG);
+    }
+
+    @Override
+    public boolean connectorOffsetsTopicsPermitted() {
+        return true;
+    }
+
+    @Override
+    public String groupId() {
+        return getString(GROUP_ID_CONFIG);
+    }
+
     public DistributedConfig(Map<String, String> props) {
         super(CONFIG, props);
         getInternalRequestKeyGenerator(); // Check here for a valid key size + key algorithm to fail fast if either are invalid
         validateKeyAlgorithmAndVerificationAlgorithms();
+        warnOnOverriddenProperties();
     }
 
     public static void main(String[] args) {
@@ -423,6 +487,28 @@ public class DistributedConfig extends WorkerConfig {
                 getInt(INTER_WORKER_KEY_SIZE_CONFIG),
                 e.getMessage()
             ));
+        }
+    }
+
+    private void warnOnOverriddenProperties() {
+        if (transactionalLeaderEnabled()) {
+            ConnectUtils.warnOnOverriddenProperty(
+                    originalsStrings(), ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true",
+                    "for the worker when exactly-once source support is enabled or in preparation to be enabled",
+                    false
+            );
+            ConnectUtils.warnOnOverriddenProperty(
+                    originalsStrings(), ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalProducerId(),
+                    "for the worker when exactly-once source support is enabled or in preparation to be enabled",
+                    true
+            );
+        }
+        if (exactlyOnceSourceEnabled()) {
+            ConnectUtils.warnOnOverriddenProperty(
+                    originalsStrings(), ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                    "for the worker when exactly-once source support is enabled",
+                    true
+            );
         }
     }
 

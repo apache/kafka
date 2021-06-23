@@ -25,6 +25,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Future;
 
 /**
@@ -41,6 +42,13 @@ import java.util.concurrent.Future;
  * simple as they are for Kafka partitions or files. Offset storage is not required for sink jobs
  * because they can use Kafka's native offset storage (or the sink data store can handle offset
  * storage to achieve exactly once semantics).
+ * </p>
+ * <p>
+ * In order to support per-connector offsets topics but continue to back up progress to a
+ * cluster-global offsets topic, the writer accepts an optional <i>secondary backing store</i>.
+ * After successful flushes to the primary backing store, the writer will copy the flushed offsets
+ * over to the secondary backing store on a best-effort basis. Failures to write to the secondary
+ * store are logged but otherwise swallowed silently.
  * </p>
  * <p>
  * Both partitions and offsets are generic data objects. This allows different connectors to use
@@ -65,7 +73,8 @@ import java.util.concurrent.Future;
 public class OffsetStorageWriter {
     private static final Logger log = LoggerFactory.getLogger(OffsetStorageWriter.class);
 
-    private final OffsetBackingStore backingStore;
+    private final OffsetBackingStore primaryBackingStore;
+    private final OffsetBackingStore secondaryBackingStore;
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final String namespace;
@@ -76,12 +85,13 @@ public class OffsetStorageWriter {
     // Unique ID for each flush request to handle callbacks after timeouts
     private long currentFlushId = 0;
 
-    public OffsetStorageWriter(OffsetBackingStore backingStore,
+    public OffsetStorageWriter(OffsetBackingStore primaryBackingStore, OffsetBackingStore secondaryBackingStore,
                                String namespace, Converter keyConverter, Converter valueConverter) {
-        this.backingStore = backingStore;
-        this.namespace = namespace;
-        this.keyConverter = keyConverter;
-        this.valueConverter = valueConverter;
+        this.primaryBackingStore = Objects.requireNonNull(primaryBackingStore, "Primary backing store may not be null");
+        this.secondaryBackingStore = secondaryBackingStore; // May be null
+        this.namespace = Objects.requireNonNull(namespace, "Offset namespace may not be null");
+        this.keyConverter = Objects.requireNonNull(keyConverter, "Offset key converter may not be null");
+        this.valueConverter = Objects.requireNonNull(valueConverter, "Offset value converter may not be null");
     }
 
     /**
@@ -114,10 +124,16 @@ public class OffsetStorageWriter {
         if (data.isEmpty())
             return false;
 
-        assert !flushing();
         toFlush = data;
         data = new HashMap<>();
         return true;
+    }
+
+    /**
+     * @return whether there's anything to flush right now.
+     */
+    public synchronized boolean willFlush() {
+        return !data.isEmpty();
     }
 
     /**
@@ -134,12 +150,14 @@ public class OffsetStorageWriter {
         // Serialize
         final Map<ByteBuffer, ByteBuffer> offsetsSerialized;
 
+        final Map<Map<String, Object>, Map<String, Object>> flushed;
         synchronized (this) {
             flushId = currentFlushId;
 
+            flushed = toFlush;
             try {
-                offsetsSerialized = new HashMap<>(toFlush.size());
-                for (Map.Entry<Map<String, Object>, Map<String, Object>> entry : toFlush.entrySet()) {
+                offsetsSerialized = new HashMap<>(flushed.size());
+                for (Map.Entry<Map<String, Object>, Map<String, Object>> entry : flushed.entrySet()) {
                     // Offsets are specified as schemaless to the converter, using whatever internal schema is appropriate
                     // for that data. The only enforcement of the format is here.
                     OffsetUtils.validateFormat(entry.getKey());
@@ -163,13 +181,24 @@ public class OffsetStorageWriter {
             }
 
             // And submit the data
-            log.debug("Submitting {} entries to backing store. The offsets are: {}", offsetsSerialized.size(), toFlush);
+            log.debug("Submitting {} entries to backing store. The offsets are: {}", offsetsSerialized.size(), flushed);
         }
 
-        return backingStore.set(offsetsSerialized, (error, result) -> {
-            boolean isCurrent = handleFinishWrite(flushId, error, result);
-            if (isCurrent && callback != null) {
-                callback.onCompletion(error, result);
+        return primaryBackingStore.set(offsetsSerialized, (primaryError, primaryResult) -> {
+            boolean isCurrent = handleFinishWrite(flushId, primaryError, primaryResult);
+            if (isCurrent) {
+                if (callback != null) {
+                    callback.onCompletion(primaryError, primaryResult);
+                }
+                if (secondaryBackingStore != null && primaryError == null) {
+                    secondaryBackingStore.set(offsetsSerialized, (secondaryError, secondaryResult) -> {
+                        if (secondaryError != null) {
+                            log.warn("Failed to write offsets ({}) to secondary backing store", flushed, secondaryError);
+                        } else {
+                            log.debug("Successfully flushed offsets ({}) to secondary backing store", flushed);
+                        }
+                    });
+                }
             }
         });
     }

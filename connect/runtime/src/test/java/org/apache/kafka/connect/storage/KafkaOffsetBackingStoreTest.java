@@ -390,7 +390,7 @@ public class KafkaOffsetBackingStoreTest {
     private void expectConfigure() throws Exception {
         PowerMock.expectPrivate(store, "createKafkaBasedLog", EasyMock.capture(capturedTopic), EasyMock.capture(capturedProducerProps),
                 EasyMock.capture(capturedConsumerProps), EasyMock.capture(capturedConsumedCallback),
-                EasyMock.capture(capturedNewTopic), EasyMock.capture(capturedAdminSupplier))
+                EasyMock.capture(capturedNewTopic), EasyMock.capture(capturedAdminSupplier), EasyMock.anyBoolean())
                 .andReturn(storeLog);
     }
 

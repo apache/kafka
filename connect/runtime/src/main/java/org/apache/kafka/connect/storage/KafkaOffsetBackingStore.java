@@ -19,13 +19,16 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
@@ -67,8 +70,8 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     private HashMap<ByteBuffer, ByteBuffer> data;
     private final Supplier<TopicAdmin> topicAdminSupplier;
     private SharedTopicAdmin ownTopicAdmin;
+    private String topic;
 
-    @Deprecated
     public KafkaOffsetBackingStore() {
         this.topicAdminSupplier = null;
     }
@@ -79,9 +82,33 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
 
     @Override
     public void configure(final WorkerConfig config) {
-        String topic = config.getString(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG);
+        configure(config, config.offsetsTopic(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+    }
+
+    public void configureForTask(final WorkerConfig config,
+                                 final String topic,
+                                 final Map<String, Object> producerOverrides,
+                                 final Map<String, Object> consumerOverrides) {
+        configure(config, topic, producerOverrides, consumerOverrides, null);
+    }
+
+    public void configureForConnector(final WorkerConfig config,
+                                 final String topic,
+                                 final Map<String, Object> producerOverrides,
+                                 final Map<String, Object> consumerOverrides,
+                                 final Map<String, Object> adminOverrides) {
+        configure(config, topic, producerOverrides, consumerOverrides, adminOverrides);
+    }
+
+    private void configure(final WorkerConfig config,
+                          final String topic,
+                          final Map<String, Object> producerOverrides,
+                          final Map<String, Object> consumerOverrides,
+                          final Map<String, Object> adminOverrides) {
         if (topic == null || topic.trim().length() == 0)
             throw new ConfigException("Offset storage topic must be specified");
+
+        this.topic = topic;
 
         String clusterId = ConnectUtils.lookupKafkaClusterId(config);
         data = new HashMap<>();
@@ -92,18 +119,21 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
+        producerProps.putAll(producerOverrides);
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
+        consumerProps.putAll(consumerOverrides);
 
-        Map<String, Object> adminProps = new HashMap<>(originals);
-        ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
         Supplier<TopicAdmin> adminSupplier;
         if (topicAdminSupplier != null) {
             adminSupplier = topicAdminSupplier;
         } else {
+            Map<String, Object> adminProps = new HashMap<>(originals);
+            adminProps.putAll(adminOverrides);
+            ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
             // Create our own topic admin supplier that we'll close when we're stopped
             ownTopicAdmin = new SharedTopicAdmin(adminProps);
             adminSupplier = ownTopicAdmin;
@@ -118,13 +148,14 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
                 .replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG))
                 .build();
 
-        offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminSupplier);
+        offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminSupplier, true);
     }
 
     private KafkaBasedLog<byte[], byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
                                                               Map<String, Object> consumerProps,
                                                               Callback<ConsumerRecord<byte[], byte[]>> consumedCallback,
-                                                              final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
+                                                              final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier,
+                                                              boolean topicContainsTransactions) {
         java.util.function.Consumer<TopicAdmin> createTopics = admin -> {
             log.debug("Creating admin client to manage Connect internal offset topic");
             // Create the topic if it doesn't exist
@@ -136,13 +167,20 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
                         DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "source connector offsets");
             }
         };
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics);
+        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics, topicContainsTransactions);
     }
 
     @Override
     public void start() {
         log.info("Starting KafkaOffsetBackingStore");
-        offsetLog.start();
+        try {
+            offsetLog.start();
+        } catch (UnsupportedVersionException e) {
+            throw new ConnectException(
+                    "Exactly-once support requires the broker to support reading topic offsets with an admin client; "
+                            + "your broker version may be too old to support this",
+                    e);
+        }
         log.info("Finished reading offsets topic and starting KafkaOffsetBackingStore");
     }
 
@@ -189,6 +227,14 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         }
 
         return producerCallback;
+    }
+
+    public Producer<byte[], byte[]> producer() {
+        return offsetLog.producer();
+    }
+
+    public String topic() {
+        return topic;
     }
 
     private final Callback<ConsumerRecord<byte[], byte[]>> consumedCallback = new Callback<ConsumerRecord<byte[], byte[]>>() {

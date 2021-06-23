@@ -19,7 +19,7 @@ package org.apache.kafka.connect.tools;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.sink.SinkConnector;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,7 +29,7 @@ import java.util.Map;
 /**
  * @see VerifiableSinkTask
  */
-public class VerifiableSinkConnector extends SourceConnector {
+public class VerifiableSinkConnector extends SinkConnector {
     private Map<String, String> config;
 
     @Override

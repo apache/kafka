@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.ConnectorsAndTasks;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.After;
 import org.junit.Before;
@@ -1282,7 +1283,7 @@ public class IncrementalCooperativeAssignorTest {
                 connectorConfigs(connectorStart, connectorNumEnd),
                 connectorTargetStates(connectorStart, connectorNumEnd, TargetState.STARTED),
                 taskConfigs(0, connectorNum, connectorNum * taskNum),
-                Collections.emptySet());
+                Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet(), Collections.emptySet());
     }
 
     private static Map<String, ExtendedWorkerState> memberConfigs(String givenLeader,
