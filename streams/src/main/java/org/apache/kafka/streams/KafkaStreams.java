@@ -1447,7 +1447,7 @@ public class KafkaStreams implements AutoCloseable {
      * Note: this is a point in time view and it may change due to partition reassignment.
      *
      * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances of this application
-     * @deprecated since 3.0.0 use {@link KafkaStreams#allRunningMetadata}
+     * @deprecated since 3.0.0 use {@link KafkaStreams#metadataForAllStreamsClients}
      */
     @Deprecated
     public Collection<org.apache.kafka.streams.state.StreamsMetadata> allMetadata() {
@@ -1470,7 +1470,7 @@ public class KafkaStreams implements AutoCloseable {
      *
      * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances of this application
      */
-    public Collection<StreamsMetadata> allRunningMetadata() {
+    public Collection<StreamsMetadata> metadataForAllStreamsClients() {
         validateIsRunningOrRebalancing();
         return streamsMetadataState.getAllMetadata();
     }
@@ -1489,7 +1489,7 @@ public class KafkaStreams implements AutoCloseable {
      * @param storeName the {@code storeName} to find metadata for
      * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances with the provide {@code storeName} of
      * this application
-     * @deprecated since 3.0.0 use {@link KafkaStreams#allMetadataForGivenStore} instead
+     * @deprecated since 3.0.0 use {@link KafkaStreams#streamsMetadataForStore} instead
      */
     @Deprecated
     public Collection<org.apache.kafka.streams.state.StreamsMetadata> allMetadataForStore(final String storeName) {
@@ -1518,7 +1518,7 @@ public class KafkaStreams implements AutoCloseable {
      * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances with the provide {@code storeName} of
      * this application
      */
-    public Collection<StreamsMetadata> allMetadataForGivenStore(final String storeName) {
+    public Collection<StreamsMetadata> streamsMetadataForStore(final String storeName) {
         validateIsRunningOrRebalancing();
         return streamsMetadataState.getAllMetadataForStore(storeName);
     }
@@ -1601,12 +1601,12 @@ public class KafkaStreams implements AutoCloseable {
      * Returns runtime information about the local threads of this {@link KafkaStreams} instance.
      *
      * @return the set of {@link org.apache.kafka.streams.processor.ThreadMetadata}.
-     * @deprecated since 3.0 use {@link #threadsMetadata()}
+     * @deprecated since 3.0 use {@link #metadataForLocalThreads()}
      */
     @Deprecated
     @SuppressWarnings("deprecation")
     public Set<org.apache.kafka.streams.processor.ThreadMetadata> localThreadsMetadata() {
-        return threadsMetadata().stream().map(threadMetadata -> new org.apache.kafka.streams.processor.ThreadMetadata(
+        return metadataForLocalThreads().stream().map(threadMetadata -> new org.apache.kafka.streams.processor.ThreadMetadata(
                 threadMetadata.threadName(),
                 threadMetadata.threadState(),
                 threadMetadata.consumerClientId(),
@@ -1635,7 +1635,7 @@ public class KafkaStreams implements AutoCloseable {
      *
      * @return the set of {@link ThreadMetadata}.
      */
-    public Set<ThreadMetadata> threadsMetadata() {
+    public Set<ThreadMetadata> metadataForLocalThreads() {
         final Set<ThreadMetadata> threadMetadata = new HashSet<>();
         processStreamThread(thread -> {
             synchronized (thread.getStateLock()) {

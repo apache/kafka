@@ -498,7 +498,7 @@ public class KafkaStreamsTest {
                 streams.threads.get(i).join();
             }
             waitForCondition(
-                () -> streams.threadsMetadata().stream().allMatch(t -> t.threadState().equals("DEAD")),
+                () -> streams.metadataForLocalThreads().stream().allMatch(t -> t.threadState().equals("DEAD")),
                 "Streams never stopped"
             );
             streams.close();
@@ -617,7 +617,7 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
             streamThreadOne.shutdown();
-            final Set<ThreadMetadata> threads = streams.threadsMetadata();
+            final Set<ThreadMetadata> threads = streams.metadataForLocalThreads();
             assertThat(threads.size(), equalTo(1));
             assertThat(threads, hasItem(streamThreadTwo.threadMetadata()));
         }
@@ -754,24 +754,24 @@ public class KafkaStreamsTest {
     @Test
     public void shouldNotGetAllTasksWhenNotRunning() throws InterruptedException {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-            assertThrows(StreamsNotStartedException.class, streams::allRunningMetadata);
+            assertThrows(StreamsNotStartedException.class, streams::metadataForAllStreamsClients);
             streams.start();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
             streams.close();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
-            assertThrows(IllegalStateException.class, streams::allRunningMetadata);
+            assertThrows(IllegalStateException.class, streams::metadataForAllStreamsClients);
         }
     }
 
     @Test
     public void shouldNotGetAllTasksWithStoreWhenNotRunning() throws InterruptedException {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-            assertThrows(StreamsNotStartedException.class, () -> streams.allMetadataForGivenStore("store"));
+            assertThrows(StreamsNotStartedException.class, () -> streams.streamsMetadataForStore("store"));
             streams.start();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
             streams.close();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
-            assertThrows(IllegalStateException.class, () -> streams.allMetadataForGivenStore("store"));
+            assertThrows(IllegalStateException.class, () -> streams.streamsMetadataForStore("store"));
         }
     }
 

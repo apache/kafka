@@ -231,10 +231,10 @@ public class StreamsMetadataState {
         if (activePartitionHostMap.isEmpty() && standbyPartitionHostMap.isEmpty()) {
             allMetadata = Collections.emptyList();
             localMetadata.set(new StreamsMetadataImpl(thisHost,
-                                                  Collections.emptySet(),
-                                                  Collections.emptySet(),
-                                                  Collections.emptySet(),
-                                                  Collections.emptySet()
+                    Collections.emptySet(),
+                    Collections.emptySet(),
+                    Collections.emptySet(),
+                    Collections.emptySet()
             ));
             return;
         }
@@ -260,10 +260,10 @@ public class StreamsMetadataState {
                 }
 
                 final StreamsMetadata metadata = new StreamsMetadataImpl(hostInfo,
-                                                                     activeStoresOnHost,
-                                                                     activePartitionsOnHost,
-                                                                     standbyStoresOnHost,
-                                                                     standbyPartitionsOnHost);
+                        activeStoresOnHost,
+                        activePartitionsOnHost,
+                        standbyStoresOnHost,
+                        standbyPartitionsOnHost);
                 rebuiltMetadata.add(metadata);
                 if (hostInfo.equals(thisHost)) {
                     localMetadata.set(metadata);

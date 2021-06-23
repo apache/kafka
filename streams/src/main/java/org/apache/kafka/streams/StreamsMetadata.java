@@ -61,11 +61,13 @@ public interface StreamsMetadata {
 
     /**
      * This method is equivalent to call {@code StreamsMetadata.hostInfo().host();}
+     * @return the host where the given process runs
      */
     String host();
 
     /**
      * This method is equivalent to call {@code StreamsMetadata.hostInfo().port();}
+     * @return the port number where the given process runs
      */
     int port();
 
@@ -73,6 +75,7 @@ public interface StreamsMetadata {
      * Compares the specified object with this StreamsMetadata. Returns {@code true} if and only if the specified object is
      * also a StreamsMetadata and for both {@code hostInfo()} are equal, and {@code stateStoreNames()}, {@code topicPartitions()},
      * {@code standbyStateStoreNames()}, and {@code standbyTopicPartitions()} contain the same elements.
+     * @return {@code true} if this object is the same as the obj argument; {@code false} otherwise.
      */
     boolean equals(Object o);
 
@@ -82,6 +85,8 @@ public interface StreamsMetadata {
      * {@code
      * Objects.hash(hostInfo(), stateStoreNames(), topicPartitions(), standbyStateStoreNames(), standbyTopicPartitions());
      * }
+     * </pre>
+     * @return a hash code value for this object.
      */
     int hashCode();
 

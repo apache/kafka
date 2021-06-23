@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -43,9 +44,9 @@ public class TaskMetadataImpl implements TaskMetadata {
                             final Map<TopicPartition, Long> endOffsets,
                             final Optional<Long> timeCurrentIdlingStarted) {
         this.taskId = taskId;
-        this.topicPartitions = topicPartitions;
-        this.committedOffsets = committedOffsets;
-        this.endOffsets = endOffsets;
+        this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
+        this.committedOffsets = Collections.unmodifiableMap(committedOffsets);
+        this.endOffsets = Collections.unmodifiableMap(endOffsets);
         this.timeCurrentIdlingStarted = timeCurrentIdlingStarted;
     }
 
@@ -82,7 +83,7 @@ public class TaskMetadataImpl implements TaskMetadata {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        final org.apache.kafka.streams.processor.internals.TaskMetadataImpl that = (org.apache.kafka.streams.processor.internals.TaskMetadataImpl) o;
+        final TaskMetadataImpl that = (TaskMetadataImpl) o;
         return Objects.equals(taskId, that.taskId) &&
                 Objects.equals(topicPartitions, that.topicPartitions);
     }

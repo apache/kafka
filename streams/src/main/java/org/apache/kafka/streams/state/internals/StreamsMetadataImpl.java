@@ -38,10 +38,10 @@ public class StreamsMetadataImpl implements StreamsMetadata {
      * operations.
      */
     public final static StreamsMetadataImpl NOT_AVAILABLE = new StreamsMetadataImpl(HostInfo.unavailable(),
-                                                                            Collections.emptySet(),
-                                                                            Collections.emptySet(),
-                                                                            Collections.emptySet(),
-                                                                            Collections.emptySet());
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet());
 
     private final HostInfo hostInfo;
 
@@ -60,10 +60,10 @@ public class StreamsMetadataImpl implements StreamsMetadata {
                                final Set<TopicPartition> standbyTopicPartitions) {
 
         this.hostInfo = hostInfo;
-        this.stateStoreNames = stateStoreNames;
-        this.topicPartitions = topicPartitions;
-        this.standbyTopicPartitions = standbyTopicPartitions;
-        this.standbyStateStoreNames = standbyStateStoreNames;
+        this.stateStoreNames = Collections.unmodifiableSet(stateStoreNames);
+        this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
+        this.standbyTopicPartitions = Collections.unmodifiableSet(standbyTopicPartitions);
+        this.standbyStateStoreNames = Collections.unmodifiableSet(standbyStateStoreNames);
     }
 
     /**
@@ -84,7 +84,7 @@ public class StreamsMetadataImpl implements StreamsMetadata {
      */
     @Override
     public Set<String> stateStoreNames() {
-        return Collections.unmodifiableSet(stateStoreNames);
+        return stateStoreNames;
     }
 
     /**
@@ -94,7 +94,7 @@ public class StreamsMetadataImpl implements StreamsMetadata {
      */
     @Override
     public Set<TopicPartition> topicPartitions() {
-        return Collections.unmodifiableSet(topicPartitions);
+        return topicPartitions;
     }
 
     /**
@@ -104,7 +104,7 @@ public class StreamsMetadataImpl implements StreamsMetadata {
      */
     @Override
     public Set<TopicPartition> standbyTopicPartitions() {
-        return Collections.unmodifiableSet(standbyTopicPartitions);
+        return standbyTopicPartitions;
     }
 
     /**
@@ -114,7 +114,7 @@ public class StreamsMetadataImpl implements StreamsMetadata {
      */
     @Override
     public Set<String> standbyStateStoreNames() {
-        return Collections.unmodifiableSet(standbyStateStoreNames);
+        return standbyStateStoreNames;
     }
 
     @Override

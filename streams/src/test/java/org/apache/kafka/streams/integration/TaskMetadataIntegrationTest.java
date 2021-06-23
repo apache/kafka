@@ -158,7 +158,7 @@ public class TaskMetadataIntegrationTest {
     }
 
     private TaskMetadata getTaskMetadata(final KafkaStreams kafkaStreams) {
-        final List<TaskMetadata> taskMetadataList = kafkaStreams.threadsMetadata().stream().flatMap(t -> t.activeTasks().stream()).collect(Collectors.toList());
+        final List<TaskMetadata> taskMetadataList = kafkaStreams.metadataForLocalThreads().stream().flatMap(t -> t.activeTasks().stream()).collect(Collectors.toList());
         assertThat("only one task", taskMetadataList.size() == 1);
         return taskMetadataList.get(0);
     }

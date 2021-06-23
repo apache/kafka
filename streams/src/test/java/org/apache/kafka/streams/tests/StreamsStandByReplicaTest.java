@@ -137,7 +137,7 @@ public class StreamsStandByReplicaTest {
 
         streams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                final Set<ThreadMetadata> threadMetadata = streams.threadsMetadata();
+                final Set<ThreadMetadata> threadMetadata = streams.metadataForLocalThreads();
                 for (final ThreadMetadata threadMetadatum : threadMetadata) {
                     System.out.println(
                         "ACTIVE_TASKS:" + threadMetadatum.activeTasks().size()

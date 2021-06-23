@@ -167,14 +167,14 @@ public class StandbyTaskCreationIntegrationTest {
     private void setStateListenersForVerification(final Predicate<ThreadMetadata> taskCondition) {
         client1.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client1.threadsMetadata().stream().allMatch(taskCondition)) {
+                client1.metadataForLocalThreads().stream().allMatch(taskCondition)) {
 
                 client1IsOk = true;
             }
         });
         client2.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client2.threadsMetadata().stream().allMatch(taskCondition)) {
+                client2.metadataForLocalThreads().stream().allMatch(taskCondition)) {
 
                 client2IsOk = true;
             }

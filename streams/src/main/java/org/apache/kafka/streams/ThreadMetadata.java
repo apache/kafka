@@ -36,11 +36,13 @@ public interface ThreadMetadata {
 
     /**
      * This function will return the set of the {@link TaskMetadata} for the current active tasks
+     * @return a set of metadata for the active tasks
      */
     Set<TaskMetadata> activeTasks();
 
     /**
      * This function will return the set of the {@link TaskMetadata} for the current standby tasks
+     * @return a set of metadata for the standby tasks
      */
     Set<TaskMetadata> standbyTasks();
 
@@ -56,6 +58,7 @@ public interface ThreadMetadata {
 
     /**
      * This function will return the set of Client Ids for the producers
+     * @return set of producer Client Ids
      */
     Set<String> producerClientIds();
 
@@ -69,6 +72,7 @@ public interface ThreadMetadata {
      * also a TaskMetadata and both {@code threadName()} are equal, {@code threadState()} are equal, {@code activeTasks()} contain the same
      * elements, {@code standbyTasks()} contain the same elements, {@code mainConsumerClientId()} are equal, {@code restoreConsumerClientId()}
      * are equal, {@code producerClientIds()} are equal, {@code producerClientIds} contain the same elements, and {@code adminClientId()} are equal.
+     * @return {@code true} if this object is the same as the obj argument; {@code false} otherwise.
      */
     boolean equals(Object o);
 
@@ -86,6 +90,7 @@ public interface ThreadMetadata {
      *             producerClientIds,
      *             adminClientId);
      * </pre>
+     * @return a hash code value for this object.
      */
     int hashCode();
 }

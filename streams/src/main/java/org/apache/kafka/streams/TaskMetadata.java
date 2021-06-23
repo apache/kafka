@@ -36,27 +36,32 @@ public interface TaskMetadata {
 
     /**
      * This function will return a set of the current TopicPartitions
+     * @return set of topic partitions
      */
     Set<TopicPartition> topicPartitions();
 
     /**
      * This function will return a map of TopicPartitions and the highest committed offset seen so far
+     * @return map with an entry for all topic partitions with the committed offset as a value
      */
     Map<TopicPartition, Long> committedOffsets();
 
     /**
      * This function will return a map of TopicPartitions and the highest offset seen so far in the Topic
+     * @return map with an entry for all topic partitions with the highest offset as a value
      */
     Map<TopicPartition, Long> endOffsets();
 
     /**
      * This function will return the time task idling started, if the task is not currently idling it will return empty
+     * @return A filled {@code Optional} with the time where task idling started, and empty {@code Optional} otherwise
      */
     Optional<Long> timeCurrentIdlingStarted();
 
     /**
      * Compares the specified object with this TaskMetadata. Returns {@code true} if and only if the specified object is
      * also a TaskMetadata and both {@code taskId()} and {@code topicPartitions()} are equal.
+     * @return {@code true} if this object is the same as the obj argument; {@code false} otherwise.
      */
     boolean equals(final Object o);
 
@@ -67,6 +72,7 @@ public interface TaskMetadata {
      * Objects.hash(taskId(), topicPartitions());
      * }
      * </pre>
+     * @return a hash code value for this object.
      */
     int hashCode();
 

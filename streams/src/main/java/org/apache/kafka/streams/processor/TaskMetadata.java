@@ -27,7 +27,7 @@ import java.util.Set;
 
 /**
  * Represents the state of a single task running within a {@link KafkaStreams} application.
- * @deprecated since 3.0, not intended for public use, use {@link org.apache.kafka.streams.TaskMetadata} instead.
+ * @deprecated since 3.0, use {@link org.apache.kafka.streams.TaskMetadata} instead.
  */
 @Deprecated
 public class TaskMetadata {
@@ -42,10 +42,6 @@ public class TaskMetadata {
 
     private final Optional<Long> timeCurrentIdlingStarted;
 
-    /**
-     * @deprecated since 3.0, not intended for public use
-     */
-    @Deprecated
     public TaskMetadata(final String taskId,
                         final Set<TopicPartition> topicPartitions,
                         final Map<TopicPartition, Long> committedOffsets,
