@@ -900,7 +900,7 @@ public class KafkaStreams implements AutoCloseable {
         threadState = new HashMap<>(numStreamThreads);
         streamStateListener = new StreamStateListener(threadState, globalThreadState);
 
-        final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
+        final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(this, internalTopologyBuilder.globalStateStores());
 
         if (hasGlobalTopology) {
             globalStreamThread.setStateListener(streamStateListener);
@@ -910,7 +910,7 @@ public class KafkaStreams implements AutoCloseable {
         for (int i = 1; i <= numStreamThreads; i++) {
             createAndAddStreamThread(cacheSizePerThread, i);
         }
-        queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
+        queryableStoreProvider = new QueryableStoreProvider(this, storeProviders, globalStateStoreProvider);
 
         stateDirCleaner = setupStateDirCleaner();
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);

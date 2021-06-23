@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -50,6 +51,7 @@ public class CompositeReadOnlySessionStoreTest {
     private final StateStoreProviderStub stubProviderTwo = new StateStoreProviderStub(false);
     private final ReadOnlySessionStoreStub<String, Long> underlyingSessionStore = new ReadOnlySessionStoreStub<>();
     private final ReadOnlySessionStoreStub<String, Long> otherUnderlyingStore = new ReadOnlySessionStoreStub<>();
+    private KafkaStreams streams;
     private CompositeReadOnlySessionStore<String, Long> sessionStore;
 
     @Before
@@ -57,9 +59,9 @@ public class CompositeReadOnlySessionStoreTest {
         stubProviderOne.addStore(storeName, underlyingSessionStore);
         stubProviderOne.addStore("other-session-store", otherUnderlyingStore);
         final QueryableStoreType<ReadOnlySessionStore<Object, Object>> queryableStoreType = QueryableStoreTypes.sessionStore();
-
+        streams = StreamsTestUtils.mockStreams();
         sessionStore = new CompositeReadOnlySessionStore<>(
-            new WrappingStoreProvider(Arrays.asList(stubProviderOne, stubProviderTwo), StoreQueryParameters.fromNameAndType(storeName, queryableStoreType)),
+            new WrappingStoreProvider(streams, Arrays.asList(stubProviderOne, stubProviderTwo), StoreQueryParameters.fromNameAndType(storeName, queryableStoreType)),
             QueryableStoreTypes.sessionStore(), storeName);
     }
 
@@ -114,7 +116,7 @@ public class CompositeReadOnlySessionStoreTest {
         final QueryableStoreType<ReadOnlySessionStore<Object, Object>> queryableStoreType = QueryableStoreTypes.sessionStore();
         final CompositeReadOnlySessionStore<String, String> store =
             new CompositeReadOnlySessionStore<>(
-                new WrappingStoreProvider(singletonList(new StateStoreProviderStub(true)), StoreQueryParameters.fromNameAndType("whateva", queryableStoreType)),
+                new WrappingStoreProvider(streams, singletonList(new StateStoreProviderStub(true)), StoreQueryParameters.fromNameAndType("whateva", queryableStoreType)),
                 QueryableStoreTypes.sessionStore(),
                 "whateva"
             );

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -40,4 +41,6 @@ public interface StateStoreProvider {
      * @return  List of the instances of the store in this topology. Empty List if not found
      */
     <T> List<T> stores(String storeName, QueryableStoreType<T> queryableStoreType);
+
+    KafkaStreams.State streamsState();
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -30,9 +31,12 @@ public class QueryableStoreProvider {
 
     private final List<StreamThreadStateStoreProvider> storeProviders;
     private final GlobalStateStoreProvider globalStoreProvider;
+    private final KafkaStreams streams;
 
-    public QueryableStoreProvider(final List<StreamThreadStateStoreProvider> storeProviders,
+    public QueryableStoreProvider(final KafkaStreams streams,
+                                  final List<StreamThreadStateStoreProvider> storeProviders,
                                   final GlobalStateStoreProvider globalStateStoreProvider) {
+        this.streams = streams;
         this.storeProviders = new ArrayList<>(storeProviders);
         this.globalStoreProvider = globalStateStoreProvider;
     }
@@ -56,7 +60,7 @@ public class QueryableStoreProvider {
             return queryableStoreType.create(globalStoreProvider, storeName);
         }
         return queryableStoreType.create(
-            new WrappingStoreProvider(storeProviders, storeQueryParameters),
+            new WrappingStoreProvider(streams, storeProviders, storeQueryParameters),
             storeName
         );
     }
