@@ -27,7 +27,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 public class ProcessorTopology {
     private final Logger log = LoggerFactory.getLogger(ProcessorTopology.class);
@@ -38,7 +37,6 @@ public class ProcessorTopology {
     private final Map<String, SinkNode<?, ?>> sinksByTopic;
     private final Set<String> terminalNodes;
     private final List<StateStore> stateStores;
-    private final Set<String> stateStoreNames;
     private final Set<String> repartitionTopics;
 
     // the following contains entries for the entire topology, eg stores that do not belong to this ProcessorTopology
@@ -56,7 +54,6 @@ public class ProcessorTopology {
         this.sourceNodesByTopic = new HashMap<>(sourceNodesByTopic);
         this.sinksByTopic = Collections.unmodifiableMap(sinksByTopic);
         this.stateStores = Collections.unmodifiableList(stateStores);
-        stateStoreNames = stateStores.stream().map(StateStore::name).collect(Collectors.toSet());
         this.globalStateStores = Collections.unmodifiableList(globalStateStores);
         this.storeToChangelogTopic = Collections.unmodifiableMap(storeToChangelogTopic);
         this.repartitionTopics = Collections.unmodifiableSet(repartitionTopics);
@@ -104,10 +101,6 @@ public class ProcessorTopology {
 
     public List<StateStore> stateStores() {
         return stateStores;
-    }
-
-    public boolean hasStore(final String storeName) {
-        return stateStoreNames.contains(storeName);
     }
 
     public List<StateStore> globalStateStores() {

@@ -79,7 +79,7 @@ public class TaskManager {
     private final ChangelogReader changelogReader;
     private final UUID processId;
     private final String logPrefix;
-    private final InternalTopologyBuilder builder;
+    private final TopologyMetadata topologyMetadata;
     private final Admin adminClient;
     private final StateDirectory stateDirectory;
     private final StreamThread.ProcessingMode processingMode;
@@ -101,7 +101,7 @@ public class TaskManager {
                 final StreamsMetricsImpl streamsMetrics,
                 final ActiveTaskCreator activeTaskCreator,
                 final StandbyTaskCreator standbyTaskCreator,
-                final InternalTopologyBuilder builder,
+                final TopologyMetadata topologyMetadata,
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
                 final StreamThread.ProcessingMode processingMode) {
@@ -109,11 +109,11 @@ public class TaskManager {
         this.changelogReader = changelogReader;
         this.processId = processId;
         this.logPrefix = logPrefix;
-        this.builder = builder;
+        this.topologyMetadata = topologyMetadata;
         this.adminClient = adminClient;
         this.stateDirectory = stateDirectory;
         this.processingMode = processingMode;
-        this.tasks = new Tasks(logPrefix, builder,  streamsMetrics, activeTaskCreator, standbyTaskCreator);
+        this.tasks = new Tasks(logPrefix, topologyMetadata,  streamsMetrics, activeTaskCreator, standbyTaskCreator);
 
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
@@ -128,8 +128,8 @@ public class TaskManager {
         return processId;
     }
 
-    InternalTopologyBuilder builder() {
-        return builder;
+    public TopologyMetadata topologyMetadata() {
+        return topologyMetadata;
     }
 
     boolean isRebalanceInProgress() {
@@ -137,7 +137,7 @@ public class TaskManager {
     }
 
     void handleRebalanceStart(final Set<String> subscribedTopics) {
-        builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
+        topologyMetadata.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
 
         tryToLockAllNonEmptyTaskDirectories();
 
@@ -267,7 +267,7 @@ public class TaskManager {
                      "\tExisting standby tasks: {}",
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
-        builder.addSubscribedTopicsFromAssignment(
+        topologyMetadata.addSubscribedTopicsFromAssignment(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
             logPrefix
         );

@@ -202,8 +202,20 @@ public class InternalMockProcessorContext<KOut, VOut>
                                         final RecordCollector.Supplier collectorSupplier,
                                         final ThreadCache cache,
                                         final Time time) {
+        this(stateDir, keySerde, valueSerde, metrics, config, collectorSupplier, cache, time, new TaskId(0, 0));
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valueSerde,
+                                        final StreamsMetricsImpl metrics,
+                                        final StreamsConfig config,
+                                        final RecordCollector.Supplier collectorSupplier,
+                                        final ThreadCache cache,
+                                        final Time time,
+                                        final TaskId taskId) {
         super(
-            new TaskId(0, 0),
+            taskId,
             config,
             metrics,
             cache

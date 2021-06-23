@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.Set;
 
 class StandbyTaskCreator {
-    private final InternalTopologyBuilder builder;
+    private final TopologyMetadata topologyMetadata;
     private final StreamsConfig config;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
@@ -43,14 +43,14 @@ class StandbyTaskCreator {
     private final Logger log;
     private final Sensor createTaskSensor;
 
-    StandbyTaskCreator(final InternalTopologyBuilder builder,
+    StandbyTaskCreator(final TopologyMetadata topologyMetadata,
                        final StreamsConfig config,
                        final StreamsMetricsImpl streamsMetrics,
                        final StateDirectory stateDirectory,
                        final ChangelogReader storeChangelogReader,
                        final String threadId,
                        final Logger log) {
-        this.builder = builder;
+        this.topologyMetadata = topologyMetadata;
         this.config = config;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
@@ -73,8 +73,7 @@ class StandbyTaskCreator {
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
             final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
-
-            final ProcessorTopology topology = builder.buildSubtopology(taskId.subtopology());
+            final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
 
             if (topology.hasStateWithChangelogs()) {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
@@ -120,7 +119,7 @@ class StandbyTaskCreator {
         return createStandbyTask(
             streamTask.id(),
             inputPartitions,
-            builder.buildSubtopology(streamTask.id.subtopology()),
+            topologyMetadata.buildSubtopology(streamTask.id),
             stateManager,
             context
         );
@@ -146,14 +145,6 @@ class StandbyTaskCreator {
         log.trace("Created task {} with assigned partitions {}", taskId, inputPartitions);
         createTaskSensor.record();
         return task;
-    }
-
-    public InternalTopologyBuilder builder() {
-        return builder;
-    }
-
-    public StateDirectory stateDirectory() {
-        return stateDirectory;
     }
 
     private LogContext getLogContext(final TaskId taskId) {
