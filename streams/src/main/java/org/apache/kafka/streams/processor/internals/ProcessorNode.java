@@ -62,7 +62,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     }
 
     public ProcessorNode(final String name,
-                         final org.apache.kafka.streams.processor.Processor<KIn, VIn> processor,
+                         @SuppressWarnings("deprecation") final org.apache.kafka.streams.processor.Processor<KIn, VIn> processor,
                          final Set<String> stateStores) {
 
         this.name = name;

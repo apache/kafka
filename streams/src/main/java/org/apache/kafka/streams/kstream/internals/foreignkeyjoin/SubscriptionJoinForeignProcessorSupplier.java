@@ -21,10 +21,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -39,8 +35,9 @@ import java.util.Objects;
  * @param <KO> Type of foreign key
  * @param <VO> Type of foreign value
  */
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
-    implements ProcessorSupplier<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> {
+    implements org.apache.kafka.streams.processor.ProcessorSupplier<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> {
 
     private final KTableValueGetterSupplier<KO, VO> foreignValueGetterSupplier;
 
@@ -49,14 +46,14 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
     }
 
     @Override
-    public Processor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> get() {
+    public org.apache.kafka.streams.processor.Processor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> get() {
 
-        return new AbstractProcessor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>>() {
+        return new org.apache.kafka.streams.processor.AbstractProcessor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>>() {
 
             private KTableValueGetter<KO, VO> foreignValues;
 
             @Override
-            public void init(final ProcessorContext context) {
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
                 super.init(context);
                 foreignValues = foreignValueGetterSupplier.get();
                 foreignValues.init(context);
