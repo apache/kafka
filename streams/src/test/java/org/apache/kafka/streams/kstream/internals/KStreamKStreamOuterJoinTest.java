@@ -52,6 +52,7 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class KStreamKStreamOuterJoinTest {
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";

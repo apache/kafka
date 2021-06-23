@@ -99,6 +99,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation")
 public class KStreamImplTest {
 
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
@@ -702,6 +703,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("materialized can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnJoin() {
         final NullPointerException exception = assertThrows(
@@ -710,6 +712,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -722,6 +725,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnJoin() {
         final NullPointerException exception = assertThrows(
@@ -730,6 +734,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnJoin() {
         final NullPointerException exception = assertThrows(
@@ -738,6 +743,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -750,6 +756,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -782,6 +789,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("windows can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullStreamJoinedOnJoin() {
         final NullPointerException exception = assertThrows(
@@ -794,6 +802,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnLeftJoin() {
         final NullPointerException exception = assertThrows(
@@ -802,6 +811,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnLeftJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -814,6 +824,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnLeftJoin() {
         final NullPointerException exception = assertThrows(
@@ -822,6 +833,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnLeftJoin() {
         final NullPointerException exception = assertThrows(
@@ -830,6 +842,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnLeftJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -842,6 +855,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnLeftJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -875,6 +889,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("windows can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullStreamJoinedOnLeftJoin() {
         final NullPointerException exception = assertThrows(
@@ -887,6 +902,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnOuterJoin() {
         final NullPointerException exception = assertThrows(
@@ -895,6 +911,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnOuterJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -907,6 +924,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnOuterJoin() {
         final NullPointerException exception = assertThrows(
@@ -915,6 +933,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnOuterJoin() {
         final NullPointerException exception = assertThrows(
@@ -923,6 +942,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnOuterJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -935,6 +955,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnOuterJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -967,6 +988,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("windows can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullStreamJoinedOnOuterJoin() {
         final NullPointerException exception = assertThrows(
@@ -1509,6 +1531,7 @@ public class KStreamImplTest {
         assertThat(mockProcessors.get(1).processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreatedWithRetention() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1536,6 +1559,7 @@ public class KStreamImplTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
         final StreamsBuilder builder = new StreamsBuilder();

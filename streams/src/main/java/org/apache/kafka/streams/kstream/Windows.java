@@ -40,7 +40,11 @@ public abstract class Windows<W extends Window> {
 
     // By default grace period is 24 hours for all windows,
     // in other words we allow out-of-order data for up to a day
-    protected static final long DEFAULT_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000L;
+    // This behavior is now deprecated
+    protected static final long DEPRECATED_OLD_24_HR_GRACE_PERIOD = 24 * 60 * 60 * 1000L;
+
+    // This constant is used as the specified grace period where we do not have any grace periods
+    protected static final long NO_GRACE_PERIOD = 0L;
 
     protected Windows() {}
 

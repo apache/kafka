@@ -82,6 +82,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
+@SuppressWarnings("deprecation")
 public class KStreamSlidingWindowAggregateTest {
 
     @Parameterized.Parameters(name = "{0}")

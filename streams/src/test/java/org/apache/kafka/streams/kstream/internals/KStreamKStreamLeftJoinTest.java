@@ -53,6 +53,7 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class KStreamKStreamLeftJoinTest {
     private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
 
@@ -96,6 +97,7 @@ public class KStreamKStreamLeftJoinTest {
             false
         );
     }
+
     @Test
     public void testLeftJoinWithSpuriousResultFixDisabledOldApi() {
         runLeftJoinWithoutSpuriousResultFix(
