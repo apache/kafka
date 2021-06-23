@@ -60,4 +60,8 @@ public class QueryableStoreProvider {
             storeName
         );
     }
+
+    public QueryableStoreProvider newWithStoreProviders(final ArrayList<StreamThreadStateStoreProvider> storeProviders) {
+        return new QueryableStoreProvider(storeProviders, globalStoreProvider);
+    }
 }
