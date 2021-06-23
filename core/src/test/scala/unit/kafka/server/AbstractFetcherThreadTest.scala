@@ -44,9 +44,8 @@ import org.junit.jupiter.api.{BeforeEach, Test}
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Set, mutable}
 import scala.util.Random
-
 import scala.collection.mutable.ArrayBuffer
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
 class AbstractFetcherThreadTest {
 
@@ -982,7 +981,7 @@ class AbstractFetcherThreadTest {
         if (state.isReadyForFetch) {
           val replicaState = replicaPartitionState(partition)
           val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-            state.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
+            state.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
           else
             Optional.empty[Integer]
           fetchData.put(partition, new FetchRequest.PartitionData(state.fetchOffset, replicaState.logStartOffset,
@@ -1047,7 +1046,7 @@ class AbstractFetcherThreadTest {
                                         lastFetchedEpoch: Optional[Integer],
                                         fetchOffset: Long,
                                         partitionState: PartitionState): Option[FetchResponseData.EpochEndOffset] = {
-      lastFetchedEpoch.asScala.flatMap { fetchEpoch =>
+      lastFetchedEpoch.toScala.flatMap { fetchEpoch =>
         val epochEndOffset = fetchEpochEndOffsets(
           Map(topicPartition -> new EpochData()
             .setPartition(topicPartition.partition)

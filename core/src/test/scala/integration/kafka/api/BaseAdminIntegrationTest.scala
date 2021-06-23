@@ -34,7 +34,8 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOption
+
 
 /**
  * Base integration test cases for [[Admin]]. Each test case added here will be executed
@@ -70,7 +71,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     val newTopics = Seq(
       new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
       new NewTopic("mytopic2", 3, 3.toShort),
-      new NewTopic("mytopic3", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
+      new NewTopic("mytopic3", Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava)
     )
     val validateResult = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true))
     validateResult.all.get()

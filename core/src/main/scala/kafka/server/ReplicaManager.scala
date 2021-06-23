@@ -62,7 +62,7 @@ import org.apache.kafka.common.utils.Time
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, Set, mutable}
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 /*
  * Result metadata of a log append operation on the log
@@ -1270,7 +1270,7 @@ class ReplicaManager(val config: KafkaConfig,
           val replicaInfoSet = mutable.Set[ReplicaView]() ++= replicaInfos += leaderReplica
 
           val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica)
-          replicaSelector.select(partition.topicPartition, clientMetadata, partitionInfo).asScala.collect {
+          replicaSelector.select(partition.topicPartition, clientMetadata, partitionInfo).toScala.collect {
             // Even though the replica selector can return the leader, we don't want to send it out with the
             // FetchResponse, so we exclude it here
             case selected if !selected.endpoint.isEmpty && selected != leaderReplica => selected.endpoint.id

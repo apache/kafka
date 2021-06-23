@@ -42,8 +42,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
 import scala.collection.{Map, Set, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 import scala.math._
 
 /**
@@ -270,7 +270,7 @@ abstract class AbstractFetcherThread(name: String,
 
         case Errors.FENCED_LEADER_EPOCH =>
           val currentLeaderEpoch = latestEpochsForPartitions.get(tp)
-            .map(epochEndOffset => Int.box(epochEndOffset.currentLeaderEpoch)).asJava
+            .map(epochEndOffset => Int.box(epochEndOffset.currentLeaderEpoch)).toJava
           if (onPartitionFenced(tp, currentLeaderEpoch))
             partitionsWithError += tp
 

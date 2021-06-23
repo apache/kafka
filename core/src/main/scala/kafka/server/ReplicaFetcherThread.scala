@@ -19,7 +19,6 @@ package kafka.server
 
 import java.util.Collections
 import java.util.Optional
-
 import kafka.api._
 import kafka.cluster.BrokerEndPoint
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
@@ -41,7 +40,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 class ReplicaFetcherThread(name: String,
                            fetcherId: Int,
@@ -272,7 +271,7 @@ class ReplicaFetcherThread(name: String,
         try {
           val logStartOffset = this.logStartOffset(topicPartition)
           val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-            fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
+            fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
           else
             Optional.empty[Integer]
           builder.add(topicPartition, new FetchRequest.PartitionData(

@@ -29,9 +29,8 @@ import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 
-import scala.annotation.nowarn
 import scala.collection.mutable
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
 final class KafkaMetadataLog private (
   log: Log,
@@ -120,7 +119,7 @@ final class KafkaMetadataLog private (
   }
 
   override def endOffsetForEpoch(epoch: Int): OffsetAndEpoch = {
-    (log.endOffsetForEpoch(epoch), earliestSnapshotId().asScala) match {
+    (log.endOffsetForEpoch(epoch), earliestSnapshotId().toScala) match {
       case (Some(offsetAndEpoch), Some(snapshotId)) if (
         offsetAndEpoch.offset == snapshotId.offset &&
         offsetAndEpoch.leaderEpoch == epoch) =>
@@ -162,7 +161,7 @@ final class KafkaMetadataLog private (
 
   override def truncateToLatestSnapshot(): Boolean = {
     val latestEpoch = log.latestEpoch.getOrElse(0)
-    val (truncated, forgottenSnapshots) = latestSnapshotId().asScala match {
+    val (truncated, forgottenSnapshots) = latestSnapshotId().toScala match {
       case Some(snapshotId) if (
           snapshotId.epoch > latestEpoch ||
           (snapshotId.epoch == latestEpoch && snapshotId.offset > endOffset().offset)
@@ -187,7 +186,7 @@ final class KafkaMetadataLog private (
   }
 
   override def updateHighWatermark(offsetMetadata: LogOffsetMetadata): Unit = {
-    offsetMetadata.metadata.asScala match {
+    offsetMetadata.metadata.toScala match {
       case Some(segmentPosition: SegmentPosition) => log.updateHighWatermark(
         new kafka.server.LogOffsetMetadata(
           offsetMetadata.offset,
@@ -290,19 +289,19 @@ final class KafkaMetadataLog private (
           value
       }
 
-      reader.asJava.asInstanceOf[Optional[RawSnapshotReader]]
+      reader.toJava.asInstanceOf[Optional[RawSnapshotReader]]
     }
   }
 
   override def latestSnapshotId(): Optional[OffsetAndEpoch] = {
     snapshots synchronized {
-      snapshots.lastOption.map { case (snapshotId, _) => snapshotId }.asJava
+      snapshots.lastOption.map { case (snapshotId, _) => snapshotId }.toJava
     }
   }
 
   override def earliestSnapshotId(): Optional[OffsetAndEpoch] = {
     snapshots synchronized {
-      snapshots.headOption.map { case (snapshotId, _) => snapshotId }.asJava
+      snapshots.headOption.map { case (snapshotId, _) => snapshotId }.toJava
     }
   }
 
@@ -314,7 +313,7 @@ final class KafkaMetadataLog private (
 
   override def deleteBeforeSnapshot(logStartSnapshotId: OffsetAndEpoch): Boolean = {
     val (deleted, forgottenSnapshots) = snapshots synchronized {
-      latestSnapshotId().asScala match {
+      latestSnapshotId().toScala match {
         case Some(snapshotId) if (snapshots.contains(logStartSnapshotId) &&
           startOffset < logStartSnapshotId.offset &&
           logStartSnapshotId.offset <= snapshotId.offset &&
@@ -340,11 +339,10 @@ final class KafkaMetadataLog private (
    *
    * This method assumes that the lock for `snapshots` is already held.
    */
-  @nowarn("cat=deprecation") // Needed for TreeMap.until
   private def forgetSnapshotsBefore(
     logStartSnapshotId: OffsetAndEpoch
   ): mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]] = {
-    val expiredSnapshots = snapshots.until(logStartSnapshotId).clone()
+    val expiredSnapshots = snapshots.rangeUntil(logStartSnapshotId).clone()
     snapshots --= expiredSnapshots.keys
 
     expiredSnapshots

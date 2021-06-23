@@ -39,7 +39,6 @@ import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._
@@ -503,7 +502,6 @@ class AclAuthorizer extends Authorizer with Logging {
     } else false
   }
 
-  @nowarn("cat=deprecation")
   private def matchingAcls(resourceType: ResourceType, resourceName: String): AclSeqs = {
     // this code is performance sensitive, make sure to run AclAuthorizerBenchmark after any changes
 
@@ -519,8 +517,8 @@ class AclAuthorizer extends Authorizer with Logging {
 
     val prefixed = new ArrayBuffer[AclEntry]
     aclCacheSnapshot
-      .from(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
-      .to(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
+      .rangeFrom(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
+      .rangeTo(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
       .forKeyValue { (resource, acls) =>
         if (resourceName.startsWith(resource.name)) prefixed ++= acls.acls
       }

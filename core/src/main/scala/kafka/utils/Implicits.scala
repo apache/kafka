@@ -20,7 +20,6 @@ package kafka.utils
 import java.util
 import java.util.Properties
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -55,7 +54,6 @@ object Implicits {
    * This was not named `foreachEntry` to avoid `unused import` warnings in Scala 2.13 (the implicit
    * would not be triggered in Scala 2.13 since `Map.foreachEntry` would have precedence).
    */
-  @nowarn("cat=unused-imports")
   implicit class MapExtensionMethods[K, V](private val self: scala.collection.Map[K, V]) extends AnyVal {
     def forKeyValue[U](f: (K, V) => U): Unit = {
       self.foreachEntry { (k, v) => f(k, v) }

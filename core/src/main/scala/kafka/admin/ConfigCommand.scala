@@ -20,7 +20,6 @@ package kafka.admin
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
-
 import joptsimple._
 import kafka.common.Config
 import kafka.log.LogConfig

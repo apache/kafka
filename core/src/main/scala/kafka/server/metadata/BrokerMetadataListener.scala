@@ -17,7 +17,6 @@
 package kafka.server.metadata
 
 import java.util.concurrent.TimeUnit
-
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.metrics.KafkaMetricsGroup
@@ -29,11 +28,11 @@ import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotReader
 
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptionalInt
 
 object BrokerMetadataListener{
   val MetadataBatchProcessingTimeUs = "MetadataBatchProcessingTimeUs"
@@ -270,7 +269,7 @@ class BrokerMetadataListener(
     override def run(): Unit = {
       val imageBuilder =
         MetadataImageBuilder(brokerId, log, metadataCache.currentImage())
-      imageBuilder.controllerId(leaderAndEpoch.leaderId.asScala)
+      imageBuilder.controllerId(leaderAndEpoch.leaderId.toScala)
       metadataCache.image(imageBuilder.build())
     }
   }

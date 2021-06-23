@@ -845,9 +845,6 @@ project(':core') {
     implementation libs.jacksonJDK8Datatypes
     implementation libs.joptSimple
     implementation libs.metrics
-
-    implementation libs.scalaJava8Compat
-
     implementation libs.scalaLogging
     implementation libs.slf4jApi
     implementation(libs.zookeeper) {
@@ -1868,7 +1865,6 @@ project(':streams:streams-scala') {
 
     if (versions.baseScala != '3') {
       api libs.scalaLibrary
-      api libs.scalaCollectionCompat
     } else {
       api libs.scala3Library
       api libs.scala3Compiler
@@ -2192,7 +2188,6 @@ project(':jmh-benchmarks') {
       implementation libs.scala3Library
       implementation libs.scala3Compiler
     }
-    implementation libs.scalaJava8Compat
   }
 
   tasks.withType(JavaCompile) {

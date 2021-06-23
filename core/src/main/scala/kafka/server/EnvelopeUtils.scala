@@ -19,14 +19,14 @@ package kafka.server
 
 import java.net.{InetAddress, UnknownHostException}
 import java.nio.ByteBuffer
-
 import kafka.network.RequestChannel
 import org.apache.kafka.common.errors.{InvalidRequestException, PrincipalDeserializationException, UnsupportedVersionException}
 import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.requests.{EnvelopeRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOptional
+
 
 object EnvelopeUtils {
   def handleEnvelopeRequest(
@@ -120,7 +120,7 @@ object EnvelopeUtils {
     envelopeContext: RequestContext,
     principalBytes: Array[Byte]
   ): KafkaPrincipal = {
-    envelopeContext.principalSerde.asScala match {
+    envelopeContext.principalSerde.toScala match {
       case Some(serde) =>
         try {
           serde.deserialize(principalBytes)

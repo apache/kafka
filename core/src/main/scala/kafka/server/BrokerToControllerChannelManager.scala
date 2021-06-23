@@ -19,7 +19,6 @@ package kafka.server
 
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.atomic.AtomicReference
-
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.raft.RaftManager
 import kafka.utils.Logging
@@ -32,11 +31,11 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptionalInt
 
 trait ControllerNodeProvider {
   def get(): Option[Node]
@@ -108,7 +107,7 @@ class RaftControllerNodeProvider(val raftManager: RaftManager[ApiMessageAndVersi
   val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
 
   override def get(): Option[Node] = {
-    raftManager.leaderAndEpoch.leaderId.asScala.map(idToNode)
+    raftManager.leaderAndEpoch.leaderId.toScala.map(idToNode)
   }
 }
 

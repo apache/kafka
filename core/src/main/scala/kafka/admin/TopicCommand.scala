@@ -19,7 +19,6 @@ package kafka.admin
 
 import java.util
 import java.util.{Collections, Properties}
-
 import joptsimple._
 import kafka.common.AdminCommandFailedException
 import kafka.log.LogConfig
@@ -38,8 +37,8 @@ import org.apache.kafka.common.utils.Utils
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
-import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionException
+import scala.jdk.OptionConverters.RichOption
 
 object TopicCommand extends Logging {
 
@@ -231,8 +230,8 @@ object TopicCommand extends Logging {
         else {
           new NewTopic(
             topic.name,
-            topic.partitions.asJava,
-            topic.replicationFactor.map(_.toShort).map(Short.box).asJava)
+            topic.partitions.toJava,
+            topic.replicationFactor.map(_.toShort).map(Short.box).toJava)
         }
 
         val configsMap = topic.configsToAdd.stringPropertyNames()

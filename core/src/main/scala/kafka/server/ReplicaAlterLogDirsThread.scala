@@ -33,8 +33,8 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUti
 import java.util
 import java.util.Optional
 import scala.collection.{Map, Seq, Set, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 class ReplicaAlterLogDirsThread(name: String,
                                 sourceBroker: BrokerEndPoint,
@@ -260,7 +260,7 @@ class ReplicaAlterLogDirsThread(name: String,
     try {
       val logStartOffset = replicaMgr.futureLocalLogOrException(tp).logStartOffset
       val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-        fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
+        fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
       else
         Optional.empty[Integer]
       requestMap.put(tp, new FetchRequest.PartitionData(fetchState.fetchOffset, logStartOffset,
