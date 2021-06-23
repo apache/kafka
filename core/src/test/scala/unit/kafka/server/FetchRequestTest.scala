@@ -199,7 +199,6 @@ class FetchRequestTest extends BaseRequestTest {
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
     val partitionData = fetchResponse.responseData(topicNames, 2).get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
-    //assertEquals(Errors.NONE.code, partitionData.errorCode)
 
     assertTrue(partitionData.highWatermark > 0)
     assertEquals(maxPartitionBytes, FetchResponse.recordsSize(partitionData))
@@ -220,7 +219,6 @@ class FetchRequestTest extends BaseRequestTest {
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
     val partitionData = fetchResponse.responseData(topicNames, 4).get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
-    //assertEquals(Errors.NONE.code, partitionData.errorCode)
     assertTrue(partitionData.lastStableOffset > 0)
     assertTrue(records(partitionData).map(_.sizeInBytes).sum > 0)
   }
@@ -253,7 +251,6 @@ class FetchRequestTest extends BaseRequestTest {
     val oldFetchResponse = sendFetchRequest(nonReplicaId, oldFetchRequest)
     val oldPartitionData = oldFetchResponse.responseData(topicNames, 12).get(topicPartition)
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, oldPartitionData.errorCode)
-    //assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, partitionData.errorCode)
   }
 
   @Test
@@ -525,7 +522,6 @@ class FetchRequestTest extends BaseRequestTest {
         // validate response
         val partitionData = fetchResponse.responseData(topicNames, requestVersion).get(topicPartition)
         assertEquals(Errors.NONE.code, partitionData.errorCode)
-        //assertEquals(Errors.NONE.code, partitionData.errorCode)
         assertTrue(partitionData.highWatermark > 0)
         val batches = FetchResponse.recordsOrFail(partitionData).batches.asScala.toBuffer
         val batch = batches.head
@@ -684,7 +680,6 @@ class FetchRequestTest extends BaseRequestTest {
     val res0 = sendFetchRequest(leaderId, req0)
     val data0 = res0.responseData(topicNames, 9).get(topicPartition)
     assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE.code, data0.errorCode)
-    //assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE.code, data0.errorCode)
 
     // fetch request with version 10: works fine!
     val req1= new FetchRequest.Builder(0, 10, -1, Int.MaxValue, 0,
@@ -693,7 +688,6 @@ class FetchRequestTest extends BaseRequestTest {
     val res1 = sendFetchRequest(leaderId, req1)
     val data1 = res1.responseData(topicNames, 10).get(topicPartition)
     assertEquals(Errors.NONE.code, data1.errorCode)
-    //assertEquals(Errors.NONE.code, data1.errorCode)
     assertEquals(3, records(data1).size)
 
     val req2 = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion(), ApiKeys.FETCH.latestVersion(), -1, Int.MaxValue, 0,

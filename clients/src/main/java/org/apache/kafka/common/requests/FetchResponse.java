@@ -117,7 +117,6 @@ public class FetchResponse extends AbstractResponse {
             }
         }
         return responseData;
-
     }
 
     @Override

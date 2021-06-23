@@ -235,7 +235,8 @@ class RaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging {
   }
 
   override def topicIdInfo(): (util.Map[String, Uuid], util.Map[Uuid, String]) = {
-    (topicNamesToIds(), topicIdsToNames())
+    val image = _currentImage
+    (image.partitions.copyReverseIdMap(), image.partitions.copyIdMap())
   }
 
   // if the leader is not known, return None;

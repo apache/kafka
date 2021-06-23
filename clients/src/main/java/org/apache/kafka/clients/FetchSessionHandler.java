@@ -90,8 +90,6 @@ public class FetchSessionHandler {
         return sessionTopicNames;
     }
 
-    private boolean canUseTopicIds = false;
-
     public static class FetchRequestData {
         /**
          * The partitions to send in the fetch request.
@@ -282,6 +280,11 @@ public class FetchSessionHandler {
         }
 
         public FetchRequestData build() {
+            // For incremental sessions we don't have to worry about removed partitions when using topic IDs because we will either
+            //   a) already be using topic IDs and have the ID in the session
+            //   b) not be using topic IDs before and will close the session upon trying to use them
+            boolean canUseTopicIds = partitionsWithoutTopicIds == 0;
+
             if (nextMetadata.isFull()) {
                 if (log.isDebugEnabled()) {
                     log.debug("Built full fetch {} for node {} with {}.",
@@ -289,7 +292,6 @@ public class FetchSessionHandler {
                 }
                 sessionPartitions = next;
                 next = null;
-                canUseTopicIds = partitionsWithoutTopicIds == 0;
                 // Only add topic IDs to the session if we are using topic IDs.
                 if (canUseTopicIds) {
                     sessionTopicIds = topicIds;
@@ -346,11 +348,6 @@ public class FetchSessionHandler {
                 sessionPartitions.put(topicPartition, nextData);
                 added.add(topicPartition);
             }
-
-            // We don't have to worry about removed partitions when using topic IDs because we will either
-            //   a) already be using topic IDs and have the ID in the session
-            //   b) not be using topic IDs before and will close the session upon trying to use them
-            canUseTopicIds = partitionsWithoutTopicIds == 0;
 
             // Add topic IDs to session if we can use them. If an ID is inconsistent, we will handle in the receiving broker.
             // If we switched from using topic IDs to not using them (or vice versa), that error will also be handled in the receiving broker.

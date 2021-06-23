@@ -723,7 +723,7 @@ class ReplicaManagerTest {
       // We receive one valid request from the follower and replica state is updated
       var successfulFetch: Option[FetchPartitionData] = None
       def callback(response: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
-        successfulFetch = response.headOption.filter(_._1 == tp).map(_._2)
+        successfulFetch = response.headOption.filter { case (topicPartition, _) => topicPartition == tp }.map { case (_, data) => data }
       }
 
       val validFetchPartitionData = new FetchRequest.PartitionData(0L, 0L, maxFetchBytes,

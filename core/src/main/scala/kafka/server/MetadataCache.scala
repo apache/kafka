@@ -279,7 +279,8 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
    * This method returns a map from topic names to IDs and a map from topic IDs to names
    */
   def topicIdInfo(): (util.Map[String, Uuid], util.Map[Uuid, String]) = {
-    (topicNamesToIds(), topicIdsToNames())
+    val snapshot = metadataSnapshot
+    (new util.HashMap(snapshot.topicIds.asJava), new util.HashMap(snapshot.topicNames.asJava))
   }
 
   private def getAllTopics(snapshot: MetadataSnapshot): Set[String] = {

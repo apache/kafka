@@ -180,6 +180,7 @@ class CachedPartition(val topic: String,
 
   override def toString: String = synchronized {
     "CachedPartition(topic=" + topic +
+      ", topicId=" + topicId +
       ", partition=" + partition +
       ", maxBytes=" + maxBytes +
       ", fetchOffset=" + fetchOffset +

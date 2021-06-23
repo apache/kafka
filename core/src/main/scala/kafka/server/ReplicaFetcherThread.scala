@@ -28,7 +28,7 @@ import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.errors.{FetchSessionTopicIdException, InconsistentTopicIdException, KafkaStorageException, UnknownTopicIdException}
+import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
@@ -214,27 +214,25 @@ class ReplicaFetcherThread(name: String,
 
 
   override protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
-    try {
-      val clientResponse = leaderEndpoint.sendRequest(fetchRequest)
-      val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse]
-      if (!fetchSessionHandler.handleResponse(fetchResponse, clientResponse.requestHeader().apiVersion())) {
-        if (fetchResponse.error == Errors.UNKNOWN_TOPIC_ID)
-          throw new UnknownTopicIdException("There was a topic ID in the request that was unknown to the server.")
-        else if (fetchResponse.error == Errors.FETCH_SESSION_TOPIC_ID_ERROR)
-          throw new FetchSessionTopicIdException("There was a topic ID in the request that was inconsistent with the session.")
-        else if (fetchResponse.error == Errors.INCONSISTENT_TOPIC_ID)
-          throw new InconsistentTopicIdException("There was a topic ID in the request that was inconsistent with the one in the logs.")
-        else
-          Map.empty
-      } else {
-        fetchResponse.responseData(fetchSessionHandler.sessionTopicNames, clientResponse.requestHeader().apiVersion()).asScala
-      }
+    val clientResponse = try {
+      leaderEndpoint.sendRequest(fetchRequest)
     } catch {
-      case topicIdError @ (_:UnknownTopicIdException | _:FetchSessionTopicIdException | _:InconsistentTopicIdException) =>
-        throw topicIdError
       case t: Throwable =>
         fetchSessionHandler.handleError(t)
         throw t
+    }
+    val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse]
+    if (!fetchSessionHandler.handleResponse(fetchResponse, clientResponse.requestHeader().apiVersion())) {
+      // If we had a topic ID related error, throw it, otherwise return an empty fetch data map.
+      if (fetchResponse.error == Errors.UNKNOWN_TOPIC_ID ||
+          fetchResponse.error == Errors.FETCH_SESSION_TOPIC_ID_ERROR ||
+          fetchResponse.error == Errors.INCONSISTENT_TOPIC_ID) {
+        throw Errors.forCode(fetchResponse.error().code()).exception()
+      } else {
+        Map.empty
+      }
+    } else {
+      fetchResponse.responseData(fetchSessionHandler.sessionTopicNames, clientResponse.requestHeader().apiVersion()).asScala
     }
   }
 

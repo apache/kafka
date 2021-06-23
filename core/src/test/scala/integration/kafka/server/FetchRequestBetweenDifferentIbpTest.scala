@@ -44,39 +44,24 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
   @Test
   def testControllerOldIBP(): Unit = {
-    val topic = "topic"
-    val producer = createProducer()
-    val consumer = createConsumer()
-
     // Ensure controller version < KAFKA_2_8_IV1, and then create a topic where leader of partition 0 is not the controller,
     // leader of partition 1 is.
-    ensureControllerWithIBP(KAFKA_2_7_IV0)
-    assertEquals(0, controllerSocketServer.config.brokerId)
-    val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
-    TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
-
-    assertEquals(1, partitionLeaders(0))
-    assertEquals(0, partitionLeaders(1))
-
-    val record1 = new ProducerRecord(topic, 0, null, "key".getBytes, "value".getBytes)
-    val record2 = new ProducerRecord(topic, 1, null, "key".getBytes, "value".getBytes)
-    producer.send(record1)
-    producer.send(record2)
-
-    consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1)))
-    val count = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
-    assertEquals(2, count)
+    testControllerWithGivenIBP(KAFKA_2_7_IV0, 0)
   }
 
   @Test
   def testControllerNewIBP(): Unit = {
+    // Ensure controller version = KAFKA_3_0_IV1, and then create a topic where leader of partition 1 is the old version.
+    testControllerWithGivenIBP(KAFKA_3_0_IV1, 2)
+  }
+
+  def testControllerWithGivenIBP(version: DefaultApiVersion, controllerBroker: Int): Unit = {
     val topic = "topic"
     val producer = createProducer()
     val consumer = createConsumer()
 
-    // Ensure controller version = KAFKA_3_0_IV1, and then create a topic where leader of partition 1 is the old version.
-    ensureControllerWithIBP(KAFKA_3_0_IV1)
-    assertEquals(2, controllerSocketServer.config.brokerId)
+    ensureControllerWithIBP(version)
+    assertEquals(controllerBroker, controllerSocketServer.config.brokerId)
     val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
     TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
 
@@ -89,7 +74,6 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     producer.send(record2)
 
     consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1)))
-
     val count = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
     assertEquals(2, count)
   }

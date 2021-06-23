@@ -164,7 +164,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           .errorCode
       )
     }),
-    ApiKeys.FETCH -> ((resp: requests.FetchResponse) => Errors.forCode(resp.responseData(topicNames.asJava, version).asScala.find(_._1 == tp).get._2.errorCode)),
+    ApiKeys.FETCH -> ((resp: requests.FetchResponse) => Errors.forCode(resp.responseData(topicNames.asJava, version).asScala.find {
+      case (topicPartition, _) => topicPartition == tp}.map { case (_, data) => data.errorCode }.get)),
     ApiKeys.LIST_OFFSETS -> ((resp: ListOffsetsResponse) => {
       Errors.forCode(
         resp.data
