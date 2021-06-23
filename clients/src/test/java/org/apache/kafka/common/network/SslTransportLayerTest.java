@@ -646,7 +646,8 @@ public class SslTransportLayerTest {
             checkAuthenticationFailed(args, "0", "TLSv1");
             server.verifyAuthenticationMetrics(0, 2);
         } finally {
-            Security.setProperty("jdk.tls.disabledAlgorithms", disabledAlgorithms);
+            if (disabledAlgorithms != null)
+                Security.setProperty("jdk.tls.disabledAlgorithms", disabledAlgorithms);
         }
     }
 
