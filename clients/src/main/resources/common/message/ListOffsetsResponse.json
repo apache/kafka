@@ -30,7 +30,7 @@
   //
   // Version 6 enables flexible versions.
   //
-  // Version 7 is the same as version 6.
+  // Version 7 is the same as version 6 (KIP-734).
   "validVersions": "0-7",
   "flexibleVersions": "6+",
   "fields": [

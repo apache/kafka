@@ -107,7 +107,6 @@ class LogOffsetTest extends BaseRequestTest {
     val secondOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
     assertEquals(0L, secondOffset.get.offset)
     assertEquals(-1L, secondOffset.get.timestamp)
-
   }
 
   @Test
@@ -191,7 +190,6 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(0L, log.logEndOffset)
     assertEquals(0L, maxTimestampOffset.get.offset)
     assertEquals(-1L, maxTimestampOffset.get.timestamp)
-
   }
 
   @deprecated("legacyFetchOffsetsBefore", since = "")
@@ -312,7 +310,6 @@ class LogOffsetTest extends BaseRequestTest {
   }
 
   private def createTopicAndGetLog(topic: String, topicPartition: TopicPartition): Log = {
-
     createTopic(topic, 1, 1)
 
     val logManager = server.getLogManager

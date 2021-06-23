@@ -80,6 +80,18 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, debugReplicaRequest)
   }
 
+  @Test
+  def testListOffsetsMaxTimeStampOldestVersion(): Unit = {
+    val consumerRequestBuilder = ListOffsetsRequest.Builder
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
+
+    val maxTimestampRequestBuilder = ListOffsetsRequest.Builder
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, true)
+
+    assertEquals(0.toShort, consumerRequestBuilder.oldestAllowedVersion())
+    assertEquals(7.toShort, maxTimestampRequestBuilder.oldestAllowedVersion())
+  }
+
   def assertResponseErrorForEpoch(error: Errors, brokerId: Int, currentLeaderEpoch: Optional[Integer]): Unit = {
     val listOffsetPartition = new ListOffsetsPartition()
       .setPartitionIndex(partition.partition)

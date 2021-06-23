@@ -4299,31 +4299,34 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
+
+                    // if no max timestamp requests were submitted we should not retry
+                    if (partitionsToQuery.stream()
+                        .flatMap(t -> t.partitions().stream())
+                        .noneMatch(p -> p.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP))
+                        return false;
+
                     if (supportsMaxTimestamp) {
                         supportsMaxTimestamp = false;
 
                         // fail any unsupported futures and remove partitions from the downgraded retry
-                        List<ListOffsetsTopic> topicsToRemove = new ArrayList<>();
-                        partitionsToQuery.stream().forEach(
-                            t -> {
-                                List<ListOffsetsPartition> partitionsToRemove = new ArrayList<>();
-                                t.partitions().stream()
-                                    .filter(p -> p.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP)
-                                    .forEach(
-                                        p -> {
-                                            futures.get(new TopicPartition(t.name(), p.partitionIndex()))
-                                                .completeExceptionally(
-                                                    new UnsupportedVersionException(
-                                                        "Broker " + brokerId
-                                                            + " does not support MAX_TIMESTAMP offset spec"));
-                                            partitionsToRemove.add(p);
-
-                                        });
-                                t.partitions().removeAll(partitionsToRemove);
-                                if (t.partitions().isEmpty()) topicsToRemove.add(t);
+                        Iterator<ListOffsetsTopic> topicIterator = partitionsToQuery.iterator();
+                        while (topicIterator.hasNext()) {
+                            ListOffsetsTopic topic = topicIterator.next();
+                            Iterator<ListOffsetsPartition> partitionIterator = topic.partitions().iterator();
+                            while (partitionIterator.hasNext()) {
+                                ListOffsetsPartition partition = partitionIterator.next();
+                                if (partition.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP) {
+                                    futures.get(new TopicPartition(topic.name(), partition.partitionIndex()))
+                                        .completeExceptionally(new UnsupportedVersionException(
+                                            "Broker " + brokerId + " does not support MAX_TIMESTAMP offset spec"));
+                                    partitionIterator.remove();
+                                }
                             }
-                        );
-                        partitionsToQuery.removeAll(topicsToRemove);
+                            if (topic.partitions().isEmpty()) {
+                                topicIterator.remove();
+                            }
+                        }
 
                         return !partitionsToQuery.isEmpty();
                     }

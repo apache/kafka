@@ -4237,7 +4237,6 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testListOffsetsMaxTimestampUnsupportedSingleOffsetSpec() {
-
         Node node = new Node(0, "localhost", 8120);
         List<Node> nodes = Collections.singletonList(node);
         final Cluster cluster = new Cluster(
@@ -4265,7 +4264,6 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testListOffsetsMaxTimestampUnsupportedMultipleOffsetSpec() throws Exception {
-
         Node node = new Node(0, "localhost", 8120);
         List<Node> nodes = Collections.singletonList(node);
         List<PartitionInfo> pInfos = new ArrayList<>();
@@ -4289,13 +4287,21 @@ public class KafkaAdminClientTest {
 
             // listoffsets response from broker 0
             env.kafkaClient().prepareUnsupportedVersionResponse(
-                request -> request instanceof ListOffsetsRequest);
+                // ensure that the initial request contains max timestamp requests
+                request -> request instanceof ListOffsetsRequest && ((ListOffsetsRequest) request).topics().stream()
+                    .flatMap(t -> t.partitions().stream())
+                    .anyMatch(p -> p.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP));
 
             ListOffsetsTopicResponse topicResponse = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp1, Errors.NONE, -1L, 345L, 543);
             ListOffsetsResponseData responseData = new ListOffsetsResponseData()
                 .setThrottleTimeMs(0)
                 .setTopics(Arrays.asList(topicResponse));
-            env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(responseData), node);
+            env.kafkaClient().prepareResponseFrom(
+                // ensure that no max timestamp requests are retried
+                request -> request instanceof ListOffsetsRequest && ((ListOffsetsRequest) request).topics().stream()
+                    .flatMap(t -> t.partitions().stream())
+                    .noneMatch(p -> p.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP),
+                new ListOffsetsResponse(responseData), node);
 
             ListOffsetsResult result = env.adminClient().listOffsets(new HashMap<TopicPartition, OffsetSpec>() {{
                     put(tp0, OffsetSpec.maxTimestamp());
@@ -4308,48 +4314,6 @@ public class KafkaAdminClientTest {
             assertEquals(345L, tp1Offset.offset());
             assertEquals(543, tp1Offset.leaderEpoch().get().intValue());
             assertEquals(-1L, tp1Offset.timestamp());
-        }
-    }
-
-    @Test
-    public void testListOffsetsMaxTimestampAndNoBrokerResponse() {
-        Node node = new Node(0, "localhost", 8120);
-        List<Node> nodes = Collections.singletonList(node);
-        List<PartitionInfo> pInfos = new ArrayList<>();
-        pInfos.add(new PartitionInfo("foo", 0, node, new Node[]{node}, new Node[]{node}));
-        pInfos.add(new PartitionInfo("foo", 1, node, new Node[]{node}, new Node[]{node}));
-        final Cluster cluster = new Cluster(
-            "mockClusterId",
-            nodes,
-            pInfos,
-            Collections.emptySet(),
-            Collections.emptySet(),
-            node);
-        final TopicPartition tp0 = new TopicPartition("foo", 0);
-        final TopicPartition tp1 = new TopicPartition("foo", 1);
-
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster,
-            AdminClientConfig.RETRIES_CONFIG, "2")) {
-
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
-
-            // listoffsets response from broker 0
-            env.kafkaClient().prepareUnsupportedVersionResponse(
-                request -> request instanceof ListOffsetsRequest);
-
-            ListOffsetsResponseData responseData = new ListOffsetsResponseData()
-                .setThrottleTimeMs(0)
-                .setTopics(new ArrayList<>());
-            env.kafkaClient().prepareResponseFrom(new ListOffsetsResponse(responseData), node);
-
-            ListOffsetsResult result = env.adminClient().listOffsets(new HashMap<TopicPartition, OffsetSpec>() {{
-                    put(tp0, OffsetSpec.maxTimestamp());
-                    put(tp1, OffsetSpec.latest());
-                }});
-
-            TestUtils.assertFutureThrows(result.partitionResult(tp0), UnsupportedVersionException.class);
-            TestUtils.assertFutureThrows(result.partitionResult(tp1), ApiException.class);
         }
     }
 
