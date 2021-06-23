@@ -78,6 +78,7 @@
     </li>
     <li>
         The Connect <code>internal.key.converter</code> and <code>internal.value.converter</code> properties have been completely <a href="https://cwiki.apache.org/confluence/x/2YDOCg">removed</a>.
+        The use of these Connect worker properties has been deprecated since version 2.0.0. 
         Workers are now hardcoded to use the JSON converter with <code>schemas.enable</code> set to <code>false</code>. If your cluster has been using
         a different internal key or value converter, you can follow the migration steps outlined in <a href="https://cwiki.apache.org/confluence/x/2YDOCg">KIP-738</a>
         to safely upgrade your Connect cluster to 3.0.
