@@ -94,7 +94,8 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
         )).setTimeoutMs(timeout)).build()
     val response = sendDeleteTopicsRequest(request)
     val error = response.errorCounts.asScala
-    assertEquals(2, error(Errors.UNSUPPORTED_VERSION))
+    // Previous versions of the code returned UNSUPPORTED_VERSION
+    assertEquals(2, error(Errors.UNKNOWN_TOPIC_ID))
   }
 
   private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer]): MetadataResponse = {
