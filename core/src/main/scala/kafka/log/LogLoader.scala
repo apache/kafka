@@ -175,7 +175,7 @@ object LogLoader extends Logging {
     })
 
     // Do the actual recovery for toRecoverSwapFiles, as discussed above.
-    completeSwapOperations(toRecoverSwapFiles.to(Set), params)
+    completeSwapOperations(toRecoverSwapFiles, params)
 
     // Forth pass: rename remaining index swap files. They must be left due to a broker crash when
     // renaming .swap files to regular files.
