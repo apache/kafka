@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import java.security.Security;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -36,8 +37,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.condition.DisabledOnJre;
-import org.junit.jupiter.api.condition.JRE;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -632,15 +631,23 @@ public class SslTransportLayerTest {
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
-    @DisabledOnJre(JRE.JAVA_16)
     public void testUnsupportedTlsVersion(Args args) throws Exception {
-        server = createEchoServer(args, SecurityProtocol.SSL);
+        // Capture the current value so that we can restore at the end of the test
+        String disabledAlgorithms = System.getProperty("jdk.tls.disabledAlgorithms");
+        // TLS 1.0 and 1.1 have been disabled in recent versions of Java 8/11 and all versions
+        // of 16, temporarily allow it so that we can test we send the expected error.
+        Security.setProperty("jdk.tls.disabledAlgorithms", "");
+        try {
+            server = createEchoServer(args, SecurityProtocol.SSL);
 
-        checkAuthenticationFailed(args, "0", "TLSv1.1");
-        server.verifyAuthenticationMetrics(0, 1);
+            checkAuthenticationFailed(args, "0", "TLSv1.1");
+            server.verifyAuthenticationMetrics(0, 1);
 
-        checkAuthenticationFailed(args, "0", "TLSv1");
-        server.verifyAuthenticationMetrics(0, 2);
+            checkAuthenticationFailed(args, "0", "TLSv1");
+            server.verifyAuthenticationMetrics(0, 2);
+        } finally {
+            Security.setProperty("jdk.tls.disabledAlgorithms", disabledAlgorithms);
+        }
     }
 
     /**
