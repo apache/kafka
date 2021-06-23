@@ -53,8 +53,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.BOOTSTRAP_SERVERS_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.REST_HOST_NAME_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.REST_PORT_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.LISTENERS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG;
@@ -237,13 +236,12 @@ public class EmbeddedConnectCluster {
         return workers().stream().allMatch(WorkerHandle::isRunning);
     }
 
-    @SuppressWarnings("deprecation")
     public void startConnect() {
         log.info("Starting Connect cluster '{}' with {} workers", connectClusterName, numInitialWorkers);
 
         workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
-        workerProps.put(REST_HOST_NAME_CONFIG, REST_HOST_NAME);
-        workerProps.put(REST_PORT_CONFIG, "0"); // use a random available port
+        // use a random available port
+        workerProps.put(LISTENERS_CONFIG, "HTTP://" + REST_HOST_NAME + ":0");
 
         String internalTopicsReplFactor = String.valueOf(numBrokers);
         putIfAbsent(workerProps, GROUP_ID_CONFIG, "connect-integration-test-" + connectClusterName);
