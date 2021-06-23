@@ -81,10 +81,16 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
     Note that port 5678 will be automatically exposed for ducker01 node and will be mapped to 5678 
     on your local machine to enable debugging in VS Code.
 
-test [test-name(s)]
+test [-d|--debug] [test-name(s)]
     Run a test or set of tests inside the currently active Ducker nodes.
     For example, to run the system test produce_bench_test, you would run:
         ./tests/docker/ducker-ak test ./tests/kafkatest/tests/core/produce_bench_test.py
+    
+    If --debug is passed, the tests will wait for remote VS Code debugger to connect on port 5678:
+        ./tests/docker/ducker-ak test --debug ./tests/kafkatest/tests/core/produce_bench_test.py
+    
+    To pass arguments to underlying ducktape invocation, pass them after `--`, e.g.:
+        ./tests/docker/ducker-ak test ./tests/kafkatest/tests/core/produce_bench_test.py -- --test-runner-timeout 1800000
 
 ssh [node-name|user-name@node-name] [command]
     Log in to a running ducker container.  If node-name is not given, it prints
