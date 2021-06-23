@@ -41,4 +41,5 @@ case $COMMAND in
      ;;
 esac
 
+export INCLUDE_DROPWIZARD_METRICS=true
 exec $base_dir/kafka-run-class.sh $EXTRA_ARGS org.apache.zookeeper.server.quorum.QuorumPeerMain "$@"
