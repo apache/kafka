@@ -69,6 +69,10 @@ class KStreamImplJoin {
         }
     }
 
+    static class MinTime {
+        long minTime = Long.MAX_VALUE;
+    }
+
     KStreamImplJoin(final InternalStreamsBuilder builder,
                     final boolean leftOuter,
                     final boolean rightOuter) {
@@ -149,6 +153,7 @@ class KStreamImplJoin {
 
         // Time shared between joins to keep track of the maximum stream time
         final MaxObservedStreamTime maxObservedStreamTime = new MaxObservedStreamTime();
+        final MinTime minTime = new MinTime();
 
         final JoinWindowsInternal internalWindows = new JoinWindowsInternal(windows);
         final KStreamKStreamJoin<K1, R, V1, V2> joinThis = new KStreamKStreamJoin<>(
@@ -158,7 +163,8 @@ class KStreamImplJoin {
             joiner,
             leftOuter,
             outerJoinWindowStore.map(StoreBuilder::name),
-            maxObservedStreamTime
+            maxObservedStreamTime,
+            minTime
         );
 
         final KStreamKStreamJoin<K1, R, V2, V1> joinOther = new KStreamKStreamJoin<>(
@@ -168,7 +174,8 @@ class KStreamImplJoin {
             AbstractStream.reverseJoinerWithKey(joiner),
             rightOuter,
             outerJoinWindowStore.map(StoreBuilder::name),
-            maxObservedStreamTime
+            maxObservedStreamTime,
+            minTime
         );
 
         final PassThrough<K1, R> joinMerge = new PassThrough<>();

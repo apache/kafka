@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.time.Duration;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -53,6 +52,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
     private final boolean isLeftSide;
 
     private final KStreamImplJoin.MaxObservedStreamTime maxObservedStreamTime;
+    private final KStreamImplJoin.MinTime minTime;
 
     KStreamKStreamJoin(final boolean isLeftSide,
                        final String otherWindowName,
@@ -60,7 +60,8 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
                        final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner,
                        final boolean outer,
                        final Optional<String> outerJoinWindowName,
-                       final KStreamImplJoin.MaxObservedStreamTime maxObservedStreamTime) {
+                       final KStreamImplJoin.MaxObservedStreamTime maxObservedStreamTime,
+                       final KStreamImplJoin.MinTime minTime) {
         this.isLeftSide = isLeftSide;
         this.otherWindowName = otherWindowName;
         if (isLeftSide) {
@@ -76,6 +77,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
         this.outer = outer;
         this.outerJoinWindowName = outerJoinWindowName;
         this.maxObservedStreamTime = maxObservedStreamTime;
+        this.minTime = minTime;
     }
 
     @Override
@@ -87,7 +89,6 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
         private WindowStore<K, V2> otherWindowStore;
         private Sensor droppedRecordsSensor;
         private Optional<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue>> outerJoinWindowStore = Optional.empty();
-        private long minTime = Long.MAX_VALUE;
 
         @Override
         public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
@@ -174,7 +175,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
                     if (!outerJoinWindowStore.isPresent() || timeTo < maxObservedStreamTime.get()) {
                         context().forward(key, joiner.apply(key, value, null));
                     } else {
-                        minTime = Math.min(minTime, inputRecordTimestamp);
+                        minTime.minTime = Math.min(minTime.minTime, inputRecordTimestamp);
                         outerJoinWindowStore.ifPresent(store -> store.put(
                             KeyAndJoinSide.make(isLeftSide, key),
                             LeftOrRightValue.make(isLeftSide, value),
@@ -186,7 +187,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
         @SuppressWarnings("unchecked")
         private void emitNonJoinedOuterRecords(final WindowStore<KeyAndJoinSide<K>, LeftOrRightValue> store) {
-            if (minTime >= maxObservedStreamTime.get() - joinAfterMs - joinBeforeMs - joinGraceMs) {
+            if (minTime.minTime >= maxObservedStreamTime.get() - joinAfterMs - joinBeforeMs - joinGraceMs) {
                 return;
             }
 
@@ -196,10 +197,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
                     final Windowed<KeyAndJoinSide<K>> windowedKey = record.key;
                     final LeftOrRightValue value = record.value;
+                    minTime.minTime = windowedKey.window().start();
 
                     // Skip next records if window has not closed
                     if (windowedKey.window().start() + joinAfterMs + joinGraceMs >= maxObservedStreamTime.get()) {
-                        minTime = windowedKey.window().start();
                         break;
                     }
 
