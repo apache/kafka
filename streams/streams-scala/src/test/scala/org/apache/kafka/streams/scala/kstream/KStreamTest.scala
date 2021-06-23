@@ -479,8 +479,8 @@ class KStreamTest extends TestDriver {
 
     import scala.jdk.CollectionConverters._
 
-    val tableNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.head
-    assertEquals("my-fancy-name", tableNode.name())
+    val streamNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.head
+    assertEquals("my-fancy-name", streamNode.name())
   }
 
 }
