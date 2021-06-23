@@ -442,7 +442,7 @@ public class StoreQueryIntegrationTest {
 
         startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
         //Add thread
-        Optional<String> streamThread = kafkaStreams1.addStreamThread();
+        final Optional<String> streamThread = kafkaStreams1.addStreamThread();
         assertThat(streamThread.isPresent(), is(true));
 
         produceValueRange(key, 0, batch1NumMessages);
