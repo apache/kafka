@@ -302,16 +302,10 @@ public class RequestResponseTest {
         checkErrorResponse(createDeleteGroupsRequest(), unknownServerException, true);
         checkResponse(createDeleteGroupsResponse(), 0, true);
         for (short version : LIST_OFFSETS.allVersions()) {
-            checkRequest(createListOffsetRequest(version, 1000000L), true);
-            checkErrorResponse(createListOffsetRequest(version, 1000000L), unknownServerException, true);
+            checkRequest(createListOffsetRequest(version), true);
+            checkErrorResponse(createListOffsetRequest(version), unknownServerException, true);
             checkResponse(createListOffsetResponse(version), version, true);
         }
-        LIST_OFFSETS.allVersions().stream().filter(version -> version >= (short) 7).forEach(
-            version -> {
-                checkRequest(createListOffsetRequest(version, ListOffsetsRequest.MAX_TIMESTAMP), true);
-                checkErrorResponse(createListOffsetRequest(version, ListOffsetsRequest.MAX_TIMESTAMP), unknownServerException, true);
-            }
-        );
         checkRequest(MetadataRequest.Builder.allTopics().build((short) 2), true);
         checkRequest(createMetadataRequest(1, Collections.singletonList("topic1")), true);
         checkErrorResponse(createMetadataRequest(1, Collections.singletonList("topic1")), unknownServerException, true);
@@ -438,8 +432,8 @@ public class RequestResponseTest {
         checkRequest(createUpdateMetadataRequest(5, null), false);
         checkErrorResponse(createUpdateMetadataRequest(5, "rack1"), unknownServerException, true);
         checkResponse(createUpdateMetadataResponse(), 0, true);
-        checkRequest(createListOffsetRequest(0, 1000000L), true);
-        checkErrorResponse(createListOffsetRequest(0, 1000000L), unknownServerException, true);
+        checkRequest(createListOffsetRequest(0), true);
+        checkErrorResponse(createListOffsetRequest(0), unknownServerException, true);
         checkResponse(createListOffsetResponse(0), 0, true);
         checkRequest(createLeaderEpochRequestForReplica(0, 1), true);
         checkRequest(createLeaderEpochRequestForConsumer(), true);
@@ -1450,17 +1444,17 @@ public class RequestResponseTest {
         );
     }
 
-    private ListOffsetsRequest createListOffsetRequest(int version, long timestamp) {
+    private ListOffsetsRequest createListOffsetRequest(int version) {
         if (version == 0) {
             ListOffsetsTopic topic = new ListOffsetsTopic()
                     .setName("test")
                     .setPartitions(Arrays.asList(new ListOffsetsPartition()
                             .setPartitionIndex(0)
-                            .setTimestamp(timestamp)
+                            .setTimestamp(1000000L)
                             .setMaxNumOffsets(10)
                             .setCurrentLeaderEpoch(5)));
             return ListOffsetsRequest.Builder
-                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
+                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
         } else if (version == 1) {
@@ -1468,45 +1462,25 @@ public class RequestResponseTest {
                     .setName("test")
                     .setPartitions(Arrays.asList(new ListOffsetsPartition()
                             .setPartitionIndex(0)
-                            .setTimestamp(timestamp)
+                            .setTimestamp(1000000L)
                             .setCurrentLeaderEpoch(5)));
             return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false)
+                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
-        } else if (version >= 2 && version <= 6) {
+        } else if (version >= 2 && version <= LIST_OFFSETS.latestVersion()) {
             ListOffsetsPartition partition = new ListOffsetsPartition()
                     .setPartitionIndex(0)
-                    .setTimestamp(timestamp)
+                    .setTimestamp(1000000L)
                     .setCurrentLeaderEpoch(5);
 
             ListOffsetsTopic topic = new ListOffsetsTopic()
                     .setName("test")
                     .setPartitions(Arrays.asList(partition));
             return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
-        } else if (version >= 7 && version <= LIST_OFFSETS.latestVersion()) {
-            ListOffsetsPartition partition = new ListOffsetsPartition()
-                .setPartitionIndex(0)
-                .setTimestamp(timestamp)
-                .setCurrentLeaderEpoch(5);
-
-            ListOffsetsTopic topic = new ListOffsetsTopic()
-                .setName("test")
-                .setPartitions(Arrays.asList(partition));
-            if (timestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
-                return ListOffsetsRequest.Builder
-                        .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
-                        .setTargetTimes(Collections.singletonList(topic))
-                        .build((short) version);
-            } else {
-                return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
-                    .setTargetTimes(Collections.singletonList(topic))
-                    .build((short) version);
-            }
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetRequest version " + version);
         }
