@@ -67,9 +67,11 @@ class ConsumerTask implements Runnable, Closeable {
     private final RemotePartitionMetadataEventHandler remotePartitionMetadataEventHandler;
     private final RemoteLogMetadataTopicPartitioner topicPartitioner;
 
-    // It indicates whether the closing process has been started or not. Id it is set as true,
+    // It indicates whether the closing process has been started or not. If it is set as true,
     // consumer will stop consuming messages and it will not allow partition assignments to be updated.
-    private volatile boolean close = false;
+    private volatile boolean closing = false;
+    // It indicates whether the consumer needs to assign the partitions or not. This is set when it is
+    // determined that the consumer needs to be assigned with the updated partitions.
     private volatile boolean assignPartitions = false;
 
     private final Object assignPartitionsLock = new Object();
@@ -86,6 +88,10 @@ class ConsumerTask implements Runnable, Closeable {
     public ConsumerTask(KafkaConsumer<byte[], byte[]> consumer,
                         RemotePartitionMetadataEventHandler remotePartitionMetadataEventHandler,
                         RemoteLogMetadataTopicPartitioner topicPartitioner) {
+        Objects.requireNonNull(consumer);
+        Objects.requireNonNull(remotePartitionMetadataEventHandler);
+        Objects.requireNonNull(topicPartitioner);
+
         this.consumer = consumer;
         this.remotePartitionMetadataEventHandler = remotePartitionMetadataEventHandler;
         this.topicPartitioner = topicPartitioner;
@@ -95,7 +101,7 @@ class ConsumerTask implements Runnable, Closeable {
     public void run() {
         log.info("Started Consumer task thread.");
         try {
-            while (!close) {
+            while (!closing) {
                 Set<Integer> assignedMetaPartitionsSnapshot = maybeWaitForPartitionsAssignment();
 
                 if (!assignedMetaPartitionsSnapshot.isEmpty()) {
@@ -111,7 +117,7 @@ class ConsumerTask implements Runnable, Closeable {
                 }
             }
         } catch (Exception e) {
-            log.error("Error occurred in consumer task, close:[{}]", close, e);
+            log.error("Error occurred in consumer task, close:[{}]", closing, e);
         }
 
         closeConsumer();
@@ -120,12 +126,10 @@ class ConsumerTask implements Runnable, Closeable {
 
     private void closeConsumer() {
         log.info("Closing the consumer instance");
-        if (consumer != null) {
-            try {
-                consumer.close(Duration.ofSeconds(30));
-            } catch (Exception e) {
-                log.error("Error encountered while closing the consumer", e);
-            }
+        try {
+            consumer.close(Duration.ofSeconds(30));
+        } catch (Exception e) {
+            log.error("Error encountered while closing the consumer", e);
         }
     }
 
@@ -166,8 +170,8 @@ class ConsumerTask implements Runnable, Closeable {
         consumer.assign(assignedMetaTopicPartitions);
     }
 
-    public void addAssignmentsForPartitions(Set<TopicIdPartition> updatedPartitions) {
-        updateAssignmentsForPartitions(updatedPartitions, Collections.emptySet());
+    public void addAssignmentsForPartitions(Set<TopicIdPartition> partitions) {
+        updateAssignmentsForPartitions(partitions, Collections.emptySet());
     }
 
     public void removeAssignmentsForPartitions(Set<TopicIdPartition> partitions) {
@@ -212,19 +216,19 @@ class ConsumerTask implements Runnable, Closeable {
         return Optional.ofNullable(partitionToConsumedOffsets.get(partition));
     }
 
-    public boolean assignedPartition(int partition) {
+    public boolean isPartitionAssigned(int partition) {
         return assignedMetaPartitions.contains(partition);
     }
 
     private void ensureNotClosed() {
-        if (close) {
+        if (closing) {
             throw new IllegalStateException("This instance is already closed");
         }
     }
 
     public void close() {
-        if (!close) {
-            close = true;
+        if (!closing) {
+            closing = true;
             consumer.wakeup();
         }
     }

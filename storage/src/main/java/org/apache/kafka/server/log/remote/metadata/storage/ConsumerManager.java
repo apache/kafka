@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
@@ -78,16 +77,16 @@ public class ConsumerManager implements Closeable {
         final int partition = recordMetadata.partition();
 
         // If the current assignment does not have the subscription for this partition then return immediately.
-        if (!assignedPartition(partition)) {
+        if (!consumerTask.isPartitionAssigned(partition)) {
             log.warn("This consumer is not subscribed to the target partition [{}] on which message is produced.",
                     partition);
             return;
         }
 
         final long offset = recordMetadata.offset();
-        long startTimeMillis = time.milliseconds();
+        long startTimeMs = time.milliseconds();
         while (true) {
-            long committedOffset = committedOffset(partition);
+            long committedOffset = consumerTask.receivedOffsetForPartition(partition).orElse(-1L);
             if (committedOffset >= offset) {
                 break;
             }
@@ -95,21 +94,13 @@ public class ConsumerManager implements Closeable {
             log.debug("Committed offset [{}] for partition [{}], but the target offset: [{}],  Sleeping for [{}] to retry again",
                     offset, partition, committedOffset, CONSUME_RECHECK_INTERVAL_MS);
 
-            if (time.milliseconds() - startTimeMillis > rlmmConfig.consumeWaitMs()) {
+            if (time.milliseconds() - startTimeMs > rlmmConfig.consumeWaitMs()) {
                 log.warn("Committed offset for partition:[{}] is : [{}], but the target offset: [{}] ",
                         partition, committedOffset, offset);
             }
 
             time.sleep(CONSUME_RECHECK_INTERVAL_MS);
         }
-    }
-
-    private long committedOffset(int partition) {
-        return consumerTask.receivedOffsetForPartition(partition).orElse(-1L);
-    }
-
-    private boolean assignedPartition(int partition) {
-        return consumerTask.assignedPartition(partition);
     }
 
     @Override
@@ -125,8 +116,8 @@ public class ConsumerManager implements Closeable {
         }
     }
 
-    public void addAssignmentsForPartitions(HashSet<TopicIdPartition> allPartitions) {
-        consumerTask.addAssignmentsForPartitions(allPartitions);
+    public void addAssignmentsForPartitions(Set<TopicIdPartition> partitions) {
+        consumerTask.addAssignmentsForPartitions(partitions);
     }
 
     public void removeAssignmentsForPartitions(Set<TopicIdPartition> partitions) {

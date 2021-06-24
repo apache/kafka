@@ -29,9 +29,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * This class is responsible for publishing messages into the remote log metadata topic partitions.
+ *
+ * Caller of this class should take care of not sending messages once the closing of this instance is initiated.
  */
 public class ProducerManager implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(ProducerManager.class);
@@ -41,9 +44,8 @@ public class ProducerManager implements Closeable {
     private final RemoteLogMetadataTopicPartitioner topicPartitioner;
     private final TopicBasedRemoteLogMetadataManagerConfig rlmmConfig;
 
-    // It indicates whether closing process has been started or not. It will not accept any
-    // messages once it is set as true.
-    private volatile boolean close = false;
+    // It indicates whether closing process has been started or not.
+    private final AtomicBoolean closing = new AtomicBoolean();
 
     public ProducerManager(TopicBasedRemoteLogMetadataManagerConfig rlmmConfig,
                            RemoteLogMetadataTopicPartitioner rlmmTopicPartitioner) {
@@ -53,20 +55,18 @@ public class ProducerManager implements Closeable {
     }
 
     public RecordMetadata publishMessage(RemoteLogMetadata remoteLogMetadata) throws KafkaException {
-        ensureNotClosed();
-
         TopicIdPartition topicIdPartition = remoteLogMetadata.topicIdPartition();
         int metadataPartitionNum = topicPartitioner.metadataPartition(topicIdPartition);
         log.debug("Publishing metadata message of partition:[{}] into metadata topic partition:[{}] with payload: [{}]",
                 topicIdPartition, metadataPartitionNum, remoteLogMetadata);
+        if (metadataPartitionNum >= rlmmConfig.metadataTopicPartitionsCount()) {
+            // This should never occur as long as metadata partitions always remain the same.
+            throw new KafkaException("Chosen partition no " + metadataPartitionNum +
+                                             " must be less than the partition count: " + rlmmConfig.metadataTopicPartitionsCount());
+        }
 
         ProducerCallback callback = new ProducerCallback();
         try {
-            if (metadataPartitionNum >= rlmmConfig.metadataTopicPartitionsCount()) {
-                // This should never occur as long as metadata partitions always remain the same.
-                throw new KafkaException("Chosen partition no " + metadataPartitionNum +
-                                         " is more than the partition count: " + rlmmConfig.metadataTopicPartitionsCount());
-            }
             producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, null,
                     serde.serialize(remoteLogMetadata)), callback).get();
         } catch (KafkaException e) {
@@ -87,26 +87,16 @@ public class ProducerManager implements Closeable {
         }
     }
 
-    private void ensureNotClosed() {
-        if (close) {
-            throw new IllegalStateException("This instance is already closed.");
-        }
-    }
-
     public void close() {
         // If it is already closed, return from here.
-        if (close) {
+        if (closing.compareAndSet(false, true)) {
             return;
         }
 
-        close = true;
-
-        if (producer != null) {
-            try {
-                producer.close(Duration.ofSeconds(30));
-            } catch (Exception e) {
-                log.error("Error encountered while closing the producer", e);
-            }
+        try {
+            producer.close(Duration.ofSeconds(30));
+        } catch (Exception e) {
+            log.error("Error encountered while closing the producer", e);
         }
     }
 
