@@ -94,7 +94,6 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
         )).setTimeoutMs(timeout)).build()
     val response = sendDeleteTopicsRequest(request)
     val error = response.errorCounts.asScala
-    // Previous versions of the code returned UNSUPPORTED_VERSION
     assertEquals(2, error(Errors.UNKNOWN_TOPIC_ID))
   }
 
