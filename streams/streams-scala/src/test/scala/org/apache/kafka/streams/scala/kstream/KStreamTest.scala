@@ -451,8 +451,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     transformNode.name() shouldBe "my-name"
   }
 
-  @Test
-  def testSettingNameOnStream(): Unit = {
+  "Setting a name for a pattern source" should "pass the name to the topology" in {
     val builder = new StreamsBuilder()
     val topicsPattern = "t-[A-Za-z0-9-].suffix"
     val sinkTopic = "sink"
@@ -466,7 +465,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     import scala.jdk.CollectionConverters._
 
     val streamNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.head
-    assertEquals("my-fancy-name", streamNode.name())
+    streamNode.name() shouldBe "my-fancy-name"
   }
 
 }
