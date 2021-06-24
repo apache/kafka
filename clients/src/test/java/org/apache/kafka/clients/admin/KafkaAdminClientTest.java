@@ -4317,6 +4317,42 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Test
+    public void testListOffsetsUnsupportedNonMaxTimestamp() {
+        Node node = new Node(0, "localhost", 8120);
+        List<Node> nodes = Collections.singletonList(node);
+        List<PartitionInfo> pInfos = new ArrayList<>();
+        pInfos.add(new PartitionInfo("foo", 0, node, new Node[]{node}, new Node[]{node}));
+        final Cluster cluster = new Cluster(
+            "mockClusterId",
+            nodes,
+            pInfos,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            node);
+        final TopicPartition tp0 = new TopicPartition("foo", 0);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster,
+            AdminClientConfig.RETRIES_CONFIG, "2")) {
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+
+            // listoffsets response from broker 0
+            env.kafkaClient().prepareUnsupportedVersionResponse(
+                // ensure that the initial request doesn't contain max timestamp requests
+                request -> request instanceof ListOffsetsRequest && ((ListOffsetsRequest) request).topics().stream()
+                    .flatMap(t -> t.partitions().stream())
+                    .noneMatch(p -> p.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP));
+
+            ListOffsetsResult result = env.adminClient().listOffsets(new HashMap<TopicPartition, OffsetSpec>() {{
+                    put(tp0, OffsetSpec.latest());
+                }});
+
+            TestUtils.assertFutureThrows(result.partitionResult(tp0), UnsupportedVersionException.class);
+        }
+    }
+
     private Map<String, FeatureUpdate> makeTestFeatureUpdates() {
         return Utils.mkMap(
             Utils.mkEntry("test_feature_1", new FeatureUpdate((short) 2, false)),
