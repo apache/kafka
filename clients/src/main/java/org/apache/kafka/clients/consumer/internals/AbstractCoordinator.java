@@ -1119,12 +1119,14 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                 // since we may be sending the request during rebalance, we should check
                 // this case and ignore the REBALANCE_IN_PROGRESS error
-                if (state == MemberState.STABLE) {
-                    requestRejoin("group is already rebalancing");
-                    future.raise(error);
-                } else {
-                    log.debug("Ignoring heartbeat response with error {} during {} state", error, state);
-                    future.complete(null);
+                synchronized (AbstractCoordinator.this) {
+                    if (state == MemberState.STABLE) {
+                        requestRejoin("group is already rebalancing");
+                        future.raise(error);
+                    } else {
+                        log.debug("Ignoring heartbeat response with error {} during {} state", error, state);
+                        future.complete(null);
+                    }
                 }
             } else if (error == Errors.ILLEGAL_GENERATION ||
                        error == Errors.UNKNOWN_MEMBER_ID ||
