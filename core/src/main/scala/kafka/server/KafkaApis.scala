@@ -141,6 +141,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     metadataSupport.maybeForward(request, handler, responseCallback)
   }
 
+  private def forwardToControllerOrFail(
+    request: RequestChannel.Request
+  ): Unit = {
+    def errorHandler(request: RequestChannel.Request): Unit = {
+      throw new IllegalStateException(s"Unable to forward $request to the controller")
+    }
+
+    maybeForwardToController(request, errorHandler)
+  }
+
   /**
    * Top-level method that handles all requests and multiplexes to the right api
    */
@@ -217,6 +227,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_TRANSACTIONS => handleDescribeTransactionsRequest(request)
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
         case ApiKeys.ALLOCATE_PRODUCER_IDS => maybeForwardToController(request, handleAllocateProducerIdsRequest)
+        case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {

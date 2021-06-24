@@ -452,8 +452,7 @@ class KafkaApisTest {
 
     createKafkaApis(authorizer = Some(authorizer)).handleAlterConfigsRequest(request)
 
-    verifyAlterConfigResult(alterConfigsRequest,
-      capturedResponse, Map(authorizedTopic -> Errors.NONE,
+    verifyAlterConfigResult(capturedResponse, Map(authorizedTopic -> Errors.NONE,
         unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED))
 
     verify(authorizer, adminManager)
@@ -462,16 +461,60 @@ class KafkaApisTest {
   @Test
   def testAlterConfigsWithForwarding(): Unit = {
     val requestBuilder = new AlterConfigsRequest.Builder(Collections.emptyMap(), false)
-    testForwardableAPI(ApiKeys.ALTER_CONFIGS, requestBuilder)
+    testForwardableApi(ApiKeys.ALTER_CONFIGS, requestBuilder)
   }
 
-  private def testForwardableAPI(apiKey: ApiKeys, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Unit = {
+  @Test
+  def testDescribeQuorumNotAllowedForZkClusters(): Unit = {
+    val requestData = DescribeQuorumRequest.singletonRequest(KafkaRaftServer.MetadataPartition)
+    val requestBuilder = new DescribeQuorumRequest.Builder(requestData)
+    val request = buildRequest(requestBuilder.build())
+
+    val capturedResponse = expectNoThrottling(request)
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, adminManager, controller)
+    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.withThreadConfinedCaching)
+
+    val response = capturedResponse.getValue.asInstanceOf[DescribeQuorumResponse]
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
+  }
+
+  @Test
+  def testDescribeQuorumForwardedForKRaftClusters(): Unit = {
+    val requestData = DescribeQuorumRequest.singletonRequest(KafkaRaftServer.MetadataPartition)
+    val requestBuilder = new DescribeQuorumRequest.Builder(requestData)
+    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+
+    testForwardableApi(
+      createKafkaApis(raftSupport = true),
+      ApiKeys.DESCRIBE_QUORUM,
+      requestBuilder
+    )
+  }
+
+  private def testForwardableApi(apiKey: ApiKeys, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Unit = {
+    testForwardableApi(
+      createKafkaApis(enableForwarding = true),
+      apiKey,
+      requestBuilder
+    )
+  }
+
+  private def testForwardableApi(
+    kafkaApis: KafkaApis,
+    apiKey: ApiKeys,
+    requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]
+  ): Unit = {
     val topicHeader = new RequestHeader(apiKey, apiKey.latestVersion,
       clientId, 0)
 
     val request = buildRequest(requestBuilder.build(topicHeader.apiVersion))
 
-    EasyMock.expect(controller.isActive).andReturn(false)
+    if (kafkaApis.metadataSupport.isInstanceOf[ZkSupport]) {
+      // The controller check only makes sense for ZK clusters. For KRaft,
+      // controller requests are handled on a separate listener, so there
+      // is no choice but to forward them.
+      EasyMock.expect(controller.isActive).andReturn(false)
+    }
 
     expectNoThrottling(request)
 
@@ -482,7 +525,7 @@ class KafkaApisTest {
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, controller, forwardingManager)
 
-    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.withThreadConfinedCaching)
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
 
     EasyMock.verify(controller, forwardingManager)
   }
@@ -508,8 +551,7 @@ class KafkaApisTest {
       .once()
   }
 
-  private def verifyAlterConfigResult(alterConfigsRequest: AlterConfigsRequest,
-                                      capturedResponse: Capture[AbstractResponse],
+  private def verifyAlterConfigResult(capturedResponse: Capture[AbstractResponse],
                                       expectedResults: Map[String, Errors]): Unit = {
     val response = capturedResponse.getValue.asInstanceOf[AlterConfigsResponse]
     val responseMap = response.data.responses().asScala.map { resourceResponse =>
@@ -569,7 +611,7 @@ class KafkaApisTest {
   def testIncrementalAlterConfigsWithForwarding(): Unit = {
     val requestBuilder = new IncrementalAlterConfigsRequest.Builder(
       new IncrementalAlterConfigsRequestData())
-    testForwardableAPI(ApiKeys.INCREMENTAL_ALTER_CONFIGS, requestBuilder)
+    testForwardableApi(ApiKeys.INCREMENTAL_ALTER_CONFIGS, requestBuilder)
   }
 
   private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {
@@ -624,7 +666,7 @@ class KafkaApisTest {
   @Test
   def testAlterClientQuotasWithForwarding(): Unit = {
     val requestBuilder = new AlterClientQuotasRequest.Builder(List.empty.asJava, false)
-    testForwardableAPI(ApiKeys.ALTER_CLIENT_QUOTAS, requestBuilder)
+    testForwardableApi(ApiKeys.ALTER_CLIENT_QUOTAS, requestBuilder)
   }
 
   private def verifyAlterClientQuotaResult(capturedResponse: Capture[AbstractResponse],
@@ -715,7 +757,7 @@ class KafkaApisTest {
         new CreatableTopicCollection(Collections.singleton(
           new CreatableTopic().setName("topic").setNumPartitions(1).
             setReplicationFactor(1.toShort)).iterator())))
-    testForwardableAPI(ApiKeys.CREATE_TOPICS, requestBuilder)
+    testForwardableApi(ApiKeys.CREATE_TOPICS, requestBuilder)
   }
 
   private def createTopicAuthorization(authorizer: Authorizer,
@@ -771,61 +813,61 @@ class KafkaApisTest {
   @Test
   def testCreateAclWithForwarding(): Unit = {
     val requestBuilder = new CreateAclsRequest.Builder(new CreateAclsRequestData())
-    testForwardableAPI(ApiKeys.CREATE_ACLS, requestBuilder)
+    testForwardableApi(ApiKeys.CREATE_ACLS, requestBuilder)
   }
 
   @Test
   def testDeleteAclWithForwarding(): Unit = {
     val requestBuilder = new DeleteAclsRequest.Builder(new DeleteAclsRequestData())
-    testForwardableAPI(ApiKeys.DELETE_ACLS, requestBuilder)
+    testForwardableApi(ApiKeys.DELETE_ACLS, requestBuilder)
   }
 
   @Test
   def testCreateDelegationTokenWithForwarding(): Unit = {
     val requestBuilder = new CreateDelegationTokenRequest.Builder(new CreateDelegationTokenRequestData())
-    testForwardableAPI(ApiKeys.CREATE_DELEGATION_TOKEN, requestBuilder)
+    testForwardableApi(ApiKeys.CREATE_DELEGATION_TOKEN, requestBuilder)
   }
 
   @Test
   def testRenewDelegationTokenWithForwarding(): Unit = {
     val requestBuilder = new RenewDelegationTokenRequest.Builder(new RenewDelegationTokenRequestData())
-    testForwardableAPI(ApiKeys.RENEW_DELEGATION_TOKEN, requestBuilder)
+    testForwardableApi(ApiKeys.RENEW_DELEGATION_TOKEN, requestBuilder)
   }
 
   @Test
   def testExpireDelegationTokenWithForwarding(): Unit = {
     val requestBuilder = new ExpireDelegationTokenRequest.Builder(new ExpireDelegationTokenRequestData())
-    testForwardableAPI(ApiKeys.EXPIRE_DELEGATION_TOKEN, requestBuilder)
+    testForwardableApi(ApiKeys.EXPIRE_DELEGATION_TOKEN, requestBuilder)
   }
 
   @Test
   def testAlterPartitionReassignmentsWithForwarding(): Unit = {
     val requestBuilder = new AlterPartitionReassignmentsRequest.Builder(new AlterPartitionReassignmentsRequestData())
-    testForwardableAPI(ApiKeys.ALTER_PARTITION_REASSIGNMENTS, requestBuilder)
+    testForwardableApi(ApiKeys.ALTER_PARTITION_REASSIGNMENTS, requestBuilder)
   }
 
   @Test
   def testCreatePartitionsWithForwarding(): Unit = {
     val requestBuilder = new CreatePartitionsRequest.Builder(new CreatePartitionsRequestData())
-    testForwardableAPI(ApiKeys.CREATE_PARTITIONS, requestBuilder)
+    testForwardableApi(ApiKeys.CREATE_PARTITIONS, requestBuilder)
   }
 
   @Test
   def testDeleteTopicsWithForwarding(): Unit = {
     val requestBuilder = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData())
-    testForwardableAPI(ApiKeys.DELETE_TOPICS, requestBuilder)
+    testForwardableApi(ApiKeys.DELETE_TOPICS, requestBuilder)
   }
 
   @Test
   def testUpdateFeaturesWithForwarding(): Unit = {
     val requestBuilder = new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
-    testForwardableAPI(ApiKeys.UPDATE_FEATURES, requestBuilder)
+    testForwardableApi(ApiKeys.UPDATE_FEATURES, requestBuilder)
   }
 
   @Test
   def testAlterScramWithForwarding(): Unit = {
     val requestBuilder = new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
-    testForwardableAPI(ApiKeys.ALTER_USER_SCRAM_CREDENTIALS, requestBuilder)
+    testForwardableApi(ApiKeys.ALTER_USER_SCRAM_CREDENTIALS, requestBuilder)
   }
 
   @Test

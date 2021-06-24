@@ -86,7 +86,7 @@ public class ClusterTestExtensionsTest {
             @ClusterConfigProperty(key = "foo", value = "bar"),
             @ClusterConfigProperty(key = "spam", value = "eggs")
         }),
-        @ClusterTest(name = "cluster-tests-2", clusterType = Type.RAFT, serverProperties = {
+        @ClusterTest(name = "cluster-tests-2", clusterType = Type.KRAFT, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
             @ClusterConfigProperty(key = "spam", value = "eggz")
         })
