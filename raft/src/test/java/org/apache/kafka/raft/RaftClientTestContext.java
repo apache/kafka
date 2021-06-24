@@ -21,15 +21,15 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1070,7 +1070,6 @@ public final class RaftClientTestContext {
         private final List<BatchReader<String>> savedBatches = new ArrayList<>();
         private final Map<Integer, Long> claimedEpochStartOffsets = new HashMap<>();
         private LeaderAndEpoch currentLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), 0);
-        private OptionalInt currentClaimedEpoch = OptionalInt.empty();
         private final OptionalInt localId;
         private Optional<SnapshotReader<String>> snapshot = Optional.empty();
         private boolean readCommit = true;
@@ -1108,7 +1107,11 @@ public final class RaftClientTestContext {
         }
 
         OptionalInt currentClaimedEpoch() {
-            return currentClaimedEpoch;
+            if (localId.isPresent() && currentLeaderAndEpoch.isLeader(localId.getAsInt())) {
+                return OptionalInt.of(currentLeaderAndEpoch.epoch());
+            } else {
+                return OptionalInt.empty();
+            }
         }
 
         List<String> commitWithBaseOffset(long baseOffset) {
@@ -1168,16 +1171,15 @@ public final class RaftClientTestContext {
             // We record the next expected offset as the claimed epoch's start
             // offset. This is useful to verify that the `handleLeaderChange` callback
             // was not received early.
-            if (localId.isPresent() && leaderAndEpoch.isLeader(localId.getAsInt())) {
-                long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
-                    lastCommitOffset().getAsLong() + 1 : 0L;
-                this.currentClaimedEpoch = OptionalInt.of(leaderAndEpoch.epoch());
-                this.claimedEpochStartOffsets.put(leaderAndEpoch.epoch(), claimedEpochStartOffset);
-            } else {
-                this.currentClaimedEpoch = OptionalInt.empty();
-            }
-
             this.currentLeaderAndEpoch = leaderAndEpoch;
+
+            currentClaimedEpoch().ifPresent(claimedEpoch -> {
+                if (claimedEpoch == leaderAndEpoch.epoch()) {
+                    long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
+                        lastCommitOffset().getAsLong() + 1 : 0L;
+                    this.claimedEpochStartOffsets.put(leaderAndEpoch.epoch(), claimedEpochStartOffset);
+                }
+            });
         }
 
         @Override
@@ -1191,8 +1193,7 @@ public final class RaftClientTestContext {
 
         @Override
         public void handleSnapshot(SnapshotReader<String> reader) {
-            snapshot.ifPresent(snapshot -> assertDoesNotThrow(() -> snapshot.close()));
-
+            snapshot.ifPresent(snapshot -> assertDoesNotThrow(snapshot::close));
             commits.clear();
             savedBatches.clear();
             snapshot = Optional.of(reader);
