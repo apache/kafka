@@ -675,10 +675,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // thus, the task is not processable, even if there is available data in the record queue
             return false;
         }
-        if (logPrefix.contains("1_4")) {
-            System.err.print("ready p");
-            System.err.flush();
-        }
+//        if (logPrefix.contains("1_4")) {
+//            System.err.print("ready p");
+//            System.err.flush();
+//        }
         final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
         if (logPrefix.contains("1_4")) {
             System.err.print("redP:" + readyToProcess);

@@ -277,9 +277,16 @@ public class SubscriptionState {
         for (TopicPartition tp : assignments) {
             TopicPartitionState state = this.assignment.stateValue(tp);
             if (state == null) {
-//                System.out.println("!!! state is null:" + tp);
+                if (tp.toString().equals("table2-4")) {
+                    System.err.print("state n");
+                    System.err.flush();
+                }
 
                 state = new TopicPartitionState();
+            }
+            if (tp.toString().equals("table2-4")) {
+                System.err.print("state n:" + state.highWatermark + "," + state.position);
+                System.err.flush();
             }
 //            System.out.println("!!! state is:" + tp + "," + state.position);
             assignedPartitionStates.put(tp, state);
@@ -392,7 +399,7 @@ public class SubscriptionState {
             final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
             for (int i = 1; i < elements.length; i++) {
                 final StackTraceElement s = elements[i];
-                System.err.print("-at "+ s.getFileName());
+                System.err.print("-at " + s.getFileName());
             }
             System.err.flush();
         }
