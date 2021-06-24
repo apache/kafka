@@ -155,7 +155,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // we should not be able to create under chroot folder
     assertThrows(classOf[NoAuthException], () => zkClient.makeSurePersistentPathExists(chroot))
 
-    // this client won't have access to the root, but the chroot already exists
+    // this client won't create permission to the root and chroot, but the chroot already exists
     val chrootClient = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, createChrootIfNecessary = true)
     chrootClient.close()
