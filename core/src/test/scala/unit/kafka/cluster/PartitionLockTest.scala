@@ -287,7 +287,7 @@ class PartitionLockTest extends Logging {
         val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.messageFormatVersion.recordVersion, "")
         val maxProducerIdExpirationMs = 60 * 60 * 1000
         val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, maxProducerIdExpirationMs)
-        val loadedLog = LogLoader.load(LoadLogParams(
+        val offsets = LogLoader.load(LoadLogParams(
           log.dir,
           log.topicPartition,
           log.config,
@@ -301,7 +301,10 @@ class PartitionLockTest extends Logging {
           maxProducerIdExpirationMs,
           leaderEpochCache,
           producerStateManager))
-        new SlowLog(log, loadedLog, leaderEpochCache, producerStateManager, appendSemaphore)
+        val localLog = new LocalLog(log.dir, log.config, segments, offsets.recoveryPoint,
+          offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, log.topicPartition,
+          logDirFailureChannel)
+        new SlowLog(log, offsets.logStartOffset, localLog, leaderEpochCache, producerStateManager, appendSemaphore)
       }
     }
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
@@ -365,13 +368,14 @@ class PartitionLockTest extends Logging {
 
   private class SlowLog(
     log: Log,
-    loadedLog: LoadedLog,
+    logStartOffset: Long,
+    localLog: LocalLog,
     leaderEpochCache: Option[LeaderEpochFileCache],
     producerStateManager: ProducerStateManager,
     appendSemaphore: Semaphore
   ) extends Log(
-    loadedLog.logStartOffset,
-    loadedLog.localLog,
+    logStartOffset,
+    localLog,
     new BrokerTopicStats,
     log.producerIdExpirationCheckIntervalMs,
     leaderEpochCache,

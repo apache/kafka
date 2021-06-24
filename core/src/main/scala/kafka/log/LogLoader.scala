@@ -85,23 +85,21 @@ object LogLoader extends Logging {
   val CleanShutdownFile = ".kafka_cleanshutdown"
 
   /**
-   * Loads the log segments from the log files on disk, and returns a LocalLog instance constructed
-   * using the same and the new log start offset. Additionally, it also suitably updates the provided
-   * LeaderEpochFileCache and ProducerStateManager to reflect the contents of the loaded log.
+   * Load the log segments from the log files on disk, and returns the components of the loaded log.
+   * Additionally, it also suitably updates the provided LeaderEpochFileCache and ProducerStateManager
+   * to reflect the contents of the loaded log.
    *
    * In the context of the calling thread, this function does not need to convert IOException to
    * KafkaStorageException because it is only called before all logs are loaded.
    *
-   * @param params The parameters for the log being loaded from disk.
+   * @param params The parameters for the log being loaded from disk
    *
-   * @return a LoadedLog instance containing the new log start offset and a LocalLog instance
-   *         created using the segments loaded from disk.
+   * @return the offsets of the Log successfully loaded from disk
    *
    * @throws LogSegmentOffsetOverflowException if we encounter a .swap file with messages that
    *                                           overflow index offset
    */
   def load(params: LoadLogParams): LoadedLogOffsets = {
-
     // First pass: through the files in the log directory and remove any temporary files
     // and find any interrupted swap operations
     val swapFiles = removeTempFilesAndCollectSwapFiles(params)
@@ -282,7 +280,7 @@ object LogLoader extends Logging {
         return fn
       } catch {
         case e: LogSegmentOffsetOverflowException =>
-          info(s"${params.logIdentifier} Caught segment overflow error: ${e.getMessage}. Split segment and retry.")
+          info(s"${params.logIdentifier}Caught segment overflow error: ${e.getMessage}. Split segment and retry.")
           val result = Log.splitOverflowedSegment(
             e.segment,
             params.segments,

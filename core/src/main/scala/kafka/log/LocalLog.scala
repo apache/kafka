@@ -60,15 +60,15 @@ case class SplitSegmentResult(deletedSegments: Iterable[LogSegment], newSegments
  * @param topicPartition The topic partition associated with this log
  * @param logDirFailureChannel The LogDirFailureChannel instance to asynchronously handle Log dir failure
  */
-private[log] class LocalLog(@volatile private var _dir: File,
-                            @volatile var config: LogConfig,
-                            val segments: LogSegments,
-                            @volatile var recoveryPoint: Long,
-                            @volatile private var nextOffsetMetadata: LogOffsetMetadata,
-                            val scheduler: Scheduler,
-                            val time: Time,
-                            val topicPartition: TopicPartition,
-                            val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
+class LocalLog(@volatile private var _dir: File,
+               @volatile private[log] var config: LogConfig,
+               private[log] val segments: LogSegments,
+               @volatile private[log] var recoveryPoint: Long,
+               @volatile private var nextOffsetMetadata: LogOffsetMetadata,
+               private[log] val scheduler: Scheduler,
+               private[log] val time: Time,
+               private[log] val topicPartition: TopicPartition,
+               private[log] val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.LocalLog._
 
@@ -155,6 +155,11 @@ private[log] class LocalLog(@volatile private var _dir: File,
       lastFlushedTime.set(time.milliseconds)
     }
   }
+
+  /**
+   * The number of messages appended to the log since the last flush
+   */
+  private[log] def unflushedMessages: Long = logEndOffset - recoveryPoint
 
   /**
    * Flush local log segments for all offsets up to offset-1.
@@ -248,11 +253,10 @@ private[log] class LocalLog(@volatile private var _dir: File,
    * A final segment that is empty will never be returned.
    *
    * @param predicate A function that takes in a candidate log segment, the next higher segment
-   *                  (if there is one) and the log end offset. It returns true iff the segment
-   *                  is deletable.
+   *                  (if there is one). It returns true iff the segment is deletable.
    * @return the segments ready to be deleted
    */
-  private[log] def deletableSegments(predicate: (LogSegment, Option[LogSegment], Long) => Boolean): Iterable[LogSegment] = {
+  private[log] def deletableSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean): Iterable[LogSegment] = {
     if (segments.isEmpty) {
       Seq.empty
     } else {
@@ -262,14 +266,8 @@ private[log] class LocalLog(@volatile private var _dir: File,
       while (segmentOpt.isDefined) {
         val segment = segmentOpt.get
         val nextSegmentOpt = nextOption(segmentsIterator)
-        val (upperBoundOffset: Long, isLastSegmentAndEmpty: Boolean) =
-          nextSegmentOpt.map {
-            nextSegment => (nextSegment.baseOffset, false)
-          }.getOrElse {
-            (logEndOffset, segment.size == 0)
-          }
-
-        if (predicate(segment, nextSegmentOpt, logEndOffset) && !isLastSegmentAndEmpty) {
+        val isLastSegmentAndEmpty = nextSegmentOpt.isEmpty && segment.size == 0
+        if (predicate(segment, nextSegmentOpt) && !isLastSegmentAndEmpty) {
           deletable += segment
           segmentOpt = nextSegmentOpt
         } else {
@@ -777,7 +775,7 @@ object LocalLog extends Logging {
                                           scheduler: Scheduler,
                                           logDirFailureChannel: LogDirFailureChannel,
                                           logPrefix: String): SplitSegmentResult = {
-    require(Log.isLogFile(segment.log.file), s"Cannot split file ${segment.log.file.getAbsoluteFile}")
+    require(isLogFile(segment.log.file), s"Cannot split file ${segment.log.file.getAbsoluteFile}")
     require(segment.hasOverflow, s"Split operation is only permitted for segments with overflow, and the problem path is ${segment.log.file.getAbsoluteFile}")
 
     info(s"${logPrefix}Splitting overflowed segment $segment")
@@ -885,7 +883,7 @@ object LocalLog extends Logging {
     // need to do this in two phases to be crash safe AND do the delete asynchronously
     // if we crash in the middle of this we complete the swap in loadSegments()
     if (!isRecoveredSwapFile)
-      sortedNewSegments.reverse.foreach(_.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix))
+      sortedNewSegments.reverse.foreach(_.changeFileSuffixes(CleanedFileSuffix, SwapFileSuffix))
     sortedNewSegments.reverse.foreach(existingSegments.add(_))
     val newSegmentBaseOffsets = sortedNewSegments.map(_.baseOffset).toSet
 
@@ -907,7 +905,7 @@ object LocalLog extends Logging {
     }.filter(item => item.isDefined).map(item => item.get)
 
     // okay we are safe now, remove the swap suffix
-    sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
+    sortedNewSegments.foreach(_.changeFileSuffixes(SwapFileSuffix, ""))
     Utils.flushDir(dir.toPath)
     deletedNotReplaced
   }
@@ -939,7 +937,7 @@ object LocalLog extends Logging {
                                       scheduler: Scheduler,
                                       logDirFailureChannel: LogDirFailureChannel,
                                       logPrefix: String): Unit = {
-    segmentsToDelete.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
+    segmentsToDelete.foreach(_.changeFileSuffixes("", DeletedFileSuffix))
 
     def deleteSegments(): Unit = {
       info(s"${logPrefix}Deleting segment files ${segmentsToDelete.mkString(",")}")

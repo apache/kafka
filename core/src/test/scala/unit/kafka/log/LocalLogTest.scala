@@ -327,26 +327,29 @@ class LocalLogTest {
       log.roll()
     }
 
-    assertEquals(10L, log.segments.numberOfSegments)
+    assertEquals(10, log.segments.numberOfSegments)
 
     {
       val deletable = log.deletableSegments(
-        (segment: LogSegment, _: Option[LogSegment], _: Long) => segment.baseOffset <= 5)
-      val expected = log.segments.nonActiveLogSegmentsFrom(0L).filter(segment => segment.baseOffset <= 5)
+        (segment: LogSegment, _: Option[LogSegment]) => segment.baseOffset <= 5)
+      val expected = log.segments.nonActiveLogSegmentsFrom(0L).filter(segment => segment.baseOffset <= 5).toList
+      assertEquals(6, expected.length)
       assertEquals(expected, deletable.toList)
     }
 
     {
-      val deletable = log.deletableSegments((_: LogSegment, _: Option[LogSegment], _: Long) => true)
+      val deletable = log.deletableSegments((_: LogSegment, _: Option[LogSegment]) => true)
       val expected = log.segments.nonActiveLogSegmentsFrom(0L).toList
+      assertEquals(9, expected.length)
       assertEquals(expected, deletable.toList)
     }
 
     {
       val record = new SimpleRecord(mockTime.milliseconds, "a".getBytes)
       appendRecords(List(record), initialOffset = 9L)
-      val deletable = log.deletableSegments((_: LogSegment, _: Option[LogSegment], _: Long) => true)
+      val deletable = log.deletableSegments((_: LogSegment, _: Option[LogSegment]) => true)
       val expected = log.segments.values.toList
+      assertEquals(10, expected.length)
       assertEquals(expected, deletable.toList)
     }
   }
@@ -363,7 +366,7 @@ class LocalLogTest {
 
     var offset = 0
     val deletableSegments = log.deletableSegments(
-      (segment: LogSegment, nextSegmentOpt: Option[LogSegment], logEndOffset: Long) => {
+      (segment: LogSegment, nextSegmentOpt: Option[LogSegment]) => {
         assertEquals(offset, segment.baseOffset)
         val floorSegmentOpt = log.segments.floorSegment(offset)
         assertTrue(floorSegmentOpt.isDefined)
@@ -377,7 +380,6 @@ class LocalLogTest {
           assertEquals(segment.baseOffset + 1, higherSegmentOpt.get.baseOffset)
           assertEquals(higherSegmentOpt.get, nextSegmentOpt.get)
         }
-        assertEquals(log.logEndOffset, logEndOffset)
         offset += 1
         true
       })

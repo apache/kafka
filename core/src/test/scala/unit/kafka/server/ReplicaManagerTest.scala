@@ -1649,7 +1649,7 @@ class ReplicaManagerTest {
     val segments = new LogSegments(tp)
     val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, tp, mockLogDirFailureChannel, logConfig.messageFormatVersion.recordVersion, "")
     val producerStateManager = new ProducerStateManager(tp, logDir, maxProducerIdExpirationMs, time)
-    val loadedLog = LogLoader.load(LoadLogParams(
+    val offsets = LogLoader.load(LoadLogParams(
       logDir,
       tp,
       logConfig,
@@ -1663,9 +1663,11 @@ class ReplicaManagerTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager))
+    val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockScheduler, time, tp, mockLogDirFailureChannel)
     val mockLog = new Log(
-      logStartOffset = loadedLog.logStartOffset,
-      localLog = loadedLog.localLog,
+      logStartOffset = offsets.logStartOffset,
+      localLog = localLog,
       brokerTopicStats = mockBrokerTopicStats,
       producerIdExpirationCheckIntervalMs = 30000,
       leaderEpochCache = leaderEpochCache,

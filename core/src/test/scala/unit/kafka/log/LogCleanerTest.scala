@@ -107,7 +107,7 @@ class LogCleanerTest {
     val logSegments = new LogSegments(topicPartition)
     val leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs, time)
-    val loadedLog = LogLoader.load(LoadLogParams(
+    val offsets = LogLoader.load(LoadLogParams(
       dir,
       topicPartition,
       config,
@@ -121,9 +121,10 @@ class LogCleanerTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager))
-
-    val log = new Log(loadedLog.logStartOffset,
-                      loadedLog.localLog,
+    val localLog = new LocalLog(dir, config, logSegments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, time.scheduler, time, topicPartition, logDirFailureChannel)
+    val log = new Log(offsets.logStartOffset,
+                      localLog,
                       brokerTopicStats = new BrokerTopicStats,
                       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
                       leaderEpochCache = leaderEpochCache,

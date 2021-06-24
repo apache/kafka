@@ -102,7 +102,7 @@ class LogCleanerManagerTest extends Logging {
     val segments = new LogSegments(tp)
     val leaderEpochCache = Log.maybeCreateLeaderEpochCache(tpDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxProducerIdExpirationMs, time)
-    val loadedLog = LogLoader.load(LoadLogParams(
+    val offsets = LogLoader.load(LoadLogParams(
       tpDir,
       tp,
       config,
@@ -116,8 +116,10 @@ class LogCleanerManagerTest extends Logging {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager))
+    val localLog = new LocalLog(tpDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, time.scheduler, time, tp, logDirFailureChannel)
     // the exception should be caught and the partition that caused it marked as uncleanable
-    class LogMock extends Log(loadedLog.logStartOffset, loadedLog.localLog, new BrokerTopicStats,
+    class LogMock extends Log(offsets.logStartOffset, localLog, new BrokerTopicStats,
         LogManager.ProducerIdExpirationCheckIntervalMs, leaderEpochCache,
         producerStateManager, _topicId = None, keepPartitionMetadataFile = true) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()

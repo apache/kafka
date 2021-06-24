@@ -99,8 +99,11 @@ class LogLoaderTest {
           val loadLogParams = LoadLogParams(logDir, topicPartition, config, time.scheduler, time,
             logDirFailureChannel, hadCleanShutdown, segments, logStartOffset, logRecoveryPoint,
             maxProducerIdExpirationMs, leaderEpochCache, producerStateManager)
-          val loadedLog = LogLoader.load(loadLogParams)
-          new Log(loadedLog.logStartOffset, loadedLog.localLog, brokerTopicStats,
+          val offsets = LogLoader.load(loadLogParams)
+          val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
+            offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+            logDirFailureChannel)
+          new Log(offsets.logStartOffset, localLog, brokerTopicStats,
             LogManager.ProducerIdExpirationCheckIntervalMs, leaderEpochCache,
             producerStateManager, None, true)
         }
@@ -279,8 +282,11 @@ class LogLoaderTest {
         maxProducerIdExpirationMs,
         leaderEpochCache,
         producerStateManager)
-      val loadedLog = LogLoader.load(loadLogParams)
-      new Log(loadedLog.logStartOffset, loadedLog.localLog, brokerTopicStats,
+      val offsets = LogLoader.load(loadLogParams)
+      val localLog = new LocalLog(logDir, logConfig, interceptedLogSegments, offsets.recoveryPoint,
+        offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+        logDirFailureChannel)
+      new Log(offsets.logStartOffset, localLog, brokerTopicStats,
         LogManager.ProducerIdExpirationCheckIntervalMs, leaderEpochCache, producerStateManager,
         None, keepPartitionMetadataFile = true)
     }
@@ -336,7 +342,7 @@ class LogLoaderTest {
     val maxProducerIdExpirationMs = 300000
     val segments = new LogSegments(topicPartition)
     val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
-    val loadedLog = LogLoader.load(LoadLogParams(
+    val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
       config,
@@ -350,8 +356,11 @@ class LogLoaderTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       stateManager))
-    val log = new Log(loadedLog.logStartOffset,
-      loadedLog.localLog,
+    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+      logDirFailureChannel)
+    val log = new Log(offsets.logStartOffset,
+      localLog,
       brokerTopicStats = brokerTopicStats,
       producerIdExpirationCheckIntervalMs = 30000,
       leaderEpochCache = leaderEpochCache,
@@ -461,7 +470,7 @@ class LogLoaderTest {
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
     val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
-    val loadedLog = LogLoader.load(LoadLogParams(
+    val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
       config,
@@ -475,8 +484,11 @@ class LogLoaderTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       stateManager))
-    new Log(loadedLog.logStartOffset,
-      loadedLog.localLog,
+    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+      logDirFailureChannel)
+    new Log(offsets.logStartOffset,
+      localLog,
       brokerTopicStats = brokerTopicStats,
       producerIdExpirationCheckIntervalMs = 30000,
       leaderEpochCache = leaderEpochCache,
@@ -514,7 +526,7 @@ class LogLoaderTest {
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
     val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
-    val loadedLog = LogLoader.load(LoadLogParams(
+    val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
       config,
@@ -528,8 +540,11 @@ class LogLoaderTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       stateManager))
-    new Log(loadedLog.logStartOffset,
-      loadedLog.localLog,
+    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+      logDirFailureChannel)
+    new Log(offsets.logStartOffset,
+      localLog,
       brokerTopicStats = brokerTopicStats,
       producerIdExpirationCheckIntervalMs = 30000,
       leaderEpochCache = leaderEpochCache,
@@ -569,7 +584,7 @@ class LogLoaderTest {
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
     val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
-    val loadedLog = LogLoader.load(LoadLogParams(
+    val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
       config,
@@ -583,8 +598,11 @@ class LogLoaderTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       stateManager))
-    new Log(loadedLog.logStartOffset,
-      loadedLog.localLog,
+    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+      logDirFailureChannel)
+    new Log(offsets.logStartOffset,
+      localLog,
       brokerTopicStats = brokerTopicStats,
       producerIdExpirationCheckIntervalMs = 30000,
       leaderEpochCache = leaderEpochCache,

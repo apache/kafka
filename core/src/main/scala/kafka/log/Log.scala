@@ -897,7 +897,7 @@ class Log(@volatile var logStartOffset: Long,
                 s"next offset: ${localLog.logEndOffset}, " +
                 s"and messages: $validRecords")
 
-              if (unflushedMessages >= config.flushInterval) flush()
+              if (localLog.unflushedMessages >= config.flushInterval) flush()
           }
           appendInfo
         }
@@ -1285,8 +1285,11 @@ class Log(@volatile var logStartOffset: Long,
   }
 
   /**
-   * Delete any local log segments matching the given predicate function,
-   * starting with the oldest segment and moving forward until a segment doesn't match.
+   * Delete any local log segments starting with the oldest segment and moving forward until until
+   * the user-supplied predicate is false or the segment containing the current high watermark is reached.
+   * We do not delete segments with offsets at or beyond the high watermark to ensure that the log start
+   * offset can never exceed it. If the high watermark has not yet been initialized, no segments are eligible
+   * for deletion.
    *
    * @param predicate A function that takes in a candidate log segment and the next higher segment
    *                  (if there is one) and returns true iff it is deletable
@@ -1295,8 +1298,8 @@ class Log(@volatile var logStartOffset: Long,
    */
   private def deleteOldSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean,
                                 reason: SegmentDeletionReason): Int = {
-    def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment], logEndOffset: Long): Boolean = {
-      highWatermark >= nextSegmentOpt.map(_.baseOffset).getOrElse(logEndOffset) &&
+    def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
+      highWatermark >= nextSegmentOpt.map(_.baseOffset).getOrElse(localLog.logEndOffset) &&
         predicate(segment, nextSegmentOpt)
     }
     lock synchronized {
@@ -1377,7 +1380,7 @@ class Log(@volatile var logStartOffset: Long,
     deleteOldSegments(shouldDelete, StartOffsetBreach(this))
   }
 
-  def isFuture: Boolean = dir.getName.endsWith(Log.FutureDirSuffix)
+  def isFuture: Boolean = localLog.isFuture
 
   /**
    * The size of the log in bytes
@@ -1466,14 +1469,9 @@ class Log(@volatile var logStartOffset: Long,
   }
 
   /**
-   * The number of messages appended to the log since the last flush
-   */
-  private def unflushedMessages: Long = logEndOffset - localLog.recoveryPoint
-
-  /**
    * Flush all local log segments
    */
-  def flush(): Unit = flush(this.logEndOffset)
+  def flush(): Unit = flush(logEndOffset)
 
   /**
    * Flush local log segments for all offsets up to offset-1
@@ -1484,7 +1482,7 @@ class Log(@volatile var logStartOffset: Long,
     maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset") {
       if (offset > localLog.recoveryPoint) {
         debug(s"Flushing log up to offset $offset, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
-          s"unflushed: $unflushedMessages")
+          s"unflushed: ${localLog.unflushedMessages}")
         localLog.flush(offset)
         lock synchronized {
           localLog.markFlushed(offset)
@@ -1499,6 +1497,7 @@ class Log(@volatile var logStartOffset: Long,
   private[log] def delete(): Unit = {
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       lock synchronized {
+        localLog.checkIfMemoryMappedBufferClosed()
         producerExpireCheck.cancel(true)
         leaderEpochCache.foreach(_.clear())
         val deletedSegments = localLog.deleteAllSegments()
@@ -1562,7 +1561,6 @@ class Log(@volatile var logStartOffset: Long,
             deleteProducerSnapshots(deletedSegments, asyncDelete = true)
             leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
             logStartOffset = math.min(targetOffset, logStartOffset)
-            localLog.updateLogEndOffset(targetOffset)
             rebuildProducerState(targetOffset, producerStateManager)
             if (highWatermark >= localLog.logEndOffset)
               updateHighWatermark(localLog.logEndOffsetMetadata)
@@ -1682,7 +1680,7 @@ class Log(@volatile var logStartOffset: Long,
   }
 
   private[log] def deleteProducerSnapshots(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
-    Log.deleteProducerSnapshots(segments, producerStateManager, asyncDelete = true, scheduler, config, logDirFailureChannel, parentDir, topicPartition)
+    Log.deleteProducerSnapshots(segments, producerStateManager, asyncDelete, scheduler, config, logDirFailureChannel, parentDir, topicPartition)
   }
 }
 
@@ -1736,7 +1734,7 @@ object Log extends Logging {
       config.messageFormatVersion.recordVersion,
       s"[Log partition=$topicPartition, dir=${dir.getParent}] ")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
-    val loadedLog = LogLoader.load(LoadLogParams(
+    val offsets = LogLoader.load(LoadLogParams(
       dir,
       topicPartition,
       config,
@@ -1750,8 +1748,10 @@ object Log extends Logging {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager))
-    new Log(loadedLog.logStartOffset,
-      loadedLog.localLog,
+    val localLog = new LocalLog(dir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, scheduler, time, topicPartition, logDirFailureChannel)
+    new Log(offsets.logStartOffset,
+      localLog,
       brokerTopicStats,
       producerIdExpirationCheckIntervalMs,
       leaderEpochCache,
@@ -1866,6 +1866,39 @@ object Log extends Logging {
     }
   }
 
+  private[log] def replaceSegments(existingSegments: LogSegments,
+                                   newSegments: Seq[LogSegment],
+                                   oldSegments: Seq[LogSegment],
+                                   dir: File,
+                                   topicPartition: TopicPartition,
+                                   config: LogConfig,
+                                   scheduler: Scheduler,
+                                   logDirFailureChannel: LogDirFailureChannel,
+                                   logPrefix: String,
+                                   isRecoveredSwapFile: Boolean = false): Iterable[LogSegment] = {
+    LocalLog.replaceSegments(existingSegments,
+      newSegments,
+      oldSegments,
+      dir,
+      topicPartition,
+      config,
+      scheduler,
+      logDirFailureChannel,
+      logPrefix,
+      isRecoveredSwapFile)
+  }
+
+  private[log] def deleteSegmentFiles(segmentsToDelete: immutable.Iterable[LogSegment],
+                                      asyncDelete: Boolean,
+                                      dir: File,
+                                      topicPartition: TopicPartition,
+                                      config: LogConfig,
+                                      scheduler: Scheduler,
+                                      logDirFailureChannel: LogDirFailureChannel,
+                                      logPrefix: String): Unit = {
+    LocalLog.deleteSegmentFiles(segmentsToDelete, asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logPrefix)
+  }
+
   /**
    * Rebuilds producer state until the provided lastOffset. This function may be called from the
    * recovery code path, and thus must be free of all side-effects, i.e. it must not update any
@@ -1965,28 +1998,6 @@ object Log extends Logging {
     }
   }
 
-  private[log] def replaceSegments(existingSegments: LogSegments,
-                                   newSegments: Seq[LogSegment],
-                                   oldSegments: Seq[LogSegment],
-                                   dir: File,
-                                   topicPartition: TopicPartition,
-                                   config: LogConfig,
-                                   scheduler: Scheduler,
-                                   logDirFailureChannel: LogDirFailureChannel,
-                                   logPrefix: String,
-                                   isRecoveredSwapFile: Boolean = false): Iterable[LogSegment] = {
-    LocalLog.replaceSegments(existingSegments,
-      newSegments,
-      oldSegments,
-      dir,
-      topicPartition,
-      config,
-      scheduler,
-      logDirFailureChannel,
-      logPrefix,
-      isRecoveredSwapFile)
-  }
-
   private[log] def splitOverflowedSegment(segment: LogSegment,
                                           existingSegments: LogSegments,
                                           dir: File,
@@ -1998,17 +2009,6 @@ object Log extends Logging {
     LocalLog.splitOverflowedSegment(segment, existingSegments, dir, topicPartition, config, scheduler, logDirFailureChannel, logPrefix)
   }
 
-  private[log] def deleteSegmentFiles(segmentsToDelete: immutable.Iterable[LogSegment],
-                                      asyncDelete: Boolean,
-                                      dir: File,
-                                      topicPartition: TopicPartition,
-                                      config: LogConfig,
-                                      scheduler: Scheduler,
-                                      logDirFailureChannel: LogDirFailureChannel,
-                                      logPrefix: String): Unit = {
-    LocalLog.deleteSegmentFiles(segmentsToDelete, asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logPrefix)
-  }
-
   private[log] def deleteProducerSnapshots(segments: Iterable[LogSegment],
                                            producerStateManager: ProducerStateManager,
                                            asyncDelete: Boolean,
@@ -2017,21 +2017,22 @@ object Log extends Logging {
                                            logDirFailureChannel: LogDirFailureChannel,
                                            parentDir: String,
                                            topicPartition: TopicPartition): Unit = {
-    def deleteProducerSnapshots(segments: Iterable[LogSegment]): Unit = {
+    val snapshotsToDelete = segments.flatMap { segment =>
+      producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset)}
+    def deleteProducerSnapshots(): Unit = {
       LocalLog.maybeHandleIOException(logDirFailureChannel,
         parentDir,
         s"Error while deleting producer state snapshots for $topicPartition in dir $parentDir") {
-        segments.foreach {
-          segment => producerStateManager.removeAndDeleteSnapshot(segment.baseOffset)
+        snapshotsToDelete.foreach { snapshot =>
+          snapshot.deleteIfExists()
         }
       }
     }
 
-
     if (asyncDelete)
-      scheduler.schedule("delete-producer-snapshot", () => deleteProducerSnapshots(segments), delay = config.fileDeleteDelayMs)
+      scheduler.schedule("delete-producer-snapshot", () => deleteProducerSnapshots(), delay = config.fileDeleteDelayMs)
     else
-      deleteProducerSnapshots(segments)
+      deleteProducerSnapshots()
   }
 
   private[log] def createNewCleanedSegment(dir: File, logConfig: LogConfig, baseOffset: Long): LogSegment = {
