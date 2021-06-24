@@ -276,8 +276,12 @@ public class SubscriptionState {
         Map<TopicPartition, TopicPartitionState> assignedPartitionStates = new HashMap<>(assignments.size());
         for (TopicPartition tp : assignments) {
             TopicPartitionState state = this.assignment.stateValue(tp);
-            if (state == null)
+            if (state == null) {
+//                System.out.println("!!! state is null:" + tp);
+
                 state = new TopicPartitionState();
+            }
+//            System.out.println("!!! state is:" + tp + "," + state.position);
             assignedPartitionStates.put(tp, state);
         }
 
@@ -383,6 +387,10 @@ public class SubscriptionState {
     }
 
     public void seekUnvalidated(TopicPartition tp, FetchPosition position) {
+        if (tp.toString().equals("table2-4")) {
+            System.err.print("seekUn:" + position);
+            System.err.flush();
+        }
         assignedState(tp).seekUnvalidated(position);
     }
 
@@ -396,6 +404,11 @@ public class SubscriptionState {
             log.debug("Skipping reset of partition {} since an alternative reset has been requested", tp);
         } else {
             log.info("Resetting offset for partition {} to position {}.", tp, position);
+            if (tp.toString().equals("table2-4")) {
+                System.err.print("resetP:" + position);
+                System.err.flush();
+            }
+
             state.seekUnvalidated(position);
         }
     }
@@ -505,6 +518,10 @@ public class SubscriptionState {
                             currentPosition.currentLeader);
                     log.info("Truncation detected for partition {} at offset {}, resetting offset to " +
                              "the first offset known to diverge {}", tp, currentPosition, newPosition);
+                    if (tp.toString().equals("table2-4")) {
+                        System.err.print("!!! truncate:" + newPosition);
+                        System.err.flush();
+                    }
                     state.seekValidated(newPosition);
                 } else {
                     OffsetAndMetadata divergentOffset = new OffsetAndMetadata(epochEndOffset.endOffset(),
@@ -539,11 +556,20 @@ public class SubscriptionState {
 
     public synchronized Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
         TopicPartitionState topicPartitionState = assignedState(tp);
+
         if (topicPartitionState.position == null) {
+            if (tp.toString().equals("table2-4")) {
+                System.err.print("pos n");
+                System.err.flush();
+            }
             return null;
         } else if (isolationLevel == IsolationLevel.READ_COMMITTED) {
             return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset - topicPartitionState.position.offset;
         } else {
+            if (tp.toString().equals("table2-4")) {
+                System.err.print("hwm:" + topicPartitionState.highWatermark);
+                System.err.flush();
+            }
             return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position.offset;
         }
     }
@@ -554,6 +580,10 @@ public class SubscriptionState {
     }
 
     synchronized void updateHighWatermark(TopicPartition tp, long highWatermark) {
+        if (tp.toString().equals("table2-4")) {
+            System.err.print("uHWM:" + highWatermark);
+            System.err.flush();
+        }
         assignedState(tp).highWatermark(highWatermark);
     }
 
@@ -945,6 +975,7 @@ public class SubscriptionState {
         }
 
         private void highWatermark(Long highWatermark) {
+
             this.highWatermark = highWatermark;
         }
 
