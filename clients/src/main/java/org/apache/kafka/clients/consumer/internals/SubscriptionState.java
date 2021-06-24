@@ -389,6 +389,11 @@ public class SubscriptionState {
     public void seekUnvalidated(TopicPartition tp, FetchPosition position) {
         if (tp.toString().equals("table2-4")) {
             System.err.print("seekUn:" + position);
+            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+            for (int i = 1; i < elements.length; i++) {
+                final StackTraceElement s = elements[i];
+                System.err.print("-at "+ s.getFileName());
+            }
             System.err.flush();
         }
         assignedState(tp).seekUnvalidated(position);
