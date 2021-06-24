@@ -98,10 +98,7 @@ object LogLoader extends Logging {
     // The remaining valid swap files must come from compaction or segment split operation. We can
     // simply rename them to regular segment files. But, before renaming, we should figure out which
     // segments are compacted and delete these segment files: this is done by calculating min/maxSwapFileOffset.
-    // If sanity check fails, we cannot do the simple renaming, we must do a full recovery, which
-    // involves rebuilding all the index files and the producer state.
-    // We store segments that require renaming and recovery in this code block, and do the actual
-    // renaming and recovery later.
+    // We store segments that require renaming in this code block, and do the actual renaming later.
     var minSwapFileOffset = Long.MaxValue
     var maxSwapFileOffset = Long.MinValue
     val toRenameSwapFiles = mutable.Set[File]()
@@ -125,7 +122,7 @@ object LogLoader extends Logging {
       try {
         if (!file.getName.endsWith(SwapFileSuffix)) {
           val offset = offsetFromFile(file)
-          if (offset >= minSwapFileOffset && offset < maxSwapFileOffset) {
+          if (offset >= minSwapFileOffset && offset <= maxSwapFileOffset) {
             info(s"${params.logIdentifier}Deleting segment files ${file.getName} that is compacted but has not been deleted yet.")
             file.delete()
           }
