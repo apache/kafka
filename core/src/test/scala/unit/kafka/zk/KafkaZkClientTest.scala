@@ -19,7 +19,6 @@ package kafka.zk
 import java.util.{Collections, Properties}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log.LogConfig
@@ -30,7 +29,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
-import org.apache.zookeeper.KeeperException.{Code, NoNodeException, NodeExistsException}
+import org.apache.zookeeper.KeeperException.{Code, NoAuthException, NoNodeException, NodeExistsException}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -52,8 +51,7 @@ import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.client.ZKClientConfig
-import org.apache.zookeeper.data.{ACL, Id, Stat}
-import org.apache.zookeeper.server.auth.DigestAuthenticationProvider
+import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -151,25 +149,16 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.makeSurePersistentPathExists(chroot)
     zkClient.setAcl(chroot, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
 
-    // root is inaccessible
-    val scheme = "digest"
-    val id = "test"
-    val pwd = "12345"
-    val digest = DigestAuthenticationProvider.generateDigest(s"$id:$pwd")
-    val authInfo = s"$id:$pwd".getBytes()
-    val acl = new ACL(ZooDefs.Perms.ALL, new Id(scheme, digest))
+    // root is read-only
+    zkClient.setAcl(root, ZooDefs.Ids.READ_ACL_UNSAFE.asScala)
 
-    zkClient.currentZooKeeper.addAuthInfo(scheme, authInfo)
-    zkClient.setAcl(root, Seq(acl))
+    // we should not be able to create under chroot folder
+    assertThrows(classOf[NoAuthException], () => zkClient.makeSurePersistentPathExists(chroot))
 
     // this client won't have access to the root, but the chroot already exists
     val chrootClient = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, createChrootIfNecessary = true)
     chrootClient.close()
-
-    zkClient.setAcl(root, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
-    zkClient.deletePath(chroot)
-    zkClient.deletePath(root)
   }
 
   @Test
