@@ -38,8 +38,7 @@ import java.util.stream.Collectors;
 
 public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKey> {
 
-    private static final ApiRequestScope GROUP_REQUEST_SCOPE = new ApiRequestScope() { };
-    private static final ApiRequestScope TXN_REQUEST_SCOPE = new ApiRequestScope() { };
+    private static final ApiRequestScope BATCH_REQUEST_SCOPE = new ApiRequestScope() { };
 
     private final Logger log;
     private final FindCoordinatorRequest.CoordinatorType type;
@@ -58,11 +57,7 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
     @Override
     public ApiRequestScope lookupScope(CoordinatorKey key) {
         if (batch) {
-            if (type == CoordinatorType.GROUP) {
-                return GROUP_REQUEST_SCOPE;
-            } else {
-                return TXN_REQUEST_SCOPE;
-            }
+            return BATCH_REQUEST_SCOPE;
         } else {
             // If the `FindCoordinator` API does not support batched lookups, we use a
             // separate lookup context for each coordinator key we need to lookup

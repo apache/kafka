@@ -75,7 +75,11 @@ public class FindCoordinatorRequest extends AbstractRequest {
             response.setThrottleTimeMs(throttleTimeMs);
         }
         Errors error = Errors.forException(e);
-        return FindCoordinatorResponse.prepareOldResponse(error, Node.noNode());
+        if (version() < 4) {
+            return FindCoordinatorResponse.prepareOldResponse(error, Node.noNode());
+        } else {
+            return FindCoordinatorResponse.prepareErrorResponse(error, data.coordinatorKeys());
+        }
     }
 
     public static FindCoordinatorRequest parse(ByteBuffer buffer, short version) {
