@@ -152,10 +152,11 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // root is read-only
     zkClient.setAcl(root, ZooDefs.Ids.READ_ACL_UNSAFE.asScala)
 
-    // we should not be able to create under chroot folder
+    // we should not be able to create node under chroot folder
     assertThrows(classOf[NoAuthException], () => zkClient.makeSurePersistentPathExists(chroot))
 
-    // this client won't create permission to the root and chroot, but the chroot already exists
+    // this client doesn't have create permission to the root and chroot, but the chroot already exists
+    // Expect that no exception thrown
     val chrootClient = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, createChrootIfNecessary = true)
     chrootClient.close()
