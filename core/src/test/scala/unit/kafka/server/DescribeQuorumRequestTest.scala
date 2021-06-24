@@ -16,21 +16,39 @@
  */
 package kafka.server
 
-import kafka.server.IntegrationTestUtils.connectAndReceive
+import java.io.IOException
+
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
-import org.apache.kafka.common.protocol.Errors
+import kafka.utils.NotNothing
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.DescribeQuorumRequest.singletonRequest
-import org.apache.kafka.common.requests.{DescribeQuorumRequest, DescribeQuorumResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, DescribeQuorumRequest, DescribeQuorumResponse}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
+import scala.reflect.ClassTag
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.KRAFT)
 class DescribeQuorumRequestTest(cluster: ClusterInstance) {
+
+  @ClusterTest(clusterType = Type.ZK)
+  def testDescribeQuorumNotSupportedByZkBrokers(): Unit = {
+    val apiRequest = new ApiVersionsRequest.Builder().build()
+    val apiResponse =  connectAndReceive[ApiVersionsResponse](apiRequest)
+    assertNull(apiResponse.apiVersion(ApiKeys.DESCRIBE_QUORUM.id))
+
+    val describeQuorumRequest = new DescribeQuorumRequest.Builder(
+      singletonRequest(KafkaRaftServer.MetadataPartition)
+    ).build()
+
+    assertThrows(classOf[IOException], () => {
+      connectAndReceive[DescribeQuorumResponse](describeQuorumRequest)
+    })
+  }
 
   @ClusterTest
   def testDescribeQuorum(): Unit = {
@@ -38,11 +56,7 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
       singletonRequest(KafkaRaftServer.MetadataPartition)
     ).build()
 
-    val response = connectAndReceive[DescribeQuorumResponse](
-      request,
-      cluster.brokerSocketServers().asScala.head,
-      cluster.clientListener()
-    )
+    val response = connectAndReceive[DescribeQuorumResponse](request)
 
     assertEquals(Errors.NONE, Errors.forCode(response.data.errorCode))
     assertEquals(1, response.data.topics.size)
@@ -62,6 +76,18 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
     val leaderState = partitionData.currentVoters.asScala.find(_.replicaId == leaderId)
       .getOrElse(throw new AssertionError("Failed to find leader among current voter states"))
     assertTrue(leaderState.logEndOffset > 0)
+  }
+
+  private def connectAndReceive[T <: AbstractResponse](
+    request: AbstractRequest
+  )(
+    implicit classTag: ClassTag[T], nn: NotNothing[T]
+  ): T = {
+    IntegrationTestUtils.connectAndReceive(
+      request,
+      cluster.brokerSocketServers().asScala.head,
+      cluster.clientListener()
+    )
   }
 
 }
