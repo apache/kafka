@@ -125,7 +125,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `DeleteConsumerGroupOffsets` response", groupId,
+                log.error("Received authorization failure for group {} in `OffsetFetch` response", groupId,
                         error.exception());
                 failed.put(groupId, error.exception());
                 break;
@@ -133,15 +133,15 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
             case COORDINATOR_NOT_AVAILABLE:
                 break;
             case NOT_COORDINATOR:
-                log.debug("DeleteConsumerGroupOffsets request for group {} returned error {}. Will retry",
+                log.debug("OffsetFetch request for group {} returned error {}. Will retry",
                         groupId, error);
                 unmapped.add(groupId);
                 break;
             default:
-                log.error("Received unexpected error for group {} in `DeleteConsumerGroupOffsets` response", 
+                log.error("Received unexpected error for group {} in `OffsetFetch` response",
                         groupId, error.exception());
                 failed.put(groupId, error.exception(
-                        "Received unexpected error for group " + groupId + " in `DeleteConsumerGroupOffsets` response"));
+                        "Received unexpected error for group " + groupId + " in `OffsetFetch` response"));
         }
     }
 

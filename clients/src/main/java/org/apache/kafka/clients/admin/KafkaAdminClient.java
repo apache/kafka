@@ -3291,7 +3291,7 @@ public class KafkaAdminClient extends AdminClient {
     public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, Void> future =
                 DeleteConsumerGroupsHandler.newFuture(groupIds);
-        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(new HashSet<>(groupIds), logContext);
+        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new DeleteConsumerGroupsResult(future.all());
     }
@@ -4315,7 +4315,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse response) {
                 long currentTimeMs = time.milliseconds();
-                driver.onResponse(currentTimeMs, spec, response, nodeProvider.provide());
+                driver.onResponse(currentTimeMs, spec, response, this.curNode());
                 maybeSendRequests(driver, currentTimeMs);
             }
 

@@ -110,7 +110,4 @@ public class FindCoordinatorResponse extends AbstractResponse {
         return new FindCoordinatorResponse(data);
     }
 
-    public static boolean isBatch(RequestHeader header) {
-        return header.apiVersion() >= 4;
-    }
 }

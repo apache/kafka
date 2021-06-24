@@ -23,10 +23,6 @@ import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -44,12 +40,10 @@ public class DeleteConsumerGroupsHandlerTest {
 
     private final LogContext logContext = new LogContext();
     private final String groupId1 = "group-id1";
-    private final String groupId2 = "group-id2";
-    private final Set<String> groupIds = new HashSet<>(Arrays.asList(groupId1, groupId2));
 
     @Test
     public void testBuildRequest() {
-        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(groupIds, logContext);
+        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(logContext);
         DeleteGroupsRequest request = handler.buildRequest(1, singleton(CoordinatorKey.byGroupId(groupId1))).build();
         assertEquals(1, request.data().groupsNames().size());
         assertEquals(groupId1, request.data().groupsNames().get(0));
@@ -91,7 +85,7 @@ public class DeleteConsumerGroupsHandlerTest {
     private AdminApiHandler.ApiResult<CoordinatorKey, Void> handleWithError(
         Errors error
     ) {
-        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(groupIds, logContext);
+        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(logContext);
         DeleteGroupsResponse response = buildResponse(error);
         return handler.handleResponse(new Node(1, "host", 1234), singleton(CoordinatorKey.byGroupId(groupId1)), response);
     }

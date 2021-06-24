@@ -105,8 +105,11 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
         FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
         if (batch) {
             for (Coordinator coordinator : response.data().coordinators()) {
+                CoordinatorKey key = (type == CoordinatorType.GROUP)
+                        ? CoordinatorKey.byGroupId(coordinator.key())
+                        : CoordinatorKey.byTransactionalId(coordinator.key());
                 handleError(Errors.forCode(coordinator.errorCode()),
-                            new CoordinatorKey(type, coordinator.key()),
+                            key,
                             coordinator.nodeId(),
                             mappedKeys,
                             failedKeys);

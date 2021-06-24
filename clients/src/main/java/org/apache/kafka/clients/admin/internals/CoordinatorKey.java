@@ -24,7 +24,7 @@ public class CoordinatorKey {
     public final String idValue;
     public final FindCoordinatorRequest.CoordinatorType type;
 
-    public CoordinatorKey(FindCoordinatorRequest.CoordinatorType type, String idValue) {
+    private CoordinatorKey(FindCoordinatorRequest.CoordinatorType type, String idValue) {
         this.idValue = idValue;
         this.type = type;
     }

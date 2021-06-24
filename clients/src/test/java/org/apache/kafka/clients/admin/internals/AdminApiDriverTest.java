@@ -334,7 +334,7 @@ class AdminApiDriverTest {
         MockTime time = new MockTime();
         LogContext lc = new LogContext();
         Set<String> groupIds = new HashSet<>(Arrays.asList("g1", "g2"));
-        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(groupIds, lc);
+        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(lc);
         AdminApiFuture<CoordinatorKey, Void> future = AdminApiFuture.forKeys(
                 groupIds.stream().map(g -> CoordinatorKey.byGroupId(g)).collect(Collectors.toSet()));
 

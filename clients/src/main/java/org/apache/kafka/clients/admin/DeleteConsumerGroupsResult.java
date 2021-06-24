@@ -34,7 +34,7 @@ import java.util.Map;
 public class DeleteConsumerGroupsResult {
     private final Map<CoordinatorKey, KafkaFutureImpl<Void>> futures;
 
-    DeleteConsumerGroupsResult(Map<CoordinatorKey, KafkaFutureImpl<Void>> futures) {
+    DeleteConsumerGroupsResult(final Map<CoordinatorKey, KafkaFutureImpl<Void>> futures) {
         this.futures = futures;
     }
 
@@ -44,9 +44,9 @@ public class DeleteConsumerGroupsResult {
      */
     public Map<String, KafkaFuture<Void>> deletedGroups() {
         Map<String, KafkaFuture<Void>> deletedGroups = new HashMap<>(futures.size());
-        for (Map.Entry<CoordinatorKey, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
-            deletedGroups.put(entry.getKey().idValue, entry.getValue());
-        }
+        futures.forEach((key, future) -> {
+            deletedGroups.put(key.idValue, future);
+        });
         return deletedGroups;
     }
 

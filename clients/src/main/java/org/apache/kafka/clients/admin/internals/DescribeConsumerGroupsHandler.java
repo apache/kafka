@@ -80,7 +80,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
 
     @Override
     public String apiName() {
-        return "describeConsumerGroups";
+        return "describeGroups";
     }
 
     @Override

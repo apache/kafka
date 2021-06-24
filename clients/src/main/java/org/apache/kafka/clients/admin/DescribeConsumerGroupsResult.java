@@ -37,7 +37,7 @@ public class DescribeConsumerGroupsResult {
 
     private final Map<CoordinatorKey, KafkaFutureImpl<ConsumerGroupDescription>> futures;
 
-    public DescribeConsumerGroupsResult(Map<CoordinatorKey, KafkaFutureImpl<ConsumerGroupDescription>> futures) {
+    public DescribeConsumerGroupsResult(final Map<CoordinatorKey, KafkaFutureImpl<ConsumerGroupDescription>> futures) {
         this.futures = futures;
     }
 

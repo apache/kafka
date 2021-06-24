@@ -276,6 +276,7 @@ public class AdminApiDriver<K, V> {
     private void clearInflightRequest(long currentTimeMs, RequestSpec<K> spec) {
         RequestState requestState = requestStates.get(spec.scope);
         if (requestState != null) {
+            // Only apply backoff if it's not a retry of a lookup request
             if (spec.scope instanceof FulfillmentScope) {
                 requestState.clearInflight(currentTimeMs + retryBackoffMs);
             } else {

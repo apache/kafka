@@ -41,7 +41,6 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public DeleteConsumerGroupsHandler(
-        Set<String> groupIds,
         LogContext logContext
     ) {
         this.log = logContext.logger(DeleteConsumerGroupsHandler.class);
@@ -113,7 +112,7 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `DescribeGroups` response", groupId,
+                log.error("Received authorization failure for group {} in `DeleteConsumerGroups` response", groupId,
                         error.exception());
                 failed.put(groupId, error.exception());
                 break;
@@ -121,12 +120,12 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
             case COORDINATOR_NOT_AVAILABLE:
                 break;
             case NOT_COORDINATOR:
-                log.debug("DescribeGroups request for group {} returned error {}. Will retry",
+                log.debug("DeleteConsumerGroups request for group {} returned error {}. Will retry",
                         groupId, error);
                 unmapped.add(groupId);
                 break;
             default:
-                log.error("Received unexpected error for group {} in `DescribeGroups` response", 
+                log.error("Received unexpected error for group {} in `DeleteConsumerGroups` response",
                         groupId, error.exception());
                 failed.put(groupId, error.exception());
         }
