@@ -114,7 +114,9 @@ object ApiVersion {
     // Introduced topic IDs to LeaderAndIsr and UpdateMetadata requests/responses (KIP-516)
     KAFKA_2_8_IV1,
     // Introduce AllocateProducerIds (KIP-730)
-    KAFKA_3_0_IV0
+    KAFKA_3_0_IV0,
+    // Introduce ListOffsets V7 which supports listing offsets by max timestamp (KIP-734)
+    KAFKA_3_0_IV1
   )
 
   // Map keys are the union of the short and full versions
@@ -456,6 +458,13 @@ case object KAFKA_3_0_IV0 extends DefaultApiVersion {
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
   val id: Int = 33
+}
+
+case object KAFKA_3_0_IV1 extends DefaultApiVersion {
+  val shortVersion: String = "3.0"
+  val subVersion = "IV1"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 34
 }
 
 object ApiVersionValidator extends Validator {

@@ -4209,11 +4209,7 @@ public class KafkaAdminClient extends AdminClient {
             OffsetSpec offsetSpec = entry.getValue();
             TopicPartition tp = entry.getKey();
             KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
-            long offsetQuery = (offsetSpec instanceof TimestampSpec)
-                    ? ((TimestampSpec) offsetSpec).timestamp()
-                    : (offsetSpec instanceof OffsetSpec.EarliestSpec)
-                        ? ListOffsetsRequest.EARLIEST_TIMESTAMP
-                        : ListOffsetsRequest.LATEST_TIMESTAMP;
+            long offsetQuery = getOffsetFromOffsetSpec(offsetSpec);
             // avoid sending listOffsets request for topics with errors
             if (!mr.errors().containsKey(tp.topic())) {
                 Node node = mr.cluster().leaderFor(tp);
@@ -4236,10 +4232,12 @@ public class KafkaAdminClient extends AdminClient {
 
                 final List<ListOffsetsTopic> partitionsToQuery = new ArrayList<>(entry.getValue().values());
 
+                private boolean supportsMaxTimestamp = true;
+
                 @Override
                 ListOffsetsRequest.Builder createRequest(int timeoutMs) {
                     return ListOffsetsRequest.Builder
-                            .forConsumer(true, context.options().isolationLevel())
+                            .forConsumer(true, context.options().isolationLevel(), supportsMaxTimestamp)
                             .setTargetTimes(partitionsToQuery);
                 }
 
@@ -4297,6 +4295,36 @@ public class KafkaAdminClient extends AdminClient {
                             future.completeExceptionally(throwable);
                         }
                     }
+                }
+
+                @Override
+                boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
+                    if (supportsMaxTimestamp) {
+                        supportsMaxTimestamp = false;
+
+                        // fail any unsupported futures and remove partitions from the downgraded retry
+                        boolean foundMaxTimestampPartition = false;
+                        Iterator<ListOffsetsTopic> topicIterator = partitionsToQuery.iterator();
+                        while (topicIterator.hasNext()) {
+                            ListOffsetsTopic topic = topicIterator.next();
+                            Iterator<ListOffsetsPartition> partitionIterator = topic.partitions().iterator();
+                            while (partitionIterator.hasNext()) {
+                                ListOffsetsPartition partition = partitionIterator.next();
+                                if (partition.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP) {
+                                    foundMaxTimestampPartition = true;
+                                    futures.get(new TopicPartition(topic.name(), partition.partitionIndex()))
+                                        .completeExceptionally(new UnsupportedVersionException(
+                                            "Broker " + brokerId + " does not support MAX_TIMESTAMP offset spec"));
+                                    partitionIterator.remove();
+                                }
+                            }
+                            if (topic.partitions().isEmpty()) {
+                                topicIterator.remove();
+                            }
+                        }
+                        return foundMaxTimestampPartition && !partitionsToQuery.isEmpty();
+                    }
+                    return false;
                 }
             });
         }
@@ -4832,6 +4860,17 @@ public class KafkaAdminClient extends AdminClient {
                 }
             }
         };
+    }
+
+    private long getOffsetFromOffsetSpec(OffsetSpec offsetSpec) {
+        if (offsetSpec instanceof TimestampSpec) {
+            return ((TimestampSpec) offsetSpec).timestamp();
+        } else if (offsetSpec instanceof OffsetSpec.EarliestSpec) {
+            return ListOffsetsRequest.EARLIEST_TIMESTAMP;
+        } else if (offsetSpec instanceof OffsetSpec.MaxTimestampSpec) {
+            return ListOffsetsRequest.MAX_TIMESTAMP;
+        }
+        return ListOffsetsRequest.LATEST_TIMESTAMP;
     }
 
     /**
