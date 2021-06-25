@@ -114,11 +114,11 @@ class ConsumerGroupServiceTest {
     when(admin.listOffsets(
       ArgumentMatchers.argThat(offsetsArgMatcher(assignedTopicPartitions)),
       any()
-    )).thenReturn(new ListOffsetsResult(endOffsets.view.filterKeys(assignedTopicPartitions.contains).toMap.asJava))
+    )).thenReturn(new ListOffsetsResult(endOffsets.filter{ case (tp, _) => assignedTopicPartitions.contains(tp) }.asJava))
     when(admin.listOffsets(
       ArgumentMatchers.argThat(offsetsArgMatcher(unassignedTopicPartitions)),
       any()
-    )).thenReturn(new ListOffsetsResult(endOffsets.view.filterKeys(unassignedTopicPartitions.contains).toMap.asJava))
+    )).thenReturn(new ListOffsetsResult(endOffsets.filter{ case (tp, _) => unassignedTopicPartitions.contains(tp) }.asJava))
 
     val (state, assignments) = groupService.collectGroupOffsets(group)
     val returnedOffsets = assignments.map { results =>
