@@ -22,57 +22,61 @@ import org.apache.kafka.streams.state.HostInfo;
 import java.util.Set;
 
 /**
- * Represents the state of the different a given Kafka Streams instance running within a {@link KafkaStreams} application.
+ * Metadata of a Kafka Streams client.
  */
 public interface StreamsMetadata {
 
     /**
-     * The value of {@link StreamsConfig#APPLICATION_SERVER_CONFIG} configured for the streams
-     * instance, which is typically host/port
+     * The value of {@link StreamsConfig#APPLICATION_SERVER_CONFIG} configured for the Streams
+     * client.
      *
-     * @return {@link HostInfo} corresponding to the streams instance
+     * @return {@link HostInfo} corresponding to the Streams client
      */
     HostInfo hostInfo();
 
     /**
-     * State stores owned by the instance as an active replica
+     * Names of the state stores assigned to active tasks of the Streams client.
      *
-     * @return set of active state store names
+     * @return names of the state stores assigned to active tasks
      */
     Set<String> stateStoreNames();
 
     /**
-     * Topic partitions consumed by the instance as an active replica
+     * Source topic partitions of the active tasks of the Streams client.
      *
-     * @return set of active topic partitions
+     * @return source topic partitions of the active tasks
      */
     Set<TopicPartition> topicPartitions();
 
     /**
-     * (Source) Topic partitions for which the instance acts as standby.
+     * Changelog topic partitions for the state stores the standby tasks of the Streams client replicates.
      *
-     * @return set of standby topic partitions
+     * @return set of changelog topic partitions of the standby tasks
      */
     Set<TopicPartition> standbyTopicPartitions();
 
     /**
-     * State stores owned by the instance as a standby replica
+     * Names of the state stores assigned to standby tasks of the Streams client.
      *
-     * @return set of standby state store names
+     * @return names of the state stores assigned to standby tasks
      */
     Set<String> standbyStateStoreNames();
 
     /**
-     * This method is equivalent to call {@code StreamsMetadata.hostInfo().host();}
+     * Host where the Streams client runs. 
      *
-     * @return the host where the given process runs
+     * This method is equivalent to {@code StreamsMetadata.hostInfo().host();}
+     *
+     * @return the host where the Streams client runs
      */
     String host();
 
     /**
-     * This method is equivalent to call {@code StreamsMetadata.hostInfo().port();}
+     * Port on which the Streams client listens.
+     * 
+     * This method is equivalent to {@code StreamsMetadata.hostInfo().port();}
      *
-     * @return the port number where the given process runs
+     * @return the port on which Streams client listens
      */
     int port();
 

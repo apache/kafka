@@ -19,63 +19,65 @@ package org.apache.kafka.streams;
 import java.util.Set;
 
 /**
- * Represents the state of a single thread running within a {@link KafkaStreams} application.
+ * Metadata of a stream thread.
  */
 public interface ThreadMetadata {
 
 
     /**
-     * This function will return the state of the Thread
-     * @return the state of the Thread
+     * State of the stream thread
+     *
+     * @return the state
      */
     String threadState();
 
     /**
-     * This function will return the name of the Thread
+     * Name of the stream thread
      *
-     * @return the name of the Thread
+     * @return the name
      */
     String threadName();
 
     /**
-     * This function will return the set of the {@link TaskMetadata} for the current active tasks
+     * Metadata of the active tasks assigned to the stream thread.
      *
-     * @return a set of metadata for the active tasks
+     * @return metadata of the active tasks
      */
     Set<TaskMetadata> activeTasks();
 
     /**
-     * This function will return the set of the {@link TaskMetadata} for the current standby tasks
+     * Metadata of the standby tasks assigned to the stream thread.
      *
-     * @return a set of metadata for the standby tasks
+     * @return metadata of the standby tasks
+
      */
     Set<TaskMetadata> standbyTasks();
 
     /**
-     * This function will return the Client Id for the consumer
+     * Client ID of the Kafka consumer used by the stream thread.
      *
-     * @return the consumer Client Id
+     * @return client ID of the Kafka consumer
      */
     String consumerClientId();
 
     /**
-     * This function will return the Client id for the restore consumer
+     * Client ID of the restore Kafka consumer used by the stream thread
      *
-     * @return the restore consumer Client Id
+     * @return client ID of the restore Kafka consumer
      */
     String restoreConsumerClientId();
 
     /**
-     * This function will return the set of Client Ids for the producers
+     * Client IDs of the Kafka producers used by the stream thread.
      *
-     * @return set of producer Client Ids
+     * @return client IDs of the Kafka producers
      */
     Set<String> producerClientIds();
 
     /**
-     * This function will return the Client Id for the admin client
+     * Client ID of the admin client used by the stream thread.
      *
-     * @return the admin Client Id
+     * @return client ID of the admin client
      */
     String adminClientId();
 

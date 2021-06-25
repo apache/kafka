@@ -25,42 +25,42 @@ import java.util.Set;
 
 
 /**
- * Represents the state of a single task running within a {@link KafkaStreams} application.
+ * Metadata of a task.
  */
 public interface TaskMetadata {
 
     /**
-     * This function will return a {@link TaskId} with basic task metadata
+     * Task ID of the task.
      *
-     * @return the basic task metadata such as subtopology and partition id
+     * @return task ID consisting of subtopology and partition ID
      */
     TaskId taskId();
 
     /**
-     * This function will return a set of the current TopicPartitions
+     * Source topic partitions of the task.
      *
-     * @return set of topic partitions
+     * @return source topic partitions
      */
     Set<TopicPartition> topicPartitions();
 
     /**
-     * This function will return a map of TopicPartitions and the highest committed offset seen so far
+     * Offsets of the source topic partitions committed so far by the task.
      *
-     * @return map with an entry for all topic partitions with the committed offset as a value
+     * @return map from source topic partitions to committed offsets
      */
     Map<TopicPartition, Long> committedOffsets();
 
     /**
-     * This function will return a map of TopicPartitions and the highest offset seen so far in the Topic
+     * End offsets of the source topic partitions of the task.
      *
-     * @return map with an entry for all topic partitions with the highest offset as a value
+     * @return map source topic partition to end offsets
      */
     Map<TopicPartition, Long> endOffsets();
 
     /**
-     * This function will return the time task idling started, if the task is not currently idling it will return empty
+     * Time task idling started. If the task is not currently idling it will return empty.
      *
-     * @return A filled {@code Optional} with the time where task idling started, and empty {@code Optional} otherwise
+     * @return time when task idling started, empty {@code Optional} if the task is currently not idling
      */
     Optional<Long> timeCurrentIdlingStarted();
 
