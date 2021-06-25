@@ -3301,11 +3301,14 @@ public class KafkaAdminClient extends AdminClient {
     private <T, O extends AbstractOptions<O>> Call getMetadataCall(MetadataOperationContext<T, O> context,
                                                                    Supplier<List<Call>> nextCalls) {
         return new Call("metadata", context.deadline(), new LeastLoadedNodeProvider()) {
+
+            private boolean supportsDisablingTopicCreation = true;
+
             @Override
             MetadataRequest.Builder createRequest(int timeoutMs) {
                 return new MetadataRequest.Builder(new MetadataRequestData()
                     .setTopics(convertToMetadataRequestTopic(context.topics()))
-                    .setAllowAutoTopicCreation(false));
+                    .setAllowAutoTopicCreation(!supportsDisablingTopicCreation));
             }
 
             @Override
@@ -3325,6 +3328,15 @@ public class KafkaAdminClient extends AdminClient {
                 for (KafkaFutureImpl<T> future : context.futures().values()) {
                     future.completeExceptionally(throwable);
                 }
+            }
+
+            @Override
+            boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
+                if (supportsDisablingTopicCreation) {
+                    supportsDisablingTopicCreation = false;
+                    return true;
+                }
+                return false;
             }
         };
     }
