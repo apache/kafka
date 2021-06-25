@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.cluster.Partition
 import kafka.log.{Log, LogManager}
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.CachedConfigRepository
+import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils.MockAlterIsrManager
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -68,7 +68,7 @@ class IsrExpirationTest {
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     replicaManager = new ReplicaManager(configs.head, metrics, time, None, null, logManager, new AtomicBoolean(false),
       quotaManager, new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId),
-      new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager, new CachedConfigRepository())
+      new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager, new MockConfigRepository())
   }
 
   @AfterEach

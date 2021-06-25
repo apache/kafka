@@ -39,7 +39,7 @@ import kafka.server.ReplicationQuotaManager;
 import kafka.server.SimpleApiVersionManager;
 import kafka.server.ZkAdminManager;
 import kafka.server.ZkSupport;
-import kafka.server.metadata.CachedConfigRepository;
+import kafka.server.metadata.MockConfigRepository;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -181,7 +181,7 @@ public class MetadataRequestBenchmark {
             autoTopicCreationManager,
             brokerId,
             config,
-            new CachedConfigRepository(),
+            new MockConfigRepository(),
             metadataCache,
             metrics,
             Option.empty(),
