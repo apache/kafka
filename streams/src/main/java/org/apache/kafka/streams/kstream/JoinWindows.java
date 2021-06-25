@@ -146,7 +146,7 @@ public class JoinWindows extends Windows<Window> {
      * the timestamp of the record from the primary stream.
      *
      * @param timeDifference
-     * @return
+     * @return a new JoinWindows object with the window definition with and grace period (uses old default of 24 hours)
      * @throws IllegalArgumentException if {@code timeDifference} is negative or can't be represented as {@code long milliseconds}
      * @deprecated since 3.0 Use {@link #ofTimeDifferenceAndGrace(Duration, Duration)} instead
      */
