@@ -4287,10 +4287,7 @@ public class KafkaAdminClientTest {
 
             // listoffsets response from broker 0
             env.kafkaClient().prepareUnsupportedVersionResponse(
-                // ensure that the initial request contains max timestamp requests
-                request -> request instanceof ListOffsetsRequest && ((ListOffsetsRequest) request).topics().stream()
-                    .flatMap(t -> t.partitions().stream())
-                    .anyMatch(p -> p.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP));
+                request -> request instanceof ListOffsetsRequest);
 
             ListOffsetsTopicResponse topicResponse = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp1, Errors.NONE, -1L, 345L, 543);
             ListOffsetsResponseData responseData = new ListOffsetsResponseData()
@@ -4340,14 +4337,10 @@ public class KafkaAdminClientTest {
 
             // listoffsets response from broker 0
             env.kafkaClient().prepareUnsupportedVersionResponse(
-                // ensure that the initial request doesn't contain max timestamp requests
-                request -> request instanceof ListOffsetsRequest && ((ListOffsetsRequest) request).topics().stream()
-                    .flatMap(t -> t.partitions().stream())
-                    .noneMatch(p -> p.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP));
+                request -> request instanceof ListOffsetsRequest);
 
-            ListOffsetsResult result = env.adminClient().listOffsets(new HashMap<TopicPartition, OffsetSpec>() {{
-                    put(tp0, OffsetSpec.latest());
-                }});
+            ListOffsetsResult result = env.adminClient().listOffsets(
+                Collections.singletonMap(tp0, OffsetSpec.latest()));
 
             TestUtils.assertFutureThrows(result.partitionResult(tp0), UnsupportedVersionException.class);
         }

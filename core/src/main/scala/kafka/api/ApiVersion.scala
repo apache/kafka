@@ -115,7 +115,7 @@ object ApiVersion {
     KAFKA_2_8_IV1,
     // Introduce AllocateProducerIds (KIP-730)
     KAFKA_3_0_IV0,
-    // Introduce ListOffsets maxTimestamps (KIP-734)
+    // Introduce ListOffsets V7 which supports listing offsets by max timestamp (KIP-734)
     KAFKA_3_0_IV1
   )
 
