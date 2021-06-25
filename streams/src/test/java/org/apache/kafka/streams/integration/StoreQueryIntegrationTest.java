@@ -370,8 +370,8 @@ public class StoreQueryIntegrationTest {
 
         startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
-        assertTrue(kafkaStreams1.localThreadsMetadata().size() > 1);
-        assertTrue(kafkaStreams2.localThreadsMetadata().size() > 1);
+        assertTrue(kafkaStreams1.metadataForLocalThreads().size() > 1);
+        assertTrue(kafkaStreams2.metadataForLocalThreads().size() > 1);
 
         produceValueRange(key, 0, batch1NumMessages);
 

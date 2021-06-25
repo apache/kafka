@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor;
+package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.TaskMetadata;
+import org.apache.kafka.streams.ThreadMetadata;
 
 import java.util.Collections;
 import java.util.Objects;
@@ -24,10 +26,8 @@ import java.util.Set;
 
 /**
  * Represents the state of a single thread running within a {@link KafkaStreams} application.
- * @deprecated since 3.0 use {@link org.apache.kafka.streams.ThreadMetadata} instead
  */
-@Deprecated
-public class ThreadMetadata {
+public class ThreadMetadataImpl implements ThreadMetadata {
 
     private final String threadName;
 
@@ -47,23 +47,24 @@ public class ThreadMetadata {
     // we keep it at the thread-level for user's convenience and possible extensions in the future
     private final String adminClientId;
 
-    public ThreadMetadata(final String threadName,
-                          final String threadState,
-                          final String mainConsumerClientId,
-                          final String restoreConsumerClientId,
-                          final Set<String> producerClientIds,
-                          final String adminClientId,
-                          final Set<org.apache.kafka.streams.processor.TaskMetadata> activeTasks,
-                          final Set<org.apache.kafka.streams.processor.TaskMetadata> standbyTasks) {
+    public ThreadMetadataImpl(final String threadName,
+                              final String threadState,
+                              final String mainConsumerClientId,
+                              final String restoreConsumerClientId,
+                              final Set<String> producerClientIds,
+                              final String adminClientId,
+                              final Set<TaskMetadata> activeTasks,
+                              final Set<TaskMetadata> standbyTasks) {
         this.mainConsumerClientId = mainConsumerClientId;
         this.restoreConsumerClientId = restoreConsumerClientId;
-        this.producerClientIds = producerClientIds;
+        this.producerClientIds = Collections.unmodifiableSet(producerClientIds);
         this.adminClientId = adminClientId;
         this.threadName = threadName;
         this.threadState = threadState;
         this.activeTasks = Collections.unmodifiableSet(activeTasks);
         this.standbyTasks = Collections.unmodifiableSet(standbyTasks);
     }
+
 
     public String threadState() {
         return threadState;
@@ -73,11 +74,12 @@ public class ThreadMetadata {
         return threadName;
     }
 
-    public Set<org.apache.kafka.streams.processor.TaskMetadata> activeTasks() {
+
+    public Set<TaskMetadata> activeTasks() {
         return activeTasks;
     }
 
-    public Set<org.apache.kafka.streams.processor.TaskMetadata> standbyTasks() {
+    public Set<TaskMetadata> standbyTasks() {
         return standbyTasks;
     }
 
@@ -105,7 +107,7 @@ public class ThreadMetadata {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        final ThreadMetadata that = (ThreadMetadata) o;
+        final ThreadMetadataImpl that = (ThreadMetadataImpl) o;
         return Objects.equals(threadName, that.threadName) &&
                Objects.equals(threadState, that.threadState) &&
                Objects.equals(activeTasks, that.activeTasks) &&
