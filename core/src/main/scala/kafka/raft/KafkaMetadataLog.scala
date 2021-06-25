@@ -313,10 +313,9 @@ final class KafkaMetadataLog private (
     }
   }
 
-
   /**
    * Delete a snapshot, advance the log start offset, and clean old log segments. This will only happen if the
-   * following hold true:
+   * following conditions all hold true:
    *
    * <li>This is not the latest snapshot (i.e., another snapshot proceeds this one)</li>
    * <li>The offset of the next snapshot is greater than the log start offset</li>
@@ -354,6 +353,18 @@ final class KafkaMetadataLog private (
     }
   }
 
+  /**
+   * Perform cleaning of old snapshots and log segments based on size.
+   *
+   * If our configured retention size has been violated, we perform cleaning as follows:
+   *
+   * <li>Find oldest snapshot and delete it</li>
+   * <li>Advance log start offset to end of next oldest snapshot</li>
+   * <li>Delete log segments which wholly precede the new log start offset</li>
+   *
+   * This process is repeated until the retention size is no longer violated, or until only
+   * a single snapshot remains.
+   */
   override def maybeClean(): Boolean = {
     snapshots synchronized {
       val snapshotSizes = loadSnapshotSizes()
@@ -411,6 +422,7 @@ final class KafkaMetadataLog private (
     expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]]
   ): Unit = {
     expiredSnapshots.foreach { case (snapshotId, _) =>
+      info(s"Marking snapshot $snapshotId for deletion")
       Snapshots.markForDelete(log.dir.toPath, snapshotId)
     }
 
