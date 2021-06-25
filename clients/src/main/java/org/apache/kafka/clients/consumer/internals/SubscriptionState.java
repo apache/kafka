@@ -452,6 +452,11 @@ public class SubscriptionState {
         // Since this is in the hot-path for fetching, we do this instead of using java.util.stream API
         List<TopicPartition> result = new ArrayList<>();
         assignment.forEach((topicPartition, topicPartitionState) -> {
+            if (topicPartition.toString().equals("table2-4")) {
+                System.err.print("isFetchable:" + (topicPartitionState.isFetchable()) + "," + (isAvailable.test(topicPartition)) + "," +
+                    topicPartitionState.fetchState + "," + topicPartitionState.paused);
+                System.err.flush();
+            }
             // Cheap check is first to avoid evaluating the predicate if possible
             if (topicPartitionState.isFetchable() && isAvailable.test(topicPartition)) {
                 result.add(topicPartition);

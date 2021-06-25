@@ -154,6 +154,7 @@ public class PartitionGroup {
                 queued.add(partition);
             } else {
                 final OptionalLong fetchedLag = lagProvider.apply(partition);
+
                 String parName = partition.toString();
                 if (parName.length() > 10) {
                     parName = parName.substring(parName.length() - 11);
