@@ -825,7 +825,6 @@ project(':core') {
     api project(':clients')
     if (versions.baseScala != '3') {
       api libs.scalaLibrary
-      implementation libs.scalaCollectionCompat
       // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
       implementation libs.scalaReflect
     } else {
