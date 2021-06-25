@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import java.security.Security;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -624,31 +623,6 @@ public class SslTransportLayerTest {
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
 
         selector.close();
-    }
-
-    /**
-     * Tests that connections cannot be made with unsupported TLS versions
-     */
-    @ParameterizedTest
-    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
-    public void testUnsupportedTlsVersion(Args args) throws Exception {
-        // Capture the current value so that we can restore at the end of the test
-        String disabledAlgorithms = System.getProperty("jdk.tls.disabledAlgorithms");
-        // TLS 1.0 and 1.1 have been disabled in recent versions of Java 8/11 and all versions
-        // of 16, temporarily allow it so that we can test we send the expected error.
-        Security.setProperty("jdk.tls.disabledAlgorithms", "");
-        try {
-            server = createEchoServer(args, SecurityProtocol.SSL);
-
-            checkAuthenticationFailed(args, "0", "TLSv1.1");
-            server.verifyAuthenticationMetrics(0, 1);
-
-            checkAuthenticationFailed(args, "0", "TLSv1");
-            server.verifyAuthenticationMetrics(0, 2);
-        } finally {
-            if (disabledAlgorithms != null)
-                Security.setProperty("jdk.tls.disabledAlgorithms", disabledAlgorithms);
-        }
     }
 
     /**
