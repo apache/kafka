@@ -99,13 +99,6 @@ for %%i in ("%BASE_DIR%\core\build\libs\kafka_%SCALA_BINARY_VERSION%*.jar") do (
 	call :concat "%%i"
 )
 
-rem Classpath addition for Dropwizard Metrics (required by ZooKeeper 3.6.3)
-IF ["%INCLUDE_DROPWIZARD_METRICS%"] NEQ [""] (
-	for %%i in ("%BASE_DIR%\core/build/dependant-testlibs/metrics-core-3.*.jar") do (
-		call :concat "%%i"
-	)
-)
-
 rem JMX settings
 IF ["%KAFKA_JMX_OPTS%"] EQU [""] (
 	set KAFKA_JMX_OPTS=-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false

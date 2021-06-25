@@ -31,10 +31,6 @@ if [ -z "$INCLUDE_TEST_JARS" ]; then
   INCLUDE_TEST_JARS=false
 fi
 
-if [ -z "$INCLUDE_DROPWIZARD_METRICS" ]; then
-  INCLUDE_DROPWIZARD_METRICS=false
-fi
-
 # Exclude jars not necessary for running commands.
 regex="(-(test|test-sources|src|scaladoc|javadoc)\.jar|jar.asc)$"
 should_include_file() {
@@ -329,13 +325,6 @@ if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   else
     KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=100M"
   fi
-fi
-
-if [ "$INCLUDE_DROPWIZARD_METRICS" = true ]; then
-  for file in "$base_dir"/core/build/dependant-testlibs/metrics-core-3.*.jar;
-  do
-    CLASSPATH="$CLASSPATH":"$file"
-  done
 fi
 
 # Remove a possible colon prefix from the classpath (happens at lines like `CLASSPATH="$CLASSPATH:$file"` when CLASSPATH is blank)

@@ -823,7 +823,7 @@ project(':core') {
     implementation libs.scalaLogging
     implementation libs.slf4jApi
     implementation(libs.zookeeper) {
-      testImplementation libs.dropwizardMetrics
+      implementation libs.dropwizardMetrics
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
     }
