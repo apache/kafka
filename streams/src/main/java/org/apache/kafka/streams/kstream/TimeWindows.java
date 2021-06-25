@@ -90,9 +90,11 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * <p>
      * This provides the semantics of tumbling windows, which are fixed-sized, gap-less, non-overlapping windows.
      * Tumbling windows are a special case of hopping windows with {@code advance == size}.
+     * Using the method implicitly sets the grace period to zero which means
+     * that out of order records arriving after the window end will be dropped
      *
      * @param size The size of the window
-     * @return a new window definition with default no grace period
+     * @return a new window definition with default no grace period. Note that this means out of order records arriving after the window end will be dropped
      * @throws IllegalArgumentException if the specified window size is zero or negative or can't be represented as {@code long milliseconds}
      */
     public static TimeWindows ofSizeWithNoGrace(final Duration size) throws IllegalArgumentException {

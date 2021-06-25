@@ -91,9 +91,11 @@ public final class SessionWindows {
 
     /**
      * Create a new window specification with the specified inactivity gap.
+     * Using the method implicitly sets the grace period to zero which
+     * means that out of order records arriving after the window end will be dropped
      *
      * @param inactivityGap the gap of inactivity between sessions
-     * @return a new window specification without any grace period
+     * @return a window definition with the window size and no grace period. Note that this means out of order records arriving after the window end will be dropped
      * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
      */
     public static SessionWindows ofInactivityGapWithNoGrace(final Duration inactivityGap) {

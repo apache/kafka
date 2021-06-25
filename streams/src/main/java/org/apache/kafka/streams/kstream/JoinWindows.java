@@ -120,6 +120,7 @@ public class JoinWindows extends Windows<Window> {
      * @param timeDifference join window interval
      * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
+     * @return A new JoinWindows object with the specified window definition and grace period
      */
     public static JoinWindows ofTimeDifferenceAndGrace(final Duration timeDifference, final Duration afterWindowEnd) {
         return new JoinWindows(timeDifference.toMillis(), timeDifference.toMillis(), afterWindowEnd.toMillis(), true);
@@ -128,10 +129,12 @@ public class JoinWindows extends Windows<Window> {
     /**
      * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference},
      * i.e., the timestamp of a record from the secondary stream is max {@code timeDifference} earlier or later than
-     * the timestamp of the record from the primary stream.
+     * the timestamp of the record from the primary stream. Using the method implicitly sets the grace period to zero
+     * which means that out of order records arriving after the window end will be dropped.
      *
      * @param timeDifference join window interval
      * @throws IllegalArgumentException if {@code timeDifference} is negative or can't be represented as {@code long milliseconds}
+     * @return a new JoinWindows object with the window definition and no grace period. Note that this means out of order records arriving after the window end will be dropped
      */
     public static JoinWindows ofTimeDifferenceWithNoGrace(final Duration timeDifference) {
         return new JoinWindows(timeDifference.toMillis(), timeDifference.toMillis(), NO_GRACE_PERIOD, true);

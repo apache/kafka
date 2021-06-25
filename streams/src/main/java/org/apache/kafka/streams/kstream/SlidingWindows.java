@@ -94,9 +94,11 @@ public final class SlidingWindows {
 
     /**
      * Return a window definition with the window size
+     * Using the method implicitly sets the grace period to zero which means that
+     * out of order records arriving after the window end will be dropped
      *
      * @param timeDifference the max time difference (inclusive) between two records in a window
-     * @return a new window definition with no grace period
+     * @return a new window definition with no grace period. Note that this means out of order records arriving after the window end will be dropped
      * @throws IllegalArgumentException if the timeDifference is negative
      */
     public static SlidingWindows ofTimeDifferenceWithNoGrace(final Duration timeDifference) throws IllegalArgumentException {
