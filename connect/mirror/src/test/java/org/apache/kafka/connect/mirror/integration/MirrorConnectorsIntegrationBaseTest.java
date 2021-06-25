@@ -246,6 +246,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         // make sure the topic is auto-created in the other cluster
         waitForTopicCreated(primary, "backup.test-topic-1");
         waitForTopicCreated(backup, "primary.test-topic-1");
+        waitForTopicCreated(primary, "mm2-offset-syncs.backup.internal");
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, getTopicConfig(backup.kafka(), "primary.test-topic-1", TopicConfig.CLEANUP_POLICY_CONFIG),
                 "topic config was not synced");
         

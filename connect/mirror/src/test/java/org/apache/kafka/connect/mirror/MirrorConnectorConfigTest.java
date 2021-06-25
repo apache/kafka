@@ -300,28 +300,30 @@ public class MirrorConnectorConfigTest {
     @Test
     public void testProducerConfigsForOffsetSyncsTopic() {
         Map<String, String> connectorProps = makeProps(
-                "source.batch.size", "1",
-                "target.acks", "1",
+                "source.producer.batch.size", "1",
+                "target.producer.acks", "1",
                 "producer.max.poll.interval.ms", "1",
                 "fetch.min.bytes", "1"
         );
         MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
         assertEquals(config.sourceProducerConfig(), config.offsetSyncsTopicProducerConfig());
         connectorProps.put("offset-syncs.topic.location", "target");
+        config = new MirrorConnectorConfig(connectorProps);
         assertEquals(config.targetProducerConfig(), config.offsetSyncsTopicProducerConfig());
     }
 
     @Test
     public void testAdminConfigsForOffsetSyncsTopic() {
         Map<String, String> connectorProps = makeProps(
-                "source.request.timeout.ms", "1",
-                "target.send.buffer.bytes", "1",
+                "source.admin.request.timeout.ms", "1",
+                "target.admin.send.buffer.bytes", "1",
                 "admin.reconnect.backoff.max.ms", "1",
                 "retries", "123"
         );
         MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
         assertEquals(config.sourceAdminConfig(), config.offsetSyncsTopicAdminConfig());
         connectorProps.put("offset-syncs.topic.location", "target");
+        config = new MirrorConnectorConfig(connectorProps);
         assertEquals(config.targetAdminConfig(), config.offsetSyncsTopicAdminConfig());
     }
 
