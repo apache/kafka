@@ -25,6 +25,7 @@ public class OffsetSpec {
 
     public static class EarliestSpec extends OffsetSpec { }
     public static class LatestSpec extends OffsetSpec { }
+    public static class MaxTimestampSpec extends OffsetSpec { }
     public static class TimestampSpec extends OffsetSpec {
         private final long timestamp;
 
@@ -58,6 +59,15 @@ public class OffsetSpec {
      */
     public static OffsetSpec forTimestamp(long timestamp) {
         return new TimestampSpec(timestamp);
+    }
+
+    /**
+     * Used to retrieve the offset with the largest timestamp of a partition
+     * as message timestamps can be specified client side this may not match
+     * the log end offset returned by LatestSpec
+     */
+    public static OffsetSpec maxTimestamp() {
+        return new MaxTimestampSpec();
     }
 
 }
