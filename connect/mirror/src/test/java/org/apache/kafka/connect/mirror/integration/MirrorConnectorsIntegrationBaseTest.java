@@ -59,6 +59,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import org.junit.jupiter.api.Test;
@@ -495,6 +496,11 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         }, 30_000,
             "Unable to find checkpoints for " + PRIMARY_CLUSTER_ALIAS + "test-topic-1"
         );
+
+        // Ensure no offset-syncs topics have been created on the primary cluster
+        Set<String> primaryTopics = primary.kafka().createAdminClient().listTopics().names().get();
+        assertFalse(primaryTopics.contains("mm2-offset-syncs." + PRIMARY_CLUSTER_ALIAS + ".internal"));
+        assertFalse(primaryTopics.contains("mm2-offset-syncs." + BACKUP_CLUSTER_ALIAS + ".internal"));
     }
 
     /*

@@ -31,7 +31,7 @@ import java.util.HashSet;
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MirrorConnectorConfigTest {
@@ -268,10 +268,7 @@ public class MirrorConnectorConfigTest {
     public void testOffsetSyncsTopic() {
         // Invalid location
         Map<String, String> connectorProps = makeProps("offset-syncs.topic.location", "something");
-        try {
-            new MirrorConnectorConfig(connectorProps);
-            fail("Should have thrown ConfigException");
-        } catch (ConfigException exc) { } // expected
+        assertThrows(ConfigException.class, () -> new MirrorConnectorConfig(connectorProps));
 
         connectorProps.put("offset-syncs.topic.location", "source");
         MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
@@ -288,14 +285,15 @@ public class MirrorConnectorConfigTest {
     @Test
     public void testConsumerConfigsForOffsetSyncsTopic() {
         Map<String, String> connectorProps = makeProps(
-                "source.max.partition.fetch.bytes", "1",
-                "target.heartbeat.interval.ms", "1",
+                "source.consumer.max.partition.fetch.bytes", "1",
+                "target.consumer.heartbeat.interval.ms", "1",
                 "consumer.max.poll.interval.ms", "1",
                 "fetch.min.bytes", "1"
         );
         MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
         assertEquals(config.sourceConsumerConfig(), config.offsetSyncsTopicConsumerConfig());
         connectorProps.put("offset-syncs.topic.location", "target");
+        config = new MirrorConnectorConfig(connectorProps);
         assertEquals(config.targetConsumerConfig(), config.offsetSyncsTopicConsumerConfig());
     }
 

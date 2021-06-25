@@ -205,7 +205,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
 
     private static final String OFFSET_SYNCS_TOPIC_LOCATION = "offset-syncs.topic.location";
-    private static final Object OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
+    private static final String OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
     private static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
 
     protected static final String SOURCE_CLUSTER_PREFIX = MirrorMakerConfig.SOURCE_CLUSTER_PREFIX;
