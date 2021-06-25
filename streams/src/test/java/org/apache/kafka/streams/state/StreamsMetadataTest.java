@@ -27,9 +27,10 @@ import java.util.Collection;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 
 public class StreamsMetadataTest {
 
@@ -46,77 +47,92 @@ public class StreamsMetadataTest {
     @Before
     public void setUp() {
         streamsMetadata = new StreamsMetadataImpl(
-                HOST_INFO,
-                STATE_STORE_NAMES,
-                TOPIC_PARTITIONS,
-                STAND_BY_STORE_NAMES,
-                STANDBY_TOPIC_PARTITIONS
+            HOST_INFO,
+            STATE_STORE_NAMES,
+            TOPIC_PARTITIONS,
+            STAND_BY_STORE_NAMES,
+            STANDBY_TOPIC_PARTITIONS
         );
     }
 
     @Test
     public void shouldNotAllowModificationOfInternalStateViaGetters() {
-        assertTrue(isUnmodifiable(streamsMetadata.stateStoreNames()));
-        assertTrue(isUnmodifiable(streamsMetadata.topicPartitions()));
-        assertTrue(isUnmodifiable(streamsMetadata.standbyTopicPartitions()));
-        assertTrue(isUnmodifiable(streamsMetadata.standbyStateStoreNames()));
+        assertThat(isUnmodifiable(streamsMetadata.stateStoreNames()), is(true));
+        assertThat(isUnmodifiable(streamsMetadata.topicPartitions()), is(true));
+        assertThat(isUnmodifiable(streamsMetadata.standbyTopicPartitions()), is(true));
+        assertThat(isUnmodifiable(streamsMetadata.standbyStateStoreNames()), is(true));
     }
 
     @Test
-    public void shouldFollowHashCodeAndEqualsContract() {
+    public void shouldBeEqualsIfSameObject() {
         final StreamsMetadata same = new StreamsMetadataImpl(
-                HOST_INFO,
-                STATE_STORE_NAMES,
-                TOPIC_PARTITIONS,
-                STAND_BY_STORE_NAMES,
-                STANDBY_TOPIC_PARTITIONS);
-        assertEquals(streamsMetadata, same);
-        assertEquals(streamsMetadata.hashCode(), same.hashCode());
+            HOST_INFO,
+            STATE_STORE_NAMES,
+            TOPIC_PARTITIONS,
+            STAND_BY_STORE_NAMES,
+            STANDBY_TOPIC_PARTITIONS);
+        assertThat(streamsMetadata, equalTo(same));
+        assertThat(streamsMetadata.hashCode(), equalTo(same.hashCode()));
+    }
 
+    @Test
+    public void shouldNotBeEqualIfDifferInHostInfo() {
         final StreamsMetadata differHostInfo = new StreamsMetadataImpl(
-                new HostInfo("different", 122),
-                STATE_STORE_NAMES,
-                TOPIC_PARTITIONS,
-                STAND_BY_STORE_NAMES,
-                STANDBY_TOPIC_PARTITIONS);
-        assertNotEquals(streamsMetadata, differHostInfo);
-        assertNotEquals(streamsMetadata.hashCode(), differHostInfo.hashCode());
+            new HostInfo("different", 122),
+            STATE_STORE_NAMES,
+            TOPIC_PARTITIONS,
+            STAND_BY_STORE_NAMES,
+            STANDBY_TOPIC_PARTITIONS);
+        assertThat(streamsMetadata, not(equalTo(differHostInfo)));
+        assertThat(streamsMetadata.hashCode(), not(equalTo(differHostInfo.hashCode())));
+    }
 
+    @Test
+    public void shouldNotBeEqualIfDifferStateStoreNames() {
         final StreamsMetadata differStateStoreNames = new StreamsMetadataImpl(
-                HOST_INFO,
-                mkSet("store1"),
-                TOPIC_PARTITIONS,
-                STAND_BY_STORE_NAMES,
-                STANDBY_TOPIC_PARTITIONS);
-        assertNotEquals(streamsMetadata, differStateStoreNames);
-        assertNotEquals(streamsMetadata.hashCode(), differStateStoreNames.hashCode());
+            HOST_INFO,
+            mkSet("store1"),
+            TOPIC_PARTITIONS,
+            STAND_BY_STORE_NAMES,
+            STANDBY_TOPIC_PARTITIONS);
+        assertThat(streamsMetadata, not(equalTo(differStateStoreNames)));
+        assertThat(streamsMetadata.hashCode(), not(equalTo(differStateStoreNames.hashCode())));
+    }
 
+    @Test
+    public void shouldNotBeEqualIfDifferInTopicPartitions() {
         final StreamsMetadata differTopicPartitions = new StreamsMetadataImpl(
-                HOST_INFO,
-                STATE_STORE_NAMES,
-                mkSet(TP_0),
-                STAND_BY_STORE_NAMES,
-                STANDBY_TOPIC_PARTITIONS);
-        assertNotEquals(streamsMetadata, differTopicPartitions);
-        assertNotEquals(streamsMetadata.hashCode(), differTopicPartitions.hashCode());
+            HOST_INFO,
+            STATE_STORE_NAMES,
+            mkSet(TP_0),
+            STAND_BY_STORE_NAMES,
+            STANDBY_TOPIC_PARTITIONS);
+        assertThat(streamsMetadata, not(equalTo(differTopicPartitions)));
+        assertThat(streamsMetadata.hashCode(), not(equalTo(differTopicPartitions.hashCode())));
+    }
 
+    @Test
+    public void shouldNotBeEqualIfDifferInStandByStores() {
         final StreamsMetadata differStandByStores = new StreamsMetadataImpl(
-                HOST_INFO,
-                STATE_STORE_NAMES,
-                TOPIC_PARTITIONS,
-                mkSet("store1"),
-                STANDBY_TOPIC_PARTITIONS);
-        assertNotEquals(streamsMetadata, differStandByStores);
-        assertNotEquals(streamsMetadata.hashCode(), differStandByStores.hashCode());
+            HOST_INFO,
+            STATE_STORE_NAMES,
+            TOPIC_PARTITIONS,
+            mkSet("store1"),
+            STANDBY_TOPIC_PARTITIONS);
+        assertThat(streamsMetadata, not(equalTo(differStandByStores)));
+        assertThat(streamsMetadata.hashCode(), not(equalTo(differStandByStores.hashCode())));
+    }
 
+    @Test
+    public void shouldNotBeEqualIfDifferInStandByTopicPartitions() {
         final StreamsMetadata differStandByTopicPartitions = new StreamsMetadataImpl(
-                HOST_INFO,
-                STATE_STORE_NAMES,
-                TOPIC_PARTITIONS,
-                STAND_BY_STORE_NAMES,
-                mkSet(TP_0));
-        assertNotEquals(streamsMetadata, differStandByTopicPartitions);
-        assertNotEquals(streamsMetadata.hashCode(), differStandByTopicPartitions.hashCode());
+            HOST_INFO,
+            STATE_STORE_NAMES,
+            TOPIC_PARTITIONS,
+            STAND_BY_STORE_NAMES,
+            mkSet(TP_0));
+        assertThat(streamsMetadata, not(equalTo(differStandByTopicPartitions)));
+        assertThat(streamsMetadata.hashCode(), not(equalTo(differStandByTopicPartitions.hashCode())));
     }
 
     private static boolean isUnmodifiable(final Collection<?> collection) {

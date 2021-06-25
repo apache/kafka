@@ -30,10 +30,10 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 
 public class TaskMetadataImplTest {
 
@@ -50,75 +50,90 @@ public class TaskMetadataImplTest {
     @Before
     public void setUp() {
         taskMetadata = new TaskMetadataImpl(
-                TASK_ID,
-                TOPIC_PARTITIONS,
-                COMMITTED_OFFSETS,
-                END_OFFSETS,
-                TIME_CURRENT_IDLING_STARTED);
+            TASK_ID,
+            TOPIC_PARTITIONS,
+            COMMITTED_OFFSETS,
+            END_OFFSETS,
+            TIME_CURRENT_IDLING_STARTED);
     }
 
     @Test
     public void shouldNotAllowModificationOfInternalStateViaGetters() {
-        assertTrue(isUnmodifiable(taskMetadata.topicPartitions()));
-        assertTrue(isUnmodifiable(taskMetadata.committedOffsets()));
-        assertTrue(isUnmodifiable(taskMetadata.endOffsets()));
+        assertThat(isUnmodifiable(taskMetadata.topicPartitions()), is(true));
+        assertThat(isUnmodifiable(taskMetadata.committedOffsets()), is(true));
+        assertThat(isUnmodifiable(taskMetadata.endOffsets()), is(true));
     }
 
     @Test
-    public void shouldFollowEqualsAndHasCodeContract() {
+    public void shouldBeEqualsIfSameObject() {
         final TaskMetadataImpl same = new TaskMetadataImpl(
-                TASK_ID,
-                TOPIC_PARTITIONS,
-                COMMITTED_OFFSETS,
-                END_OFFSETS,
-                TIME_CURRENT_IDLING_STARTED);
-        assertEquals(taskMetadata, same);
-        assertEquals(taskMetadata.hashCode(), same.hashCode());
+            TASK_ID,
+            TOPIC_PARTITIONS,
+            COMMITTED_OFFSETS,
+            END_OFFSETS,
+            TIME_CURRENT_IDLING_STARTED);
+        assertThat(taskMetadata, equalTo(same));
+        assertThat(taskMetadata.hashCode(), equalTo(same.hashCode()));
+    }
 
+    @Test
+    public void shouldBeEqualsIfOnlyDifferInCommittedOffsets() {
         final TaskMetadataImpl stillSameDifferCommittedOffsets = new TaskMetadataImpl(
-                TASK_ID,
-                TOPIC_PARTITIONS,
-                mkMap(mkEntry(TP_1, 1000000L), mkEntry(TP_1, 2L)),
-                END_OFFSETS,
-                TIME_CURRENT_IDLING_STARTED);
-        assertEquals(taskMetadata, stillSameDifferCommittedOffsets);
-        assertEquals(taskMetadata.hashCode(), stillSameDifferCommittedOffsets.hashCode());
+            TASK_ID,
+            TOPIC_PARTITIONS,
+            mkMap(mkEntry(TP_1, 1000000L), mkEntry(TP_1, 2L)),
+            END_OFFSETS,
+            TIME_CURRENT_IDLING_STARTED);
+        assertThat(taskMetadata, equalTo(stillSameDifferCommittedOffsets));
+        assertThat(taskMetadata.hashCode(), equalTo(stillSameDifferCommittedOffsets.hashCode()));
+    }
 
+    @Test
+    public void shouldBeEqualsIfOnlyDifferInEndOffsets() {
         final TaskMetadataImpl stillSameDifferEndOffsets = new TaskMetadataImpl(
-                TASK_ID,
-                TOPIC_PARTITIONS,
-                COMMITTED_OFFSETS,
-                mkMap(mkEntry(TP_1, 1000000L), mkEntry(TP_1, 2L)),
-                TIME_CURRENT_IDLING_STARTED);
-        assertEquals(taskMetadata, stillSameDifferEndOffsets);
-        assertEquals(taskMetadata.hashCode(), stillSameDifferEndOffsets.hashCode());
+            TASK_ID,
+            TOPIC_PARTITIONS,
+            COMMITTED_OFFSETS,
+            mkMap(mkEntry(TP_1, 1000000L), mkEntry(TP_1, 2L)),
+            TIME_CURRENT_IDLING_STARTED);
+        assertThat(taskMetadata, equalTo(stillSameDifferEndOffsets));
+        assertThat(taskMetadata.hashCode(), equalTo(stillSameDifferEndOffsets.hashCode()));
+    }
 
+    @Test
+    public void shouldBeEqualsIfOnlyDifferInIdlingTime() {
         final TaskMetadataImpl stillSameDifferIdlingTime = new TaskMetadataImpl(
-                TASK_ID,
-                TOPIC_PARTITIONS,
-                COMMITTED_OFFSETS,
-                END_OFFSETS,
-                Optional.empty());
-        assertEquals(taskMetadata, stillSameDifferIdlingTime);
-        assertEquals(taskMetadata.hashCode(), stillSameDifferIdlingTime.hashCode());
+            TASK_ID,
+            TOPIC_PARTITIONS,
+            COMMITTED_OFFSETS,
+            END_OFFSETS,
+            Optional.empty());
+        assertThat(taskMetadata, equalTo(stillSameDifferIdlingTime));
+        assertThat(taskMetadata.hashCode(), equalTo(stillSameDifferIdlingTime.hashCode()));
+    }
 
+    @Test
+    public void shouldNotBeEqualsIfDifferInTaskID() {
         final TaskMetadataImpl differTaskId = new TaskMetadataImpl(
-                new TaskId(1, 10000),
-                TOPIC_PARTITIONS,
-                COMMITTED_OFFSETS,
-                END_OFFSETS,
-                TIME_CURRENT_IDLING_STARTED);
-        assertNotEquals(taskMetadata, differTaskId);
-        assertNotEquals(taskMetadata.hashCode(), differTaskId.hashCode());
+            new TaskId(1, 10000),
+            TOPIC_PARTITIONS,
+            COMMITTED_OFFSETS,
+            END_OFFSETS,
+            TIME_CURRENT_IDLING_STARTED);
+        assertThat(taskMetadata, not(equalTo(differTaskId)));
+        assertThat(taskMetadata.hashCode(), not(equalTo(differTaskId.hashCode())));
+    }
 
+    @Test
+    public void shouldNotBeEqualsIfDifferInTopicPartitions() {
         final TaskMetadataImpl differTopicPartitions = new TaskMetadataImpl(
-                TASK_ID,
-                mkSet(TP_0),
-                COMMITTED_OFFSETS,
-                END_OFFSETS,
-                TIME_CURRENT_IDLING_STARTED);
-        assertNotEquals(taskMetadata, differTopicPartitions);
-        assertNotEquals(taskMetadata.hashCode(), differTopicPartitions.hashCode());
+            TASK_ID,
+            mkSet(TP_0),
+            COMMITTED_OFFSETS,
+            END_OFFSETS,
+            TIME_CURRENT_IDLING_STARTED);
+        assertThat(taskMetadata, not(equalTo(differTopicPartitions)));
+        assertThat(taskMetadata.hashCode(), not(equalTo(differTopicPartitions.hashCode())));
     }
 
     private static boolean isUnmodifiable(final Collection<?> collection) {

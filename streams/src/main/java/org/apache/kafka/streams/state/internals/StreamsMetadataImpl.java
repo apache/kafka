@@ -37,11 +37,12 @@ public class StreamsMetadataImpl implements StreamsMetadata {
      * Sentinel to indicate that the StreamsMetadata is currently unavailable. This can occur during rebalance
      * operations.
      */
-    public final static StreamsMetadataImpl NOT_AVAILABLE = new StreamsMetadataImpl(HostInfo.unavailable(),
-            Collections.emptySet(),
-            Collections.emptySet(),
-            Collections.emptySet(),
-            Collections.emptySet());
+    public final static StreamsMetadataImpl NOT_AVAILABLE = new StreamsMetadataImpl(
+        HostInfo.unavailable(),
+        Collections.emptySet(),
+        Collections.emptySet(),
+        Collections.emptySet(),
+        Collections.emptySet());
 
     private final HostInfo hostInfo;
 

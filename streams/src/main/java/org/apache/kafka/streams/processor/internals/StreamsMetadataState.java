@@ -93,7 +93,7 @@ public class StreamsMetadataState {
     public Collection<StreamsMetadata> getAllMetadata() {
         return Collections.unmodifiableList(allMetadata);
     }
-    
+
     /**
      * Find all of the {@link StreamsMetadata}s for a given storeName
      *
@@ -230,11 +230,12 @@ public class StreamsMetadataState {
                                  final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap) {
         if (activePartitionHostMap.isEmpty() && standbyPartitionHostMap.isEmpty()) {
             allMetadata = Collections.emptyList();
-            localMetadata.set(new StreamsMetadataImpl(thisHost,
-                    Collections.emptySet(),
-                    Collections.emptySet(),
-                    Collections.emptySet(),
-                    Collections.emptySet()
+            localMetadata.set(new StreamsMetadataImpl(
+                thisHost,
+                Collections.emptySet(),
+                Collections.emptySet(),
+                Collections.emptySet(),
+                Collections.emptySet()
             ));
             return;
         }
@@ -259,11 +260,12 @@ public class StreamsMetadataState {
                     standbyStoresOnHost.addAll(getStoresOnHost(storeToSourceTopics, standbyPartitionsOnHost));
                 }
 
-                final StreamsMetadata metadata = new StreamsMetadataImpl(hostInfo,
-                        activeStoresOnHost,
-                        activePartitionsOnHost,
-                        standbyStoresOnHost,
-                        standbyPartitionsOnHost);
+                final StreamsMetadata metadata = new StreamsMetadataImpl(
+                    hostInfo,
+                    activeStoresOnHost,
+                    activePartitionsOnHost,
+                    standbyStoresOnHost,
+                    standbyPartitionsOnHost);
                 rebuiltMetadata.add(metadata);
                 if (hostInfo.equals(thisHost)) {
                     localMetadata.set(metadata);
