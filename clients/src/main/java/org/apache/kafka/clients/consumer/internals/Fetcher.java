@@ -607,6 +607,7 @@ public class Fetcher<K, V> implements Closeable {
             while (recordsRemaining > 0) {
                 if (nextInLineFetch == null || nextInLineFetch.isConsumed) {
                     CompletedFetch records = completedFetches.peek();
+
                     if (records == null) break;
 
                     if (records.notInitialized()) {
@@ -625,6 +626,10 @@ public class Fetcher<K, V> implements Closeable {
                             throw e;
                         }
                     } else {
+                        if (records.partition.toString().equals("table2-4")) {
+                            System.err.print("inited ");
+                            System.err.flush();
+                        }
                         nextInLineFetch = records;
                     }
                     completedFetches.poll();
@@ -632,6 +637,10 @@ public class Fetcher<K, V> implements Closeable {
                     // when the partition is paused we add the records back to the completedFetches queue instead of draining
                     // them so that they can be returned on a subsequent poll if the partition is resumed at that time
                     log.debug("Skipping fetching records for assigned partition {} because it is paused", nextInLineFetch.partition);
+                    if (nextInLineFetch.partition.toString().equals("table2-4")) {
+                        System.err.print("paused");
+                        System.err.flush();
+                    }
                     pausedCompletedFetches.add(nextInLineFetch);
                     nextInLineFetch = null;
                 } else {
@@ -672,6 +681,7 @@ public class Fetcher<K, V> implements Closeable {
             // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
             log.debug("Not returning fetched records for partition {} since it is no longer assigned",
                     completedFetch.partition);
+
         } else if (!subscriptions.isFetchable(completedFetch.partition)) {
             // this can happen when a partition is paused before fetched records are returned to the consumer's
             // poll call or if the offset is being reset
@@ -1164,6 +1174,10 @@ public class Fetcher<K, V> implements Closeable {
             Optional<Node> leaderOpt = position.currentLeader.leader;
             if (!leaderOpt.isPresent()) {
                 log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
+                if (partition.toString().equals("table2-4")) {
+                    System.err.print("lead mis" + position);
+                    System.err.flush();
+                }
                 metadata.requestUpdate();
                 continue;
             }
@@ -1176,8 +1190,16 @@ public class Fetcher<K, V> implements Closeable {
                 // If we try to send during the reconnect backoff window, then the request is just
                 // going to be failed anyway before being sent, so skip the send for now
                 log.trace("Skipping fetch for partition {} because node {} is awaiting reconnect backoff", partition, node);
+                if (partition.toString().equals("table2-4")) {
+                    System.err.print("skip fetch backoff ");
+                    System.err.flush();
+                }
             } else if (this.nodesWithPendingFetchRequests.contains(node.id())) {
                 log.trace("Skipping fetch for partition {} because previous request to {} has not been processed", partition, node);
+                if (partition.toString().equals("table2-4")) {
+                    System.err.print("skip fetch: " + node);
+                    System.err.flush();
+                }
             } else {
                 // if there is a leader and no in-flight requests, issue a new fetch
                 FetchSessionHandler.Builder builder = fetchable.get(node);
@@ -1198,6 +1220,10 @@ public class Fetcher<K, V> implements Closeable {
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", isolationLevel,
                     partition, position, node);
+                if (partition.toString().equals("table2-4")) {
+                    System.err.print("fetch req:" + position);
+                    System.err.flush();
+                }
             }
         }
 
@@ -1236,6 +1262,10 @@ public class Fetcher<K, V> implements Closeable {
 
         try {
             if (!subscriptions.hasValidPosition(tp)) {
+                if (tp.toString().equals("table2-4")) {
+                    System.err.print("noValidPos");
+                    System.err.flush();
+                }
                 // this can happen when a rebalance happened while fetch is still in-flight
                 log.debug("Ignoring fetched records for partition {} since it no longer has valid position", tp);
             } else if (error == Errors.NONE) {
@@ -1245,6 +1275,10 @@ public class Fetcher<K, V> implements Closeable {
                 if (position == null || position.offset != fetchOffset) {
                     log.debug("Discarding stale fetch response for partition {} since its offset {} does not match " +
                             "the expected offset {}", tp, fetchOffset, position);
+                    if (tp.toString().equals("table2-4")) {
+                        System.err.print("offsetNotM:" + fetchOffset + "," + position);
+                        System.err.flush();
+                    }
                     return null;
                 }
 
@@ -1257,6 +1291,10 @@ public class Fetcher<K, V> implements Closeable {
                     if (completedFetch.responseVersion < 3) {
                         // Implement the pre KIP-74 behavior of throwing a RecordTooLargeException.
                         Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
+                        if (tp.toString().equals("table2-4")) {
+                            System.err.print("recordLarge:" + fetchOffset + "," + position);
+                            System.err.flush();
+                        }
                         throw new RecordTooLargeException("There are some messages at [Partition=Offset]: " +
                                 recordTooLargePartitions + " whose size is larger than the fetch size " + this.fetchSize +
                                 " and hence cannot be returned. Please considering upgrading your broker to 0.10.1.0 or " +
@@ -1265,12 +1303,20 @@ public class Fetcher<K, V> implements Closeable {
                                 recordTooLargePartitions);
                     } else {
                         // This should not happen with brokers that support FetchRequest/Response V3 or higher (i.e. KIP-74)
+                        if (tp.toString().equals("table2-4")) {
+                            System.err.print("non-empty fetch:" + fetchOffset);
+                            System.err.flush();
+                        }
                         throw new KafkaException("Failed to make progress reading messages at " + tp + "=" +
                             fetchOffset + ". Received a non-empty fetch response from the server, but no " +
                             "complete records were found.");
                     }
                 }
 
+                if (tp.toString().equals("table2-4")) {
+                    System.err.print("parHWM:" + partition.highWatermark());
+                    System.err.flush();
+                }
                 if (partition.highWatermark() >= 0) {
                     log.trace("Updating high watermark for partition {} to {}", tp, partition.highWatermark());
                     subscriptions.updateHighWatermark(tp, partition.highWatermark());

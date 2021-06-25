@@ -237,14 +237,14 @@ public class StreamThread extends Thread {
                 updateThreadMetadata(taskManager.activeTaskMap(), taskManager.standbyTaskMap());
             }
 
-            System.err.print(shortLogPrefix + "not ");
-            System.err.flush();
+//            System.err.print(shortLogPrefix + "not ");
+//            System.err.flush();
             stateLock.notifyAll();
-            System.err.print(shortLogPrefix + "note ");
-            System.err.flush();
+//            System.err.print(shortLogPrefix + "note ");
+//            System.err.flush();
         }
-        System.err.print(shortLogPrefix + "ess ");
-        System.err.flush();
+//        System.err.print(shortLogPrefix + "ess ");
+//        System.err.flush();
 
         if (stateListener != null) {
             stateListener.onChange(this, state, oldState);
