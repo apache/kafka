@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
+import org.mockito.ArgumentMatcher
 
 import scala.jdk.CollectionConverters._
 
@@ -78,6 +79,7 @@ class ConsumerGroupServiceTest {
     val commitedOffsets = Map(
       testTopicPartition1 -> new OffsetAndMetadata(100),
       testTopicPartition2 -> null,
+      testTopicPartition3 -> new OffsetAndMetadata(100),
       testTopicPartition4 -> new OffsetAndMetadata(100),
       testTopicPartition5 -> null,
     ).asJava
@@ -101,20 +103,22 @@ class ConsumerGroupServiceTest {
       ConsumerGroupState.STABLE,
       new Node(1, "localhost", 9092))
 
-    def offsetsArgMatcher: util.Map[TopicPartition, OffsetSpec] = {
-      val expectedOffsetsUnassignedTopics = commitedOffsets.asScala.filter{ case (tp, _) => unassignedTopicPartitions.contains(tp) }.keySet.map(tp => tp -> OffsetSpec.latest).toMap
-      val expectedOffsetsAssignedTopics = endOffsets.filter{ case (tp, _) => assignedTopicPartitions.contains(tp) }.keySet.map(tp => tp -> OffsetSpec.latest).toMap
-      ArgumentMatchers.argThat[util.Map[TopicPartition, OffsetSpec]] { map =>
-        (map.keySet.asScala == expectedOffsetsUnassignedTopics.keySet || map.keySet.asScala == expectedOffsetsAssignedTopics.keySet) && map.values.asScala.forall(_.isInstanceOf[OffsetSpec.LatestSpec])
-      }
+    def offsetsArgMatcher(expectedPartitions: Set[TopicPartition]): ArgumentMatcher[util.Map[TopicPartition, OffsetSpec]] = {
+      topicPartitionOffsets => topicPartitionOffsets != null && topicPartitionOffsets.keySet.asScala.equals(expectedPartitions)
     }
 
     when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any()))
       .thenReturn(new DescribeConsumerGroupsResult(Collections.singletonMap(group, KafkaFuture.completedFuture(consumerGroupDescription))))
     when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(group), any()))
       .thenReturn(AdminClientTestUtils.listConsumerGroupOffsetsResult(commitedOffsets))
-    when(admin.listOffsets(offsetsArgMatcher, any()))
-      .thenReturn(new ListOffsetsResult(endOffsets.asJava))
+    when(admin.listOffsets(
+      ArgumentMatchers.argThat(offsetsArgMatcher(assignedTopicPartitions)),
+      any()
+    )).thenReturn(new ListOffsetsResult(endOffsets.view.filterKeys(assignedTopicPartitions.contains).toMap.asJava))
+    when(admin.listOffsets(
+      ArgumentMatchers.argThat(offsetsArgMatcher(unassignedTopicPartitions)),
+      any()
+    )).thenReturn(new ListOffsetsResult(endOffsets.view.filterKeys(unassignedTopicPartitions.contains).toMap.asJava))
 
     val (state, assignments) = groupService.collectGroupOffsets(group)
     val returnedOffsets = assignments.map { results =>
@@ -128,16 +132,17 @@ class ConsumerGroupServiceTest {
       testTopicPartition0 -> None,
       testTopicPartition1 -> Some(100),
       testTopicPartition2 -> None,
+      testTopicPartition3 -> Some(100),
       testTopicPartition4 -> Some(100),
       testTopicPartition5 -> None
     )
     assertEquals(Some("Stable"), state)
-    assertTrue(assignments.nonEmpty)
     assertEquals(expectedOffsets, returnedOffsets)
 
     verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any())
     verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(group), any())
-    verify(admin, times(2)).listOffsets(offsetsArgMatcher, any())
+    verify(admin, times(1)).listOffsets(ArgumentMatchers.argThat(offsetsArgMatcher(assignedTopicPartitions)), any())
+    verify(admin, times(1)).listOffsets(ArgumentMatchers.argThat(offsetsArgMatcher(unassignedTopicPartitions)), any())
   }
 
   @Test
