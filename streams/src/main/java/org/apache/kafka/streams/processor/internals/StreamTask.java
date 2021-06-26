@@ -680,10 +680,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 //            System.err.flush();
 //        }
         final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
-        if (logPrefix.contains("1_4")) {
-            System.err.print("redP:" + readyToProcess);
-            System.err.flush();
-        }
+//        if (logPrefix.contains("1_4")) {
+//            System.err.print("redP:" + readyToProcess);
+//            System.err.flush();
+//        }
 //        System.out.println("!!! readyToProcess:" + readyToProcess);
         if (!readyToProcess) {
             if (!timeCurrentIdlingStarted.isPresent()) {

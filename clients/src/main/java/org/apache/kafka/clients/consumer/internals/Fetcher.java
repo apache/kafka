@@ -631,10 +631,10 @@ public class Fetcher<K, V> implements Closeable {
                             throw e;
                         }
                     } else {
-                        if (records.partition.toString().equals("table2-4")) {
-                            System.err.print("inited ");
-                            System.err.flush();
-                        }
+//                        if (records.partition.toString().equals("table2-4")) {
+//                            System.err.print("inited ");
+//                            System.err.flush();
+//                        }
                         nextInLineFetch = records;
                     }
                     completedFetches.poll();

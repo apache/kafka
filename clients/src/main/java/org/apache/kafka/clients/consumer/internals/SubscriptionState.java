@@ -293,7 +293,8 @@ public class SubscriptionState {
         }
 
         if (hasTable24) {
-            System.err.print("ass:" + this.assignment);
+            System.err.print("old:" + this.assignment);
+            System.err.print("new:" + assignedPartitionStates);
             System.err.flush();
         }
 
