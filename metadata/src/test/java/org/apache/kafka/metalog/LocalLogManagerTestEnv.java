@@ -141,6 +141,10 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return shared.waitForLatestSnapshot();
     }
 
+    public long appendedBytes() {
+        return shared.appendedBytes();
+    }
+
     @Override
     public void close() throws InterruptedException {
         try {

@@ -269,10 +269,7 @@ public class QuorumControllerTest {
                 reader = logEnv.waitForSnapshot(snapshotLogOffset);
                 SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(reader);
                 assertEquals(snapshotLogOffset, snapshot.lastContainedLogOffset());
-                checkSnapshotContent(
-                    expectedSnapshotContent(fooId, brokerEpochs),
-                    snapshot
-                );
+                checkSnapshotContent(expectedSnapshotContent(fooId, brokerEpochs), snapshot);
             }
         }
 
@@ -285,10 +282,7 @@ public class QuorumControllerTest {
                     logEnv.waitForSnapshot(snapshotLogOffset)
                 );
                 assertEquals(snapshotLogOffset, snapshot.lastContainedLogOffset());
-                checkSnapshotContent(
-                    expectedSnapshotContent(fooId, brokerEpochs),
-                    snapshot
-                );
+                checkSnapshotContent(expectedSnapshotContent(fooId, brokerEpochs), snapshot);
             }
         }
     }
@@ -296,18 +290,17 @@ public class QuorumControllerTest {
     @Test
     public void testSnapshotConfiguration() throws Throwable {
         final int numBrokers = 4;
-        final int minNewRecordBytes = 4;
+        final int maxNewRecordBytes = 4;
         Map<Integer, Long> brokerEpochs = new HashMap<>();
         Uuid fooId;
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(
-                    logEnv,
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv,
                     builder -> {
                         builder
                             .setConfigDefs(CONFIGS)
-                            .setSnapshotMinNewRecordBytes(minNewRecordBytes);
+                            .setSnapshotMaxNewRecordBytes(maxNewRecordBytes);
                     })
-                ) {
+            ) {
 
                 QuorumController active = controlEnv.activeController();
                 for (int i = 0; i < numBrokers; i++) {
@@ -350,6 +343,71 @@ public class QuorumControllerTest {
                     expectedSnapshotContent(fooId, brokerEpochs),
                     snapshot
                 );
+            }
+        }
+    }
+
+    @Test
+    public void testSnapshotOnlyAfterConfiguredMinBytes() throws Throwable {
+        final int numBrokers = 4;
+        final int maxNewRecordBytes = 1000;
+        int appendedBytes = 0;
+        Map<Integer, Long> brokerEpochs = new HashMap<>();
+        Uuid fooId;
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv,
+                    builder -> {
+                        builder
+                            .setConfigDefs(CONFIGS)
+                            .setSnapshotMaxNewRecordBytes(maxNewRecordBytes);
+                    })
+            ) {
+
+                QuorumController active = controlEnv.activeController();
+                for (int i = 0; i < numBrokers; i++) {
+                    BrokerRegistrationReply reply = active.registerBroker(
+                        new BrokerRegistrationRequestData().
+                            setBrokerId(i).
+                            setRack(null).
+                            setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                            setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
+                            setListeners(new ListenerCollection(Arrays.asList(new Listener().
+                                setName("PLAINTEXT").setHost("localhost").
+                                setPort(9092 + i)).iterator()))).get();
+                    brokerEpochs.put(i, reply.epoch());
+                }
+
+                assertTrue(
+                    logEnv.appendedBytes() < maxNewRecordBytes,
+                    String.format(
+                        "%s appended bytes is not less than %s max new record bytes",
+                        logEnv.appendedBytes(),
+                        maxNewRecordBytes
+                    )
+                );
+
+                // Keep creating topic until we reached the max bytes limit
+                int counter = 0;
+                while (logEnv.appendedBytes() < maxNewRecordBytes) {
+                    counter += 1;
+                    String topicName = String.format("foo-%s", counter);
+
+                    CreateTopicsResponseData reply = active.createTopics(
+                        new CreateTopicsRequestData().setTopics(
+                            new CreatableTopicCollection(Collections.singleton(
+                                new CreatableTopic().setName(topicName).setNumPartitions(-1).
+                                    setReplicationFactor((short) -1).
+                                    setAssignments(new CreatableReplicaAssignmentCollection(
+                                        Arrays.asList(new CreatableReplicaAssignment().
+                                            setPartitionIndex(0).
+                                            setBrokerIds(Arrays.asList(0, 1, 2)),
+                                        new CreatableReplicaAssignment().
+                                            setPartitionIndex(1).
+                                            setBrokerIds(Arrays.asList(1, 2, 0))).
+                                                iterator()))).iterator()))).get();
+                }
+
+                logEnv.waitForLatestSnapshot();
             }
         }
     }
@@ -435,6 +493,12 @@ public class QuorumControllerTest {
         );
     }
 
+    /**
+     * This function checks that the iterator is a subset of the expected list.
+     *
+     * This is needed because when generating snapshots through configuration is difficult to control exactly when a
+     * snapshot will be generated and which committed offset will be included in the snapshot.
+     */
     private void checkSnapshotSubcontent(
         List<ApiMessageAndVersion> expected,
         Iterator<Batch<ApiMessageAndVersion>> iterator
@@ -442,10 +506,7 @@ public class QuorumControllerTest {
         RecordTestUtils.deepSortRecords(expected);
 
         List<ApiMessageAndVersion> actual = StreamSupport
-            .stream(
-                Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED),
-                false
-            )
+            .stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
             .flatMap(batch ->  batch.records().stream())
             .collect(Collectors.toList());
 

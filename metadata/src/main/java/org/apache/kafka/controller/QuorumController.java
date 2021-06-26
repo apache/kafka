@@ -133,7 +133,7 @@ public final class QuorumController implements Controller {
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
-        private long snapshotMinNewRecordBytes = Long.MAX_VALUE;
+        private long snapshotMaxNewRecordBytes = Long.MAX_VALUE;
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
         private ControllerMetrics controllerMetrics = null;
 
@@ -186,8 +186,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setSnapshotMinNewRecordBytes(long value) {
-            this.snapshotMinNewRecordBytes = value;
+        public Builder setSnapshotMaxNewRecordBytes(long value) {
+            this.snapshotMaxNewRecordBytes = value;
             return this;
         }
 
@@ -221,7 +221,7 @@ public final class QuorumController implements Controller {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
                 return new QuorumController(logContext, nodeId, queue, time, configDefs,
                     raftClient, supportedFeatures, defaultReplicationFactor,
-                    defaultNumPartitions, replicaPlacer, snapshotMinNewRecordBytes,
+                    defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
                     sessionTimeoutNs, controllerMetrics);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -882,7 +882,7 @@ public final class QuorumController implements Controller {
 
     private void checkSnapshotGeneration(long batchSizeInBytes) {
         newBytesSinceLastSnapshot += batchSizeInBytes;
-        if (newBytesSinceLastSnapshot >= snapshotMinNewRecordBytes &&
+        if (newBytesSinceLastSnapshot >= snapshotMaxNewRecordBytes &&
             snapshotGeneratorManager.generator == null
         ) {
             boolean isActiveController = curClaimEpoch != -1;
@@ -892,6 +892,10 @@ public final class QuorumController implements Controller {
                 // create an in-memory snapshot when needed.
                 snapshotRegistry.createSnapshot(lastCommittedOffset);
             }
+
+            log.info(
+                "Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot.",
+                lastCommittedEpoch, lastCommittedOffset, newBytesSinceLastSnapshot);
 
             snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch);
             newBytesSinceLastSnapshot = 0;
@@ -1021,9 +1025,9 @@ public final class QuorumController implements Controller {
 
 
     /**
-     * Minimum number of bytes processed through handling commits before generating a snapshot.
+     * Maximum number of bytes processed through handling commits before generating a snapshot.
      */
-    private final long snapshotMinNewRecordBytes;
+    private final long snapshotMaxNewRecordBytes;
 
     /**
      * Number of bytes processed through handling commits since the last snapshot was generated.
@@ -1040,7 +1044,7 @@ public final class QuorumController implements Controller {
                              short defaultReplicationFactor,
                              int defaultNumPartitions,
                              ReplicaPlacer replicaPlacer,
-                             long snapshotMinNewRecordBytes,
+                             long snapshotMaxNewRecordBytes,
                              long sessionTimeoutNs,
                              ControllerMetrics controllerMetrics) {
         this.logContext = logContext;
@@ -1058,7 +1062,7 @@ public final class QuorumController implements Controller {
             snapshotRegistry, sessionTimeoutNs, replicaPlacer);
         this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
-        this.snapshotMinNewRecordBytes = snapshotMinNewRecordBytes;
+        this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             logContext, defaultReplicationFactor, defaultNumPartitions,
             configurationControl, clusterControl, controllerMetrics);
@@ -1067,7 +1071,8 @@ public final class QuorumController implements Controller {
         this.curClaimEpoch = -1;
         this.writeOffset = -1L;
 
-        snapshotRegistry.createSnapshot(lastCommittedOffset);
+        resetState();
+
         this.raftClient.register(metaLogListener);
     }
 

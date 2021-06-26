@@ -57,6 +57,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 
 /**
@@ -307,6 +308,23 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
             return Objects.requireNonNull(snapshots.lastEntry()).getValue();
         }
+
+        synchronized long appendedBytes() {
+            ObjectSerializationCache objectCache = new ObjectSerializationCache();
+
+            return batches
+                .values()
+                .stream()
+                .flatMapToInt(batch -> {
+                    if (batch instanceof LocalRecordBatch) {
+                        LocalRecordBatch localBatch = (LocalRecordBatch) batch;
+                        return localBatch.records.stream().mapToInt(record -> messageSize(record, objectCache));
+                    } else {
+                        return IntStream.empty();
+                    }
+                })
+                .sum();
+        }
     }
 
     private static class MetaLogListenerData {
@@ -458,7 +476,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                                     Collections.singletonList(
                                         Batch.of(
                                             entryOffset - batch.records.size() + 1,
-                                            Math.toIntExact(batch.leaderEpoch),
+                                            batch.leaderEpoch,
                                             batch
                                                 .records
                                                 .stream()
@@ -481,7 +499,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         });
     }
 
-    private int messageSize(ApiMessageAndVersion messageAndVersion, ObjectSerializationCache objectCache) {
+    private static int messageSize(ApiMessageAndVersion messageAndVersion, ObjectSerializationCache objectCache) {
         return new MetadataRecordSerde().recordSize(messageAndVersion, objectCache);
     }
 

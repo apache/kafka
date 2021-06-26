@@ -31,7 +31,7 @@ class RaftClusterSnapshotTest {
 
   @Test
   def testContorllerSnapshotGenerated(): Unit = {
-    val metadataSnapshotMinNewRecordBytes = 1
+    val metadataSnapshotMaxNewRecordBytes = 1
     val cluster = new KafkaClusterTestKit
       .Builder(
         new TestKitNodes.Builder()
@@ -40,8 +40,8 @@ class RaftClusterSnapshotTest {
           .build()
       )
       .setConfigProp(
-        KafkaConfig.MetadataSnapshotMinNewRecordBytesProp,
-        metadataSnapshotMinNewRecordBytes.toString
+        KafkaConfig.MetadataSnapshotMaxNewRecordBytesProp,
+        metadataSnapshotMaxNewRecordBytes.toString
       )
       .build()
 

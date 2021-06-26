@@ -152,7 +152,7 @@ class ControllerServer(
         setDefaultNumPartitions(config.numPartitions.intValue()).
         setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
           TimeUnit.MILLISECONDS)).
-        setSnapshotMinNewRecordBytes(config.metadataSnapshotMinNewRecordBytes.toLong).
+        setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
         setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
         build()
 
