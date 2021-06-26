@@ -18,11 +18,12 @@ package kafka.cluster
 
 import java.io.File
 import java.util.Properties
+
 import kafka.api.ApiVersion
 import kafka.log.{CleanerConfig, LogConfig, LogManager}
 import kafka.server.{Defaults, MetadataCache}
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.server.metadata.CachedConfigRepository
+import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils.{MockAlterIsrManager, MockIsrChangeListener}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
@@ -47,7 +48,7 @@ class AbstractPartitionTest {
   var alterIsrManager: MockAlterIsrManager = _
   var isrChangeListener: MockIsrChangeListener = _
   var logConfig: LogConfig = _
-  var configRepository: CachedConfigRepository = _
+  var configRepository: MockConfigRepository = _
   val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
   val metadataCache: MetadataCache = mock(classOf[MetadataCache])
   val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
@@ -59,7 +60,7 @@ class AbstractPartitionTest {
 
     val logProps = createLogProperties(Map.empty)
     logConfig = LogConfig(logProps)
-    configRepository = TestUtils.createConfigRepository(topicPartition.topic(), logProps)
+    configRepository = MockConfigRepository.forTopic(topicPartition.topic(), logProps)
 
     tmpDir = TestUtils.tempDir()
     logDir1 = TestUtils.randomPartitionLogDir(tmpDir)

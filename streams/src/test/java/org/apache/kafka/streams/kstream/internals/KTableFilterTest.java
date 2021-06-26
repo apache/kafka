@@ -66,6 +66,7 @@ public class KTableFilterTest {
 
     private final Predicate<String, Integer> predicate = (key, value) -> (value % 2) == 0;
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private void doTestKTable(final StreamsBuilder builder,
                               final KTable<String, Integer> table2,
                               final KTable<String, Integer> table3,

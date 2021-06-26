@@ -19,14 +19,12 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T> {
 
     private final String storeName;
@@ -54,17 +52,17 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public org.apache.kafka.streams.processor.Processor<K, Change<V>> get() {
         return new KTableAggregateProcessor();
     }
 
-    private class KTableAggregateProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTableAggregateProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, Change<V>> {
         private TimestampedKeyValueStore<K, T> store;
         private TimestampedTupleForwarder<K, T> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
             store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(

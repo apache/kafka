@@ -81,6 +81,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 @RunWith(Parameterized.class)
 public class KStreamSlidingWindowAggregateTest {
 

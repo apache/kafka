@@ -22,7 +22,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -32,6 +31,7 @@ import java.util.Properties;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KTableKTableRightJoinTest {
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
@@ -41,7 +41,7 @@ public class KTableKTableRightJoinTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         @SuppressWarnings("unchecked")
-        final Processor<String, Change<String>> join = new KTableKTableRightJoin<>(
+        final org.apache.kafka.streams.processor.Processor<String, Change<String>> join = new KTableKTableRightJoin<>(
             (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
             (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
             null

@@ -20,11 +20,13 @@ package kafka.cluster
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent._
+
 import kafka.api.ApiVersion
 import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.epoch.LeaderEpochFileCache
+import kafka.server.metadata.MockConfigRepository
 import kafka.utils._
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -68,7 +70,7 @@ class PartitionLockTest extends Logging {
   @BeforeEach
   def setUp(): Unit = {
     val logConfig = new LogConfig(new Properties)
-    val configRepository = TestUtils.createConfigRepository(topicPartition.topic, createLogProperties(Map.empty))
+    val configRepository = MockConfigRepository.forTopic(topicPartition.topic, createLogProperties(Map.empty))
     logManager = TestUtils.createLogManager(Seq(logDir), logConfig, configRepository,
       CleanerConfig(enableCleaner = false), mockTime)
     partition = setupPartitionWithMocks(logManager)

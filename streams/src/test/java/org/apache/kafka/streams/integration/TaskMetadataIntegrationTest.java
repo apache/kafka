@@ -24,11 +24,10 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -82,6 +81,7 @@ public class TaskMetadataIntegrationTest {
     private AtomicBoolean process;
     private AtomicBoolean commit;
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Before
     public void setup() {
         final String testId = safeUniqueTestName(getClass(), testName);
@@ -158,7 +158,7 @@ public class TaskMetadataIntegrationTest {
     }
 
     private TaskMetadata getTaskMetadata(final KafkaStreams kafkaStreams) {
-        final List<TaskMetadata> taskMetadataList = kafkaStreams.localThreadsMetadata().stream().flatMap(t -> t.activeTasks().stream()).collect(Collectors.toList());
+        final List<TaskMetadata> taskMetadataList = kafkaStreams.metadataForLocalThreads().stream().flatMap(t -> t.activeTasks().stream()).collect(Collectors.toList());
         assertThat("only one task", taskMetadataList.size() == 1);
         return taskMetadataList.get(0);
     }
@@ -180,7 +180,8 @@ public class TaskMetadataIntegrationTest {
                 timestamp);
     }
 
-    private class PauseProcessor extends AbstractProcessor<String, String> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private class PauseProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
         @Override
         public void process(final String key, final String value) {
             while (!process.get()) {
