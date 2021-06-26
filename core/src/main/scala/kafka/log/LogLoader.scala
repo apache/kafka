@@ -101,7 +101,6 @@ object LogLoader extends Logging {
     // We store segments that require renaming in this code block, and do the actual renaming later.
     var minSwapFileOffset = Long.MaxValue
     var maxSwapFileOffset = Long.MinValue
-    val toRenameSwapFiles = mutable.Set[File]()
     swapFiles.filter(f => Log.isLogFile(new File(CoreUtils.replaceSuffix(f.getPath, SwapFileSuffix, "")))).foreach { f =>
       val baseOffset = offsetFromFile(f)
       val segment = LogSegment.open(f.getParentFile,
@@ -109,7 +108,6 @@ object LogLoader extends Logging {
         params.config,
         time = params.time,
         fileSuffix = Log.SwapFileSuffix)
-      toRenameSwapFiles += f
       info(s"${params.logIdentifier}Found log file ${f.getPath} from interrupted swap operation, which is recoverable from ${Log.SwapFileSuffix} files by renaming.")
       minSwapFileOffset = Math.min(segment.baseOffset, minSwapFileOffset)
       maxSwapFileOffset = Math.max(segment.offsetIndex.lastOffset, maxSwapFileOffset)
@@ -134,19 +132,16 @@ object LogLoader extends Logging {
       }
     }
 
-    // Do the actual renaming for toRenameSwapFiles, as discussed above.
-    toRenameSwapFiles.foreach { f =>
-    val baseOffset = offsetFromFile(f)
-    val segment = LogSegment.open(f.getParentFile,
-      baseOffset = baseOffset,
-      params.config,
-      time = params.time,
-      fileSuffix = Log.SwapFileSuffix)
-      info(s"${params.logIdentifier}Recovering segment with base offset ${baseOffset} by renaming from ${Log.SwapFileSuffix} files.")
-      segment.changeFileSuffixes(Log.SwapFileSuffix, "")
+    // Third pass: rename all swap files.
+    for (file <- params.dir.listFiles if file.isFile) {
+      if (file.getName.endsWith(SwapFileSuffix)) {
+        info(s"${params.logIdentifier}Recovering file ${file.getName} by renaming from ${Log.SwapFileSuffix} files.")
+        file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, Log.SwapFileSuffix, "")))
+      }
     }
 
-    // Third pass: load all the log and index files.
+
+    // Fourth pass: load all the log and index files.
     // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. When
     // this happens, restart loading segment files from scratch.
     retryOnOffsetOverflow(params, {
@@ -157,15 +152,6 @@ object LogLoader extends Logging {
       params.segments.clear()
       loadSegmentFiles(params)
     })
-
-    // Forth pass: rename remaining index swap files. They must be left due to a broker crash when
-    // renaming .swap files to regular files.
-    for (file <- params.dir.listFiles if file.isFile) {
-      if (file.getName.endsWith(SwapFileSuffix)) {
-        info(s"${params.logIdentifier}Recovering index file ${file.getName} by renaming from ${Log.SwapFileSuffix} files.")
-        file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, Log.SwapFileSuffix, "")))
-      }
-    }
 
     val (newRecoveryPoint: Long, nextOffset: Long) = {
       if (!params.dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
