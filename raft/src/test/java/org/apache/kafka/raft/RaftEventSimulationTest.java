@@ -352,6 +352,7 @@ public class RaftEventSimulationTest {
         scheduler.addInvariant(new MajorityReachedHighWatermark(cluster));
         scheduler.addInvariant(new SingleLeader(cluster));
         scheduler.addInvariant(new SnapshotAtLogStart(cluster));
+        scheduler.addInvariant(new LeaderNeverLoadSnapshot(cluster));
         scheduler.addValidation(new ConsistentCommittedData(cluster));
         return scheduler;
     }
@@ -1010,6 +1011,33 @@ public class RaftEventSimulationTest {
                         );
                     }
                 });
+            }
+        }
+    }
+
+    private static class LeaderNeverLoadSnapshot implements Invariant {
+        final Cluster cluster;
+        int epoch = 0;
+        OptionalInt leaderId = OptionalInt.empty();
+
+        private LeaderNeverLoadSnapshot(Cluster cluster) {
+            this.cluster = cluster;
+        }
+
+        @Override
+        public void verify() {
+            for (RaftNode raftNode : cluster.running()) {
+                if (raftNode.counter.isLeader()) {
+                    assertFalse(raftNode.counter.isHandleSnapshotCalled());
+                    assertTrue(raftNode.counter.getHandleSnapshotCalls() == 0);
+                } else {
+                    if (raftNode.counter.isHandleSnapshotCalled()) {
+                        assertTrue(raftNode.counter.getHandleSnapshotCalls() > 0);
+                    } else {
+                        assertTrue(raftNode.counter.getHandleSnapshotCalls() == 0);
+                    }
+                }
+
             }
         }
     }
