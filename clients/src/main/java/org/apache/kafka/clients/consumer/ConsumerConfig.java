@@ -347,7 +347,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         HEARTBEAT_INTERVAL_MS_DOC)
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                                         Type.LIST,
-                                        Arrays.asList(CooperativeStickyAssignor.class, RangeAssignor.class),
+                                        Arrays.asList(RangeAssignor.class, CooperativeStickyAssignor.class),
                                         new ConfigDef.NonNullValidator(),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
