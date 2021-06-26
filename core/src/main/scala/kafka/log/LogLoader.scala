@@ -116,8 +116,8 @@ object LogLoader extends Logging {
     }
 
     // Second pass: delete segments that are between minSwapFileOffset and maxSwapFileOffset. As
-    // discussed above, these segments were compacted but haven't been renamed to .delete before
-    // shutting down the broker.
+    // discussed above, these segments were compacted or split but haven't been renamed to .delete
+    // before shutting down the broker.
     for (file <- params.dir.listFiles if file.isFile) {
       try {
         if (!file.getName.endsWith(SwapFileSuffix)) {
