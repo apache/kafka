@@ -315,6 +315,11 @@ public class Fetcher<K, V> implements Closeable {
                                     log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                                             isolationLevel, fetchOffset, partition, partitionData);
 
+                                    if (partition.toString().equals("table2-4")) {
+                                        System.err.print("fet: " + partitionData);
+                                        System.err.flush();
+                                    }
+
                                     Iterator<? extends RecordBatch> batches = FetchResponse.recordsOrFail(partitionData).batches().iterator();
                                     short responseVersion = resp.requestHeader().apiVersion();
 
@@ -1196,10 +1201,10 @@ public class Fetcher<K, V> implements Closeable {
                 }
             } else if (this.nodesWithPendingFetchRequests.contains(node.id())) {
                 log.trace("Skipping fetch for partition {} because previous request to {} has not been processed", partition, node);
-                if (partition.toString().equals("table2-4")) {
-                    System.err.print("skip fetch: " + node);
-                    System.err.flush();
-                }
+//                if (partition.toString().equals("table2-4")) {
+//                    System.err.print("!!! skip fetch: " + node);
+//                    System.err.flush();
+//                }
             } else {
                 // if there is a leader and no in-flight requests, issue a new fetch
                 FetchSessionHandler.Builder builder = fetchable.get(node);
@@ -1220,10 +1225,10 @@ public class Fetcher<K, V> implements Closeable {
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", isolationLevel,
                     partition, position, node);
-                if (partition.toString().equals("table2-4")) {
-                    System.err.print("fetch req:" + position);
-                    System.err.flush();
-                }
+//                if (partition.toString().equals("table2-4")) {
+//                    System.err.print("!!! fetch req:" + position);
+//                    System.err.flush();
+//                }
             }
         }
 
