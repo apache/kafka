@@ -69,6 +69,11 @@ public class PartitionStates<S> {
         updateSize();
     }
 
+    @Override
+    public String toString() {
+        return map.toString();
+    }
+
     /**
      * Returns an unmodifiable view of the partitions in random order.
      * changes to this PartitionStates instance will be reflected in this view.

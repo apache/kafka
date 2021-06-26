@@ -274,6 +274,7 @@ public class SubscriptionState {
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
 
         Map<TopicPartition, TopicPartitionState> assignedPartitionStates = new HashMap<>(assignments.size());
+        boolean hasTable24 = false;
         for (TopicPartition tp : assignments) {
             TopicPartitionState state = this.assignment.stateValue(tp);
             if (state == null) {
@@ -285,11 +286,15 @@ public class SubscriptionState {
                 state = new TopicPartitionState();
             }
             if (tp.toString().equals("table2-4")) {
-                System.err.print("state n:" + state.highWatermark + "," + state.position);
-                System.err.flush();
+                hasTable24 = true;
             }
 //            System.out.println("!!! state is:" + tp + "," + state.position);
             assignedPartitionStates.put(tp, state);
+        }
+
+        if (hasTable24) {
+            System.err.print("ass:" + this.assignment);
+            System.err.flush();
         }
 
         assignmentId++;
@@ -806,6 +811,12 @@ public class SubscriptionState {
             this.resetStrategy = null;
             this.nextRetryTimeMs = null;
             this.preferredReadReplica = null;
+        }
+
+
+        @Override
+        public String toString() {
+            return "(hwm=" + this.highWatermark + "pos=:" + (this.position == null ? null : this.position.offset) + ')';
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {
