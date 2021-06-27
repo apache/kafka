@@ -761,7 +761,7 @@ public class StreamThread extends Thread {
 
 //        System.err.print(shortLogPrefix + "b r");
         if (!isRunning()) {
-            System.err.print(shortLogPrefix + "eb r:" + state);
+//            System.err.print(shortLogPrefix + "eb r:" + state);
             log.info("Thread state is already {}, skipping the run once call after poll request", state);
             return;
         }
