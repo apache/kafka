@@ -632,19 +632,6 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that connections cannot be made with unsupported TLS versions
-     */
-    @ParameterizedTest
-    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
-    public void testUnsupportedTLSVersion(Args args) throws Exception {
-        args.sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
-        server = createEchoServer(args, SecurityProtocol.SSL);
-
-        checkAuthenticationFailed(args, "0", "TLSv1.1");
-        server.verifyAuthenticationMetrics(0, 1);
-    }
-
-    /**
      * Tests that connections cannot be made with unsupported TLS cipher suites
      */
     @ParameterizedTest
