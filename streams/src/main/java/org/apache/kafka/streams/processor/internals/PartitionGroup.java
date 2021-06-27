@@ -373,7 +373,7 @@ public class PartitionGroup {
         if (oldSize == 0 && newSize > 0) {
 
             nonEmptyQueuesByTime.offer(recordQueue);
-            
+
 
             // if all partitions now are non-empty, set the flag
             // we do not need to update the stream-time here since this task will definitely be
