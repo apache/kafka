@@ -51,6 +51,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.Future;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -86,7 +87,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private volatile boolean initializationFailed;
 
     @Override
-    public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
+    public Future<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
             throws RemoteStorageException {
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
 
@@ -105,7 +106,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             }
 
             // Publish the message to the topic.
-            doPublishMetadata(remoteLogSegmentMetadata.remoteLogSegmentId().topicIdPartition(),
+            return doPublishMetadata(remoteLogSegmentMetadata.remoteLogSegmentId().topicIdPartition(),
                               remoteLogSegmentMetadata);
         } finally {
             lock.readLock().unlock();
@@ -113,7 +114,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     }
 
     @Override
-    public void updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate segmentMetadataUpdate)
+    public Future<Void> updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate segmentMetadataUpdate)
             throws RemoteStorageException {
         Objects.requireNonNull(segmentMetadataUpdate, "segmentMetadataUpdate can not be null");
 
@@ -129,14 +130,14 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             }
 
             // Publish the message to the topic.
-            doPublishMetadata(segmentMetadataUpdate.remoteLogSegmentId().topicIdPartition(), segmentMetadataUpdate);
+            return doPublishMetadata(segmentMetadataUpdate.remoteLogSegmentId().topicIdPartition(), segmentMetadataUpdate);
         } finally {
             lock.readLock().unlock();
         }
     }
 
     @Override
-    public void putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
+    public Future<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
             throws RemoteStorageException {
         Objects.requireNonNull(remotePartitionDeleteMetadata, "remotePartitionDeleteMetadata can not be null");
 
@@ -144,22 +145,20 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         try {
             ensureInitializedAndNotClosed();
 
-            doPublishMetadata(remotePartitionDeleteMetadata.topicIdPartition(), remotePartitionDeleteMetadata);
+            return doPublishMetadata(remotePartitionDeleteMetadata.topicIdPartition(), remotePartitionDeleteMetadata);
         } finally {
             lock.readLock().unlock();
         }
     }
 
-    private void doPublishMetadata(TopicIdPartition topicIdPartition, RemoteLogMetadata remoteLogMetadata)
+    private FuturePublishRecordMetadata doPublishMetadata(TopicIdPartition topicIdPartition, RemoteLogMetadata remoteLogMetadata)
             throws RemoteStorageException {
         log.debug("Publishing metadata for partition: [{}] with context: [{}]", topicIdPartition, remoteLogMetadata);
 
         try {
             // Publish the message to the topic.
-            RecordMetadata recordMetadata = producerManager.publishMessage(remoteLogMetadata);
-            // Wait until the consumer catches up with this offset. This will ensure read-after-write consistency
-            // semantics.
-            consumerManager.waitTillConsumptionCatchesUp(recordMetadata);
+            Future<RecordMetadata> recordMetadata = producerManager.publishMessage(remoteLogMetadata);
+            return new FuturePublishRecordMetadata(recordMetadata, consumerManager, time);
         } catch (KafkaException e) {
             if (e instanceof RetriableException) {
                 throw e;

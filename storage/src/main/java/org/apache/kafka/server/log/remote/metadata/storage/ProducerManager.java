@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -29,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.time.Duration;
+import java.util.concurrent.Future;
 
 /**
  * This class is responsible for publishing messages into the remote log metadata topic partitions.
@@ -50,7 +50,7 @@ public class ProducerManager implements Closeable {
         topicPartitioner = rlmmTopicPartitioner;
     }
 
-    public RecordMetadata publishMessage(RemoteLogMetadata remoteLogMetadata) throws KafkaException {
+    public Future<RecordMetadata> publishMessage(RemoteLogMetadata remoteLogMetadata) {
         TopicIdPartition topicIdPartition = remoteLogMetadata.topicIdPartition();
         int metadataPartitionNum = topicPartitioner.metadataPartition(topicIdPartition);
         log.debug("Publishing metadata message of partition:[{}] into metadata topic partition:[{}] with payload: [{}]",
@@ -61,25 +61,13 @@ public class ProducerManager implements Closeable {
                                              " must be less than the partition count: " + rlmmConfig.metadataTopicPartitionsCount());
         }
 
-        ProducerCallback callback = new ProducerCallback();
         try {
-            producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, null,
-                    serde.serialize(remoteLogMetadata)), callback).get();
+            return producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, null,
+                    serde.serialize(remoteLogMetadata)));
         } catch (KafkaException e) {
             throw e;
         } catch (Exception e) {
             throw new KafkaException("Exception occurred while publishing message for topicIdPartition: " + topicIdPartition, e);
-        }
-
-        if (callback.exception() == null) {
-            return callback.recordMetadata();
-        } else {
-            Exception ex = callback.exception();
-            if (ex instanceof KafkaException) {
-                throw (KafkaException) ex;
-            } else {
-                throw new KafkaException(ex);
-            }
         }
     }
 
@@ -90,24 +78,4 @@ public class ProducerManager implements Closeable {
             log.error("Error encountered while closing the producer", e);
         }
     }
-
-    private static class ProducerCallback implements Callback {
-        private volatile RecordMetadata recordMetadata;
-        private volatile Exception exception;
-
-        @Override
-        public void onCompletion(RecordMetadata recordMetadata, Exception exception) {
-            this.recordMetadata = recordMetadata;
-            this.exception = exception;
-        }
-
-        public RecordMetadata recordMetadata() {
-            return recordMetadata;
-        }
-
-        public Exception exception() {
-            return exception;
-        }
-    }
-
 }
