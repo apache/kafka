@@ -293,7 +293,9 @@ public class SubscriptionState {
         }
 
         if (hasTable24) {
-            System.err.print("old:" + this.assignment);
+            String logPrefix = Thread.currentThread().getName();
+            String shortPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 16) : logPrefix;
+            System.err.print(shortPrefix + "old:" + this.assignment);
             System.err.print("new:" + assignedPartitionStates);
             System.err.flush();
         }
@@ -537,7 +539,7 @@ public class SubscriptionState {
                     log.info("Truncation detected for partition {} at offset {}, resetting offset to " +
                              "the first offset known to diverge {}", tp, currentPosition, newPosition);
                     if (tp.toString().equals("table2-4")) {
-                        System.err.print("!!! truncate:" + newPosition);
+                        System.err.print("truncate:" + newPosition);
                         System.err.flush();
                     }
                     state.seekValidated(newPosition);
