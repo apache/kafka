@@ -703,10 +703,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @SuppressWarnings("unchecked")
     public boolean process(final long wallClockTime) {
-        if (logPrefix.contains("1_4")) {
-            System.err.print("proc ");
-            System.err.flush();
-        }
+//        if (logPrefix.contains("1_4")) {
+//            System.err.print("proc ");
+//            System.err.flush();
+//        }
         if (record == null) {
             if (!isProcessable(wallClockTime)) {
                 return false;
@@ -980,22 +980,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         if (logPrefix.contains("1_4")) {
-            System.err.print("addR");
+            System.err.print("addR:" + mainConsumer + mainConsumer.assignment());
             System.err.flush();
         }
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
-        if (logPrefix.contains("1_4")) {
-            System.err.print("isTrace");
-            System.err.flush();
-        }
 
         if (log.isTraceEnabled()) {
             log.trace("Added records into the buffered queue of partition {}, new queue size is {}", partition, newQueueSize);
-        }
-        if (logPrefix.contains("1_4")) {
-            System.err.print("ad rec:" + newQueueSize + "," + maxBufferedSize);
-            System.err.flush();
         }
 
 
@@ -1005,10 +997,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             System.err.print(logPrefix + "pausing:" + partition + "," + newQueueSize + "," + maxBufferedSize);
             mainConsumer.pause(singleton(partition));
         }
-        if (logPrefix.contains("1_4")) {
-            System.err.print("end add r");
-            System.err.flush();
-        }
+
     }
 
     /**
