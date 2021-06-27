@@ -371,15 +371,9 @@ public class PartitionGroup {
 
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
-            if (logPrefix.contains("1_4")) {
-                System.err.println(longLogPrefix + "ready of");
-                System.err.flush();
-            }
+
             nonEmptyQueuesByTime.offer(recordQueue);
-            if (logPrefix.contains("1_4")) {
-                System.err.println(longLogPrefix + "offer");
-                System.err.flush();
-            }
+            
 
             // if all partitions now are non-empty, set the flag
             // we do not need to update the stream-time here since this task will definitely be
@@ -390,10 +384,7 @@ public class PartitionGroup {
         }
 
         totalBuffered += newSize - oldSize;
-        if (logPrefix.contains("1_4")) {
-            System.err.print(longLogPrefix + "end add R");
-            System.err.flush();
-        }
+
 
         return newSize;
     }

@@ -998,6 +998,12 @@ public class TaskManager {
         for (final TopicPartition partition : records.partitions()) {
             final Task activeTask = tasks.activeTasksForInputPartition(partition);
 
+            if (activeTask.id().toString().contains("1_4")) {
+                final String subLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 20) : logPrefix;
+                System.err.print(subLogPrefix + activeTask.inputPartitions());
+                System.err.flush();
+            }
+
             if (activeTask == null) {
                 log.error("Unable to locate active task for received-record partition {}. Current tasks: {}",
                     partition, toString(">"));
