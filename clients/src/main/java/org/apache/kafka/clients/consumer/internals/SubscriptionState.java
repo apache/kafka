@@ -293,8 +293,8 @@ public class SubscriptionState {
         }
 
         if (hasTable24) {
-            String logPrefix = Thread.currentThread().getName();
-            String shortPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 16) : logPrefix;
+            final String logPrefix = Thread.currentThread().getName();
+            final String shortPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 16) : logPrefix;
             System.err.print(shortPrefix + "old:" + this.assignment);
             System.err.print("new:" + assignedPartitionStates);
             System.err.flush();
