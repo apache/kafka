@@ -226,10 +226,10 @@ public class PartitionGroup {
             return true;
         } else if (queued.isEmpty()) {
             logger.trace("No partitions were buffered locally, so this task is not ready for processing.");
-            if (logPrefix.contains("1_4")) {
-                System.err.print(logPrefix + "no ");
-                System.err.flush();
-            }
+//            if (logPrefix.contains("1_4")) {
+//                System.err.print(logPrefix + "no ");
+//                System.err.flush();
+//            }
 
             return false;
         } else {

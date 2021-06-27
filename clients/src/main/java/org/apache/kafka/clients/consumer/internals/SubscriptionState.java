@@ -274,7 +274,7 @@ public class SubscriptionState {
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
 
         Map<TopicPartition, TopicPartitionState> assignedPartitionStates = new HashMap<>(assignments.size());
-        boolean hasTable24 = false;
+//        boolean hasTable24 = false;
         for (TopicPartition tp : assignments) {
             TopicPartitionState state = this.assignment.stateValue(tp);
             if (state == null) {
@@ -285,20 +285,20 @@ public class SubscriptionState {
 
                 state = new TopicPartitionState();
             }
-            if (tp.toString().equals("table2-4")) {
-                hasTable24 = true;
-            }
+//            if (tp.toString().equals("table2-4")) {
+//                hasTable24 = true;
+//            }
 //            System.out.println("!!! state is:" + tp + "," + state.position);
             assignedPartitionStates.put(tp, state);
         }
 
-        if (hasTable24) {
-            final String logPrefix = Thread.currentThread().getName();
-            final String shortPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 16) : logPrefix;
-            System.err.print(shortPrefix + "old:" + this.assignment);
-            System.err.print("new:" + assignedPartitionStates);
-            System.err.flush();
-        }
+
+        final String logPrefix = Thread.currentThread().getName();
+        final String shortPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 13) : logPrefix;
+        System.err.print(shortPrefix + "old:" + this.assignment);
+        System.err.print("new:" + assignedPartitionStates);
+        System.err.flush();
+
 
         assignmentId++;
         this.assignment.set(assignedPartitionStates);
@@ -402,10 +402,10 @@ public class SubscriptionState {
     }
 
     public void seekUnvalidated(TopicPartition tp, FetchPosition position) {
-        if (tp.toString().equals("table2-4")) {
-            System.err.print("seekUn:" + position);
-            System.err.flush();
-        }
+//        if (tp.toString().equals("table2-4")) {
+//            System.err.print("seekUn:" + position);
+//            System.err.flush();
+//        }
         assignedState(tp).seekUnvalidated(position);
     }
 
@@ -419,10 +419,10 @@ public class SubscriptionState {
             log.debug("Skipping reset of partition {} since an alternative reset has been requested", tp);
         } else {
             log.info("Resetting offset for partition {} to position {}.", tp, position);
-            if (tp.toString().equals("table2-4")) {
-                System.err.print("resetP:" + position);
-                System.err.flush();
-            }
+//            if (tp.toString().equals("table2-4")) {
+//                System.err.print("resetP:" + position);
+//                System.err.flush();
+//            }
 
             state.seekUnvalidated(position);
         }
@@ -587,7 +587,7 @@ public class SubscriptionState {
             return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset - topicPartitionState.position.offset;
         } else {
             if (tp.toString().equals("table2-4")) {
-                System.err.print("hwm:" + topicPartitionState.highWatermark);
+                System.err.print("m:" + topicPartitionState.highWatermark);
                 System.err.flush();
             }
             return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position.offset;
