@@ -520,24 +520,6 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that connections cannot be made with unsupported TLS versions
-     */
-    @Test
-    public void testUnsupportedTLSVersion() throws Exception {
-        String node = "0";
-        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
-        server = createEchoServer(SecurityProtocol.SSL);
-
-        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.1"));
-        createSelector(sslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
-        server.verifyAuthenticationMetrics(0, 1);
-    }
-
-    /**
      * Tests that connections cannot be made with unsupported TLS cipher suites
      */
     @Test
