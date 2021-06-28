@@ -397,18 +397,14 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public DeleteTopicsResult deleteTopics(TopicCollection topics, DeleteTopicsOptions options) {
-        DeleteTopicsResult futures;
-        switch (topics.attribute()) {
-            case TOPIC_ID:
-                futures = DeleteTopicsResult.ofTopicIds(new HashMap<>(handleDeleteTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options)));
-                break;
-            case TOPIC_NAME:
-                futures = DeleteTopicsResult.ofTopicNames(new HashMap<>(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options)));
-                break;
-            default:
-                throw new UnsupportedOperationException("TopicAttribute" + topics.attribute() + " did not match the supported attributes.");
-        }
-        return futures;
+        DeleteTopicsResult result;
+        if (topics instanceof TopicIdCollection)
+            result = DeleteTopicsResult.ofTopicIds(new HashMap<>(handleDeleteTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options)));
+        else if (topics instanceof TopicNameCollection)
+            result = DeleteTopicsResult.ofTopicNames(new HashMap<>(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options)));
+        else
+            throw new UnsupportedOperationException("The TopicCollection provided did not match any supported classes for deleteTopics.");
+        return result;
     }
 
     private Map<String, KafkaFuture<Void>> handleDeleteTopicsUsingNames(Collection<String> topicNames, DeleteTopicsOptions options) {

@@ -1694,16 +1694,12 @@ public class KafkaAdminClient extends AdminClient {
     public DeleteTopicsResult deleteTopics(final TopicCollection topics,
                                            final DeleteTopicsOptions options) {
         DeleteTopicsResult result;
-        switch (topics.attribute()) {
-            case TOPIC_ID:
-                result = DeleteTopicsResult.ofTopicIds(new HashMap<>(handleDeleteTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options)));
-                break;
-            case TOPIC_NAME:
-                result = DeleteTopicsResult.ofTopicNames(new HashMap<>(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options)));
-                break;
-            default:
-                throw new UnsupportedOperationException("TopicAttribute" + topics.attribute() + " did not match the supported attributes.");
-        }
+        if (topics instanceof TopicIdCollection)
+            result = DeleteTopicsResult.ofTopicIds(new HashMap<>(handleDeleteTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options)));
+        else if (topics instanceof TopicNameCollection)
+            result = DeleteTopicsResult.ofTopicNames(new HashMap<>(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options)));
+        else
+            throw new UnsupportedOperationException("The TopicCollection provided did not match any supported classes for deleteTopics.");
         return result;
     }
 

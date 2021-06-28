@@ -20,39 +20,21 @@ import java.util.Collection;
 
 /**
  * A class used to represent a collection of topics. This collection may define topics by topic name
- * attribute or topic ID attribute. Subclassing this class beyond the classes provided here is not supported.
+ * or topic ID. Subclassing this class beyond the classes provided here is not supported.
  */
 public abstract class TopicCollection {
-    private final TopicAttribute attribute;
+
+    private TopicCollection() {}
 
     /**
-     * An enum used to describe how topics in the collection are identified
-     */
-    public enum TopicAttribute {
-        TOPIC_NAME, TOPIC_ID
-    }
-
-    private TopicCollection(TopicAttribute attribute) {
-        this.attribute = attribute;
-    }
-
-    /**
-     * @return the attribute used to identify topics in this collection
-     */
-    public TopicAttribute attribute() {
-        return attribute;
-    }
-
-
-    /**
-     * A class used to represent a collection of topics defined by their topic ID attribute.
+     * A class used to represent a collection of topics defined by their topic ID.
      * Subclassing this class beyond the classes provided here is not supported.
      */
     public static class TopicIdCollection extends TopicCollection {
-        private Collection<Uuid> topicIds;
+        private final Collection<Uuid> topicIds;
 
         public TopicIdCollection(Collection<Uuid> topicIds) {
-            super(TopicAttribute.TOPIC_ID);
+            super();
             this.topicIds = topicIds;
         }
 
@@ -65,14 +47,14 @@ public abstract class TopicCollection {
     }
 
     /**
-     * A class used to represent a collection of topics defined by their topic name attribute.
+     * A class used to represent a collection of topics defined by their topic name.
      * Subclassing this class beyond the classes provided here is not supported.
      */
     public static class TopicNameCollection extends TopicCollection {
-        private Collection<String> topicNames;
+        private final Collection<String> topicNames;
 
         public TopicNameCollection(Collection<String> topicNames) {
-            super(TopicAttribute.TOPIC_NAME);
+            super();
             this.topicNames = topicNames;
         }
 

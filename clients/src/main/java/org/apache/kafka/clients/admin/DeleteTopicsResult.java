@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
@@ -34,11 +33,8 @@ import java.util.Map;
 public class DeleteTopicsResult {
     private Map<String, KafkaFuture<Void>> nameFutures;
     private Map<Uuid, KafkaFuture<Void>> topicIdFutures;
-    private final TopicCollection.TopicAttribute attribute;
 
-    protected DeleteTopicsResult(TopicCollection.TopicAttribute attribute) {
-        this.attribute = attribute;
-    }
+    protected DeleteTopicsResult() {}
 
     private void setNameFutures(Map<String, KafkaFuture<Void>> nameFutures) {
         this.nameFutures = nameFutures;
@@ -49,74 +45,48 @@ public class DeleteTopicsResult {
     }
 
     protected static DeleteTopicsResult ofTopicNames(Map<String, KafkaFuture<Void>> nameFutures) {
-        DeleteTopicsResult result = new DeleteTopicsResult(TopicCollection.TopicAttribute.TOPIC_NAME);
+        DeleteTopicsResult result = new DeleteTopicsResult();
         result.setNameFutures(nameFutures);
         return result;
     }
 
     protected static DeleteTopicsResult ofTopicIds(Map<Uuid, KafkaFuture<Void>> topicIdFutures) {
-        DeleteTopicsResult result = new DeleteTopicsResult(TopicCollection.TopicAttribute.TOPIC_ID);
+        DeleteTopicsResult result = new DeleteTopicsResult();
         result.setTopicIdFutures(topicIdFutures);
         return result;
     }
 
     /**
-     * @return the attribute used to identify topics in the futures map
-     */
-    public TopicCollection.TopicAttribute attribute() {
-        return attribute;
-    }
-
-    /**
      * Return a map from topic names to futures which can be used to check the status of
-     * individual deletions.
-     * @throws UnsupportedOperationException if the collection's attribute was not TOPIC_NAME
+     * individual deletions if the deleteTopics request used topic names. Otherwise return null.
      */
     public Map<String, KafkaFuture<Void>> topicNameValues() {
-        if (attribute != TopicCollection.TopicAttribute.TOPIC_NAME)
-            throw new UnsupportedOperationException("Can not get topic name values unless TopicAttribute is TOPIC_NAME");
         return nameFutures;
     }
 
 
     /**
-     * Return a map from topic names to futures which can be used to check the status of
-     * individual deletions.
-     * @throws UnsupportedOperationException if the collection's attribute was not TOPIC_ID
+     * Return a map from topic IDs to futures which can be used to check the status of
+     * individual deletions if the deleteTopics request used topic IDs. Otherwise return null.
      */
     public Map<Uuid, KafkaFuture<Void>> topicIdValues() {
-        if (attribute != TopicCollection.TopicAttribute.TOPIC_ID)
-            throw new UnsupportedOperationException("Can not get topic ID values unless TopicAttribute is TOPIC_ID");
         return topicIdFutures;
     }
 
     @Deprecated
     /**
      * Return a map from topic names to futures which can be used to check the status of
-     * individual deletions.
+     * individual deletions if the deleteTopics request used topic names. Otherwise return null.
      */
     public Map<String, KafkaFuture<Void>> values() {
-        if (attribute != TopicCollection.TopicAttribute.TOPIC_NAME)
-            throw new UnsupportedOperationException("Can not get topic name values unless TopicAttribute is TOPIC_NAME");
         return nameFutures;
     }
 
     /**
      * Return a future which succeeds only if all the topic deletions succeed.
-     * @throws IllegalStateException if the topic attribute is not supported.
      */
     public KafkaFuture<Void> all() {
-        KafkaFuture<Void> future;
-        switch (attribute) {
-            case TOPIC_ID:
-                future = KafkaFuture.allOf(topicIdFutures.values().toArray(new KafkaFuture[0]));
-                break;
-            case TOPIC_NAME:
-                future = KafkaFuture.allOf(nameFutures.values().toArray(new KafkaFuture[0]));
-                break;
-            default:
-                throw new IllegalStateException("TopicAttribute" + attribute + " did not match the supported attributes.");
-        }
-        return future;
+        return (topicIdFutures == null) ? KafkaFuture.allOf(nameFutures.values().toArray(new KafkaFuture[0])) :
+            KafkaFuture.allOf(topicIdFutures.values().toArray(new KafkaFuture[0]));
     }
 }

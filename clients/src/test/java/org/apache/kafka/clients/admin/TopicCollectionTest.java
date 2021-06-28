@@ -35,13 +35,9 @@ public class TopicCollectionTest {
         List<String> topicNames = Arrays.asList("foo", "bar");
 
         TopicCollection idCollection = new TopicCollection.TopicIdCollection(topicIds);
-        assertEquals(TopicCollection.TopicAttribute.TOPIC_ID, idCollection.attribute());
-
         TopicCollection nameCollection = new TopicNameCollection(topicNames);
-        assertEquals(TopicCollection.TopicAttribute.TOPIC_NAME, nameCollection.attribute());
 
         assertEquals(topicIds, ((TopicIdCollection) idCollection).topicIds());
-
         assertEquals(topicNames, ((TopicNameCollection) nameCollection).topicNames());
     }
 

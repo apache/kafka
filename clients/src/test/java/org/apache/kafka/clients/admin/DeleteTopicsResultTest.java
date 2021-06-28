@@ -17,12 +17,11 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collections;
@@ -39,17 +38,14 @@ public class DeleteTopicsResultTest {
         Map<String, KafkaFuture<Void>> topicNames = Collections.singletonMap("foo", future);
 
         DeleteTopicsResult topicIdFutures = DeleteTopicsResult.ofTopicIds(topicIds);
-        assertEquals(TopicCollection.TopicAttribute.TOPIC_ID, topicIdFutures.attribute());
-
         DeleteTopicsResult topicNameFutures = DeleteTopicsResult.ofTopicNames(topicNames);
-        assertEquals(TopicCollection.TopicAttribute.TOPIC_NAME, topicNameFutures.attribute());
 
         assertEquals(topicIds, topicIdFutures.topicIdValues());
-        assertThrows(UnsupportedOperationException.class, () -> topicIdFutures.topicNameValues());
+        assertNull(topicIdFutures.topicNameValues());
         assertTrue(topicIdFutures.all().isDone());
 
         assertEquals(topicNames, topicNameFutures.topicNameValues());
-        assertThrows(UnsupportedOperationException.class, () -> topicNameFutures.topicIdValues());
+        assertNull(topicNameFutures.topicIdValues());
         assertTrue(topicNameFutures.all().isDone());
     }
 }
