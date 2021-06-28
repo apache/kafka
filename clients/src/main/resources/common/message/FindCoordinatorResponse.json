@@ -23,7 +23,7 @@
   //
   // Version 3 is the first flexible version.
   //
-  // Version 4 adds support for batching via Coordinators
+  // Version 4 adds support for batching via Coordinators (KIP-699)
   "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [

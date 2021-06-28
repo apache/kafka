@@ -95,7 +95,7 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
 
         for (CoordinatorKey key : unrepresentableKeys) {
             failedKeys.put(key, new InvalidGroupIdException("The given group id '" +
-                            key.idValue + "' cannot be represented in a request."));
+                key.idValue + "' cannot be represented in a request."));
         }
         FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
         if (batch) {
