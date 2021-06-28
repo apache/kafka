@@ -448,14 +448,13 @@ ducker_test() {
         case "${1}" in
             -d|--debug) debug=1; shift;;
             --) shift; break;;
-            *) test_name_args+=(${1}); shift;;
+            *) test_name_args+=("${1}"); shift;;
         esac
     done
-    local ducktape_args=${@}
+    local ducktape_args=${*}
     
     [[ ${#test_name_args} -lt 1 ]] && \
         die "ducker_test: you must supply at least one system test to run. Type --help for help."
-    local kafka_test=0
     local test_names=""
 
     for test_name in ${test_name_args[*]}; do
