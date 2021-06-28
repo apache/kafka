@@ -114,11 +114,11 @@ class ConsumerGroupServiceTest {
     when(admin.listOffsets(
       ArgumentMatchers.argThat(offsetsArgMatcher(assignedTopicPartitions)),
       any()
-    )).thenReturn(new ListOffsetsResult(endOffsets.filter{ case (tp, _) => assignedTopicPartitions.contains(tp) }.asJava))
+    )).thenReturn(new ListOffsetsResult(endOffsets.filter { case (tp, _) => assignedTopicPartitions.contains(tp) }.asJava))
     when(admin.listOffsets(
       ArgumentMatchers.argThat(offsetsArgMatcher(unassignedTopicPartitions)),
       any()
-    )).thenReturn(new ListOffsetsResult(endOffsets.filter{ case (tp, _) => unassignedTopicPartitions.contains(tp) }.asJava))
+    )).thenReturn(new ListOffsetsResult(endOffsets.filter { case (tp, _) => unassignedTopicPartitions.contains(tp) }.asJava))
 
     val (state, assignments) = groupService.collectGroupOffsets(group)
     val returnedOffsets = assignments.map { results =>
@@ -126,8 +126,7 @@ class ConsumerGroupServiceTest {
         new TopicPartition(assignment.topic.get, assignment.partition.get) -> assignment.offset
       }.toMap
     }.getOrElse(Map.empty)
-    // Results should have information for all assigned topic partition (even if there is not Offset's information at all, because they get fills with None)
-    // Results should have information only for unassigned topic partitions if and only if there is information about them (including with null values)
+
     val expectedOffsets = Map(
       testTopicPartition0 -> None,
       testTopicPartition1 -> Some(100),
