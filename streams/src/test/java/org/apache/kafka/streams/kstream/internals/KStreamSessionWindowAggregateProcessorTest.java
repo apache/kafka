@@ -421,8 +421,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
         processor.process("OnTime1", "1");
 
-        // dummy record to advance stream time = 1
-        context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", new RecordHeaders()));
+        // dummy record to advance stream time = 11, 10 for gap time plus 1 to place outside window
+        context.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
         processor.process("dummy", "dummy");
 
         try (final LogCaptureAppender appender =
@@ -435,7 +435,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             assertThat(
                 appender.getMessages(),
                 hasItem("Skipping record for expired window." +
-                    " key=[Late1] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[1]")
+                    " key=[Late1] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[11]")
             );
         }
 
@@ -489,16 +489,16 @@ public class KStreamSessionWindowAggregateProcessorTest {
             context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process("OnTime1", "1");
 
-            // dummy record to advance stream time = 1
-            context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", new RecordHeaders()));
+            // dummy record to advance stream time = 11, 10 for gap time plus 1 to place at edge of window
+            context.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
             processor.process("dummy", "dummy");
 
             // delayed record arrives on time, should not be skipped
             context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process("OnTime2", "1");
 
-            // dummy record to advance stream time = 2
-            context.setRecordContext(new ProcessorRecordContext(2, -2, -3, "topic", new RecordHeaders()));
+            // dummy record to advance stream time = 12, 10 for gap time plus 2 to place outside window
+            context.setRecordContext(new ProcessorRecordContext(12, -2, -3, "topic", new RecordHeaders()));
             processor.process("dummy", "dummy");
 
             // delayed record arrives late
@@ -508,7 +508,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             assertThat(
                 appender.getMessages(),
                 hasItem("Skipping record for expired window." +
-                    " key=[Late1] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[2]")
+                    " key=[Late1] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[12]")
             );
         }
 
