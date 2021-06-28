@@ -43,6 +43,7 @@ import kafka.server.ReplicaQuota;
 import kafka.server.ZkMetadataCache;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.CachedConfigRepository;
+import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
 import kafka.utils.Pool;
@@ -133,7 +134,7 @@ public class ReplicaFetcherThreadBenchmark {
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
                 JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
-                new CachedConfigRepository(),
+                new MockConfigRepository(),
                 logConfig,
                 new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),
                 1,
