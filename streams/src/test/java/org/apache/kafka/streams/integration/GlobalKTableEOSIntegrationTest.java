@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.io.File;
+import java.util.Collections;
+import java.util.concurrent.atomic.AtomicReference;
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -36,9 +40,11 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -62,6 +68,7 @@ import java.util.Properties;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
@@ -125,12 +132,14 @@ public class GlobalKTableEOSIntegrationTest {
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0L);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        streamsConfiguration.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         streamsConfiguration.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 300);
+        streamsConfiguration.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 5000);
         globalTable = builder.globalTable(
             globalTableTopic,
             Consumed.with(Serdes.Long(), Serdes.String()),
@@ -167,7 +176,7 @@ public class GlobalKTableEOSIntegrationTest {
 
         TestUtils.waitForCondition(
             () -> results.equals(expected),
-            30000L,
+            30_000L,
             () -> "waiting for initial values;" +
                 "\n  expected: " + expected +
                 "\n  received: " + results
@@ -195,7 +204,7 @@ public class GlobalKTableEOSIntegrationTest {
                 replicatedStore.all().forEachRemaining(pair -> globalState.put(pair.key, pair.value));
                 return globalState.equals(expectedState);
             },
-            30000,
+            30_000L,
             () -> "waiting for data in replicated store" +
                 "\n  expected: " + expectedState +
                 "\n  received: " + globalState
@@ -212,7 +221,7 @@ public class GlobalKTableEOSIntegrationTest {
 
         TestUtils.waitForCondition(
             () -> results.equals(expected),
-            30000L,
+            30_000L,
             () -> "waiting for final values" +
                 "\n  expected: " + expected +
                 "\n  received: " + results
@@ -235,7 +244,7 @@ public class GlobalKTableEOSIntegrationTest {
 
         TestUtils.waitForCondition(
             () -> results.equals(expected),
-            30000L,
+            30_000L,
             () -> "waiting for initial values" +
                 "\n  expected: " + expected +
                 "\n  received: " + results
@@ -263,7 +272,7 @@ public class GlobalKTableEOSIntegrationTest {
                 replicatedStore.all().forEachRemaining(pair -> globalState.put(pair.key, pair.value));
                 return globalState.equals(expectedState);
             },
-            30000,
+            30_000L,
             () -> "waiting for data in replicated store" +
                 "\n  expected: " + expectedState +
                 "\n  received: " + globalState
@@ -280,7 +289,7 @@ public class GlobalKTableEOSIntegrationTest {
 
         TestUtils.waitForCondition(
             () -> results.equals(expected),
-            30000L,
+            30_000L,
             () -> "waiting for final values" +
                 "\n  expected: " + expected +
                 "\n  received: " + results
@@ -314,13 +323,111 @@ public class GlobalKTableEOSIntegrationTest {
                 }
                 return result.equals(expected);
             },
-            30000L,
+            30_000L,
             () -> "waiting for initial values" +
                 "\n  expected: " + expected +
-                "\n  received: " + results
+                "\n  received: " + result
         );
     }
-    
+
+    @Test
+    public void shouldSkipOverTxMarkersOnRestore() throws Exception {
+        shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(false);
+    }
+
+    @Test
+    public void shouldSkipOverAbortedMessagesOnRestore() throws Exception {
+        shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(true);
+    }
+
+    private void shouldSkipOverTxMarkersAndAbortedMessagesOnRestore(final boolean appendAbortedMessages) throws Exception {
+        // records with key 1L, 2L, and 4L are written into partition-0
+        // record with key 3L is written into partition-1
+        produceInitialGlobalTableValues();
+
+        final String stateDir = streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG);
+        final File globalStateDir = new File(
+            stateDir
+                + File.separator
+                + streamsConfiguration.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)
+                + File.separator
+                + "global");
+        assertTrue(globalStateDir.mkdirs());
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(globalStateDir, ".checkpoint"));
+
+        // set the checkpointed offset to the commit marker of partition-1
+        // even if `poll()` won't return any data for partition-1, we should still finish the restore
+        checkpoint.write(Collections.singletonMap(new TopicPartition(globalTableTopic, 1), 1L));
+
+        if (appendAbortedMessages) {
+            final AtomicReference<Exception> error = new AtomicReference<>();
+            startStreams(new StateRestoreListener() {
+                @Override
+                public void onRestoreStart(final TopicPartition topicPartition,
+                                           final String storeName,
+                                           final long startingOffset,
+                                           final long endingOffset) {
+                    // we need to write aborted messages only after we init the `highWatermark`
+                    // to move the `endOffset` beyond the `highWatermark
+                    //
+                    // we cannot write committed messages because we want to test the case that
+                    // poll() returns no records
+                    //
+                    // cf. GlobalStateManagerImpl#restoreState()
+                    try {
+                        produceAbortedMessages();
+                    } catch (final Exception fatal) {
+                        error.set(fatal);
+                    }
+                }
+
+                @Override
+                public void onBatchRestored(final TopicPartition topicPartition,
+                                            final String storeName,
+                                            final long batchEndOffset,
+                                            final long numRestored) { }
+
+                @Override
+                public void onRestoreEnd(final TopicPartition topicPartition,
+                                         final String storeName,
+                                         final long totalRestored) { }
+            });
+            final Exception fatal = error.get();
+            if (fatal != null) {
+                throw fatal;
+            }
+        } else {
+            startStreams();
+        }
+
+        final Map<Long, String> expected = new HashMap<>();
+        expected.put(1L, "A");
+        expected.put(2L, "B");
+        // skip record <3L, "C"> because we won't read it (cf checkpoint file above)
+        expected.put(4L, "D");
+
+        final ReadOnlyKeyValueStore<Long, String> store = IntegrationTestUtils
+            .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
+        assertNotNull(store);
+
+        final Map<Long, String> storeContent = new HashMap<>();
+        TestUtils.waitForCondition(
+            () -> {
+                storeContent.clear();
+                final Iterator<KeyValue<Long, String>> it = store.all();
+                while (it.hasNext()) {
+                    final KeyValue<Long, String> kv = it.next();
+                    storeContent.put(kv.key, kv.value);
+                }
+                return storeContent.equals(expected);
+            },
+            30_000L,
+            () -> "waiting for initial values" +
+                "\n  expected: " + expected +
+                "\n  received: " + storeContent
+        );
+    }
+
     @Test
     public void shouldNotRestoreAbortedMessages() throws Exception {
         produceAbortedMessages();
@@ -339,17 +446,17 @@ public class GlobalKTableEOSIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(store);
 
-        final Map<Long, String> result = new HashMap<>();
+        final Map<Long, String> storeContent = new HashMap<>();
         TestUtils.waitForCondition(
             () -> {
-                result.clear();
-                store.all().forEachRemaining(pair -> result.put(pair.key, pair.value));
-                return result.equals(expected);
+                storeContent.clear();
+                store.all().forEachRemaining(pair -> storeContent.put(pair.key, pair.value));
+                return storeContent.equals(expected);
             },
-            30000L,
+            30_000L,
             () -> "waiting for initial values" +
                 "\n  expected: " + expected +
-                "\n  received: " + results
+                "\n  received: " + storeContent
         );
     }
 
@@ -362,7 +469,12 @@ public class GlobalKTableEOSIntegrationTest {
     }
     
     private void startStreams() {
+        startStreams(null);
+    }
+
+    private void startStreams(final StateRestoreListener stateRestoreListener) {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        kafkaStreams.setGlobalStateRestoreListener(stateRestoreListener);
         kafkaStreams.start();
     }
 
