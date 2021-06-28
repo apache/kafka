@@ -97,7 +97,8 @@ object LogLoader extends Logging {
 
     // The remaining valid swap files must come from compaction or segment split operation. We can
     // simply rename them to regular segment files. But, before renaming, we should figure out which
-    // segments are compacted and delete these segment files: this is done by calculating min/maxSwapFileOffset.
+    // segments are compacted/split and delete these segment files: this is done by calculating
+    // min/maxSwapFileOffset.
     // We store segments that require renaming in this code block, and do the actual renaming later.
     var minSwapFileOffset = Long.MaxValue
     var maxSwapFileOffset = Long.MinValue
@@ -110,7 +111,7 @@ object LogLoader extends Logging {
         fileSuffix = Log.SwapFileSuffix)
       info(s"${params.logIdentifier}Found log file ${f.getPath} from interrupted swap operation, which is recoverable from ${Log.SwapFileSuffix} files by renaming.")
       minSwapFileOffset = Math.min(segment.baseOffset, minSwapFileOffset)
-      maxSwapFileOffset = Math.max(segment.offsetIndex.lastOffset, maxSwapFileOffset)
+      maxSwapFileOffset = Math.max(segment.readNextOffset, maxSwapFileOffset)
     }
 
     // Second pass: delete segments that are between minSwapFileOffset and maxSwapFileOffset. As
@@ -120,7 +121,7 @@ object LogLoader extends Logging {
       try {
         if (!file.getName.endsWith(SwapFileSuffix)) {
           val offset = offsetFromFile(file)
-          if (offset >= minSwapFileOffset && offset <= maxSwapFileOffset) {
+          if (offset >= minSwapFileOffset && offset < maxSwapFileOffset) {
             info(s"${params.logIdentifier}Deleting segment files ${file.getName} that is compacted but has not been deleted yet.")
             file.delete()
           }
