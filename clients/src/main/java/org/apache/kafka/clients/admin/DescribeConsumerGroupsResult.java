@@ -46,9 +46,7 @@ public class DescribeConsumerGroupsResult {
      */
     public Map<String, KafkaFuture<ConsumerGroupDescription>> describedGroups() {
         Map<String, KafkaFuture<ConsumerGroupDescription>> describedGroups = new HashMap<>();
-        for (Map.Entry<CoordinatorKey, KafkaFutureImpl<ConsumerGroupDescription>> entry : futures.entrySet()) {
-            describedGroups.put(entry.getKey().idValue, entry.getValue());
-        }
+        futures.forEach((key, future) -> describedGroups.put(key.idValue, future));
         return describedGroups;
     }
 
@@ -59,15 +57,15 @@ public class DescribeConsumerGroupsResult {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
             nil -> {
                 Map<String, ConsumerGroupDescription> descriptions = new HashMap<>(futures.size());
-                try {
-                    for (Map.Entry<CoordinatorKey, KafkaFutureImpl<ConsumerGroupDescription>> entry : futures.entrySet()) {
-                        descriptions.put(entry.getKey().idValue, entry.getValue().get());
+                futures.forEach((key, future) -> {
+                    try {
+                        descriptions.put(key.idValue, future.get());
+                    } catch (InterruptedException | ExecutionException e) {
+                        // This should be unreachable, since the KafkaFuture#allOf already ensured
+                        // that all of the futures completed successfully.
+                        throw new RuntimeException(e);
                     }
-                } catch (InterruptedException | ExecutionException e) {
-                    // This should be unreachable, since the KafkaFuture#allOf already ensured
-                    // that all of the futures completed successfully.
-                    throw new RuntimeException(e);
-                }
+                });
                 return descriptions;
             });
     }

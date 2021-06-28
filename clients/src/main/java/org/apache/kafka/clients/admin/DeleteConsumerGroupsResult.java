@@ -44,9 +44,7 @@ public class DeleteConsumerGroupsResult {
      */
     public Map<String, KafkaFuture<Void>> deletedGroups() {
         Map<String, KafkaFuture<Void>> deletedGroups = new HashMap<>(futures.size());
-        futures.forEach((key, future) -> {
-            deletedGroups.put(key.idValue, future);
-        });
+        futures.forEach((key, future) -> deletedGroups.put(key.idValue, future));
         return deletedGroups;
     }
 

@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.errors.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
@@ -58,6 +57,22 @@ public class FindCoordinatorRequest extends AbstractRequest {
 
         public FindCoordinatorRequestData data() {
             return data;
+        }
+    }
+
+    /**
+     * Indicates that it is not possible to lookup coordinators in batches with FindCoordinator. Instead
+     * coordinators must be looked up one by one.
+     */
+    public static class NoBatchedFindCoordinatorsException extends UnsupportedVersionException {
+        private static final long serialVersionUID = 1L;
+
+        public NoBatchedFindCoordinatorsException(String message, Throwable cause) {
+            super(message, cause);
+        }
+
+        public NoBatchedFindCoordinatorsException(String message) {
+            super(message);
         }
     }
 
