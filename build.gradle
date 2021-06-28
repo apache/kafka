@@ -77,37 +77,21 @@ allprojects {
     // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
     // that are unrelated to the project dependencies, we should not change them
     if (name != "zinc") {
-      if (versions.baseScala != '3') {
-        resolutionStrategy {
-          force(
-                  // be explicit about the javassist dependency version instead of relying on the transitive version
-                  libs.javassist,
-                  // ensure we have a single version in the classpath despite transitive dependencies
-                  libs.scalaLibrary,
-                  libs.scalaReflect,
-                  libs.jacksonAnnotations,
-                  // be explicit about the Netty dependency version instead of relying on the version set by
-                  // ZooKeeper (potentially older and containing CVEs)
-                  libs.nettyHandler,
-                  libs.nettyTransportNativeEpoll
-          )
-        }
-      } else {
-        resolutionStrategy {
-          force(
-                  // be explicit about the javassist dependency version instead of relying on the transitive version
-                  libs.javassist,
-                  // ensure we have a single version in the classpath despite transitive dependencies
-                  libs.scala3Library,
-                  libs.scala3Compiler,
-                  libs.jacksonAnnotations,
-                  // be explicit about the Netty dependency version instead of relying on the version set by
-                  // ZooKeeper (potentially older and containing CVEs)
-                  libs.nettyHandler,
-                  libs.nettyTransportNativeEpoll
-          )
-        }
+      resolutionStrategy {
+        force(
+                // be explicit about the javassist dependency version instead of relying on the transitive version
+                libs.javassist,
+                // ensure we have a single version in the classpath despite transitive dependencies
+                libs.scalaLibrary,
+                libs.scalaCompiler,
+                libs.jacksonAnnotations,
+                // be explicit about the Netty dependency version instead of relying on the version set by
+                // ZooKeeper (potentially older and containing CVEs)
+                libs.nettyHandler,
+                libs.nettyTransportNativeEpoll
+        )
       }
+
     }
   }
 }
@@ -823,14 +807,8 @@ project(':core') {
     // `core` is often used in users' tests, define the following dependencies as `api` for backwards compatibility
     // even though the `core` module doesn't expose any public API
     api project(':clients')
-    if (versions.baseScala != '3') {
-      api libs.scalaLibrary
-      // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
-      implementation libs.scalaReflect
-    } else {
-      api libs.scala3Library
-      api libs.scala3Compiler
-    }
+    api libs.scalaLibrary
+    api libs.scalaCompiler
 
     implementation project(':server-common')
     implementation project(':metadata')
@@ -1861,13 +1839,8 @@ project(':streams:streams-scala') {
   archivesBaseName = "kafka-streams-scala_${versions.baseScala}"
   dependencies {
     api project(':streams')
-
-    if (versions.baseScala != '3') {
-      api libs.scalaLibrary
-    } else {
-      api libs.scala3Library
-      api libs.scala3Compiler
-    }
+    api libs.scalaLibrary
+    api libs.scalaCompiler
 
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
@@ -2181,12 +2154,8 @@ project(':jmh-benchmarks') {
     implementation libs.metrics
     implementation libs.mockitoCore
     implementation libs.slf4jlog4j
-    if (versions.baseScala != '3') {
-      implementation libs.scalaLibrary
-    } else {
-      implementation libs.scala3Library
-      implementation libs.scala3Compiler
-    }
+    implementation libs.scalaLibrary
+    implementation libs.scalaCompiler
   }
 
   tasks.withType(JavaCompile) {

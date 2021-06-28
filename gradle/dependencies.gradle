@@ -36,6 +36,8 @@ if (hasProperty('scalaVersion')) {
     versions["scala"] = defaultScala30Version
     versions["baseScala"] = '3'
     versions["baseScalaJackson"] = '2.13'
+    versions["postfixScala"] = '3'
+    versions["postfixScalaOptionalVersion"] = '_3'
   }  else {
     versions["scala"] = scalaVersion
   }
@@ -57,6 +59,8 @@ if (versions.baseScala != '3') {
     versions["baseScala"] = versions.scala
     versions["baseScalaJackson"] = versions.scala
   }
+  versions["postfixScala"] = ''
+  versions["postfixScalaOptionalVersion"] = ''
 }
 
 versions += [
@@ -183,9 +187,8 @@ libs += [
   powermockEasymock: "org.powermock:powermock-api-easymock:$versions.powermock",
   reflections: "org.reflections:reflections:$versions.reflections",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
-  scalaLibrary: "org.scala-lang:scala-library:$versions.scala",
-  scala3Library: "org.scala-lang:scala3-library_3:3.0.0",
-  scala3Compiler: "org.scala-lang:scala3-compiler_3:3.0.0",
+  scalaLibrary: "org.scala-lang:scala$versions.postfixScala-library$versions.postfixScalaOptionalVersion:$versions.scala",
+  scalaCompiler: "org.scala-lang:scala$versions.postfixScala-compiler$versions.postfixScalaOptionalVersion:$versions.scala",
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScalaJackson:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
