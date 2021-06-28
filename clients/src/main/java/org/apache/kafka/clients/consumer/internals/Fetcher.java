@@ -315,10 +315,10 @@ public class Fetcher<K, V> implements Closeable {
                                     log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                                             isolationLevel, fetchOffset, partition, partitionData);
 
-                                    if (partition.toString().equals("table2-4")) {
-                                        System.err.print("fet: " + partitionData);
-                                        System.err.flush();
-                                    }
+//                                    if (partition.toString().equals("table2-4")) {
+//                                        System.err.print("fet: " + partitionData);
+//                                        System.err.flush();
+//                                    }
 
                                     Iterator<? extends RecordBatch> batches = FetchResponse.recordsOrFail(partitionData).batches().iterator();
                                     short responseVersion = resp.requestHeader().apiVersion();

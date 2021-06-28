@@ -1004,6 +1004,11 @@ public class TaskManager {
                 throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
             }
 
+            if (activeTask.id().toString().contains("1_4")) {
+                final String subLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 20) : logPrefix;
+                System.err.print(subLogPrefix + activeTask.inputPartitions());
+                System.err.flush();
+            }
             activeTask.addRecords(partition, records.records(partition));
         }
     }
