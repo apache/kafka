@@ -126,6 +126,7 @@ public class KGroupedTableImplTest {
             Materialized.as(INVALID_STORE_NAME)));
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private MockProcessorSupplier<String, Integer> getReducedResults(final KTable<String, Integer> inputKTable) {
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         inputKTable
@@ -201,7 +202,6 @@ public class KGroupedTableImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldReduceAndMaterializeResults() {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
@@ -235,7 +235,6 @@ public class KGroupedTableImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldCountAndMaterializeResults() {
         builder
@@ -265,7 +264,6 @@ public class KGroupedTableImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateAndMaterializeResults() {
         builder

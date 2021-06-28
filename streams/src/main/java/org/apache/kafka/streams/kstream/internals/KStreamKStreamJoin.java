@@ -21,10 +21,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -40,13 +36,15 @@ import java.util.Optional;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
-class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V1> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
     private final String otherWindowName;
     private final long joinBeforeMs;
     private final long joinAfterMs;
     private final long joinGraceMs;
+    private final boolean enableSpuriousResultFix;
 
     private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner;
     private final boolean outer;
@@ -57,18 +55,22 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
     KStreamKStreamJoin(final boolean isLeftSide,
                        final String otherWindowName,
-                       final long joinBeforeMs,
-                       final long joinAfterMs,
-                       final long joinGraceMs,
+                       final JoinWindowsInternal windows,
                        final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner,
                        final boolean outer,
                        final Optional<String> outerJoinWindowName,
                        final KStreamImplJoin.MaxObservedStreamTime maxObservedStreamTime) {
         this.isLeftSide = isLeftSide;
         this.otherWindowName = otherWindowName;
-        this.joinBeforeMs = joinBeforeMs;
-        this.joinAfterMs = joinAfterMs;
-        this.joinGraceMs = joinGraceMs;
+        if (isLeftSide) {
+            this.joinBeforeMs = windows.beforeMs;
+            this.joinAfterMs = windows.afterMs;
+        } else {
+            this.joinBeforeMs = windows.afterMs;
+            this.joinAfterMs = windows.beforeMs;
+        }
+        this.joinGraceMs = windows.gracePeriodMs();
+        this.enableSpuriousResultFix = windows.spuriousResultFixEnabled();
         this.joiner = joiner;
         this.outer = outer;
         this.outerJoinWindowName = outerJoinWindowName;
@@ -76,23 +78,28 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     }
 
     @Override
-    public Processor<K, V1> get() {
+    public org.apache.kafka.streams.processor.Processor<K, V1> get() {
         return new KStreamKStreamJoinProcessor();
     }
 
-    private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {
+    private class KStreamKStreamJoinProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, V1> {
         private WindowStore<K, V2> otherWindowStore;
         private Sensor droppedRecordsSensor;
         private Optional<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue>> outerJoinWindowStore = Optional.empty();
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
             final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
             droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             otherWindowStore = context.getStateStore(otherWindowName);
 
-            if (StreamsConfig.InternalConfig.getBoolean(context().appConfigs(), ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, true)) {
+            if (enableSpuriousResultFix
+                && StreamsConfig.InternalConfig.getBoolean(
+                    context().appConfigs(),
+                    ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
+                    true
+                )) {
                 outerJoinWindowStore = outerJoinWindowName.map(context::getStateStore);
             }
         }

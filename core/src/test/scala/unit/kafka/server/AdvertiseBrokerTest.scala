@@ -37,25 +37,8 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testBrokerAdvertiseHostNameAndPortToZK(): Unit = {
-    val advertisedHostName = "routable-host1"
-    val advertisedPort = 1234
-    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
-    props.put("advertised.host.name", advertisedHostName)
-    props.put("advertised.port", advertisedPort.toString)
-    servers += TestUtils.createServer(KafkaConfig.fromProps(props))
-
-    val brokerInfo = zkClient.getBroker(brokerId).get
-    assertEquals(1, brokerInfo.endPoints.size)
-    val endpoint = brokerInfo.endPoints.head
-    assertEquals(advertisedHostName, endpoint.host)
-    assertEquals(advertisedPort, endpoint.port)
-    assertEquals(SecurityProtocol.PLAINTEXT, endpoint.securityProtocol)
-    assertEquals(SecurityProtocol.PLAINTEXT.name, endpoint.listenerName.value)
-  }
-
   def testBrokerAdvertiseListenersToZK(): Unit = {
-    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnect, enableControlledShutdown = false)
     props.put("advertised.listeners", "PLAINTEXT://routable-listener:3334")
     servers += TestUtils.createServer(KafkaConfig.fromProps(props))
 
@@ -65,11 +48,12 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
     assertEquals("routable-listener", endpoint.host)
     assertEquals(3334, endpoint.port)
     assertEquals(SecurityProtocol.PLAINTEXT, endpoint.securityProtocol)
-    assertEquals(SecurityProtocol.PLAINTEXT.name, endpoint.listenerName)
+    assertEquals(SecurityProtocol.PLAINTEXT.name, endpoint.listenerName.value)
   }
 
+  @Test
   def testBrokerAdvertiseListenersWithCustomNamesToZK(): Unit = {
-    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnect, enableControlledShutdown = false)
     props.put("listeners", "INTERNAL://:0,EXTERNAL://:0")
     props.put("advertised.listeners", "EXTERNAL://external-listener:9999,INTERNAL://internal-listener:10999")
     props.put("listener.security.protocol.map", "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT")
@@ -77,7 +61,7 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
     servers += TestUtils.createServer(KafkaConfig.fromProps(props))
 
     val brokerInfo = zkClient.getBroker(brokerId).get
-    assertEquals(1, brokerInfo.endPoints.size)
+    assertEquals(2, brokerInfo.endPoints.size)
     val endpoint = brokerInfo.endPoints.head
     assertEquals("external-listener", endpoint.host)
     assertEquals(9999, endpoint.port)
@@ -87,7 +71,7 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
     assertEquals("internal-listener", endpoint2.host)
     assertEquals(10999, endpoint2.port)
     assertEquals(SecurityProtocol.PLAINTEXT, endpoint.securityProtocol)
-    assertEquals("INTERNAL", endpoint2.listenerName)
+    assertEquals("INTERNAL", endpoint2.listenerName.value)
   }
   
 }

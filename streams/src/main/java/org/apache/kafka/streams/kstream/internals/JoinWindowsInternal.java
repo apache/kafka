@@ -14,42 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.kstream.internals;
 
-package org.apache.kafka.controller;
+import org.apache.kafka.streams.kstream.JoinWindows;
 
-import java.io.IOException;
-import java.util.List;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+public class JoinWindowsInternal extends JoinWindows {
 
-
-/**
- * The no-op snapshot writer which does nothing.
- *
- * TODO: This will be moved to the test/ directory once we have the KRaft
- * implementation of the snapshot writer.
- */
-public final class NoOpSnapshotWriter implements SnapshotWriter {
-    private final long epoch;
-
-    public NoOpSnapshotWriter(long epoch) {
-        this.epoch = epoch;
+    public JoinWindowsInternal(final JoinWindows joinWindows) {
+        super(joinWindows);
     }
 
-    @Override
-    public long epoch() {
-        return epoch;
-    }
-
-    @Override
-    public boolean writeBatch(List<ApiMessageAndVersion> batch) throws IOException {
-        return true;
-    }
-
-    @Override
-    public void close() {
-    }
-
-    @Override
-    public void completeSnapshot() throws IOException {
+    public boolean spuriousResultFixEnabled() {
+        return enableSpuriousResultFix;
     }
 }

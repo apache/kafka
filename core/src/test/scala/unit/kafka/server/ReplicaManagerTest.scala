@@ -23,7 +23,7 @@ import kafka.log._
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
-import kafka.server.metadata.CachedConfigRepository
+import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils.createBroker
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
@@ -63,7 +63,7 @@ class ReplicaManagerTest {
   val time = new MockTime
   val scheduler = new MockScheduler(time)
   val metrics = new Metrics
-  val configRepository = new CachedConfigRepository()
+  val configRepository = new MockConfigRepository()
   var alterIsrManager: AlterIsrManager = _
   var config: KafkaConfig = _
   var quotaManager: QuotaManagers = _

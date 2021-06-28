@@ -36,7 +36,7 @@ import kafka.log._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
-import kafka.server.metadata.{CachedConfigRepository, ConfigRepository, MetadataBroker}
+import kafka.server.metadata.{ConfigRepository, MetadataBroker, MockConfigRepository}
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -1094,7 +1094,7 @@ object TestUtils extends Logging {
    */
   def createLogManager(logDirs: Seq[File] = Seq.empty[File],
                        defaultConfig: LogConfig = LogConfig(),
-                       configRepository: ConfigRepository = new CachedConfigRepository,
+                       configRepository: ConfigRepository = new MockConfigRepository,
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
                        time: MockTime = new MockTime()): LogManager = {
     new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
@@ -1173,12 +1173,6 @@ object TestUtils extends Logging {
     new MockIsrChangeListener()
   }
 
-  def createConfigRepository(topic: String, props: Properties): CachedConfigRepository = {
-    val configRepository = new CachedConfigRepository()
-    props.entrySet().forEach(e => configRepository.setTopicConfig(topic, e.getKey.toString, e.getValue.toString))
-    configRepository
-  }
-
   def produceMessages(servers: Seq[KafkaServer],
                       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
                       acks: Int = -1): Unit = {
@@ -1207,16 +1201,17 @@ object TestUtils extends Logging {
     values
   }
 
-  def produceMessage(servers: Seq[KafkaServer], topic: String, message: String,
+  def produceMessage(servers: Seq[KafkaServer], topic: String, message: String, timestamp: java.lang.Long = null,
                      deliveryTimeoutMs: Int = 30 * 1000, requestTimeoutMs: Int = 20 * 1000): Unit = {
     val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers),
       deliveryTimeoutMs = deliveryTimeoutMs, requestTimeoutMs = requestTimeoutMs)
     try {
-      producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
+      producer.send(new ProducerRecord(topic, null, timestamp, topic.getBytes, message.getBytes)).get
     } finally {
       producer.close()
     }
   }
+
 
   def verifyTopicDeletion(zkClient: KafkaZkClient, topic: String, numPartitions: Int, servers: Seq[KafkaServer]): Unit = {
     val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))

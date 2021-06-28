@@ -25,7 +25,7 @@ import java.util.Properties
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
-import kafka.server.metadata.CachedConfigRepository
+import kafka.server.metadata.MockConfigRepository
 import kafka.utils.{CoreUtils, MockTime, Scheduler, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, DefaultRecordBatch, MemoryRecords, RecordBatch, RecordVersion, SimpleRecord, TimestampType}
@@ -75,7 +75,7 @@ class LogLoaderTest {
     // Create a LogManager with some overridden methods to facilitate interception of clean shutdown
     // flag and to inject a runtime error
     def interceptedLogManager(logConfig: LogConfig, logDirs: Seq[File], simulateError: SimulateError): LogManager = {
-      new LogManager(logDirs = logDirs.map(_.getAbsoluteFile), initialOfflineDirs = Array.empty[File], new CachedConfigRepository(),
+      new LogManager(logDirs = logDirs.map(_.getAbsoluteFile), initialOfflineDirs = Array.empty[File], new MockConfigRepository(),
         initialDefaultConfig = logConfig, cleanerConfig = CleanerConfig(enableCleaner = false), recoveryThreadsPerDataDir = 4,
         flushCheckMs = 1000L, flushRecoveryOffsetCheckpointMs = 10000L, flushStartOffsetCheckpointMs = 10000L,
         retentionCheckMs = 1000L, maxPidExpirationMs = 60 * 60 * 1000, scheduler = time.scheduler, time = time,
@@ -1493,5 +1493,46 @@ class LogLoaderTest {
     val reloadedLog = createLog(logDir, reloadedLogConfig, recoveryPoint = recoveryPoint, lastShutdownClean = false)
     val abortedTransactions = LogTestUtils.allAbortedTransactions(reloadedLog)
     assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
+  }
+
+  @Test
+  def testLogEndLessThanStartAfterReopen(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    var log = createLog(logDir, logConfig)
+    for (i <- 0 until 5) {
+      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
+      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
+      log.roll()
+    }
+    assertEquals(6, log.logSegments.size)
+
+    // Increment the log start offset
+    val startOffset = 4
+    log.updateHighWatermark(log.logEndOffset)
+    log.maybeIncrementLogStartOffset(startOffset, ClientRecordDeletion)
+    assertTrue(log.logEndOffset > log.logStartOffset)
+
+    // Append garbage to a segment below the current log start offset
+    val segmentToForceTruncation = log.logSegments.take(2).last
+    val bw = new BufferedWriter(new FileWriter(segmentToForceTruncation.log.file))
+    bw.write("corruptRecord")
+    bw.close()
+    log.close()
+
+    // Reopen the log. This will cause truncate the segment to which we appended garbage and delete all other segments.
+    // All remaining segments will be lower than the current log start offset, which will force deletion of all segments
+    // and recreation of a single, active segment starting at logStartOffset.
+    log = createLog(logDir, logConfig, logStartOffset = startOffset, lastShutdownClean = false)
+    // Wait for segment deletions (if any) to complete.
+    mockTime.sleep(logConfig.fileDeleteDelayMs)
+    assertEquals(1, log.numberOfSegments)
+    assertEquals(startOffset, log.logStartOffset)
+    assertEquals(startOffset, log.logEndOffset)
+    // Validate that the remaining segment matches our expectations
+    val onlySegment = log.segments.firstSegment.get
+    assertEquals(startOffset, onlySegment.baseOffset)
+    assertTrue(onlySegment.log.file().exists())
+    assertTrue(onlySegment.lazyOffsetIndex.file.exists())
+    assertTrue(onlySegment.lazyTimeIndex.file.exists())
   }
 }

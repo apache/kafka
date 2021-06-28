@@ -40,10 +40,12 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -695,7 +697,7 @@ public class RecordAccumulatorTest {
     }
 
     @Test
-    public void testIdempotenceWithOldMagic() throws InterruptedException {
+    public void testIdempotenceWithOldMagic() {
         // Simulate talking to an older broker, ie. one which supports a lower magic.
         ApiVersions apiVersions = new ApiVersions();
         int batchSize = 1025;
@@ -706,12 +708,58 @@ public class RecordAccumulatorTest {
         String metricGrpName = "producer-metrics";
 
         apiVersions.update("foobar", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
-        TransactionManager transactionManager = new TransactionManager(new LogContext(), null, 0, 100L, new ApiVersions());
+        TransactionManager transactionManager = new TransactionManager(new LogContext(), null, 0, retryBackoffMs, apiVersions);
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
             CompressionType.NONE, lingerMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
         assertThrows(UnsupportedVersionException.class,
             () -> accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds()));
+    }
+
+    @Test
+    public void testRecordsDrainedWhenTransactionCompleting() throws Exception {
+        int batchSize = 1025;
+        int deliveryTimeoutMs = 3200;
+        int lingerMs = 10;
+        long totalSize = 10 * batchSize;
+
+        TransactionManager transactionManager = Mockito.mock(TransactionManager.class);
+        RecordAccumulator accumulator = createTestRecordAccumulator(transactionManager, deliveryTimeoutMs,
+            batchSize, totalSize, CompressionType.NONE, lingerMs);
+
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(12345L, (short) 5);
+        Mockito.when(transactionManager.producerIdAndEpoch()).thenReturn(producerIdAndEpoch);
+        Mockito.when(transactionManager.isSendToPartitionAllowed(tp1)).thenReturn(true);
+        Mockito.when(transactionManager.isPartitionAdded(tp1)).thenReturn(true);
+        Mockito.when(transactionManager.firstInFlightSequence(tp1)).thenReturn(0);
+
+        // Initially, the transaction is still in progress, so we should respect the linger.
+        Mockito.when(transactionManager.isCompleting()).thenReturn(false);
+
+        accumulator.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs,
+            false, time.milliseconds());
+        accumulator.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs,
+            false, time.milliseconds());
+        assertTrue(accumulator.hasUndrained());
+
+        RecordAccumulator.ReadyCheckResult firstResult = accumulator.ready(cluster, time.milliseconds());
+        assertEquals(0, firstResult.readyNodes.size());
+        Map<Integer, List<ProducerBatch>> firstDrained = accumulator.drain(cluster, firstResult.readyNodes,
+            Integer.MAX_VALUE, time.milliseconds());
+        assertEquals(0, firstDrained.size());
+
+        // Once the transaction begins completion, then the batch should be drained immediately.
+        Mockito.when(transactionManager.isCompleting()).thenReturn(true);
+
+        RecordAccumulator.ReadyCheckResult secondResult = accumulator.ready(cluster, time.milliseconds());
+        assertEquals(1, secondResult.readyNodes.size());
+        Node readyNode = secondResult.readyNodes.iterator().next();
+
+        Map<Integer, List<ProducerBatch>> secondDrained = accumulator.drain(cluster, secondResult.readyNodes,
+            Integer.MAX_VALUE, time.milliseconds());
+        assertEquals(Collections.singleton(readyNode.id()), secondDrained.keySet());
+        List<ProducerBatch> batches = secondDrained.get(readyNode.id());
+        assertEquals(1, batches.size());
     }
 
     @Test
@@ -1080,16 +1128,26 @@ public class RecordAccumulatorTest {
         }
     }
 
-
     private RecordAccumulator createTestRecordAccumulator(int batchSize, long totalSize, CompressionType type, int lingerMs) {
         int deliveryTimeoutMs = 3200;
         return createTestRecordAccumulator(deliveryTimeoutMs, batchSize, totalSize, type, lingerMs);
     }
 
+    private RecordAccumulator createTestRecordAccumulator(int deliveryTimeoutMs, int batchSize, long totalSize, CompressionType type, int lingerMs) {
+        return createTestRecordAccumulator(null, deliveryTimeoutMs, batchSize, totalSize, type, lingerMs);
+    }
+
     /**
      * Return a test RecordAccumulator instance
      */
-    private RecordAccumulator createTestRecordAccumulator(int deliveryTimeoutMs, int batchSize, long totalSize, CompressionType type, int lingerMs) {
+    private RecordAccumulator createTestRecordAccumulator(
+        TransactionManager txnManager,
+        int deliveryTimeoutMs,
+        int batchSize,
+        long totalSize,
+        CompressionType type,
+        int lingerMs
+    ) {
         long retryBackoffMs = 100L;
         String metricGrpName = "producer-metrics";
 
@@ -1104,7 +1162,7 @@ public class RecordAccumulatorTest {
             metricGrpName,
             time,
             new ApiVersions(),
-            null,
+            txnManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
     }
 }

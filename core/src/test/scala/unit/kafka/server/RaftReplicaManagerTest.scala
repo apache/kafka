@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.cluster.Partition
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.LazyOffsetCheckpoints
-import kafka.server.metadata.{CachedConfigRepository, MetadataBroker, MetadataBrokers, MetadataImage, MetadataImageBuilder, MetadataPartition, RaftMetadataCache}
+import kafka.server.metadata.{MetadataBroker, MetadataBrokers, MetadataImage, MetadataImageBuilder, MetadataPartition, MockConfigRepository, RaftMetadataCache}
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import org.apache.kafka.common.errors.InconsistentTopicIdException
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -46,7 +46,7 @@ trait LeadershipChangeHandler {
 class RaftReplicaManagerTest {
   private var alterIsrManager: AlterIsrManager = _
   private var config: KafkaConfig = _
-  private val configRepository = new CachedConfigRepository()
+  private val configRepository = new MockConfigRepository()
   private val metrics = new Metrics
   private var quotaManager: QuotaManagers = _
   private val time = new MockTime
