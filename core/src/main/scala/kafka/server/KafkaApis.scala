@@ -1910,10 +1910,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         results.asScala.filter(result => result.name() != null))(_.name)
       results.forEach { topic =>
         val unresolvedTopicId = topic.topicId() != Uuid.ZERO_UUID && topic.name() == null
-        if (!config.usesTopicId && topicIdsFromRequest.contains(topic.topicId)) {
-          topic.setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-          topic.setErrorMessage("Topic IDs are not supported on the server.")
-        } else if (unresolvedTopicId) {
+        if (unresolvedTopicId) {
           topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
         } else if (topicIdsFromRequest.contains(topic.topicId) && !authorizedDescribeTopics.contains(topic.name)) {
 
