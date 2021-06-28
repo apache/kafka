@@ -2213,13 +2213,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private Long append(int epoch, List<T> records, boolean isAtomic) {
-        BatchAccumulator<T> accumulator;
-        try {
-            accumulator = quorum.<T>leaderStateOrThrow().accumulator();
-        } catch (IllegalStateException ise) {
+        Optional<LeaderState<T>> leaderStateOpt = quorum.maybeLeaderState();
+        if (!leaderStateOpt.isPresent()) {
             return Long.MAX_VALUE;
         }
 
+        BatchAccumulator<T> accumulator = leaderStateOpt.get().accumulator();
         boolean isFirstAppend = accumulator.isEmpty();
         final Long offset;
         if (isAtomic) {
@@ -2274,17 +2273,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             throw new IllegalArgumentException("Cannot resign from epoch " + epoch +
                 " since we are not the leader");
         } else {
-            try {
-                LeaderState<T> leaderState = quorum.leaderStateOrThrow();
+            // Note that if we transition to another state before we have a chance to
+            // request resignation, then we consider the call fulfilled.
+            quorum.maybeLeaderState().ifPresent(leaderState -> {
                 if (leaderState.epoch() == epoch) {
                     logger.info("Received user request to resign from the current epoch {}", currentEpoch);
                     leaderState.requestResign();
                     wakeup();
                 }
-            } catch (IllegalStateException e) {
-                // If we transition to another state before we have a chance to request
-                // resignation, then we consider the call fulfilled
-            }
+            });
         }
     }
 
