@@ -2254,7 +2254,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         if (!quorum.isVoter()) {
-            throw new IllegalArgumentException("Attempt to resign by a non-voter");
+            throw new IllegalStateException("Attempt to resign by a non-voter");
         }
 
         LeaderAndEpoch leaderAndEpoch = leaderAndEpoch();

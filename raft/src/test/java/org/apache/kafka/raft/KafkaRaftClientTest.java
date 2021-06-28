@@ -502,7 +502,7 @@ public class KafkaRaftClientTest {
 
         context.client.poll();
         context.assertElectedLeader(epoch, leaderId);
-        assertThrows(IllegalArgumentException.class, () -> context.client.resign(epoch));
+        assertThrows(IllegalStateException.class, () -> context.client.resign(epoch));
     }
 
     @Test
