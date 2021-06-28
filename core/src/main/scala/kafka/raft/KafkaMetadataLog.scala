@@ -315,7 +315,7 @@ final class KafkaMetadataLog private (
 
   /**
    * Delete a snapshot, advance the log start offset, and clean old log segments. This will only happen if the
-   * following conditions all hold true:
+   * following invariants all hold true:
    *
    * <li>This is not the latest snapshot (i.e., another snapshot proceeds this one)</li>
    * <li>The offset of the next snapshot is greater than the log start offset</li>
@@ -345,11 +345,25 @@ final class KafkaMetadataLog private (
   }
 
   /**
-   * Force all known snapshots to have an open reader so we can know their sizes. This is not thread-safe
+   * Force all known snapshots to have an open reader so we can know their sizes. This method is not thread-safe
    */
   private def loadSnapshotSizes(): Seq[(OffsetAndEpoch, Long)] = {
     snapshots.keys.toSeq.flatMap {
       snapshotId => readSnapshot(snapshotId).asScala.map { reader => (snapshotId, reader.sizeInBytes())}
+    }
+  }
+
+  /**
+   * Return the max timestamp of the first batch in a snapshot, if the snapshot exists and has records
+   */
+  private def firstBatchMaxTimestamp(snapshotId: OffsetAndEpoch): Option[Long] = {
+    readSnapshot(snapshotId).asScala.flatMap { reader =>
+      val it = reader.records().batchIterator()
+      if (it.hasNext) {
+        Some(it.next.maxTimestamp())
+      } else {
+        None
+      }
     }
   }
 
@@ -367,35 +381,84 @@ final class KafkaMetadataLog private (
    */
   override def maybeClean(): Boolean = {
     snapshots synchronized {
-      val snapshotSizes = loadSnapshotSizes()
-      if (snapshotSizes.size < 2) {
-        return false
-      }
+      cleanSnapshotsRetentionSize() || cleanSnapshotsRetentionMs()
+    }
+  }
 
-      var logSize: Long = log.size
-      var snapshotTotalSize: Long = snapshotSizes.map(_._2).sum
-      var didClean = false
-
-      val snapshotIterator = snapshotSizes.iterator
-      var snapshotOpt = Log.nextOption(snapshotIterator)
-      while (snapshotOpt.isDefined) {
-        val snapshot = snapshotOpt.get
-        val nextOpt = Log.nextOption(snapshotIterator)
-        if (logSize + snapshotTotalSize > retentionSize) {
-          if (deleteSnapshot(snapshot._1, nextOpt.map(_._1))) {
-            logSize = log.size
-            snapshotTotalSize -= snapshot._2
-            didClean = true
-            snapshotOpt = nextOpt
-          } else {
-            snapshotOpt = None
-          }
+  /**
+   * Iterate through the snapshots a test the given predicate to see if we should attempt to delete it. Since
+   * we have some additional invariants regarding snapshots and log segments we cannot simply delete a snapshot in
+   * all cases.
+   *
+   * For the given predicate, we are testing if the snapshot identified by the first argument should be deleted.
+   */
+  private def cleanSnapshots(predicate: (OffsetAndEpoch, Option[OffsetAndEpoch]) => Boolean): Boolean = {
+    val snapshotIterator = snapshots.keys.iterator
+    var snapshotOpt = Log.nextOption(snapshotIterator)
+    var didClean = false
+    while (snapshotOpt.isDefined) {
+      val snapshot = snapshotOpt.get
+      val nextOpt = Log.nextOption(snapshotIterator)
+      if (predicate(snapshot, nextOpt)) {
+        if (deleteSnapshot(snapshot, nextOpt)) {
+          didClean = true
+          snapshotOpt = nextOpt
         } else {
           snapshotOpt = None
         }
+      } else {
+        snapshotOpt = None
       }
-      didClean
     }
+    didClean
+  }
+
+  private def cleanSnapshotsRetentionMs(): Boolean = {
+    if (retentionMs < 0)
+      return false
+
+    // If the timestamp of the first batch in the _next_ snapshot exceeds retention time, then we infer that
+    // the current snapshot also exceeds retention time. We make this inference to avoid reading the full snapshot.
+    def shouldClean(snapshotId: OffsetAndEpoch, nextSnapshotIdOpt: Option[OffsetAndEpoch]): Boolean = {
+      val now = time.milliseconds()
+      nextSnapshotIdOpt.exists { nextSnapshotId =>
+        firstBatchMaxTimestamp(nextSnapshotId).exists { timestamp =>
+          if (now - timestamp > retentionMs) {
+            true
+          } else {
+            false
+          }
+        }
+      }
+    }
+
+    cleanSnapshots(shouldClean)
+  }
+
+  private def cleanSnapshotsRetentionSize(): Boolean = {
+    if (retentionSize < 0)
+      return false
+
+    val snapshotSizes = loadSnapshotSizes().toMap
+    if (snapshotSizes.size < 2) {
+      return false
+    }
+
+    var snapshotTotalSize: Long = snapshotSizes.values.sum
+
+    // Keep deleting snapshots and segments as long as we exceed the retention size
+    def shouldClean(snapshotId: OffsetAndEpoch, nextSnapshotIdOpt: Option[OffsetAndEpoch]): Boolean = {
+      snapshotSizes.get(snapshotId).exists { snapshotSize =>
+        if (log.size + snapshotTotalSize > retentionSize) {
+          snapshotTotalSize -= snapshotSize
+          true
+        } else {
+          false
+        }
+      }
+    }
+
+    cleanSnapshots(shouldClean)
   }
 
   /**
