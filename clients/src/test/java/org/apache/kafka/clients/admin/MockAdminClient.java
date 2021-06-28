@@ -23,6 +23,9 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicCollection;
+import org.apache.kafka.common.TopicCollection.TopicIdCollection;
+import org.apache.kafka.common.TopicCollection.TopicNameCollection;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.TopicPartitionReplica;
@@ -393,19 +396,14 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public DeleteTopicsResult deleteTopics(Collection<String> topicsToDelete, DeleteTopicsOptions options) {
-        return DeleteTopicsResult.ofTopicNames(handleDeleteTopicsUsingNames(topicsToDelete, options));
-    }
-
-    @Override
     synchronized public DeleteTopicsResult deleteTopics(TopicCollection topics, DeleteTopicsOptions options) {
         DeleteTopicsResult futures;
         switch (topics.attribute()) {
             case TOPIC_ID:
-                futures = DeleteTopicsResult.ofTopicIds(new HashMap<>(handleDeleteTopicsUsingIds(topics.topicIds(), options)));
+                futures = DeleteTopicsResult.ofTopicIds(new HashMap<>(handleDeleteTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options)));
                 break;
             case TOPIC_NAME:
-                futures = DeleteTopicsResult.ofTopicNames(new HashMap<>(handleDeleteTopicsUsingNames(topics.topicNames(), options)));
+                futures = DeleteTopicsResult.ofTopicNames(new HashMap<>(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options)));
                 break;
             default:
                 throw new UnsupportedOperationException("TopicAttribute" + topics.attribute() + " did not match the supported attributes.");

@@ -17,9 +17,11 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.TopicCollection;
+import org.apache.kafka.common.TopicCollection.TopicIdCollection;
+import org.apache.kafka.common.TopicCollection.TopicNameCollection;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Arrays;
 import java.util.List;
@@ -32,17 +34,15 @@ public class TopicCollectionTest {
         List<Uuid> topicIds = Arrays.asList(Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid());
         List<String> topicNames = Arrays.asList("foo", "bar");
 
-        TopicCollection idCollection = TopicCollection.ofTopicIds(topicIds);
+        TopicCollection idCollection = new TopicCollection.TopicIdCollection(topicIds);
         assertEquals(TopicCollection.TopicAttribute.TOPIC_ID, idCollection.attribute());
 
-        TopicCollection nameCollection = TopicCollection.ofTopicNames(topicNames);
+        TopicCollection nameCollection = new TopicNameCollection(topicNames);
         assertEquals(TopicCollection.TopicAttribute.TOPIC_NAME, nameCollection.attribute());
 
-        assertEquals(topicIds, idCollection.topicIds());
-        assertThrows(UnsupportedOperationException.class, () -> idCollection.topicNames());
+        assertEquals(topicIds, ((TopicIdCollection) idCollection).topicIds());
 
-        assertEquals(topicNames, nameCollection.topicNames());
-        assertThrows(UnsupportedOperationException.class, () -> nameCollection.topicIds());
+        assertEquals(topicNames, ((TopicNameCollection) nameCollection).topicNames());
     }
 
 }
