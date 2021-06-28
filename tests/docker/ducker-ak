@@ -451,7 +451,7 @@ ducker_test() {
             *) test_name_args+=(${1}); shift;;
         esac
     done
-    local ducktape_args=${1}
+    local ducktape_args=${@}
     
     [[ ${#test_name_args} -lt 1 ]] && \
         die "ducker_test: you must supply at least one system test to run. Type --help for help."
