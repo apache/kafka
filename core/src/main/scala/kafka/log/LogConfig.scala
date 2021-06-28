@@ -116,7 +116,6 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
     }
     ConfigUtils.configMapToRedactedString(overriddenTopicProps.asJava, configDef)
   }
-
 }
 
 object LogConfig {
