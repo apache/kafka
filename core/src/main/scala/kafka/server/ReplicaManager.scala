@@ -612,6 +612,7 @@ class ReplicaManager(val config: KafkaConfig,
       val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
         origin, entriesPerPartition, requiredAcks, requestLocal)
       debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
+//      System.err.println("Produce to local log in %d ms".format(time.milliseconds - sTime))
 
       val produceStatus = localProduceResults.map { case (topicPartition, result) =>
         topicPartition -> ProducePartitionStatus(
@@ -651,6 +652,7 @@ class ReplicaManager(val config: KafkaConfig,
 
       if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
         // create delayed produce operation
+//        System.err.println("!!! delayproduce")
         val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
         val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
 
@@ -665,11 +667,13 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         // we can respond immediately
         val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
+//        System.err.println("respond immediately:" + produceResponseStatus)
         responseCallback(produceResponseStatus)
       }
     } else {
       // If required.acks is outside accepted range, something is wrong with the client
       // Just return an error and don't handle the request at all
+      System.err.println("required.acks wrong:" + requiredAcks)
       val responseStatus = entriesPerPartition.map { case (topicPartition, _) =>
         topicPartition -> new PartitionResponse(
           Errors.INVALID_REQUIRED_ACKS,

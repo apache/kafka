@@ -25,7 +25,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -62,10 +61,11 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 /**
  * Tests situations during which certain connector operations, such as start, validation,
- * configuration and others, take longer than expected.
+ * configuaration and others,taake llonger than expected.
  */
 @Category(IntegrationTest.class)
 public class BlockingConnectorTest {
@@ -79,7 +79,7 @@ public class BlockingConnectorTest {
     private static final int NUM_RECORDS_PRODUCED = 100;
     private static final long CONNECT_WORKER_STARTUP_TIMEOUT = TimeUnit.SECONDS.toMillis(60);
     private static final long RECORD_TRANSFER_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
-    private static final long REST_REQUEST_TIMEOUT = Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS * 2;
+    private static final long REST_REQUEST_TIMEOUT = TimeUnit.SECONDS.toMillis(30);
 
     private static final String CONNECTOR_INITIALIZE = "Connector::initialize";
     private static final String CONNECTOR_INITIALIZE_WITH_TASK_CONFIGS = "Connector::initializeWithTaskConfigs";
@@ -113,9 +113,9 @@ public class BlockingConnectorTest {
 
     @Before
     public void setup() throws Exception {
-        // Artificially reduce the REST request timeout so that these don't take forever
+        // Artifiicially reduce thjae REST request timeout so that these don't take forever
         ConnectorsResource.setRequestTimeout(REST_REQUEST_TIMEOUT);
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluaster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -130,11 +130,34 @@ public class BlockingConnectorTest {
         // wait for the Connect REST API to become available. necessary because of the reduced REST
         // request timeout; otherwise, we may get an unexpected 500 with our first real REST request
         // if the worker is still getting on its feet.
-        waitForCondition(
-            () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
-            CONNECT_WORKER_STARTUP_TIMEOUT,
-            "Worker did not complete startup in time"
-        );
+        System.err.println("!!! ready");
+        System.out.println("!!! ready");
+        boolean fail = false;
+        try {
+            waitForCondition(
+                () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
+                CONNECT_WORKER_STARTUP_TIMEOUT,
+                "Worker did not complete startup in time"
+            );
+        } catch (final java.lang.AssertionError e) {
+            fail = true;
+            System.err.println("!!! Worker did not complete startup in time, try again");
+            System.out.println("!!! Worker did not complete startup in time, try again");
+        }
+
+        try {
+            waitForCondition(
+                () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
+                CONNECT_WORKER_STARTUP_TIMEOUT,
+                "Worker did not complete startup in time"
+            );
+        } catch (final java.lang.AssertionError e) {
+//            System.err.println("!!! failed twice");
+            fail("failed twice");
+        }
+        if (fail) {
+            fail("failed 1st");
+        }
     }
 
     @After

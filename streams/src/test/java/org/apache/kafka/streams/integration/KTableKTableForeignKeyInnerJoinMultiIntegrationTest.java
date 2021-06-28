@@ -132,7 +132,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 
         //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
         final List<KeyValue<Integer, String>> table3 = Collections.singletonList(
-                new KeyValue<>(10, "waffle")
+            new KeyValue<>(10, "waffle")
         );
 
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);
@@ -160,6 +160,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 
     @After
     public void after() throws IOException {
+        System.err.println("closing");
         if (streams != null) {
             streams.close();
             streams = null;
@@ -193,7 +194,9 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
 
         final List<KafkaStreams> kafkaStreamsList = asList(streams, streamsTwo, streamsThree);
+        System.err.println("starting");
         startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(120));
+        System.err.println("all running");
 
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             CONSUMER_CONFIG,
@@ -210,7 +213,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
-
+        // increase the session timeout value, to avoid unnecessary rebalance
+        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 15000);
         return streamsConfig;
     }
 
@@ -224,25 +228,25 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         final KTable<Integer, Float> table1 = builder.table(
             TABLE_1,
             Consumed.with(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true),
-                          serdeScope.decorateSerde(Serdes.Float(), streamsConfig, false))
+                serdeScope.decorateSerde(Serdes.Float(), streamsConfig, false))
         );
         final KTable<String, Long> table2 = builder.table(
             TABLE_2,
             Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
-                          serdeScope.decorateSerde(Serdes.Long(), streamsConfig, false))
+                serdeScope.decorateSerde(Serdes.Long(), streamsConfig, false))
         );
         final KTable<Integer, String> table3 = builder.table(
             TABLE_3,
             Consumed.with(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true),
-                          serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+                serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
         );
 
         final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized;
         if (queryableName != null) {
             materialized = Materialized.<Integer, String, KeyValueStore<Bytes, byte[]>>as(queryableName)
-                    .withKeySerde(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true))
-                    .withValueSerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
-                    .withCachingDisabled();
+                .withKeySerde(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true))
+                .withValueSerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+                .withCachingDisabled();
         } else {
             throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
         }
@@ -250,15 +254,29 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materializedTwo;
         if (queryableNameTwo != null) {
             materializedTwo = Materialized.<Integer, String, KeyValueStore<Bytes, byte[]>>as(queryableNameTwo)
-                    .withKeySerde(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true))
-                    .withValueSerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
-                    .withCachingDisabled();
+                .withKeySerde(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true))
+                .withValueSerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+                .withCachingDisabled();
         } else {
             throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
         }
 
-        final Function<Float, String> tableOneKeyExtractor = value -> Integer.toString((int) value.floatValue());
+        final Function<Float, String> tableOneKeyExtractor = value -> {
+            System.err.println("!!! tableOneKeyExtractor:" + Integer.toString((int) value.floatValue()));
+//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//            for (int i = 1; i < elements.length; i++) {
+//                final StackTraceElement s = elements[i];
+//                System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//            }
+            return Integer.toString((int) value.floatValue());
+        };
         final Function<String, Integer> joinedTableKeyExtractor = value -> {
+            System.err.println("!!! joinedTableKeyExtractor:" + value);
+//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//            for (int i = 1; i < elements.length; i++) {
+//                final StackTraceElement s = elements[i];
+//                System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//            }
             //Hardwired to return the desired foreign key as a test shortcut
             if (value.contains("value2=10"))
                 return 10;
@@ -266,15 +284,31 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
                 return 0;
         };
 
-        final ValueJoiner<Float, Long, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
-        final ValueJoiner<String, String, String> joinerTwo = (value1, value2) -> value1 + ",value3=" + value2;
+        final ValueJoiner<Float, Long, String> joiner = (value1, value2) -> {
+            System.err.println("!!! joiner1: value1 " + value1 + "," + value2);
+//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//            for (int i = 1; i < elements.length; i++) {
+//                final StackTraceElement s = elements[i];
+//                System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//            }
+            return "value1=" + value1 + ",value2=" + value2;
+        };
+        final ValueJoiner<String, String, String> joinerTwo = (value1, value2) -> {
+            System.err.println("!!! joiner2: value1 " + value1 + "," + value2);
+//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//            for (int i = 1; i < elements.length; i++) {
+//                final StackTraceElement s = elements[i];
+//                System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//            }
+            return value1 + ",value3=" + value2;
+        };
 
         table1.join(table2, tableOneKeyExtractor, joiner, materialized)
             .join(table3, joinedTableKeyExtractor, joinerTwo, materializedTwo)
             .toStream()
             .to(OUTPUT,
                 Produced.with(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true),
-                              serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)));
+                    serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)));
 
         return new KafkaStreams(builder.build(streamsConfig), streamsConfig);
     }

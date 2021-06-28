@@ -216,6 +216,7 @@ public class ReplicationControlManager {
             " with topic ID " + record.topicId();
         if (prevPartInfo == null) {
             log.info("Created partition {} and {}.", description, newPartInfo);
+
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), null,
                 newPartInfo.isr, NO_LEADER, newPartInfo.leader);
@@ -293,6 +294,8 @@ public class ReplicationControlManager {
 
     ControllerResult<CreateTopicsResponseData>
             createTopics(CreateTopicsRequestData request) {
+        System.err.println("replicreateTopics");
+
         Map<String, ApiError> topicErrors = new HashMap<>();
         List<ApiMessageAndVersion> records = new ArrayList<>();
 
@@ -316,6 +319,7 @@ public class ReplicationControlManager {
         }
         records.addAll(configResult.records());
 
+        System.err.println("try create");
         // Try to create whatever topics are needed.
         Map<String, CreatableTopicResult> successes = new HashMap<>();
         for (CreatableTopic topic : request.topics()) {
@@ -325,6 +329,7 @@ public class ReplicationControlManager {
                 topicErrors.put(topic.name(), error);
             }
         }
+        System.err.println("create response");
 
         // Create responses for all topics.
         CreateTopicsResponseData data = new CreateTopicsResponseData();
@@ -349,6 +354,7 @@ public class ReplicationControlManager {
             resultsPrefix = ", ";
         }
         log.info("createTopics result(s): {}", resultsBuilder.toString());
+        System.err.println("createTopics result:" + resultsBuilder.toString());
         return ControllerResult.atomicOf(records, data);
     }
 

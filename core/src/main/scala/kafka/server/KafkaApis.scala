@@ -950,6 +950,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def handleListOffsetRequestV0(request : RequestChannel.Request) : List[ListOffsetsTopicResponse] = {
+//    System.err.println("handleListOffsetRequestV0")
     val correlationId = request.header.correlationId
     val clientId = request.header.clientId
     val offsetRequest = request.body[ListOffsetsRequest]
@@ -989,11 +990,14 @@ class KafkaApis(val requestChannel: RequestChannel,
                     _ : KafkaStorageException) =>
             debug("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
               correlationId, clientId, topicPartition, e.getMessage))
+//            System.err.println("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
+//              correlationId, clientId, topicPartition, e.getMessage))
             new ListOffsetsPartitionResponse()
               .setPartitionIndex(partition.partitionIndex)
               .setErrorCode(Errors.forException(e).code)
           case e: Throwable =>
             error("Error while responding to offset request", e)
+//            System.err.println("Error while responding to offset request", e)
             new ListOffsetsPartitionResponse()
               .setPartitionIndex(partition.partitionIndex)
               .setErrorCode(Errors.forException(e).code)
@@ -1009,6 +1013,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val clientId = request.header.clientId
     val offsetRequest = request.body[ListOffsetsRequest]
     val version = request.header.apiVersion
+//    System.err.println("V1:" + version)
 
     def buildErrorResponse(e: Errors, partition: ListOffsetsPartition): ListOffsetsPartitionResponse = {
       new ListOffsetsPartitionResponse()
@@ -1034,6 +1039,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (offsetRequest.duplicatePartitions.contains(topicPartition)) {
           debug(s"OffsetRequest with correlation id $correlationId from client $clientId on partition $topicPartition " +
               s"failed because the partition is duplicated in the request.")
+//          System.err.println(s"OffsetRequest with correlation id $correlationId from client $clientId on partition $topicPartition " +
+//            s"failed because the partition is duplicated in the request.")
           buildErrorResponse(Errors.INVALID_REQUEST, partition)
         } else {
           try {
@@ -1075,10 +1082,13 @@ class KafkaApis(val requestChannel: RequestChannel,
                       _ : UnsupportedForMessageFormatException) =>
               debug(s"Offset request with correlation id $correlationId from client $clientId on " +
                   s"partition $topicPartition failed due to ${e.getMessage}")
+//              System.err.println(s"Offset request with correlation id $correlationId from client $clientId on " +
+//                s"partition $topicPartition failed due to ${e.getMessage}")
               buildErrorResponse(Errors.forException(e), partition)
 
             // Only V5 and newer ListOffset calls should get OFFSET_NOT_AVAILABLE
             case e: OffsetNotAvailableException =>
+//              System.err.println("OffsetNotAvailableException:" + e)
               if (request.header.apiVersion >= 5) {
                 buildErrorResponse(Errors.forException(e), partition)
               } else {
@@ -1086,7 +1096,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               }
 
             case e: Throwable =>
-              error("Error while responding to offset request", e)
+//              error("Error while responding to offset request", e)
+              System.err.println("Error while responding to offset request:" + e)
               buildErrorResponse(Errors.forException(e), partition)
           }
         }
@@ -1116,8 +1127,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     errorUnavailableEndpoints: Boolean,
     errorUnavailableListeners: Boolean
   ): Seq[MetadataResponseTopic] = {
+
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
       errorUnavailableEndpoints, errorUnavailableListeners)
+//    System.err.println("!!! getTopicMetadata: " + topics + topicResponses)
 
     if (topics.isEmpty || topicResponses.size == topics.size || fetchAllTopics) {
       topicResponses
@@ -1722,6 +1735,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateTopicsRequest(request: RequestChannel.Request): Unit = {
+//    System.err.println("handleCreateTopicsRequest")
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
 
@@ -1739,6 +1753,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val createTopicsRequest = request.body[CreateTopicsRequest]
+
     val results = new CreatableTopicResultCollection(createTopicsRequest.data.topics.size)
     if (!zkSupport.controller.isActive) {
       createTopicsRequest.data.topics.forEach { topic =>
@@ -1753,6 +1768,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       val hasClusterAuthorization = authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME,
         logIfDenied = false)
       val topics = createTopicsRequest.data.topics.asScala.map(_.name)
+
+//      System.err.println("!!! topic:" + topics)
+//      if (topics.equals(ArrayBuffer("test-topic-1"))) {
+//        System.err.println("!!! pending")
+//        Thread.sleep(58000)
+//      }
       val authorizedTopics =
         if (hasClusterAuthorization) topics.toSet
         else authHelper.filterByAuthorized(request.context, CREATE, TOPIC, topics)(identity)

@@ -257,9 +257,16 @@ public final class QuorumController implements Controller {
     private Throwable handleEventException(String name,
                                            Optional<Long> startProcessingTimeNs,
                                            Throwable exception) {
+
         if (!startProcessingTimeNs.isPresent()) {
             log.info("unable to start processing {} because of {}.", name,
                 exception.getClass().getSimpleName());
+            System.err.println("[Controller" + nodeId + "] unable to start processing " + name + "," + exception.getClass().getSimpleName());
+//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//            for (int i = 1; i < elements.length; i++) {
+//                final StackTraceElement s = elements[i];
+//                System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//            }
             if (exception instanceof ApiException) {
                 return exception;
             } else {
@@ -748,6 +755,7 @@ public final class QuorumController implements Controller {
                             curEpoch);
                     }
                     log.warn("Becoming active at controller epoch {}.", newEpoch);
+                    System.err.println("[Controller" + nodeId + "] Becoming active at controller epoch:" + newEpoch);
                     curClaimEpoch = newEpoch;
                     controllerMetrics.setActive(true);
                     writeOffset = lastCommittedOffset;

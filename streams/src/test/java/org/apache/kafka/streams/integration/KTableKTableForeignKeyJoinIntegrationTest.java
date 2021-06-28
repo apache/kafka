@@ -362,7 +362,6 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
             final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
-
             left.pipeInput("lhs1", "lhsValue1|rhs1");
 
             {

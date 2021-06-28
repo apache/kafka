@@ -464,6 +464,8 @@ public abstract class AbstractCoordinator implements Closeable {
                 }
             } else {
                 final RuntimeException exception = future.exception();
+                //Luke
+//                System.err.println("rebalance failed:" + exception);
 
                 resetJoinGroupFuture();
 
@@ -754,6 +756,8 @@ public abstract class AbstractCoordinator implements Closeable {
                                 future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
                             } else {
                                 log.info("Successfully synced group in generation {}", generation);
+                                //Luke
+//                                System.err.println("Successfully synced group in generation:" + generation);
                                 state = MemberState.STABLE;
                                 rejoinNeeded = false;
                                 // record rebalance latency
@@ -903,6 +907,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     protected synchronized void markCoordinatorUnknown(boolean isDisconnected, String cause) {
+//        System.err.println("Group coordinator:" + ", cause:" + cause + ",isDis:" + isDisconnected);
         if (this.coordinator != null) {
             log.info("Group coordinator {} is unavailable or invalid due to cause: {}."
                     + "isDisconnected: {}. Rediscovery will be attempted.", this.coordinator,
@@ -926,6 +931,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.warn("Consumer has been disconnected from the group coordinator for {}ms", durationOfOngoingDisconnect);
         }
     }
+
 
     /**
      * Get the current generation state, regardless of whether it is currently stable.
@@ -1041,6 +1047,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // attempt any resending if the request fails or times out.
             log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
                 generation.memberId, coordinator, leaveReason);
+//            System.err.println("Member " + generation.memberId + "leave:" + leaveReason);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
                 Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId))

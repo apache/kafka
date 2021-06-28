@@ -1260,6 +1260,9 @@ public class KafkaAdminClient extends AdminClient {
                     if (authException != null) {
                         call.fail(now, authException);
                     } else {
+                        System.err.println(String.format(
+                            "Cancelled %s request with correlation id %s due to node %s being disconnected",
+                            call.callName, correlationId, response.destination()));
                         call.fail(now, new DisconnectException(String.format(
                             "Cancelled %s request with correlation id %s due to node %s being disconnected",
                             call.callName, correlationId, response.destination())));
@@ -1690,6 +1693,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DeleteTopicsResult deleteTopics(final Collection<String> topicNames,
                                            final DeleteTopicsOptions options) {
+//        System.err.println("!!! top:" + topicNames);
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         final List<String> validTopicNames = new ArrayList<>(topicNames.size());
         for (String topicName : topicNames) {

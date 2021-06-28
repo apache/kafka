@@ -618,6 +618,7 @@ public class Selector implements Selectable, AutoCloseable {
                 } else {
                     log.warn("Unexpected error from {}; closing connection", desc, e);
                 }
+//                System.err.println("Connection with " + desc + "," + e);
 
                 if (e instanceof DelayedResponseAuthenticationException)
                     maybeDelayCloseOnAuthenticationFailure(channel);
@@ -851,8 +852,16 @@ public class Selector implements Selectable, AutoCloseable {
             }
         }
 
-        for (String channel : this.failedSends)
+        for (String channel : this.failedSends) {
             this.disconnected.put(channel, ChannelState.FAILED_SEND);
+            System.err.println("clear dis:" + channel + "," + ChannelState.FAILED_SEND);
+            
+            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+            for (int i = 1; i < elements.length; i++) {
+                final StackTraceElement s = elements[i];
+                System.err.print(" - at " + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+            }
+        }
         this.failedSends.clear();
         this.madeReadProgressLastPoll = false;
     }
@@ -962,8 +971,17 @@ public class Selector implements Selectable, AutoCloseable {
 
         this.sensors.connectionClosed.record();
         this.explicitlyMutedChannels.remove(channel);
-        if (notifyDisconnect)
+        if (notifyDisconnect) {
             this.disconnected.put(channel.id(), channel.state());
+//            if (channel.id().equals("0") || channel.id().equals("1") || channel.id().equals("2")) {
+//                System.err.println("doClose dis:" + channel.id() + "," + channel.state().state());
+////                final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+////                for (int i = 1; i < elements.length; i++) {
+////                    final StackTraceElement s = elements[i];
+////                    System.err.print(" - at " + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+////                }
+//            }
+        }
     }
 
     /**

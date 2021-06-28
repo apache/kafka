@@ -256,9 +256,7 @@ public class WorkerConnector implements Runnable {
             Callback<TargetState> stateChangeCallback = pendingStateChangeCallback.getAndSet(null);
             if (stateChangeCallback != null) {
                 stateChangeCallback.onCompletion(
-                        new ConnectException(
-                                "Could not begin changing connector state to " + preEmptedState.name()
-                                    + " as the connector has been scheduled for shutdown"),
+                        new ConnectException(""),
                         null);
             }
             if (state == State.STARTED)

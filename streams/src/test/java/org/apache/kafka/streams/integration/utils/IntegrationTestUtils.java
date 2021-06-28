@@ -602,6 +602,7 @@ public class IntegrationTestUtils {
             topic,
             waitTime
         );
+        boolean isFail = false;
         try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
             retryOnExceptionWithTimeout(waitTime, () -> {
                 final List<KeyValue<K, V>> readData =
@@ -609,7 +610,24 @@ public class IntegrationTestUtils {
                 accumData.addAll(readData);
                 assertThat(reason + ",  currently accumulated data is " + accumData, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
             });
+        } catch (final AssertionError e) {
+            System.err.println("!!! failed 1st time");
+            isFail = true;
         }
+
+        if (isFail) {
+            try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
+                retryOnExceptionWithTimeout(waitTime, () -> {
+                    final List<KeyValue<K, V>> readData =
+                        readKeyValues(topic, consumer, waitTime, expectedNumRecords);
+                    accumData.addAll(readData);
+                    assertThat(reason + ",  currently accumulated data is " + accumData, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+                });
+            }
+
+            fail("failed 1st time");
+        }
+
         return accumData;
     }
 
@@ -860,6 +878,7 @@ public class IntegrationTestUtils {
             stateMap.put(streams, streams.state());
             final StateListener prevStateListener = getStateListener(streams);
             final StateListener newStateListener = (newState, oldState) -> {
+//                System.err.println("!!! " + streams + "," + oldState + "," + newState);
                 stateLock.lock();
                 try {
                     stateMap.put(streams, newState);
@@ -1166,6 +1185,7 @@ public class IntegrationTestUtils {
             final ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(pollIntervalMs));
 
             for (final ConsumerRecord<K, V> record : records) {
+//                System.err.println("!!! record:" + record);
                 consumerRecords.add(record);
             }
         }

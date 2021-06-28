@@ -206,7 +206,8 @@ public class StreamThread extends Thread {
      */
     State setState(final State newState) {
         final State oldState;
-
+        System.err.print(shortLogPrefix + "ss ");
+        System.err.flush();
         synchronized (stateLock) {
             oldState = state;
 
@@ -227,6 +228,8 @@ public class StreamThread extends Thread {
                 throw new StreamsException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("State transition from {} to {}", oldState, newState);
+                System.err.println(shortLogPrefix + ", " + oldState + "," + newState);
+                System.err.flush();
             }
 
             state = newState;
@@ -234,8 +237,14 @@ public class StreamThread extends Thread {
                 updateThreadMetadata(taskManager.activeTaskMap(), taskManager.standbyTaskMap());
             }
 
+//            System.err.print(shortLogPrefix + "not ");
+//            System.err.flush();
             stateLock.notifyAll();
+//            System.err.print(shortLogPrefix + "note ");
+//            System.err.flush();
         }
+//        System.err.print(shortLogPrefix + "ess ");
+//        System.err.flush();
 
         if (stateListener != null) {
             stateListener.onChange(this, state, oldState);
@@ -245,7 +254,15 @@ public class StreamThread extends Thread {
     }
 
     public boolean isRunning() {
+//        if (state.equals(State.RUNNING)) {
+//            System.err.print(shortLogPrefix + "is r ");
+//            System.err.flush();
+//        }
         synchronized (stateLock) {
+//            if (state.equals(State.RUNNING)) {
+//                System.err.print(shortLogPrefix + "is r l ");
+//                System.err.flush();
+//            }
             return state.isAlive();
         }
     }
@@ -253,6 +270,7 @@ public class StreamThread extends Thread {
     private final Time time;
     private final Logger log;
     private final String logPrefix;
+    private final String shortLogPrefix;
     public final Object stateLock;
     private final Duration pollTime;
     private final long commitTimeMs;
@@ -395,6 +413,10 @@ public class StreamThread extends Thread {
         }
 
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
+        final String shortPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 16) : logPrefix;
+        System.err.print(shortPrefix + "con:" + mainConsumer);
+        System.err.flush();
+
         changelogReader.setMainConsumer(mainConsumer);
         taskManager.setMainConsumer(mainConsumer);
         referenceContainer.mainConsumer = mainConsumer;
@@ -511,6 +533,7 @@ public class StreamThread extends Thread {
         this.time = time;
         this.builder = builder;
         this.logPrefix = logContext.logPrefix();
+        this.shortLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 16) : logPrefix;
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
         this.taskManager = taskManager;
@@ -589,12 +612,14 @@ public class StreamThread extends Thread {
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks " + e.corruptedTasks() + " are corrupted. " +
                          "Will close the task as dirty and re-create and bootstrap from scratch.", e);
+                System.err.println("Detecte task corrupted:" + e);
                 try {
                     taskManager.handleCorruption(e.corruptedTasks());
                 } catch (final TaskMigratedException taskMigrated) {
                     handleTaskMigrated(taskMigrated);
                 }
             } catch (final TaskMigratedException e) {
+                System.err.println("task migrated:" + e);
                 handleTaskMigrated(e);
             } catch (final UnsupportedVersionException e) {
                 final String errorMessage = e.getMessage();
@@ -611,6 +636,7 @@ public class StreamThread extends Thread {
                 return false;
             }
         }
+
         return true;
     }
 
@@ -633,6 +659,8 @@ public class StreamThread extends Thread {
 
     public boolean waitOnThreadState(final StreamThread.State targetState, final long timeoutMs) {
         final long begin = time.milliseconds();
+        System.err.print(shortLogPrefix + "wt ");
+        System.err.flush();
         synchronized (stateLock) {
             boolean interrupted = false;
             long elapsedMs = 0L;
@@ -647,10 +675,14 @@ public class StreamThread extends Thread {
                         }
                     } else {
                         log.debug("Cannot transit to {} within {}ms", targetState, timeoutMs);
+                        System.err.print(shortLogPrefix + "wtf ");
+                        System.err.flush();
                         return false;
                     }
                     elapsedMs = time.milliseconds() - begin;
                 }
+                System.err.print(shortLogPrefix + "wtt ");
+                System.err.flush();
                 return true;
             } finally {
                 // Make sure to restore the interruption status before returning.
@@ -660,8 +692,11 @@ public class StreamThread extends Thread {
                 if (interrupted) {
                     Thread.currentThread().interrupt();
                 }
+                System.err.print(shortLogPrefix + "wtF ");
+                System.err.flush();
             }
         }
+
     }
 
     public void shutdownToError() {
@@ -714,6 +749,10 @@ public class StreamThread extends Thread {
      */
     // Visible for testing
     void runOnce() {
+
+//        final String shortLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 16) : logPrefix;
+//        System.err.print(shortLogPrefix + "runO ");
+
         final long startMs = time.milliseconds();
         now = startMs;
 
@@ -723,12 +762,19 @@ public class StreamThread extends Thread {
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
         // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
         // could affect the task manager state beyond this point within #runOnce().
+
+//        System.err.print(shortLogPrefix + "b r");
         if (!isRunning()) {
+//            System.err.print(shortLogPrefix + "eb r:" + state);
             log.info("Thread state is already {}, skipping the run once call after poll request", state);
             return;
         }
 
+//        System.err.print(shortLogPrefix + "b i");
+//        System.err.flush();
         initializeAndRestorePhase();
+//        System.err.print(shortLogPrefix + "a i");
+//        System.err.flush();
 
         // TODO: we should record the restore latency and its relative time spent ratio after
         //       we figure out how to move this method out of the stream thread
@@ -739,6 +785,8 @@ public class StreamThread extends Thread {
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
         if (state == State.RUNNING) {
+//            System.err.print(shortLogPrefix + "do ");
+//            System.err.flush();
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
              *  1. If it is time to punctuate, do it;
@@ -771,6 +819,7 @@ public class StreamThread extends Thread {
                 log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
                           processed,
                           numIterations);
+//                System.err.println("processed record:" + processed + "," + numIterations);
 
                 final int punctuated = taskManager.punctuate();
                 totalPunctuatorsSinceLastSummary += punctuated;
@@ -832,6 +881,10 @@ public class StreamThread extends Thread {
             totalCommittedSinceLastSummary = 0L;
             lastLogSummaryMs = now;
         }
+
+
+//        System.err.println("e runO");
+
     }
 
     private void initializeAndRestorePhase() {
@@ -1013,6 +1066,7 @@ public class StreamThread extends Thread {
                 log.debug("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                           taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
+//            System.err.println("ms has elapsed:" + (now - lastCommitMs) + "," + commitTimeMs);
 
             committed = taskManager.commit(
                 taskManager.tasks()

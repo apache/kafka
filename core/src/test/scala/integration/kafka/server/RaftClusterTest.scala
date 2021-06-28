@@ -57,8 +57,11 @@ class RaftClusterTest {
       cluster.startup()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
+
+      System.err.println("cluster.brokers():" + cluster.brokers().get(1).currentState() + cluster.brokers().get(2).currentState())
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
+      System.err.println("after raftmanager")
       val admin = Admin.create(cluster.clientProperties())
       try {
         assertEquals(cluster.nodes().clusterId().toString,
@@ -83,15 +86,21 @@ class RaftClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
+
+      System.err.println("cluster.brokers():" + cluster.brokers().get(1).currentState() + cluster.brokers().get(2).currentState())
+
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
+      System.err.println("after raftmanager")
 
       val admin = Admin.create(cluster.clientProperties())
       try {
         // Create a test topic
         val newTopic = Collections.singletonList(new NewTopic("test-topic", 1, 3.toShort))
+        System.err.println("before create topic")
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
+        System.err.println("after create topic")
 
         // List created topic
         TestUtils.waitUntilTrue(() => {
@@ -108,6 +117,8 @@ class RaftClusterTest {
         // Delete topic
         val deleteResult = admin.deleteTopics(Collections.singletonList("test-topic"))
         deleteResult.all().get()
+
+
 
         // List again
         TestUtils.waitUntilTrue(() => {
@@ -141,8 +152,14 @@ class RaftClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
+
+      System.err.println("cluster.brokers():" + cluster.brokers().get(1).currentState() + cluster.brokers().get(2).currentState())
+
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
+
+      System.err.println("after raftmanager")
+
       val admin = Admin.create(cluster.clientProperties())
       try {
         // Create many topics
@@ -150,8 +167,12 @@ class RaftClusterTest {
         newTopic.add(new NewTopic("test-topic-1", 1, 3.toShort))
         newTopic.add(new NewTopic("test-topic-2", 1, 3.toShort))
         newTopic.add(new NewTopic("test-topic-3", 1, 3.toShort))
+
+        System.err.println("before create topic")
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
+
+        System.err.println("after create topic")
 
         // List created topic
         TestUtils.waitUntilTrue(() => {
@@ -184,8 +205,12 @@ class RaftClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
+
+      System.err.println("cluster.brokers():" + cluster.brokers().get(1).currentState() + cluster.brokers().get(2).currentState())
+
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
+      System.err.println("after raftmanager")
       val admin = Admin.create(cluster.clientProperties())
       try {
         // Create many topics
@@ -195,6 +220,8 @@ class RaftClusterTest {
         newTopic.add(new NewTopic("test-topic-3", 3, 3.toShort))
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
+
+        System.err.println("after create topic")
 
         // List created topic
         TestUtils.waitUntilTrue(() => {

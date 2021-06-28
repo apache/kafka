@@ -662,16 +662,29 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // in either case we can just log it and move on without notifying the thread since the consumer
             // would soon be updated to not return any records for this task anymore.
             log.info("Stream task {} is already in {} state, skip processing it.", id(), state());
+            System.err.print(logPrefix + "t close:" + id());
+            System.err.flush();
 
             return false;
         }
 
         if (hasPendingTxCommit) {
+            System.err.println("has pending tx");
+            System.err.flush();
             // if the task has a pending TX commit, we should just retry the commit but not process any records
             // thus, the task is not processable, even if there is available data in the record queue
             return false;
         }
+//        if (logPrefix.contains("1_4")) {
+//            System.err.print("ready p");
+//            System.err.flush();
+//        }
         final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
+//        if (logPrefix.contains("1_4")) {
+//            System.err.print("redP:" + readyToProcess);
+//            System.err.flush();
+//        }
+//        System.out.println("!!! readyToProcess:" + readyToProcess);
         if (!readyToProcess) {
             if (!timeCurrentIdlingStarted.isPresent()) {
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);
@@ -690,6 +703,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @SuppressWarnings("unchecked")
     public boolean process(final long wallClockTime) {
+//        if (logPrefix.contains("1_4")) {
+//            System.err.print("proc ");
+//            System.err.flush();
+//        }
         if (record == null) {
             if (!isProcessable(wallClockTime)) {
                 return false;
@@ -710,7 +727,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             final ProcessorNode<Object, Object, Object, Object> currNode = (ProcessorNode<Object, Object, Object, Object>) recordInfo.node();
             final TopicPartition partition = recordInfo.partition();
 
-            log.trace("Start processing one record [{}]", record);
+//            log.error("Start processing one record [{}]", record);
+            if (logPrefix.contains("1_4")) {
+                System.err.println(logPrefix + "pro r:" + record);
+                System.err.flush();
+            }
+
 
             final ProcessorRecordContext recordContext = new ProcessorRecordContext(
                 record.timestamp,
@@ -957,17 +979,25 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
+        if (logPrefix.contains("1_4")) {
+            System.err.print("addR:" + mainConsumer + mainConsumer.assignment());
+            System.err.flush();
+        }
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
+
 
         if (log.isTraceEnabled()) {
             log.trace("Added records into the buffered queue of partition {}, new queue size is {}", partition, newQueueSize);
         }
 
+
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
         if (newQueueSize > maxBufferedSize) {
+            System.err.print(logPrefix + "pausing:" + partition + "," + newQueueSize + "," + maxBufferedSize);
             mainConsumer.pause(singleton(partition));
         }
+
     }
 
     /**

@@ -267,6 +267,13 @@ public class TaskManager {
                      "\tExisting standby tasks: {}",
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
+//        System.err.println(String.format("%s:new ass:" +
+//                "New act:%s," +
+//                "New st:%s," +
+//                "Exi act:%s," +
+//                "Exi sta:%s",
+//            logPrefix, activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds()));
+
         builder.addSubscribedTopicsFromAssignment(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
             logPrefix
@@ -997,6 +1004,11 @@ public class TaskManager {
                 throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
             }
 
+            if (activeTask.id().toString().contains("1_4")) {
+                final String subLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 20) : logPrefix;
+                System.err.print(subLogPrefix + activeTask.inputPartitions());
+                System.err.flush();
+            }
             activeTask.addRecords(partition, records.records(partition));
         }
     }
@@ -1085,7 +1097,10 @@ public class TaskManager {
      * @throws TaskCorruptedException  if committing offsets failed due to TimeoutException (EOS)
      */
     private void commitOffsetsOrTransaction(final Map<Task, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
-        log.debug("Committing task offsets {}", offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue))); // avoid logging actual Task objects
+        if (offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue)).size() > 0) {
+            log.debug("Committing task offsets {}", offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue))); // avoid logging actual Task objects
+//            System.err.println("committing task offset:" + offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue)));
+        }
 
         final Set<TaskId> corruptedTasks = new HashSet<>();
 
@@ -1183,13 +1198,35 @@ public class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     int process(final int maxNumRecords, final Time time) {
+//        if (logPrefix.contains("1_4")) {
+//            System.err.println("tm:p");
+//        }
         int totalProcessed = 0;
 
         long now = time.milliseconds();
+//        final List<Task> subTask = activeTaskIterable().stream().filter(task -> {
+//            if (task.id().toString().contains("1_4")) {
+//                return true;
+//            }
+//            return false;
+//        }).collect(Collectors.toList());
+//
+//        final String subLogPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 20) : logPrefix;
+//        if (!subTask.isEmpty()) {
+//            System.err.print(subLogPrefix + "p 1_4");
+//        } else {
+//            System.err.print(subLogPrefix + "!p 1_4 ");
+//        }
+
         for (final Task task : activeTaskIterable()) {
+
             int processed = 0;
             final long then = now;
             try {
+//                if (task.id().toString().contains("1_4")) {
+//                    System.err.print("p:" + processed + "m:" + maxNumRecords);
+//                    System.err.flush();
+//                }
                 while (processed < maxNumRecords && task.process(now)) {
                     task.clearTaskTimeout();
                     processed++;
@@ -1202,12 +1239,18 @@ public class TaskManager {
                         task.id()),
                     timeoutException
                 );
+                System.err.println(String.format(
+                    "Could not complete processing records for %s due to the following exception; will move to next task and retry later",
+                    task.id()) + timeoutException);
             } catch (final TaskMigratedException e) {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
                              "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
+                System.err.println("Failed to process stream task '' since it got migrated to another thread already. " +
+                    "Will trigger a new rebalance and close all tasks as zombies together." + task.id() + e);
                 throw e;
             } catch (final RuntimeException e) {
                 log.error("Failed to process stream task {} due to the following error:", task.id(), e);
+                System.err.println("Failed to process stream task {} due to the following error:" + task.id() + e);
                 throw e;
             } finally {
                 now = time.milliseconds();
@@ -1215,6 +1258,10 @@ public class TaskManager {
                 task.recordProcessBatchTime(now - then);
             }
         }
+
+//        if (logPrefix.contains("1_4")) {
+//            System.err.println("end tm:p");
+//        }
 
         return totalProcessed;
     }

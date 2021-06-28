@@ -39,8 +39,6 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   private val overridingProps = new Properties
   overridingProps.put(KafkaConfig.DeleteTopicEnableProp, "true")
   overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
-  // speed up the test for UnderReplicatedPartitions, which relies on the ISR expiry thread to execute concurrently with topic creation
-  // But the replica.lag.time.max.ms value still need to consider the slow Jenkins testing environment
   overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, "4000")
 
   private val testedMetrics = List("OfflinePartitionsCount","PreferredReplicaImbalanceCount","UnderReplicatedPartitions")
@@ -92,6 +90,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
         for (s <- servers if running) {
           underReplicatedPartitionCount = s.replicaManager.underReplicatedPartitionCount
           if (underReplicatedPartitionCount > 0) {
+            System.err.println("underReplicatedPartitionCount:" + underReplicatedPartitionCount)
             running = false
           }
         }
@@ -133,7 +132,9 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
       // Create topics
       for (t <- topics if running) {
         try {
+          System.err.println("creating topic:" + t)
           createTopic(t, partitionNum, replicationFactor)
+          System.err.println("done")
         } catch {
           case e: Exception => e.printStackTrace
         }
@@ -142,8 +143,10 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
       // Delete topics
       for (t <- topics if running) {
           try {
+            System.err.println("deleting topic:" + t)
             adminZkClient.deleteTopic(t)
             TestUtils.verifyTopicDeletion(zkClient, t, partitionNum, servers)
+            System.err.println("done")
           } catch {
           case e: Exception => e.printStackTrace
           }

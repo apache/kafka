@@ -83,11 +83,12 @@ class DelayedProduce(delayMs: Long,
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
     produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
-      trace(s"Checking produce satisfaction for $topicPartition, current status $status")
+//      error(s"!!! Checking produce satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
         val (hasEnough, error) = replicaManager.getPartitionOrError(topicPartition) match {
           case Left(err) =>
+            System.err.println("A:" + err)
             // Case A
             (false, err)
 
@@ -98,14 +99,19 @@ class DelayedProduce(delayMs: Long,
         // Case B.1 || B.2
         if (error != Errors.NONE || hasEnough) {
           status.acksPending = false
+          if (error != Errors.NONE) {
+            System.err.println("B:" + error)
+          }
           status.responseStatus.error = error
         }
       }
     }
 
     // check if every partition has satisfied at least one of case A or B
-    if (!produceMetadata.produceStatus.values.exists(_.acksPending))
+    if (!produceMetadata.produceStatus.values.exists(_.acksPending)) {
+//      System.err.print(" fc ")
       forceComplete()
+    }
     else
       false
   }
@@ -124,6 +130,13 @@ class DelayedProduce(delayMs: Long,
    */
   override def onComplete(): Unit = {
     val responseStatus = produceMetadata.produceStatus.map { case (k, status) => k -> status.responseStatus }
+
+//    System.err.println("!!! onComplete:" + responseStatus)
+//    val elements = Thread.currentThread.getStackTrace
+//    for (i <- 1 until elements.length) {
+//      val s = elements(i)
+//      System.out.println("\tat " + s.getClassName + "." + s.getMethodName + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+//    }
     responseCallback(responseStatus)
   }
 }

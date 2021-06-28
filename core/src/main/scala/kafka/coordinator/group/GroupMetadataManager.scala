@@ -63,10 +63,10 @@ class GroupMetadataManager(brokerId: Int,
 
   private val groupMetadataCache = new Pool[String, GroupMetadata]
 
-  /* lock protecting access to loading and owned partition sets */
+  /* loack protecting access to loading and owned partition sets */
   private val partitionLock = new ReentrantLock()
 
-  /* partitions of consumer groups that are being loaded, its lock should be always called BEFORE the group lock if needed */
+  /* paritions of conasumer grouaps that are being loaded, its lock should be always called BEFORE the group lock if needed */
   private val loadingPartitions: mutable.Set[Int] = mutable.Set()
 
   /* partitions of consumer groups that are assigned, using the same loading partition lock */
@@ -274,12 +274,23 @@ class GroupMetadataManager(brokerId: Int,
 
           // construct the error status in the propagated assignment response in the cache
           val status = responseStatus(groupMetadataPartition)
+//          System.err.println("responseStatus" + responseStatus)
+//          System.err.println("!!! status" + status)
 
           val responseError = if (status.error == Errors.NONE) {
             Errors.NONE
           } else {
             debug(s"Metadata from group ${group.groupId} with generation $generationId failed when appending to log " +
               s"due to ${status.error.exceptionName}")
+            System.err.println(s"Metadata from group ${group.groupId} with generation $generationId failed when appending to log " +
+              s"due to ${status}")
+
+            // val elements = Thread.currentThread.getStackTrace
+//            for (i <- 1 until elements.length) {
+//              val s = elements(i)
+//              System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+//            }
+            
 
             // transform the log append error code to the corresponding the commit status error code
             status.error match {
@@ -317,6 +328,7 @@ class GroupMetadataManager(brokerId: Int,
         appendForGroup(group, groupMetadataRecords, requestLocal, putCacheCallback)
 
       case None =>
+        System.err.println("no magic value")
         responseCallback(Errors.NOT_COORDINATOR)
         None
     }

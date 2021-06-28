@@ -250,7 +250,11 @@ public class KafkaStreams implements AutoCloseable {
 
     private boolean waitOnState(final State targetState, final long waitMs) {
         final long begin = time.milliseconds();
+//        System.err.print("client" + clientId + "waS ");
+//        System.err.flush();
         synchronized (stateLock) {
+//            System.err.print("client" + clientId + "waSL ");
+//            System.err.flush();
             boolean interrupted = false;
             long elapsedMs = 0L;
             try {
@@ -258,6 +262,8 @@ public class KafkaStreams implements AutoCloseable {
                     if (waitMs > elapsedMs) {
                         final long remainingMs = waitMs - elapsedMs;
                         try {
+//                            System.err.print("client" + clientId + "wa ");
+//                            System.err.flush();
                             stateLock.wait(remainingMs);
                         } catch (final InterruptedException e) {
                             interrupted = true;
@@ -273,8 +279,12 @@ public class KafkaStreams implements AutoCloseable {
                 // We do not always own the current thread that executes this method, i.e., we do not know the
                 // interruption policy of the thread. The least we can do is restore the interruption status before
                 // the current thread exits this method.
+//                System.err.print("client" + clientId + "wae ");
+//                System.err.flush();
                 if (interrupted) {
                     Thread.currentThread().interrupt();
+//                    System.err.print("client" + clientId + "waei ");
+//                    System.err.flush();
                 }
             }
             return true;
@@ -287,7 +297,8 @@ public class KafkaStreams implements AutoCloseable {
      */
     private boolean setState(final State newState) {
         final State oldState;
-
+//        System.err.print("client " + clientId + "ss ");
+//        System.err.flush();
         synchronized (stateLock) {
             oldState = state;
 
@@ -310,13 +321,16 @@ public class KafkaStreams implements AutoCloseable {
                 // refused but we do not throw exception here, to allow appropriate error handling
                 return false;
             } else if (!state.isValidTransition(newState)) {
-                throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
+                throw new IllegalStateException("client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("State transition from {} to {}", oldState, newState);
+                System.err.println("client" + clientId + oldState + "," + newState);
             }
             state = newState;
             stateLock.notifyAll();
         }
+//        System.err.print("client" + clientId + "notia ");
+//        System.err.flush();
 
         // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
         if (stateListener != null) {
@@ -336,13 +350,21 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private boolean isRunningOrRebalancing() {
+//        System.err.print("client " + clientId + "isR ");
+//        System.err.flush();
         synchronized (stateLock) {
+//            System.err.print("client " + clientId + "isRL ");
+//            System.err.flush();
             return state.isRunningOrRebalancing();
         }
     }
 
     private void validateIsRunningOrRebalancing() {
+//        System.err.print("client " + clientId + "vlR ");
+//        System.err.flush();
         synchronized (stateLock) {
+//            System.err.print("client " + clientId + "vlRL ");
+//            System.err.flush();
             if (state == State.CREATED) {
                 throw new StreamsNotStartedException("KafkaStreams has not been started, you can retry after calling start()");
             }
@@ -394,7 +416,11 @@ public class KafkaStreams implements AutoCloseable {
      */
     @Deprecated
     public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) {
+//        System.err.print("client " + clientId + "sUEO ");
+//        System.err.flush();
         synchronized (stateLock) {
+//            System.err.print("client " + clientId + "sUEL ");
+//            System.err.flush();
             if (state == State.CREATED) {
                 oldHandler = true;
                 processStreamThread(thread -> thread.setUncaughtExceptionHandler(uncaughtExceptionHandler));
@@ -426,7 +452,11 @@ public class KafkaStreams implements AutoCloseable {
      */
     public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final Consumer<Throwable> handler = exception -> handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
+//        System.err.print("client " + clientId + "sUEH ");
+//        System.err.flush();
         synchronized (stateLock) {
+//            System.err.print("client " + clientId + "sUEHL ");
+//            System.err.flush();
             if (state == State.CREATED) {
                 this.streamsUncaughtExceptionHandler = handler;
                 Objects.requireNonNull(streamsUncaughtExceptionHandler);
@@ -524,7 +554,11 @@ public class KafkaStreams implements AutoCloseable {
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
      */
     public void setGlobalStateRestoreListener(final StateRestoreListener globalStateRestoreListener) {
+//        System.err.print("client " + clientId + "sGL ");
+//        System.err.flush();
         synchronized (stateLock) {
+//            System.err.print("client " + clientId + "sGLL ");
+//            System.err.flush();
             if (state == State.CREATED) {
                 this.globalStateRestoreListener = globalStateRestoreListener;
             } else {
@@ -1000,7 +1034,11 @@ public class KafkaStreams implements AutoCloseable {
                 streamThread = createAndAddStreamThread(cacheSizePerThread, threadIdx);
             }
 
+//            System.err.print("client " + clientId + "aST ");
+//            System.err.flush();
             synchronized (stateLock) {
+//                System.err.print("client " + clientId + "aSTL ");
+//                System.err.flush();
                 if (isRunningOrRebalancing()) {
                     streamThread.start();
                     return Optional.of(streamThread.getName());
@@ -1073,6 +1111,7 @@ public class KafkaStreams implements AutoCloseable {
                         streamThread.shutdown();
                         if (!streamThread.getName().equals(Thread.currentThread().getName())) {
                             final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
+//                            System.err.println("client" + clientId + "wots ");
                             if (remainingTimeMs <= 0 || !streamThread.waitOnThreadState(StreamThread.State.DEAD, remainingTimeMs)) {
                                 log.warn("{} did not shutdown in the allotted time.", streamThread.getName());
                                 // Don't remove from threads until shutdown is complete. We will trim it from the
@@ -1638,7 +1677,11 @@ public class KafkaStreams implements AutoCloseable {
     public Set<ThreadMetadata> metadataForLocalThreads() {
         final Set<ThreadMetadata> threadMetadata = new HashSet<>();
         processStreamThread(thread -> {
+//            System.err.print("client " + clientId + "lTM:" + thread.getName());
+//            System.err.flush();
             synchronized (thread.getStateLock()) {
+//                System.err.print("client " + clientId + "lTML:" + thread.getName());
+//                System.err.flush();
                 if (thread.state() != StreamThread.State.DEAD) {
                     threadMetadata.add(thread.threadMetadata());
                 }

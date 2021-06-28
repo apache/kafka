@@ -279,7 +279,7 @@ public class EosIntegrationTest {
                             Utils.mkProperties(Collections.singletonMap(
                                 ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                                 IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                            ),
+                        ),
                         outputTopic,
                         inputData.size()
                     );
@@ -361,7 +361,7 @@ public class EosIntegrationTest {
                         Utils.mkProperties(Collections.singletonMap(
                             ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                             IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                        ),
+                    ),
                     SINGLE_PARTITION_OUTPUT_TOPIC,
                     firstBurstOfData.size()
                 );
@@ -385,7 +385,7 @@ public class EosIntegrationTest {
                         Utils.mkProperties(Collections.singletonMap(
                             ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                             IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                        ),
+                    ),
                     SINGLE_PARTITION_OUTPUT_TOPIC,
                     secondBurstOfData.size()
                 );
@@ -747,7 +747,7 @@ public class EosIntegrationTest {
 
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
                 committedDataBeforeStall.size() + uncommittedDataBeforeStall.size()
-                + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
+                    + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
                 CONSUMER_GROUP_ID + "_ALL");
 
             final int allCommittedRecordsAfterRecoverySize = committedDataBeforeStall.size() +

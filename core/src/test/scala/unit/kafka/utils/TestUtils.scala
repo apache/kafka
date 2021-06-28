@@ -66,6 +66,7 @@ import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
+import org.opentest4j.AssertionFailedError
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, mutable}
@@ -1467,9 +1468,26 @@ object TestUtils extends Logging {
       records ++= polledRecords.asScala
       records.size >= numRecords
     }
-    pollRecordsUntilTrue(consumer, pollAction,
-      waitTimeMs = waitTimeMs,
-      msg = s"Consumed ${records.size} records before timeout instead of the expected $numRecords records")
+    
+    var isFail = false
+    try {
+      pollRecordsUntilTrue(consumer, pollAction,
+        waitTimeMs = waitTimeMs,
+        msg = s"Consumed ${records.size} records before timeout instead of the expected $numRecords records")
+    } catch {
+      case e: AssertionFailedError => {
+        isFail = true
+        System.err.println(s"!!! Consumed ${records.size} records before timeout instead of the expected $numRecords records")
+      }
+    }
+
+    if (isFail) {
+      pollRecordsUntilTrue(consumer, pollAction,
+        waitTimeMs = waitTimeMs,
+        msg = s"Consumed ${records.size} records before timeout instead of the expected $numRecords records")
+      fail("failed at 1st try")
+    }
+
     records
   }
 

@@ -371,12 +371,14 @@ class Partition(val topicPartition: TopicPartition,
     checkCurrentLeaderEpoch(currentLeaderEpoch) match {
       case Errors.NONE =>
         if (requireLeader && !isLeader) {
+//          System.err.println("!!! leader:" + requireLeader + isLeader + currentLeaderEpoch + ", log:" + log)
           Right(Errors.NOT_LEADER_OR_FOLLOWER)
         } else {
           log match {
             case Some(partitionLog) =>
               Left(partitionLog)
             case _ =>
+//              System.err.println("!!! leader:" + requireLeader + isLeader + currentLeaderEpoch + ", log:" + log)
               Right(Errors.NOT_LEADER_OR_FOLLOWER)
           }
         }
@@ -409,6 +411,9 @@ class Partition(val topicPartition: TopicPartition,
     getLocalLog(currentLeaderEpoch, requireLeader) match {
       case Left(localLog) => localLog
       case Right(error) =>
+//        System.err.println(s"Failed to find ${if (requireLeader) "leader" else ""} log for " +
+//          s"partition $topicPartition with leader epoch $currentLeaderEpoch. The current leader " +
+//          s"is $leaderReplicaIdOpt and the current epoch $leaderEpoch")
         throw error.exception(s"Failed to find ${if (requireLeader) "leader" else ""} log for " +
           s"partition $topicPartition with leader epoch $currentLeaderEpoch. The current leader " +
           s"is $leaderReplicaIdOpt and the current epoch $leaderEpoch")
@@ -543,6 +548,11 @@ class Partition(val topicPartition: TopicPartition,
         s"ISR ${isr.mkString("[", ",", "]")} addingReplicas ${addingReplicas.mkString("[", ",", "]")} " +
         s"removingReplicas ${removingReplicas.mkString("[", ",", "]")}. Previous leader epoch was $leaderEpoch.")
 
+//      System.err.println(s"$localBrokerId: Leader $topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
+//        s"offset $leaderEpochStartOffset with high watermark ${leaderLog.highWatermark} " +
+//        s"ISR ${isr.mkString("[", ",", "]")} addingReplicas ${addingReplicas.mkString("[", ",", "]")} " +
+//        s"removingReplicas ${removingReplicas.mkString("[", ",", "]")}. Previous leader epoch was $leaderEpoch.")
+
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
       leaderEpoch = partitionState.leaderEpoch
       leaderEpochStartOffsetOpt = Some(leaderEpochStartOffset)
@@ -565,6 +575,14 @@ class Partition(val topicPartition: TopicPartition,
 
       if (isNewLeader) {
         // mark local replica as the leader after converting hw
+//        if (topicPartition.topic().contains("__consumer_offsets")) {
+//          System.err.println(s"$localBrokerId:makeL: newL: $localBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
+////          val elements = Thread.currentThread.getStackTrace
+////          for (i <- 1 until elements.length) {
+////            val s = elements(i)
+////            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+////          }
+//        }
         leaderReplicaIdOpt = Some(localBrokerId)
         // reset log end offset for remote replicas
         remoteReplicas.foreach { replica =>
@@ -629,6 +647,15 @@ class Partition(val topicPartition: TopicPartition,
       if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && leaderEpoch == oldLeaderEpoch) {
         false
       } else {
+//        if (topicPartition.topic().contains("__consumer_offsets")) {
+////          System.err.println(s"$localBrokerId:makeF: newL: $newLeaderBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
+////          val elements = Thread.currentThread.getStackTrace
+////          for (i <- 1 until elements.length) {
+////            val s = elements(i)
+////            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+////          }
+//        }
+
         leaderReplicaIdOpt = Some(newLeaderBrokerId)
         true
       }
@@ -782,20 +809,25 @@ class Partition(val topicPartition: TopicPartition,
         // keep the current immutable replica list reference
         val curMaximalIsr = isrState.maximalIsr
 
-        if (isTraceEnabled) {
-          def logEndOffsetString: ((Int, Long)) => String = {
-            case (brokerId, logEndOffset) => s"broker $brokerId: $logEndOffset"
-          }
-
-          val curInSyncReplicaObjects = (curMaximalIsr - localBrokerId).flatMap(getReplica)
-          val replicaInfo = curInSyncReplicaObjects.map(replica => (replica.brokerId, replica.logEndOffset))
-          val localLogInfo = (localBrokerId, localLogOrException.logEndOffset)
-          val (ackedReplicas, awaitingReplicas) = (replicaInfo + localLogInfo).partition { _._2 >= requiredOffset}
-
-          trace(s"Progress awaiting ISR acks for offset $requiredOffset: " +
-            s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
-            s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
+//        if (isTraceEnabled) {
+        def logEndOffsetString: ((Int, Long)) => String = {
+          case (brokerId, logEndOffset) => s"broker $brokerId: $logEndOffset"
         }
+
+        val curInSyncReplicaObjects = (curMaximalIsr - localBrokerId).flatMap(getReplica)
+        val replicaInfo = curInSyncReplicaObjects.map(replica => (replica.brokerId, replica.logEndOffset))
+        val localLogInfo = (localBrokerId, localLogOrException.logEndOffset)
+        val (ackedReplicas, awaitingReplicas) = (replicaInfo + localLogInfo).partition { _._2 >= requiredOffset}
+
+        trace(s"Progress awaiting ISR acks for offset $requiredOffset: " +
+          s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
+          s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
+//        }
+//        if (requiredOffset < 3) {
+//          System.err.println(s"$localBrokerId: Progress awaiting ISR acks for offset $requiredOffset: " +
+//            s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
+//            s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
+//        }
 
         val minIsr = leaderLog.config.minInSyncReplicas
         if (leaderLog.highWatermark >= requiredOffset) {
@@ -810,6 +842,7 @@ class Partition(val topicPartition: TopicPartition,
         } else
           (false, Errors.NONE)
       case None =>
+//        System.err.println("not leader")
         (false, Errors.NOT_LEADER_OR_FOLLOWER)
     }
   }
@@ -1143,14 +1176,20 @@ class Partition(val topicPartition: TopicPartition,
     // If we're in the lagging HW state after a leader election, throw OffsetNotAvailable for "latest" offset
     // or for a timestamp lookup that is beyond the last fetchable offset.
     timestamp match {
-      case ListOffsetsRequest.LATEST_TIMESTAMP =>
+      case ListOffsetsRequest.LATEST_TIMESTAMP => {
+//        System.err.println("LATEST:" + maybeOffsetsError)
         maybeOffsetsError.map(e => throw e)
           .orElse(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch))))
-      case ListOffsetsRequest.EARLIEST_TIMESTAMP =>
+      }
+      case ListOffsetsRequest.EARLIEST_TIMESTAMP => {
+//        System.err.println("EARLIST:" + getOffsetByTimestamp)
         getOffsetByTimestamp
-      case _ =>
+      }
+      case _ => {
+//        System.err.println("else:" + getOffsetByTimestamp + "," + lastFetchableOffset + maybeOffsetsError)
         getOffsetByTimestamp.filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)
           .orElse(maybeOffsetsError.map(e => throw e))
+      }
     }
   }
 
@@ -1186,13 +1225,17 @@ class Partition(val topicPartition: TopicPartition,
     val allOffsets = localLog.legacyFetchOffsetsBefore(timestamp, maxNumOffsets)
 
     if (!isFromConsumer) {
+//      System.err.println("!isFromConsumer:" + allOffsets)
       allOffsets
     } else {
       val hw = localLog.highWatermark
-      if (allOffsets.exists(_ > hw))
+      if (allOffsets.exists(_ > hw)) {
+//        System.err.println("_ > hw:" + hw + "," + allOffsets)
         hw +: allOffsets.dropWhile(_ > hw)
-      else
+      } else {
+//        System.err.println("else:" + allOffsets)
         allOffsets
+      }
     }
   }
 

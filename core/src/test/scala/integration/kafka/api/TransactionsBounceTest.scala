@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  *    http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package kafka.api
 
@@ -21,7 +21,7 @@ import java.util.Properties
 
 import kafka.server.KafkaConfig
 import kafka.utils.{ShutdownableThread, TestUtils}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
@@ -34,6 +34,7 @@ import scala.collection.mutable
 
 class TransactionsBounceTest extends IntegrationTestHarness {
   private val consumeRecordTimeout = 30000
+  private val rebalanceTimeout = 30000
   private val producerBufferSize =  65536
   private val serverMessageMaxBytes =  producerBufferSize/2
   private val numPartitions = 3
@@ -85,16 +86,32 @@ class TransactionsBounceTest extends IntegrationTestHarness {
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
   }
 
+  private def waitForRebalancingCompleted(consumer: Consumer[Array[Byte], Array[Byte]],
+                                          expectedAssignment: Set[TopicPartition]): Unit = {
+    TestUtils.pollUntilTrue(consumer, () => consumer.assignment() == expectedAssignment.asJava,
+      s"Timed out while waiting expected assignment $expectedAssignment. " +
+        s"The current assignment is ${consumer.assignment()}", waitTimeMs = rebalanceTimeout)
+  }
+
   private def testBrokerFailure(commit: (KafkaProducer[Array[Byte], Array[Byte]],
     String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
     // constantly through the period.
     val consumerGroup = "myGroup"
     val numInputRecords = 10000
+    val expectedConsumerAssignment = Set(new TopicPartition(inputTopic, 0), new TopicPartition(inputTopic, 1),
+      new TopicPartition(inputTopic, 2))
+    val expectedVerifyingConsumerAssignment = Set(new TopicPartition(outputTopic, 0), new TopicPartition(outputTopic, 1),
+      new TopicPartition(outputTopic, 2))
     createTopics()
 
-    TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
     val consumer = createConsumerAndSubscribe(consumerGroup, List(inputTopic))
+    val verifyingConsumer = createConsumerAndSubscribe("randomGroup", List(outputTopic), readCommitted = true)
+    // wait for rebalancing completed before producing records, to avoid consuming records we want to verify later
+    waitForRebalancingCompleted(consumer, expectedConsumerAssignment)
+    waitForRebalancingCompleted(verifyingConsumer, expectedVerifyingConsumerAssignment)
+
+    TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
     val producer = createTransactionalProducer("test-txn")
 
     producer.initTransactions()
@@ -135,7 +152,6 @@ class TransactionsBounceTest extends IntegrationTestHarness {
       scheduler.shutdown()
     }
 
-    val verifyingConsumer = createConsumerAndSubscribe("randomGroup", List(outputTopic), readCommitted = true)
     val recordsByPartition = new mutable.HashMap[TopicPartition, mutable.ListBuffer[Int]]()
     TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numInputRecords, waitTimeMs = consumeRecordTimeout).foreach { record =>
       val value = TestUtils.assertCommittedAndGetValue(record).toInt
@@ -204,7 +220,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
 
     override def shutdown(): Unit = {
       super.shutdown()
-   }
+    }
   }
 
 }

@@ -36,7 +36,7 @@ public final class NetworkClientUtils {
      * disconnects have been processed.
      *
      * This method can be used to check the status of a connection prior to calling the blocking version to be able
-     * to tell whether the latter completed a new connection.
+     * to tell whether the latter completed a new connection. 
      */
     public static boolean isReady(KafkaClient client, Node node, long currentTime) {
         client.poll(0, currentTime);

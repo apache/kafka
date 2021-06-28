@@ -60,6 +60,8 @@ public class PartitionGroup {
 
     private  final Logger logger;
     private final Map<TopicPartition, RecordQueue> partitionQueues;
+    private final String logPrefix;
+    private final String longLogPrefix;
     private final Function<TopicPartition, OptionalLong> lagProvider;
     private final Sensor enforcedProcessingSensor;
     private final long maxTaskIdleMs;
@@ -93,6 +95,14 @@ public class PartitionGroup {
                    final Sensor recordLatenessSensor,
                    final Sensor enforcedProcessingSensor,
                    final long maxTaskIdleMs) {
+        int an = logContext.logPrefix().indexOf('[', logContext.logPrefix().indexOf('[') + 1);
+        an = an == -1 ? 0 : an;
+        this.logPrefix = logContext.logPrefix().substring(an);
+
+        an = logContext.logPrefix().indexOf(']');
+        an = an == -1 ? logContext.logPrefix().length() : an;
+        this.longLogPrefix = logContext.logPrefix().length() > 25 ?
+            logContext.logPrefix().substring(an - 20, an) + logPrefix : logContext.logPrefix();
         this.logger = logContext.logger(PartitionGroup.class);
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::headRecordTimestamp));
         this.partitionQueues = partitionQueues;
@@ -123,6 +133,9 @@ public class PartitionGroup {
                               "\n\tNon-buffered partitions: {}",
                           bufferedPartitions,
                           emptyPartitions);
+                if (logPrefix.contains("1_4")) {
+                    System.err.println(logPrefix + "max.task.idle.ms is disabled" + bufferedPartitions + "," + emptyPartitions);
+                }
             }
             return true;
         }
@@ -142,10 +155,21 @@ public class PartitionGroup {
             } else {
                 final OptionalLong fetchedLag = lagProvider.apply(partition);
 
+                String parName = partition.toString();
+                if (parName.length() > 10) {
+                    parName = parName.substring(parName.length() - 11);
+                }
                 if (!fetchedLag.isPresent()) {
                     // must wait to fetch metadata for the partition
                     idlePartitionDeadlines.remove(partition);
                     logger.trace("Waiting to fetch data for {}", partition);
+
+
+//                    if (logPrefix.contains("1_4")) {
+//                        System.err.print(logPrefix + "W:" + parName);
+//                    }
+
+
                     return false;
                 } else if (fetchedLag.getAsLong() > 0L) {
                     // must wait to poll the data we know to be on the broker
@@ -155,6 +179,10 @@ public class PartitionGroup {
                         partition,
                         fetchedLag.getAsLong()
                     );
+                    if (logPrefix.contains("1_4")) {
+                        System.err.print(logPrefix + "lag for:" + parName + "," + fetchedLag.getAsLong());
+                        System.err.flush();
+                    }
                     return false;
                 } else {
                     // p is known to have zero lag. wait for maxTaskIdleMs to see if more data shows up.
@@ -173,6 +201,10 @@ public class PartitionGroup {
                             maxTaskIdleMs,
                             deadline
                         );
+                        if (logPrefix.contains("1_4")) {
+                            System.err.println(logPrefix + "Lag current time:" + partition + "," + maxTaskIdleMs);
+                            System.err.flush();
+                        }
                         return false;
                     } else {
                         // this partition is ready for processing due to the task idling deadline passing
@@ -184,11 +216,21 @@ public class PartitionGroup {
                 }
             }
         }
+
         if (enforced == null) {
             logger.trace("All partitions were buffered locally, so this task is ready for processing.");
+            if (logPrefix.contains("1_4")) {
+                System.err.print(logPrefix + "buf ");
+                System.err.flush();
+            }
             return true;
         } else if (queued.isEmpty()) {
             logger.trace("No partitions were buffered locally, so this task is not ready for processing.");
+//            if (logPrefix.contains("1_4")) {
+//                System.err.print(logPrefix + "no ");
+//                System.err.flush();
+//            }
+
             return false;
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
@@ -202,6 +244,10 @@ public class PartitionGroup {
                      enforced,
                      maxTaskIdleMs,
                      wallClockTime);
+            if (logPrefix.contains("1_4")) {
+                System.err.print(logPrefix + "par empty");
+                System.err.flush();
+            }
             return true;
         }
     }
@@ -233,6 +279,7 @@ public class PartitionGroup {
         for (final TopicPartition newInputPartition : newInputPartitions) {
             partitionQueues.put(newInputPartition, recordQueueCreator.apply(newInputPartition));
         }
+        System.err.println(logPrefix + "rm:" + removedPartitions);
         nonEmptyQueuesByTime.removeIf(q -> removedPartitions.contains(q.partition()));
         allBuffered = allBuffered && newInputPartitions.isEmpty();
     }
@@ -257,6 +304,15 @@ public class PartitionGroup {
         StampedRecord record = null;
 
         final RecordQueue queue = nonEmptyQueuesByTime.poll();
+        if (logPrefix.contains("1_4")) {
+            if (queue != null) {
+                System.err.println(logPrefix + queue.partition() + "," + queue.size());
+                System.err.flush();
+            } else {
+                System.err.print(logPrefix + "nu");
+                System.err.flush();
+            }
+        }
         info.queue = queue;
 
         if (queue != null) {
@@ -303,9 +359,21 @@ public class PartitionGroup {
         final int oldSize = recordQueue.size();
         final int newSize = recordQueue.addRawRecords(rawRecords);
 
+        if (logPrefix.contains("1_4")) {
+            System.err.println(longLogPrefix + "add records:" + rawRecords + ";" + oldSize + newSize);
+            System.err.flush();
+        }
+//        final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//        for (int i = 1; i < elements.length; i++) {
+//            final StackTraceElement s = elements[i];
+//            System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//        }
+
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
+
             nonEmptyQueuesByTime.offer(recordQueue);
+
 
             // if all partitions now are non-empty, set the flag
             // we do not need to update the stream-time here since this task will definitely be
@@ -316,6 +384,7 @@ public class PartitionGroup {
         }
 
         totalBuffered += newSize - oldSize;
+
 
         return newSize;
     }
