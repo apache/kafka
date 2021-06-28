@@ -2268,6 +2268,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // that the listener has not been notified about a leader change that already
             // took place. In this case, we consider the call as already fulfilled and
             // take no further action.
+            logger.debug("Ignoring call to resign from epoch {} since it is smaller than the " +
+                "current epoch {}", epoch, currentEpoch);
             return;
         } else if (!leaderAndEpoch.isLeader(quorum.localIdOrThrow())) {
             throw new IllegalArgumentException("Cannot resign from epoch " + epoch +
@@ -2275,13 +2277,22 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         } else {
             // Note that if we transition to another state before we have a chance to
             // request resignation, then we consider the call fulfilled.
-            quorum.maybeLeaderState().ifPresent(leaderState -> {
-                if (leaderState.epoch() == epoch) {
-                    logger.info("Received user request to resign from the current epoch {}", currentEpoch);
-                    leaderState.requestResign();
-                    wakeup();
-                }
-            });
+            Optional<LeaderState<Object>> leaderStateOpt = quorum.maybeLeaderState();
+            if (!leaderStateOpt.isPresent()) {
+                logger.debug("Ignoring call to resign from epoch {} since this node is " +
+                    "no longer the leader", epoch);
+                return;
+            }
+
+            LeaderState<Object> leaderState = leaderStateOpt.get();
+            if (leaderState.epoch() != epoch) {
+                logger.debug("Ignoring call to resign from epoch {} since it is smaller than the " +
+                    "current epoch {}", epoch, leaderState.epoch());
+            } else {
+                logger.info("Received user request to resign from the current epoch {}", currentEpoch);
+                leaderState.requestResign();
+                wakeup();
+            }
         }
     }
 
