@@ -34,7 +34,7 @@ import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import scala.Option;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
-import scala.compat.java8.OptionConverters;
+import scala.jdk.javaapi.OptionConverters;
 
 import java.io.File;
 import java.util.Arrays;
