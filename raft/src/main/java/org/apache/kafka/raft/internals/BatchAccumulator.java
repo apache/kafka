@@ -35,7 +35,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.function.Supplier;
+import java.util.function.Function;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -207,21 +207,31 @@ public class BatchAccumulator<T> implements Closeable {
         currentBatch = null;
     }
 
-    private void appendControlMessage(
-        Supplier<MemoryRecords> supplier,
-        ByteBuffer buffer
-    ) {
+    private void appendControlMessage(Function<ByteBuffer, MemoryRecords> valueCreator) {
         appendLock.lock();
         try {
-            forceDrain();
-            completed.add(new CompletedBatch<>(
-                nextOffset,
-                1,
-                supplier.get(),
-                memoryPool,
-                buffer
-            ));
-            nextOffset += 1;
+            ByteBuffer buffer = memoryPool.tryAllocate(256);
+            if (buffer != null) {
+                try {
+                    forceDrain();
+                    completed.add(
+                        new CompletedBatch<>(
+                            nextOffset,
+                            1,
+                            valueCreator.apply(buffer),
+                            memoryPool,
+                            buffer
+                        )
+                    );
+                    nextOffset += 1;
+                } catch (Exception e) {
+                    // Release the buffer now since the buffer was not stored in completed for a delay release
+                    memoryPool.release(buffer);
+                    throw e;
+                }
+            } else {
+                throw new IllegalStateException("Could not allocate buffer for the control record");
+            }
         } finally {
             appendLock.unlock();
         }
@@ -238,19 +248,15 @@ public class BatchAccumulator<T> implements Closeable {
         LeaderChangeMessage leaderChangeMessage,
         long currentTimeMs
     ) {
-        ByteBuffer buffer = memoryPool.tryAllocate(256);
-        if (buffer != null) {
-            appendControlMessage(
-                () -> MemoryRecords.withLeaderChangeMessage(
-                    this.nextOffset,
-                    currentTimeMs,
-                    this.epoch,
-                    buffer,
-                    leaderChangeMessage),
-                buffer);
-        } else {
-            throw new IllegalStateException("Could not allocate buffer for the leader change record.");
-        }
+        appendControlMessage(buffer -> {
+            return MemoryRecords.withLeaderChangeMessage(
+                this.nextOffset,
+                currentTimeMs,
+                this.epoch,
+                buffer,
+                leaderChangeMessage
+            );
+        });
     }
 
 
@@ -264,19 +270,15 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotHeaderRecord snapshotHeaderRecord,
         long currentTimeMs
     ) {
-        ByteBuffer buffer = memoryPool.tryAllocate(256);
-        if (buffer != null) {
-            appendControlMessage(
-                () -> MemoryRecords.withSnapshotHeaderRecord(
-                    this.nextOffset,
-                    currentTimeMs,
-                    this.epoch,
-                    buffer,
-                    snapshotHeaderRecord),
-                buffer);
-        } else {
-            throw new IllegalStateException("Could not allocate buffer for the metadata snapshot header record.");
-        }
+        appendControlMessage(buffer -> {
+            return MemoryRecords.withSnapshotHeaderRecord(
+                this.nextOffset,
+                currentTimeMs,
+                this.epoch,
+                buffer,
+                snapshotHeaderRecord
+            );
+        });
     }
 
     /**
@@ -290,19 +292,15 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotFooterRecord snapshotFooterRecord,
         long currentTimeMs
     ) {
-        ByteBuffer buffer = memoryPool.tryAllocate(256);
-        if (buffer != null) {
-            appendControlMessage(
-                () -> MemoryRecords.withSnapshotFooterRecord(
-                    this.nextOffset,
-                    currentTimeMs,
-                    this.epoch,
-                    buffer,
-                    snapshotFooterRecord),
-                buffer);
-        } else {
-            throw new IllegalStateException("Could not allocate buffer for the metadata snapshot footer record.");
-        }
+        appendControlMessage(buffer -> {
+            return MemoryRecords.withSnapshotFooterRecord(
+                this.nextOffset,
+                currentTimeMs,
+                this.epoch,
+                buffer,
+                snapshotFooterRecord
+            );
+        });
     }
 
     public void forceDrain() {

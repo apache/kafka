@@ -124,9 +124,7 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
         while (iterator.hasNext()) {
             Batch<T> batch = iterator.next();
 
-            if (batch.records().isEmpty()) {
-                continue;
-            } else {
+            if (!batch.records().isEmpty()) {
                 return Optional.of(batch);
             }
         }
