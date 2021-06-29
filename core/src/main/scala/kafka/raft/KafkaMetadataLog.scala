@@ -49,6 +49,8 @@ final class KafkaMetadataLog private (
   val retentionMs: Long,
 ) extends ReplicatedLog with Logging {
 
+  this.logIdent = s"[MetadataLog partition=$topicPartition, dir=${log.dir.getParent}] "
+
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
       case Isolation.COMMITTED => FetchHighWatermark

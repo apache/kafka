@@ -249,8 +249,6 @@ final public class KafkaRaftClientSnapshotTest {
         context.log.deleteBeforeSnapshot(snapshotId);
         context.client.poll();
 
-        //context.log.logStartOffset(snapshotId.offset);
-
         // Send Fetch request less than start offset
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 0, epoch, 0));
         context.pollUntilResponse();
