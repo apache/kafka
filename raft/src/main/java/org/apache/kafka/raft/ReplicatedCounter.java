@@ -171,7 +171,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
         handleSnapshotCalls = 0;
     }
 
-    public int getHandleSnapshotCalls() {
+    public int handleSnapshotCalls() {
         return handleSnapshotCalls;
     }
 }
