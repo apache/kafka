@@ -383,12 +383,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         }
 
         // If requested, mark the connector as restarting
-        AbstractStatus.State connectorState;
-        if (request.shouldRestartConnector(connectorStatus)) {
-            connectorState = AbstractStatus.State.RESTARTING;
-        } else {
-            connectorState = connectorStatus.state();
-        }
+        AbstractStatus.State connectorState = request.shouldRestartConnector(connectorStatus) ? AbstractStatus.State.RESTARTING : connectorStatus.state();
         ConnectorStateInfo.ConnectorState connectorInfoState = new ConnectorStateInfo.ConnectorState(
                 connectorState.toString(),
                 connectorStatus.workerId(),
@@ -399,13 +394,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         List<ConnectorStateInfo.TaskState> taskStates = statusBackingStore.getAll(connectorName)
                 .stream()
                 .map(taskStatus -> {
-                    AbstractStatus.State state = taskStatus.state();
-                    if (request.shouldRestartTask(taskStatus)) {
-                        state = AbstractStatus.State.RESTARTING;
-                    }
+                    AbstractStatus.State taskState = request.shouldRestartTask(taskStatus) ? AbstractStatus.State.RESTARTING : taskStatus.state();
                     return new ConnectorStateInfo.TaskState(
                             taskStatus.id().task(),
-                            state.toString(),
+                            taskState.toString(),
                             taskStatus.workerId(),
                             taskStatus.trace()
                     );

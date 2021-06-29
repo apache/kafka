@@ -1077,10 +1077,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public void restartConnectorAndTasks(
-            RestartRequest request,
-            Callback<ConnectorStateInfo> callback
-    ) {
+    public void restartConnectorAndTasks(RestartRequest request, Callback<ConnectorStateInfo> callback) {
         final String connectorName = request.connectorName();
         addRequest(
                 () -> {
@@ -1099,13 +1096,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         if (!maybePlan.isPresent()) {
                             callback.onCompletion(new NotFoundException("Status for connector " + connectorName + " not found", null), null);
                         } else {
-                            RestartPlan plan = maybePlan.get();
-                            callback.onCompletion(null, plan.restartConnectorStateInfo());
+                            callback.onCompletion(null, maybePlan.get().restartConnectorStateInfo());
                         }
                     } else {
                         callback.onCompletion(new NotLeaderException("Only the leader can process restart requests.", leaderUrl()), null);
                     }
-
                     return null;
                 },
                 forwardErrorCallback(callback)
@@ -1127,13 +1122,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             restartRequests = new ArrayList<>(pendingRestartRequests.values());
             pendingRestartRequests.clear();
         }
-        for (RestartRequest restartRequest : restartRequests) {
+        restartRequests.forEach(restartRequest -> {
             try {
                 doRestartConnectorAndTasks(restartRequest);
             } catch (Exception e) {
                 log.warn("Unexpected error while trying to process " + restartRequest + ", the restart request will be skipped.", e);
             }
-        }
+        });
     }
 
     /**
@@ -1188,7 +1183,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.debug("Restarting {} of {} tasks for {}", plan.restartTaskCount(), plan.totalTaskCount(), request);
             plan.taskIdsToRestart().forEach(taskId -> {
                 try {
-                    if (this.startTask(taskId)) {
+                    if (startTask(taskId)) {
                         log.info("Task '{}' restart successful", taskId);
                     } else {
                         log.error("Task '{}' restart failed", taskId);

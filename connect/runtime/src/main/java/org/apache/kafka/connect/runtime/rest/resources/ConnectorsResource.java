@@ -264,7 +264,7 @@ public class ConnectorsResource {
                                  final @QueryParam("forward") Boolean forward) throws Throwable {
         RestartRequest restartRequest = new RestartRequest(connector, onlyFailed, includeTasks);
         String forwardingPath = "/connectors/" + connector + "/restart";
-        if (restartRequest.forciblyRestartConnectorOnly()) {
+        if (restartRequest.forceRestartConnectorOnly()) {
             // For backward compatibility, just restart the connector instance and return OK with no body
             FutureCallback<Void> cb = new FutureCallback<>();
             herder.restartConnector(connector, cb);

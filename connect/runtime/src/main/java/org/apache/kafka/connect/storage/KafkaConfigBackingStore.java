@@ -215,8 +215,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         return RESTART_PREFIX + connectorName;
     }
 
-    public static final Boolean ONLY_FAILED_DEFAULT = Boolean.FALSE;
-    public static final Boolean INCLUDE_TASKS_DEFAULT = Boolean.FALSE;
+    public static final boolean ONLY_FAILED_DEFAULT = false;
+    public static final boolean INCLUDE_TASKS_DEFAULT = false;
     public static final String ONLY_FAILED_FIELD_NAME = "only-failed";
     public static final String INCLUDE_TASKS_FIELD_NAME = "include-tasks";
     public static final Schema RESTART_REQUEST_V0 = SchemaBuilder.struct()
@@ -752,11 +752,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     updateListener.onTaskConfigUpdate(updatedTasks);
             } else if (record.key().startsWith(RESTART_PREFIX)) {
                 RestartRequest request = recordToRestartRequest(record, value);
-                if (request == null) {
-                    return;
-                }
                 // Only notify the listener if this backing store is already successfully started (having caught up the first time)
-                if (started) {
+                if (request != null && started) {
                     updateListener.onRestartRequest(request);
                 }
             } else if (record.key().equals(SESSION_KEY_KEY)) {
@@ -806,38 +803,30 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     @SuppressWarnings("unchecked")
     RestartRequest recordToRestartRequest(ConsumerRecord<String, byte[]> record, SchemaAndValue value) {
         String connectorName = record.key().substring(RESTART_PREFIX.length());
-        if (value.value() == null) {
-            log.error("Ignoring restart request because it is unexpectedly null");
-            return null;
-        }
         if (!(value.value() instanceof Map)) {
-            log.error("Ignoring restart request because the value is not a Map but is {}", value.value().getClass());
+            log.error("Ignoring restart request because the value is not a Map but is {}", value.value() == null ? "null" : value.value().getClass());
             return null;
         }
 
         Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
 
         Object failed = valueAsMap.get(ONLY_FAILED_FIELD_NAME);
-        if (failed == null) {
-            log.warn("Invalid data for restart request '{}' field was missing, defaulting to {}", ONLY_FAILED_FIELD_NAME, ONLY_FAILED_DEFAULT);
-            failed = ONLY_FAILED_DEFAULT;
-        }
+        boolean onlyFailed;
         if (!(failed instanceof Boolean)) {
-            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", ONLY_FAILED_FIELD_NAME, failed.getClass(), ONLY_FAILED_DEFAULT);
-            failed = ONLY_FAILED_DEFAULT;
+            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", ONLY_FAILED_FIELD_NAME, failed == null ? "null" : failed.getClass(), ONLY_FAILED_DEFAULT);
+            onlyFailed = ONLY_FAILED_DEFAULT;
+        } else {
+            onlyFailed = (Boolean) failed;
         }
-        boolean onlyFailed = (Boolean) failed;
 
         Object withTasks = valueAsMap.get(INCLUDE_TASKS_FIELD_NAME);
-        if (withTasks == null) {
-            log.warn("Invalid data for restart request '{}' field was missing, defaulting to {}", INCLUDE_TASKS_FIELD_NAME, INCLUDE_TASKS_DEFAULT);
-            withTasks = INCLUDE_TASKS_DEFAULT;
-        }
+        boolean includeTasks;
         if (!(withTasks instanceof Boolean)) {
-            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", INCLUDE_TASKS_FIELD_NAME, withTasks.getClass(), INCLUDE_TASKS_DEFAULT);
-            withTasks = INCLUDE_TASKS_DEFAULT;
+            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", INCLUDE_TASKS_FIELD_NAME, withTasks == null ? "null" : withTasks.getClass(), INCLUDE_TASKS_DEFAULT);
+            includeTasks = INCLUDE_TASKS_DEFAULT;
+        } else {
+            includeTasks = (Boolean) withTasks;
         }
-        boolean includeTasks = (Boolean) withTasks;
         return new RestartRequest(connectorName, onlyFailed, includeTasks);
     }
 

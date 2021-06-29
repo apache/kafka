@@ -142,13 +142,8 @@ public class RestartPlan {
 
     @Override
     public String toString() {
-        if (shouldRestartConnector()) {
-            return String.format(
-                    "plan to restart connector and %d of %d tasks for %s", restartTaskCount(), totalTaskCount(), request
-            );
-        }
-        return String.format(
-                "plan to restart %d of %d tasks for %s", restartTaskCount(), totalTaskCount(), request
-        );
+        return shouldRestartConnector()
+                ? String.format("plan to restart connector and %d of %d tasks for %s", restartTaskCount(), totalTaskCount(), request)
+                : String.format("plan to restart %d of %d tasks for %s", restartTaskCount(), totalTaskCount(), request);
     }
 }

@@ -32,13 +32,13 @@ public class RestartRequestTest {
     @Test
     public void forciblyRestartConnectorOnly() {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, false);
-        assertTrue(restartRequest.forciblyRestartConnectorOnly());
+        assertTrue(restartRequest.forceRestartConnectorOnly());
         restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
-        assertFalse(restartRequest.forciblyRestartConnectorOnly());
+        assertFalse(restartRequest.forceRestartConnectorOnly());
         restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
-        assertFalse(restartRequest.forciblyRestartConnectorOnly());
+        assertFalse(restartRequest.forceRestartConnectorOnly());
         restartRequest = new RestartRequest(CONNECTOR_NAME, true, true);
-        assertFalse(restartRequest.forciblyRestartConnectorOnly());
+        assertFalse(restartRequest.forceRestartConnectorOnly());
     }
 
     @Test

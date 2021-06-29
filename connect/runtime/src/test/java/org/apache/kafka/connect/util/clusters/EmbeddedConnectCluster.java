@@ -453,8 +453,6 @@ public class EmbeddedConnectCluster {
                 if (response.getStatus() == Response.Status.ACCEPTED.getStatusCode()) {
                     return mapper.readerFor(ConnectorStateInfo.class)
                             .readValue(responseToString(response));
-                } else {
-                    return null;
                 }
             }
             return null;

@@ -88,7 +88,7 @@ public class RestartRequest implements Comparable<RestartRequest> {
      *
      * @return true if only the {@link Connector} instance is to be restarted even if not failed, or false otherwise
      */
-    public boolean forciblyRestartConnectorOnly() {
+    public boolean forceRestartConnectorOnly() {
         return !onlyFailed() && !includeTasks();
     }
 
@@ -105,10 +105,7 @@ public class RestartRequest implements Comparable<RestartRequest> {
     @Override
     public int compareTo(RestartRequest o) {
         int result = connectorName.compareTo(o.connectorName);
-        if (result == 0) {
-            result = impactRank() - o.impactRank();
-        }
-        return result;
+        return result == 0 ? impactRank() - o.impactRank() : result;
     }
     //calculates an internal rank for the restart request based on the probable number of tasks/connector this request is going to restart
     private int impactRank() {
