@@ -400,14 +400,14 @@ class FullFetchContext(private val time: Time,
   }
 
   override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
-    var topLevelError = Errors.NONE
+    var hasInconsistentTopicIds = false
     def createNewSession: (FetchSession.CACHE_MAP, FetchSession.TOPIC_ID_MAP) = {
       val cachedPartitions = new FetchSession.CACHE_MAP(updates.size)
       val sessionTopicIds = new util.HashMap[String, Uuid](updates.size)
       updates.forEach { (part, respData) =>
         if (respData.errorCode() == Errors.INCONSISTENT_TOPIC_ID.code()) {
           info(s"Session encountered an inconsistent topic ID for topicPartition $part.")
-          topLevelError = Errors.INCONSISTENT_TOPIC_ID
+          hasInconsistentTopicIds = true
         }
         val reqData = fetchData.get(part)
         val id = topicIds.getOrDefault(part.topic(), Uuid.ZERO_UUID)
@@ -419,12 +419,12 @@ class FullFetchContext(private val time: Time,
     }
     val responseSessionId = cache.maybeCreateSession(time.milliseconds(), isFromFollower,
         updates.size, usesTopicIds, () => createNewSession)
-    if (topLevelError == Errors.INCONSISTENT_TOPIC_ID) {
-      FetchResponse.of(topLevelError, 0, responseSessionId, new FetchSession.RESP_MAP, Collections.emptyMap())
+    if (hasInconsistentTopicIds) {
+      FetchResponse.of(Errors.INCONSISTENT_TOPIC_ID, 0, responseSessionId, new FetchSession.RESP_MAP, Collections.emptyMap())
     } else {
       debug(s"Full fetch context with session id $responseSessionId returning " +
         s"${partitionsToLogString(updates.keySet)}")
-      FetchResponse.of(topLevelError, 0, responseSessionId, updates, topicIds)
+      FetchResponse.of(Errors.NONE, 0, responseSessionId, updates, topicIds)
     }
   }
 }
@@ -514,7 +514,7 @@ class IncrementalFetchContext(private val time: Time,
           s"got ${session.epoch}.  Possible duplicate request.")
         FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, 0, session.id, new FetchSession.RESP_MAP, Collections.emptyMap())
       } else {
-        var topLevelError = Errors.NONE
+        var hasInconsistentTopicIds = false
         // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
         // It will also set the top-level error to INCONSISTENT_TOPIC_ID if any partitions had this error.
         val partitionIter = new PartitionIterator(updates.entrySet.iterator, true)
@@ -522,15 +522,15 @@ class IncrementalFetchContext(private val time: Time,
           val entry = partitionIter.next()
           if (entry.getValue.errorCode() == Errors.INCONSISTENT_TOPIC_ID.code()) {
             info(s"Incremental fetch session ${session.id} encountered an inconsistent topic ID for topicPartition ${entry.getKey}.")
-            topLevelError = Errors.INCONSISTENT_TOPIC_ID
+            hasInconsistentTopicIds = true
           }
         }
-        if (topLevelError == Errors.INCONSISTENT_TOPIC_ID) {
-          FetchResponse.of(topLevelError, 0, session.id, new FetchSession.RESP_MAP, Collections.emptyMap())
+        if (hasInconsistentTopicIds) {
+          FetchResponse.of(Errors.INCONSISTENT_TOPIC_ID, 0, session.id, new FetchSession.RESP_MAP, Collections.emptyMap())
         } else {
           debug(s"Incremental fetch context with session id ${session.id} returning " +
             s"${partitionsToLogString(updates.keySet)}")
-          FetchResponse.of(topLevelError, 0, session.id, updates, session.sessionTopicIds)
+          FetchResponse.of(Errors.NONE, 0, session.id, updates, session.sessionTopicIds)
         }
       }
     }

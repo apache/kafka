@@ -277,9 +277,8 @@ public class FetchRequest extends AbstractRequest {
         // is essential for them.
         Errors error = Errors.forException(e);
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
-        // Since UNKNOWN_TOPIC_ID is a new error type only returned when topic ID requests are made (from newer clients),
-        // we can skip returning the error on all partitions and returning any partitions at all.
-        if (error != Errors.UNKNOWN_TOPIC_ID) {
+        // For version 13+, we know the client can handle a top level error code, so we don't need to send back partitions too.
+        if (version() < 13) {
             data.topics().forEach(topic -> {
                 List<FetchResponseData.PartitionData> partitionResponses = topic.partitions().stream().map(partition ->
                         FetchResponse.partitionResponse(partition.partition(), error)).collect(Collectors.toList());
