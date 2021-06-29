@@ -24,8 +24,13 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
+import org.apache.kafka.common.record.ControlRecordUtils;
 
+import java.util.Optional;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * A type for writing a snapshot for a given end offset and epoch.
@@ -44,27 +49,20 @@ final public class SnapshotWriter<T> implements AutoCloseable {
     final private RawSnapshotWriter snapshot;
     final private BatchAccumulator<T> accumulator;
     final private Time time;
+    final private long lastContainedLogTimestamp;
 
-    /**
-     * Initializes a new instance of the class.
-     *
-     * @param snapshot the low level snapshot writer
-     * @param maxBatchSize the maximum size in byte for a batch
-     * @param memoryPool the memory pool for buffer allocation
-     * @param time the clock implementation
-     * @param compressionType the compression algorithm to use
-     * @param serde the record serialization and deserialization implementation
-     */
-    public SnapshotWriter(
+    private SnapshotWriter(
         RawSnapshotWriter snapshot,
         int maxBatchSize,
         MemoryPool memoryPool,
         Time time,
+        long lastContainedLogTimestamp,
         CompressionType compressionType,
         RecordSerde<T> serde
     ) {
         this.snapshot = snapshot;
         this.time = time;
+        this.lastContainedLogTimestamp = lastContainedLogTimestamp;
 
         this.accumulator = new BatchAccumulator<>(
             snapshot.snapshotId().epoch,
@@ -76,6 +74,75 @@ final public class SnapshotWriter<T> implements AutoCloseable {
             compressionType,
             serde
         );
+    }
+
+    /**
+     * Adds a {@link SnapshotHeaderRecord} to snapshot
+     *
+     * @throws IllegalStateException if the snapshot is not empty
+     */
+    private void initializeSnapshotWithHeader() {
+        if (snapshot.sizeInBytes() != 0) {
+            String message = String.format(
+                "Initializing writer with a non-empty snapshot: id = '%s'.",
+                snapshot.snapshotId()
+            );
+            throw new IllegalStateException(message);
+        }
+
+        SnapshotHeaderRecord headerRecord = new SnapshotHeaderRecord()
+            .setVersion(ControlRecordUtils.SNAPSHOT_HEADER_HIGHEST_VERSION)
+            .setLastContainedLogTimestamp(lastContainedLogTimestamp);
+        accumulator.appendSnapshotHeaderMessage(headerRecord, time.milliseconds());
+        accumulator.forceDrain();
+    }
+
+    /**
+     * Adds a {@link SnapshotFooterRecord} to the snapshot
+     *
+     * No more records should be appended to the snapshot after calling this method
+     */
+    private void finalizeSnapshotWithFooter() {
+        SnapshotFooterRecord footerRecord = new SnapshotFooterRecord()
+            .setVersion(ControlRecordUtils.SNAPSHOT_FOOTER_HIGHEST_VERSION);
+        accumulator.appendSnapshotFooterMessage(footerRecord, time.milliseconds());
+        accumulator.forceDrain();
+    }
+
+    /**
+     * Create an instance of this class and initialize
+     * the underlying snapshot with {@link SnapshotHeaderRecord}
+     *
+     * @param snapshot a lambda to create the low level snapshot writer
+     * @param maxBatchSize the maximum size in byte for a batch
+     * @param memoryPool the memory pool for buffer allocation
+     * @param time the clock implementation
+     * @param lastContainedLogTimestamp The append time of the highest record contained in this snapshot
+     * @param compressionType the compression algorithm to use
+     * @param serde the record serialization and deserialization implementation
+     * @return {@link Optional}{@link SnapshotWriter}
+     */
+    public static <T> Optional<SnapshotWriter<T>> createWithHeader(
+        Supplier<Optional<RawSnapshotWriter>> supplier,
+        int maxBatchSize,
+        MemoryPool memoryPool,
+        Time snapshotTime,
+        long lastContainedLogTimestamp,
+        CompressionType compressionType,
+        RecordSerde<T> serde
+    ) {
+        Optional<SnapshotWriter<T>> writer = supplier.get().map(snapshot -> {
+            return new SnapshotWriter<T>(
+                    snapshot,
+                    maxBatchSize,
+                    memoryPool,
+                    snapshotTime,
+                    lastContainedLogTimestamp,
+                    CompressionType.NONE,
+                    serde);
+        });
+        writer.ifPresent(SnapshotWriter::initializeSnapshotWithHeader);
+        return writer;
     }
 
     /**
@@ -135,8 +202,11 @@ final public class SnapshotWriter<T> implements AutoCloseable {
 
     /**
      * Freezes the snapshot by flushing all pending writes and marking it as immutable.
+     *
+     * Also adds a {@link SnapshotFooterRecord} to the end of the snapshot
      */
     public void freeze() {
+        finalizeSnapshotWithFooter();
         appendBatches(accumulator.drain());
         snapshot.freeze();
         accumulator.close();

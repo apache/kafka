@@ -345,7 +345,8 @@ public final class QuorumController implements Controller {
             }
             Optional<SnapshotWriter<ApiMessageAndVersion>> writer = raftClient.createSnapshot(
                 committedOffset,
-                committedEpoch
+                committedEpoch,
+                0
             );
             if (writer.isPresent()) {
                 generator = new SnapshotGenerator(
