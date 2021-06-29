@@ -211,18 +211,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         statusBackingStore.put(new TaskStatus(id, TaskStatus.State.DESTROYED, workerId, generation()));
     }
 
-    /**
-     * Invoked when the connector is restarted asynchronously by the herder on processing a restart request.
-     * @param connector The connector name
-     */
     public void onRestart(String connector) {
         statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.RESTARTING,
                 workerId, generation()));
     }
-    /**
-     * Invoked when the task is restarted asynchronously by the herder on processing a restart request.
-     * @param id The id of the task
-     */
+
     public void onRestart(ConnectorTaskId id) {
         statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RESTARTING, workerId, generation()));
     }
