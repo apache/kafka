@@ -40,7 +40,7 @@ final class KafkaMetadataLog private (
   scheduler: Scheduler,
   // Access to this object needs to be synchronized because it is used by the snapshotting thread to notify the
   // polling thread when snapshots are created. This object is also used to store any opened snapshot reader.
-  val snapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
+  snapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
   topicPartition: TopicPartition,
   maxFetchSizeInBytes: Int,
   // Visible for testing
@@ -323,24 +323,22 @@ final class KafkaMetadataLog private (
    *
    * This method is not thread safe and assumes a lock on the snapshots collection is held
    */
-  private[raft] def deleteSnapshot(snapshotId: OffsetAndEpoch, nextSnapshotIdOpt: Option[OffsetAndEpoch]): Boolean = {
-    nextSnapshotIdOpt.exists { nextSnapshotId =>
-      if (snapshots.contains(snapshotId) &&
-          snapshots.contains(nextSnapshotId) &&
-          startOffset < nextSnapshotId.offset &&
-          snapshotId.offset < nextSnapshotId.offset &&
-          log.maybeIncrementLogStartOffset(nextSnapshotId.offset, SnapshotGenerated)) {
-        log.deleteOldSegments()
-        val forgotten = mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]]
-        snapshots.remove(snapshotId) match {
-          case Some(removedSnapshot) => forgotten.put(snapshotId, removedSnapshot)
-          case None => throw new IllegalStateException(s"Could not remove snapshot $snapshotId from our cache.")
-        }
-        removeSnapshots(forgotten)
-        true
-      } else {
-        false
+  private[raft] def deleteSnapshot(snapshotId: OffsetAndEpoch, nextSnapshotId: OffsetAndEpoch): Boolean = {
+    if (snapshots.contains(snapshotId) &&
+        snapshots.contains(nextSnapshotId) &&
+        startOffset < nextSnapshotId.offset &&
+        snapshotId.offset < nextSnapshotId.offset &&
+        log.maybeIncrementLogStartOffset(nextSnapshotId.offset, SnapshotGenerated)) {
+      log.deleteOldSegments()
+      val forgotten = mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]]
+      snapshots.remove(snapshotId) match {
+        case Some(removedSnapshot) => forgotten.put(snapshotId, removedSnapshot)
+        case None => throw new IllegalStateException(s"Could not remove snapshot $snapshotId from our cache.")
       }
+      removeSnapshots(forgotten)
+      true
+    } else {
+      false
     }
   }
 
@@ -392,23 +390,20 @@ final class KafkaMetadataLog private (
    *
    * For the given predicate, we are testing if the snapshot identified by the first argument should be deleted.
    */
-  private def cleanSnapshots(predicate: (OffsetAndEpoch, Option[OffsetAndEpoch]) => Boolean): Boolean = {
-    val snapshotIterator = snapshots.keys.iterator
-    var snapshotOpt = Log.nextOption(snapshotIterator)
+  private def cleanSnapshots(predicate: (OffsetAndEpoch, OffsetAndEpoch) => Boolean): Boolean = {
+    if (snapshots.size < 2)
+      return false;
+
     var didClean = false
-    while (snapshotOpt.isDefined) {
-      val snapshot = snapshotOpt.get
-      val nextOpt = Log.nextOption(snapshotIterator)
-      if (predicate(snapshot, nextOpt)) {
-        if (deleteSnapshot(snapshot, nextOpt)) {
+    snapshots.keys.toSeq.sliding(2).toSeq.takeWhile {
+      case Seq(snapshot: OffsetAndEpoch, nextSnapshot: OffsetAndEpoch) =>
+        if (predicate(snapshot, nextSnapshot) && deleteSnapshot(snapshot, nextSnapshot)) {
           didClean = true
-          snapshotOpt = nextOpt
+          true
         } else {
-          snapshotOpt = None
+          false
         }
-      } else {
-        snapshotOpt = None
-      }
+      case _ => false // Shouldn't get here with sliding(2)
     }
     didClean
   }
@@ -419,15 +414,13 @@ final class KafkaMetadataLog private (
 
     // If the timestamp of the first batch in the _next_ snapshot exceeds retention time, then we infer that
     // the current snapshot also exceeds retention time. We make this inference to avoid reading the full snapshot.
-    def shouldClean(snapshotId: OffsetAndEpoch, nextSnapshotIdOpt: Option[OffsetAndEpoch]): Boolean = {
+    def shouldClean(snapshotId: OffsetAndEpoch, nextSnapshotId: OffsetAndEpoch): Boolean = {
       val now = time.milliseconds()
-      nextSnapshotIdOpt.exists { nextSnapshotId =>
-        firstBatchMaxTimestamp(nextSnapshotId).exists { timestamp =>
-          if (now - timestamp > retentionMs) {
-            true
-          } else {
-            false
-          }
+      firstBatchMaxTimestamp(nextSnapshotId).exists { timestamp =>
+        if (now - timestamp > retentionMs) {
+          true
+        } else {
+          false
         }
       }
     }
@@ -440,14 +433,11 @@ final class KafkaMetadataLog private (
       return false
 
     val snapshotSizes = loadSnapshotSizes().toMap
-    if (snapshotSizes.size < 2) {
-      return false
-    }
 
     var snapshotTotalSize: Long = snapshotSizes.values.sum
 
     // Keep deleting snapshots and segments as long as we exceed the retention size
-    def shouldClean(snapshotId: OffsetAndEpoch, nextSnapshotIdOpt: Option[OffsetAndEpoch]): Boolean = {
+    def shouldClean(snapshotId: OffsetAndEpoch, nextSnapshotId: OffsetAndEpoch): Boolean = {
       snapshotSizes.get(snapshotId).exists { snapshotSize =>
         if (log.size + snapshotTotalSize > retentionSize) {
           snapshotTotalSize -= snapshotSize
@@ -503,6 +493,12 @@ final class KafkaMetadataLog private (
     snapshots synchronized {
       snapshots.values.flatten.foreach(_.close())
       snapshots.clear()
+    }
+  }
+
+  private[raft] def snapshotCount(): Int = {
+    snapshots synchronized {
+      snapshots.size
     }
   }
 }

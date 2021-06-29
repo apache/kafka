@@ -284,7 +284,7 @@ final class KafkaMetadataLogTest {
     append(log, offset, epoch)
     log.updateHighWatermark(new LogOffsetMetadata(offset))
 
-    assertFalse(log.deleteSnapshot(new OffsetAndEpoch(1L, epoch), Some(new OffsetAndEpoch(2L, epoch))))
+    assertFalse(log.deleteSnapshot(new OffsetAndEpoch(1L, epoch), new OffsetAndEpoch(2L, epoch)))
     assertEquals(0, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(offset, log.endOffset().offset)
@@ -795,9 +795,9 @@ final class KafkaMetadataLogTest {
       }
     }
 
-    assertEquals(6, log.snapshots.size)
+    assertEquals(6, log.snapshotCount())
     assertTrue(log.maybeClean())
-    assertEquals(1, log.snapshots.size, "Expected only one snapshot after cleaning")
+    assertEquals(1, log.snapshotCount(), "Expected only one snapshot after cleaning")
     assertOptional(log.latestSnapshotId(), (snapshotId: OffsetAndEpoch) => {
       assertEquals(600, snapshotId.offset)
     })
@@ -838,7 +838,7 @@ final class KafkaMetadataLogTest {
 
     // Cleaning should occur, but resulting size will not be under retention limit since we have to keep one snapshot
     assertTrue(log.maybeClean())
-    assertEquals(1, log.snapshots.size, "Expected one snapshot after cleaning")
+    assertEquals(1, log.snapshotCount(), "Expected one snapshot after cleaning")
     assertOptional(log.latestSnapshotId(), (snapshotId: OffsetAndEpoch) => {
       assertEquals(2000, snapshotId.offset, "Unexpected offset for latest snapshot")
       assertOptional(log.readSnapshot(snapshotId), (reader: RawSnapshotReader) => {
