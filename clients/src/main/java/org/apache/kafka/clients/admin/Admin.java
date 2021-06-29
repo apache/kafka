@@ -209,7 +209,7 @@ public interface Admin extends AutoCloseable {
      * @return The DeleteTopicsResult.
      */
     default DeleteTopicsResult deleteTopics(Collection<String> topics) {
-        return deleteTopics(new TopicCollection.TopicNameCollection(topics), new DeleteTopicsOptions());
+        return deleteTopics(TopicCollection.ofTopicNames(topics), new DeleteTopicsOptions());
     }
 
     /**
@@ -223,7 +223,7 @@ public interface Admin extends AutoCloseable {
      * @return The DeleteTopicsResult.
      */
     default DeleteTopicsResult deleteTopics(Collection<String> topics, DeleteTopicsOptions options) {
-        return deleteTopics(new TopicCollection.TopicNameCollection(topics), options);
+        return deleteTopics(TopicCollection.ofTopicNames(topics), options);
     }
 
     /**

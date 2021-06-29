@@ -130,7 +130,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     waitForTopics(client, topics, List())
     val topicIds = getTopicIds().values.toSet
 
-    client.deleteTopics(new TopicCollection.TopicIdCollection(topicIds.asJava)).all.get()
+    client.deleteTopics(TopicCollection.ofTopicIds(topicIds.asJava)).all.get()
     waitForTopics(client, List(), topics)
   }
 

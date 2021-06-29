@@ -31,51 +31,45 @@ import java.util.Map;
  */
 @InterfaceStability.Evolving
 public class DeleteTopicsResult {
-    private Map<String, KafkaFuture<Void>> nameFutures;
-    private Map<Uuid, KafkaFuture<Void>> topicIdFutures;
+    private final Map<Uuid, KafkaFuture<Void>> topicIdFutures;
+    private final Map<String, KafkaFuture<Void>> nameFutures;
 
-    protected DeleteTopicsResult() {}
-
-    private void setNameFutures(Map<String, KafkaFuture<Void>> nameFutures) {
+    protected DeleteTopicsResult(Map<Uuid, KafkaFuture<Void>> topicIdFutures, Map<String, KafkaFuture<Void>> nameFutures) {
+        if (topicIdFutures != null && nameFutures != null)
+            throw new IllegalArgumentException("topicIdFutures and nameFutures can not both be specified.");
+        this.topicIdFutures = topicIdFutures;
         this.nameFutures = nameFutures;
     }
 
-    private void setTopicIdFutures(Map<Uuid, KafkaFuture<Void>> topicIdFutures) {
-        this.topicIdFutures = topicIdFutures;
+    protected static DeleteTopicsResult ofTopicIds(Map<Uuid, KafkaFuture<Void>> topicIdFutures) {
+        DeleteTopicsResult result = new DeleteTopicsResult(topicIdFutures, null);
+        return result;
     }
 
     protected static DeleteTopicsResult ofTopicNames(Map<String, KafkaFuture<Void>> nameFutures) {
-        DeleteTopicsResult result = new DeleteTopicsResult();
-        result.setNameFutures(nameFutures);
-        return result;
-    }
-
-    protected static DeleteTopicsResult ofTopicIds(Map<Uuid, KafkaFuture<Void>> topicIdFutures) {
-        DeleteTopicsResult result = new DeleteTopicsResult();
-        result.setTopicIdFutures(topicIdFutures);
+        DeleteTopicsResult result = new DeleteTopicsResult(null, nameFutures);
         return result;
     }
 
     /**
-     * Return a map from topic names to futures which can be used to check the status of
-     * individual deletions if the deleteTopics request used topic names. Otherwise return null.
-     */
-    public Map<String, KafkaFuture<Void>> topicNameValues() {
-        return nameFutures;
-    }
-
-
-    /**
-     * Return a map from topic IDs to futures which can be used to check the status of
+     * @return a map from topic IDs to futures which can be used to check the status of
      * individual deletions if the deleteTopics request used topic IDs. Otherwise return null.
      */
     public Map<Uuid, KafkaFuture<Void>> topicIdValues() {
         return topicIdFutures;
     }
 
+    /**
+     * @return a map from topic names to futures which can be used to check the status of
+     * individual deletions if the deleteTopics request used topic names. Otherwise return null.
+     */
+    public Map<String, KafkaFuture<Void>> topicNameValues() {
+        return nameFutures;
+    }
+
     @Deprecated
     /**
-     * Return a map from topic names to futures which can be used to check the status of
+     * @return a map from topic names to futures which can be used to check the status of
      * individual deletions if the deleteTopics request used topic names. Otherwise return null.
      */
     public Map<String, KafkaFuture<Void>> values() {
@@ -83,7 +77,7 @@ public class DeleteTopicsResult {
     }
 
     /**
-     * Return a future which succeeds only if all the topic deletions succeed.
+     * @return a future which succeeds only if all the topic deletions succeed.
      */
     public KafkaFuture<Void> all() {
         return (topicIdFutures == null) ? KafkaFuture.allOf(nameFutures.values().toArray(new KafkaFuture[0])) :

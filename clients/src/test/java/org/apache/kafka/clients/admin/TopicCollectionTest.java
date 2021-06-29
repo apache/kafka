@@ -34,8 +34,8 @@ public class TopicCollectionTest {
         List<Uuid> topicIds = Arrays.asList(Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid());
         List<String> topicNames = Arrays.asList("foo", "bar");
 
-        TopicCollection idCollection = new TopicCollection.TopicIdCollection(topicIds);
-        TopicCollection nameCollection = new TopicNameCollection(topicNames);
+        TopicCollection idCollection = TopicCollection.ofTopicIds(topicIds);
+        TopicCollection nameCollection = TopicCollection.ofTopicNames(topicNames);
 
         assertEquals(topicIds, ((TopicIdCollection) idCollection).topicIds());
         assertEquals(topicNames, ((TopicNameCollection) nameCollection).topicNames());

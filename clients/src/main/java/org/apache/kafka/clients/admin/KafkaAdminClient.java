@@ -1699,7 +1699,7 @@ public class KafkaAdminClient extends AdminClient {
         else if (topics instanceof TopicNameCollection)
             result = DeleteTopicsResult.ofTopicNames(new HashMap<>(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options)));
         else
-            throw new UnsupportedOperationException("The TopicCollection provided did not match any supported classes for deleteTopics.");
+            throw new IllegalArgumentException("The TopicCollection provided did not match any supported classes for deleteTopics.");
         return result;
     }
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.common;
 
 import java.util.Collection;
+import java.util.Collections;
 
 /**
  * A class used to represent a collection of topics. This collection may define topics by topic name
@@ -27,13 +28,27 @@ public abstract class TopicCollection {
     private TopicCollection() {}
 
     /**
+     * @return a collection of topics defined by topic ID
+     */
+    public static TopicIdCollection ofTopicIds(Collection<Uuid> topics) {
+        return new TopicIdCollection(topics);
+    }
+
+    /**
+     * @return a collection of topics defined by topic name
+     */
+    public static TopicNameCollection ofTopicNames(Collection<String> topics) {
+        return new TopicNameCollection(topics);
+    }
+
+    /**
      * A class used to represent a collection of topics defined by their topic ID.
      * Subclassing this class beyond the classes provided here is not supported.
      */
     public static class TopicIdCollection extends TopicCollection {
         private final Collection<Uuid> topicIds;
 
-        public TopicIdCollection(Collection<Uuid> topicIds) {
+        private TopicIdCollection(Collection<Uuid> topicIds) {
             super();
             this.topicIds = topicIds;
         }
@@ -42,7 +57,7 @@ public abstract class TopicCollection {
          * @return A collection of topic IDs
          */
         public Collection<Uuid> topicIds() {
-            return topicIds;
+            return Collections.unmodifiableCollection(topicIds);
         }
     }
 
@@ -53,7 +68,7 @@ public abstract class TopicCollection {
     public static class TopicNameCollection extends TopicCollection {
         private final Collection<String> topicNames;
 
-        public TopicNameCollection(Collection<String> topicNames) {
+        private TopicNameCollection(Collection<String> topicNames) {
             super();
             this.topicNames = topicNames;
         }
@@ -62,7 +77,7 @@ public abstract class TopicCollection {
          * @return A collection of topic names
          */
         public Collection<String> topicNames() {
-            return topicNames;
+            return Collections.unmodifiableCollection(topicNames);
         }
     }
 }

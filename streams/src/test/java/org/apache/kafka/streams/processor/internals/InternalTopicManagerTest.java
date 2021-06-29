@@ -1732,16 +1732,8 @@ public class InternalTopicManagerTest {
 
     private static class MockDeleteTopicsResult extends DeleteTopicsResult {
 
-        Map<String, KafkaFuture<Void>> futures;
-
         MockDeleteTopicsResult(final Map<String, KafkaFuture<Void>> futures) {
-            super();
-            this.futures = futures;
-        }
-
-        @Override
-        public Map<String, KafkaFuture<Void>> topicNameValues() {
-            return futures;
+            super(null, futures);
         }
     }
 

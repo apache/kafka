@@ -921,21 +921,21 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId),
                     prepareDeleteTopicsResponseWithTopicId(topicId, Errors.NONE));
-            future = env.adminClient().deleteTopics(new TopicCollection.TopicIdCollection(singletonList(topicId)),
+            future = env.adminClient().deleteTopics(TopicCollection.ofTopicIds(singletonList(topicId)),
                     new DeleteTopicsOptions()).all();
             assertNull(future.get());
 
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId),
                     prepareDeleteTopicsResponseWithTopicId(topicId, Errors.TOPIC_DELETION_DISABLED));
-            future = env.adminClient().deleteTopics(new TopicCollection.TopicIdCollection(singletonList(topicId)),
+            future = env.adminClient().deleteTopics(TopicCollection.ofTopicIds(singletonList(topicId)),
                     new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, TopicDeletionDisabledException.class);
 
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId),
                     prepareDeleteTopicsResponseWithTopicId(topicId, Errors.UNKNOWN_TOPIC_ID));
-            future = env.adminClient().deleteTopics(new TopicCollection.TopicIdCollection(singletonList(topicId)),
+            future = env.adminClient().deleteTopics(TopicCollection.ofTopicIds(singletonList(topicId)),
                     new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, UnknownTopicIdException.class);
         }
@@ -967,7 +967,7 @@ public class KafkaAdminClientTest {
                             deletableTopicResultWithId(topicId1, Errors.NONE)));
 
             DeleteTopicsResult resultIds = env.adminClient().deleteTopics(
-                    new TopicCollection.TopicIdCollection(asList(topicId1, topicId2)), new DeleteTopicsOptions());
+                    TopicCollection.ofTopicIds(asList(topicId1, topicId2)), new DeleteTopicsOptions());
 
             resultIds.topicIdValues().get(topicId1).get();
             TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId2), ApiException.class);
@@ -1027,7 +1027,7 @@ public class KafkaAdminClientTest {
                             deletableTopicResultWithId(topicId2, Errors.NONE)));
 
             DeleteTopicsResult resultIds = env.adminClient().deleteTopics(
-                    new TopicCollection.TopicIdCollection(asList(topicId1, topicId2, topicId3)),
+                    TopicCollection.ofTopicIds(asList(topicId1, topicId2, topicId3)),
                     new DeleteTopicsOptions().retryOnQuotaViolation(true));
 
             assertNull(resultIds.topicIdValues().get(topicId1).get());
@@ -1096,7 +1096,7 @@ public class KafkaAdminClientTest {
                             deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED)));
 
             DeleteTopicsResult resultIds = env.adminClient().deleteTopics(
-                    new TopicCollection.TopicIdCollection(asList(topicId1, topicId2, topicId3)),
+                    TopicCollection.ofTopicIds(asList(topicId1, topicId2, topicId3)),
                     new DeleteTopicsOptions().retryOnQuotaViolation(true));
 
             // Wait until the prepared attempts have consumed
@@ -1152,7 +1152,7 @@ public class KafkaAdminClientTest {
                             deletableTopicResultWithId(topicId3, Errors.UNKNOWN_TOPIC_ID)));
 
             DeleteTopicsResult resultIds = env.adminClient().deleteTopics(
-                    new TopicCollection.TopicIdCollection(asList(topicId1, topicId2, topicId3)),
+                    TopicCollection.ofTopicIds(asList(topicId1, topicId2, topicId3)),
                     new DeleteTopicsOptions().retryOnQuotaViolation(false));
 
             assertNull(resultIds.topicIdValues().get(topicId1).get());
