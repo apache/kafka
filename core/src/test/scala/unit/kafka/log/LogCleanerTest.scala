@@ -1510,7 +1510,6 @@ class LogCleanerTest {
     // 5) Simulate recovery after a subset of swap files are renamed to regular files and old segments files are renamed
     //    to .deleted. Clean operation is resumed during recovery.
     log.logSegments.head.timeIndex.file.renameTo(new File(CoreUtils.replaceSuffix(log.logSegments.head.timeIndex.file.getPath, "", Log.SwapFileSuffix)))
-      // .changeFileSuffixes("", Log.SwapFileSuffix)
     log = recoverAndCheck(config, cleanedKeys)
 
     // add some more messages and clean the log again
