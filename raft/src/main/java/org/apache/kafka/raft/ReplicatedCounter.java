@@ -39,7 +39,6 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     private long lastOffsetSnapshotted = -1;
 
     private int handleSnapshotCalls = 0;
-    private boolean handleSnapshotCalled = false;
 
     public ReplicatedCounter(
         int nodeId,
@@ -150,7 +149,6 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                 }
             }
             lastOffsetSnapshotted = reader.lastContainedLogOffset();
-            handleSnapshotCalled = true;
             handleSnapshotCalls += 1;
             log.debug("Finished loading snapshot. Set value: {}", committed);
         } finally {
@@ -170,19 +168,10 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             uncommitted = -1;
             claimedEpoch = OptionalInt.empty();
         }
-        handleSnapshotCalled = false;
         handleSnapshotCalls = 0;
-    }
-
-    public boolean isLeader() {
-        return this.client.leaderAndEpoch().isLeader(nodeId);
     }
 
     public int getHandleSnapshotCalls() {
         return handleSnapshotCalls;
-    }
-
-    public boolean isHandleSnapshotCalled() {
-        return handleSnapshotCalled;
     }
 }

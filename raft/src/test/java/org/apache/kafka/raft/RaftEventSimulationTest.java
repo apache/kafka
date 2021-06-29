@@ -1017,8 +1017,6 @@ public class RaftEventSimulationTest {
 
     private static class LeaderNeverLoadSnapshot implements Invariant {
         final Cluster cluster;
-        int epoch = 0;
-        OptionalInt leaderId = OptionalInt.empty();
 
         private LeaderNeverLoadSnapshot(Cluster cluster) {
             this.cluster = cluster;
@@ -1027,15 +1025,10 @@ public class RaftEventSimulationTest {
         @Override
         public void verify() {
             for (RaftNode raftNode : cluster.running()) {
-                if (raftNode.counter.isLeader()) {
-                    assertFalse(raftNode.counter.isHandleSnapshotCalled());
+                if (raftNode.counter.isWritable()) {
                     assertTrue(raftNode.counter.getHandleSnapshotCalls() == 0);
                 } else {
-                    if (raftNode.counter.isHandleSnapshotCalled()) {
-                        assertTrue(raftNode.counter.getHandleSnapshotCalls() > 0);
-                    } else {
-                        assertTrue(raftNode.counter.getHandleSnapshotCalls() == 0);
-                    }
+                    assertTrue(raftNode.counter.getHandleSnapshotCalls() >= 0);
                 }
 
             }
