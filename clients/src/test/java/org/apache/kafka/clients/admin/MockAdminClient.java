@@ -407,8 +407,9 @@ public class MockAdminClient extends AdminClient {
         return result;
     }
 
-    private Map<String, KafkaFuture<Void>> handleDeleteTopicsUsingNames(Collection<String> topicNames, DeleteTopicsOptions options) {
+    private Map<String, KafkaFuture<Void>> handleDeleteTopicsUsingNames(Collection<String> topicNameCollection, DeleteTopicsOptions options) {
         Map<String, KafkaFuture<Void>> deleteTopicsResult = new HashMap<>();
+        Collection<String> topicNames = new ArrayList<>(topicNameCollection);
 
         if (timeoutNextRequests > 0) {
             for (final String topicName : topicNames) {
@@ -435,8 +436,9 @@ public class MockAdminClient extends AdminClient {
         return deleteTopicsResult;
     }
 
-    private Map<Uuid, KafkaFuture<Void>> handleDeleteTopicsUsingIds(Collection<Uuid> topicIds, DeleteTopicsOptions options) {
+    private Map<Uuid, KafkaFuture<Void>> handleDeleteTopicsUsingIds(Collection<Uuid> topicIdCollection, DeleteTopicsOptions options) {
         Map<Uuid, KafkaFuture<Void>> deleteTopicsResult = new HashMap<>();
+        Collection<Uuid> topicIds = new ArrayList<>(topicIdCollection);
 
         if (timeoutNextRequests > 0) {
             for (final Uuid topicId : topicIds) {

@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicCollection.TopicIdCollection;
 import org.apache.kafka.common.TopicCollection.TopicNameCollection;
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.List;
@@ -37,8 +37,8 @@ public class TopicCollectionTest {
         TopicCollection idCollection = TopicCollection.ofTopicIds(topicIds);
         TopicCollection nameCollection = TopicCollection.ofTopicNames(topicNames);
 
-        assertEquals(topicIds, ((TopicIdCollection) idCollection).topicIds());
-        assertEquals(topicNames, ((TopicNameCollection) nameCollection).topicNames());
+        assertTrue(((TopicIdCollection) idCollection).topicIds().containsAll(topicIds));
+        assertTrue(((TopicNameCollection) nameCollection).topicNames().containsAll(topicNames));
     }
 
 }
