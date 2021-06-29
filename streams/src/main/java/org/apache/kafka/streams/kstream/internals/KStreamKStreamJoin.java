@@ -21,6 +21,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -51,8 +52,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
     private final Optional<String> outerJoinWindowName;
     private final boolean isLeftSide;
 
-    private final KStreamImplJoin.MaxObservedStreamTime maxObservedStreamTime;
-    private final KStreamImplJoin.MinTime minTime;
+    private final TimeTracker sharedTimeTracker;
 
     KStreamKStreamJoin(final boolean isLeftSide,
                        final String otherWindowName,
@@ -60,8 +60,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
                        final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner,
                        final boolean outer,
                        final Optional<String> outerJoinWindowName,
-                       final KStreamImplJoin.MaxObservedStreamTime maxObservedStreamTime,
-                       final KStreamImplJoin.MinTime minTime) {
+                       final TimeTracker sharedTimeTracker) {
         this.isLeftSide = isLeftSide;
         this.otherWindowName = otherWindowName;
         if (isLeftSide) {
@@ -76,8 +75,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
         this.joiner = joiner;
         this.outer = outer;
         this.outerJoinWindowName = outerJoinWindowName;
-        this.maxObservedStreamTime = maxObservedStreamTime;
-        this.minTime = minTime;
+        this.sharedTimeTracker = sharedTimeTracker;
     }
 
     @Override
@@ -130,10 +128,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
 
-            maxObservedStreamTime.advance(inputRecordTimestamp);
+            sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
 
             // Emit all non-joined records which window has closed
-            if (inputRecordTimestamp == maxObservedStreamTime.get()) {
+            if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
                 outerJoinWindowStore.ifPresent(this::emitNonJoinedOuterRecords);
             }
 
@@ -172,10 +170,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
                     //
                     // This condition below allows us to process the out-of-order records without the need
                     // to hold it in the temporary outer store
-                    if (!outerJoinWindowStore.isPresent() || timeTo < maxObservedStreamTime.get()) {
+                    if (!outerJoinWindowStore.isPresent() || timeTo < sharedTimeTracker.streamTime) {
                         context().forward(key, joiner.apply(key, value, null));
                     } else {
-                        minTime.minTime = Math.min(minTime.minTime, inputRecordTimestamp);
+                        sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
                         outerJoinWindowStore.ifPresent(store -> store.put(
                             KeyAndJoinSide.make(isLeftSide, key),
                             LeftOrRightValue.make(isLeftSide, value),
@@ -187,9 +185,12 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
         @SuppressWarnings("unchecked")
         private void emitNonJoinedOuterRecords(final WindowStore<KeyAndJoinSide<K>, LeftOrRightValue> store) {
-            if (minTime.minTime >= maxObservedStreamTime.get() - joinAfterMs - joinBeforeMs - joinGraceMs) {
+            if (sharedTimeTracker.minTime >= sharedTimeTracker.streamTime - joinAfterMs - joinBeforeMs - joinGraceMs) {
                 return;
             }
+
+            // reset to MAX_VALUE in case the store is empty
+            sharedTimeTracker.minTime = Long.MAX_VALUE;
 
             try (final KeyValueIterator<Windowed<KeyAndJoinSide<K>>, LeftOrRightValue> it = store.all()) {
                 while (it.hasNext()) {
@@ -197,10 +198,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
                     final Windowed<KeyAndJoinSide<K>> windowedKey = record.key;
                     final LeftOrRightValue value = record.value;
-                    minTime.minTime = windowedKey.window().start();
+                    sharedTimeTracker.minTime = windowedKey.window().start();
 
                     // Skip next records if window has not closed
-                    if (windowedKey.window().start() + joinAfterMs + joinGraceMs >= maxObservedStreamTime.get()) {
+                    if (windowedKey.window().start() + joinAfterMs + joinGraceMs >= sharedTimeTracker.streamTime) {
                         break;
                     }
 

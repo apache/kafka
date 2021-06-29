@@ -475,7 +475,7 @@ public class KStreamKStreamOuterJoinTest {
             // push one item to the other window that has a join; this should produce non-joined records with a closed window first, then
             // the joined records
             // by the time they were produced before
-            // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 101), 1:A2 (ts: (200: }
+            // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 101), 1:A2 (ts: 200) }
             // w2 = { }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
             // --> w2 = { 0:a0 (ts: 201) }

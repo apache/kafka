@@ -57,20 +57,17 @@ class KStreamImplJoin {
     private final boolean leftOuter;
     private final boolean rightOuter;
 
-    static class MaxObservedStreamTime {
-        private long maxObservedStreamTime = ConsumerRecord.NO_TIMESTAMP;
-
-        public void advance(final long streamTime) {
-            maxObservedStreamTime = Math.max(streamTime, maxObservedStreamTime);
-        }
-
-        public long get() {
-            return maxObservedStreamTime;
-        }
-    }
-
-    static class MinTime {
+    static class TimeTracker {
+        long streamTime = ConsumerRecord.NO_TIMESTAMP;
         long minTime = Long.MAX_VALUE;
+
+        public void advanceStreamTime(final long recordTimestamp) {
+            streamTime = Math.max(recordTimestamp, streamTime);
+        }
+
+        public void updatedMinTime(final long recordTimestamp) {
+            minTime = Math.min(recordTimestamp, minTime);
+        }
     }
 
     KStreamImplJoin(final InternalStreamsBuilder builder,
@@ -152,8 +149,7 @@ class KStreamImplJoin {
         }
 
         // Time shared between joins to keep track of the maximum stream time
-        final MaxObservedStreamTime maxObservedStreamTime = new MaxObservedStreamTime();
-        final MinTime minTime = new MinTime();
+        final TimeTracker sharedTimeTracker = new TimeTracker();
 
         final JoinWindowsInternal internalWindows = new JoinWindowsInternal(windows);
         final KStreamKStreamJoin<K1, R, V1, V2> joinThis = new KStreamKStreamJoin<>(
@@ -163,8 +159,7 @@ class KStreamImplJoin {
             joiner,
             leftOuter,
             outerJoinWindowStore.map(StoreBuilder::name),
-            maxObservedStreamTime,
-            minTime
+            sharedTimeTracker
         );
 
         final KStreamKStreamJoin<K1, R, V2, V1> joinOther = new KStreamKStreamJoin<>(
@@ -174,8 +169,7 @@ class KStreamImplJoin {
             AbstractStream.reverseJoinerWithKey(joiner),
             rightOuter,
             outerJoinWindowStore.map(StoreBuilder::name),
-            maxObservedStreamTime,
-            minTime
+            sharedTimeTracker
         );
 
         final PassThrough<K1, R> joinMerge = new PassThrough<>();
