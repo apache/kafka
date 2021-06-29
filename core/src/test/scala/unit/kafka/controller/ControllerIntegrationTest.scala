@@ -666,7 +666,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilTrue(() => {
       otherBroker.replicaManager.partitionCount.value() == 1 &&
       otherBroker.replicaManager.metadataCache.getAllTopics().size == 1 &&
-      otherBroker.replicaManager.metadataCache.getAliveBrokers.size == 2
+      otherBroker.replicaManager.metadataCache.getAliveBrokers().size == 2
     }, "Broker fail to initialize after restart")
   }
 

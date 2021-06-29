@@ -485,7 +485,7 @@ class MetadataCacheTest {
 
     val initialBrokerIds = (0 to 2)
     updateCache(initialBrokerIds)
-    val aliveBrokersFromCache = cache.getAliveBrokers
+    val aliveBrokersFromCache = cache.getAliveBrokers()
     // This should not change `aliveBrokersFromCache`
     updateCache((0 to 3))
     assertEquals(initialBrokerIds.toSet, aliveBrokersFromCache.map(_.id).toSet)

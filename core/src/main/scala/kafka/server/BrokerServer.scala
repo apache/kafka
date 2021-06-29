@@ -33,7 +33,7 @@ import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{BrokerMetadataListener, CachedConfigRepository, ClientQuotaCache, ClientQuotaMetadataManager, RaftMetadataCache}
 import kafka.utils.{CoreUtils, KafkaScheduler}
-import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.metrics.Metrics
@@ -47,7 +47,7 @@ import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -359,10 +359,10 @@ class BrokerServer(
       // Start other services that we've delayed starting, in the appropriate order.
       replicaManager.startup()
       replicaManager.startHighWatermarkCheckPointThread()
-      groupCoordinator.startup(() => metadataCache.numPartitions(Topic.GROUP_METADATA_TOPIC_NAME).
-        getOrElse(config.offsetsTopicPartitions))
-      transactionCoordinator.startup(() => metadataCache.numPartitions(Topic.TRANSACTION_STATE_TOPIC_NAME).
-        getOrElse(config.transactionTopicPartitions))
+      groupCoordinator.startup(() => metadataCache.
+        numPartitions(GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions))
+      transactionCoordinator.startup(() => metadataCache.
+        numPartitions(TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
       // Apply deferred partition metadata changes after starting replica manager and coordinators
       // so that those services are ready and able to process the changes.
       replicaManager.endMetadataChangeDeferral(
