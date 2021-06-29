@@ -90,9 +90,14 @@ public final class SessionWindows {
     }
 
     /**
-     * Create a new window specification with the specified inactivity gap.
+     * Creates a new window specification with the specified inactivity gap.
      * Using the method implicitly sets the grace period to zero which
      * means that out of order records arriving after the window end will be dropped
+     *
+     * <p>
+     * Note that new events may change the boundaries of session windows, so aggressive
+     * close times can lead to surprising results in which an out-of-order event is rejected and then
+     * a subsequent event moves the window boundary forward.
      *
      * @param inactivityGap the gap of inactivity between sessions
      * @return a window definition with the window size and no grace period. Note that this means out of order records arriving after the window end will be dropped
@@ -103,8 +108,10 @@ public final class SessionWindows {
     }
 
     /**
-     * Reject out-of-order events that arrive more than {@code afterWindowEnd}
-     * after the end of its window.
+     * Creates a new window specification with the specified inactivity gap.
+     * Using the method explicitly sets the grace period to the duration specified by {@code afterWindowEnd} which
+     * means that out of order records arriving after the window end will be dropped
+     *
      * <p>
      * Note that new events may change the boundaries of session windows, so aggressive
      * close times can lead to surprising results in which an out-of-order event is rejected and then

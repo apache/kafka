@@ -102,7 +102,14 @@ public final class TimeWindows extends Windows<TimeWindow> {
     }
 
     /**
-     * Reject out-of-order events that arrive more than {@code millisAfterWindowEnd} after the end of its window.
+     * Return a window definition with the given window size, and with the advance interval being equal to the window
+     * size.
+     * The time interval represented by the N-th window is: {@code [N * size, N * size + size)}.
+     * <p>
+     * This provides the semantics of tumbling windows, which are fixed-sized, gap-less, non-overlapping windows.
+     * Tumbling windows are a special case of hopping windows with {@code advance == size}.
+     * Using the method explicitly sets the grace period to the duration specified by {@code afterWindowEnd} which means
+     * that out of order records arriving after the window end will be dropped.
      *
      * <p>
      * Delay is defined as (stream_time - record_timestamp).

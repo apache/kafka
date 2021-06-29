@@ -79,18 +79,7 @@ public class JoinWindows extends Windows<Window> {
     protected final boolean enableSpuriousResultFix;
 
     protected JoinWindows(final JoinWindows joinWindows) {
-        beforeMs = joinWindows.beforeMs;
-        afterMs = joinWindows.afterMs;
-        graceMs = joinWindows.graceMs;
-        enableSpuriousResultFix = joinWindows.enableSpuriousResultFix;
-
-        if (beforeMs + afterMs < 0) {
-            throw new IllegalArgumentException("Window interval (ie, beforeMs+afterMs) must not be negative.");
-        }
-
-        if (graceMs < 0) {
-            throw new IllegalArgumentException("Grace period must not be negative.");
-        }
+        this(joinWindows.beforeMs, joinWindows.afterMs, joinWindows.graceMs, joinWindows.enableSpuriousResultFix);
     }
 
     private JoinWindows(final long beforeMs,
@@ -112,10 +101,11 @@ public class JoinWindows extends Windows<Window> {
     }
 
     /**
-     * Reject out-of-order events that are delayed more than {@code afterWindowEnd}
-     * after the end of its window.
-     * <p>
-     * Delay is defined as (stream_time - record_timestamp).
+     * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference},
+     * i.e., the timestamp of a record from the secondary stream is max {@code timeDifference} earlier or later than
+     * the timestamp of the record from the primary stream. Using the method explicitly sets the grace period to
+     * the duration specified by {@code afterWindowEnd} which means that out of order records arriving
+     * after the window end will be dropped. The delay is defined as (stream_time - record_timestamp).
      *
      * @param timeDifference join window interval
      * @param afterWindowEnd The grace period to admit out-of-order events to a window.

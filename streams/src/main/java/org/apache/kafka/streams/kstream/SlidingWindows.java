@@ -107,7 +107,7 @@ public final class SlidingWindows {
 
     /**
      * Return a window definition with the window size based on the given maximum time difference (inclusive) between
-     * records in the same window and given window grace period. Reject out-of-order events that arrive after {@code grace}.
+     * records in the same window and given window grace period. Reject out-of-order events that arrive after {@code afterWindowEnd}.
      * A window is closed when {@code stream-time > window-end + grace-period}.
      *
      * @param timeDifference the max time difference (inclusive) between two records in a window
