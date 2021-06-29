@@ -51,8 +51,10 @@ public class LeaderState<T> implements EpochState {
     private final Map<Integer, ReplicaState> observerStates = new HashMap<>();
     private final Set<Integer> grantingVoters = new HashSet<>();
     private final Logger log;
-
     private final BatchAccumulator<T> accumulator;
+
+    // This is volatile because resignation can be requested from an external thread.
+    private volatile boolean resignRequested = false;
 
     protected LeaderState(
         int localId,
@@ -98,6 +100,14 @@ public class LeaderState<T> implements EpochState {
         
         accumulator.appendLeaderChangeMessage(leaderChangeMessage, currentTimeMs);
         accumulator.forceDrain();
+    }
+
+    public boolean isResignRequested() {
+        return resignRequested;
+    }
+
+    public void requestResign() {
+        this.resignRequested = true;
     }
 
     @Override

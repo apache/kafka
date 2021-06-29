@@ -473,7 +473,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void transitionToResigned(List<Integer> preferredSuccessors) {
-        fetchPurgatory.completeAllExceptionally(Errors.BROKER_NOT_AVAILABLE.exception("The broker is shutting down"));
+        fetchPurgatory.completeAllExceptionally(
+            Errors.NOT_LEADER_OR_FOLLOWER.exception("Not handling request since this node is resigning"));
         quorum.transitionToResigned(preferredSuccessors);
         maybeFireLeaderChange();
         resetConnections();
@@ -1914,8 +1915,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> state = quorum.leaderStateOrThrow();
         maybeFireLeaderChange(state);
 
-        GracefulShutdown shutdown = this.shutdown.get();
-        if (shutdown != null) {
+        if (shutdown.get() != null || state.isResignRequested()) {
             transitionToResigned(state.nonLeaderVotersByDescendingFetchOffset());
             return 0L;
         }
@@ -2213,13 +2213,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private Long append(int epoch, List<T> records, boolean isAtomic) {
-        BatchAccumulator<T> accumulator;
-        try {
-            accumulator = quorum.<T>leaderStateOrThrow().accumulator();
-        } catch (IllegalStateException ise) {
+        Optional<LeaderState<T>> leaderStateOpt = quorum.maybeLeaderState();
+        if (!leaderStateOpt.isPresent()) {
             return Long.MAX_VALUE;
         }
 
+        BatchAccumulator<T> accumulator = leaderStateOpt.get().accumulator();
         boolean isFirstAppend = accumulator.isEmpty();
         final Long offset;
         if (isAtomic) {
@@ -2250,7 +2249,51 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public void resign(int epoch) {
-        throw new UnsupportedOperationException();
+        if (epoch < 0) {
+            throw new IllegalArgumentException("Attempt to resign from an invalid negative epoch " + epoch);
+        }
+
+        if (!quorum.isVoter()) {
+            throw new IllegalStateException("Attempt to resign by a non-voter");
+        }
+
+        LeaderAndEpoch leaderAndEpoch = leaderAndEpoch();
+        int currentEpoch = leaderAndEpoch.epoch();
+
+        if (epoch > currentEpoch) {
+            throw new IllegalArgumentException("Attempt to resign from epoch " + epoch +
+                " which is larger than the current epoch " + currentEpoch);
+        } else if (epoch < currentEpoch) {
+            // If the passed epoch is smaller than the current epoch, then it might mean
+            // that the listener has not been notified about a leader change that already
+            // took place. In this case, we consider the call as already fulfilled and
+            // take no further action.
+            logger.debug("Ignoring call to resign from epoch {} since it is smaller than the " +
+                "current epoch {}", epoch, currentEpoch);
+            return;
+        } else if (!leaderAndEpoch.isLeader(quorum.localIdOrThrow())) {
+            throw new IllegalArgumentException("Cannot resign from epoch " + epoch +
+                " since we are not the leader");
+        } else {
+            // Note that if we transition to another state before we have a chance to
+            // request resignation, then we consider the call fulfilled.
+            Optional<LeaderState<Object>> leaderStateOpt = quorum.maybeLeaderState();
+            if (!leaderStateOpt.isPresent()) {
+                logger.debug("Ignoring call to resign from epoch {} since this node is " +
+                    "no longer the leader", epoch);
+                return;
+            }
+
+            LeaderState<Object> leaderState = leaderStateOpt.get();
+            if (leaderState.epoch() != epoch) {
+                logger.debug("Ignoring call to resign from epoch {} since it is smaller than the " +
+                    "current epoch {}", epoch, leaderState.epoch());
+            } else {
+                logger.info("Received user request to resign from the current epoch {}", currentEpoch);
+                leaderState.requestResign();
+                wakeup();
+            }
+        }
     }
 
     @Override
