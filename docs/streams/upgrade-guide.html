@@ -125,7 +125,7 @@
         e.g. suppression operators with the default won't emit results up for 24 hours, while lso in practice out-of-order data usually has a much smaller time-skewness.
         Instead of abstracting this config from users with a long default value, we introduced new constructs such as <code>TimeWindows#ofSizeWithNoGrace</code> to let callers always set it upon constructing the windows;
         the other setters such as <code>TimeWindows#grace</code> are deprecated and will be removed in the future.
-        Also when the new construct API are used for left/outer stream-stream joins, Kafka Streams would fix emitting spurious join results.
+        Also when the new construct API are used for left/outer stream-stream joins, Kafka Streams would fix emitting spurious join results which may have an impact on the throughput.
         More details can be found in the following:
     </p>
     <ul>
