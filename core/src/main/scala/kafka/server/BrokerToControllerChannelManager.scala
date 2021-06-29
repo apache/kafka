@@ -73,7 +73,7 @@ class MetadataCacheControllerNodeProvider(
 ) extends ControllerNodeProvider {
   override def get(): Option[Node] = {
     metadataCache.getControllerId
-      .flatMap(metadataCache.getAliveBrokerNode(_, listenerName.value))
+      .flatMap(metadataCache.getAliveBrokerNode(_, listenerName))
   }
 }
 

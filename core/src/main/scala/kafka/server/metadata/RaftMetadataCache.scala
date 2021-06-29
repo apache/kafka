@@ -205,12 +205,12 @@ class RaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging {
     _currentImage.brokers.aliveBrokers().map(b => BrokerMetadata(b.id, Option(b.rack)))
   }
 
-  override def getAliveBrokerNode(brokerId: Int, listenerName: String): Option[Node] = {
-    _currentImage.brokers.aliveBroker(brokerId).flatMap(_.endpoints.get(listenerName))
+  override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
+    _currentImage.brokers.aliveBroker(brokerId).flatMap(_.endpoints.get(listenerName.value()))
   }
 
-  override def getAliveBrokerNodes(listenerName: String): Seq[Node] = {
-    _currentImage.brokers.aliveBrokers().flatMap(_.endpoints.get(listenerName))
+  override def getAliveBrokerNodes(listenerName: ListenerName): Seq[Node] = {
+    _currentImage.brokers.aliveBrokers().flatMap(_.endpoints.get(listenerName.value()))
   }
 
   override def getPartitionInfo(topic: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
@@ -226,8 +226,8 @@ class RaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging {
     }
   }
 
-  override def numPartitions(topic: String): Int = {
-    _currentImage.partitions.numTopicPartitions(topic).getOrElse(0)
+  override def numPartitions(topic: String): Option[Int] = {
+    _currentImage.partitions.numTopicPartitions(topic)
   }
 
   // if the leader is not known, return None;

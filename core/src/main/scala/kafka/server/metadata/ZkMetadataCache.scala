@@ -210,12 +210,12 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
     metadataSnapshot.aliveBrokers.values.map(b => new BrokerMetadata(b.id, b.rack))
   }
 
-  override def getAliveBrokerNode(brokerId: Int, listenerName: String): Option[Node] = {
-    metadataSnapshot.aliveBrokers.get(brokerId).flatMap(_.getNode(new ListenerName(listenerName)))
+  override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
+    metadataSnapshot.aliveBrokers.get(brokerId).flatMap(_.getNode(listenerName))
   }
 
-  override def getAliveBrokerNodes(listenerName: String): Iterable[Node] = {
-    metadataSnapshot.aliveBrokers.values.flatMap(_.getNode(new ListenerName(listenerName)))
+  override def getAliveBrokerNodes(listenerName: ListenerName): Iterable[Node] = {
+    metadataSnapshot.aliveBrokers.values.flatMap(_.getNode(listenerName))
   }
 
   private def addOrUpdatePartitionInfo(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
@@ -230,8 +230,8 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
     metadataSnapshot.partitionStates.get(topic).flatMap(_.get(partitionId))
   }
 
-  def numPartitions(topic: String): Int = {
-    metadataSnapshot.partitionStates.getOrElse(topic, Map.empty).size
+  def numPartitions(topic: String): Option[Int] = {
+    metadataSnapshot.partitionStates.get(topic).map(_.size)
   }
 
   // if the leader is not known, return None;

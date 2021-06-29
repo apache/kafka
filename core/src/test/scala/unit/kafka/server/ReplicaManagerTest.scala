@@ -160,13 +160,13 @@ class ReplicaManagerTest {
         aliveBrokers.map(_.id()).contains(invocation.getArguments()(0).asInstanceOf[Int])
       }
     })
-    Mockito.when(cache.getAliveBrokerNode(ArgumentMatchers.anyInt(), ArgumentMatchers.any[String])).
+    Mockito.when(cache.getAliveBrokerNode(ArgumentMatchers.anyInt(), ArgumentMatchers.any[ListenerName])).
       thenAnswer(new Answer[Option[Node]]() {
         override def answer(invocation: InvocationOnMock): Option[Node] = {
           aliveBrokers.find(node => node.id == invocation.getArguments()(0).asInstanceOf[Integer])
         }
       })
-    Mockito.when(cache.getAliveBrokerNodes(ArgumentMatchers.any[String])).thenReturn(aliveBrokers)
+    Mockito.when(cache.getAliveBrokerNodes(ArgumentMatchers.any[ListenerName])).thenReturn(aliveBrokers)
   }
 
   @Test

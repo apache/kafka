@@ -952,7 +952,7 @@ object TestUtils extends Logging {
                                    topic: String, expectedNumPartitions: Int): Map[TopicPartition, UpdateMetadataPartitionState] = {
     waitUntilTrue(
       () => servers.forall { server =>
-        server.metadataCache.numPartitions(topic) == expectedNumPartitions
+        server.metadataCache.numPartitions(topic) == Some(expectedNumPartitions)
       },
       s"Topic [$topic] metadata not propagated after 60000 ms", waitTimeMs = 60000L)
 

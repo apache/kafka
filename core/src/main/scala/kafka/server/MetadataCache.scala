@@ -52,16 +52,16 @@ trait MetadataCache {
 
   def getAliveBrokers(): Iterable[BrokerMetadata]
 
-  def getAliveBrokerNode(brokerId: Int, listenerName: String): Option[Node]
+  def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node]
 
-  def getAliveBrokerNodes(listenerName: String): Iterable[Node]
+  def getAliveBrokerNodes(listenerName: ListenerName): Iterable[Node]
 
   def getPartitionInfo(topic: String, partitionId: Int): Option[UpdateMetadataRequestData.UpdateMetadataPartitionState]
 
   /**
-   * Return the number of partitions in the given topic, or 0 if the given topic does not exist.
+   * Return the number of partitions in the given topic, or None if the given topic does not exist.
    */
-  def numPartitions(topic: String): Int
+  def numPartitions(topic: String): Option[Int]
 
   /**
    * Get a partition leader's endpoint

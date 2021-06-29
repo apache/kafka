@@ -77,7 +77,7 @@ class AutoTopicCreationManagerTest {
 
     Mockito.reset(metadataCache, controller, brokerToController, groupCoordinator, transactionCoordinator)
 
-    Mockito.when(metadataCache.getAliveBrokerNodes(any(classOf[String]))).thenReturn(aliveBrokers)
+    Mockito.when(metadataCache.getAliveBrokerNodes(any(classOf[ListenerName]))).thenReturn(aliveBrokers)
   }
 
   @Test

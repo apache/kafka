@@ -1234,7 +1234,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
-    val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName.value())
+    val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
 
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
@@ -1376,7 +1376,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               .find(_.partitionIndex == partition)
               .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
               .flatMap(metadata => metadataCache.
-                getAliveBrokerNode(metadata.leaderId, request.context.listenerName.value()))
+                getAliveBrokerNode(metadata.leaderId, request.context.listenerName))
 
             coordinatorEndpoint match {
               case Some(endpoint) =>
@@ -3137,7 +3137,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         clusterAuthorizedOperations = 0
     }
 
-    val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName.value())
+    val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
     val controllerId = metadataSupport.controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {

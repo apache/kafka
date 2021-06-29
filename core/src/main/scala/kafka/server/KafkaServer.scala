@@ -549,7 +549,7 @@ class KafkaServer(
           // If the controller id or the broker registration are missing, we sleep and retry (if there are remaining retries)
           metadataCache.getControllerId match {
             case Some(controllerId) =>
-              metadataCache.getAliveBrokerNode(controllerId, config.interBrokerListenerName.value()) match {
+              metadataCache.getAliveBrokerNode(controllerId, config.interBrokerListenerName) match {
                 case Some(broker) =>
                   // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
                   // attempt, connect to the most recent controller

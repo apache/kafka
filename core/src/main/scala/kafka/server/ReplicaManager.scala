@@ -1721,7 +1721,7 @@ class ReplicaManager(val config: KafkaConfig,
         // we do not need to check if the leader exists again since this has been done at the beginning of this process
         val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map { partition =>
           val leaderNode = metadataCache.getAliveBrokerNode(
-            partition.leaderReplicaIdOpt.getOrElse(-1), config.interBrokerListenerName.value()).
+            partition.leaderReplicaIdOpt.getOrElse(-1), config.interBrokerListenerName).
               getOrElse(Node.noNode())
           val leader = new BrokerEndPoint(leaderNode.id(), leaderNode.host(), leaderNode.port())
           val log = partition.localLogOrException

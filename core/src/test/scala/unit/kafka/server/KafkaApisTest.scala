@@ -3122,7 +3122,7 @@ class KafkaApisTest {
     assertEquals(metadataCache.getControllerId.get, describeClusterResponse.data.controllerId)
     assertEquals(clusterId, describeClusterResponse.data.clusterId)
     assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
-    assertEquals(metadataCache.getAliveBrokerNodes(plaintextListener.value()).toSet,
+    assertEquals(metadataCache.getAliveBrokerNodes(plaintextListener).toSet,
       describeClusterResponse.nodes.asScala.values.toSet)
   }
 
