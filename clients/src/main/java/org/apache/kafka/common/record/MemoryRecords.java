@@ -713,13 +713,13 @@ public class MemoryRecords extends AbstractRecords {
         int leaderEpoch,
         SnapshotFooterRecord snapshotFooterRecord
     ) {
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
+        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
             buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
             TimestampType.CREATE_TIME, initialOffset, timestamp,
             RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-            false, true, leaderEpoch, buffer.capacity()
-        );
-        builder.appendSnapshotFooterMessage(timestamp, snapshotFooterRecord);
-        builder.close();
+            false, true, leaderEpoch, buffer.capacity())
+        ) {
+            builder.appendSnapshotFooterMessage(timestamp, snapshotFooterRecord);
+        }
     }
 }
