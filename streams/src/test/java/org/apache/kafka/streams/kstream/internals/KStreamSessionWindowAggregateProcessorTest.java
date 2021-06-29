@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender.Event;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -54,6 +55,7 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -390,7 +392,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
             processor.process(null, "1");
 
             assertThat(
-                appender.getMessages(),
+                appender.getEvents().stream()
+                    .filter(e -> e.getLevel().equals("WARN"))
+                    .map(Event::getMessage)
+                    .collect(Collectors.toList()),
                 hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-3] offset=[-2]")
             );
         }
