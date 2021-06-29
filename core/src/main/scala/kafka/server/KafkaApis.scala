@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.admin.AdminUtils
-import kafka.api.{ApiVersion, ElectLeadersRequestOps, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0, KAFKA_2_8_IV1, KAFKA_3_0_IV2}
+import kafka.api.{ApiVersion, ElectLeadersRequestOps, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.common.OffsetAndMetadata
 import kafka.controller.ReplicaAssignment
 import kafka.coordinator.group._
@@ -1206,17 +1206,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val topicIds = metadataRequest.topicIds.asScala.toSet.filterNot(_ == Uuid.ZERO_UUID)
     val useTopicId = topicIds.nonEmpty
 
-    val (supportedVersionTopicIds, unsupportedVersionTopicIds) = if (config.interBrokerProtocolVersion >= KAFKA_3_0_IV2)
-      (topicIds, Set.empty[Uuid])
-    else
-      (Set.empty[Uuid], topicIds)
-
-    val unsupportedVersionTopicMetadata = unsupportedVersionTopicIds.map(topicId =>
-        metadataResponseTopic(Errors.UNSUPPORTED_VERSION, null, topicId, false, util.Collections.emptyList())).toSeq
-
     // Only get topicIds and topicNames when supporting topicId
-    val unknownTopicIds = supportedVersionTopicIds.filter(metadataCache.getTopicName(_).isEmpty)
-    val knownTopicNames = supportedVersionTopicIds.flatMap(metadataCache.getTopicName)
+    val unknownTopicIds = topicIds.filter(metadataCache.getTopicName(_).isEmpty)
+    val knownTopicNames = topicIds.flatMap(metadataCache.getTopicName)
 
     val unknownTopicIdsTopicMetadata = unknownTopicIds.map(topicId =>
         metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, false, util.Collections.emptyList())).toSeq
@@ -1298,7 +1290,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val completeTopicMetadata = unsupportedVersionTopicMetadata ++ unknownTopicIdsTopicMetadata ++
+    val completeTopicMetadata =  unknownTopicIdsTopicMetadata ++
       topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
     val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)

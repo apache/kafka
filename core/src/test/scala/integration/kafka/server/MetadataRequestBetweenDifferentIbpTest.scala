@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.api.{ApiVersion, KAFKA_2_8_IV0, KAFKA_3_0_IV1}
+import kafka.api.{ApiVersion, KAFKA_2_8_IV0, KAFKA_3_0_IV2}
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import kafka.zk.ZkVersion
@@ -36,28 +36,9 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
   override def generateConfigs: Seq[KafkaConfig] = {
     Seq(
       createConfig(0, KAFKA_2_8_IV0),
-      createConfig(1, KAFKA_3_0_IV1),
-      createConfig(2, KAFKA_3_0_IV1)
+      createConfig(1, KAFKA_3_0_IV2),
+      createConfig(2, KAFKA_3_0_IV2)
     )
-  }
-
-  @Test
-  def testTopicIdUnsupported(): Unit = {
-    val topic = "topic"
-
-    // Ensure controller version = KAFKA_3_0_IV1, and then create a topic
-    ensureControllerIn(Seq(1, 2))
-    createTopic(topic,  Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1)))
-
-    // We can get topicId from the controller
-    val resp1 = sendMetadataRequest(new MetadataRequest(requestData(topic, Uuid.ZERO_UUID), 10.toShort), controllerSocketServer)
-    val topicId = resp1.topicMetadata.iterator().next().topicId()
-    assertNotEquals(Uuid.ZERO_UUID, topicId)
-    assertNotNull(topicId)
-
-    // Send request to a broker whose version=KAFKA_3_0_IV0
-    val resp2 = sendMetadataRequest(new MetadataRequest(requestData(topic, topicId), 12.toShort), brokerSocketServer(0))
-    assertEquals(Errors.UNSUPPORTED_VERSION, resp2.topicMetadata.iterator().next().error())
   }
 
   @Test
@@ -72,11 +53,11 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
     val topicId = resp1.topicMetadata.iterator().next().topicId()
 
     // We could still get topic metadata by topicId
-   /* val topicMetadata = sendMetadataRequest(new MetadataRequest(requestData(null, topicId), 12.toShort), controllerSocketServer)
+   val topicMetadata = sendMetadataRequest(new MetadataRequest(requestData(null, topicId), 12.toShort), controllerSocketServer)
       .topicMetadata.iterator().next()
     assertEquals(topicId, topicMetadata.topicId())
     assertEquals(topic, topicMetadata.topic())
-*/
+
     // Make the broker whose version=KAFKA_3_0_IV0 controller
     ensureControllerIn(Seq(0))
 
