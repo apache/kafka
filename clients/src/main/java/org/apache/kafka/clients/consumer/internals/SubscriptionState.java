@@ -292,11 +292,11 @@ public class SubscriptionState {
             assignedPartitionStates.put(tp, state);
         }
 
-        final String logPrefix = Thread.currentThread().getName();
-        final String shortPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 13) : logPrefix;
-        System.err.print(shortPrefix + "old:" + this.assignment);
-        System.err.print("new:" + assignedPartitionStates);
-        System.err.flush();
+//        final String logPrefix = Thread.currentThread().getName();
+//        final String shortPrefix = logPrefix.length() > 25 ? logPrefix.substring(logPrefix.length() - 22, logPrefix.length() - 13) : logPrefix;
+//        System.err.print(shortPrefix + "old:" + this.assignment);
+//        System.err.print("new:" + assignedPartitionStates);
+//        System.err.flush();
 
 
         assignmentId++;

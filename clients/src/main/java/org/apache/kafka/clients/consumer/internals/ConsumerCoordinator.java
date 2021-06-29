@@ -370,7 +370,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
 
-        System.err.println("ass:" + memberId + "," + assignment.partitions());
+        System.err.println("!!! ass:" + memberId + "," + assignment.partitions());
 
         Set<TopicPartition> assignedPartitions = new HashSet<>(assignment.partitions());
 

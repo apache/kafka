@@ -465,7 +465,7 @@ public abstract class AbstractCoordinator implements Closeable {
             } else {
                 final RuntimeException exception = future.exception();
                 //Luke
-//                System.err.println("rebalance failed:" + exception);
+                System.err.println("rebalance failed:" + exception);
 
                 resetJoinGroupFuture();
 
@@ -757,7 +757,7 @@ public abstract class AbstractCoordinator implements Closeable {
                             } else {
                                 log.info("Successfully synced group in generation {}", generation);
                                 //Luke
-//                                System.err.println("Successfully synced group in generation:" + generation);
+                                System.err.println("Successfully synced group in generation:" + generation);
                                 state = MemberState.STABLE;
                                 rejoinNeeded = false;
                                 // record rebalance latency

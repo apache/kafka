@@ -1365,8 +1365,8 @@ class GroupCoordinator(val brokerId: Int,
     info(s"Preparing to rebalance group ${group.groupId} in state ${group.currentState} with old generation " +
       s"${group.generationId} (${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) (reason: $reason)")
     //Luke
-//    System.err.println(s"$brokerId: Preparing to rebalance group ${group.groupId} in state ${group.currentState} with old generation " +
-//      s"${group.generationId} (${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) (reason: $reason)")
+    System.err.println(s"$brokerId: Preparing to rebalance group ${group.groupId} in state ${group.currentState} with old generation " +
+      s"${group.generationId} (${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) (reason: $reason)")
 
 
     val groupKey = GroupJoinKey(group.groupId)
