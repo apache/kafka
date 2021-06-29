@@ -4249,7 +4249,8 @@ public class KafkaAdminClientTest {
         final TopicPartition tp0 = new TopicPartition("foo", 0);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster, AdminClientConfig.RETRIES_CONFIG, "2")) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
+                    ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 6));
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
             // listoffsets response from broker 0
@@ -4282,7 +4283,8 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster,
             AdminClientConfig.RETRIES_CONFIG, "2")) {
 
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
+                    ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 6));
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
             // listoffsets response from broker 0
@@ -4332,7 +4334,8 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster,
             AdminClientConfig.RETRIES_CONFIG, "2")) {
 
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
+                    ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 6));
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
             // listoffsets response from broker 0
@@ -4364,12 +4367,8 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster,
                 AdminClientConfig.RETRIES_CONFIG, "2")) {
 
-            ApiVersion oldBrokerVersion = new ApiVersion();
-            oldBrokerVersion.setApiKey(ApiKeys.LIST_OFFSETS.id);
-            oldBrokerVersion.setMinVersion((short) 0);
-            oldBrokerVersion.setMaxVersion((short) 6);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
-                    Arrays.asList(oldBrokerVersion)));
+                    ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 6));
 
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
@@ -4386,8 +4385,10 @@ public class KafkaAdminClientTest {
             ListOffsetsResult result = env.adminClient().listOffsets(
                     Collections.singletonMap(tp0, OffsetSpec.latest()));
 
-            // trigger the request
-            result.partitionResult(tp0).get();
+            ListOffsetsResultInfo tp0Offset = result.partitionResult(tp0).get();
+            assertEquals(123L, tp0Offset.offset());
+            assertEquals(321, tp0Offset.leaderEpoch().get().intValue());
+            assertEquals(-1L, tp0Offset.timestamp());
         }
     }
 

@@ -237,10 +237,16 @@ public class MockClient implements KafkaClient {
                 continue;
 
             AbstractRequest.Builder<?> builder = request.requestBuilder();
-            short version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
-                    builder.latestAllowedVersion());
 
             UnsupportedVersionException unsupportedVersionException = null;
+            short version = 0;
+            try {
+                version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
+                        builder.latestAllowedVersion());
+            } catch (UnsupportedVersionException e) {
+                unsupportedVersionException = e;
+            }
+
             if (futureResp.isUnsupportedRequest) {
                 unsupportedVersionException = new UnsupportedVersionException(
                         "Api " + request.apiKey() + " with version " + version);
