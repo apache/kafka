@@ -120,9 +120,10 @@ class ApiVersionTest {
     assertEquals(KAFKA_2_8_IV0, ApiVersion("2.8-IV0"))
     assertEquals(KAFKA_2_8_IV1, ApiVersion("2.8-IV1"))
 
-    assertEquals(KAFKA_3_0_IV1, ApiVersion("3.0"))
+    assertEquals(KAFKA_3_0_IV2, ApiVersion("3.0"))
     assertEquals(KAFKA_3_0_IV0, ApiVersion("3.0-IV0"))
     assertEquals(KAFKA_3_0_IV1, ApiVersion("3.0-IV1"))
+    assertEquals(KAFKA_3_0_IV2, ApiVersion("3.0-IV2"))
   }
 
   @Test

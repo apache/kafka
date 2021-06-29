@@ -164,8 +164,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           .errorCode
       )
     }),
+    // We may need to get the top level error if the topic does not exist in the response
     ApiKeys.FETCH -> ((resp: requests.FetchResponse) => Errors.forCode(resp.responseData(topicNames.asJava, version).asScala.find {
-      case (topicPartition, _) => topicPartition == tp}.map { case (_, data) => data.errorCode }.get)),
+      case (topicPartition, _) => topicPartition == tp}.map { case (_, data) => data.errorCode }.getOrElse(resp.error.code()))),
     ApiKeys.LIST_OFFSETS -> ((resp: ListOffsetsResponse) => {
       Errors.forCode(
         resp.data

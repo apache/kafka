@@ -71,22 +71,22 @@ class FetchSessionTest {
   def testSessionCache(): Unit = {
     val cache = new FetchSessionCache(3, 100)
     assertEquals(0, cache.size)
-    val id1 = cache.maybeCreateSession(0, false, 10, ApiKeys.FETCH.latestVersion(), () => dummyCreate(10))
-    val id2 = cache.maybeCreateSession(10, false, 20, ApiKeys.FETCH.latestVersion(), () => dummyCreate(20))
-    val id3 = cache.maybeCreateSession(20, false, 30, ApiKeys.FETCH.latestVersion(), () => dummyCreate(30))
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, 40, ApiKeys.FETCH.latestVersion(), () => dummyCreate(40)))
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, 5, ApiKeys.FETCH.latestVersion(), () => dummyCreate(5)))
+    val id1 = cache.maybeCreateSession(0, false, 10, true, () => dummyCreate(10))
+    val id2 = cache.maybeCreateSession(10, false, 20, true, () => dummyCreate(20))
+    val id3 = cache.maybeCreateSession(20, false, 30, true, () => dummyCreate(30))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, 40, true, () => dummyCreate(40)))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, 5, true, () => dummyCreate(5)))
     assertCacheContains(cache, id1, id2, id3)
     cache.touch(cache.get(id1).get, 200)
-    val id4 = cache.maybeCreateSession(210, false, 11, ApiKeys.FETCH.latestVersion(), () => dummyCreate(11))
+    val id4 = cache.maybeCreateSession(210, false, 11, true, () => dummyCreate(11))
     assertCacheContains(cache, id1, id3, id4)
     cache.touch(cache.get(id1).get, 400)
     cache.touch(cache.get(id3).get, 390)
     cache.touch(cache.get(id4).get, 400)
-    val id5 = cache.maybeCreateSession(410, false, 50, ApiKeys.FETCH.latestVersion(), () => dummyCreate(50))
+    val id5 = cache.maybeCreateSession(410, false, 50, true, () => dummyCreate(50))
     assertCacheContains(cache, id3, id4, id5)
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(410, false, 5, ApiKeys.FETCH.latestVersion(), () => dummyCreate(5)))
-    val id6 = cache.maybeCreateSession(410, true, 5, ApiKeys.FETCH.latestVersion(), () => dummyCreate(5))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(410, false, 5, true, () => dummyCreate(5)))
+    val id6 = cache.maybeCreateSession(410, true, 5, true, () => dummyCreate(5))
     assertCacheContains(cache, id3, id5, id6)
   }
 
@@ -96,7 +96,7 @@ class FetchSessionTest {
     assertEquals(0, cache.totalPartitions)
     assertEquals(0, cache.size)
     assertEquals(0, cache.evictionsMeter.count)
-    val id1 = cache.maybeCreateSession(0, false, 2, ApiKeys.FETCH.latestVersion(), () => dummyCreate(2))
+    val id1 = cache.maybeCreateSession(0, false, 2, true, () => dummyCreate(2))
     assertTrue(id1 > 0)
     assertCacheContains(cache, id1)
     val session1 = cache.get(id1).get
@@ -104,7 +104,7 @@ class FetchSessionTest {
     assertEquals(2, cache.totalPartitions)
     assertEquals(1, cache.size)
     assertEquals(0, cache.evictionsMeter.count)
-    val id2 = cache.maybeCreateSession(0, false, 4, ApiKeys.FETCH.latestVersion(), () => dummyCreate(4))
+    val id2 = cache.maybeCreateSession(0, false, 4, true, () => dummyCreate(4))
     val session2 = cache.get(id2).get
     assertTrue(id2 > 0)
     assertCacheContains(cache, id1, id2)
@@ -113,7 +113,7 @@ class FetchSessionTest {
     assertEquals(0, cache.evictionsMeter.count)
     cache.touch(session1, 200)
     cache.touch(session2, 200)
-    val id3 = cache.maybeCreateSession(200, false, 5, ApiKeys.FETCH.latestVersion(), () => dummyCreate(5))
+    val id3 = cache.maybeCreateSession(200, false, 5, true, () => dummyCreate(5))
     assertTrue(id3 > 0)
     assertCacheContains(cache, id2, id3)
     assertEquals(9, cache.totalPartitions)
@@ -903,9 +903,8 @@ class FetchSessionTest {
     assertEquals(Errors.INCONSISTENT_TOPIC_ID, resp2.error)
     assertTrue(resp2.sessionId > 0)
     val responseData2 = resp2.responseData(topicNames, request2.version)
-    assertEquals(1, responseData2.size())
-    // We should still get INCONSISTENT_TOPIC_ID error here since the session will send a response with the old ID.
-    assertEquals(Errors.INCONSISTENT_TOPIC_ID.code(), responseData2.get(new TopicPartition("foo", 0)).errorCode())
+    // We should have no partition responses with this top level error.
+    assertEquals(0, responseData2.size())
   }
 
   @Test

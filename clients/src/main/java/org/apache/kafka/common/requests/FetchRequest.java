@@ -277,14 +277,18 @@ public class FetchRequest extends AbstractRequest {
         // is essential for them.
         Errors error = Errors.forException(e);
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
-        data.topics().forEach(topic -> {
-            List<FetchResponseData.PartitionData> partitionResponses = topic.partitions().stream().map(partition ->
-                    FetchResponse.partitionResponse(partition.partition(), error)).collect(Collectors.toList());
-            topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
-                    .setTopic(topic.topic())
-                    .setTopicId(topic.topicId())
-                    .setPartitions(partitionResponses));
-        });
+        // Since UNKNOWN_TOPIC_ID is a new error type only returned when topic ID requests are made (from newer clients),
+        // we can skip returning the error on all partitions and returning any partitions at all.
+        if (error != Errors.UNKNOWN_TOPIC_ID) {
+            data.topics().forEach(topic -> {
+                List<FetchResponseData.PartitionData> partitionResponses = topic.partitions().stream().map(partition ->
+                        FetchResponse.partitionResponse(partition.partition(), error)).collect(Collectors.toList());
+                topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
+                        .setTopic(topic.topic())
+                        .setTopicId(topic.topicId())
+                        .setPartitions(partitionResponses));
+            });
+        }
         return new FetchResponse(new FetchResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())

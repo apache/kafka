@@ -647,9 +647,7 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_ID, resp1.error())
     val topicNames1 = topicIDsWithUnknown.map(_.swap).asJava
     val responseData1 = resp1.responseData(topicNames1, ApiKeys.FETCH.latestVersion())
-    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, responseData1.get(foo0).errorCode)
-    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, responseData1.get(foo1).errorCode)
-    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, responseData1.get(bar0).errorCode)
+    assertEquals(0, responseData1.size())
   }
 
   @Test
