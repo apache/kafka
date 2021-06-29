@@ -4200,6 +4200,7 @@ public class KafkaAdminClient extends AdminClient {
                                            Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
 
         MetadataResponse mr = context.response().orElseThrow(() -> new IllegalStateException("No Metadata response"));
+        Cluster clusterSnapshot = mr.cluster();
         List<Call> calls = new ArrayList<>();
         // grouping topic partitions per leader
         Map<Node, Map<String, ListOffsetsTopic>> leaders = new HashMap<>();
@@ -4212,7 +4213,7 @@ public class KafkaAdminClient extends AdminClient {
             long offsetQuery = getOffsetFromOffsetSpec(offsetSpec);
             // avoid sending listOffsets request for topics with errors
             if (!mr.errors().containsKey(tp.topic())) {
-                Node node = mr.cluster().leaderFor(tp);
+                Node node = clusterSnapshot.leaderFor(tp);
                 if (node != null) {
                     Map<String, ListOffsetsTopic> leadersOnNode = leaders.computeIfAbsent(node, k -> new HashMap<>());
                     ListOffsetsTopic topic = leadersOnNode.computeIfAbsent(tp.topic(), k -> new ListOffsetsTopic().setName(tp.topic()));
