@@ -88,8 +88,8 @@ object ConfigEntityName {
  */
 class DynamicConfigManager(private val zkClient: KafkaZkClient,
                            private val configHandlers: Map[String, ConfigHandler],
-                           private val changeExpirationMs: Long = 15 * 60 * 1000,
-                           private val time: Time = Time.SYSTEM) extends Logging {
+                           private val changeExpirationMs: Long,
+                           private val time: Time) extends Logging {
   val adminZkClient = new AdminZkClient(zkClient)
 
   object ConfigChangedNotificationHandler extends NotificationHandler {

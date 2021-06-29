@@ -21,6 +21,7 @@ import kafka.zk.{LiteralAclChangeStore, LiteralAclStore, ZkAclChangeStore, ZooKe
 import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.GROUP
+import org.apache.kafka.common.utils.Time
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.mutable.ArrayBuffer
@@ -53,7 +54,7 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
     val notificationMessage2 = new ResourcePattern(GROUP, "messageB", LITERAL)
 
     notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralAclChangeStore.aclChangePath,
-      ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
+      ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs, Time.SYSTEM)
     notificationListener.init()
 
     zkClient.createAclChangeNotification(notificationMessage1)
@@ -82,7 +83,7 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
   def testSwallowsProcessorException(): Unit = {
     notificationHandler.setThrowSize(2)
     notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralAclChangeStore.aclChangePath,
-      ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
+      ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs, Time.SYSTEM)
     notificationListener.init()
 
     zkClient.createAclChangeNotification(new ResourcePattern(GROUP, "messageA", LITERAL))

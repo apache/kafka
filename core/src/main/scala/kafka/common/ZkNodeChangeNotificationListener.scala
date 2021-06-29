@@ -53,8 +53,8 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
                                        private val seqNodeRoot: String,
                                        private val seqNodePrefix: String,
                                        private val notificationHandler: NotificationHandler,
-                                       private val changeExpirationMs: Long = 15 * 60 * 1000,
-                                       private val time: Time = Time.SYSTEM) extends Logging {
+                                       private val changeExpirationMs: Long,
+                                       private val time: Time) extends Logging {
   private var lastExecutedChange = -1L
   private val queue = new LinkedBlockingQueue[ChangeNotification]
   private val thread = new ChangeEventProcessThread(s"$seqNodeRoot-event-process-thread")
