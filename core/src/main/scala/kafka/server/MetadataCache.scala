@@ -20,12 +20,15 @@ package kafka.server
 import java.util
 import java.util.Collections
 import java.util.concurrent.locks.ReentrantReadWriteLock
+
+import kafka.admin.BrokerMetadata
+
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
 import kafka.controller.StateChangeLogger
-import kafka.server.metadata.{MetadataBroker, RaftMetadataCache}
+import kafka.server.metadata.RaftMetadataCache
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import kafka.utils.Implicits._
@@ -62,16 +65,21 @@ trait MetadataCache {
 
   def getAllTopics(): collection.Set[String]
 
-  def getAllPartitions(): collection.Set[TopicPartition]
+  def getTopicPartitions(topicName: String): collection.Set[TopicPartition]
 
-  def getNonExistingTopics(topics: collection.Set[String]): collection.Set[String]
+  def hasAliveBroker(brokerId: Int): Boolean
 
-  def getAliveBroker(brokerId: Int): Option[MetadataBroker]
+  def getAliveBrokers(): Iterable[BrokerMetadata]
 
-  def getAliveBrokers: collection.Seq[MetadataBroker]
+  def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node]
+
+  def getAliveBrokerNodes(listenerName: ListenerName): Iterable[Node]
 
   def getPartitionInfo(topic: String, partitionId: Int): Option[UpdateMetadataRequestData.UpdateMetadataPartitionState]
 
+  /**
+   * Return the number of partitions in the given topic, or None if the given topic does not exist.
+   */
   def numPartitions(topic: String): Option[Int]
 
   /**
@@ -251,14 +259,13 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
     }
   }
 
-  def getAllTopics(): Set[String] = {
+  override def getAllTopics(): Set[String] = {
     getAllTopics(metadataSnapshot)
   }
 
-  def getAllPartitions(): Set[TopicPartition] = {
-    metadataSnapshot.partitionStates.flatMap { case (topicName, partitionsAndStates) =>
-      partitionsAndStates.keys.map(partitionId => new TopicPartition(topicName, partitionId.toInt))
-    }.toSet
+  override def getTopicPartitions(topicName: String): Set[TopicPartition] = {
+    metadataSnapshot.partitionStates.getOrElse(topicName, Map.empty).values.
+      map(p => new TopicPartition(topicName, p.partitionIndex())).toSet
   }
 
   private def getAllTopics(snapshot: MetadataSnapshot): Set[String] = {
@@ -275,12 +282,18 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
     topics.diff(metadataSnapshot.partitionStates.keySet)
   }
 
-  def getAliveBroker(brokerId: Int): Option[MetadataBroker] = {
-    metadataSnapshot.aliveBrokers.get(brokerId).map(MetadataBroker.apply)
+  override def hasAliveBroker(brokerId: Int): Boolean = metadataSnapshot.aliveBrokers.contains(brokerId)
+
+  override def getAliveBrokers(): Iterable[BrokerMetadata] = {
+    metadataSnapshot.aliveBrokers.values.map(b => new BrokerMetadata(b.id, b.rack))
   }
 
-  def getAliveBrokers: Seq[MetadataBroker] = {
-    metadataSnapshot.aliveBrokers.values.map(MetadataBroker.apply).toBuffer
+  override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
+    metadataSnapshot.aliveBrokers.get(brokerId).flatMap(_.getNode(listenerName))
+  }
+
+  override def getAliveBrokerNodes(listenerName: ListenerName): Iterable[Node] = {
+    metadataSnapshot.aliveBrokers.values.flatMap(_.getNode(listenerName))
   }
 
   private def addOrUpdatePartitionInfo(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
