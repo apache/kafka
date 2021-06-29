@@ -1092,11 +1092,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         // Write a restart request to the config backing store, to be executed asynchronously in tick()
                         configBackingStore.putRestartRequest(request);
                         // Compute and send the response that this was accepted
-                        Optional<RestartPlan> maybePlan = buildRestartPlan(request);
-                        if (!maybePlan.isPresent()) {
+                        Optional<RestartPlan> plan = buildRestartPlan(request);
+                        if (!plan.isPresent()) {
                             callback.onCompletion(new NotFoundException("Status for connector " + connectorName + " not found", null), null);
                         } else {
-                            callback.onCompletion(null, maybePlan.get().restartConnectorStateInfo());
+                            callback.onCompletion(null, plan.get().restartConnectorStateInfo());
                         }
                     } else {
                         callback.onCompletion(new NotLeaderException("Only the leader can process restart requests.", leaderUrl()), null);
