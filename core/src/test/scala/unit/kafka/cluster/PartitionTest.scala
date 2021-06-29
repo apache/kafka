@@ -127,6 +127,15 @@ class PartitionTest extends AbstractPartitionTest {
     assertThrows[OffsetOutOfRangeException] {
       read(lastFetchedEpoch = 0, fetchOffset = 0)
     }
+
+    // Fetch offset lower than start offset should throw OffsetOutOfRangeException
+    log.maybeIncrementLogStartOffset(newLogStartOffset = 10, ClientRecordDeletion)
+    assertThrows[OffsetOutOfRangeException] {
+      read(lastFetchedEpoch = 5, fetchOffset = 6) // diverging
+    }
+    assertThrows[OffsetOutOfRangeException] {
+      read(lastFetchedEpoch = 3, fetchOffset = 6) // not diverging
+    }
   }
 
   @Test
