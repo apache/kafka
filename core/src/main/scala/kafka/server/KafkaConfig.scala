@@ -1062,7 +1062,7 @@ object KafkaConfig {
       .defineInternal(SaslMechanismControllerProtocolProp, STRING, SaslConfigs.DEFAULT_SASL_MECHANISM, null, HIGH, SaslMechanismControllerProtocolDoc)
       .defineInternal(MetadataLogDirProp, STRING, null, null, HIGH, MetadataLogDirDoc)
       .defineInternal(MetadataLogSegmentBytesProp, INT, Defaults.LogSegmentBytes, atLeast(Records.LOG_OVERHEAD), HIGH, MetadataLogSegmentBytesDoc)
-      .defineInternal(MetadataLogSegmentMillisProp, LONG, null, null, HIGH, MetadataLogSegmentMillisDoc)
+      .defineInternal(MetadataLogSegmentMillisProp, LONG, Defaults.LogRollHours * 60 * 60 * 1000L, null, HIGH, MetadataLogSegmentMillisDoc)
       .defineInternal(MetadataMaxRetentionBytesProp, LONG, Defaults.LogRetentionBytes, null, HIGH, MetadataMaxRetentionBytesDoc)
       .defineInternal(MetadataMaxRetentionMillisProp, LONG, null, null, HIGH, MetadataMaxRetentionMillisDoc)
 
