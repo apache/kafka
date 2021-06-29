@@ -35,6 +35,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
+import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
@@ -406,7 +407,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             log.trace("Node {}: handling LocalRecordBatch with offset {}.",
                                 nodeId, entryOffset);
                             listenerData.listener.handleCommit(
-                                new MemoryBatchReader<>(
+                                MemoryBatchReader.of(
                                     Collections.singletonList(
                                         Batch.of(
                                             entryOffset - batch.records.size() + 1,
@@ -539,19 +540,28 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(long committedOffset, int committedEpoch) {
+    public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(
+        long committedOffset,
+        int committedEpoch,
+        long lastContainedLogTime
+    ) {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, committedEpoch);
+        return SnapshotWriter.createWithHeader(
+            () -> createNewSnapshot(snapshotId),
+            1024,
+            MemoryPool.NONE,
+            new MockTime(),
+            lastContainedLogTime,
+            CompressionType.NONE,
+            new MetadataRecordSerde()
+        );
+    }
+
+    private Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId) {
         return Optional.of(
-            new SnapshotWriter<>(
-                new MockRawSnapshotWriter(snapshotId, buffer -> {
-                    shared.addSnapshot(new MockRawSnapshotReader(snapshotId, buffer));
-                }),
-                1024,
-                MemoryPool.NONE,
-                new MockTime(),
-                CompressionType.NONE,
-                new MetadataRecordSerde()
-            )
+            new MockRawSnapshotWriter(snapshotId, buffer -> {
+                shared.addSnapshot(new MockRawSnapshotReader(snapshotId, buffer));
+            })
         );
     }
 

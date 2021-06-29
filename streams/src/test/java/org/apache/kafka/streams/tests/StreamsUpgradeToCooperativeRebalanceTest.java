@@ -24,9 +24,9 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TaskMetadata;
+import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.processor.TaskMetadata;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -82,7 +82,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
         streams.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING && oldState == State.REBALANCING) {
                 System.out.println(String.format("%sSTREAMS in a RUNNING State", upgradePhase));
-                final Set<ThreadMetadata> allThreadMetadata = streams.localThreadsMetadata();
+                final Set<ThreadMetadata> allThreadMetadata = streams.metadataForLocalThreads();
                 final StringBuilder taskReportBuilder = new StringBuilder();
                 final List<String> activeTasks = new ArrayList<>();
                 final List<String> standbyTasks = new ArrayList<>();
@@ -110,7 +110,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         Exit.addShutdownHook("streams-shutdown-hook", () -> {
             streams.close();
-            System.out.println(String.format("%sCOOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED", upgradePhase));
+            System.out.printf("%sCOOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED%n", upgradePhase);
             System.out.flush();
         });
     }

@@ -36,15 +36,13 @@ import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_KSTRE
  * Too much information to generalize, so Stream-Stream joins are represented by a specific node.
  */
 public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V2, VR> {
-    private static final Properties EMPTY_PROPERTIES = new Properties();
-
     private final ProcessorParameters<K, V1, ?, ?> thisWindowedStreamProcessorParameters;
     private final ProcessorParameters<K, V2, ?, ?> otherWindowedStreamProcessorParameters;
     private final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder;
     private final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder;
     private final Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStoreBuilder;
     private final Joined<K, V1, V2> joined;
-
+    private final boolean enableSpuriousResultFix;
 
     private StreamStreamJoinNode(final String nodeName,
                                  final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner,
@@ -56,7 +54,8 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                                  final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder,
                                  final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder,
                                  final Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStoreBuilder,
-                                 final Joined<K, V1, V2> joined) {
+                                 final Joined<K, V1, V2> joined,
+                                 final boolean enableSpuriousResultFix) {
 
         super(nodeName,
               valueJoiner,
@@ -72,6 +71,7 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         this.thisWindowedStreamProcessorParameters = thisWindowedStreamProcessorParameters;
         this.otherWindowedStreamProcessorParameters =  otherWindowedStreamProcessorParameters;
         this.outerJoinWindowStoreBuilder = outerJoinWindowStoreBuilder;
+        this.enableSpuriousResultFix = enableSpuriousResultFix;
     }
 
 
@@ -102,7 +102,14 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         topologyBuilder.addStateStore(thisWindowStoreBuilder, thisWindowedStreamProcessorName, otherProcessorName);
         topologyBuilder.addStateStore(otherWindowStoreBuilder, otherWindowedStreamProcessorName, thisProcessorName);
 
-        if (props == null || StreamsConfig.InternalConfig.getBoolean(new HashMap(props), ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, true)) {
+        if (enableSpuriousResultFix &&
+            (props == null ||
+                StreamsConfig.InternalConfig.getBoolean(
+                    new HashMap(props),
+                    ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
+                    true
+                )
+            )) {
             outerJoinWindowStoreBuilder.ifPresent(builder -> topologyBuilder.addStateStore(builder, thisProcessorName, otherProcessorName));
         }
     }
@@ -124,11 +131,10 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         private StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder;
         private Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStoreBuilder;
         private Joined<K, V1, V2> joined;
-
+        private boolean enableSpuriousResultFix = false;
 
         private StreamStreamJoinNodeBuilder() {
         }
-
 
         public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withValueJoiner(final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner) {
             this.valueJoiner = valueJoiner;
@@ -186,6 +192,11 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
+        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withSpuriousResultFixEnabled() {
+            this.enableSpuriousResultFix = true;
+            return this;
+        }
+
         public StreamStreamJoinNode<K, V1, V2, VR> build() {
 
             return new StreamStreamJoinNode<>(nodeName,
@@ -198,7 +209,8 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                                               thisWindowStoreBuilder,
                                               otherWindowStoreBuilder,
                                               outerJoinWindowStoreBuilder,
-                                              joined);
+                                              joined,
+                                              enableSpuriousResultFix);
 
 
         }

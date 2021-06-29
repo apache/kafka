@@ -31,6 +31,7 @@ import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
+import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.Timeout;
 import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalLong;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -69,7 +71,7 @@ public class SnapshotGeneratorTest {
 
     @Test
     public void testGenerateBatches() throws Exception {
-        SnapshotWriter<ApiMessageAndVersion> writer = createSnapshotWriter(123);
+        SnapshotWriter<ApiMessageAndVersion> writer = createSnapshotWriter(123, 0);
         ExponentialBackoff exponentialBackoff =
             new ExponentialBackoff(100, 2, 400, 0.0);
         List<Section> sections = Arrays.asList(new Section("replication",
@@ -88,14 +90,24 @@ public class SnapshotGeneratorTest {
         assertTrue(writer.isFrozen());
     }
 
-    private SnapshotWriter<ApiMessageAndVersion> createSnapshotWriter(long committedOffset) {
-        return new SnapshotWriter<>(
-            new MockRawSnapshotWriter(new OffsetAndEpoch(committedOffset + 1, 1), buffer -> { }),
+    private SnapshotWriter<ApiMessageAndVersion> createSnapshotWriter(
+        long committedOffset,
+        long lastContainedLogTime
+    ) {
+        return SnapshotWriter.createWithHeader(
+            () -> createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, 1)),
             1024,
             MemoryPool.NONE,
             new MockTime(),
+            lastContainedLogTime,
             CompressionType.NONE,
             new MetadataRecordSerde()
-        );
+        ).get();
+    }
+
+    private Optional<RawSnapshotWriter> createNewSnapshot(
+            OffsetAndEpoch snapshotId
+    ) {
+        return Optional.of(new MockRawSnapshotWriter(snapshotId, buffer -> { }));
     }
 }

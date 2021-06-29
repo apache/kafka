@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.log.{Log, LogManager}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
-import kafka.server.metadata.CachedConfigRepository
+import kafka.server.metadata.MockConfigRepository
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic}
@@ -42,7 +42,7 @@ class OffsetsForLeaderEpochTest {
   private val time = new MockTime
   private val metrics = new Metrics
   private val alterIsrManager = TestUtils.createAlterIsrManager()
-  private val configRepository = new CachedConfigRepository()
+  private val configRepository = new MockConfigRepository()
   private val tp = new TopicPartition("topic", 1)
   private var replicaManager: ReplicaManager = _
   private var quotaManager: QuotaManagers = _
