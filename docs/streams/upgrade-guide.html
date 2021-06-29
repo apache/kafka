@@ -117,6 +117,21 @@
     <p>
         We removed the default implementation of <code>RocksDBConfigSetter#close()</code>.
     </p>
+    <p>
+        We dropped the default 24 hours grace period for windowed operations such as Window or Session aggregates, or stream-stream joins.
+        This period determines how long after a window ends any late arrived records will still be processed.
+        Records coming in after the grace period has elapsed will be dropped from those windows.
+        With a long grace period, though Kafka Streams can handle out-of-order data up to that amount of time, it will also incur a high and confusing latency for users,
+        e.g. suppression operators with the default won't emit results up for 24 hours, while lso in practice out-of-order data usually has a much smaller time-skewness.
+        Instead of abstracting this config from users with a long default value, we introduced new constructs such as <code>TimeWindows#ofSizeWithNoGrace</code> to let callers always set it upon constructing the windows;
+        the other setters such as <code>TimeWindows#grace</code> are deprecated and will be removed in the future.
+        Also when the new construct API are used for left/outer stream-stream joins, Kafka Streams would fix emitting spurious join results.
+        More details can be found in the following:
+    </p>
+    <ul>
+        <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-633%3A+Drop+24+hour+default+of+grace+period+in+Streams">KIP-633</a>: Drop 24 hour default of grace period in Streams</li>
+        <li><a href="https://issues.apache.org/jira/browse/KAFKA-10847">KAFKA-10847</a>: Avoid spurious left/outer join results in stream-stream join</li>
+    </ul>
 
     <p>
         The public <code>topicGroupId</code> and <code>partition</code> fields on TaskId have been deprecated and replaced with getters. Please migrate to using the new <code>TaskId.subtopology()</code>
