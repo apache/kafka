@@ -34,6 +34,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender.Event;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
@@ -46,6 +47,7 @@ import org.junit.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
@@ -150,7 +152,10 @@ public class KTableSourceTest {
             inputTopic.pipeInput(null, "value");
 
             assertThat(
-                appender.getMessages(),
+                appender.getEvents().stream()
+                    .filter(e -> e.getLevel().equals("WARN"))
+                    .map(Event::getMessage)
+                    .collect(Collectors.toList()),
                 hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
             );
         }
