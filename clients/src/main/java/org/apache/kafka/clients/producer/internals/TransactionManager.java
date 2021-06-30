@@ -1079,8 +1079,9 @@ public class TransactionManager {
             // for ProducerFencedException, do not wrap it as a KafkaException
             // but create a new instance without the call trace since it was not thrown because of the current call
             if (lastError instanceof ProducerFencedException) {
-                throw new ProducerFencedException("The producer has been rejected from the broker because " +
-                    "it tried to use an old epoch with the transactionalId");
+                throw new ProducerFencedException(String.format("The producer has been rejected from the broker because " +
+                    "it tried to use an old epoch %d with producerId %d and the transactionalId",
+                    producerIdAndEpoch.epoch, producerIdAndEpoch.producerId));
             } else {
                 throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
             }

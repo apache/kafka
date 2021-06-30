@@ -29,6 +29,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -709,6 +710,10 @@ public class StreamThread extends Thread {
                          ignoreAndRejoinGroup
                          );
 
+                enforceRebalance();
+            } catch (final OutOfOrderSequenceException e) {
+                log.warn("Got an out of sequence error during normal processing, triggering a new rebalance and reinitialize", e);
+    
                 enforceRebalance();
             }
         }
