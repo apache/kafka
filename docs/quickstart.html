@@ -217,17 +217,21 @@ wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.L
             continue playing around.
         </p>
 
-        <ol>
-            <li>
-                Stop the producer and consumer clients with <code>Ctrl-C</code>, if you haven't done so already.
-            </li>
-            <li>
-                Stop the Kafka broker with <code>Ctrl-C</code>.
-            </li>
-            <li>
-                Lastly, stop the ZooKeeper server with <code>Ctrl-C</code>.
-            </li>
-        </ol>
+        <p>
+            Stop the producer and consumer clients with <code>Ctrl-C</code>, if you haven't done so already.
+        </p>
+
+        <p>
+            Next, stop the Kafka broker:
+        </p>
+
+        <pre class="line-numbers"><code class="language-bash">$ bin/kafka-server-stop.sh config/server.properties</code></pre>
+
+        <p>
+            Lastly, stop the ZooKeeper server:
+        </p>
+
+        <pre class="line-numbers"><code class="language-bash">$ bin/zookeeper-server-stop.sh config/zookeeper.properties</code></pre>
 
         <p>
             If you also want to delete any data of your local Kafka environment including any events you have created
