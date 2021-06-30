@@ -474,7 +474,7 @@ class StreamsUpgradeTest(Test):
                     monitors[first_other_processor] = first_other_monitor
                     monitors[second_other_processor] = second_other_monitor
 
-                    version_probing_message = "Sent a version 10 subscription and got version 10 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 10 and trigger new rebalance.",
+                    version_probing_message = "Sent a version 11 subscription and got version 10 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 10 and trigger new rebalance.",
                     end_of_upgrade_message = "Sent a version 10 subscription and group.s latest commonly supported version is 11 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 11 for next rebalance."
                     end_of_upgrade_error_message = "Could not detect 'successful version probing and end of rolling upgrade' at upgraded node "
                     followup_rebalance_message = "Triggering the followup rebalance scheduled for 0 ms."
