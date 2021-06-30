@@ -204,6 +204,7 @@ class StreamsBrokerBounceTest(Test):
         
         return data
 
+    @ignore
     @cluster(num_nodes=7)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["leader", "controller"],
