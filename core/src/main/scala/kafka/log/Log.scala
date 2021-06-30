@@ -1117,6 +1117,9 @@ class Log(@volatile private var _dir: File,
       if (!ignoreRecordSize && batchSize > config.maxMessageSize) {
         brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
         brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
+
+        debug(s"The record batch size in the append to $topicPartition is $batchSize bytes " +
+          s"which exceeds the maximum configured value of ${config.maxMessageSize}.")
         throw new RecordTooLargeException(s"The record batch size in the append to $topicPartition is $batchSize bytes " +
           s"which exceeds the maximum configured value of ${config.maxMessageSize}.")
       }
