@@ -482,6 +482,13 @@ public class NetworkClient implements KafkaClient {
                 version = versionInfo.latestUsableVersion(clientRequest.apiKey(), builder.oldestAllowedVersion(),
                         builder.latestAllowedVersion());
             }
+
+            // user force use old message version to produce, we need check version here
+            // this is used when client and broker are both 2.x version, but log.message.format is set to 0.10 in broker
+            if (clientRequest.apiKey() == ApiKeys.PRODUCE && apiVersions.getMaxProduceVersion() > 0) {
+                version = (short) Math.max(apiVersions.getMaxProduceVersion(), version);
+            }
+
             // The call to build may also throw UnsupportedVersionException, if there are essential
             // fields that cannot be represented in the chosen version.
             doSend(clientRequest, isInternalRequest, now, builder.build(version));
