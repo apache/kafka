@@ -195,9 +195,16 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
         @SuppressWarnings("unchecked")
         private void emitNonJoinedOuterRecords(final WindowStore<KeyAndJoinSide<K>, LeftOrRightValue> store) {
+            // calling `store.all()` creates an iterator what is an expensive operation on RocksDB;
+            // to reduce runtime cost, we try to avoid paying those cost
+
+            // only try to emit left/outer join results if there _might_ be any result records
             if (sharedTimeTracker.minTime >= sharedTimeTracker.streamTime - joinAfterMs - joinGraceMs) {
                 return;
             }
+            // throttle the emit frequency to a (configurable) interval;
+            // we use processing time to decouple from data properties,
+            // as throttling is a non-functional performance optimization
             if (context.currentSystemTimeMs() < sharedTimeTracker.nextTimeToEmit) {
                 return;
             }
