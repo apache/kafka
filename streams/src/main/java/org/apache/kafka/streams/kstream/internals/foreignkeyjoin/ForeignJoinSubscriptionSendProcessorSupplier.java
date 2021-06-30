@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -81,15 +80,9 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements o
             valueSerdeTopic = valueSerdeTopicSupplier.get();
             // get default key serde if it wasn't supplied directly at construction
             if (foreignKeySerializer == null) {
-                if (context.keySerde() == null) {
-                    throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
-                }
                 foreignKeySerializer = (Serializer<KO>) context.keySerde().serializer();
             }
             if (valueSerializer == null) {
-                if (context.valueSerde() == null) {
-                    throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
-                }
                 valueSerializer = (Serializer<V>) context.valueSerde().serializer();
             }
             droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(

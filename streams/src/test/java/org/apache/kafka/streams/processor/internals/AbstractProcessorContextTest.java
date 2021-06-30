@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -48,7 +49,6 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.emptyIterable;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
@@ -173,13 +173,13 @@ public class AbstractProcessorContextTest {
         );
     }
     @Test
-    public void shouldReturnNullIfSerdeDefaultNotSet() {
+    public void shouldThrowErrorIfSerdeDefaultNotSet() {
         final Properties config = getStreamsConfig();
         config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
         config.put("user.supplied.config", "user-supplied-value");
         final TestProcessorContext pc = new TestProcessorContext(metrics, config);
-        assertNull(pc.keySerde());
-        assertNull(pc.valueSerde());
+        assertThrows(ConfigException.class, pc::keySerde);
+        assertThrows(ConfigException.class, pc::valueSerde);
     }
 
     private static class TestProcessorContext extends AbstractProcessorContext<Object, Object> {

@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
@@ -69,9 +68,6 @@ class RecordDeserializer {
                 Optional.empty()
             );
         } catch (final Exception deserializationException) {
-            if (deserializationException instanceof ConfigException) {
-                throw deserializationException;
-            }
             final DeserializationExceptionHandler.DeserializationHandlerResponse response;
             try {
                 response = deserializationExceptionHandler.handle(processorContext, rawRecord, deserializationException);

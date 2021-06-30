@@ -1423,10 +1423,10 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public Serde defaultKeySerde() {
         final Object keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
+        if (keySerdeConfigSetting ==  null) {
+            throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
+        }
         try {
-            if (keySerdeConfigSetting ==  null) {
-                return null;
-            }
             final Serde<?> serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
             serde.configure(originals(), true);
             return serde;
@@ -1445,10 +1445,10 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public Serde defaultValueSerde() {
         final Object valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
+        if (valueSerdeConfigSetting == null) {
+            throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
+        }
         try {
-            if (valueSerdeConfigSetting == null) {
-                return null;
-            }
             final Serde<?> serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
             serde.configure(originals(), false);
             return serde;

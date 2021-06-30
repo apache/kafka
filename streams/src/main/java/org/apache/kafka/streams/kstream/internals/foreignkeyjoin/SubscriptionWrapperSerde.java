@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -24,6 +23,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
+import org.apache.kafka.streams.processor.SerdeGetter;
 
 import java.nio.ByteBuffer;
 import java.util.function.Supplier;
@@ -52,13 +52,11 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             this.primaryKeySerializer = primaryKeySerializer;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public void setIfUnset(final Serializer<K> defaultKeySerializer, final Serializer<Void> defaultValueSerializer) {
+        public void setIfUnset(final SerdeGetter getter) {
             if (primaryKeySerializer == null) {
-                if (defaultKeySerializer == null) {
-                    throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
-                }
-                primaryKeySerializer = defaultKeySerializer;
+                primaryKeySerializer = (Serializer<K>) getter.keySerde().serializer();
             }
         }
 
@@ -115,13 +113,11 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             this.primaryKeyDeserializer = primaryKeyDeserializer;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public void setIfUnset(final Deserializer<K> defaultKeyDeserializer, final Deserializer<Void> defaultValueDeserializer) {
+        public void setIfUnset(final SerdeGetter getter) {
             if (primaryKeyDeserializer == null) {
-                if (defaultKeyDeserializer == null) {
-                    throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
-                }
-                primaryKeyDeserializer = defaultKeyDeserializer;
+                primaryKeyDeserializer = (Deserializer<K>) getter.keySerde().deserializer();
             }
         }
 

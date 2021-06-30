@@ -860,8 +860,8 @@ public class StreamsConfigTest {
         final StreamsConfig config = new StreamsConfig(getStreamsConfig());
 
         assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
-        assertNull(config.defaultKeySerde());
-        assertNull(config.defaultValueSerde());
+        assertThrows(ConfigException.class, config::defaultKeySerde);
+        assertThrows(ConfigException.class, config::defaultValueSerde);
     }
 
     @Test

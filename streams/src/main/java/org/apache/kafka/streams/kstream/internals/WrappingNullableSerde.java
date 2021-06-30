@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.processor.SerdeGetter;
 
 import java.util.Map;
 import java.util.Objects;
@@ -59,13 +60,8 @@ public abstract class WrappingNullableSerde<T, InnerK, InnerV> implements Serde<
         deserializer.close();
     }
 
-    public void setIfUnset(final Serde<InnerK> defaultKeySerde, final Serde<InnerV> defaultValueSerde) {
-        if (defaultKeySerde != null && defaultValueSerde != null) {
-            serializer.setIfUnset(defaultKeySerde.serializer(), defaultValueSerde.serializer());
-            deserializer.setIfUnset(defaultKeySerde.deserializer(), defaultValueSerde.deserializer());
-        } else {
-            serializer.setIfUnset(null, null);
-            deserializer.setIfUnset(null, null);
-        }
+    public void setIfUnset(final SerdeGetter getter) {
+        serializer.setIfUnset(getter);
+        deserializer.setIfUnset(getter);
     }
 }

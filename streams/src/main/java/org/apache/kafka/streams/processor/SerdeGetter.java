@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.processor.SerdeGetter;
+import org.apache.kafka.common.serialization.Serde;
 
-public interface WrappingNullableSerializer<Outer, InnerK, InnerV> extends Serializer<Outer> {
-    void setIfUnset(final SerdeGetter getter);
+public interface SerdeGetter {
+
+    Serde<?> keySerde();
+
+    Serde<?> valueSerde();
 }

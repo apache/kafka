@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
+import org.apache.kafka.streams.processor.SerdeGetter;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -40,17 +41,17 @@ public class LeftOrRightValueSerializer<V1, V2> implements WrappingNullableSeria
 
     @SuppressWarnings("unchecked")
     @Override
-    public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<Object> defaultValueSerializer) {
+    public void setIfUnset(final SerdeGetter getter) {
         if (leftSerializer == null) {
-            leftSerializer = (Serializer<V1>) Objects.requireNonNull(defaultValueSerializer, "defaultValueSerializer cannot be null");
+            leftSerializer = (Serializer<V1>) Objects.requireNonNull(getter.valueSerde().serializer(), "defaultValueSerializer cannot be null");
         }
 
         if (rightSerializer == null) {
-            rightSerializer = (Serializer<V2>) Objects.requireNonNull(defaultValueSerializer, "defaultValueSerializer cannot be null");
+            rightSerializer = (Serializer<V2>) Objects.requireNonNull(getter.valueSerde().serializer(), "defaultValueSerializer cannot be null");
         }
 
-        initNullableSerializer(leftSerializer, defaultKeySerializer, defaultValueSerializer);
-        initNullableSerializer(rightSerializer, defaultKeySerializer, defaultValueSerializer);
+        initNullableSerializer(leftSerializer, getter);
+        initNullableSerializer(rightSerializer, getter);
     }
 
     @Override

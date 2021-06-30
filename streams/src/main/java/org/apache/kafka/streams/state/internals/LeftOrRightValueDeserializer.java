@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
+import org.apache.kafka.streams.processor.SerdeGetter;
 
 import java.util.Map;
 import java.util.Objects;
@@ -35,17 +36,17 @@ public class LeftOrRightValueDeserializer<V1, V2> implements WrappingNullableDes
 
     @SuppressWarnings("unchecked")
     @Override
-    public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<Object> defaultValueDeserializer) {
+    public void setIfUnset(final SerdeGetter getter) {
         if (leftDeserializer == null) {
-            leftDeserializer = (Deserializer<V1>) Objects.requireNonNull(defaultValueDeserializer, "defaultValueDeserializer cannot be null");
+            leftDeserializer = (Deserializer<V1>) Objects.requireNonNull(getter.valueSerde().deserializer(), "defaultValueDeserializer cannot be null");
         }
 
         if (rightDeserializer == null) {
-            rightDeserializer = (Deserializer<V2>) Objects.requireNonNull(defaultValueDeserializer, "defaultValueDeserializer cannot be null");
+            rightDeserializer = (Deserializer<V2>) Objects.requireNonNull(getter.valueSerde().deserializer(), "defaultValueDeserializer cannot be null");
         }
 
-        initNullableDeserializer(leftDeserializer, defaultKeyDeserializer, defaultValueDeserializer);
-        initNullableDeserializer(rightDeserializer, defaultKeyDeserializer, defaultValueDeserializer);
+        initNullableDeserializer(leftDeserializer, getter);
+        initNullableDeserializer(rightDeserializer, getter);
     }
 
     @Override

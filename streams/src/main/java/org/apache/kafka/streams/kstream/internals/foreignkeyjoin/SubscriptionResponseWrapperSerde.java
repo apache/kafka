@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
+import org.apache.kafka.streams.processor.SerdeGetter;
 
 import java.nio.ByteBuffer;
 
@@ -54,13 +54,11 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
             this.serializer = serializer;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<V> defaultValueSerializer) {
+        public void setIfUnset(final SerdeGetter getter) {
             if (serializer == null) {
-                if (defaultValueSerializer == null) {
-                    throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
-                }
-                serializer = defaultValueSerializer;
+                serializer = (Serializer<V>) getter.valueSerde().serializer();
             }
         }
 
@@ -105,13 +103,11 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
             this.deserializer = deserializer;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<V> defaultValueDeserializer) {
+        public void setIfUnset(final SerdeGetter getter) {
             if (deserializer == null) {
-                if (defaultValueDeserializer == null) {
-                    throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
-                }
-                deserializer = defaultValueDeserializer;
+                deserializer = (Deserializer<V>) getter.valueSerde().deserializer();
             }
         }
 

@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.SerdeGetter;
 
 import java.nio.ByteBuffer;
 
@@ -37,13 +37,11 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
         return inner;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<T> defaultValueSerializer) {
+    public void setIfUnset(final SerdeGetter getter) {
         if (inner == null) {
-            if (defaultValueSerializer == null) {
-                throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
-            }
-            inner = defaultValueSerializer;
+            inner = (Serializer<T>) getter.valueSerde().serializer();
         }
     }
 

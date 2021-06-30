@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streams.processor.SerdeGetter;
 
 import java.nio.ByteBuffer;
 
@@ -36,13 +36,11 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
         return inner;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<T> defaultValueDeserializer) {
+    public void setIfUnset(final SerdeGetter getter) {
         if (inner == null) {
-            if (defaultValueDeserializer == null) {
-                throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
-            }
-            inner = defaultValueDeserializer;
+            inner = (Deserializer<T>) getter.valueSerde().deserializer();
         }
     }
 

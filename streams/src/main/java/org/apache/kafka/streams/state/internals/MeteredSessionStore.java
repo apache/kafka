@@ -120,8 +120,8 @@ public class MeteredSessionStore<K, V>
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-                WrappingNullableUtils.prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
-                WrappingNullableUtils.prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde())
+                WrappingNullableUtils.prepareKeySerde(keySerde, context),
+                WrappingNullableUtils.prepareValueSerde(valueSerde, context)
         );
     }
 
@@ -132,8 +132,8 @@ public class MeteredSessionStore<K, V>
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-                WrappingNullableUtils.prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
-                WrappingNullableUtils.prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde())
+                WrappingNullableUtils.prepareKeySerde(keySerde, context),
+                WrappingNullableUtils.prepareValueSerde(valueSerde, context)
         );
     }
 
