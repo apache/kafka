@@ -95,6 +95,18 @@ object JmxTool extends Logging {
       .defaultsTo(false)
     val waitOpt = parser.accepts("wait", "Wait for requested JMX objects to become available before starting output. " +
       "Only supported when the list of objects is non-empty and contains no object name patterns.")
+    val waitTimeoutOpt = parser.accepts("wait-timeout", "In milliseconds, how long to wait for requested JMX objects. " +
+      "Only applies when '--wait' flag is specified.")
+      .withOptionalArg
+      .describedAs("ms")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(10000)
+    val waitBackoffOpt = parser.accepts("wait-backoff", "In milliseconds, the wait interval in between queries for requested JMX objects. " +
+      "Only applies when '--wait' flag is specified.")
+      .withOptionalArg
+      .describedAs("ms")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(100)
     val helpOpt = parser.accepts("help", "Print usage information.")
 
 
@@ -116,6 +128,8 @@ object JmxTool extends Logging {
     val dateFormatExists = options.has(dateFormatOpt)
     val dateFormat = if(dateFormatExists) Some(new SimpleDateFormat(options.valueOf(dateFormatOpt))) else None
     val wait = options.has(waitOpt)
+    val waitTimeoutMs = options.valueOf(waitTimeoutOpt).intValue
+    val waitBackoffMs = options.valueOf(waitBackoffOpt).intValue
 
     val reportFormat = parseFormat(options.valueOf(reportFormatOpt).toLowerCase)
     val reportFormatOriginal = reportFormat.equals("original")
@@ -170,13 +184,12 @@ object JmxTool extends Logging {
     var names: Iterable[ObjectName] = null
     def namesSet = Option(names).toSet.flatten
     def foundAllObjects = queries.toSet == namesSet
-    val waitTimeoutMs = 10000
     if (!hasPatternQueries) {
       val start = System.currentTimeMillis
       do {
         if (names != null) {
           System.err.println("Could not find all object names, retrying")
-          Thread.sleep(100)
+          Thread.sleep(waitBackoffMs)
         }
         names = queries.flatMap((name: ObjectName) => mbsc.queryNames(name, null).asScala)
       } while (wait && System.currentTimeMillis - start < waitTimeoutMs && !foundAllObjects)
