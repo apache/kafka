@@ -83,7 +83,7 @@ public class ClusterImageTest {
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().
             setId(0).setEpoch(1000), UNFENCE_BROKER_RECORD.highestSupportedVersion()));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FenceBrokerRecord().
-            setId(1).setEpoch(1000), FENCE_BROKER_RECORD.highestSupportedVersion()));
+            setId(1).setEpoch(1001), FENCE_BROKER_RECORD.highestSupportedVersion()));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
             setBrokerId(2).setBrokerEpoch(123),
             UNREGISTER_BROKER_RECORD.highestSupportedVersion()));

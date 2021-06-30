@@ -20,7 +20,6 @@ package org.apache.kafka.image;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -40,7 +39,7 @@ public final class ClusterImage {
     private final Map<Integer, BrokerRegistration> brokers;
 
     public ClusterImage(Map<Integer, BrokerRegistration> brokers) {
-        this.brokers = brokers;
+        this.brokers = Collections.unmodifiableMap(brokers);
     }
 
     public boolean isEmpty() {
@@ -55,7 +54,7 @@ public final class ClusterImage {
         return brokers.get(nodeId);
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) throws IOException {
+    public void write(Consumer<List<ApiMessageAndVersion>> out) {
         List<ApiMessageAndVersion> batch = new ArrayList<>();
         for (BrokerRegistration broker : brokers.values()) {
             batch.add(broker.toRecord());

@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -62,7 +61,7 @@ public final class ConfigurationImage {
         return properties;
     }
 
-    public void write(ConfigResource configResource, Consumer<List<ApiMessageAndVersion>> out) throws IOException {
+    public void write(ConfigResource configResource, Consumer<List<ApiMessageAndVersion>> out) {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         for (Map.Entry<String, String> entry : data.entrySet()) {
             records.add(new ApiMessageAndVersion(new ConfigRecord().

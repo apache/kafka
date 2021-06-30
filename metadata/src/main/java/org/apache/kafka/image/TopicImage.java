@@ -22,7 +22,6 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
@@ -66,7 +65,7 @@ public final class TopicImage {
         return partitions;
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) throws IOException {
+    public void write(Consumer<List<ApiMessageAndVersion>> out) {
         List<ApiMessageAndVersion> batch = new ArrayList<>();
         batch.add(new ApiMessageAndVersion(new TopicRecord().
             setName(name).

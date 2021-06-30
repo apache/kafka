@@ -49,12 +49,9 @@ public final class ClientQuotasDelta {
 
     public void replay(ClientQuotaRecord record) {
         ClientQuotaEntity entity = ClientQuotaImage.dataToEntity(record.entity());
-        ClientQuotaDelta change = changes.get(entity);
-        if (change == null) {
-            change = new ClientQuotaDelta(image.entities().
-                getOrDefault(entity, ClientQuotaImage.EMPTY));
-            changes.put(entity, change);
-        }
+        ClientQuotaDelta change = changes.computeIfAbsent(entity, __ ->
+            new ClientQuotaDelta(image.entities().
+                getOrDefault(entity, ClientQuotaImage.EMPTY)));
         change.replay(record);
     }
 

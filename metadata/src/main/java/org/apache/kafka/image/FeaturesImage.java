@@ -21,7 +21,6 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -45,7 +44,7 @@ public final class FeaturesImage {
     private final Map<String, VersionRange> finalizedVersions;
 
     public FeaturesImage(Map<String, VersionRange> finalizedVersions) {
-        this.finalizedVersions = finalizedVersions;
+        this.finalizedVersions = Collections.unmodifiableMap(finalizedVersions);
     }
 
     public boolean isEmpty() {
@@ -60,7 +59,7 @@ public final class FeaturesImage {
         return Optional.ofNullable(finalizedVersions.get(feature));
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) throws IOException {
+    public void write(Consumer<List<ApiMessageAndVersion>> out) {
         List<ApiMessageAndVersion> batch = new ArrayList<>();
         for (Entry<String, VersionRange> entry : finalizedVersions.entrySet()) {
             batch.add(new ApiMessageAndVersion(new FeatureLevelRecord().

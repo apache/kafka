@@ -21,53 +21,54 @@ import org.apache.kafka.common.metadata.ClientQuotaRecord;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
+import java.util.OptionalDouble;
 
 import static java.util.Map.Entry;
 
 
 public final class ClientQuotaDelta {
     private final ClientQuotaImage image;
-    private final Map<String, Optional<Double>> changes = new HashMap<>();
+    private final Map<String, OptionalDouble> changes = new HashMap<>();
 
     public ClientQuotaDelta(ClientQuotaImage image) {
         this.image = image;
     }
 
-    public Map<String, Optional<Double>> changes() {
+    public Map<String, OptionalDouble> changes() {
         return changes;
     }
 
     public void finishSnapshot() {
         for (String key : image.quotas().keySet()) {
             if (!changes.containsKey(key)) {
-                changes.put(key, Optional.empty());
+                // If a quota from the image did not appear in the snapshot, mark it as removed.
+                changes.put(key, OptionalDouble.empty());
             }
         }
     }
 
     public void replay(ClientQuotaRecord record) {
         if (record.remove()) {
-            changes.put(record.key(), Optional.empty());
+            changes.put(record.key(), OptionalDouble.empty());
         } else {
-            changes.put(record.key(), Optional.of(record.value()));
+            changes.put(record.key(), OptionalDouble.of(record.value()));
         }
     }
 
     public ClientQuotaImage apply() {
         Map<String, Double> newQuotas = new HashMap<>(image.quotas().size());
         for (Entry<String, Double> entry : image.quotas().entrySet()) {
-            Optional<Double> change = changes.get(entry.getKey());
+            OptionalDouble change = changes.get(entry.getKey());
             if (change == null) {
                 newQuotas.put(entry.getKey(), entry.getValue());
             } else if (change.isPresent()) {
-                newQuotas.put(entry.getKey(), change.get());
+                newQuotas.put(entry.getKey(), change.getAsDouble());
             }
         }
-        for (Entry<String, Optional<Double>> entry : changes.entrySet()) {
+        for (Entry<String, OptionalDouble> entry : changes.entrySet()) {
             if (!newQuotas.containsKey(entry.getKey())) {
                 if (entry.getValue().isPresent()) {
-                    newQuotas.put(entry.getKey(), entry.getValue().get());
+                    newQuotas.put(entry.getKey(), entry.getValue().getAsDouble());
                 }
             }
         }

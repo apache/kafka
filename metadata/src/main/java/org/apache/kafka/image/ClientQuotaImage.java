@@ -23,7 +23,6 @@ import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -55,8 +54,8 @@ public final class ClientQuotaImage {
         return quotas;
     }
 
-    public void write(ClientQuotaEntity entity, Consumer<List<ApiMessageAndVersion>> out) throws IOException {
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+    public void write(ClientQuotaEntity entity, Consumer<List<ApiMessageAndVersion>> out) {
+        List<ApiMessageAndVersion> records = new ArrayList<>(quotas.size());
         for (Entry<String, Double> entry : quotas.entrySet()) {
             records.add(new ApiMessageAndVersion(new ClientQuotaRecord().
                 setEntity(entityToData(entity)).
@@ -87,7 +86,7 @@ public final class ClientQuotaImage {
     }
 
     public List<ValueData> toDescribeValues() {
-        List<ValueData> values = new ArrayList<>();
+        List<ValueData> values = new ArrayList<>(quotas.size());
         for (Entry<String, Double> entry : quotas.entrySet()) {
             values.add(new ValueData().setKey(entry.getKey()).setValue(entry.getValue()));
         }

@@ -20,7 +20,6 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map.Entry;
@@ -43,7 +42,7 @@ public final class ConfigurationsImage {
     private final Map<ConfigResource, ConfigurationImage> data;
 
     public ConfigurationsImage(Map<ConfigResource, ConfigurationImage> data) {
-        this.data = data;
+        this.data = Collections.unmodifiableMap(data);
     }
 
     public boolean isEmpty() {
@@ -63,7 +62,7 @@ public final class ConfigurationsImage {
         }
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) throws IOException {
+    public void write(Consumer<List<ApiMessageAndVersion>> out) {
         for (Entry<ConfigResource, ConfigurationImage> entry : data.entrySet()) {
             ConfigResource configResource = entry.getKey();
             ConfigurationImage configImage = entry.getValue();

@@ -79,7 +79,14 @@ public class BrokerRegistration {
         this.id = id;
         this.epoch = epoch;
         this.incarnationId = incarnationId;
-        this.listeners = Collections.unmodifiableMap(new HashMap<>(listeners));
+        Map<String, Endpoint> newListeners = new HashMap<>(listeners.size());
+        for (Entry<String, Endpoint> entry : listeners.entrySet()) {
+            if (!entry.getValue().listenerName().isPresent()) {
+                throw new IllegalArgumentException("Broker listeners must be named.");
+            }
+            newListeners.put(entry.getKey(), entry.getValue());
+        }
+        this.listeners = Collections.unmodifiableMap(newListeners);
         Objects.requireNonNull(supportedFeatures);
         this.supportedFeatures = new HashMap<>(supportedFeatures);
         Objects.requireNonNull(rack);

@@ -45,10 +45,10 @@ public final class ConfigurationsDelta {
     public void finishSnapshot() {
         for (Entry<ConfigResource, ConfigurationImage> entry : image.resourceData().entrySet()) {
             ConfigResource resource = entry.getKey();
-            ConfigurationImage configurationImage = entry.getValue();
-            ConfigurationDelta configurationDelta = changes.computeIfAbsent(resource,
-                __ -> new ConfigurationDelta(configurationImage));
-            configurationDelta.finishSnapshot();
+            ConfigurationImage configImage = entry.getValue();
+            ConfigurationDelta configDelta = changes.computeIfAbsent(resource,
+                __ -> new ConfigurationDelta(configImage));
+            configDelta.finishSnapshot();
         }
     }
 

@@ -19,7 +19,6 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -88,7 +87,7 @@ public final class MetadataImage {
         return clientQuotas;
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) throws IOException {
+    public void write(Consumer<List<ApiMessageAndVersion>> out) {
         features.write(out);
         cluster.write(out);
         topics.write(out);

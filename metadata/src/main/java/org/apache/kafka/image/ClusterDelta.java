@@ -70,30 +70,33 @@ public final class ClusterDelta {
         changedBrokers.put(record.brokerId(), Optional.empty());
     }
 
-    public void replay(FenceBrokerRecord record) {
-        BrokerRegistration broker = broker(record.id());
+    private BrokerRegistration getBrokerOrThrow(int brokerId, long epoch, String action) {
+        BrokerRegistration broker = broker(brokerId);
         if (broker == null) {
-            throw new RuntimeException("Tried to fence broker " + record.id() +
+            throw new IllegalStateException("Tried to " + action + " broker " + brokerId +
                 ", but that broker was not registered.");
         }
+        if (broker.epoch() != epoch) {
+            throw new IllegalStateException("Tried to " + action + " broker " + brokerId +
+                ", but the given epoch, " + epoch + ", did not match the current broker " +
+                "epoch, " + broker.epoch());
+        }
+        return broker;
+    }
+
+    public void replay(FenceBrokerRecord record) {
+        BrokerRegistration broker = getBrokerOrThrow(record.id(), record.epoch(), "fence");
         changedBrokers.put(record.id(), Optional.of(broker.cloneWithFencing(true)));
     }
 
     public void replay(UnfenceBrokerRecord record) {
-        BrokerRegistration broker = broker(record.id());
-        if (broker == null) {
-            throw new RuntimeException("Tried to unfence broker " + record.id() +
-                ", but that broker was not registered.");
-        }
+        BrokerRegistration broker = getBrokerOrThrow(record.id(), record.epoch(), "unfence");
         changedBrokers.put(record.id(), Optional.of(broker.cloneWithFencing(false)));
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {
-        BrokerRegistration broker = broker(record.brokerId());
-        if (broker == null) {
-            throw new RuntimeException("Tried to change broker " + record.brokerId() +
-                ", but that broker was not registered.");
-        }
+        BrokerRegistration broker =
+            getBrokerOrThrow(record.brokerId(), record.brokerEpoch(), "change");
         if (record.fenced() < 0) {
             changedBrokers.put(record.brokerId(), Optional.of(broker.cloneWithFencing(false)));
         } else if (record.fenced() > 0) {

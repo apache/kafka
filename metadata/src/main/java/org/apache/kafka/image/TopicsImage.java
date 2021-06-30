@@ -21,7 +21,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -44,8 +43,8 @@ public final class TopicsImage {
 
     public TopicsImage(Map<Uuid, TopicImage> topicsById,
                        Map<String, TopicImage> topicsByName) {
-        this.topicsById = topicsById;
-        this.topicsByName = topicsByName;
+        this.topicsById = Collections.unmodifiableMap(topicsById);
+        this.topicsByName = Collections.unmodifiableMap(topicsByName);
     }
 
     public boolean isEmpty() {
@@ -74,7 +73,7 @@ public final class TopicsImage {
         return topicsByName.get(name);
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) throws IOException {
+    public void write(Consumer<List<ApiMessageAndVersion>> out) {
         for (TopicImage topicImage : topicsById.values()) {
             topicImage.write(out);
         }

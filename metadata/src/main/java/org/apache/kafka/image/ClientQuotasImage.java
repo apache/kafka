@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.DescribeClientQuotasRequestData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntityData;
@@ -24,7 +25,6 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryDat
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,8 +36,9 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
-import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
+import static org.apache.kafka.common.quota.ClientQuotaEntity.CLIENT_ID;
+import static org.apache.kafka.common.quota.ClientQuotaEntity.IP;
+import static org.apache.kafka.common.quota.ClientQuotaEntity.USER;
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_EXACT;
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_DEFAULT;
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_SPECIFIED;
@@ -54,7 +55,7 @@ public final class ClientQuotasImage {
     private final Map<ClientQuotaEntity, ClientQuotaImage> entities;
 
     public ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entities) {
-        this.entities = entities;
+        this.entities = Collections.unmodifiableMap(entities);
     }
 
     public boolean isEmpty() {
@@ -65,7 +66,7 @@ public final class ClientQuotasImage {
         return entities;
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) throws IOException {
+    public void write(Consumer<List<ApiMessageAndVersion>> out) {
         for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
             ClientQuotaEntity entity = entry.getKey();
             ClientQuotaImage clientQuotaImage = entry.getValue();
@@ -79,51 +80,47 @@ public final class ClientQuotasImage {
         Set<String> typeMatch = new HashSet<>();
         for (DescribeClientQuotasRequestData.ComponentData component : request.components()) {
             if (component.entityType().isEmpty()) {
-                response.setErrorCode(INVALID_REQUEST.code());
-                response.setErrorMessage("Invalid empty entity type.");
-                return response;
+                throw new InvalidRequestException("Invalid empty entity type.");
             } else if (exactMatch.containsKey(component.entityType()) ||
                     typeMatch.contains(component.entityType())) {
-                response.setErrorCode(INVALID_REQUEST.code());
-                response.setErrorMessage("Entity type " + component.entityType() +
+                throw new InvalidRequestException("Entity type " + component.entityType() +
                     " cannot appear more than once in the filter.");
-                return response;
             }
             switch (component.matchType()) {
                 case MATCH_TYPE_EXACT:
                     if (component.match() == null) {
-                        response.setErrorCode(INVALID_REQUEST.code());
-                        response.setErrorMessage("Request specified MATCH_TYPE_EXACT, " +
-                            "but set match string to null.");
-                        return response;
+                        throw new InvalidRequestException("Request specified " +
+                            "MATCH_TYPE_EXACT, but set match string to null.");
                     }
                     exactMatch.put(component.entityType(), component.match());
                     break;
                 case MATCH_TYPE_DEFAULT:
                     if (component.match() != null) {
-                        response.setErrorCode(INVALID_REQUEST.code());
-                        response.setErrorMessage("Request specified MATCH_TYPE_DEFAULT, " +
-                            "but also specified a match string.");
-                        return response;
+                        throw new InvalidRequestException("Request specified " +
+                            "MATCH_TYPE_DEFAULT, but also specified a match string.");
                     }
                     exactMatch.put(component.entityType(), null);
                     break;
                 case MATCH_TYPE_SPECIFIED:
                     if (component.match() != null) {
-                        response.setErrorCode(INVALID_REQUEST.code());
-                        response.setErrorMessage("Request specified MATCH_TYPE_SPECIFIED, " +
-                            "but also specified a match string.");
-                        return response;
+                        throw new InvalidRequestException("Request specified " +
+                            "MATCH_TYPE_SPECIFIED, but also specified a match string.");
                     }
                     typeMatch.add(component.entityType());
                     break;
                 default:
-                    response.setErrorCode(UNSUPPORTED_VERSION.code());
-                    response.setErrorMessage("Unknown match type " + component.matchType());
-                    return response;
+                    throw new InvalidRequestException("Unknown match type " + component.matchType());
             }
         }
-        // TODO: this is O(N). We should do some indexing here to speed it up.
+        if (exactMatch.containsKey(IP) || typeMatch.contains(IP)) {
+            if ((exactMatch.containsKey(USER) || typeMatch.contains(USER)) ||
+                    (exactMatch.containsKey(CLIENT_ID) || typeMatch.contains(CLIENT_ID))) {
+                throw new InvalidRequestException("Invalid entity filter component " +
+                    "combination. IP filter component should not be used with " +
+                    "user or clientId filter component.");
+            }
+        }
+        // TODO: this is O(N). We should add indexing here to speed it up. See KAFKA-13022.
         for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
             ClientQuotaEntity entity = entry.getKey();
             ClientQuotaImage quotaImage = entry.getValue();
