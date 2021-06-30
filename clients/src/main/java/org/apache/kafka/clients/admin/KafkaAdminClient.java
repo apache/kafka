@@ -1563,7 +1563,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
-        final Map<String, KafkaFutureImpl<TopicMetadataAndConfig>> topicFutures = new HashMap<>(newTopics.size());
+        final Map<String, KafkaFutureImpl<TopicMetadataAndConfig>> topicFutures = new HashMap<>((int) (newTopics.size() / .75f) + 1);
         final CreatableTopicCollection topics = new CreatableTopicCollection();
         for (NewTopic newTopic : newTopics) {
             if (topicNameIsUnrepresentable(newTopic.name())) {
@@ -1690,7 +1690,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DeleteTopicsResult deleteTopics(final Collection<String> topicNames,
                                            final DeleteTopicsOptions options) {
-        final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
+        final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>((int) (topicNames.size() / .75f) + 1);
         final List<String> validTopicNames = new ArrayList<>(topicNames.size());
         for (String topicName : topicNames) {
             if (topicNameIsUnrepresentable(topicName)) {
@@ -1716,7 +1716,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DeleteTopicsWithIdsResult deleteTopicsWithIds(final Collection<Uuid> topicIds,
                                                          final DeleteTopicsOptions options) {
-        final Map<Uuid, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicIds.size());
+        final Map<Uuid, KafkaFutureImpl<Void>> topicFutures = new HashMap<>((int) (topicIds.size() / .75f) + 1);
         final List<Uuid> validTopicIds = new ArrayList<>(topicIds.size());
         for (Uuid topicId : topicIds) {
             if (topicId.equals(Uuid.ZERO_UUID)) {
@@ -1919,7 +1919,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeTopicsResult describeTopics(final Collection<String> topicNames, DescribeTopicsOptions options) {
-        final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
+        final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>((int) (topicNames.size() / .75f) + 1);
         final ArrayList<String> topicNamesList = new ArrayList<>();
         for (String topicName : topicNames) {
             if (topicNameIsUnrepresentable(topicName)) {
@@ -2255,7 +2255,7 @@ public class KafkaAdminClient extends AdminClient {
     public DescribeConfigsResult describeConfigs(Collection<ConfigResource> configResources, final DescribeConfigsOptions options) {
         // Partition the requested config resources based on which broker they must be sent to with the
         // null broker being used for config resources which can be obtained from any broker
-        final Map<Integer, Map<ConfigResource, KafkaFutureImpl<Config>>> brokerFutures = new HashMap<>(configResources.size());
+        final Map<Integer, Map<ConfigResource, KafkaFutureImpl<Config>>> brokerFutures = new HashMap<>((int) (configResources.size() / .75f) + 1);
 
         for (ConfigResource resource : configResources) {
             Integer broker = nodeFor(resource);
@@ -2399,7 +2399,7 @@ public class KafkaAdminClient extends AdminClient {
                                                                     Collection<ConfigResource> resources,
                                                                     NodeProvider nodeProvider) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>();
-        final Map<ConfigResource, AlterConfigsRequest.Config> requestMap = new HashMap<>(resources.size());
+        final Map<ConfigResource, AlterConfigsRequest.Config> requestMap = new HashMap<>((int) (resources.size() / .75f) + 1);
         for (ConfigResource resource : resources) {
             List<AlterConfigsRequest.ConfigEntry> configEntries = new ArrayList<>();
             for (ConfigEntry configEntry: configs.get(resource).entries())
@@ -2502,7 +2502,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment, final AlterReplicaLogDirsOptions options) {
-        final Map<TopicPartitionReplica, KafkaFutureImpl<Void>> futures = new HashMap<>(replicaAssignment.size());
+        final Map<TopicPartitionReplica, KafkaFutureImpl<Void>> futures = new HashMap<>((int) (replicaAssignment.size() / .75f) + 1);
 
         for (TopicPartitionReplica replica : replicaAssignment.keySet())
             futures.put(replica, new KafkaFutureImpl<>());
@@ -2583,7 +2583,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers, DescribeLogDirsOptions options) {
-        final Map<Integer, KafkaFutureImpl<Map<String, LogDirDescription>>> futures = new HashMap<>(brokers.size());
+        final Map<Integer, KafkaFutureImpl<Map<String, LogDirDescription>>> futures = new HashMap<>((int) (brokers.size() / .75f) + 1);
 
         final long now = time.milliseconds();
         for (final Integer brokerId : brokers) {
@@ -2638,7 +2638,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options) {
-        final Map<TopicPartitionReplica, KafkaFutureImpl<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> futures = new HashMap<>(replicas.size());
+        final Map<TopicPartitionReplica, KafkaFutureImpl<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> futures = new HashMap<>((int) (replicas.size() / .75f) + 1);
 
         for (TopicPartitionReplica replica : replicas) {
             futures.put(replica, new KafkaFutureImpl<>());
@@ -2734,7 +2734,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public CreatePartitionsResult createPartitions(final Map<String, NewPartitions> newPartitions,
                                                    final CreatePartitionsOptions options) {
-        final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(newPartitions.size());
+        final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>((int) (newPartitions.size() / .75f) + 1);
         final CreatePartitionsTopicCollection topics = new CreatePartitionsTopicCollection(newPartitions.size());
         for (Map.Entry<String, NewPartitions> entry : newPartitions.entrySet()) {
             final String topic = entry.getKey();
@@ -2840,7 +2840,7 @@ public class KafkaAdminClient extends AdminClient {
         // requests need to be sent to partitions leader nodes so ...
         // ... from the provided map it's needed to create more maps grouping topic/partition per leader
 
-        final Map<TopicPartition, KafkaFutureImpl<DeletedRecords>> futures = new HashMap<>(recordsToDelete.size());
+        final Map<TopicPartition, KafkaFutureImpl<DeletedRecords>> futures = new HashMap<>((int) (recordsToDelete.size() / .75f) + 1);
         for (TopicPartition topicPartition: recordsToDelete.keySet()) {
             futures.put(topicPartition, new KafkaFutureImpl<>());
         }
@@ -4175,7 +4175,7 @@ public class KafkaAdminClient extends AdminClient {
                                          ListOffsetsOptions options) {
 
         // preparing topics list for asking metadata about them
-        final Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures = new HashMap<>(topicPartitionOffsets.size());
+        final Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures = new HashMap<>((int) (topicPartitionOffsets.size() / .75f) + 1);
         final Set<String> topics = new HashSet<>();
         for (TopicPartition topicPartition : topicPartitionOffsets.keySet()) {
             topics.add(topicPartition.topic());
@@ -4361,7 +4361,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options) {
-        Map<ClientQuotaEntity, KafkaFutureImpl<Void>> futures = new HashMap<>(entries.size());
+        Map<ClientQuotaEntity, KafkaFutureImpl<Void>> futures = new HashMap<>((int) (entries.size() / .75f) + 1);
         for (ClientQuotaAlteration entry : entries) {
             futures.put(entry.entity(), new KafkaFutureImpl<>());
         }

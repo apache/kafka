@@ -1291,7 +1291,7 @@ public final class Utils {
      * @return a map including all elements in properties
      */
     public static Map<String, Object> propsToMap(Properties properties) {
-        Map<String, Object> map = new HashMap<>(properties.size());
+        Map<String, Object> map = new HashMap<>((int) (properties.size() / .75f) + 1);
         for (Map.Entry<Object, Object> entry : properties.entrySet()) {
             if (entry.getKey() instanceof String) {
                 String k = (String) entry.getKey();
@@ -1359,7 +1359,7 @@ public final class Utils {
     }
 
     public static <K, V> Map<K, V> initializeMap(Collection<K> keys, Supplier<V> valueSupplier) {
-        Map<K, V> res = new HashMap<>(keys.size());
+        Map<K, V> res = new HashMap<>((int) (keys.size() / .75f) + 1);
         keys.forEach(key -> res.put(key, valueSupplier.get()));
         return res;
     }
