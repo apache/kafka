@@ -1582,10 +1582,11 @@ class Log(@volatile private var _dir: File,
     val maxOffsetInMessages = appendInfo.lastOffset
 
     if (segment.shouldRoll(RollParams(config, appendInfo, messagesSize, now))) {
-      debug(s"Rolling new log segment (log_size = ${segment.size}/${config.segmentSize}}, " +
+      debug(s"Rolling new log segment (log_size = ${segment.size}/${config.segmentSize}, " +
         s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
         s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
-        s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
+        s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}, " +
+        s"offset_convertible_to_relative = ${segment.canConvertToRelativeOffset(appendInfo.lastOffset)}).")
 
       /*
         maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
