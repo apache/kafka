@@ -624,6 +624,8 @@ public class SaslClientAuthenticator implements Authenticator {
      */
     public static String firstPrincipal(Subject subject) {
         Set<Principal> principals = subject.getPrincipals();
+        // getPrincipals() returns a SynchronizedSet and iteration over SynchronizedSet is not thread safe.
+        // Hence, we have to add synchronization on local variable "principals".
         synchronized (principals) {
             Iterator<Principal> iterator = principals.iterator();
             if (iterator.hasNext())
