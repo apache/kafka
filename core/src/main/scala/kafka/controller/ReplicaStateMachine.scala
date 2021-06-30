@@ -98,7 +98,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
                             stateChangeLogger: StateChangeLogger,
                             controllerContext: ControllerContext,
                             zkClient: KafkaZkClient,
-                            controllerBrokerRequestBatch: ControllerBrokerRequestBatch)
+                            val controllerBrokerRequestBatch: ControllerBrokerRequestBatch)
   extends ReplicaStateMachine(controllerContext) with Logging {
 
   private val controllerId = config.brokerId
@@ -115,6 +115,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       } catch {
         case e: ControllerMovedException =>
           error(s"Controller moved to another broker when moving some replicas to $targetState state", e)
+          reset()
           throw e
         case e: Throwable => error(s"Error while moving some replicas to $targetState state", e)
       }
@@ -440,6 +441,16 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     stateChangeLogger.withControllerEpoch(controllerContext.epoch)
       .error(s"Controller $controllerId epoch ${controllerContext.epoch} initiated state change of replica ${replica.replica} " +
         s"for partition ${replica.topicPartition} from $currState to $targetState failed", t)
+  }
+
+
+  private def reset(): Unit = {
+    controllerBrokerRequestBatch.clear()
+  }
+
+  override def shutdown(): Unit = {
+    reset()
+    super.shutdown()
   }
 }
 
