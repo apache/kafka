@@ -270,7 +270,7 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Append a {@link SnapshotHeaderRecord} record to the batch
      *
-     * @param @SnapshotHeaderRecord The message to append
+     * @param snapshotHeaderRecord The message to append
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
     public void appendSnapshotHeaderMessage(
@@ -291,7 +291,7 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Append a {@link SnapshotFooterRecord} record to the batch
      *
-     * @param @SnapshotFooterRecord The message to append
+     * @param snapshotFooterRecord The message to append
      * @param currentTimeMs
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
