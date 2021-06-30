@@ -82,7 +82,7 @@ public class PlainSaslServerTest {
 
         e = assertThrows(SaslAuthenticationException.class, () ->
             saslServer.evaluateResponse(saslMessage("", "u", "")));
-        assertEquals("Authentication failed: password not specified", e.getMessage());
+        assertEquals("Authentication failed: password not specified for user u", e.getMessage());
 
         e = assertThrows(SaslAuthenticationException.class, () ->
             saslServer.evaluateResponse(saslMessage("a", "", "")));
@@ -94,7 +94,7 @@ public class PlainSaslServerTest {
 
         e = assertThrows(SaslAuthenticationException.class, () ->
             saslServer.evaluateResponse(saslMessage("a", "u", "")));
-        assertEquals("Authentication failed: password not specified", e.getMessage());
+        assertEquals("Authentication failed: password not specified for user u", e.getMessage());
 
         String nul = "\u0000";
 
