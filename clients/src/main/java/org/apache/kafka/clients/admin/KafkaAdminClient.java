@@ -1699,7 +1699,7 @@ public class KafkaAdminClient extends AdminClient {
         else if (topics instanceof TopicNameCollection)
             return DeleteTopicsResult.ofTopicNames(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options));
         else
-            throw new IllegalArgumentException("The TopicCollection provided did not match any supported classes for deleteTopics.");
+            throw new IllegalArgumentException("The TopicCollection: " + topics + " provided did not match any supported classes for deleteTopics.");
     }
 
     private Map<String, KafkaFuture<Void>> handleDeleteTopicsUsingNames(final Collection<String> topicNames,
@@ -1734,7 +1734,7 @@ public class KafkaAdminClient extends AdminClient {
         for (Uuid topicId : topicIds) {
             if (topicId.equals(Uuid.ZERO_UUID)) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(new UnknownTopicIdException("The given topic ID '" +
+                future.completeExceptionally(new IllegalArgumentException("The given topic ID '" +
                     topicId + "' cannot be represented in a request."));
                 topicFutures.put(topicId, future);
             } else if (!topicFutures.containsKey(topicId)) {
