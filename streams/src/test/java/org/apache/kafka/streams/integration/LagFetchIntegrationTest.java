@@ -143,6 +143,7 @@ public class LagFetchIntegrationTest {
         return offsetLagInfoMap;
     }
 
+    @SuppressWarnings("deprecation")
     private void shouldFetchLagsDuringRebalancing(final String optimization) throws Exception {
         final CountDownLatch latchTillActiveIsRunning = new CountDownLatch(1);
         final CountDownLatch latchTillStandbyIsRunning = new CountDownLatch(1);
@@ -221,6 +222,9 @@ public class LagFetchIntegrationTest {
             assertThat(lagInfo.currentOffsetPosition(), equalTo(5L));
             assertThat(lagInfo.endOffsetPosition(), equalTo(5L));
             assertThat(lagInfo.offsetLag(), equalTo(0L));
+            assertThat(lagInfo.getCurrentOffsetPosition(), equalTo(5L));
+            assertThat(lagInfo.getEndOffsetPosition(), equalTo(5L));
+            assertThat(lagInfo.getOffsetLag(), equalTo(0L));
 
             // start up the standby & make it pause right after it has partition assigned
             standbyStreams.start();
@@ -233,11 +237,14 @@ public class LagFetchIntegrationTest {
             assertThat(lagInfo.currentOffsetPosition(), equalTo(0L));
             assertThat(lagInfo.endOffsetPosition(), equalTo(5L));
             assertThat(lagInfo.offsetLag(), equalTo(5L));
+            assertThat(lagInfo.getCurrentOffsetPosition(), equalTo(0L));
+            assertThat(lagInfo.getEndOffsetPosition(), equalTo(5L));
+            assertThat(lagInfo.getOffsetLag(), equalTo(5L));
             // standby thread wont proceed to RUNNING before this barrier is crossed
             lagCheckBarrier.await(60, TimeUnit.SECONDS);
 
             // wait till the lag goes down to 0, on the standby
-            TestUtils.waitForCondition(() -> standbyStreams.allLocalStorePartitionLags().get(stateStoreName).get(0).offsetLag() == 0,
+            TestUtils.waitForCondition(() -> standbyStreams.allLocalStorePartitionLags().get(stateStoreName).get(0).getOffsetLag() == 0,
                 WAIT_TIMEOUT_MS,
                 "Standby should eventually catchup and have zero lag.");
         } finally {
@@ -258,6 +265,7 @@ public class LagFetchIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldFetchLagsDuringRestoration() throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             inputTopicName,
@@ -307,6 +315,9 @@ public class LagFetchIntegrationTest {
                 assertThat(zeroLagInfo.currentOffsetPosition(), equalTo(5L));
                 assertThat(zeroLagInfo.endOffsetPosition(), equalTo(5L));
                 assertThat(zeroLagInfo.offsetLag(), equalTo(0L));
+                assertThat(zeroLagInfo.getCurrentOffsetPosition(), equalTo(5L));
+                assertThat(zeroLagInfo.getEndOffsetPosition(), equalTo(5L));
+                assertThat(zeroLagInfo.getOffsetLag(), equalTo(0L));
                 zeroLagRef.set(zeroLagInfo);
                 return true;
             }, WAIT_TIMEOUT_MS, "Eventually should reach zero lag.");
@@ -351,13 +362,16 @@ public class LagFetchIntegrationTest {
 
             restartedStreams.start();
             restorationEndLatch.await(WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-            TestUtils.waitForCondition(() -> restartedStreams.allLocalStorePartitionLags().get(stateStoreName).get(0).offsetLag() == 0,
+            TestUtils.waitForCondition(() -> restartedStreams.allLocalStorePartitionLags().get(stateStoreName).get(0).getOffsetLag() == 0,
                 WAIT_TIMEOUT_MS,
                 "Standby should eventually catchup and have zero lag.");
             final LagInfo fullLagInfo = restoreStartLagInfo.get(stateStoreName).get(0);
             assertThat(fullLagInfo.currentOffsetPosition(), equalTo(0L));
             assertThat(fullLagInfo.endOffsetPosition(), equalTo(5L));
             assertThat(fullLagInfo.offsetLag(), equalTo(5L));
+            assertThat(fullLagInfo.getCurrentOffsetPosition(), equalTo(0L));
+            assertThat(fullLagInfo.getEndOffsetPosition(), equalTo(5L));
+            assertThat(fullLagInfo.getOffsetLag(), equalTo(5L));
 
             assertThat(restoreEndLagInfo.get(stateStoreName).get(0), equalTo(zeroLagRef.get()));
         } finally {

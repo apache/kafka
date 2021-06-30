@@ -36,13 +36,28 @@ public class LagInfo {
         this.offsetLag = Math.max(0, endOffsetPosition - currentOffsetPosition);
     }
 
+    @Deprecated
+    public long currentOffsetPosition() {
+        return this.getCurrentOffsetPosition();
+    }
+
+    @Deprecated
+    public long endOffsetPosition() {
+        return this.getEndOffsetPosition();
+    }
+
+    @Deprecated
+    public long offsetLag() {
+        return this.getOffsetLag();
+    }
+
     /**
      * Get the current maximum offset on the store partition's changelog topic, that has been successfully written into
      * the store partition's state store.
      *
      * @return current consume offset for standby/restoring store partitions &amp;   simply endoffset for active store partition replicas
      */
-    public long currentOffsetPosition() {
+    public long getCurrentOffsetPosition() {
         return this.currentOffsetPosition;
     }
 
@@ -51,7 +66,7 @@ public class LagInfo {
      *
      * @return last offset written to the changelog topic partition
      */
-    public long endOffsetPosition() {
+    public long getEndOffsetPosition() {
         return this.endOffsetPosition;
     }
 
@@ -60,7 +75,7 @@ public class LagInfo {
      *
      * @return lag as measured by message offsets
      */
-    public long offsetLag() {
+    public long getOffsetLag() {
         return this.offsetLag;
     }
 
