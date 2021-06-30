@@ -59,6 +59,7 @@ public final class ConfigResource {
 
     /**
      * Create an instance of this class with the provided parameters.
+     * An empty name is used to refer to the default resource of a resource type.
      *
      * @param type a non-null resource type
      * @param name a non-null resource name
