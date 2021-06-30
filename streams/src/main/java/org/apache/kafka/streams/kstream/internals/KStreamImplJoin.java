@@ -58,8 +58,14 @@ class KStreamImplJoin {
     private final boolean rightOuter;
 
     static class TimeTracker {
+        private long emitIntervalMs = 50L;
         long streamTime = ConsumerRecord.NO_TIMESTAMP;
         long minTime = Long.MAX_VALUE;
+        long nextTimeToEmit = Long.MAX_VALUE;
+
+        public void setEmitInterval(final long emitIntervalMs) {
+            this.emitIntervalMs = emitIntervalMs;
+        }
 
         public void advanceStreamTime(final long recordTimestamp) {
             streamTime = Math.max(recordTimestamp, streamTime);
@@ -67,6 +73,10 @@ class KStreamImplJoin {
 
         public void updatedMinTime(final long recordTimestamp) {
             minTime = Math.min(recordTimestamp, minTime);
+        }
+
+        public void advanceNextTimeToEmit() {
+            nextTimeToEmit += emitIntervalMs;
         }
     }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
@@ -97,11 +98,20 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
             if (enableSpuriousResultFix
                 && StreamsConfig.InternalConfig.getBoolean(
-                    context().appConfigs(),
+                    context.appConfigs(),
                     ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
                     true
                 )) {
                 outerJoinWindowStore = outerJoinWindowName.map(context::getStateStore);
+                sharedTimeTracker.nextTimeToEmit = context.currentSystemTimeMs();
+
+                final Object emitIntervalConfig = context.appConfigs()
+                    .get(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX);
+                if (emitIntervalConfig instanceof Number) {
+                    sharedTimeTracker.setEmitInterval(((Number) emitIntervalConfig).longValue());
+                } else if (emitIntervalConfig instanceof String) {
+                    sharedTimeTracker.setEmitInterval(Long.parseLong((String) emitIntervalConfig));
+                }
             }
         }
 
@@ -185,9 +195,13 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
         @SuppressWarnings("unchecked")
         private void emitNonJoinedOuterRecords(final WindowStore<KeyAndJoinSide<K>, LeftOrRightValue> store) {
-            if (sharedTimeTracker.minTime >= sharedTimeTracker.streamTime - joinAfterMs - joinBeforeMs - joinGraceMs) {
+            if (sharedTimeTracker.minTime >= sharedTimeTracker.streamTime - joinAfterMs - joinGraceMs) {
                 return;
             }
+            if (context.currentSystemTimeMs() < sharedTimeTracker.nextTimeToEmit) {
+                return;
+            }
+            sharedTimeTracker.advanceNextTimeToEmit();
 
             // reset to MAX_VALUE in case the store is empty
             sharedTimeTracker.minTime = Long.MAX_VALUE;

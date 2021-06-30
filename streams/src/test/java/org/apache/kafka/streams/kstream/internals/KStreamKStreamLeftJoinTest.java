@@ -664,25 +664,23 @@ public class KStreamKStreamLeftJoinTest {
             // push two items to the primary stream; the other window is empty; this should not produce any item yet
             // w1 = {}
             // w2 = {}
-            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100), 1:A2 (ts: 200) }
+            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100) }
             // --> w2 = {}
             inputTopic1.pipeInput(0, "A0", 0L);
-            inputTopic1.pipeInput(1, "A1", 101L);
-            inputTopic1.pipeInput(1, "A2", 200L);
+            inputTopic1.pipeInput(1, "A1", 100L);
             processor.checkAndClearProcessResult();
 
             // push one item to the other window that has a join; this should produce non-joined records with a closed window first, then
             // the joined records
             // by the time they were produced before
-            // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100), 1:A2 (ts: 200) }
+            // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100) }
             // w2 = { }
-            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100), 1:A2 (ts: 200) }
-            // --> w2 = { 1:a1 (ts: 200) }
-            inputTopic2.pipeInput(1, "a1", 201L);
+            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100) }
+            // --> w2 = { 1:a1 (ts: 110) }
+            inputTopic2.pipeInput(1, "a1", 110L);
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(0, "A0+null", 0L),
-                new KeyValueTimestamp<>(1, "A1+a1", 201L),
-                new KeyValueTimestamp<>(1, "A2+a1", 201L)
+                new KeyValueTimestamp<>(1, "A1+a1", 110L)
             );
         }
     }
