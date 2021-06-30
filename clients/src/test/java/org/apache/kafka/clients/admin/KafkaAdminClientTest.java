@@ -4335,7 +4335,7 @@ public class KafkaAdminClientTest {
             AdminClientConfig.RETRIES_CONFIG, "2")) {
 
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
-                    ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 6));
+                    ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 0));
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
             // listoffsets response from broker 0

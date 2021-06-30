@@ -238,28 +238,30 @@ public class MockClient implements KafkaClient {
 
             AbstractRequest.Builder<?> builder = request.requestBuilder();
 
-            UnsupportedVersionException unsupportedVersionException = null;
-            short version = 0;
             try {
-                version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
+                short version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
                         builder.latestAllowedVersion());
-            } catch (UnsupportedVersionException e) {
-                unsupportedVersionException = e;
-            }
 
-            if (futureResp.isUnsupportedRequest) {
-                unsupportedVersionException = new UnsupportedVersionException(
-                        "Api " + request.apiKey() + " with version " + version);
-            } else {
-                AbstractRequest abstractRequest = request.requestBuilder().build(version);
-                if (!futureResp.requestMatcher.matches(abstractRequest))
-                    throw new IllegalStateException("Request matcher did not match next-in-line request "
-                            + abstractRequest + " with prepared response " + futureResp.responseBody);
+                UnsupportedVersionException unsupportedVersionException = null;
+                if (futureResp.isUnsupportedRequest) {
+                    unsupportedVersionException = new UnsupportedVersionException(
+                            "Api " + request.apiKey() + " with version " + version);
+                } else {
+                    AbstractRequest abstractRequest = request.requestBuilder().build(version);
+                    if (!futureResp.requestMatcher.matches(abstractRequest))
+                        throw new IllegalStateException("Request matcher did not match next-in-line request "
+                                + abstractRequest + " with prepared response " + futureResp.responseBody);
+                }
+
+                ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
+                        request.createdTimeMs(), time.milliseconds(), futureResp.disconnected,
+                        unsupportedVersionException, null, futureResp.responseBody);
+                responses.add(resp);
+            } catch (UnsupportedVersionException unsupportedVersionException) {
+                ClientResponse resp = new ClientResponse(request.makeHeader(builder.latestAllowedVersion()), request.callback(), request.destination(),
+                        request.createdTimeMs(), time.milliseconds(), false, unsupportedVersionException, null, null);
+                responses.add(resp);
             }
-            ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                    request.createdTimeMs(), time.milliseconds(), futureResp.disconnected,
-                    unsupportedVersionException, null, futureResp.responseBody);
-            responses.add(resp);
             iterator.remove();
             return;
         }
