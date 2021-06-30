@@ -18,8 +18,11 @@ package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
 
+import java.awt.geom.RoundRectangle2D;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.util.Objects;
 
 /**
  * <p>
@@ -40,6 +43,7 @@ import java.math.BigInteger;
 public class Decimal {
     public static final String LOGICAL_NAME = "org.apache.kafka.connect.data.Decimal";
     public static final String SCALE_FIELD = "scale";
+    public static final String ROUNDING_MODE_FIELD = "roundingMode";
 
     /**
      * Returns a SchemaBuilder for a Decimal with the given scale factor. By returning a SchemaBuilder you can override
@@ -48,14 +52,32 @@ public class Decimal {
      * @return a SchemaBuilder
      */
     public static SchemaBuilder builder(int scale) {
+        return builder(scale, RoundingMode.UNNECESSARY);
+    }
+
+    /**
+     * Returns a SchemaBuilder for a Decimal with the given scale factor and rounding mode. By returning a SchemaBuilder
+     * you can override additional schema settings such as required/optional, default value, and documentation.
+     * For backward compatibility
+     * @param scale the scale factor to apply to unscaled values
+     * @param roundingMode rounding mode to use when the scale has to be adopted
+     * @return a SchemaBuilder
+     */
+    public static SchemaBuilder builder(int scale, RoundingMode roundingMode) {
+        Objects.requireNonNull(roundingMode);
         return SchemaBuilder.bytes()
                 .name(LOGICAL_NAME)
                 .parameter(SCALE_FIELD, Integer.toString(scale))
+                .parameter(ROUNDING_MODE_FIELD, roundingMode.name())
                 .version(1);
     }
 
     public static Schema schema(int scale) {
         return builder(scale).build();
+    }
+
+    public static Schema schema(int scale, RoundingMode roundingMode) {
+        return builder(scale, roundingMode).build();
     }
 
     /**
@@ -64,9 +86,7 @@ public class Decimal {
      * @return the encoded value
      */
     public static byte[] fromLogical(Schema schema, BigDecimal value) {
-        if (value.scale() != scale(schema))
-            throw new DataException("BigDecimal has mismatching scale value for given Decimal schema");
-        return value.unscaledValue().toByteArray();
+        return value.setScale(scale(schema), roundingMode(schema)).unscaledValue().toByteArray();
     }
 
     public static BigDecimal toLogical(Schema schema, byte[] value) {
@@ -81,6 +101,18 @@ public class Decimal {
             return Integer.parseInt(scaleString);
         } catch (NumberFormatException e) {
             throw new DataException("Invalid scale parameter found in Decimal schema: ", e);
+        }
+    }
+
+    private static RoundingMode roundingMode(Schema schema) {
+        String roundingModeString = schema.parameters().get(ROUNDING_MODE_FIELD);
+        if (roundingModeString==null) {
+            return RoundingMode.UNNECESSARY;
+        }
+        try {
+            return RoundingMode.valueOf(roundingModeString);
+        } catch (IllegalArgumentException e) {
+            throw new DataException("Invalid roundingMode parameter found in Decimal schema: "+roundingModeString, e);
         }
     }
 }

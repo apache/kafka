@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -36,7 +37,9 @@ public class DecimalTest {
     public void testBuilder() {
         Schema plain = Decimal.builder(2).build();
         assertEquals(Decimal.LOGICAL_NAME, plain.name());
-        assertEquals(Collections.singletonMap(Decimal.SCALE_FIELD, "2"), plain.parameters());
+        assertEquals(2, plain.parameters().size());
+        assertEquals("2", plain.parameters().get(Decimal.SCALE_FIELD));
+        assertEquals("UNNECESSARY", plain.parameters().get(Decimal.ROUNDING_MODE_FIELD));
         assertEquals(1, (Object) plain.version());
     }
 
@@ -59,4 +62,23 @@ public class DecimalTest {
         converted = Decimal.toLogical(schema, TEST_BYTES_NEGATIVE);
         assertEquals(TEST_DECIMAL_NEGATIVE, converted);
     }
+
+    @Test
+    public void testExpandScale() {
+        Schema schema = Decimal.schema(2);
+        BigDecimal input = BigDecimal.valueOf (5, 0);
+        byte[] encoded = Decimal.fromLogical(schema, input);
+        BigDecimal output = Decimal.toLogical(schema, encoded);
+        assertEquals(input.setScale(2), output);
+    }
+
+    @Test
+    public void testReduceScale() {
+        Schema schema = Decimal.builder(2).parameter(Decimal.ROUNDING_MODE_FIELD, RoundingMode.HALF_UP.name());
+        BigDecimal input = BigDecimal.valueOf (5.123);
+        byte[] encoded = Decimal.fromLogical(schema, input);
+        BigDecimal output = Decimal.toLogical(schema, encoded);
+        assertEquals(BigDecimal.valueOf(5.12), output);
+    }
+
 }
