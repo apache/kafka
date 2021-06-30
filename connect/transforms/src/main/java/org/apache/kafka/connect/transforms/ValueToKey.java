@@ -41,14 +41,18 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
     public static final String OVERVIEW_DOC = "Replace the record key with a new key formed from a subset of fields in the record value.";
 
     public static final String FIELDS_CONFIG = "fields";
+    public static final String SKIP_MISSING_OR_NULL_CONFIG = "skip.missing.or.null";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new NonEmptyListValidator(), ConfigDef.Importance.HIGH,
-                    "Field names on the record value to extract as the record key.");
+                    "Field names on the record value to extract as the record key.")
+            .define(SKIP_MISSING_OR_NULL_CONFIG, ConfigDef.Type.BOOLEAN, Boolean.TRUE, ConfigDef.Importance.MEDIUM,
+                    "Skip null value or not");
 
     private static final String PURPOSE = "copying fields from value to key";
 
     private List<String> fields;
+    private Boolean skipNullValue;
 
     private Cache<Schema, Schema> valueToKeySchemaCache;
 
@@ -56,11 +60,15 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
     public void configure(Map<String, ?> configs) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
         fields = config.getList(FIELDS_CONFIG);
+        skipNullValue = config.getBoolean(SKIP_MISSING_OR_NULL_CONFIG);
         valueToKeySchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
     @Override
     public R apply(R record) {
+        if (skipNullValue && record.value() == null) {
+            return record;
+        }
         if (record.valueSchema() == null) {
             return applySchemaless(record);
         } else {
