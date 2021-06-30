@@ -243,7 +243,7 @@ class RaftReplicaManager(config: KafkaConfig,
 
             case HostedPartition.None =>
               // Create the partition instance since it does not yet exist
-              (Some(Partition(topicPartition, time, configRepository, this)), None)
+              (Some(Partition(topicPartition, time, this)), None)
           }
           partition.foreach { partition =>
             checkTopicId(builder.topicNameToId(partition.topic), partition.topicId, partition.topicPartition)
@@ -277,7 +277,7 @@ class RaftReplicaManager(config: KafkaConfig,
 
             case HostedPartition.None =>
               // it's a partition that we don't know about yet, so create it and mark it online
-              val partition = Partition(topicPartition, time, configRepository, this)
+              val partition = Partition(topicPartition, time, this)
               allPartitions.putIfNotExists(topicPartition, HostedPartition.Online(partition))
               Some(partition)
           }

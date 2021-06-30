@@ -130,8 +130,8 @@ class RaftReplicaManagerTest {
   def testDefersChangesImmediatelyThenAppliesChanges(): Unit = {
     val rrm = createRaftReplicaManager()
     rrm.delegate = mockDelegate
-    val partition0 =  Partition(topicPartition0, time, configRepository, rrm)
-    val partition1 =  Partition(topicPartition1, time, configRepository, rrm)
+    val partition0 =  Partition(topicPartition0, time, rrm)
+    val partition1 =  Partition(topicPartition1, time, rrm)
 
     processTopicPartitionMetadata(rrm)
     // verify changes would have been deferred
@@ -179,8 +179,8 @@ class RaftReplicaManagerTest {
   def testAppliesChangesWhenNotDeferring(): Unit = {
     val rrm = createRaftReplicaManager()
     rrm.delegate = mockDelegate
-    val partition0 = Partition(topicPartition0, time, configRepository, rrm)
-    val partition1 = Partition(topicPartition1, time, configRepository, rrm)
+    val partition0 = Partition(topicPartition0, time, rrm)
+    val partition1 = Partition(topicPartition1, time, rrm)
 
     rrm.endMetadataChangeDeferral(onLeadershipChange)
 

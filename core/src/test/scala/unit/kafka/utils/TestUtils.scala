@@ -677,12 +677,6 @@ object TestUtils extends Logging {
     brokers
   }
 
-  def deleteBrokersInZk(zkClient: KafkaZkClient, ids: Seq[Int]): Seq[MetadataBroker] = {
-    val brokers = ids.map(createBroker(_, "localhost", 6667, SecurityProtocol.PLAINTEXT))
-    ids.foreach(b => zkClient.deletePath(BrokerIdsZNode.path + "/" + b))
-    brokers
-  }
-
   def getMsgStrings(n: Int): Seq[String] = {
     val buffer = new ListBuffer[String]
     for (i <- 0 until  n)
