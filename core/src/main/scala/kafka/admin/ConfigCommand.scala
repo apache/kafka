@@ -74,8 +74,7 @@ object ConfigCommand extends Config {
   // so that configs may be fully validated. Prior to starting brokers, updates may be performed using
   // ZooKeeper for bootstrapping. This allows all password configs to be stored encrypted in ZK,
   // avoiding clear passwords in server.properties. For consistency with older versions, quota-related
-  // broker configs can still be updated using ZooKeeper at any time. ConfigCommand will be migrated
-  // to the new AdminClient later for these configs (KIP-248).
+  // broker configs can still be updated using ZooKeeper at any time.
   val BrokerConfigsUpdatableUsingZooKeeperWhileBrokerRunning = Set(
     DynamicConfig.Broker.LeaderReplicationThrottledRateProp,
     DynamicConfig.Broker.FollowerReplicationThrottledRateProp,

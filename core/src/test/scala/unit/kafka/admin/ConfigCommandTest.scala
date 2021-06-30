@@ -51,7 +51,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldExitWithNonZeroStatusOnZkCommandError(): Unit = {
+  def shouldExitWithNonZeroStatusOnUpdatingUnallowedConfigViaZk(): Unit = {
     assertNonZeroStatusExit(Array(
       "--zookeeper", zkConnect,
       "--entity-name", "1",
@@ -80,9 +80,18 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   def shouldExitWithNonZeroStatusOnZkCommandWithIpsEntity(): Unit = {
     assertNonZeroStatusExit(Array(
       "--zookeeper", zkConnect,
-      "--entity-type", "Ips",
+      "--entity-type", "ips",
       "--describe"))
   }
+
+  @Test
+  def shouldExitWithNonZeroStatusAlterUserQuotaWithoutEntityName(): Unit = {
+    assertNonZeroStatusExit(Array(
+      "--zookeeper", zkConnect,
+      "--entity-type", "users",
+      "--alter", "--add-config", "consumer_byte_rate=20000"))
+  }
+
 
   @Test
   def shouldExitWithNonZeroStatusOnBrokerCommandError(): Unit = {
