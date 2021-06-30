@@ -29,6 +29,16 @@ import java.util.Properties
 class KafkaServerTest extends ZooKeeperTestHarness {
 
   @Test
+  def testAlreadyRegisteredAdvertisedListenersWithEmptyHost(): Unit = {
+    //start a server with a advertised listener
+    val server1 = createServer(1, "", TestUtils.RandomPort)
+    try {
+      //start a server with same advertised listener
+      assertThrows(classOf[IllegalArgumentException], () => createServer(2, "", TestUtils.boundPort(server1)))
+    } finally TestUtils.shutdownServers(Seq(server1))
+  }
+
+  @Test
   def testAlreadyRegisteredAdvertisedListeners(): Unit = {
     //start a server with a advertised listener
     val server1 = createServer(1, "myhost", TestUtils.RandomPort)
