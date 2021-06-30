@@ -62,4 +62,9 @@ public class UniformStickyPartitioner implements Partitioner {
     public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
         stickyPartitionCache.nextPartition(topic, cluster, prevPartition);
     }
+
+    @Override
+    public boolean canAbortOnNewBatch(Integer recordPartition, byte[] keyBytes) {
+        return recordPartition == null;
+    }
 }

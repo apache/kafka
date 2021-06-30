@@ -52,4 +52,13 @@ public interface Partitioner extends Configurable, Closeable {
      */
     default void onNewBatch(String topic, Cluster cluster, int prevPartition) {
     }
+
+    /**
+     * We can abort on new batch if record partition and key is null
+     * @param recordPartition The partition to which the record should be sent
+     * @param keyBytes The serialized key to partition on( or null if no key)
+     */
+    default public boolean canAbortOnNewBatch(Integer recordPartition, byte[] keyBytes) {
+        return recordPartition == null && keyBytes == null;
+    }
 }
