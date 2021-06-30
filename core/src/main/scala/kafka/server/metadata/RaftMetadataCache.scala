@@ -29,10 +29,12 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadata
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
-
 import java.util
 import java.util.Collections
 import java.util.concurrent.locks.ReentrantLock
+
+import kafka.admin.BrokerMetadata
+
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -191,22 +193,24 @@ class RaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging {
 
   override def getAllTopics(): Set[String] = _currentImage.partitions.allTopicNames()
 
-  override def getAllPartitions(): Set[TopicPartition] = {
-    _currentImage.partitions.allPartitions().map {
-      partition => partition.toTopicPartition
-    }.toSet
+  override def getTopicPartitions(topicName: String): Set[TopicPartition] =
+    _currentImage.partitions.topicPartitions(topicName).
+      map(p => new TopicPartition(p.topicName, p.partitionIndex)).toSet
+
+  override def hasAliveBroker(brokerId: Int): Boolean = {
+    _currentImage.brokers.aliveBroker(brokerId).nonEmpty
   }
 
-  override def getNonExistingTopics(topics: Set[String]): Set[String] = {
-    topics.diff(_currentImage.partitions.allTopicNames())
+  override def getAliveBrokers(): Iterable[BrokerMetadata] = {
+    _currentImage.brokers.aliveBrokers().map(b => BrokerMetadata(b.id, Option(b.rack)))
   }
 
-  override def getAliveBroker(brokerId: Int): Option[MetadataBroker] = {
-    _currentImage.brokers.aliveBroker(brokerId)
+  override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
+    _currentImage.brokers.aliveBroker(brokerId).flatMap(_.endpoints.get(listenerName.value()))
   }
 
-  override def getAliveBrokers: Seq[MetadataBroker] = {
-    _currentImage.brokers.aliveBrokers()
+  override def getAliveBrokerNodes(listenerName: ListenerName): Seq[Node] = {
+    _currentImage.brokers.aliveBrokers().flatMap(_.endpoints.get(listenerName.value()))
   }
 
   override def getPartitionInfo(topic: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {

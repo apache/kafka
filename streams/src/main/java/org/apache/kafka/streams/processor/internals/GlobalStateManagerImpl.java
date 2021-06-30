@@ -68,7 +68,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final long taskTimeoutMs;
     private final ProcessorTopology topology;
     private final OffsetCheckpoint checkpointFile;
-    private final Duration requestTimeoutPlusTaskTimeout;
+    private final Duration pollMsPlusRequestTimeout;
     private final Consumer<byte[], byte[]> globalConsumer;
     private final StateRestoreListener stateRestoreListener;
     private final Map<TopicPartition, Long> checkpointFileCache;
@@ -111,8 +111,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         final int requestTimeoutMs = new ClientUtils.QuietConsumerConfig(consumerProps)
             .getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        pollMsPlusRequestTimeout = Duration.ofMillis(
+            config.getLong(StreamsConfig.POLL_MS_CONFIG) + requestTimeoutMs
+        );
         taskTimeoutMs = config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG);
-        requestTimeoutPlusTaskTimeout = Duration.ofMillis(requestTimeoutMs + taskTimeoutMs);
     }
 
     @Override
@@ -238,6 +240,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                               final String storeName,
                               final RecordConverter recordConverter) {
         for (final TopicPartition topicPartition : topicPartitions) {
+            long currentDeadline = NO_DEADLINE;
+
             globalConsumer.assign(Collections.singletonList(topicPartition));
             long offset;
             final Long checkpoint = checkpointFileCache.get(topicPartition);
@@ -246,13 +250,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 offset = checkpoint;
             } else {
                 globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
-                offset = retryUntilSuccessOrThrowOnTaskTimeout(
-                    () -> globalConsumer.position(topicPartition),
-                    String.format(
-                        "Failed to get position for partition %s. The broker may be transiently unavailable at the moment.",
-                        topicPartition
-                    )
-                );
+                offset = getGlobalConsumerOffset(topicPartition);
             }
 
             final Long highWatermark = highWatermarks.get(topicPartition);
@@ -262,34 +260,19 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
             long restoreCount = 0L;
 
-            while (offset < highWatermark) { // when we "fix" this loop (KAFKA-7380 / KAFKA-10317)
-                                             // we should update the `poll()` timeout below
-
-                // we ignore `poll.ms` config during bootstrapping phase and
-                // apply `request.timeout.ms` plus `task.timeout.ms` instead
+            while (offset < highWatermark) {
+                // we add `request.timeout.ms` to `poll.ms` because `poll.ms` might be too short
+                // to give a fetch request a fair chance to actually complete and we don't want to
+                // start `task.timeout.ms` too early
                 //
-                // the reason is, that `poll.ms` might be too short to give a fetch request a fair chance
-                // to actually complete and we don't want to start `task.timeout.ms` too early
-                //
-                // we also pass `task.timeout.ms` into `poll()` directly right now as it simplifies our own code:
-                // if we don't pass it in, we would just track the timeout ourselves and call `poll()` again
-                // in our own retry loop; by passing the timeout we can reuse the consumer's internal retry loop instead
-                //
-                // note that using `request.timeout.ms` provides a conservative upper bound for the timeout;
-                // this implies that we might start `task.timeout.ms` "delayed" -- however, starting the timeout
-                // delayed is preferable (as it's more robust) than starting it too early
-                //
-                // TODO https://issues.apache.org/jira/browse/KAFKA-10315
-                //   -> do a more precise timeout handling if `poll` would throw an exception if a fetch request fails
-                //      (instead of letting the consumer retry fetch requests silently)
-                //
-                // TODO https://issues.apache.org/jira/browse/KAFKA-10317 and
-                //      https://issues.apache.org/jira/browse/KAFKA-7380
-                //  -> don't pass in `task.timeout.ms` to stay responsive if `KafkaStreams#close` gets called
-                final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(requestTimeoutPlusTaskTimeout);
+                // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
+                //      `poll(pollMS)` without adding the request timeout and do a more precise
+                //      timeout handling
+                final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollMsPlusRequestTimeout);
                 if (records.isEmpty()) {
-                    // this will always throw
-                    maybeUpdateDeadlineOrThrow(time.milliseconds());
+                    currentDeadline = maybeUpdateDeadlineOrThrow(currentDeadline);
+                } else {
+                    currentDeadline = NO_DEADLINE;
                 }
 
                 final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
@@ -299,13 +282,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     }
                 }
 
-                offset = retryUntilSuccessOrThrowOnTaskTimeout(
-                    () -> globalConsumer.position(topicPartition),
-                    String.format(
-                        "Failed to get position for partition %s. The broker may be transiently unavailable at the moment.",
-                        topicPartition
-                    )
-                );
+                offset = getGlobalConsumerOffset(topicPartition);
 
                 stateRestoreAdapter.restoreBatch(restoreRecords);
                 stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
@@ -314,6 +291,16 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             stateRestoreListener.onRestoreEnd(topicPartition, storeName, restoreCount);
             checkpointFileCache.put(topicPartition, offset);
         }
+    }
+
+    private long getGlobalConsumerOffset(final TopicPartition topicPartition) {
+        return retryUntilSuccessOrThrowOnTaskTimeout(
+            () -> globalConsumer.position(topicPartition),
+            String.format(
+                "Failed to get position for partition %s. The broker may be transiently unavailable at the moment.",
+                topicPartition
+            )
+        );
     }
 
     private <R> R retryUntilSuccessOrThrowOnTaskTimeout(final Supplier<R> supplier,
