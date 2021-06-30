@@ -86,9 +86,11 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains only those records that satisfy the given predicate
    * @see `org.apache.kafka.streams.kstream.KTable#filter`
    */
-  def filter(predicate: (K, V) => Boolean,
-             named: Named,
-             materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
+  def filter(
+    predicate: (K, V) => Boolean,
+    named: Named,
+    materialized: Materialized[K, V, ByteArrayKeyValueStore]
+  ): KTable[K, V] =
     new KTable(inner.filter(predicate.asPredicate, named, materialized))
 
   /**
@@ -138,9 +140,11 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains only those records that do <em>not</em> satisfy the given predicate
    * @see `org.apache.kafka.streams.kstream.KTable#filterNot`
    */
-  def filterNot(predicate: (K, V) => Boolean,
-                named: Named,
-                materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
+  def filterNot(
+    predicate: (K, V) => Boolean,
+    named: Named,
+    materialized: Materialized[K, V, ByteArrayKeyValueStore]
+  ): KTable[K, V] =
     new KTable(inner.filterNot(predicate.asPredicate, named, materialized))
 
   /**
@@ -198,9 +202,11 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KTable#mapValues`
    */
-  def mapValues[VR](mapper: V => VR,
-                    named: Named,
-                    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
+  def mapValues[VR](
+    mapper: V => VR,
+    named: Named,
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]
+  ): KTable[K, VR] =
     new KTable(inner.mapValues[VR](mapper.asValueMapper, named, materialized))
 
   /**
@@ -258,9 +264,11 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KTable#mapValues`
    */
-  def mapValues[VR](mapper: (K, V) => VR,
-                    named: Named,
-                    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
+  def mapValues[VR](
+    mapper: (K, V) => VR,
+    named: Named,
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]
+  ): KTable[K, VR] =
     new KTable(inner.mapValues[VR](mapper.asValueMapperWithKey, named, materialized))
 
   /**
@@ -337,8 +345,10 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def transformValues[VR](valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
-                          stateStoreNames: String*): KTable[K, VR] =
+  def transformValues[VR](
+    valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
+    stateStoreNames: String*
+  ): KTable[K, VR] =
     new KTable(inner.transformValues[VR](valueTransformerWithKeySupplier, stateStoreNames: _*))
 
   /**
@@ -364,9 +374,11 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def transformValues[VR](valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
-                          named: Named,
-                          stateStoreNames: String*): KTable[K, VR] =
+  def transformValues[VR](
+    valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
+    named: Named,
+    stateStoreNames: String*
+  ): KTable[K, VR] =
     new KTable(inner.transformValues[VR](valueTransformerWithKeySupplier, named, stateStoreNames: _*))
 
   /**
@@ -389,9 +401,11 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def transformValues[VR](valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
-                          materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]],
-                          stateStoreNames: String*): KTable[K, VR] =
+  def transformValues[VR](
+    valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
+    materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]],
+    stateStoreNames: String*
+  ): KTable[K, VR] =
     new KTable(inner.transformValues[VR](valueTransformerWithKeySupplier, materialized, stateStoreNames: _*))
 
   /**
@@ -415,10 +429,12 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def transformValues[VR](valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
-                          materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]],
-                          named: Named,
-                          stateStoreNames: String*): KTable[K, VR] =
+  def transformValues[VR](
+    valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
+    materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]],
+    named: Named,
+    stateStoreNames: String*
+  ): KTable[K, VR] =
     new KTable(inner.transformValues[VR](valueTransformerWithKeySupplier, materialized, named, stateStoreNames: _*))
 
   /**
@@ -619,10 +635,12 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
    *         one for each matched record-pair with the same key
    */
-  def join[VR, KO, VO](other: KTable[KO, VO],
-                       keyExtractor: Function[V, KO],
-                       joiner: ValueJoiner[V, VO, VR],
-                       materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, VR] =
+  def join[VR, KO, VO](
+    other: KTable[KO, VO],
+    keyExtractor: Function[V, KO],
+    joiner: ValueJoiner[V, VO, VR],
+    materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]
+  ): KTable[K, VR] =
     new KTable(inner.join(other.inner, keyExtractor.asJavaFunction, joiner, materialized))
 
   /**
@@ -638,11 +656,13 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
    *         one for each matched record-pair with the same key
    */
-  def join[VR, KO, VO](other: KTable[KO, VO],
-                       keyExtractor: Function[V, KO],
-                       joiner: ValueJoiner[V, VO, VR],
-                       named: Named,
-                       materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, VR] =
+  def join[VR, KO, VO](
+    other: KTable[KO, VO],
+    keyExtractor: Function[V, KO],
+    joiner: ValueJoiner[V, VO, VR],
+    named: Named,
+    materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]
+  ): KTable[K, VR] =
     new KTable(inner.join(other.inner, keyExtractor.asJavaFunction, joiner, named, materialized))
 
   /**
@@ -657,10 +677,12 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
    *         one for each matched record-pair with the same key
    */
-  def leftJoin[VR, KO, VO](other: KTable[KO, VO],
-                           keyExtractor: Function[V, KO],
-                           joiner: ValueJoiner[V, VO, VR],
-                           materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, VR] =
+  def leftJoin[VR, KO, VO](
+    other: KTable[KO, VO],
+    keyExtractor: Function[V, KO],
+    joiner: ValueJoiner[V, VO, VR],
+    materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]
+  ): KTable[K, VR] =
     new KTable(inner.leftJoin(other.inner, keyExtractor.asJavaFunction, joiner, materialized))
 
   /**
@@ -676,11 +698,13 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
    *         one for each matched record-pair with the same key
    */
-  def leftJoin[VR, KO, VO](other: KTable[KO, VO],
-                           keyExtractor: Function[V, KO],
-                           joiner: ValueJoiner[V, VO, VR],
-                           named: Named,
-                           materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, VR] =
+  def leftJoin[VR, KO, VO](
+    other: KTable[KO, VO],
+    keyExtractor: Function[V, KO],
+    joiner: ValueJoiner[V, VO, VR],
+    named: Named,
+    materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]
+  ): KTable[K, VR] =
     new KTable(inner.leftJoin(other.inner, keyExtractor.asJavaFunction, joiner, named, materialized))
 
   /**
