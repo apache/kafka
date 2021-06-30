@@ -20,6 +20,7 @@ import org.apache.kafka.streams.KeyValue;
 
 import java.io.Closeable;
 import java.util.Iterator;
+import java.util.function.Consumer;
 
 /**
  * Iterator interface of {@link KeyValue}.
@@ -41,4 +42,17 @@ public interface KeyValueIterator<K, V> extends Iterator<KeyValue<K, V>>, Closea
      * @return the key of the next value that would be returned from the next call to next
      */
     K peekNextKey();
+
+    /**
+     * Perform required operation on the iterator and guarantee to close it, even in case of execution failure.
+     *
+     * @param operationToPerform operation to be performed on the iterator
+     *
+     * @since 2.10
+     */
+    default void performAndClose(Consumer<KeyValueIterator<K, V>> operationToPerform) {
+        try (KeyValueIterator<K, V> iterator = this) {
+            operationToPerform.accept(iterator);
+        }
+    }
 }
