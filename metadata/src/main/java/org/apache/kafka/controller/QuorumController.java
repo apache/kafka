@@ -697,6 +697,8 @@ public final class QuorumController implements Controller {
                             )
                         );
                     }
+                    log.info("Starting to replay snapshot ({}), from last commit offset ({}) and epoch ({})",
+                        reader.snapshotId(), lastCommittedOffset, lastCommittedEpoch);
 
                     resetState();
 
@@ -893,8 +895,7 @@ public final class QuorumController implements Controller {
                 snapshotRegistry.createSnapshot(lastCommittedOffset);
             }
 
-            log.info(
-                "Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot.",
+            log.info("Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot.",
                 lastCommittedEpoch, lastCommittedOffset, newBytesSinceLastSnapshot);
 
             snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch);
