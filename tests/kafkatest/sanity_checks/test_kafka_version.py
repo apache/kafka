@@ -50,9 +50,9 @@ class KafkaVersionTest(Test):
         the other on the current development branch."""
         self.kafka = KafkaService(self.test_context, num_nodes=2, zk=self.zk,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 2}})
-        self.kafka.nodes[1].version = LATEST_0_8_2
-        self.kafka.nodes[1].config[config_property.INTER_BROKER_PROTOCOL_VERSION] = "0.8.2.X"
+        self.kafka.nodes[0].version = LATEST_0_8_2
+        self.kafka.nodes[0].config[config_property.INTER_BROKER_PROTOCOL_VERSION] = "0.8.2.X"
         self.kafka.start()
 
-        assert is_version(self.kafka.nodes[0], [DEV_BRANCH.vstring], logger=self.logger)
-        assert is_version(self.kafka.nodes[1], [LATEST_0_8_2], logger=self.logger)
+        assert is_version(self.kafka.nodes[0], [LATEST_0_8_2], logger=self.logger)
+        assert is_version(self.kafka.nodes[1], [DEV_BRANCH.vstring], logger=self.logger)
