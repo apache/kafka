@@ -21,8 +21,7 @@ import java.util.Collection;
 import java.util.Collections;
 
 /**
- * A class used to represent a collection of topics. This collection may define topics by topic name
- * or topic ID. Subclassing this class beyond the classes provided here is not supported.
+ * A class used to represent a collection of topics. This collection may define topics by name or ID.
  */
 public abstract class TopicCollection {
 

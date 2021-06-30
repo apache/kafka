@@ -1694,25 +1694,23 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DeleteTopicsResult deleteTopics(final TopicCollection topics,
                                            final DeleteTopicsOptions options) {
-        DeleteTopicsResult result;
         if (topics instanceof TopicIdCollection)
-            result = DeleteTopicsResult.ofTopicIds(handleDeleteTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options));
+            return DeleteTopicsResult.ofTopicIds(handleDeleteTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options));
         else if (topics instanceof TopicNameCollection)
-            result = DeleteTopicsResult.ofTopicNames(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options));
+            return DeleteTopicsResult.ofTopicNames(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options));
         else
             throw new IllegalArgumentException("The TopicCollection provided did not match any supported classes for deleteTopics.");
-        return result;
     }
 
     private Map<String, KafkaFuture<Void>> handleDeleteTopicsUsingNames(final Collection<String> topicNames,
-                                                                            final DeleteTopicsOptions options) {
+                                                                        final DeleteTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         final List<String> validTopicNames = new ArrayList<>(topicNames.size());
         for (String topicName : topicNames) {
             if (topicNameIsUnrepresentable(topicName)) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new InvalidTopicException("The given topic name '" +
-                        topicName + "' cannot be represented in a request."));
+                    topicName + "' cannot be represented in a request."));
                 topicFutures.put(topicName, future);
             } else if (!topicFutures.containsKey(topicName)) {
                 topicFutures.put(topicName, new KafkaFutureImpl<>());
@@ -1723,21 +1721,21 @@ public class KafkaAdminClient extends AdminClient {
             final long now = time.milliseconds();
             final long deadline = calcDeadlineMs(now, options.timeoutMs());
             final Call call = getDeleteTopicsCall(options, topicFutures, validTopicNames,
-                    Collections.emptyMap(), now, deadline);
+                Collections.emptyMap(), now, deadline);
             runnable.call(call, now);
         }
         return new HashMap<>(topicFutures);
     }
 
     private Map<Uuid, KafkaFuture<Void>> handleDeleteTopicsUsingIds(final Collection<Uuid> topicIds,
-                                                                        final DeleteTopicsOptions options) {
+                                                                    final DeleteTopicsOptions options) {
         final Map<Uuid, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicIds.size());
         final List<Uuid> validTopicIds = new ArrayList<>(topicIds.size());
         for (Uuid topicId : topicIds) {
             if (topicId.equals(Uuid.ZERO_UUID)) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new UnknownTopicIdException("The given topic ID '" +
-                        topicId + "' cannot be represented in a request."));
+                    topicId + "' cannot be represented in a request."));
                 topicFutures.put(topicId, future);
             } else if (!topicFutures.containsKey(topicId)) {
                 topicFutures.put(topicId, new KafkaFutureImpl<>());
@@ -1748,7 +1746,7 @@ public class KafkaAdminClient extends AdminClient {
             final long now = time.milliseconds();
             final long deadline = calcDeadlineMs(now, options.timeoutMs());
             final Call call = getDeleteTopicsWithIdsCall(options, topicFutures, validTopicIds,
-                    Collections.emptyMap(), now, deadline);
+                Collections.emptyMap(), now, deadline);
             runnable.call(call, now);
         }
         return new HashMap<>(topicFutures);
