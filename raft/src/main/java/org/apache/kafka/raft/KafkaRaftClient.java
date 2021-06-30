@@ -341,12 +341,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private void maybeFireHandleCommit(long baseOffset, int epoch, List<T> records) {
+    private void maybeFireHandleCommit(long baseOffset, int epoch, long appendTimestamp, List<T> records) {
         for (ListenerContext listenerContext : listenerContexts) {
             OptionalLong nextExpectedOffsetOpt = listenerContext.nextExpectedOffset();
             nextExpectedOffsetOpt.ifPresent(nextOffset -> {
                 if (nextOffset == baseOffset)
-                    listenerContext.fireHandleCommit(baseOffset, epoch, records);
+                    listenerContext.fireHandleCommit(baseOffset, epoch, appendTimestamp, records);
             });
         }
     }
@@ -1854,7 +1854,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     double elapsedTimePerRecord = (double) elapsedTime / batch.numRecords;
                     kafkaRaftMetrics.updateCommitLatency(elapsedTimePerRecord, appendTimeMs);
                     logger.debug("Completed commit of {} records at {}", batch.numRecords, offsetAndEpoch);
-                    batch.records.ifPresent(records -> maybeFireHandleCommit(batch.baseOffset, epoch, records));
+                    batch.records.ifPresent(records -> {
+                        maybeFireHandleCommit(batch.baseOffset, epoch, batch.appendTimestamp, records);
+                    });
                 }
             });
         } finally {
@@ -2452,8 +2454,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          * a nice optimization for the leader which is typically doing more work than all of the
          * followers.
          */
-        public void fireHandleCommit(long baseOffset, int epoch, List<T> records) {
-            Batch<T> batch = Batch.of(baseOffset, epoch, records);
+        public void fireHandleCommit(long baseOffset, int epoch, long appendTimestamp, List<T> records) {
+            Batch<T> batch = Batch.of(baseOffset, epoch, appendTimestamp, records);
             MemoryBatchReader<T> reader = MemoryBatchReader.of(Collections.singletonList(batch), this);
             fireHandleCommit(reader);
         }

@@ -52,7 +52,7 @@ public class BatchBuilder<T> {
     private final ByteBufferOutputStream batchOutput;
     private final DataOutputStreamWritable recordOutput;
     private final long baseOffset;
-    private final long logAppendTime;
+    private final long appendTime;
     private final boolean isControlBatch;
     private final int leaderEpoch;
     private final int initialPosition;
@@ -69,7 +69,7 @@ public class BatchBuilder<T> {
         RecordSerde<T> serde,
         CompressionType compressionType,
         long baseOffset,
-        long logAppendTime,
+        long appendTime,
         boolean isControlBatch,
         int leaderEpoch,
         int maxBytes
@@ -80,7 +80,7 @@ public class BatchBuilder<T> {
         this.compressionType = compressionType;
         this.baseOffset = baseOffset;
         this.nextOffset = baseOffset;
-        this.logAppendTime = logAppendTime;
+        this.appendTime = appendTime;
         this.isControlBatch = isControlBatch;
         this.initialPosition = batchOutput.position();
         this.leaderEpoch = leaderEpoch;
@@ -215,6 +215,13 @@ public class BatchBuilder<T> {
     }
 
     /**
+     * TODO: write documentation
+     */
+    public long appendTime() {
+        return appendTime;
+    }
+
+    /**
      * Return the reference to the initial buffer passed through the constructor.
      * This is used in case the buffer needs to be returned to a pool (e.g.
      * in {@link org.apache.kafka.common.memory.MemoryPool#release(ByteBuffer)}.
@@ -249,8 +256,8 @@ public class BatchBuilder<T> {
             RecordBatch.MAGIC_VALUE_V2,
             compressionType,
             TimestampType.CREATE_TIME,
-            logAppendTime,
-            logAppendTime,
+            appendTime,
+            appendTime,
             RecordBatch.NO_PRODUCER_ID,
             RecordBatch.NO_PRODUCER_EPOCH,
             RecordBatch.NO_SEQUENCE,

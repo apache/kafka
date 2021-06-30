@@ -132,6 +132,7 @@ class BrokerMetadataListenerTest {
           Batch.of(
             baseOffset,
             leaderEpoch,
+            baseOffset, // Use the base offset as the append time
             records.asJava
           )
         ).asJava,

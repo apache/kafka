@@ -33,13 +33,13 @@ class MemoryBatchReaderTest {
     @Test
     public void testIteration() {
         Batch<String> batch1 = Batch.of(
-            0L, 1, Arrays.asList("a", "b", "c")
+            0L, 1, 0L, Arrays.asList("a", "b", "c")
         );
         Batch<String> batch2 = Batch.of(
-            3L, 2, Arrays.asList("d", "e")
+            3L, 2, 1L, Arrays.asList("d", "e")
         );
         Batch<String> batch3 = Batch.of(
-            5L, 2, Arrays.asList("f", "g", "h", "i")
+            5L, 2, 3L, Arrays.asList("f", "g", "h", "i")
         );
 
         @SuppressWarnings("unchecked")

@@ -137,6 +137,7 @@ public final class RecordsIteratorTest {
         Random random = new Random(seed);
         long baseOffset = random.nextInt(100);
         int epoch = random.nextInt(3) + 1;
+        long appendTimestamp = random.nextInt(1000);
 
         int numberOfBatches = random.nextInt(100) + 1;
         List<Batch<String>> batches = new ArrayList<>(numberOfBatches);
@@ -147,11 +148,12 @@ public final class RecordsIteratorTest {
                 .mapToObj(String::valueOf)
                 .collect(Collectors.toList());
 
-            batches.add(Batch.of(baseOffset, epoch, records));
+            batches.add(Batch.of(baseOffset, epoch, appendTimestamp, records));
             baseOffset += records.size();
             if (i % 5 == 0) {
                 epoch += random.nextInt(3);
             }
+            appendTimestamp += random.nextInt(1000);
         }
 
         return batches;
@@ -169,7 +171,7 @@ public final class RecordsIteratorTest {
                 STRING_SERDE,
                 compressionType,
                 batch.baseOffset(),
-                12345L,
+                batch.appendTimestamp(),
                 false,
                 batch.epoch(),
                 1024

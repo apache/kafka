@@ -199,6 +199,7 @@ public class BatchAccumulator<T> implements Closeable {
         MemoryRecords data = currentBatch.build();
         completed.add(new CompletedBatch<>(
             currentBatch.baseOffset(),
+            currentBatch.appendTime(),
             currentBatch.records(),
             data,
             memoryPool,
@@ -207,7 +208,13 @@ public class BatchAccumulator<T> implements Closeable {
         currentBatch = null;
     }
 
-    private void appendControlMessage(Function<ByteBuffer, MemoryRecords> valueCreator) {
+    /**
+     * Append a control batch from a supplied memory record.
+     *
+     * It is expected that the memory records returned by `valueCreator` contains one batch and that batch contains one
+     * record.
+     */
+    private void appendControlMessage(long currentTimeMs, Function<ByteBuffer, MemoryRecords> valueCreator) {
         appendLock.lock();
         try {
             ByteBuffer buffer = memoryPool.tryAllocate(256);
@@ -217,6 +224,7 @@ public class BatchAccumulator<T> implements Closeable {
                     completed.add(
                         new CompletedBatch<>(
                             nextOffset,
+                            currentTimeMs,
                             1,
                             valueCreator.apply(buffer),
                             memoryPool,
@@ -225,7 +233,7 @@ public class BatchAccumulator<T> implements Closeable {
                     );
                     nextOffset += 1;
                 } catch (Exception e) {
-                    // Release the buffer now since the buffer was not stored in completed for a delay release
+                    // Release the buffer now since the buffer was not stored in completed for a delayed release
                     memoryPool.release(buffer);
                     throw e;
                 }
@@ -248,7 +256,7 @@ public class BatchAccumulator<T> implements Closeable {
         LeaderChangeMessage leaderChangeMessage,
         long currentTimeMs
     ) {
-        appendControlMessage(buffer -> {
+        appendControlMessage(currentTimeMs, buffer -> {
             return MemoryRecords.withLeaderChangeMessage(
                 this.nextOffset,
                 currentTimeMs,
@@ -270,7 +278,7 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotHeaderRecord snapshotHeaderRecord,
         long currentTimeMs
     ) {
-        appendControlMessage(buffer -> {
+        appendControlMessage(currentTimeMs, buffer -> {
             return MemoryRecords.withSnapshotHeaderRecord(
                 this.nextOffset,
                 currentTimeMs,
@@ -292,7 +300,7 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotFooterRecord snapshotFooterRecord,
         long currentTimeMs
     ) {
-        appendControlMessage(buffer -> {
+        appendControlMessage(currentTimeMs, buffer -> {
             return MemoryRecords.withSnapshotFooterRecord(
                 this.nextOffset,
                 currentTimeMs,
@@ -450,6 +458,7 @@ public class BatchAccumulator<T> implements Closeable {
 
     public static class CompletedBatch<T> {
         public final long baseOffset;
+        public final long appendTimestamp;
         public final int numRecords;
         public final Optional<List<T>> records;
         public final MemoryRecords data;
@@ -460,12 +469,14 @@ public class BatchAccumulator<T> implements Closeable {
 
         private CompletedBatch(
             long baseOffset,
+            long appendTimestamp,
             List<T> records,
             MemoryRecords data,
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
             this.baseOffset = baseOffset;
+            this.appendTimestamp = appendTimestamp;
             this.records = Optional.of(records);
             this.numRecords = records.size();
             this.data = data;
@@ -475,12 +486,14 @@ public class BatchAccumulator<T> implements Closeable {
 
         private CompletedBatch(
             long baseOffset,
+            long appendTimestamp,
             int numRecords,
             MemoryRecords data,
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
             this.baseOffset = baseOffset;
+            this.appendTimestamp = appendTimestamp;
             this.records = Optional.empty();
             this.numRecords = numRecords;
             this.data = data;
