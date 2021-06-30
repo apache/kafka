@@ -393,9 +393,9 @@ class RaftClusterTest {
   }
 
   private def anyBrokerSocketServer(cluster: KafkaClusterTestKit): SocketServer =
-    cluster.brokers.values.stream
+    cluster.brokers.values.asScala
       .map(b => b.socketServer)
-      .findFirst
-      .orElseThrow(() => new RuntimeException("No broker SocketServers found"))
+      .find(_ => true)
+      .getOrElse(throw new RuntimeException("No broker SocketServers found"))
 
 }
