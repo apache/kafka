@@ -19,12 +19,12 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -32,6 +32,7 @@ import org.junit.Test;
 
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.IntStream;
 
 import static org.junit.Assert.assertEquals;
 
@@ -75,6 +76,44 @@ public class KStreamBranchTest {
         assertEquals(3, processors.get(0).processed().size());
         assertEquals(1, processors.get(1).processed().size());
         assertEquals(2, processors.get(2).processed().size());
+    }
+
+    @SuppressWarnings({"unchecked", "deprecation"})
+    @Test
+    public void testKStreamBranchWithComposedPredicate() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Predicate<Integer, String> isEven = (key, value) -> (key % 2) == 0;
+        final Predicate<Integer, String> isMultipleOfThree = (key, value) -> (key % 3) == 0;
+        final Predicate<Integer, String> isMultipleOfFour = (key, value) -> (key % 4) == 0;
+
+        final int[] expectedKeys = IntStream.range(1, 14).toArray();
+
+        final KStream<Integer, String> stream;
+        final KStream<Integer, String>[] branches;
+
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        branches = stream.branch(isMultipleOfFour.and(isMultipleOfThree), isEven.and(isMultipleOfThree),
+            isMultipleOfFour.or(isMultipleOfThree));
+
+        assertEquals(3, branches.length);
+
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        for (int i = 0; i < branches.length; i++) {
+            branches[i].process(supplier);
+        }
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
+            for (final int expectedKey : expectedKeys) {
+                inputTopic.pipeInput(expectedKey, "V" + expectedKey);
+            }
+        }
+
+        final List<MockProcessor<Integer, String>> processors = supplier.capturedProcessors(3);
+        assertEquals(1, processors.get(0).processed().size());
+        assertEquals(1, processors.get(1).processed().size());
+        assertEquals(4, processors.get(2).processed().size());
     }
 
     @SuppressWarnings({"unchecked", "deprecation"})
