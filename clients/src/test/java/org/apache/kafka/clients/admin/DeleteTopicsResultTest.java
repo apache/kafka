@@ -22,6 +22,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collections;
@@ -30,22 +31,34 @@ import java.util.Map;
 public class DeleteTopicsResultTest {
 
     @Test
-    public void testDeleteTopicsResult() {
-
+    public void testDeleteTopicsResultWithNames() {
         KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
         future.complete(null);
-        Map<Uuid, KafkaFuture<Void>> topicIds = Collections.singletonMap(Uuid.randomUuid(), future);
         Map<String, KafkaFuture<Void>> topicNames = Collections.singletonMap("foo", future);
 
-        DeleteTopicsResult topicIdFutures = DeleteTopicsResult.ofTopicIds(topicIds);
         DeleteTopicsResult topicNameFutures = DeleteTopicsResult.ofTopicNames(topicNames);
-
-        assertEquals(topicIds, topicIdFutures.topicIdValues());
-        assertNull(topicIdFutures.topicNameValues());
-        assertTrue(topicIdFutures.all().isDone());
 
         assertEquals(topicNames, topicNameFutures.topicNameValues());
         assertNull(topicNameFutures.topicIdValues());
         assertTrue(topicNameFutures.all().isDone());
+    }
+
+    @Test
+    public void testDeleteTopicsResultWithIds() {
+        KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        future.complete(null);
+        Map<Uuid, KafkaFuture<Void>> topicIds = Collections.singletonMap(Uuid.randomUuid(), future);
+
+        DeleteTopicsResult topicIdFutures = DeleteTopicsResult.ofTopicIds(topicIds);
+
+        assertEquals(topicIds, topicIdFutures.topicIdValues());
+        assertNull(topicIdFutures.topicNameValues());
+        assertTrue(topicIdFutures.all().isDone());
+    }
+
+    @Test
+    public void testInvalidConfigurations() {
+        assertThrows(IllegalArgumentException.class, () -> new DeleteTopicsResult(null, null));
+        assertThrows(IllegalArgumentException.class, () -> new DeleteTopicsResult(Collections.emptyMap(), Collections.emptyMap()));
     }
 }

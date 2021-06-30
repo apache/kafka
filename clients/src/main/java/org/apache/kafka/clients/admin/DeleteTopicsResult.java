@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
@@ -36,22 +37,23 @@ public class DeleteTopicsResult {
 
     protected DeleteTopicsResult(Map<Uuid, KafkaFuture<Void>> topicIdFutures, Map<String, KafkaFuture<Void>> nameFutures) {
         if (topicIdFutures != null && nameFutures != null)
-            throw new IllegalArgumentException("topicIdFutures and nameFutures can not both be specified.");
+            throw new IllegalArgumentException("topicIdFutures and nameFutures cannot both be specified.");
+        if (topicIdFutures == null && nameFutures == null)
+            throw new IllegalArgumentException("topicIdFutures and nameFutures cannot both be null.");
         this.topicIdFutures = topicIdFutures;
         this.nameFutures = nameFutures;
     }
 
-    protected static DeleteTopicsResult ofTopicIds(Map<Uuid, KafkaFuture<Void>> topicIdFutures) {
-        DeleteTopicsResult result = new DeleteTopicsResult(topicIdFutures, null);
-        return result;
+    static DeleteTopicsResult ofTopicIds(Map<Uuid, KafkaFuture<Void>> topicIdFutures) {
+        return new DeleteTopicsResult(topicIdFutures, null);
     }
 
-    protected static DeleteTopicsResult ofTopicNames(Map<String, KafkaFuture<Void>> nameFutures) {
-        DeleteTopicsResult result = new DeleteTopicsResult(null, nameFutures);
-        return result;
+    static DeleteTopicsResult ofTopicNames(Map<String, KafkaFuture<Void>> nameFutures) {
+        return new DeleteTopicsResult(null, nameFutures);
     }
 
     /**
+     * Use when {@link Admin#deleteTopics(TopicCollection, DeleteTopicsOptions)} used a TopicIdCollection
      * @return a map from topic IDs to futures which can be used to check the status of
      * individual deletions if the deleteTopics request used topic IDs. Otherwise return null.
      */
@@ -60,6 +62,7 @@ public class DeleteTopicsResult {
     }
 
     /**
+     * Use when {@link Admin#deleteTopics(TopicCollection, DeleteTopicsOptions)} used a TopicNameCollection
      * @return a map from topic names to futures which can be used to check the status of
      * individual deletions if the deleteTopics request used topic names. Otherwise return null.
      */
@@ -71,6 +74,7 @@ public class DeleteTopicsResult {
     /**
      * @return a map from topic names to futures which can be used to check the status of
      * individual deletions if the deleteTopics request used topic names. Otherwise return null.
+     * @deprecated Since 3.0 use {@link #topicNameValues} instead
      */
     public Map<String, KafkaFuture<Void>> values() {
         return nameFutures;

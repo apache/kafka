@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 
@@ -49,8 +50,7 @@ public abstract class TopicCollection {
         private final Collection<Uuid> topicIds;
 
         private TopicIdCollection(Collection<Uuid> topicIds) {
-            super();
-            this.topicIds = topicIds;
+            this.topicIds = new ArrayList<>(topicIds);
         }
 
         /**
@@ -69,8 +69,7 @@ public abstract class TopicCollection {
         private final Collection<String> topicNames;
 
         private TopicNameCollection(Collection<String> topicNames) {
-            super();
-            this.topicNames = topicNames;
+            this.topicNames = new ArrayList<>(topicNames);
         }
 
         /**

@@ -50,6 +50,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -1695,15 +1696,15 @@ public class KafkaAdminClient extends AdminClient {
                                            final DeleteTopicsOptions options) {
         DeleteTopicsResult result;
         if (topics instanceof TopicIdCollection)
-            result = DeleteTopicsResult.ofTopicIds(new HashMap<>(handleDeleteTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options)));
+            result = DeleteTopicsResult.ofTopicIds(handleDeleteTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options));
         else if (topics instanceof TopicNameCollection)
-            result = DeleteTopicsResult.ofTopicNames(new HashMap<>(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options)));
+            result = DeleteTopicsResult.ofTopicNames(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options));
         else
             throw new IllegalArgumentException("The TopicCollection provided did not match any supported classes for deleteTopics.");
         return result;
     }
 
-    private Map<String, KafkaFutureImpl<Void>> handleDeleteTopicsUsingNames(final Collection<String> topicNames,
+    private Map<String, KafkaFuture<Void>> handleDeleteTopicsUsingNames(final Collection<String> topicNames,
                                                                             final DeleteTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         final List<String> validTopicNames = new ArrayList<>(topicNames.size());
@@ -1725,10 +1726,10 @@ public class KafkaAdminClient extends AdminClient {
                     Collections.emptyMap(), now, deadline);
             runnable.call(call, now);
         }
-        return topicFutures;
+        return new HashMap<>(topicFutures);
     }
 
-    private Map<Uuid, KafkaFutureImpl<Void>> handleDeleteTopicsUsingIds(final Collection<Uuid> topicIds,
+    private Map<Uuid, KafkaFuture<Void>> handleDeleteTopicsUsingIds(final Collection<Uuid> topicIds,
                                                                         final DeleteTopicsOptions options) {
         final Map<Uuid, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicIds.size());
         final List<Uuid> validTopicIds = new ArrayList<>(topicIds.size());
@@ -1750,7 +1751,7 @@ public class KafkaAdminClient extends AdminClient {
                     Collections.emptyMap(), now, deadline);
             runnable.call(call, now);
         }
-        return topicFutures;
+        return new HashMap<>(topicFutures);
     }
 
     private Call getDeleteTopicsCall(final DeleteTopicsOptions options,
