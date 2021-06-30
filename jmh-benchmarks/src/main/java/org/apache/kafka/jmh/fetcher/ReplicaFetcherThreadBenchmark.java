@@ -157,9 +157,9 @@ public class ReplicaFetcherThreadBenchmark {
             OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
             AlterIsrManager isrChannelManager = Mockito.mock(AlterIsrManager.class);
-            Partition partition = new Partition(tp, 100, ApiVersion$.MODULE$.latestVersion(),
+            Partition partition = new Partition(tp, 100L, ApiVersion$.MODULE$.latestVersion(),
                     0, Time.SYSTEM, isrChangeListener, new DelayedOperationsMock(tp),
-                    Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
+                    Mockito.mock(MetadataCache.class), logManager, isrChannelManager, Partition.defaultFollowerPendingFetchAvailabilityConfig());
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId);
             pool.put(tp, partition);
