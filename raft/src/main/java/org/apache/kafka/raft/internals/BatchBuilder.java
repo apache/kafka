@@ -215,13 +215,6 @@ public class BatchBuilder<T> {
     }
 
     /**
-     * TODO: write documentation
-     */
-    public long appendTime() {
-        return appendTime;
-    }
-
-    /**
      * Return the reference to the initial buffer passed through the constructor.
      * This is used in case the buffer needs to be returned to a pool (e.g.
      * in {@link org.apache.kafka.common.memory.MemoryPool#release(ByteBuffer)}.

@@ -56,7 +56,7 @@ public final class Batch<T> implements Iterable<T> {
     }
 
     /**
-     * TODO: Write documentation
+     * The append timestamp of the batch.
      */
     public long appendTimestamp() {
         return appendTimestamp;

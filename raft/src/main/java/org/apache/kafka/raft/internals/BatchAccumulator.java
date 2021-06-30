@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.Function;
@@ -199,7 +200,6 @@ public class BatchAccumulator<T> implements Closeable {
         MemoryRecords data = currentBatch.build();
         completed.add(new CompletedBatch<>(
             currentBatch.baseOffset(),
-            currentBatch.appendTime(),
             currentBatch.records(),
             data,
             memoryPool,
@@ -211,10 +211,10 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Append a control batch from a supplied memory record.
      *
-     * It is expected that the memory records returned by `valueCreator` contains one batch and that batch contains one
-     * record.
+     * It is expected that the memory records returned by `valueCreator` contains one
+     * batch and that batch contains one record.
      */
-    private void appendControlMessage(long currentTimeMs, Function<ByteBuffer, MemoryRecords> valueCreator) {
+    private void appendControlMessage(Function<ByteBuffer, MemoryRecords> valueCreator) {
         appendLock.lock();
         try {
             ByteBuffer buffer = memoryPool.tryAllocate(256);
@@ -224,7 +224,6 @@ public class BatchAccumulator<T> implements Closeable {
                     completed.add(
                         new CompletedBatch<>(
                             nextOffset,
-                            currentTimeMs,
                             1,
                             valueCreator.apply(buffer),
                             memoryPool,
@@ -256,7 +255,7 @@ public class BatchAccumulator<T> implements Closeable {
         LeaderChangeMessage leaderChangeMessage,
         long currentTimeMs
     ) {
-        appendControlMessage(currentTimeMs, buffer -> {
+        appendControlMessage(buffer -> {
             return MemoryRecords.withLeaderChangeMessage(
                 this.nextOffset,
                 currentTimeMs,
@@ -278,7 +277,7 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotHeaderRecord snapshotHeaderRecord,
         long currentTimeMs
     ) {
-        appendControlMessage(currentTimeMs, buffer -> {
+        appendControlMessage(buffer -> {
             return MemoryRecords.withSnapshotHeaderRecord(
                 this.nextOffset,
                 currentTimeMs,
@@ -300,7 +299,7 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotFooterRecord snapshotFooterRecord,
         long currentTimeMs
     ) {
-        appendControlMessage(currentTimeMs, buffer -> {
+        appendControlMessage(buffer -> {
             return MemoryRecords.withSnapshotFooterRecord(
                 this.nextOffset,
                 currentTimeMs,
@@ -458,7 +457,6 @@ public class BatchAccumulator<T> implements Closeable {
 
     public static class CompletedBatch<T> {
         public final long baseOffset;
-        public final long appendTimestamp;
         public final int numRecords;
         public final Optional<List<T>> records;
         public final MemoryRecords data;
@@ -469,14 +467,14 @@ public class BatchAccumulator<T> implements Closeable {
 
         private CompletedBatch(
             long baseOffset,
-            long appendTimestamp,
             List<T> records,
             MemoryRecords data,
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
+            Objects.requireNonNull(data.firstBatch(), "Exptected memory records to contain one batch");
+
             this.baseOffset = baseOffset;
-            this.appendTimestamp = appendTimestamp;
             this.records = Optional.of(records);
             this.numRecords = records.size();
             this.data = data;
@@ -486,14 +484,14 @@ public class BatchAccumulator<T> implements Closeable {
 
         private CompletedBatch(
             long baseOffset,
-            long appendTimestamp,
             int numRecords,
             MemoryRecords data,
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
+            Objects.requireNonNull(data.firstBatch(), "Exptected memory records to contain one batch");
+
             this.baseOffset = baseOffset;
-            this.appendTimestamp = appendTimestamp;
             this.records = Optional.empty();
             this.numRecords = numRecords;
             this.data = data;
@@ -507,6 +505,10 @@ public class BatchAccumulator<T> implements Closeable {
 
         public void release() {
             pool.release(initialBuffer);
+        }
+
+        public long appendTimestamp() {
+            return data.firstBatch().maxTimestamp();
         }
     }
 

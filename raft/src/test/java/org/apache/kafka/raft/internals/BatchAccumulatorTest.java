@@ -137,6 +137,7 @@ class BatchAccumulatorTest {
             BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
             assertEquals(records, batch.records.get());
             assertEquals(baseOffset, batch.baseOffset);
+            assertEquals(time.milliseconds(), batch.appendTimestamp());
         });
     }
 
@@ -190,6 +191,7 @@ class BatchAccumulatorTest {
             BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
             assertEquals(records, batch.records.get());
             assertEquals(baseOffset, batch.baseOffset);
+            assertEquals(time.milliseconds(), batch.appendTimestamp());
         });
     }
 
@@ -332,6 +334,7 @@ class BatchAccumulatorTest {
             BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
             assertEquals(records, batch.records.get());
             assertEquals(baseOffset, batch.baseOffset);
+            assertEquals(time.milliseconds(), batch.appendTimestamp());
         });
     }
 

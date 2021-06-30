@@ -1855,7 +1855,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     kafkaRaftMetrics.updateCommitLatency(elapsedTimePerRecord, appendTimeMs);
                     logger.debug("Completed commit of {} records at {}", batch.numRecords, offsetAndEpoch);
                     batch.records.ifPresent(records -> {
-                        maybeFireHandleCommit(batch.baseOffset, epoch, batch.appendTimestamp, records);
+                        maybeFireHandleCommit(batch.baseOffset, epoch, batch.appendTimestamp(), records);
                     });
                 }
             });
