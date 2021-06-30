@@ -25,7 +25,7 @@ import java.util.Objects;
 
 public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNullableSerializer<Change<T>, Void, T> {
 
-    private static final int NEWFLAG_SIZE = 1;
+    private static final int NEW_DATA_LENGTH_BYTES_SIZE = Integer.BYTES;
 
     private Serializer<T> inner;
 
@@ -45,34 +45,30 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
     }
 
     /**
-     * @throws StreamsException if both old and new values of data are null, or if
-     * both values are not null
+     * @throws StreamsException if both old and new values of data are null.
      */
     @Override
     public byte[] serialize(final String topic, final Headers headers, final Change<T> data) {
-        final byte[] serializedKey;
+        final boolean oldValueIsNull = data.oldValue == null;
+        final boolean newValueIsNull = data.newValue == null;
 
-        // only one of the old / new values would be not null
-        if (data.newValue != null) {
-            if (data.oldValue != null) {
-                throw new StreamsException("Both old and new values are not null (" + data.oldValue
-                    + " : " + data.newValue + ") in ChangeSerializer, which is not allowed.");
-            }
-
-            serializedKey = inner.serialize(topic, headers, data.newValue);
+        // both old and new values cannot be null
+        if (oldValueIsNull && newValueIsNull) {
+            throw new StreamsException("Both old and new values are null in ChangeSerializer, which is not allowed.");
         } else {
-            if (data.oldValue == null) {
-                throw new StreamsException("Both old and new values are null in ChangeSerializer, which is not allowed.");
-            }
+            final byte[] newData = newValueIsNull ? new byte[0] : inner.serialize(topic, headers, data.newValue);
+            final byte[] oldData = oldValueIsNull ? new byte[0] : inner.serialize(topic, headers, data.oldValue);
 
-            serializedKey = inner.serialize(topic, headers, data.oldValue);
+            final int newDataLength = newData.length;
+            final int capacity = NEW_DATA_LENGTH_BYTES_SIZE + newDataLength + oldData.length;
+
+            return ByteBuffer
+                    .allocate(capacity)
+                    .putInt(newDataLength)
+                    .put(newData)
+                    .put(oldData)
+                    .array();
         }
-
-        final ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + NEWFLAG_SIZE);
-        buf.put(serializedKey);
-        buf.put((byte) (data.newValue != null ? 1 : 0));
-
-        return buf.array();
     }
 
     @Override

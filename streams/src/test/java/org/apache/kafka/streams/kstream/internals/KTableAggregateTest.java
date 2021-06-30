@@ -96,15 +96,11 @@ public class KTableAggregateTest {
                 asList(
                     new KeyValueTimestamp<>("A", "0+1", 10L),
                     new KeyValueTimestamp<>("B", "0+2", 15L),
-                    new KeyValueTimestamp<>("A", "0+1-1", 20L),
                     new KeyValueTimestamp<>("A", "0+1-1+3", 20L),
-                    new KeyValueTimestamp<>("B", "0+2-2", 18L),
                     new KeyValueTimestamp<>("B", "0+2-2+4", 18L),
                     new KeyValueTimestamp<>("C", "0+5", 5L),
                     new KeyValueTimestamp<>("D", "0+6", 25L),
-                    new KeyValueTimestamp<>("B", "0+2-2+4-4", 18L),
                     new KeyValueTimestamp<>("B", "0+2-2+4-4+7", 18L),
-                    new KeyValueTimestamp<>("C", "0+5-5", 10L),
                     new KeyValueTimestamp<>("C", "0+5-5+8", 10L)),
                 supplier.theCapturedProcessor().processed());
         }

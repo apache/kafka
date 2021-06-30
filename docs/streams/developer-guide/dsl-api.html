@@ -1023,8 +1023,8 @@ KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
                                         more than once for a key as a result of having received input tombstone records for that key (see below).</li>
                                     <li>When the first non-<code class="docutils literal"><span class="pre">null</span></code> value is received for a key (e.g.,  INSERT), then only the adder is called.</li>
                                     <li>When subsequent non-<code class="docutils literal"><span class="pre">null</span></code> values are received for a key (e.g.,  UPDATE), then (1) the subtractor is
-                                        called with the old value as stored in the table and (2) the adder is called with the new value of the
-                                        input record that was just received.  The order of execution for the subtractor and adder is not defined.</li>
+                                        first called with the old value as stored in the table and then (2) the adder is called with the new value of the
+                                        input record that was just received.</li>
                                     <li>When a tombstone record &#8211; i.e. a record with a <code class="docutils literal"><span class="pre">null</span></code> value &#8211; is received for a key (e.g.,  DELETE),
                                         then only the subtractor is called.  Note that, whenever the subtractor returns a <code class="docutils literal"><span class="pre">null</span></code> value itself,
                                         then the corresponding key is removed from the resulting <code class="docutils literal"><span class="pre">KTable</span></code>.  If that happens, any next input
@@ -1271,8 +1271,8 @@ KTable&lt;String, Long&gt; aggregatedTable = groupedTable.reduce(
                                         for a key as a result of having received input tombstone records for that key (see below).</li>
                                     <li>When the first non-<code class="docutils literal"><span class="pre">null</span></code> value is received for a key (e.g.,  INSERT), then only the adder is called.</li>
                                     <li>When subsequent non-<code class="docutils literal"><span class="pre">null</span></code> values are received for a key (e.g.,  UPDATE), then (1) the subtractor is
-                                        called with the old value as stored in the table and (2) the adder is called with the new value of the
-                                        input record that was just received.  The order of execution for the subtractor and adder is not defined.</li>
+                                        first called with the old value as stored in the table and then (2) the adder is called with the new value of the
+                                        input record that was just received.</li>
                                     <li>When a tombstone record &#8211; i.e. a record with a <code class="docutils literal"><span class="pre">null</span></code> value &#8211; is received for a key (e.g.,  DELETE),
                                         then only the subtractor is called.  Note that, whenever the subtractor returns a <code class="docutils literal"><span class="pre">null</span></code> value itself,
                                         then the corresponding key is removed from the resulting <code class="docutils literal"><span class="pre">KTable</span></code>.  If that happens, any next input
