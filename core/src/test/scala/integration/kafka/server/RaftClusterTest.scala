@@ -17,13 +17,17 @@
 
 package kafka.server
 
+import kafka.network.SocketServer
+import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, NewTopic}
+import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
+import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{Test, Timeout}
 
 import java.util
 import java.util.Collections
@@ -313,4 +317,85 @@ class RaftClusterTest {
       cluster.close()
     }
   }
+
+  @Test
+  def testCreateClusterWithAdvertisedPortZero(): Unit = {
+    val nodes = new TestKitNodes.Builder()
+      .setNumControllerNodes(1)
+      .setNumBrokerNodes(3)
+      .build()
+    nodes.brokerNodes().values().forEach { broker =>
+      broker.propertyOverrides().put(KafkaConfig.ListenersProp,
+        s"${nodes.externalListenerName().value()}://localhost:0")
+      broker.propertyOverrides().put(KafkaConfig.AdvertisedListenersProp,
+        s"${nodes.externalListenerName().value()}://localhost:0")
+    }
+    val cluster = new KafkaClusterTestKit.Builder(nodes).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.brokers().values().forEach { broker =>
+        TestUtils.waitUntilTrue(() => broker.currentState() == BrokerState.RUNNING,
+          "Broker never made it to RUNNING state.")
+      }
+
+      val describeClusterResponse = connectAndReceive[DescribeClusterResponse](
+        request = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
+        destination = anyBrokerSocketServer(cluster),
+        listenerName = cluster.nodes().externalListenerName()
+      )
+
+      assertEquals(nodes.brokerNodes().size(), describeClusterResponse.nodes().size())
+      describeClusterResponse.nodes().values().forEach { node =>
+        assertEquals("localhost", node.host)
+        assertEquals(cluster.brokers().get(node.id).socketServer.boundPort(nodes.externalListenerName()), node.port)
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer(): Unit = {
+    val nodes = new TestKitNodes.Builder()
+      .setNumControllerNodes(1)
+      .setNumBrokerNodes(3)
+      .build()
+    nodes.brokerNodes().values().forEach { broker =>
+      broker.propertyOverrides().put(KafkaConfig.ListenersProp,
+        s"${nodes.externalListenerName().value()}://localhost:0")
+      broker.propertyOverrides().put(KafkaConfig.AdvertisedListenersProp,
+        s"${nodes.externalListenerName().value()}://advertised-host-${broker.id}:${broker.id + 100}")
+    }
+    val cluster = new KafkaClusterTestKit.Builder(nodes).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.brokers().values().forEach { broker =>
+        TestUtils.waitUntilTrue(() => broker.currentState() == BrokerState.RUNNING,
+          "Broker never made it to RUNNING state.")
+      }
+
+      val describeClusterResponse = connectAndReceive[DescribeClusterResponse](
+        request = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
+        destination = anyBrokerSocketServer(cluster),
+        listenerName = cluster.nodes().externalListenerName()
+      )
+
+      assertEquals(nodes.brokerNodes().size(), describeClusterResponse.nodes().size())
+      describeClusterResponse.nodes().values().forEach { broker =>
+        assertEquals(s"advertised-host-${broker.id}", broker.host)
+        assertEquals(broker.id + 100, broker.port)
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  private def anyBrokerSocketServer(cluster: KafkaClusterTestKit): SocketServer =
+    cluster.brokers.values.stream
+      .map(b => b.socketServer)
+      .findFirst
+      .orElseThrow(() => new RuntimeException("No broker SocketServers found"))
+
 }

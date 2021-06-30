@@ -304,7 +304,7 @@ class BrokerServer(
         networkListeners.add(new Listener().
           setHost(if (Utils.isBlank(ep.host)) InetAddress.getLocalHost.getCanonicalHostName else ep.host).
           setName(ep.listenerName.value()).
-          setPort(ep.port).
+          setPort(if (ep.port == 0) socketServer.boundPort(ep.listenerName) else ep.port).
           setSecurityProtocol(ep.securityProtocol.id))
       }
       lifecycleManager.start(() => metadataListener.highestMetadataOffset(),
