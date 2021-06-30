@@ -29,7 +29,6 @@ import org.apache.kafka.streams.kstream.internals.graph.GroupedTableOperationRep
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Collections;
@@ -68,7 +67,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         this.userProvidedRepartitionTopicName = groupedInternal.name();
     }
 
-    private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private <T> KTable<K, T> doAggregate(final org.apache.kafka.streams.processor.ProcessorSupplier<K, Change<V>> aggregateSupplier,
                                          final NamedInternal named,
                                          final String functionName,
                                          final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
@@ -145,7 +145,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         if (materializedInternal.valueSerde() == null) {
             materializedInternal.withValueSerde(valueSerde);
         }
-        final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(
+        @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+        final org.apache.kafka.streams.processor.ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(
             materializedInternal.storeName(),
             adder,
             subtractor);
@@ -176,7 +177,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
             materializedInternal.withValueSerde(Serdes.Long());
         }
 
-        final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(
+        @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+        final org.apache.kafka.streams.processor.ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(
             materializedInternal.storeName(),
             countInitializer,
             countAdder,
@@ -221,7 +223,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }
-        final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(
+        @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+        final org.apache.kafka.streams.processor.ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(
             materializedInternal.storeName(),
             initializer,
             adder,

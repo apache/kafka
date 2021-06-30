@@ -23,7 +23,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -463,6 +462,7 @@ public class RepartitionTopicNamingTest {
     }
 
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private Topology buildTopology(final String optimizationConfig) {
         final Initializer<Integer> initializer = () -> 0;
         final Aggregator<String, String, Integer> aggregator = (k, v, agg) -> agg + v.length();
@@ -505,7 +505,8 @@ public class RepartitionTopicNamingTest {
     }
 
 
-    private static class SimpleProcessor extends AbstractProcessor<String, String> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private static class SimpleProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
 
         final List<String> valueList;
 

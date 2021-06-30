@@ -96,28 +96,13 @@ public class RestServer {
     public RestServer(WorkerConfig config) {
         this.config = config;
 
-        List<String> listeners = parseListeners();
+        List<String> listeners = config.getList(WorkerConfig.LISTENERS_CONFIG);
         List<String> adminListeners = config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG);
 
         jettyServer = new Server();
         handlers = new ContextHandlerCollection();
 
         createConnectors(listeners, adminListeners);
-    }
-
-    @SuppressWarnings("deprecation")
-    List<String> parseListeners() {
-        List<String> listeners = config.getList(WorkerConfig.LISTENERS_CONFIG);
-        if (listeners == null || listeners.size() == 0) {
-            String hostname = config.getString(WorkerConfig.REST_HOST_NAME_CONFIG);
-
-            if (hostname == null)
-                hostname = "";
-
-            listeners = Collections.singletonList(String.format("%s://%s:%d", PROTOCOL_HTTP, hostname, config.getInt(WorkerConfig.REST_PORT_CONFIG)));
-        }
-
-        return listeners;
     }
 
     /**
@@ -127,11 +112,9 @@ public class RestServer {
         List<Connector> connectors = new ArrayList<>();
 
         for (String listener : listeners) {
-            if (!listener.isEmpty()) {
-                Connector connector = createConnector(listener);
-                connectors.add(connector);
-                log.info("Added connector for {}", listener);
-            }
+            Connector connector = createConnector(listener);
+            connectors.add(connector);
+            log.info("Added connector for {}", listener);
         }
 
         jettyServer.setConnectors(connectors.toArray(new Connector[0]));

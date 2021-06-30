@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender.Event;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -67,6 +68,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
@@ -81,6 +83,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 @RunWith(Parameterized.class)
 public class KStreamSlidingWindowAggregateTest {
 
@@ -718,7 +721,13 @@ public class KStreamSlidingWindowAggregateTest {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "1");
-            assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. value=[1] topic=[topic] partition=[0] offset=[0]"));
+            assertThat(
+                appender.getEvents().stream()
+                    .filter(e -> e.getLevel().equals("WARN"))
+                    .map(Event::getMessage)
+                    .collect(Collectors.toList()),
+                hasItem("Skipping record due to null key or value. value=[1] topic=[topic] partition=[0] offset=[0]")
+            );
         }
     }
 
