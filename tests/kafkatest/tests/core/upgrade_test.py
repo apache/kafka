@@ -24,7 +24,7 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
 from kafkatest.utils.remote_account import java_version
-from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, V_0_11_0_0, V_2_8_0, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, V_0_11_0_0, V_2_8_0, DEV_BRANCH, KafkaVersion
 from kafkatest.services.kafka.util import new_jdk_not_supported
 
 class TestUpgrade(ProduceConsumeValidateTest):
@@ -55,7 +55,19 @@ class TestUpgrade(ProduceConsumeValidateTest):
         # Not trying to detect a problem here leads to failure in the ensuing Kafka roll, which would be a less
         # intuitive failure than seeing a problem here, so detect ZooKeeper upgrade problems before involving Kafka.
         self.zk.describe(self.topic)
-        self.logger.info("First pass bounce - rolling upgrade")
+        # Do some stuff that exercises the use of ZooKeeper before we upgrade to the latest ZooKeeper client version
+        self.logger.info("First pass bounce - rolling Kafka with old ZooKeeper client")
+        for node in self.kafka.nodes:
+            self.kafka.restart_node(node)
+        topic_cfg = {
+            "topic": "another_topic",
+            "partitions": self.partitions,
+            "replication-factor": self.replication_factor,
+            "configs": {"min.insync.replicas": 2}
+        }
+        self.kafka.create_topic(topic_cfg)
+
+        self.logger.info("Second pass bounce - rolling upgrade")
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
             node.version = DEV_BRANCH
@@ -64,7 +76,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
             self.kafka.start_node(node)
             self.wait_until_rejoin()
 
-        self.logger.info("Second pass bounce - remove inter.broker.protocol.version config")
+        self.logger.info("Third pass bounce - remove inter.broker.protocol.version config")
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
             del node.config[config_property.INTER_BROKER_PROTOCOL_VERSION]
@@ -76,6 +88,9 @@ class TestUpgrade(ProduceConsumeValidateTest):
             self.wait_until_rejoin()
 
     @cluster(num_nodes=6)
+    @parametrize(from_kafka_version=str(LATEST_2_8), to_message_format_version=None, compression_types=["none"])
+    @parametrize(from_kafka_version=str(LATEST_2_8), to_message_format_version=None, compression_types=["lz4"])
+    @parametrize(from_kafka_version=str(LATEST_2_8), to_message_format_version=None, compression_types=["snappy"])
     @parametrize(from_kafka_version=str(LATEST_2_7), to_message_format_version=None, compression_types=["none"])
     @parametrize(from_kafka_version=str(LATEST_2_7), to_message_format_version=None, compression_types=["lz4"])
     @parametrize(from_kafka_version=str(LATEST_2_7), to_message_format_version=None, compression_types=["snappy"])
