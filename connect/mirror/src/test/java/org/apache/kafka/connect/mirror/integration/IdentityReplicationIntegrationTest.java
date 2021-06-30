@@ -51,7 +51,7 @@ import org.junit.jupiter.api.BeforeEach;
  * are translated and replicated from the primary cluster to the backup cluster during this failover.
  */
 @Tag("integration")
-public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrationTest {
+public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
     @BeforeEach
     public void startClusters() throws Exception {
         super.startClusters(new HashMap<String, String>() {{
