@@ -28,6 +28,7 @@ import java.util.Collections;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class DelegatingClassLoaderTest {
@@ -50,13 +51,13 @@ public class DelegatingClassLoaderTest {
         assertFalse(DelegatingClassLoader.serviceLoaderManifestForPlugin("resource/version.properties"));
     }
 
-    @Test(expected = ClassNotFoundException.class)
+    @Test
     public void testLoadingUnloadedPluginClass() throws ClassNotFoundException {
         TestPlugins.assertAvailable();
         DelegatingClassLoader classLoader = new DelegatingClassLoader(Collections.emptyList());
         classLoader.initLoaders();
         for (String pluginClassName : TestPlugins.pluginClasses()) {
-            classLoader.loadClass(pluginClassName);
+            assertThrows(ClassNotFoundException.class, () -> classLoader.loadClass(pluginClassName));
         }
     }
 

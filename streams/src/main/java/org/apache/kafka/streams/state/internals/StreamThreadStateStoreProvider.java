@@ -54,7 +54,7 @@ public class StreamThreadStateStoreProvider {
 
             if (storeQueryParams.partition() != null) {
                 for (final Task task : tasks) {
-                    if (task.id().partition == storeQueryParams.partition() &&
+                    if (task.id().partition() == storeQueryParams.partition() &&
                         task.getStore(storeName) != null &&
                         storeName.equals(task.getStore(storeName).name())) {
                         final T typedStore = validateAndCastStores(task.getStore(storeName), queryableStoreType, storeName, task.id());

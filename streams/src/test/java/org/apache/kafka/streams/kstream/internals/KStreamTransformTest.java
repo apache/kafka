@@ -44,6 +44,7 @@ public class KStreamTransformTest {
     private static final String TOPIC_NAME = "topic";
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testTransform() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -79,7 +80,6 @@ public class KStreamTransformTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(
             builder.build(),
-            new Properties(),
             Instant.ofEpochMilli(0L))) {
             final TestInputTopic<Integer, Integer> inputTopic =
                 driver.createInputTopic(TOPIC_NAME, new IntegerSerializer(), new IntegerSerializer());
@@ -107,6 +107,7 @@ public class KStreamTransformTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testTransformWithNewDriverAndPunctuator() {
         final StreamsBuilder builder = new StreamsBuilder();

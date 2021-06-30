@@ -18,10 +18,11 @@
 package kafka.utils
 
 import java.lang.management.ManagementFactory
-import javax.management.ObjectName
 
-import org.junit.Test
-import org.junit.Assert.{assertEquals, assertTrue}
+import javax.management.ObjectName
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.slf4j.LoggerFactory
 
 
 class LoggingTest extends Logging {
@@ -38,7 +39,7 @@ class LoggingTest extends Logging {
   def testLog4jControllerIsRegistered(): Unit = {
     val mbs = ManagementFactory.getPlatformMBeanServer()
     val log4jControllerName = ObjectName.getInstance("kafka:type=kafka.Log4jController")
-    assertTrue("kafka.utils.Log4jController is not registered", mbs.isRegistered(log4jControllerName))
+    assertTrue(mbs.isRegistered(log4jControllerName), "kafka.utils.Log4jController is not registered")
     val instance = mbs.getObjectInstance(log4jControllerName)
     assertEquals("kafka.utils.Log4jController", instance.getClassName)
   }
@@ -65,5 +66,23 @@ class LoggingTest extends Logging {
     val logging = new TestLogging
 
     assertEquals(logging.getClass.getName, logging.log.underlying.getName)
+  }
+
+  @Test
+  def testLoggerLevelIsResolved(): Unit = {
+    val controller = new Log4jController()
+    val previousLevel = controller.getLogLevel("kafka")
+    try {
+      controller.setLogLevel("kafka", "TRACE")
+      // Do some logging so that the Logger is created within the hierarchy
+      // (until loggers are used only loggers in the config file exist)
+      LoggerFactory.getLogger("kafka.utils.Log4jControllerTest").trace("test")
+      assertEquals("TRACE", controller.getLogLevel("kafka"))
+      assertEquals("TRACE", controller.getLogLevel("kafka.utils.Log4jControllerTest"))
+      assertTrue(controller.getLoggers.contains("kafka=TRACE"))
+      assertTrue(controller.getLoggers.contains("kafka.utils.Log4jControllerTest=TRACE"))
+    } finally {
+      controller.setLogLevel("kafka", previousLevel)
+    }
   }
 }

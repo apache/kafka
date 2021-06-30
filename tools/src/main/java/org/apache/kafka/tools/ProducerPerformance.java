@@ -19,6 +19,7 @@ package org.apache.kafka.tools;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,6 +47,11 @@ import org.apache.kafka.common.utils.Utils;
 public class ProducerPerformance {
 
     public static void main(String[] args) throws Exception {
+        ProducerPerformance perf = new ProducerPerformance();
+        perf.start(args);
+    }
+    
+    void start(String[] args) throws IOException {
         ArgumentParser parser = argParser();
 
         try {
@@ -71,53 +77,21 @@ public class ProducerPerformance {
                 throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
             }
 
-            List<byte[]> payloadByteList = new ArrayList<>();
-            if (payloadFilePath != null) {
-                Path path = Paths.get(payloadFilePath);
-                System.out.println("Reading payloads from: " + path.toAbsolutePath());
-                if (Files.notExists(path) || Files.size(path) == 0)  {
-                    throw new  IllegalArgumentException("File does not exist or empty file provided.");
-                }
+            List<byte[]> payloadByteList = readPayloadFile(payloadFilePath, payloadDelimiter);
 
-                String[] payloadList = new String(Files.readAllBytes(path), "UTF-8").split(payloadDelimiter);
+            Properties props = readProps(producerProps, producerConfig, transactionalId, transactionsEnabled);
 
-                System.out.println("Number of messages read: " + payloadList.length);
-
-                for (String payload : payloadList) {
-                    payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
-                }
-            }
-
-            Properties props = new Properties();
-            if (producerConfig != null) {
-                props.putAll(Utils.loadProps(producerConfig));
-            }
-            if (producerProps != null)
-                for (String prop : producerProps) {
-                    String[] pieces = prop.split("=");
-                    if (pieces.length != 2)
-                        throw new IllegalArgumentException("Invalid property: " + prop);
-                    props.put(pieces[0], pieces[1]);
-                }
-
-            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-            if (transactionsEnabled)
-                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
-
-            KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
+            KafkaProducer<byte[], byte[]> producer = createKafkaProducer(props);
 
             if (transactionsEnabled)
                 producer.initTransactions();
 
             /* setup perf test */
             byte[] payload = null;
-            Random random = new Random(0);
             if (recordSize != null) {
                 payload = new byte[recordSize];
-                for (int i = 0; i < payload.length; ++i)
-                    payload[i] = (byte) (random.nextInt(26) + 65);
             }
+            Random random = new Random(0);
             ProducerRecord<byte[], byte[]> record;
             Stats stats = new Stats(numRecords, 5000);
             long startMs = System.currentTimeMillis();
@@ -127,15 +101,14 @@ public class ProducerPerformance {
             int currentTransactionSize = 0;
             long transactionStartTime = 0;
             for (long i = 0; i < numRecords; i++) {
+
+                payload = generateRandomPayload(recordSize, payloadByteList, payload, random);
+
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-
-                if (payloadFilePath != null) {
-                    payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
-                }
                 record = new ProducerRecord<>(topicName, payload);
 
                 long sendStartMs = System.currentTimeMillis();
@@ -186,8 +159,65 @@ public class ProducerPerformance {
 
     }
 
+    KafkaProducer<byte[], byte[]> createKafkaProducer(Properties props) {
+        return new KafkaProducer<>(props);
+    }
+
+    static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
+            Random random) {
+        if (!payloadByteList.isEmpty()) {
+            payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
+        } else if (recordSize != null) {
+            for (int j = 0; j < payload.length; ++j)
+                payload[j] = (byte) (random.nextInt(26) + 65);
+        } else {
+            throw new IllegalArgumentException("no payload File Path or record Size provided");
+        }
+        return payload;
+    }
+    
+    static Properties readProps(List<String> producerProps, String producerConfig, String transactionalId,
+            boolean transactionsEnabled) throws IOException {
+        Properties props = new Properties();
+        if (producerConfig != null) {
+            props.putAll(Utils.loadProps(producerConfig));
+        }
+        if (producerProps != null)
+            for (String prop : producerProps) {
+                String[] pieces = prop.split("=");
+                if (pieces.length != 2)
+                    throw new IllegalArgumentException("Invalid property: " + prop);
+                props.put(pieces[0], pieces[1]);
+            }
+
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        if (transactionsEnabled) props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+        return props;
+    }
+
+    static List<byte[]> readPayloadFile(String payloadFilePath, String payloadDelimiter) throws IOException {
+        List<byte[]> payloadByteList = new ArrayList<>();
+        if (payloadFilePath != null) {
+            Path path = Paths.get(payloadFilePath);
+            System.out.println("Reading payloads from: " + path.toAbsolutePath());
+            if (Files.notExists(path) || Files.size(path) == 0)  {
+                throw new IllegalArgumentException("File does not exist or empty file provided.");
+            }
+
+            String[] payloadList = new String(Files.readAllBytes(path), StandardCharsets.UTF_8).split(payloadDelimiter);
+
+            System.out.println("Number of messages read: " + payloadList.length);
+
+            for (String payload : payloadList) {
+                payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
+            }
+        }
+        return payloadByteList;
+    }
+
     /** Get the command-line argument parser. */
-    private static ArgumentParser argParser() {
+    static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
                 .newArgumentParser("producer-performance")
                 .defaultHelp(true)
@@ -356,9 +386,9 @@ public class ProducerPerformance {
         }
 
         public void printWindow() {
-            long ellapsed = System.currentTimeMillis() - windowStart;
-            double recsPerSec = 1000.0 * windowCount / (double) ellapsed;
-            double mbPerSec = 1000.0 * this.windowBytes / (double) ellapsed / (1024.0 * 1024.0);
+            long elapsed = System.currentTimeMillis() - windowStart;
+            double recsPerSec = 1000.0 * windowCount / (double) elapsed;
+            double mbPerSec = 1000.0 * this.windowBytes / (double) elapsed / (1024.0 * 1024.0);
             System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f ms max latency.%n",
                               windowCount,
                               recsPerSec,

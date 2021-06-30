@@ -20,8 +20,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -42,42 +42,35 @@ import java.util.Map;
  * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
  */
 public class EndQuorumEpochResponse extends AbstractResponse {
-    public final EndQuorumEpochResponseData data;
+    private final EndQuorumEpochResponseData data;
 
     public EndQuorumEpochResponse(EndQuorumEpochResponseData data) {
+        super(ApiKeys.END_QUORUM_EPOCH);
         this.data = data;
-    }
-
-    public EndQuorumEpochResponse(Struct struct, short version) {
-        this.data = new EndQuorumEpochResponseData(struct, version);
-    }
-
-    public EndQuorumEpochResponse(Struct struct) {
-        short latestVersion = (short) (EndQuorumEpochResponseData.SCHEMAS.length - 1);
-        this.data = new EndQuorumEpochResponseData(struct, latestVersion);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errors = new HashMap<>();
 
-        Errors topLevelError = Errors.forCode(data.errorCode());
-        if (topLevelError != Errors.NONE) {
-            errors.put(topLevelError, 1);
-        }
+        errors.put(Errors.forCode(data.errorCode()), 1);
 
         for (EndQuorumEpochResponseData.TopicData topicResponse : data.topics()) {
             for (EndQuorumEpochResponseData.PartitionData partitionResponse : topicResponse.partitions()) {
-                errors.compute(Errors.forCode(partitionResponse.errorCode()),
-                    (error, count) -> count == null ? 1 : count + 1);
+                updateErrorCounts(errors, Errors.forCode(partitionResponse.errorCode()));
             }
         }
         return errors;
+    }
+
+    @Override
+    public EndQuorumEpochResponseData data() {
+        return data;
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     public static EndQuorumEpochResponseData singletonResponse(
@@ -102,6 +95,6 @@ public class EndQuorumEpochResponse extends AbstractResponse {
     }
 
     public static EndQuorumEpochResponse parse(ByteBuffer buffer, short version) {
-        return new EndQuorumEpochResponse(ApiKeys.END_QUORUM_EPOCH.responseSchema(version).read(buffer), version);
+        return new EndQuorumEpochResponse(new EndQuorumEpochResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

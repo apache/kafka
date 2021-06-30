@@ -21,17 +21,19 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent._
 
-import kafka.api.{ApiVersion, LeaderAndIsr}
+import kafka.api.ApiVersion
 import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
+import kafka.server.epoch.LeaderEpochFileCache
+import kafka.server.metadata.MockConfigRepository
 import kafka.utils._
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
 
@@ -63,14 +65,18 @@ class PartitionLockTest extends Logging {
   var logManager: LogManager = _
   var partition: Partition = _
 
-  @Before
+  private val topicPartition = new TopicPartition("test-topic", 0)
+
+  @BeforeEach
   def setUp(): Unit = {
     val logConfig = new LogConfig(new Properties)
-    logManager = TestUtils.createLogManager(Seq(logDir), logConfig, CleanerConfig(enableCleaner = false), mockTime)
-    partition = setupPartitionWithMocks(logManager, logConfig)
+    val configRepository = MockConfigRepository.forTopic(topicPartition.topic, createLogProperties(Map.empty))
+    logManager = TestUtils.createLogManager(Seq(logDir), logConfig, configRepository,
+      CleanerConfig(enableCleaner = false), mockTime)
+    partition = setupPartitionWithMocks(logManager)
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     executorService.shutdownNow()
     logManager.liveLogDirs.foreach(Utils.delete)
@@ -138,8 +144,8 @@ class PartitionLockTest extends Logging {
       .setIsNew(true)
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
     // Update replica set synchronously first to avoid race conditions
-    partition.makeLeader(partitionState(secondReplicaSet), offsetCheckpoints)
-    assertTrue(s"Expected replica $replicaToCheck to be defined", partition.getReplica(replicaToCheck).isDefined)
+    partition.makeLeader(partitionState(secondReplicaSet), offsetCheckpoints, None)
+    assertTrue(partition.getReplica(replicaToCheck).isDefined, s"Expected replica $replicaToCheck to be defined")
 
     val future = executorService.submit((() => {
       var i = 0
@@ -151,7 +157,7 @@ class PartitionLockTest extends Logging {
           secondReplicaSet
         }
 
-        partition.makeLeader(partitionState(replicas), offsetCheckpoints)
+        partition.makeLeader(partitionState(replicas), offsetCheckpoints, None)
 
         i += 1
         Thread.sleep(1) // just to avoid tight loop
@@ -160,11 +166,11 @@ class PartitionLockTest extends Logging {
 
     val deadline = 1.seconds.fromNow
     while (deadline.hasTimeLeft()) {
-      assertTrue(s"Expected replica $replicaToCheck to be defined", partition.getReplica(replicaToCheck).isDefined)
+      assertTrue(partition.getReplica(replicaToCheck).isDefined, s"Expected replica $replicaToCheck to be defined")
     }
     active.set(false)
     future.get(5, TimeUnit.SECONDS)
-    assertTrue(s"Expected replica $replicaToCheck to be defined", partition.getReplica(replicaToCheck).isDefined)
+    assertTrue(partition.getReplica(replicaToCheck).isDefined, s"Expected replica $replicaToCheck to be defined")
   }
 
   /**
@@ -244,23 +250,22 @@ class PartitionLockTest extends Logging {
     }): Runnable)
   }
 
-  private def setupPartitionWithMocks(logManager: LogManager, logConfig: LogConfig): Partition = {
+  private def setupPartitionWithMocks(logManager: LogManager): Partition = {
     val leaderEpoch = 1
     val brokerId = 0
-    val topicPartition = new TopicPartition("test-topic", 0)
-    val stateStore: PartitionStateStore = mock(classOf[PartitionStateStore])
+    val isrChangeListener: IsrChangeListener = mock(classOf[IsrChangeListener])
     val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
     val alterIsrManager: AlterIsrManager = mock(classOf[AlterIsrManager])
 
-    logManager.startup()
+    logManager.startup(Set.empty)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = kafka.server.Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       mockTime,
-      stateStore,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       logManager,
@@ -275,35 +280,49 @@ class PartitionLockTest extends Logging {
         }
       }
 
-      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
-        val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints)
-        new SlowLog(log, mockTime, appendSemaphore)
+      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Log = {
+        val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None)
+        val logDirFailureChannel = new LogDirFailureChannel(1)
+        val segments = new LogSegments(log.topicPartition)
+        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.messageFormatVersion.recordVersion, "")
+        val maxProducerIdExpirationMs = 60 * 60 * 1000
+        val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, maxProducerIdExpirationMs)
+        val offsets = LogLoader.load(LoadLogParams(
+          log.dir,
+          log.topicPartition,
+          log.config,
+          mockTime.scheduler,
+          mockTime,
+          logDirFailureChannel,
+          hadCleanShutdown = true,
+          segments,
+          0L,
+          0L,
+          maxProducerIdExpirationMs,
+          leaderEpochCache,
+          producerStateManager))
+        new SlowLog(log, segments, offsets, leaderEpochCache, producerStateManager, mockTime, logDirFailureChannel, appendSemaphore)
       }
     }
-    when(stateStore.fetchTopicConfig()).thenReturn(createLogProperties(Map.empty))
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)
-    when(stateStore.shrinkIsr(ArgumentMatchers.anyInt, ArgumentMatchers.any[LeaderAndIsr]))
-      .thenReturn(Some(2))
-    when(stateStore.expandIsr(ArgumentMatchers.anyInt, ArgumentMatchers.any[LeaderAndIsr]))
-      .thenReturn(Some(2))
-    when(alterIsrManager.enqueue(ArgumentMatchers.any[AlterIsrItem]))
+    when(alterIsrManager.submit(ArgumentMatchers.any[AlterIsrItem]))
       .thenReturn(true)
 
-    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
     val controllerEpoch = 0
     val replicas = (0 to numReplicaFetchers).map(i => Integer.valueOf(brokerId + i)).toList.asJava
     val isr = replicas
 
-    assertTrue("Expected become leader transition to succeed", partition.makeLeader(new LeaderAndIsrPartitionState()
+    assertTrue(partition.makeLeader(new LeaderAndIsrPartitionState()
       .setControllerEpoch(controllerEpoch)
       .setLeader(brokerId)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(isr)
       .setZkVersion(1)
       .setReplicas(replicas)
-      .setIsNew(true), offsetCheckpoints))
+      .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
 
     partition
   }
@@ -318,10 +337,11 @@ class PartitionLockTest extends Logging {
   }
 
   private def append(partition: Partition, numRecords: Int, followerQueues: Seq[ArrayBlockingQueue[MemoryRecords]]): Unit = {
+    val requestLocal = RequestLocal.withThreadConfinedCaching
     (0 until numRecords).foreach { _ =>
       val batch = TestUtils.records(records = List(new SimpleRecord("k1".getBytes, "v1".getBytes),
         new SimpleRecord("k2".getBytes, "v2".getBytes)))
-      partition.appendRecordsToLeader(batch, origin = AppendOrigin.Client, requiredAcks = 0)
+      partition.appendRecordsToLeader(batch, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
       followerQueues.foreach(_.put(batch))
     }
   }
@@ -343,24 +363,38 @@ class PartitionLockTest extends Logging {
     }
   }
 
-  private class SlowLog(log: Log, mockTime: MockTime, appendSemaphore: Semaphore) extends Log(
+  private class SlowLog(
+    log: Log,
+    segments: LogSegments,
+    offsets: LoadedLogOffsets,
+    leaderEpochCache: Option[LeaderEpochFileCache],
+    producerStateManager: ProducerStateManager,
+    mockTime: MockTime,
+    logDirFailureChannel: LogDirFailureChannel,
+    appendSemaphore: Semaphore
+  ) extends Log(
     log.dir,
     log.config,
-    log.logStartOffset,
-    log.recoveryPoint,
+    segments,
+    offsets.logStartOffset,
+    offsets.recoveryPoint,
+    offsets.nextOffsetMetadata,
     mockTime.scheduler,
     new BrokerTopicStats,
-    log.time,
-    log.maxProducerIdExpirationMs,
+    mockTime,
     log.producerIdExpirationCheckIntervalMs,
     log.topicPartition,
-    log.producerStateManager,
-    new LogDirFailureChannel(1)) {
+    leaderEpochCache,
+    producerStateManager,
+    logDirFailureChannel,
+    _topicId = None,
+    keepPartitionMetadataFile = true) {
 
-    override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin, interBrokerProtocolVersion: ApiVersion): LogAppendInfo = {
-      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion)
+    override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin,
+                                interBrokerProtocolVersion: ApiVersion, requestLocal: RequestLocal): LogAppendInfo = {
+      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion, requestLocal)
       appendSemaphore.acquire()
       appendInfo
     }
-  }
+ }
 }

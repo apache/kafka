@@ -1,7 +1,4 @@
 /*
- * Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
- * Copyright (C) 2017-2018 Alexis Seigneurin.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,31 +20,31 @@ import java.time.Duration
 import java.util
 import java.util.{Locale, Properties}
 import java.util.regex.Pattern
-
 import org.apache.kafka.common.serialization.{Serdes => SerdesJ}
 import org.apache.kafka.streams.kstream.{
   Aggregator,
   Initializer,
   JoinWindows,
   KeyValueMapper,
+  Reducer,
+  Transformer,
+  ValueJoiner,
+  ValueMapper,
   KGroupedStream => KGroupedStreamJ,
   KStream => KStreamJ,
   KTable => KTableJ,
   Materialized => MaterializedJ,
-  Reducer,
-  StreamJoined => StreamJoinedJ,
-  Transformer,
-  ValueJoiner,
-  ValueMapper
+  StreamJoined => StreamJoinedJ
 }
-import org.apache.kafka.streams.processor.{AbstractProcessor, ProcessorContext, ProcessorSupplier}
+import org.apache.kafka.streams.processor.{api, ProcessorContext}
+import org.apache.kafka.streams.processor.api.{Processor, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.{Serdes => NewSerdes}
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.{KeyValue, StreamsConfig, TopologyDescription, StreamsBuilder => StreamsBuilderJ}
-import org.junit.Assert._
-import org.junit._
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api._
 
 import scala.jdk.CollectionConverters._
 
@@ -362,7 +359,7 @@ class TopologyTest {
       mappedStream
         .filter((k: String, _: String) => k == "B")
         .mapValues((v: String) => v.toUpperCase(Locale.getDefault))
-        .process(() => new SimpleProcessor(processorValueCollector))
+        .process(new SimpleProcessorSupplier(processorValueCollector))
 
       val stream2 = mappedStream.groupByKey
         .aggregate(0)(aggregator)(Materialized.`with`(NewSerdes.stringSerde, NewSerdes.intSerde))
@@ -405,7 +402,7 @@ class TopologyTest {
       val reducer: Reducer[String] = (v1, v2) => v1 + ":" + v2
       val valueMapper: ValueMapper[String, String] = v => v.toUpperCase(Locale.getDefault)
       val processorValueCollector = new util.ArrayList[String]
-      val processorSupplier: ProcessorSupplier[String, String] = () => new SimpleProcessor(processorValueCollector)
+      val processorSupplier = new SimpleProcessorSupplier(processorValueCollector)
       val valueJoiner2: ValueJoiner[String, Integer, String] = (value1, value2) => value1 + ":" + value2.toString
       val valueJoiner3: ValueJoiner[String, String, String] = (value1, value2) => value1 + ":" + value2
 
@@ -460,9 +457,10 @@ class TopologyTest {
     assertEquals(getTopologyScala.build(props).describe.toString, getTopologyJava.build(props).describe.toString)
   }
 
-  private class SimpleProcessor private[TopologyTest] (val valueList: util.List[String])
-      extends AbstractProcessor[String, String] {
-    override def process(key: String, value: String): Unit =
-      valueList.add(value)
+  private class SimpleProcessorSupplier private[TopologyTest] (val valueList: util.List[String])
+      extends ProcessorSupplier[String, String, Void, Void] {
+
+    override def get(): Processor[String, String, Void, Void] =
+      (record: api.Record[String, String]) => valueList.add(record.value())
   }
 }

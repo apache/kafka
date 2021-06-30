@@ -138,24 +138,26 @@ public class WindowStoreBuilderTest {
     }
 
     @SuppressWarnings("all")
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
-        new WindowStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime());
+        assertThrows(NullPointerException.class, () -> new WindowStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfKeySerdeIsNull() {
-        new WindowStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
+        assertThrows(NullPointerException.class, () -> new WindowStoreBuilder<>(supplier, null, Serdes.String(), new MockTime()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfValueSerdeIsNull() {
-        new WindowStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
+        assertThrows(NullPointerException.class, () -> new WindowStoreBuilder<>(supplier, Serdes.String(),
+            null, new MockTime()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfTimeIsNull() {
-        new WindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null);
+        assertThrows(NullPointerException.class, () -> new WindowStoreBuilder<>(supplier, Serdes.String(),
+                Serdes.String(), null));
     }
 
     @Test

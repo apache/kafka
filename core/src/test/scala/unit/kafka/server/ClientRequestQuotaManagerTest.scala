@@ -19,8 +19,8 @@ package kafka.server
 import kafka.server.QuotaType.Request
 import org.apache.kafka.common.metrics.Quota
 
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val config = ClientQuotaManagerConfig()
@@ -48,7 +48,7 @@ class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
       time.sleep(500)
       val throttleTime = maybeRecord(clientRequestQuotaManager, "ANONYMOUS", "test-client", millisToPercent(67.1))
 
-      assertEquals("Should be throttled", 210, throttleTime)
+      assertEquals(210, throttleTime, "Should be throttled")
 
       throttle(clientRequestQuotaManager, "ANONYMOUS", "test-client", throttleTime, callback)
       assertEquals(1, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
@@ -68,8 +68,8 @@ class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
         time.sleep(1000)
       }
 
-      assertEquals("Should be unthrottled since bursty sample has rolled over",
-        0, maybeRecord(clientRequestQuotaManager, "ANONYMOUS", "test-client", 0))
+      assertEquals(0,
+        maybeRecord(clientRequestQuotaManager, "ANONYMOUS", "test-client", 0), "Should be unthrottled since bursty sample has rolled over")
 
       // Create a very large spike which requires > one quota window to bring within quota
       assertEquals(1000, maybeRecord(clientRequestQuotaManager, "ANONYMOUS", "test-client", millisToPercent(500)))
@@ -78,8 +78,8 @@ class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
         assertEquals(1000, maybeRecord(clientRequestQuotaManager, "ANONYMOUS", "test-client", 0))
       }
       time.sleep(1000)
-      assertEquals("Should be unthrottled since bursty sample has rolled over",
-        0, maybeRecord(clientRequestQuotaManager, "ANONYMOUS", "test-client", 0))
+      assertEquals(0,
+        maybeRecord(clientRequestQuotaManager, "ANONYMOUS", "test-client", 0), "Should be unthrottled since bursty sample has rolled over")
 
     } finally {
       clientRequestQuotaManager.shutdown()

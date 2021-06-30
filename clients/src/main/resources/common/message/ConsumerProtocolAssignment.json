@@ -22,10 +22,11 @@
   // it encounters a newer version, it parses it using the current format. This basically means
   // that new versions cannot remove or reorder any of the existing fields.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "AssignedPartitions", "type": "[]TopicPartition", "versions": "0+",
       "fields": [
-        { "name": "Topic", "type": "string", "versions": "0+" },
+        { "name": "Topic", "type": "string", "mapKey": true, "versions": "0+", "entityType": "topicName" },
         { "name": "Partitions", "type": "[]int32", "versions": "0+" }
       ]
     },

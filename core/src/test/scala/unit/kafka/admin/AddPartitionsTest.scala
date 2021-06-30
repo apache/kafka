@@ -18,7 +18,6 @@
 package kafka.admin
 
 import java.util.Optional
-
 import kafka.controller.ReplicaAssignment
 import kafka.server.BaseRequestTest
 import kafka.utils.TestUtils
@@ -27,8 +26,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -49,7 +48,7 @@ class AddPartitionsTest extends BaseRequestTest {
   val topic5 = "new-topic5"
   val topic5Assignment = Map(1 -> ReplicaAssignment(Seq(0,1), List(), List()))
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -61,25 +60,15 @@ class AddPartitionsTest extends BaseRequestTest {
 
   @Test
   def testWrongReplicaCount(): Unit = {
-    try {
-      adminZkClient.addPartitions(topic1, topic1Assignment, adminZkClient.getBrokerMetadatas(), 2,
-        Some(Map(0 -> Seq(0, 1), 1 -> Seq(0, 1, 2))))
-      fail("Add partitions should fail")
-    } catch {
-      case _: InvalidReplicaAssignmentException => //this is good
-    }
+    assertThrows(classOf[InvalidReplicaAssignmentException], () => adminZkClient.addPartitions(topic1, topic1Assignment, adminZkClient.getBrokerMetadatas(), 2,
+      Some(Map(0 -> Seq(0, 1), 1 -> Seq(0, 1, 2)))))
   }
 
   @Test
   def testMissingPartition0(): Unit = {
-    try {
-      adminZkClient.addPartitions(topic5, topic5Assignment, adminZkClient.getBrokerMetadatas(), 2,
-        Some(Map(1 -> Seq(0, 1), 2 -> Seq(0, 1, 2))))
-      fail("Add partitions should fail")
-    } catch {
-      case e: AdminOperationException => //this is good
-        assertTrue(e.getMessage.contains("Unexpected existing replica assignment for topic 'new-topic5', partition id 0 is missing"))
-    }
+    val e = assertThrows(classOf[AdminOperationException], () => adminZkClient.addPartitions(topic5, topic5Assignment, adminZkClient.getBrokerMetadatas(), 2,
+      Some(Map(1 -> Seq(0, 1), 2 -> Seq(0, 1, 2)))))
+    assertTrue(e.getMessage.contains("Unexpected existing replica assignment for topic 'new-topic5', partition id 0 is missing"))
   }
 
   @Test
@@ -94,8 +83,8 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(leader2, leader2FromZk)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 1)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 2)
+    TestUtils.waitForPartitionMetadata(servers, topic1, 1)
+    TestUtils.waitForPartitionMetadata(servers, topic1, 2)
     val response = connectAndReceive[MetadataResponse](
       new MetadataRequest.Builder(Seq(topic1).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
@@ -127,8 +116,8 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(leader2, leader2FromZk)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2)
+    TestUtils.waitForPartitionMetadata(servers, topic2, 1)
+    TestUtils.waitForPartitionMetadata(servers, topic2, 2)
     val response = connectAndReceive[MetadataResponse](
       new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
@@ -148,12 +137,12 @@ class AddPartitionsTest extends BaseRequestTest {
     adminZkClient.addPartitions(topic3, topic3Assignment, adminZkClient.getBrokerMetadatas(), 7)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 1)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 2)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 3)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 4)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 5)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 6)
+    TestUtils.waitForPartitionMetadata(servers, topic3, 1)
+    TestUtils.waitForPartitionMetadata(servers, topic3, 2)
+    TestUtils.waitForPartitionMetadata(servers, topic3, 3)
+    TestUtils.waitForPartitionMetadata(servers, topic3, 4)
+    TestUtils.waitForPartitionMetadata(servers, topic3, 5)
+    TestUtils.waitForPartitionMetadata(servers, topic3, 6)
 
     val response = connectAndReceive[MetadataResponse](
       new MetadataRequest.Builder(Seq(topic3).asJava, false).build)
@@ -173,8 +162,8 @@ class AddPartitionsTest extends BaseRequestTest {
     adminZkClient.addPartitions(topic2, topic2Assignment, adminZkClient.getBrokerMetadatas(), 3)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2)
+    TestUtils.waitForPartitionMetadata(servers, topic2, 1)
+    TestUtils.waitForPartitionMetadata(servers, topic2, 2)
 
     val response = connectAndReceive[MetadataResponse](
       new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
@@ -188,11 +177,11 @@ class AddPartitionsTest extends BaseRequestTest {
   def validateLeaderAndReplicas(metadata: TopicMetadata, partitionId: Int, expectedLeaderId: Int,
                                 expectedReplicas: Set[Int]): Unit = {
     val partitionOpt = metadata.partitionMetadata.asScala.find(_.partition == partitionId)
-    assertTrue(s"Partition $partitionId should exist", partitionOpt.isDefined)
+    assertTrue(partitionOpt.isDefined, s"Partition $partitionId should exist")
     val partition = partitionOpt.get
 
-    assertEquals("Partition leader id should match", Optional.of(expectedLeaderId), partition.leaderId)
-    assertEquals("Replica set should match", expectedReplicas, partition.replicaIds.asScala.toSet)
+    assertEquals(Optional.of(expectedLeaderId), partition.leaderId, "Partition leader id should match")
+    assertEquals(expectedReplicas, partition.replicaIds.asScala.toSet, "Replica set should match")
   }
 
 }

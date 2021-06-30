@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.Map.Entry;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -89,11 +90,30 @@ public class MirrorMakerConfig extends AbstractConfig {
     public List<SourceAndTarget> clusterPairs() {
         List<SourceAndTarget> pairs = new ArrayList<>();
         Set<String> clusters = clusters();
+        Map<String, String> originalStrings = originalsStrings();
+        boolean globalHeartbeatsEnabled = MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED_DEFAULT;
+        if (originalStrings.containsKey(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED)) {
+            globalHeartbeatsEnabled = Boolean.valueOf(originalStrings.get(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
+        }
+
         for (String source : clusters) {
             for (String target : clusters) {
-                SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
                 if (!source.equals(target)) {
-                    pairs.add(sourceAndTarget);
+                    String clusterPairConfigPrefix = source + "->" + target + ".";
+                    boolean clusterPairEnabled = Boolean.valueOf(originalStrings.getOrDefault(clusterPairConfigPrefix + "enabled", "false"));
+                    boolean clusterPairHeartbeatsEnabled = globalHeartbeatsEnabled;
+                    if (originalStrings.containsKey(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED)) {
+                        clusterPairHeartbeatsEnabled = Boolean.valueOf(originalStrings.get(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
+                    }
+
+                    // By default, all source->target Herder combinations are created even if `x->y.enabled=false`
+                    // Unless `emit.heartbeats.enabled=false` or `x->y.emit.heartbeats.enabled=false`
+                    // Reason for this behavior: for a given replication flow A->B with heartbeats, 2 herders are required :
+                    // B->A for the MirrorHeartbeatConnector (emits heartbeats into A for monitoring replication health)
+                    // A->B for the MirrorSourceConnector (actual replication flow)
+                    if (clusterPairEnabled || clusterPairHeartbeatsEnabled) {
+                        pairs.add(new SourceAndTarget(source, target));
+                    }
                 }
             }
         }
@@ -140,7 +160,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
 
     // loads worker configs based on properties of the form x.y.z and cluster.x.y.z 
-    Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
+    public Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
         Map<String, String> props = new HashMap<>();
         props.putAll(clusterProps(sourceAndTarget.target()));
       
@@ -176,7 +196,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
 
     // loads properties of the form cluster.x.y.z and source->target.x.y.z
-    Map<String, String> connectorBaseConfig(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
+    public Map<String, String> connectorBaseConfig(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
         Map<String, String> props = new HashMap<>();
 
         props.putAll(originalsStrings());
@@ -247,7 +267,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     private Map<String, String> stringsWithPrefixStripped(String prefix) {
         return originalsStrings().entrySet().stream()
             .filter(x -> x.getKey().startsWith(prefix))
-            .collect(Collectors.toMap(x -> x.getKey().substring(prefix.length()), x -> x.getValue()));
+            .collect(Collectors.toMap(x -> x.getKey().substring(prefix.length()), Entry::getValue));
     }
 
     private Map<String, String> stringsWithPrefix(String prefix) {
@@ -259,12 +279,12 @@ public class MirrorMakerConfig extends AbstractConfig {
     static Map<String, String> clusterConfigsWithPrefix(String prefix, Map<String, String> props) {
         return props.entrySet().stream()
                 .filter(x -> !x.getKey().matches("(^consumer.*|^producer.*|^admin.*)"))
-                .collect(Collectors.toMap(x -> prefix + x.getKey(), x -> x.getValue()));
+                .collect(Collectors.toMap(x -> prefix + x.getKey(), Entry::getValue));
     }
 
     static Map<String, String> clientConfigsWithPrefix(String prefix, Map<String, String> props) {
         return props.entrySet().stream()
                 .filter(x -> x.getKey().matches("(^consumer.*|^producer.*|^admin.*)"))
-                .collect(Collectors.toMap(x -> prefix + x.getKey(), x -> x.getValue()));
+                .collect(Collectors.toMap(x -> prefix + x.getKey(), Entry::getValue));
     }
 }

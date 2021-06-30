@@ -28,8 +28,8 @@ import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -50,7 +50,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   val topic = "topic1"
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     producer.close()
     shutdownServers(brokers)
@@ -154,17 +154,17 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     //Check the times for throttled/unthrottled are each side of what we expect
     val throttledLowerBound = expectedDuration * 1000 * 0.9
     val throttledUpperBound = expectedDuration * 1000 * 3
-    assertTrue(s"Expected $unthrottledTook < $throttledLowerBound", unthrottledTook < throttledLowerBound)
-    assertTrue(s"Expected $throttledTook > $throttledLowerBound", throttledTook > throttledLowerBound)
-    assertTrue(s"Expected $throttledTook < $throttledUpperBound", throttledTook < throttledUpperBound)
+    assertTrue(unthrottledTook < throttledLowerBound, s"Expected $unthrottledTook < $throttledLowerBound")
+    assertTrue(throttledTook > throttledLowerBound, s"Expected $throttledTook > $throttledLowerBound")
+    assertTrue(throttledTook < throttledUpperBound, s"Expected $throttledTook < $throttledUpperBound")
 
     // Check the rate metric matches what we expect.
     // In a short test the brokers can be read unfairly, so assert against the average
     val rateUpperBound = throttle * 1.1
     val rateLowerBound = throttle * 0.5
     val rate = if (leaderThrottle) avRate(LeaderReplication, 100 to 105) else avRate(FollowerReplication, 106 to 107)
-    assertTrue(s"Expected ${rate} < $rateUpperBound", rate < rateUpperBound)
-    assertTrue(s"Expected ${rate} > $rateLowerBound", rate > rateLowerBound)
+    assertTrue(rate < rateUpperBound, s"Expected ${rate} < $rateUpperBound")
+    assertTrue(rate > rateLowerBound, s"Expected ${rate} > $rateLowerBound")
   }
 
   def tp(partition: Int): TopicPartition = new TopicPartition(topic, partition)
@@ -203,10 +203,10 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     val throttledTook = System.currentTimeMillis() - start
 
-    assertTrue(s"Throttled replication of ${throttledTook}ms should be > ${expectedDuration * 1000 * 0.9}ms",
-      throttledTook > expectedDuration * 1000 * 0.9)
-    assertTrue(s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms",
-      throttledTook < expectedDuration * 1000 * 1.5)
+    assertTrue(throttledTook > expectedDuration * 1000 * 0.9,
+      s"Throttled replication of ${throttledTook}ms should be > ${expectedDuration * 1000 * 0.9}ms")
+    assertTrue(throttledTook < expectedDuration * 1000 * 1.5,
+      s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms")
   }
 
   def addData(msgCount: Int, msg: Array[Byte]): Unit = {

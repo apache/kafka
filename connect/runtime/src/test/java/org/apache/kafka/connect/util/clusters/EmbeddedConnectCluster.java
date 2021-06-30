@@ -20,6 +20,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -52,8 +53,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.BOOTSTRAP_SERVERS_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.REST_HOST_NAME_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.REST_PORT_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.LISTENERS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG;
@@ -87,6 +87,9 @@ public class EmbeddedConnectCluster {
     private final String workerNamePrefix;
     private final AtomicInteger nextWorkerId = new AtomicInteger(0);
     private final EmbeddedConnectClusterAssertions assertions;
+    // we should keep the original class loader and set it back after connector stopped since the connector will change the class loader,
+    // and then, the Mockito will use the unexpected class loader to generate the wrong proxy instance, which makes mock failed
+    private final ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
 
     private EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numWorkers,
                                    int numBrokers, Properties brokerProps,
@@ -133,7 +136,7 @@ public class EmbeddedConnectCluster {
             Exit.setExitProcedure(exitProcedure);
             Exit.setHaltProcedure(haltProcedure);
         }
-        kafkaCluster.before();
+        kafkaCluster.start();
         startConnect();
     }
 
@@ -146,15 +149,18 @@ public class EmbeddedConnectCluster {
     public void stop() {
         connectCluster.forEach(this::stopWorker);
         try {
-            kafkaCluster.after();
+            kafkaCluster.stop();
         } catch (UngracefulShutdownException e) {
             log.warn("Kafka did not shutdown gracefully");
         } catch (Exception e) {
             log.error("Could not stop kafka", e);
             throw new RuntimeException("Could not stop brokers", e);
         } finally {
-            Exit.resetExitProcedure();
-            Exit.resetHaltProcedure();
+            if (maskExitProcedures) {
+                Exit.resetExitProcedure();
+                Exit.resetHaltProcedure();
+            }
+            Plugins.compareAndSwapLoaders(originalClassLoader);
         }
     }
 
@@ -230,13 +236,12 @@ public class EmbeddedConnectCluster {
         return workers().stream().allMatch(WorkerHandle::isRunning);
     }
 
-    @SuppressWarnings("deprecation")
     public void startConnect() {
         log.info("Starting Connect cluster '{}' with {} workers", connectClusterName, numInitialWorkers);
 
         workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
-        workerProps.put(REST_HOST_NAME_CONFIG, REST_HOST_NAME);
-        workerProps.put(REST_PORT_CONFIG, "0"); // use a random available port
+        // use a random available port
+        workerProps.put(LISTENERS_CONFIG, "HTTP://" + REST_HOST_NAME + ":0");
 
         String internalTopicsReplFactor = String.valueOf(numBrokers);
         putIfAbsent(workerProps, GROUP_ID_CONFIG, "connect-integration-test-" + connectClusterName);
@@ -252,6 +257,19 @@ public class EmbeddedConnectCluster {
         for (int i = 0; i < numInitialWorkers; i++) {
             addWorker();
         }
+    }
+
+    @Override
+    public String toString() {
+        return String.format("EmbeddedConnectCluster(name= %s, numBrokers= %d, numInitialWorkers= %d, workerProps= %s)",
+            connectClusterName,
+            numBrokers,
+            numInitialWorkers,
+            workerProps);
+    }
+
+    public String getName() {
+        return connectClusterName;
     }
 
     /**

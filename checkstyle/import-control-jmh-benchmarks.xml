@@ -49,6 +49,8 @@
     <allow pkg="kafka.security.authorizer"/>
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.clients"/>
+    <allow pkg="org.apache.kafka.metadata"/>
+    <allow pkg="org.apache.kafka.timeline" />
 
     <subpackage name="cache">
     </subpackage>

@@ -82,4 +82,14 @@ public class Meter implements CompoundStat {
         double totalValue = (rate.stat instanceof WindowedCount) ? 1.0 : value;
         total.record(config, totalValue, timeMs);
     }
+
+    @Override
+    public String toString() {
+        return "Meter(" +
+            "rate=" + rate +
+            ", total=" + total +
+            ", rateMetricName=" + rateMetricName +
+            ", totalMetricName=" + totalMetricName +
+            ')';
+    }
 }

@@ -22,19 +22,22 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
+import java.io.IOException;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -51,8 +54,17 @@ public class HandlingSourceTopicDeletionIntegrationTest {
     private static final String INPUT_TOPIC = "inputTopic";
     private static final String OUTPUT_TOPIC = "outputTopic";
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
 
     @Rule
     public TestName testName = new TestName();
@@ -87,11 +99,17 @@ public class HandlingSourceTopicDeletionIntegrationTest {
         final Topology topology = builder.build();
         final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsConfiguration);
         final AtomicBoolean calledUncaughtExceptionHandler1 = new AtomicBoolean(false);
-        kafkaStreams1.setUncaughtExceptionHandler((thread, exception) -> calledUncaughtExceptionHandler1.set(true));
+        kafkaStreams1.setUncaughtExceptionHandler(exception -> {
+            calledUncaughtExceptionHandler1.set(true);
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+        });
         kafkaStreams1.start();
         final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, streamsConfiguration);
         final AtomicBoolean calledUncaughtExceptionHandler2 = new AtomicBoolean(false);
-        kafkaStreams2.setUncaughtExceptionHandler((thread, exception) -> calledUncaughtExceptionHandler2.set(true));
+        kafkaStreams2.setUncaughtExceptionHandler(exception -> {
+            calledUncaughtExceptionHandler2.set(true);
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+        });
         kafkaStreams2.start();
 
         TestUtils.waitForCondition(

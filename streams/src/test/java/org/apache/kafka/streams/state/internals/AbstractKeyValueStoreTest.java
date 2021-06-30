@@ -49,6 +49,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("unchecked")
 public abstract class AbstractKeyValueStoreTest {
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context);
@@ -80,6 +81,7 @@ public abstract class AbstractKeyValueStoreTest {
         return result;
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldNotIncludeDeletedFromRangeResult() {
         store.close();
@@ -260,7 +262,7 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals("one", driver.flushedEntryStored(1));
         assertEquals("two", driver.flushedEntryStored(2));
         assertEquals("four", driver.flushedEntryStored(4));
-        assertNull(null, driver.flushedEntryStored(5));
+        assertNull(driver.flushedEntryStored(5));
 
         assertFalse(driver.flushedEntryRemoved(0));
         assertFalse(driver.flushedEntryRemoved(1));

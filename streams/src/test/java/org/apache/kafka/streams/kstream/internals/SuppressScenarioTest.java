@@ -32,11 +32,15 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.KGroupedStream;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.SlidingWindows;
+import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -47,10 +51,10 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Properties;
 
 import static java.time.Duration.ZERO;
@@ -72,9 +76,7 @@ public class SuppressScenarioTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private final Properties config = Utils.mkProperties(Utils.mkMap(
-        Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase(Locale.getDefault())),
-        Utils.mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-        Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
+        Utils.mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
     ));
 
     @Test
@@ -579,7 +581,7 @@ public class SuppressScenarioTest {
             // arbitrarily disordered records are admitted, because the *window* is not closed until stream-time > window-end + grace
             inputTopic.pipeInput("k1", "v1", 1L);
             // any record in the same partition advances stream time (note the key is different)
-            inputTopic.pipeInput("k2", "v1", 6L);
+            inputTopic.pipeInput("k2", "v1", 11L);
             // late event for first window - this should get dropped from all streams, since the first window is now closed.
             inputTopic.pipeInput("k1", "v1", 5L);
             // just pushing stream time forward to flush the other events through.
@@ -592,7 +594,7 @@ public class SuppressScenarioTest {
                     new KeyValueTimestamp<>("[k1@0/5]", 2L, 5L),
                     new KeyValueTimestamp<>("[k1@0/5]", null, 5L),
                     new KeyValueTimestamp<>("[k1@0/5]", 3L, 5L),
-                    new KeyValueTimestamp<>("[k2@6/6]", 1L, 6L),
+                    new KeyValueTimestamp<>("[k2@11/11]", 1L, 11L),
                     new KeyValueTimestamp<>("[k1@30/30]", 1L, 30L)
                 )
             );
@@ -600,7 +602,7 @@ public class SuppressScenarioTest {
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
                     new KeyValueTimestamp<>("[k1@0/5]", 3L, 5L),
-                    new KeyValueTimestamp<>("[k2@6/6]", 1L, 6L)
+                    new KeyValueTimestamp<>("[k2@11/11]", 1L, 11L)
                 )
             );
         }
@@ -806,6 +808,18 @@ public class SuppressScenarioTest {
 
     }
 
+    @Test
+    public void shouldWorkWithCogrouped() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KGroupedStream<String, String> stream1 = builder.stream("one", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+        final KGroupedStream<String, String> stream2 = builder.stream("two", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+        final KStream<Windowed<String>, Object> cogrouped = stream1.cogroup((key, value, aggregate) -> aggregate + value).cogroup(stream2, (key, value, aggregate) -> aggregate + value)
+            .windowedBy(TimeWindows.of(Duration.ofMinutes(15)))
+            .aggregate(() -> "", Named.as("test"), Materialized.as("store"))
+            .suppress(Suppressed.untilWindowCloses(unbounded()))
+            .toStream();
+    }
 
     private static <K, V> void verify(final List<TestRecord<K, V>> results,
                                       final List<KeyValueTimestamp<K, V>> expectedResults) {

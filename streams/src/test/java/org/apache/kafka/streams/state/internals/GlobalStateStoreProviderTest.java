@@ -52,6 +52,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 
@@ -139,13 +140,14 @@ public class GlobalStateStoreProviderTest {
         assertTrue(stores.isEmpty());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionIfStoreIsntOpen() {
         final NoOpReadOnlyStore<Object, Object> store = new NoOpReadOnlyStore<>();
         store.close();
         final GlobalStateStoreProvider provider =
             new GlobalStateStoreProvider(Collections.singletonMap("global", store));
-        provider.stores("global", QueryableStoreTypes.keyValueStore());
+        assertThrows(InvalidStateStoreException.class, () -> provider.stores("global",
+            QueryableStoreTypes.keyValueStore()));
     }
 
     @Test

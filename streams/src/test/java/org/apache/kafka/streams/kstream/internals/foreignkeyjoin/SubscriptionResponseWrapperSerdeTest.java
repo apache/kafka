@@ -30,6 +30,7 @@ import static java.util.Objects.requireNonNull;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 public class SubscriptionResponseWrapperSerdeTest {
     private static final class NonNullableSerde<T> implements Serde<T>, Serializer<T>, Deserializer<T> {
@@ -125,10 +126,10 @@ public class SubscriptionResponseWrapperSerdeTest {
         assertEquals(foreignValue, result.getForeignValue());
     }
 
-    @Test(expected = UnsupportedVersionException.class)
-    @SuppressWarnings("unchecked")
+    @Test
     public void shouldThrowExceptionWithBadVersionTest() {
         final long[] hashedValue = null;
-        new SubscriptionResponseWrapper<>(hashedValue, "foreignValue", (byte) 0xFF);
+        assertThrows(UnsupportedVersionException.class,
+            () -> new SubscriptionResponseWrapper<>(hashedValue, "foreignValue", (byte) 0xFF));
     }
 }

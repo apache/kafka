@@ -127,7 +127,7 @@ public class ConsumerNetworkClient implements Closeable {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
-            requestTimeoutMs, null, null, completionHandler);
+            requestTimeoutMs, completionHandler);
         unsent.put(node, clientRequest);
 
         // wakeup the client in case it is blocking in poll so that we can send the queued request
@@ -432,8 +432,8 @@ public class ConsumerNetworkClient implements Closeable {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
                     AuthenticationException authenticationException = client.authenticationException(node);
                     handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
-                        request.callback(), request.destination(), request.createdTimeMs(), now, true,
-                        null, authenticationException, null));
+                            request.callback(), request.destination(), request.createdTimeMs(), now, true,
+                            null, authenticationException, null));
                 }
             }
         }
@@ -594,7 +594,7 @@ public class ConsumerNetworkClient implements Closeable {
                 future.raise(response.authenticationException());
             } else if (response.wasDisconnected()) {
                 log.debug("Cancelled request with header {} due to node {} being disconnected",
-                    response.requestHeader(), response.destination());
+                        response.requestHeader(), response.destination());
                 future.raise(DisconnectException.INSTANCE);
             } else if (response.versionMismatch() != null) {
                 future.raise(response.versionMismatch());
@@ -634,7 +634,7 @@ public class ConsumerNetworkClient implements Closeable {
     /*
      * A thread-safe helper class to hold requests per node that have not been sent yet
      */
-    private final static class UnsentRequests {
+    private static final class UnsentRequests {
         private final ConcurrentMap<Node, ConcurrentLinkedQueue<ClientRequest>> unsent;
 
         private UnsentRequests() {
@@ -644,11 +644,7 @@ public class ConsumerNetworkClient implements Closeable {
         public void put(Node node, ClientRequest request) {
             // the lock protects the put from a concurrent removal of the queue for the node
             synchronized (unsent) {
-                ConcurrentLinkedQueue<ClientRequest> requests = unsent.get(node);
-                if (requests == null) {
-                    requests = new ConcurrentLinkedQueue<>();
-                    unsent.put(node, requests);
-                }
+                ConcurrentLinkedQueue<ClientRequest> requests = unsent.computeIfAbsent(node, key -> new ConcurrentLinkedQueue<>());
                 requests.add(request);
             }
         }

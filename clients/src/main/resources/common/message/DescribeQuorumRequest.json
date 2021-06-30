@@ -16,6 +16,7 @@
 {
   "apiKey": 55,
   "type": "request",
+  "listeners": ["broker", "controller"],
   "name": "DescribeQuorumRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

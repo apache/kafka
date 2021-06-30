@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 
 class ActiveTaskCreator {
     private final InternalTopologyBuilder builder;
@@ -92,7 +92,7 @@ class ActiveTaskCreator {
         if (processingMode == EXACTLY_ONCE_ALPHA) {
             threadProducer = null;
             taskProducers = new HashMap<>();
-        } else { // non-eos and eos-beta
+        } else { // non-eos and eos-v2
             log.info("Creating thread producer client");
 
             final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
@@ -115,7 +115,7 @@ class ActiveTaskCreator {
 
     StreamsProducer streamsProducerForTask(final TaskId taskId) {
         if (processingMode != EXACTLY_ONCE_ALPHA) {
-            throw new IllegalStateException("Producer per thread is used.");
+            throw new IllegalStateException("Expected EXACTLY_ONCE to be enabled, but the processing mode was " + processingMode);
         }
 
         final StreamsProducer taskProducer = taskProducers.get(taskId);
@@ -126,14 +126,16 @@ class ActiveTaskCreator {
     }
 
     StreamsProducer threadProducer() {
-        if (processingMode != EXACTLY_ONCE_BETA) {
-            throw new IllegalStateException("Exactly-once beta is not enabled.");
+        if (processingMode != EXACTLY_ONCE_V2) {
+            throw new IllegalStateException("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was " + processingMode);
         }
         return threadProducer;
     }
 
+    // TODO: change return type to `StreamTask`
     Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer,
                                  final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        // TODO: change type to `StreamTask`
         final List<Task> createdTasks = new ArrayList<>();
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
@@ -141,7 +143,7 @@ class ActiveTaskCreator {
 
             final LogContext logContext = getLogContext(taskId);
 
-            final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
+            final ProcessorTopology topology = builder.buildSubtopology(taskId.subtopology());
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
@@ -178,7 +180,7 @@ class ActiveTaskCreator {
     }
 
     StreamTask createActiveTaskFromStandby(final StandbyTask standbyTask,
-                                           final Set<TopicPartition> partitions,
+                                           final Set<TopicPartition> inputPartitions,
                                            final Consumer<byte[], byte[]> consumer) {
         final InternalProcessorContext context = standbyTask.processorContext();
         final ProcessorStateManager stateManager = standbyTask.stateMgr;
@@ -189,17 +191,17 @@ class ActiveTaskCreator {
 
         return createActiveTask(
             standbyTask.id,
-            partitions,
+            inputPartitions,
             consumer,
             logContext,
-            builder.buildSubtopology(standbyTask.id.topicGroupId),
+            builder.buildSubtopology(standbyTask.id.subtopology()),
             stateManager,
             context
         );
     }
 
     private StreamTask createActiveTask(final TaskId taskId,
-                                        final Set<TopicPartition> partitions,
+                                        final Set<TopicPartition> inputPartitions,
                                         final Consumer<byte[], byte[]> consumer,
                                         final LogContext logContext,
                                         final ProcessorTopology topology,
@@ -230,7 +232,7 @@ class ActiveTaskCreator {
 
         final StreamTask task = new StreamTask(
             taskId,
-            partitions,
+            inputPartitions,
             topology,
             consumer,
             config,
@@ -240,10 +242,11 @@ class ActiveTaskCreator {
             time,
             stateManager,
             recordCollector,
-            context
+            context,
+            logContext
         );
 
-        log.trace("Created task {} with assigned partitions {}", taskId, partitions);
+        log.trace("Created task {} with assigned partitions {}", taskId, inputPartitions);
         createTaskSensor.record();
         return task;
     }

@@ -30,7 +30,7 @@ import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.LinkedHashMap;
@@ -48,9 +48,9 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
 
     CogroupedKStreamImpl(final String name,
                          final Set<String> subTopologySourceNodes,
-                         final StreamsGraphNode streamsGraphNode,
+                         final GraphNode graphNode,
                          final InternalStreamsBuilder builder) {
-        super(name, null, null, subTopologySourceNodes, streamsGraphNode, builder);
+        super(name, null, null, subTopologySourceNodes, graphNode, builder);
         groupPatterns = new LinkedHashMap<>();
         aggregateBuilder = new CogroupedStreamAggregateBuilder<>(builder);
     }
@@ -104,7 +104,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             subTopologySourceNodes,
             name,
             aggregateBuilder,
-            streamsGraphNode,
+            graphNode,
             groupPatterns);
     }
 
@@ -117,7 +117,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             subTopologySourceNodes,
             name,
             aggregateBuilder,
-            streamsGraphNode,
+            graphNode,
             groupPatterns);
     }
 
@@ -129,7 +129,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             subTopologySourceNodes,
             name,
             aggregateBuilder,
-            streamsGraphNode,
+            graphNode,
             groupPatterns);
     }
 

@@ -19,7 +19,6 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util
 import java.util.Properties
-
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_7_IV0, LeaderAndIsr}
@@ -31,7 +30,7 @@ import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import kafka.utils.json.JsonObject
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
@@ -40,13 +39,14 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
+import org.apache.kafka.server.common.ProducerIdsBlock
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
 
 import scala.beans.BeanProperty
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Map, Seq, mutable}
+import scala.collection.{Map, Seq, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
@@ -279,8 +279,12 @@ object TopicsZNode {
 }
 
 object TopicZNode {
+  case class TopicIdReplicaAssignment(topic: String,
+                                      topicId: Option[Uuid],
+                                      assignment: Map[TopicPartition, ReplicaAssignment])
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
-  def encode(assignment: collection.Map[TopicPartition, ReplicaAssignment]): Array[Byte] = {
+  def encode(topicId: Option[Uuid],
+             assignment: collection.Map[TopicPartition, ReplicaAssignment]): Array[Byte] = {
     val replicaAssignmentJson = mutable.Map[String, util.List[Int]]()
     val addingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
     val removingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
@@ -293,14 +297,17 @@ object TopicZNode {
         removingReplicasAssignmentJson += (partition.partition.toString -> replicaAssignment.removingReplicas.asJava)
     }
 
-    Json.encodeAsBytes(Map(
-      "version" -> 2,
+    val topicAssignment = mutable.Map(
+      "version" -> 3,
       "partitions" -> replicaAssignmentJson.asJava,
       "adding_replicas" -> addingReplicasAssignmentJson.asJava,
       "removing_replicas" -> removingReplicasAssignmentJson.asJava
-    ).asJava)
+    )
+    topicId.foreach(id => topicAssignment += "topic_id" -> id.toString)
+
+    Json.encodeAsBytes(topicAssignment.asJava)
   }
-  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, ReplicaAssignment] = {
+  def decode(topic: String, bytes: Array[Byte]): TopicIdReplicaAssignment = {
     def getReplicas(replicasJsonOpt: Option[JsonObject], partition: String): Seq[Int] = {
       replicasJsonOpt match {
         case Some(replicasJson) => replicasJson.get(partition) match {
@@ -311,21 +318,24 @@ object TopicZNode {
       }
     }
 
-    Json.parseBytes(bytes).flatMap { js =>
+    Json.parseBytes(bytes).map { js =>
       val assignmentJson = js.asJsonObject
-      val partitionsJsonOpt = assignmentJson.get("partitions").map(_.asJsonObject)
+      val topicId = assignmentJson.get("topic_id").map(_.to[String]).map(Uuid.fromString)
       val addingReplicasJsonOpt = assignmentJson.get("adding_replicas").map(_.asJsonObject)
       val removingReplicasJsonOpt = assignmentJson.get("removing_replicas").map(_.asJsonObject)
-      partitionsJsonOpt.map { partitionsJson =>
+      val partitionsJsonOpt = assignmentJson.get("partitions").map(_.asJsonObject)
+      val partitions = partitionsJsonOpt.map { partitionsJson =>
         partitionsJson.iterator.map { case (partition, replicas) =>
           new TopicPartition(topic, partition.toInt) -> ReplicaAssignment(
             replicas.to[Seq[Int]],
             getReplicas(addingReplicasJsonOpt, partition),
             getReplicas(removingReplicasJsonOpt, partition)
           )
-        }
-      }
-    }.map(_.toMap).getOrElse(Map.empty)
+        }.toMap
+      }.getOrElse(immutable.Map.empty[TopicPartition, ReplicaAssignment])
+
+      TopicIdReplicaAssignment(topic, topicId, partitions)
+    }.getOrElse(TopicIdReplicaAssignment(topic, None, Map.empty[TopicPartition, ReplicaAssignment]))
   }
 }
 
@@ -756,7 +766,33 @@ object BrokerSequenceIdZNode {
 }
 
 object ProducerIdBlockZNode {
+  val CurrentVersion: Long = 1L
+
   def path = "/latest_producer_id_block"
+
+  def generateProducerIdBlockJson(producerIdBlock: ProducerIdsBlock): Array[Byte] = {
+    Json.encodeAsBytes(Map("version" -> CurrentVersion,
+      "broker" -> producerIdBlock.brokerId,
+      "block_start" -> producerIdBlock.producerIdStart.toString,
+      "block_end" -> producerIdBlock.producerIdEnd.toString).asJava
+    )
+  }
+
+  def parseProducerIdBlockData(jsonData: Array[Byte]): ProducerIdsBlock = {
+    val jsonDataAsString = jsonData.map(_.toChar).mkString
+    try {
+      Json.parseBytes(jsonData).map(_.asJsonObject).flatMap { js =>
+        val brokerId = js("broker").to[Int]
+        val blockStart = js("block_start").to[String].toLong
+        val blockEnd = js("block_end").to[String].toLong
+        Some(new ProducerIdsBlock(brokerId, blockStart, Math.toIntExact(blockEnd - blockStart + 1)))
+      }.getOrElse(throw new KafkaException(s"Failed to parse the producerId block json $jsonDataAsString"))
+    } catch {
+      case e: java.lang.NumberFormatException =>
+        // this should never happen: the written data has exceeded long type limit
+        throw new KafkaException(s"Read jason data $jsonDataAsString contains producerIds that have exceeded long type limit", e)
+    }
+  }
 }
 
 object DelegationTokenAuthZNode {
@@ -798,12 +834,25 @@ object DelegationTokenInfoZNode {
  *             written by the controller to the FeatureZNode only when the broker IBP config
  *             is less than KAFKA_2_7_IV0.
  */
-object FeatureZNodeStatus extends Enumeration {
-  type FeatureZNodeStatus = Value
-  val Disabled, Enabled = Value
+sealed trait FeatureZNodeStatus {
+  def id: Int
+}
 
-  def withNameOpt(value: Int): Option[Value] = {
-    values.find(_.id == value)
+object FeatureZNodeStatus {
+  case object Disabled extends FeatureZNodeStatus {
+    val id: Int = 0
+  }
+
+  case object Enabled extends FeatureZNodeStatus {
+    val id: Int = 1
+  }
+
+  def withNameOpt(id: Int): Option[FeatureZNodeStatus] = {
+    id match {
+      case Disabled.id => Some(Disabled)
+      case Enabled.id => Some(Enabled)
+      case _ => Option.empty
+    }
   }
 }
 
@@ -813,7 +862,7 @@ object FeatureZNodeStatus extends Enumeration {
  * @param status     the status of the ZK node
  * @param features   the cluster-wide finalized features
  */
-case class FeatureZNode(status: FeatureZNodeStatus.FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
+case class FeatureZNode(status: FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
 }
 
 object FeatureZNode {

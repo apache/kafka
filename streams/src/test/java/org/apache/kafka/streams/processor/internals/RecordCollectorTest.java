@@ -30,7 +30,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -52,6 +54,8 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.MockClientSupplier;
+
+import java.util.UUID;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -91,7 +95,7 @@ public class RecordCollectorTest {
     private final StreamsConfig eosConfig = new StreamsConfig(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE)
+        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2)
     ));
 
     private final String topic = "topic";
@@ -109,6 +113,7 @@ public class RecordCollectorTest {
 
     private final StringSerializer stringSerializer = new StringSerializer();
     private final ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
+    private final UUID processId = UUID.randomUUID();
 
     private final StreamPartitioner<String, Object> streamPartitioner =
         (topic, key, value, numPartitions) -> Integer.parseInt(key) % numPartitions;
@@ -124,10 +129,10 @@ public class RecordCollectorTest {
         clientSupplier.setCluster(cluster);
         streamsProducer = new StreamsProducer(
             config,
-            "threadId",
+            processId + "-StreamThread-1",
             clientSupplier,
             null,
-        null,
+            processId,
             logContext
         );
         mockProducer = clientSupplier.producers.get(0);
@@ -448,12 +453,69 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldThrowTaskMigratedExceptionOnSubsequentSendWhenProducerFencedInCallback() {
-        final KafkaException exception = new ProducerFencedException("KABOOM!");
+    public void shouldThrowInformativeStreamsExceptionOnKafkaExceptionFromStreamPartitioner() {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            getExceptionalStreamsProducer(exception),
+            getExceptionalStreamProducerOnPartitionsFor(new KafkaException("Kaboom!")),
+            productionExceptionHandler,
+            streamsMetrics
+        );
+        collector.initialize();
+
+        final StreamsException exception = assertThrows(
+            StreamsException.class,
+            () -> collector.send(topic, "0", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertThat(
+            exception.getMessage(),
+            equalTo("Could not determine the number of partitions for topic '" + topic + "' for task " +
+                taskId + " due to org.apache.kafka.common.KafkaException: Kaboom!")
+        );
+    }
+
+    @Test
+    public void shouldForwardTimeoutExceptionFromStreamPartitionerWithoutWrappingIt() {
+        shouldForwardExceptionWithoutWrappingIt(new TimeoutException("Kaboom!"));
+    }
+
+    @Test
+    public void shouldForwardRuntimeExceptionFromStreamPartitionerWithoutWrappingIt() {
+        shouldForwardExceptionWithoutWrappingIt(new RuntimeException("Kaboom!"));
+    }
+
+    private <E extends RuntimeException> void shouldForwardExceptionWithoutWrappingIt(final E runtimeException) {
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamProducerOnPartitionsFor(runtimeException),
+            productionExceptionHandler,
+            streamsMetrics
+        );
+        collector.initialize();
+
+        final RuntimeException exception = assertThrows(
+            runtimeException.getClass(),
+            () -> collector.send(topic, "0", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertThat(exception.getMessage(), equalTo("Kaboom!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnSubsequentSendWhenProducerFencedInCallback() {
+        testThrowTaskMigratedExceptionOnSubsequentSend(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnSubsequentSendWhenInvalidEpochInCallback() {
+        testThrowTaskMigratedExceptionOnSubsequentSend(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testThrowTaskMigratedExceptionOnSubsequentSend(final RuntimeException exception) {
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducerOnSend(exception),
             productionExceptionHandler,
             streamsMetrics
         );
@@ -462,26 +524,27 @@ public class RecordCollectorTest {
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
 
         final TaskMigratedException thrown = assertThrows(
-            TaskMigratedException.class, () ->
-                collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+            TaskMigratedException.class,
+            () -> collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
         );
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                        "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
-                        "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
-                        " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
-        );
     }
 
     @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentFlushWhenProducerFencedInCallback() {
-        final KafkaException exception = new ProducerFencedException("KABOOM!");
+        testThrowTaskMigratedExceptionOnSubsequentFlush(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnSubsequentFlushWhenInvalidEpochInCallback() {
+        testThrowTaskMigratedExceptionOnSubsequentFlush(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testThrowTaskMigratedExceptionOnSubsequentFlush(final RuntimeException exception) {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            getExceptionalStreamsProducer(exception),
+            getExceptionalStreamsProducerOnSend(exception),
             productionExceptionHandler,
             streamsMetrics
         );
@@ -491,22 +554,23 @@ public class RecordCollectorTest {
 
         final TaskMigratedException thrown = assertThrows(TaskMigratedException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                        "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
-                        "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
-                        " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
-        );
     }
 
     @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentCloseWhenProducerFencedInCallback() {
-        final KafkaException exception = new ProducerFencedException("KABOOM!");
+        testThrowTaskMigratedExceptionOnSubsequentClose(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnSubsequentCloseWhenInvalidEpochInCallback() {
+        testThrowTaskMigratedExceptionOnSubsequentClose(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testThrowTaskMigratedExceptionOnSubsequentClose(final RuntimeException exception) {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            getExceptionalStreamsProducer(exception),
+            getExceptionalStreamsProducerOnSend(exception),
             productionExceptionHandler,
             streamsMetrics
         );
@@ -516,13 +580,6 @@ public class RecordCollectorTest {
 
         final TaskMigratedException thrown = assertThrows(TaskMigratedException.class, collector::closeClean);
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                        "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
-                        "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
-                        " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
-        );
     }
 
     @Test
@@ -531,7 +588,7 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            getExceptionalStreamsProducer(exception),
+            getExceptionalStreamsProducerOnSend(exception),
             productionExceptionHandler,
             streamsMetrics
         );
@@ -557,7 +614,7 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            getExceptionalStreamsProducer(exception),
+            getExceptionalStreamsProducerOnSend(exception),
             productionExceptionHandler,
             streamsMetrics
         );
@@ -580,7 +637,7 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            getExceptionalStreamsProducer(exception),
+            getExceptionalStreamsProducerOnSend(exception),
             productionExceptionHandler,
             streamsMetrics
         );
@@ -603,7 +660,7 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            getExceptionalStreamsProducer(exception),
+            getExceptionalStreamsProducerOnSend(exception),
             new AlwaysContinueProductionExceptionHandler(),
             streamsMetrics
         );
@@ -629,7 +686,7 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            getExceptionalStreamsProducer(exception),
+            getExceptionalStreamsProducerOnSend(exception),
             new AlwaysContinueProductionExceptionHandler(),
             streamsMetrics
         );
@@ -652,7 +709,7 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            getExceptionalStreamsProducer(exception),
+            getExceptionalStreamsProducerOnSend(exception),
             new AlwaysContinueProductionExceptionHandler(),
             streamsMetrics
         );
@@ -674,7 +731,7 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            getExceptionalStreamsProducer(new Exception()),
+            getExceptionalStreamsProducerOnSend(new Exception()),
             new AlwaysContinueProductionExceptionHandler(),
             streamsMetrics
         );
@@ -721,7 +778,7 @@ public class RecordCollectorTest {
             taskId,
             new StreamsProducer(
                 eosConfig,
-                "threadId",
+                "-StreamThread-1",
                 new MockClientSupplier() {
                     @Override
                     public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
@@ -734,7 +791,7 @@ public class RecordCollectorTest {
                     }
                 },
                 taskId,
-                null,
+                processId,
                 logContext
             ),
             productionExceptionHandler,
@@ -752,7 +809,7 @@ public class RecordCollectorTest {
             taskId,
             new StreamsProducer(
                 config,
-                "threadId",
+                processId + "-StreamThread-1",
                 new MockClientSupplier() {
                     @Override
                     public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
@@ -791,7 +848,7 @@ public class RecordCollectorTest {
             taskId,
             new StreamsProducer(
                 eosConfig,
-                "threadId",
+                processId + "-StreamThread-1",
                 new MockClientSupplier() {
                     @Override
                     public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
@@ -799,7 +856,7 @@ public class RecordCollectorTest {
                     }
                 },
                 taskId,
-                null,
+                processId,
                 logContext
             ),
             productionExceptionHandler,
@@ -820,10 +877,10 @@ public class RecordCollectorTest {
         streamsProducer.flush();
     }
 
-    private StreamsProducer getExceptionalStreamsProducer(final Exception exception) {
+    private StreamsProducer getExceptionalStreamsProducerOnSend(final Exception exception) {
         return new StreamsProducer(
             config,
-            "threadId",
+            processId + "-StreamThread-1",
             new MockClientSupplier() {
                 @Override
                 public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
@@ -832,6 +889,27 @@ public class RecordCollectorTest {
                         public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
                             callback.onCompletion(null, exception);
                             return null;
+                        }
+                    };
+                }
+            },
+            null,
+            null,
+            logContext
+        );
+    }
+
+    private StreamsProducer getExceptionalStreamProducerOnPartitionsFor(final RuntimeException exception) {
+        return new StreamsProducer(
+            config,
+            processId + "-StreamThread-1",
+            new MockClientSupplier() {
+                @Override
+                public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
+                    return new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                        @Override
+                        public synchronized List<PartitionInfo> partitionsFor(final String topic) {
+                            throw exception;
                         }
                     };
                 }

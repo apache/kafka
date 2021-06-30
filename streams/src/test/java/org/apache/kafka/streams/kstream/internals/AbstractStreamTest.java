@@ -19,8 +19,9 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.test.NoopValueTransformer;
+import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -29,14 +30,9 @@ import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
-import java.util.Properties;
 import java.util.Random;
 
 import static org.easymock.EasyMock.createMock;
@@ -45,15 +41,16 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class AbstractStreamTest {
 
     @Test
     public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
         final ValueTransformerSupplier<?, ?> valueTransformerSupplier = createMock(ValueTransformerSupplier.class);
-        expect(valueTransformerSupplier.get()).andReturn(null).times(3);
+        expect(valueTransformerSupplier.get()).andAnswer(NoopValueTransformer::new).atLeastOnce();
+        replay(valueTransformerSupplier);
         final ValueTransformerWithKeySupplier<?, ?, ?> valueTransformerWithKeySupplier =
             AbstractStream.toValueTransformerWithKeySupplier(valueTransformerSupplier);
-        replay(valueTransformerSupplier);
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
@@ -64,7 +61,7 @@ public class AbstractStreamTest {
     public void testToInternalValueTransformerWithKeySupplierSuppliesNewTransformers() {
         final ValueTransformerWithKeySupplier<?, ?, ?> valueTransformerWithKeySupplier =
             createMock(ValueTransformerWithKeySupplier.class);
-        expect(valueTransformerWithKeySupplier.get()).andReturn(null).times(3);
+        expect(valueTransformerWithKeySupplier.get()).andAnswer(NoopValueTransformerWithKey::new).atLeastOnce();
         replay(valueTransformerWithKeySupplier);
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
@@ -72,6 +69,7 @@ public class AbstractStreamTest {
         verify(valueTransformerWithKeySupplier);
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testShouldBeExtensible() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -83,11 +81,8 @@ public class AbstractStreamTest {
 
         stream.randomFilter().process(supplier);
 
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "abstract-stream-test");
-        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        final TopologyTestDriver driver = new TopologyTestDriver(builder.build());
 
-        final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props);
         final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
         for (final int expectedKey : expectedKeys) {
             inputTopic.pipeInput(expectedKey, "V" + expectedKey);
@@ -107,12 +102,12 @@ public class AbstractStreamTest {
             final ProcessorGraphNode<K, V> processorNode = new ProcessorGraphNode<>(
                 name,
                 new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name));
-            builder.addGraphNode(this.streamsGraphNode, processorNode);
+            builder.addGraphNode(this.graphNode, processorNode);
             return new KStreamImpl<>(name, null, null, subTopologySourceNodes, false, processorNode, builder);
         }
     }
 
-    private static class ExtendedKStreamDummy<K, V> implements ProcessorSupplier<K, V> {
+    private static class ExtendedKStreamDummy<K, V> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V> {
 
         private final Random rand;
 
@@ -121,11 +116,11 @@ public class AbstractStreamTest {
         }
 
         @Override
-        public Processor<K, V> get() {
+        public org.apache.kafka.streams.processor.Processor<K, V> get() {
             return new ExtendedKStreamDummyProcessor();
         }
 
-        private class ExtendedKStreamDummyProcessor extends AbstractProcessor<K, V> {
+        private class ExtendedKStreamDummyProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, V> {
             @Override
             public void process(final K key, final V value) {
                 // flip a coin and filter

@@ -25,7 +25,7 @@ import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.server.policy.CreateTopicPolicy
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
-import org.junit.Test
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 

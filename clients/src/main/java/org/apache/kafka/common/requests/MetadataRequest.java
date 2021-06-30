@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -92,6 +93,16 @@ public class MetadataRequest extends AbstractRequest {
             if (!data.allowAutoTopicCreation() && version < 4)
                 throw new UnsupportedVersionException("MetadataRequest versions older than 4 don't support the " +
                         "allowAutoTopicCreation field");
+            if (data.topics() != null) {
+                data.topics().forEach(topic -> {
+                    if (topic.name() == null)
+                        throw new UnsupportedVersionException("MetadataRequest version " + version +
+                                " does not support null topic names.");
+                    if (topic.topicId() != Uuid.ZERO_UUID)
+                        throw new UnsupportedVersionException("MetadataRequest version " + version +
+                            " does not support non-zero topic IDs.");
+                });
+            }
             return new MetadataRequest(data, version);
         }
 
@@ -102,20 +113,13 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     private final MetadataRequestData data;
-    private final short version;
 
     public MetadataRequest(MetadataRequestData data, short version) {
         super(ApiKeys.METADATA, version);
         this.data = data;
-        this.version = version;
     }
 
-    public MetadataRequest(Struct struct, short version) {
-        super(ApiKeys.METADATA, version);
-        this.data = new MetadataRequestData(struct, version);
-        this.version = version;
-    }
-
+    @Override
     public MetadataRequestData data() {
         return data;
     }
@@ -124,22 +128,26 @@ public class MetadataRequest extends AbstractRequest {
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         MetadataResponseData responseData = new MetadataResponseData();
-        if (topics() != null) {
-            for (String topic :topics())
+        if (data.topics() != null) {
+            for (MetadataRequestTopic topic : data.topics()) {
+                // the response does not allow null, so convert to empty string if necessary
+                String topicName = topic.name() == null ? "" : topic.name();
                 responseData.topics().add(new MetadataResponseData.MetadataResponseTopic()
-                    .setName(topic)
+                    .setName(topicName)
+                    .setTopicId(topic.topicId())
                     .setErrorCode(error.code())
                     .setIsInternal(false)
                     .setPartitions(Collections.emptyList()));
+            }
         }
 
         responseData.setThrottleTimeMs(throttleTimeMs);
-        return new MetadataResponse(responseData);
+        return new MetadataResponse(responseData, true);
     }
 
     public boolean isAllTopics() {
         return (data.topics() == null) ||
-            (data.topics().isEmpty() && version == 0); //In version 0, an empty topic list indicates
+            (data.topics().isEmpty() && version() == 0); //In version 0, an empty topic list indicates
                                                          // "request metadata for all topics."
     }
 
@@ -158,17 +166,12 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     public static MetadataRequest parse(ByteBuffer buffer, short version) {
-        return new MetadataRequest(ApiKeys.METADATA.parseRequest(version, buffer), version);
+        return new MetadataRequest(new MetadataRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public static List<MetadataRequestTopic> convertToMetadataRequestTopic(final Collection<String> topics) {
         return topics.stream().map(topic -> new MetadataRequestTopic()
             .setName(topic))
             .collect(Collectors.toList());
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version);
     }
 }

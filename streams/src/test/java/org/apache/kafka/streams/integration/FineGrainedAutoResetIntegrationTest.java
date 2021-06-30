@@ -31,6 +31,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -40,9 +41,9 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -70,8 +71,42 @@ public class FineGrainedAutoResetIntegrationTest {
     private static final String OUTPUT_TOPIC_1 = "outputTopic_1";
     private static final String OUTPUT_TOPIC_2 = "outputTopic_2";
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    @BeforeClass
+    public static void startCluster() throws IOException, InterruptedException {
+        CLUSTER.start();
+        CLUSTER.createTopics(
+                TOPIC_1_0,
+                TOPIC_2_0,
+                TOPIC_A_0,
+                TOPIC_C_0,
+                TOPIC_Y_0,
+                TOPIC_Z_0,
+                TOPIC_1_1,
+                TOPIC_2_1,
+                TOPIC_A_1,
+                TOPIC_C_1,
+                TOPIC_Y_1,
+                TOPIC_Z_1,
+                TOPIC_1_2,
+                TOPIC_2_2,
+                TOPIC_A_2,
+                TOPIC_C_2,
+                TOPIC_Y_2,
+                TOPIC_Z_2,
+                NOOP,
+                DEFAULT_OUTPUT_TOPIC,
+                OUTPUT_TOPIC_0,
+                OUTPUT_TOPIC_1,
+                OUTPUT_TOPIC_2);
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
     private final MockTime mockTime = CLUSTER.time;
 
     private static final String TOPIC_1_0 = "topic-1_0";
@@ -105,41 +140,12 @@ public class FineGrainedAutoResetIntegrationTest {
     private final String topicYTestMessage = "topic-Y test";
     private final String topicZTestMessage = "topic-Z test";
 
-
-    @BeforeClass
-    public static void startKafkaCluster() throws InterruptedException {
-        CLUSTER.createTopics(
-            TOPIC_1_0,
-            TOPIC_2_0,
-            TOPIC_A_0,
-            TOPIC_C_0,
-            TOPIC_Y_0,
-            TOPIC_Z_0,
-            TOPIC_1_1,
-            TOPIC_2_1,
-            TOPIC_A_1,
-            TOPIC_C_1,
-            TOPIC_Y_1,
-            TOPIC_Z_1,
-            TOPIC_1_2,
-            TOPIC_2_2,
-            TOPIC_A_2,
-            TOPIC_C_2,
-            TOPIC_Y_2,
-            TOPIC_Z_2,
-            NOOP,
-            DEFAULT_OUTPUT_TOPIC,
-            OUTPUT_TOPIC_0,
-            OUTPUT_TOPIC_1,
-            OUTPUT_TOPIC_2);
-    }
-
     @Before
     public void setUp() throws IOException {
 
         final Properties props = new Properties();
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         props.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
@@ -278,7 +284,7 @@ public class FineGrainedAutoResetIntegrationTest {
     public void shouldThrowStreamsExceptionNoResetSpecified() throws InterruptedException {
         final Properties props = new Properties();
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         props.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
 
@@ -306,13 +312,14 @@ public class FineGrainedAutoResetIntegrationTest {
     }
 
 
-    private static final class TestingUncaughtExceptionHandler implements Thread.UncaughtExceptionHandler {
+    private static final class TestingUncaughtExceptionHandler implements StreamsUncaughtExceptionHandler {
         boolean correctExceptionThrown = false;
         @Override
-        public void uncaughtException(final Thread t, final Throwable e) {
-            assertThat(e.getClass().getSimpleName(), is("StreamsException"));
-            assertThat(e.getCause().getClass().getSimpleName(), is("NoOffsetForPartitionException"));
+        public StreamThreadExceptionResponse handle(final Throwable throwable) {
+            assertThat(throwable.getClass().getSimpleName(), is("StreamsException"));
+            assertThat(throwable.getCause().getClass().getSimpleName(), is("NoOffsetForPartitionException"));
             correctExceptionThrown = true;
+            return StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
         }
     }
 

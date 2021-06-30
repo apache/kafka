@@ -17,14 +17,18 @@
 
 package org.apache.kafka.common.utils;
 
-import org.junit.Test;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
+import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ConfigUtilsTest {
 
@@ -45,15 +49,15 @@ public class ConfigUtilsTest {
             {"cow", "beef", "heifer", "steer"}
         });
         assertEquals("baz", newConfig.get("foo.bar"));
-        assertEquals(null, newConfig.get("foobar.deprecated"));
+        assertNull(newConfig.get("foobar.deprecated"));
         assertEquals("1", newConfig.get("chicken"));
-        assertEquals(null, newConfig.get("rooster"));
-        assertEquals(null, newConfig.get("hen"));
+        assertNull(newConfig.get("rooster"));
+        assertNull(newConfig.get("hen"));
         assertEquals("moo", newConfig.get("cow"));
-        assertEquals(null, newConfig.get("beef"));
-        assertEquals(null, newConfig.get("heifer"));
-        assertEquals(null, newConfig.get("steer"));
-        assertEquals(null, config.get("cow"));
+        assertNull(newConfig.get("beef"));
+        assertNull(newConfig.get("heifer"));
+        assertNull(newConfig.get("steer"));
+        assertNull(config.get("cow"));
         assertEquals("blah", config.get("blah"));
         assertEquals("blah", newConfig.get("blah"));
         assertEquals(42, newConfig.get("unexpected.non.string.object"));
@@ -139,5 +143,29 @@ public class ConfigUtilsTest {
         assertEquals("derp", newConfig.get("foo.bar"));
         assertNull(newConfig.get("foo.bar.deprecated"));
         assertNull(newConfig.get("foo.bar.even.more.deprecated"));
+    }
+
+    private static final ConfigDef CONFIG = new ConfigDef().
+        define("myPassword", Type.PASSWORD, Importance.HIGH, "").
+        define("myString", Type.STRING, Importance.HIGH, "").
+        define("myInt", Type.INT, Importance.HIGH, "").
+        define("myString2", Type.STRING, Importance.HIGH, "");
+
+    @Test
+    public void testConfigMapToRedactedStringForEmptyMap() {
+        assertEquals("{}", ConfigUtils.
+            configMapToRedactedString(Collections.emptyMap(), CONFIG));
+    }
+
+    @Test
+    public void testConfigMapToRedactedStringWithSecrets() {
+        Map<String, Object> testMap1 = new HashMap<>();
+        testMap1.put("myString", "whatever");
+        testMap1.put("myInt", Integer.valueOf(123));
+        testMap1.put("myPassword", "foosecret");
+        testMap1.put("myString2", null);
+        testMap1.put("myUnknown", Integer.valueOf(456));
+        assertEquals("{myInt=123, myPassword=(redacted), myString=\"whatever\", myString2=null, myUnknown=(redacted)}",
+            ConfigUtils.configMapToRedactedString(testMap1, CONFIG));
     }
 }

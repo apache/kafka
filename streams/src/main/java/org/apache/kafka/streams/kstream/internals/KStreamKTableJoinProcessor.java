@@ -18,29 +18,27 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1, V1> {
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends org.apache.kafka.streams.processor.AbstractProcessor<K1, V1> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoin.class);
 
     private final KTableValueGetter<K2, V2> valueGetter;
     private final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper;
-    private final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
+    private final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner;
     private final boolean leftJoin;
-    private StreamsMetricsImpl metrics;
     private Sensor droppedRecordsSensor;
 
     KStreamKTableJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
                                final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper,
-                               final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
+                               final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner,
                                final boolean leftJoin) {
         this.valueGetter = valueGetter;
         this.keyMapper = keyMapper;
@@ -49,10 +47,10 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
     }
 
     @Override
-    public void init(final ProcessorContext context) {
+    public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
         super.init(context);
-        metrics = (StreamsMetricsImpl) context.metrics();
-        droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
+        final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
+        droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
         valueGetter.init(context);
     }
 
@@ -76,7 +74,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
         } else {
             final V2 value2 = getValueOrNull(valueGetter.get(mappedKey));
             if (leftJoin || value2 != null) {
-                context().forward(key, joiner.apply(value, value2));
+                context().forward(key, joiner.apply(key, value, value2));
             }
         }
     }

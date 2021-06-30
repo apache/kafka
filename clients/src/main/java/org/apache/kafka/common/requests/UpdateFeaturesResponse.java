@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Possible error codes:
@@ -40,28 +40,22 @@ public class UpdateFeaturesResponse extends AbstractResponse {
     private final UpdateFeaturesResponseData data;
 
     public UpdateFeaturesResponse(UpdateFeaturesResponseData data) {
+        super(ApiKeys.UPDATE_FEATURES);
         this.data = data;
     }
 
-    public UpdateFeaturesResponse(Struct struct) {
-        final short latestVersion = (short) (UpdateFeaturesResponseData.SCHEMAS.length - 1);
-        this.data = new UpdateFeaturesResponseData(struct, latestVersion);
-    }
-
-    public UpdateFeaturesResponse(Struct struct, short version) {
-        this.data = new UpdateFeaturesResponseData(struct, version);
-    }
-
-    public Map<String, ApiError> errors() {
-        return data.results().valuesSet().stream().collect(
-            Collectors.toMap(
-                result -> result.feature(),
-                result -> new ApiError(Errors.forCode(result.errorCode()), result.errorMessage())));
+    public ApiError topLevelError() {
+        return new ApiError(Errors.forCode(data.errorCode()), data.errorMessage());
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return apiErrorCounts(errors());
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        updateErrorCounts(errorCounts, Errors.forCode(data.errorCode()));
+        for (UpdatableFeatureResult result : data.results()) {
+            updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()));
+        }
+        return errorCounts;
     }
 
     @Override
@@ -70,21 +64,17 @@ public class UpdateFeaturesResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    @Override
     public String toString() {
         return data.toString();
     }
 
+    @Override
     public UpdateFeaturesResponseData data() {
         return data;
     }
 
     public static UpdateFeaturesResponse parse(ByteBuffer buffer, short version) {
-        return new UpdateFeaturesResponse(ApiKeys.UPDATE_FEATURES.parseResponse(version, buffer), version);
+        return new UpdateFeaturesResponse(new UpdateFeaturesResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     public static UpdateFeaturesResponse createWithErrors(ApiError topLevelError, Map<String, ApiError> updateErrors, int throttleTimeMs) {

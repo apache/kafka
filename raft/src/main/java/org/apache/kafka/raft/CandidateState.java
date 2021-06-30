@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.slf4j.Logger;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -29,9 +32,11 @@ public class CandidateState implements EpochState {
     private final int epoch;
     private final int retries;
     private final Map<Integer, State> voteStates = new HashMap<>();
+    private final Optional<LogOffsetMetadata> highWatermark;
     private final int electionTimeoutMs;
     private final Timer electionTimer;
     private final Timer backoffTimer;
+    private final Logger log;
 
     /**
      * The life time of a candidate state is the following:
@@ -48,16 +53,20 @@ public class CandidateState implements EpochState {
         int localId,
         int epoch,
         Set<Integer> voters,
+        Optional<LogOffsetMetadata> highWatermark,
         int retries,
-        int electionTimeoutMs
+        int electionTimeoutMs,
+        LogContext logContext
     ) {
         this.localId = localId;
         this.epoch = epoch;
+        this.highWatermark = highWatermark;
         this.retries = retries;
         this.isBackingOff = false;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
         this.backoffTimer = time.timer(0);
+        this.log = logContext.logger(CandidateState.class);
 
         for (Integer voterId : voters) {
             voteStates.put(voterId, State.UNRECORDED);
@@ -227,8 +236,22 @@ public class CandidateState implements EpochState {
     }
 
     @Override
+    public Optional<LogOffsetMetadata> highWatermark() {
+        return highWatermark;
+    }
+
+    @Override
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        // Still reject vote request even candidateId = localId, Although the candidate votes for
+        // itself, this vote is implicit and not "granted".
+        log.debug("Rejecting vote request from candidate {} since we are already candidate in epoch {}",
+            candidateId, epoch);
+        return false;
+    }
+
+    @Override
     public String toString() {
-        return "Candidate(" +
+        return "CandidateState(" +
             "localId=" + localId +
             ", epoch=" + epoch +
             ", retries=" + retries +
@@ -240,6 +263,9 @@ public class CandidateState implements EpochState {
     public String name() {
         return "Candidate";
     }
+
+    @Override
+    public void close() {}
 
     private enum State {
         UNRECORDED,

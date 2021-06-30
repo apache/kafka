@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -35,7 +36,7 @@ import java.util.NoSuchElementException;
  */
 public class ThreadCache {
     private final Logger log;
-    private final long maxCacheSizeBytes;
+    private volatile long maxCacheSizeBytes;
     private final StreamsMetricsImpl metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();
 
@@ -69,6 +70,25 @@ public class ThreadCache {
 
     public long flushes() {
         return numFlushes;
+    }
+
+    public synchronized void resize(final long newCacheSizeBytes) {
+        final boolean shrink = newCacheSizeBytes < maxCacheSizeBytes;
+        maxCacheSizeBytes = newCacheSizeBytes;
+        if (shrink) {
+            log.debug("Cache size was shrunk to {}", newCacheSizeBytes);
+            if (caches.values().isEmpty()) {
+                return;
+            }
+            final CircularIterator<NamedCache> circularIterator = new CircularIterator<>(caches.values());
+            while (sizeBytes() > maxCacheSizeBytes) {
+                final NamedCache cache = circularIterator.next();
+                cache.evict();
+                numEvicts++;
+            }
+        } else {
+            log.debug("Cache size was expanded to {}", newCacheSizeBytes);
+        }
     }
 
     /**
@@ -170,11 +190,15 @@ public class ThreadCache {
     }
 
     public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to) {
+        return range(namespace, from, to, true);
+    }
+
+    public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to, final boolean toInclusive) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
             return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, this.metrics));
         }
-        return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to), cache);
+        return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to, toInclusive), cache);
     }
 
     public MemoryLRUCacheBytesIterator reverseRange(final String namespace, final Bytes from, final Bytes to) {

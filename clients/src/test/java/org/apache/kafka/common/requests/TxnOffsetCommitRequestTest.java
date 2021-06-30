@@ -17,14 +17,13 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,9 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
 
@@ -47,7 +44,7 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
     private static TxnOffsetCommitRequest.Builder builder;
     private static TxnOffsetCommitRequest.Builder builderWithGroupMetadata;
 
-    @Before
+    @BeforeEach
     @Override
     public void setUp() {
         super.setUp();
@@ -68,13 +65,9 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             groupId,
             producerId,
             producerEpoch,
-            offsets,
-            false);
+            offsets
+        );
 
-        initializeBuilderWithGroupMetadata(false);
-    }
-
-    private void initializeBuilderWithGroupMetadata(final boolean autoDowngrade) {
         builderWithGroupMetadata = new TxnOffsetCommitRequest.Builder(
             transactionalId,
             groupId,
@@ -83,8 +76,8 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             offsets,
             memberId,
             generationId,
-            Optional.of(groupInstanceId),
-            autoDowngrade);
+            Optional.of(groupInstanceId)
+        );
     }
 
     @Test
@@ -116,7 +109,7 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
                 ))
         );
 
-        for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
             final TxnOffsetCommitRequest request;
             if (version < 3) {
                 request = builder.build(version);
@@ -132,27 +125,6 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             assertEquals(errorsMap, response.errors());
             assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 2), response.errorCounts());
             assertEquals(throttleTimeMs, response.throttleTimeMs());
-        }
-    }
-
-    @Test
-    public void testEnableGroupMetadataAutoDowngrade() {
-        for (short version = 0; version <= 2; version++) {
-            initializeBuilderWithGroupMetadata(true);
-            final TxnOffsetCommitRequest request = builderWithGroupMetadata.build(version);
-
-            assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, request.data.memberId());
-            assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, request.data.generationId());
-            assertNull(request.data.groupInstanceId());
-        }
-    }
-
-    @Test
-    public void testDisableGroupMetadataAutoDowngrade() {
-        for (short version = 0; version <= 2; version++) {
-            initializeBuilderWithGroupMetadata(false);
-            final short finalVersion = version;
-            assertThrows(UnsupportedVersionException.class, () -> builderWithGroupMetadata.build(finalVersion));
         }
     }
 }

@@ -16,9 +16,9 @@ package kafka.server
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
-
 import kafka.server.ClientQuotaManager.DefaultTags
 import kafka.utils.TestUtils
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.message.CreatePartitionsRequestData
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
@@ -42,11 +42,11 @@ import org.apache.kafka.common.security.auth.AuthenticationContext
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder
 import org.apache.kafka.test.{TestUtils => JTestUtils}
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.fail
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -105,7 +105,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     properties.put(KafkaConfig.ControllerQuotaWindowSizeSecondsProp, ControllerQuotaWindowSizeSeconds.toString)
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -315,8 +315,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
 
   private def assertThrottleTime(max: Int, actual: Int): Unit = {
     assertTrue(
-      s"Expected a throttle time between 0 and $max but got $actual",
-      (actual >= 0) && (actual <= max))
+      (actual >= 0) && (actual <= max),
+      s"Expected a throttle time between 0 and $max but got $actual")
   }
 
   private def createTopics(topics: Map[String, Int], version: Short): (Int, Map[String, Errors]) = {
@@ -355,7 +355,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
 
   private def defineUserQuota(user: String, quota: Option[Double]): Unit = {
     val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> user).asJava)
-    val quotas = Map(DynamicConfig.Client.ControllerMutationOverrideProp -> quota)
+    val quotas = Map(QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG -> quota)
 
     try alterClientQuotas(Map(entity -> quotas))(entity).get(10, TimeUnit.SECONDS) catch {
       case e: ExecutionException => throw e.getCause

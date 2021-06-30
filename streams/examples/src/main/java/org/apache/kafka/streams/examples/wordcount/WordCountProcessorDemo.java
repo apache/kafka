@@ -60,14 +60,11 @@ public final class WordCountProcessorDemo {
         @Override
         public Processor<String, String, String, String> get() {
             return new Processor<String, String, String, String>() {
-                private ProcessorContext context;
                 private KeyValueStore<String, Integer> kvStore;
 
                 @Override
-                @SuppressWarnings("unchecked")
                 public void init(final ProcessorContext<String, String> context) {
-                    this.context = context;
-                    this.context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -> {
+                    context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -> {
                         try (final KeyValueIterator<String, Integer> iter = kvStore.all()) {
                             System.out.println("----------- " + timestamp + " ----------- ");
 
@@ -85,7 +82,7 @@ public final class WordCountProcessorDemo {
 
                 @Override
                 public void process(final Record<String, String> record) {
-                    final String[] words = record.value().toLowerCase(Locale.getDefault()).split(" ");
+                    final String[] words = record.value().toLowerCase(Locale.getDefault()).split("\\W+");
 
                     for (final String word : words) {
                         final Integer oldValue = kvStore.get(word);

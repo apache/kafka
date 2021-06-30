@@ -17,9 +17,6 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.ConfigDef.Range;
-import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-
-import java.util.List;
 
 public class SaslConfigs {
     /*
@@ -31,26 +28,10 @@ public class SaslConfigs {
     public static final String GSSAPI_MECHANISM = "GSSAPI";
     public static final String DEFAULT_SASL_MECHANISM = GSSAPI_MECHANISM;
 
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final String SASL_ENABLED_MECHANISMS = BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG;
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final String SASL_ENABLED_MECHANISMS_DOC = BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_DOC;
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final List<String> DEFAULT_SASL_ENABLED_MECHANISMS = BrokerSecurityConfigs.DEFAULT_SASL_ENABLED_MECHANISMS;
-
     public static final String SASL_JAAS_CONFIG = "sasl.jaas.config";
     public static final String SASL_JAAS_CONFIG_DOC = "JAAS login context parameters for SASL connections in the format used by JAAS configuration files. "
         + "JAAS configuration file format is described <a href=\"http://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/LoginConfigFile.html\">here</a>. "
-        + "The format for the value is: '<code>loginModuleClass controlFlag (optionName=optionValue)*;</code>'. For brokers, "
+        + "The format for the value is: <code>loginModuleClass controlFlag (optionName=optionValue)*;</code>. For brokers, "
         + "the config must be prefixed with listener prefix and SASL mechanism name in lower-case. For example, "
         + "listener.name.sasl_ssl.scram-sha-256.sasl.jaas.config=com.example.ScramLoginModule required;";
 
@@ -117,22 +98,6 @@ public class SaslConfigs {
             + " This value and sasl.login.refresh.min.period.seconds are both ignored if their sum exceeds the remaining lifetime of a credential."
             + " Currently applies only to OAUTHBEARER.";
     public static final short DEFAULT_LOGIN_REFRESH_BUFFER_SECONDS = 300;
-
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG;
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC;
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = BrokerSecurityConfigs.DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES;
 
     public static void addClientSaslSupport(ConfigDef config) {
         config.define(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SaslConfigs.SASL_KERBEROS_SERVICE_NAME_DOC)

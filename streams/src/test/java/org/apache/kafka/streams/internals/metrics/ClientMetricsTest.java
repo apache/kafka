@@ -17,21 +17,31 @@
 package org.apache.kafka.streams.internals.metrics;
 
 import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.eq;
 
-import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.mock;
-import static org.powermock.api.easymock.PowerMock.replay;
-import static org.powermock.api.easymock.PowerMock.verify;
+import java.util.Collections;
+import java.util.Map;
+
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_LEVEL_GROUP;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class ClientMetricsTest {
     private static final String COMMIT_ID = "test-commit-ID";
     private static final String VERSION = "test-version";
 
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
+    private final Sensor expectedSensor = mock(Sensor.class);
+    private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
+
 
     @Test
     public void shouldAddVersionMetric() {
@@ -99,37 +109,52 @@ public class ClientMetricsTest {
         );
     }
 
+    @Test
+    public void shouldGetFailedStreamThreadsSensor() {
+        final String name = "failed-stream-threads";
+        final String description = "The number of failed stream threads since the start of the Kafka Streams client";
+        when(streamsMetrics.clientLevelSensor(name, RecordingLevel.INFO)).thenReturn(expectedSensor);
+        when(streamsMetrics.clientLevelTagMap()).thenReturn(tagMap);
+        StreamsMetricsImpl.addSumMetricToSensor(
+            expectedSensor,
+            CLIENT_LEVEL_GROUP,
+            tagMap,
+            name,
+            false,
+            description
+        );
+
+        final Sensor sensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
     private <K> void setUpAndVerifyMutableMetric(final String name,
                                                  final String description,
                                                  final Gauge<K> valueProvider,
                                                  final Runnable metricAdder) {
-        streamsMetrics.addClientLevelMutableMetric(
-            eq(name),
-            eq(description),
-            eq(RecordingLevel.INFO),
-            eq(valueProvider)
-        );
-        replay(streamsMetrics);
 
         metricAdder.run();
 
-        verify(streamsMetrics);
+        verify(streamsMetrics).addClientLevelMutableMetric(
+                eq(name),
+                eq(description),
+                eq(RecordingLevel.INFO),
+                eq(valueProvider)
+        );
     }
 
     private void setUpAndVerifyImmutableMetric(final String name,
                                                final String description,
                                                final String value,
                                                final Runnable metricAdder) {
-        streamsMetrics.addClientLevelImmutableMetric(
-            eq(name),
-            eq(description),
-            eq(RecordingLevel.INFO),
-            eq(value)
-        );
-        replay(streamsMetrics);
 
         metricAdder.run();
 
-        verify(streamsMetrics);
+        verify(streamsMetrics).addClientLevelImmutableMetric(
+                eq(name),
+                eq(description),
+                eq(RecordingLevel.INFO),
+                eq(value)
+        );
     }
 }

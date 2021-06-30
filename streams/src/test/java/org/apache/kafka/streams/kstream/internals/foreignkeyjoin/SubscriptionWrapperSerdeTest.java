@@ -23,6 +23,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class SubscriptionWrapperSerdeTest {
@@ -57,24 +58,19 @@ public class SubscriptionWrapperSerdeTest {
         assertEquals(originalKey, deserialized.getPrimaryKey());
     }
 
-    @Test (expected = NullPointerException.class)
-    @SuppressWarnings("unchecked")
+    @Test
     public void shouldThrowExceptionOnNullKeyTest() {
         final String originalKey = null;
-        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> "pkTopic", Serdes.String());
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
-        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(hashedValue, SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, originalKey);
-        swSerde.serializer().serialize(null, wrapper);
+        assertThrows(NullPointerException.class, () -> new SubscriptionWrapper<>(hashedValue,
+            SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, originalKey));
     }
 
-    @Test (expected = NullPointerException.class)
-    @SuppressWarnings("unchecked")
+    @Test
     public void shouldThrowExceptionOnNullInstructionTest() {
         final String originalKey = "originalKey";
-        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> "pkTopic", Serdes.String());
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
-        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(hashedValue, null, originalKey);
-        swSerde.serializer().serialize(null, wrapper);
+        assertThrows(NullPointerException.class, () -> new SubscriptionWrapper<>(hashedValue, null, originalKey));
     }
 
     @Test (expected = UnsupportedVersionException.class)

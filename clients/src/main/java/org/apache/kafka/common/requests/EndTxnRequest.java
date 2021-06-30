@@ -19,14 +19,14 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
 public class EndTxnRequest extends AbstractRequest {
 
-    public final EndTxnRequestData data;
+    private final EndTxnRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<EndTxnRequest> {
         public final EndTxnRequestData data;
@@ -52,11 +52,6 @@ public class EndTxnRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public EndTxnRequest(Struct struct, short version) {
-        super(ApiKeys.END_TXN, version);
-        this.data = new EndTxnRequestData(struct, version);
-    }
-
     public TransactionResult result() {
         if (data.committed())
             return TransactionResult.COMMIT;
@@ -65,8 +60,8 @@ public class EndTxnRequest extends AbstractRequest {
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public EndTxnRequestData data() {
+        return data;
     }
 
     @Override
@@ -78,6 +73,6 @@ public class EndTxnRequest extends AbstractRequest {
     }
 
     public static EndTxnRequest parse(ByteBuffer buffer, short version) {
-        return new EndTxnRequest(ApiKeys.END_TXN.parseRequest(version, buffer), version);
+        return new EndTxnRequest(new EndTxnRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

@@ -51,7 +51,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-@SuppressWarnings("unchecked")
 public class InternalStreamsBuilderTest {
 
     private static final String APP_ID = "app-id";
@@ -371,9 +370,4 @@ public class InternalStreamsBuilderTest {
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    // TODO: this static functions are added because some non-TopologyBuilder unit tests need to access the internal topology builder,
-    //       which is usually a bad sign of design patterns between TopologyBuilder and StreamThread. We need to consider getting rid of them later
-    public static InternalTopologyBuilder internalTopologyBuilder(final InternalStreamsBuilder internalStreamsBuilder) {
-        return internalStreamsBuilder.internalTopologyBuilder;
-    }
 }

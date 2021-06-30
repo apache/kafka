@@ -16,6 +16,7 @@
 {
   "apiKey": 43,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "ElectLeadersRequest",
   // Version 1 implements multiple leader election types, as described by KIP-460.
   //
@@ -28,9 +29,9 @@
     { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+", "nullableVersions": "0+",
       "about": "The topic partitions to elect leaders.",
       "fields": [
-        { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
+        { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
           "about": "The name of a topic." },
-        { "name": "PartitionId", "type": "[]int32", "versions": "0+",
+        { "name": "Partitions", "type": "[]int32", "versions": "0+",
           "about": "The partitions of this topic whose leader should be elected." }
       ]
     },

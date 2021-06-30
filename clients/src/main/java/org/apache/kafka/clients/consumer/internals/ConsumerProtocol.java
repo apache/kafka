@@ -16,22 +16,21 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.nio.BufferUnderflowException;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
+import java.nio.BufferUnderflowException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 
 /**
  * ConsumerProtocol contains the schemas for consumer subscriptions and assignments for use with
@@ -73,16 +72,25 @@ public class ConsumerProtocol {
         version = checkSubscriptionVersion(version);
 
         ConsumerProtocolSubscription data = new ConsumerProtocolSubscription();
-        data.setTopics(subscription.topics());
+
+        List<String> topics = new ArrayList<>(subscription.topics());
+        Collections.sort(topics);
+        data.setTopics(topics);
+
         data.setUserData(subscription.userData() != null ? subscription.userData().duplicate() : null);
-        Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(subscription.ownedPartitions());
-        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
-            data.ownedPartitions().add(new ConsumerProtocolSubscription.TopicPartition()
-                .setTopic(topicEntry.getKey())
-                .setPartitions(topicEntry.getValue()));
+
+        List<TopicPartition> ownedPartitions = new ArrayList<>(subscription.ownedPartitions());
+        ownedPartitions.sort(Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition));
+        ConsumerProtocolSubscription.TopicPartition partition = null;
+        for (TopicPartition tp : ownedPartitions) {
+            if (partition == null || !partition.topic().equals(tp.topic())) {
+                partition = new ConsumerProtocolSubscription.TopicPartition().setTopic(tp.topic());
+                data.ownedPartitions().add(partition);
+            }
+            partition.partitions().add(tp.partition());
         }
 
-        return serializeMessage(version, data);
+        return MessageUtil.toVersionPrefixedByteBuffer(version, data);
     }
 
     public static Subscription deserializeSubscription(final ByteBuffer buffer, short version) {
@@ -121,14 +129,15 @@ public class ConsumerProtocol {
 
         ConsumerProtocolAssignment data = new ConsumerProtocolAssignment();
         data.setUserData(assignment.userData() != null ? assignment.userData().duplicate() : null);
-        Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(assignment.partitions());
-        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
-            data.assignedPartitions().add(new ConsumerProtocolAssignment.TopicPartition()
-                .setTopic(topicEntry.getKey())
-                .setPartitions(topicEntry.getValue()));
-        }
-
-        return serializeMessage(version, data);
+        assignment.partitions().forEach(tp -> {
+            ConsumerProtocolAssignment.TopicPartition partition = data.assignedPartitions().find(tp.topic());
+            if (partition == null) {
+                partition = new ConsumerProtocolAssignment.TopicPartition().setTopic(tp.topic());
+                data.assignedPartitions().add(partition);
+            }
+            partition.partitions().add(tp.partition());
+        });
+        return MessageUtil.toVersionPrefixedByteBuffer(version, data);
     }
 
     public static Assignment deserializeAssignment(final ByteBuffer buffer, short version) {
@@ -173,16 +182,5 @@ public class ConsumerProtocol {
             return ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION;
         else
             return version;
-    }
-
-    private static ByteBuffer serializeMessage(final short version, final Message message) {
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = message.size(cache, version);
-        ByteBuffer bytes = ByteBuffer.allocate(2 + size);
-        ByteBufferAccessor accessor = new ByteBufferAccessor(bytes);
-        accessor.writeShort(version);
-        message.write(accessor, cache, version);
-        bytes.flip();
-        return bytes;
     }
 }

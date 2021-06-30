@@ -19,21 +19,22 @@ package kafka.network
 
 import java.net.InetAddress
 import java.util
-import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
+import java.util.concurrent.{Callable, ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
-
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.Processor.ListenerMetricTag
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.Implicits.MapExtensionMethods
+import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.config.internals.QuotaConfigs
+import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.utils.{Time, Utils}
-import org.junit.Assert._
-import org.junit._
-import org.scalatest.Assertions.{assertThrows, intercept}
+import org.apache.kafka.common.utils.Time
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api._
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
@@ -43,6 +44,7 @@ class ConnectionQuotasTest {
   private var metrics: Metrics = _
   private var executor: ExecutorService = _
   private var connectionQuotas: ConnectionQuotas = _
+  private var time: Time = _
 
   private val listeners = Map(
     "EXTERNAL" -> ListenerDesc(new ListenerName("EXTERNAL"), InetAddress.getByName("192.168.1.1")),
@@ -54,6 +56,7 @@ class ConnectionQuotasTest {
 
   private val numQuotaSamples = 2
   private val quotaWindowSizeSeconds = 1
+  private val eps = 0.01
 
   case class ListenerDesc(listenerName: ListenerName, defaultIp: InetAddress) {
     override def toString: String = {
@@ -72,7 +75,14 @@ class ConnectionQuotasTest {
     props
   }
 
-  @Before
+  private def setupMockTime(): Unit = {
+    // clean up metrics initialized with Time.SYSTEM
+    metrics.close()
+    time = new MockTime()
+    metrics = new Metrics(time)
+  }
+
+  @BeforeEach
   def setUp(): Unit = {
     // Clean-up any metrics left around by previous tests
     TestUtils.clearYammerMetrics()
@@ -83,11 +93,12 @@ class ConnectionQuotasTest {
     }
     // use system time, because ConnectionQuota causes the current thread to wait with timeout, which waits based on
     // system time; so using mock time will likely result in test flakiness due to a mixed use of mock and system time
-    metrics = new Metrics(new MetricConfig(), Collections.emptyList(), Time.SYSTEM)
+    time = Time.SYSTEM
+    metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time)
     executor = Executors.newFixedThreadPool(listeners.size)
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     executor.shutdownNow()
     if (connectionQuotas != null) {
@@ -101,13 +112,13 @@ class ConnectionQuotasTest {
   @Test
   def testFailWhenNoListeners(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     // inc() on a separate thread in case it blocks
     val listener = listeners("EXTERNAL")
     executor.submit((() =>
-      intercept[RuntimeException](
-        connectionQuotas.inc(listener.listenerName, listener.defaultIp, blockedPercentMeters("EXTERNAL"))
+      assertThrows(classOf[RuntimeException],
+        () => connectionQuotas.inc(listener.listenerName, listener.defaultIp, blockedPercentMeters("EXTERNAL"))
       )): Runnable
     ).get(5, TimeUnit.SECONDS)
   }
@@ -115,17 +126,17 @@ class ConnectionQuotasTest {
   @Test
   def testFailDecrementForUnknownIp(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     addListenersAndVerify(config, connectionQuotas)
 
     // calling dec() for an IP for which we didn't call inc() should throw an exception
-    intercept[IllegalArgumentException](connectionQuotas.dec(listeners("EXTERNAL").listenerName, unknownHost))
+    assertThrows(classOf[IllegalArgumentException], () => connectionQuotas.dec(listeners("EXTERNAL").listenerName, unknownHost))
   }
 
   @Test
   def testNoConnectionLimitsByDefault(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     addListenersAndVerify(config, connectionQuotas)
 
     // verify there is no limit by accepting 10000 connections as fast as possible
@@ -134,19 +145,17 @@ class ConnectionQuotasTest {
       executor.submit((() => acceptConnections(connectionQuotas, listener, numConnections)): Runnable)
     }
     futures.foreach(_.get(10, TimeUnit.SECONDS))
-    assertTrue("Expected broker-connection-accept-rate metric to get recorded",
-      brokerConnRateMetric().metricValue.asInstanceOf[Double].toLong > 0)
+    assertTrue(metricValue(brokerConnRateMetric())> 0, "Expected broker-connection-accept-rate metric to get recorded")
     listeners.values.foreach { listener =>
-      assertEquals(s"Number of connections on $listener:",
-        numConnections, connectionQuotas.get(listener.defaultIp))
+      assertEquals(numConnections, connectionQuotas.get(listener.defaultIp), s"Number of connections on $listener:")
 
-      assertTrue(s"Expected connection-accept-rate metric to get recorded for listener $listener",
-        listenerConnRateMetric(listener.listenerName.value).metricValue.asInstanceOf[Double].toLong > 0)
+      assertTrue(metricValue(listenerConnRateMetric(listener.listenerName.value)) > 0,
+        s"Expected connection-accept-rate metric to get recorded for listener $listener")
 
       // verify removing one connection
       connectionQuotas.dec(listener.listenerName, listener.defaultIp)
-      assertEquals(s"Number of connections on $listener:",
-        numConnections - 1, connectionQuotas.get(listener.defaultIp))
+      assertEquals(numConnections - 1, connectionQuotas.get(listener.defaultIp),
+        s"Number of connections on $listener:")
     }
     // the blocked percent should still be 0, because no limits were reached
     verifyNoBlockedPercentRecordedOnAllListeners()
@@ -158,7 +167,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionsPerIpProp, maxConnectionsPerIp.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -166,31 +175,32 @@ class ConnectionQuotasTest {
     executor.submit((() =>
       acceptConnections(connectionQuotas, externalListener, maxConnectionsPerIp)): Runnable
     ).get(5, TimeUnit.SECONDS)
-    assertEquals(s"Number of connections on $externalListener:",
-      maxConnectionsPerIp, connectionQuotas.get(externalListener.defaultIp))
+    assertEquals(maxConnectionsPerIp, connectionQuotas.get(externalListener.defaultIp),
+      s"Number of connections on $externalListener:")
 
     // all subsequent connections will be added to the counters, but inc() will throw TooManyConnectionsException for each
     executor.submit((() =>
       acceptConnectionsAboveIpLimit(connectionQuotas, externalListener, 2)): Runnable
     ).get(5, TimeUnit.SECONDS)
-    assertEquals(s"Number of connections on $externalListener:",
-      maxConnectionsPerIp + 2, connectionQuotas.get(externalListener.defaultIp))
+    assertEquals(maxConnectionsPerIp + 2, connectionQuotas.get(externalListener.defaultIp),
+      s"Number of connections on $externalListener:")
 
     // connections on the same listener but from a different IP should be accepted
     executor.submit((() =>
-      acceptConnections(connectionQuotas, externalListener.listenerName, knownHost, maxConnectionsPerIp, 0)): Runnable
+      acceptConnections(connectionQuotas, externalListener.listenerName, knownHost, maxConnectionsPerIp,
+        0, expectIpThrottle = false)): Runnable
     ).get(5, TimeUnit.SECONDS)
 
     // remove two "rejected" connections and remove 2 more connections to free up the space for another 2 connections
     for (_ <- 0 until 4) connectionQuotas.dec(externalListener.listenerName, externalListener.defaultIp)
-    assertEquals(s"Number of connections on $externalListener:",
-      maxConnectionsPerIp - 2, connectionQuotas.get(externalListener.defaultIp))
+    assertEquals(maxConnectionsPerIp - 2, connectionQuotas.get(externalListener.defaultIp),
+      s"Number of connections on $externalListener:")
 
     executor.submit((() =>
       acceptConnections(connectionQuotas, externalListener, 2)): Runnable
     ).get(5, TimeUnit.SECONDS)
-    assertEquals(s"Number of connections on $externalListener:",
-      maxConnectionsPerIp, connectionQuotas.get(externalListener.defaultIp))
+    assertEquals(maxConnectionsPerIp, connectionQuotas.get(externalListener.defaultIp),
+      s"Number of connections on $externalListener:")
   }
 
   @Test
@@ -199,7 +209,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionsProp, maxConnections.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -207,43 +217,43 @@ class ConnectionQuotasTest {
     executor.submit((() =>
       acceptConnections(connectionQuotas, listeners("EXTERNAL"), maxConnections)): Runnable
     ).get(5, TimeUnit.SECONDS)
-    assertEquals(s"Number of connections on ${listeners("EXTERNAL")}:",
-      maxConnections, connectionQuotas.get(listeners("EXTERNAL").defaultIp))
+    assertEquals(maxConnections, connectionQuotas.get(listeners("EXTERNAL").defaultIp),
+      s"Number of connections on ${listeners("EXTERNAL")}:")
 
     // the blocked percent should still be 0, because there should be no wait for a connection slot
     assertEquals(0, blockedPercentMeters("EXTERNAL").count())
 
     // the number of connections should be above max for maxConnectionsExceeded to return true
-    assertFalse("Total number of connections is exactly the maximum.",
-      connectionQuotas.maxConnectionsExceeded(listeners("EXTERNAL").listenerName))
+    assertFalse(connectionQuotas.maxConnectionsExceeded(listeners("EXTERNAL").listenerName),
+      "Total number of connections is exactly the maximum.")
 
     // adding one more connection will block ConnectionQuota.inc()
     val future = executor.submit((() =>
       acceptConnections(connectionQuotas, listeners("EXTERNAL"), 1)): Runnable
     )
-    intercept[TimeoutException](future.get(100, TimeUnit.MILLISECONDS))
+    assertThrows(classOf[TimeoutException], () => future.get(100, TimeUnit.MILLISECONDS))
 
     // removing one connection should make the waiting connection to succeed
     connectionQuotas.dec(listeners("EXTERNAL").listenerName, listeners("EXTERNAL").defaultIp)
     future.get(1, TimeUnit.SECONDS)
-    assertEquals(s"Number of connections on ${listeners("EXTERNAL")}:",
-      maxConnections, connectionQuotas.get(listeners("EXTERNAL").defaultIp))
+    assertEquals(maxConnections, connectionQuotas.get(listeners("EXTERNAL").defaultIp),
+      s"Number of connections on ${listeners("EXTERNAL")}:")
     // metric is recorded in nanoseconds
-    assertTrue("Expected BlockedPercentMeter metric to be recorded",
-      blockedPercentMeters("EXTERNAL").count() > 0)
+    assertTrue(blockedPercentMeters("EXTERNAL").count() > 0,
+      "Expected BlockedPercentMeter metric to be recorded")
 
     // adding inter-broker connections should succeed even when the total number of connections reached the max
     executor.submit((() =>
       acceptConnections(connectionQuotas, listeners("REPLICATION"), 1)): Runnable
     ).get(5, TimeUnit.SECONDS)
-    assertTrue("Expected the number of connections to exceed the maximum.",
-      connectionQuotas.maxConnectionsExceeded(listeners("EXTERNAL").listenerName))
+    assertTrue(connectionQuotas.maxConnectionsExceeded(listeners("EXTERNAL").listenerName),
+      "Expected the number of connections to exceed the maximum.")
 
     // adding one more connection on another non-inter-broker will block ConnectionQuota.inc()
     val future1 = executor.submit((() =>
       acceptConnections(connectionQuotas, listeners("ADMIN"), 1)): Runnable
     )
-    intercept[TimeoutException](future1.get(1, TimeUnit.SECONDS))
+    assertThrows(classOf[TimeoutException], () => future1.get(1, TimeUnit.SECONDS))
 
     // adding inter-broker connection should still succeed, even though a connection from another listener is waiting
     executor.submit((() =>
@@ -253,7 +263,7 @@ class ConnectionQuotasTest {
     // at this point, we need to remove 3 connections for the waiting connection to succeed
     // remove 2 first -- should not be enough to accept the waiting connection
     for (_ <- 0 until 2) connectionQuotas.dec(listeners("EXTERNAL").listenerName, listeners("EXTERNAL").defaultIp)
-    intercept[TimeoutException](future1.get(100, TimeUnit.MILLISECONDS))
+    assertThrows(classOf[TimeoutException], () => future1.get(100, TimeUnit.MILLISECONDS))
     connectionQuotas.dec(listeners("EXTERNAL").listenerName, listeners("EXTERNAL").defaultIp)
     future1.get(1, TimeUnit.SECONDS)
   }
@@ -266,7 +276,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionsProp, maxConnections.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -281,10 +291,10 @@ class ConnectionQuotasTest {
     }
     futures.foreach(_.get(5, TimeUnit.SECONDS))
     listeners.values.foreach { listener =>
-      assertEquals(s"Number of connections on $listener:",
-        listenerMaxConnections, connectionQuotas.get(listener.defaultIp))
-      assertFalse(s"Total number of connections on $listener should be exactly the maximum.",
-        connectionQuotas.maxConnectionsExceeded(listener.listenerName))
+      assertEquals(listenerMaxConnections, connectionQuotas.get(listener.defaultIp),
+        s"Number of connections on $listener:")
+      assertFalse(connectionQuotas.maxConnectionsExceeded(listener.listenerName),
+        s"Total number of connections on $listener should be exactly the maximum.")
     }
 
     // since every listener has exactly the max number of listener connections,
@@ -293,7 +303,7 @@ class ConnectionQuotasTest {
       executor.submit((() => acceptConnections(connectionQuotas, listener, 1)): Runnable)
     }
     overLimitFutures.foreach { future =>
-      intercept[TimeoutException](future.get(1, TimeUnit.SECONDS))
+      assertThrows(classOf[TimeoutException], () => future.get(1, TimeUnit.SECONDS))
     }
     listeners.values.foreach { listener =>
       // free up one connection slot
@@ -313,7 +323,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -333,7 +343,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -360,7 +370,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> listenerRateLimit.toString).asJava
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
@@ -386,7 +396,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> listenerRateLimit.toString).asJava
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
@@ -410,23 +420,150 @@ class ConnectionQuotasTest {
   }
 
   @Test
+  def testIpConnectionRateWhenActualRateBelowLimit(): Unit = {
+    val ipConnectionRateLimit = 30
+    val connCreateIntervalMs = 40 // connection creation rate = 25/sec
+    val props = brokerPropsWithDefaultConnectionLimits
+    val config = KafkaConfig.fromProps(props)
+    // use MockTime for IP connection rate quota tests that don't expect to block
+    setupMockTime()
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
+    addListenersAndVerify(config, connectionQuotas)
+    val externalListener = listeners("EXTERNAL")
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), Some(ipConnectionRateLimit))
+    val numConnections = 200
+    // create connections with the rate < ip quota and verify there is no throttling
+    acceptConnectionsAndVerifyRate(connectionQuotas, externalListener, numConnections, connCreateIntervalMs,
+      expectedRate = 25, epsilon = 0)
+    assertEquals(numConnections, connectionQuotas.get(externalListener.defaultIp),
+      s"Number of connections on $externalListener:")
+
+    val adminListener = listeners("ADMIN")
+    val unthrottledConnectionCreateInterval = 20 // connection creation rate = 50/s
+    // create connections with an IP with no quota and verify there is no throttling
+    acceptConnectionsAndVerifyRate(connectionQuotas, adminListener, numConnections, unthrottledConnectionCreateInterval,
+      expectedRate = 50, epsilon = 0)
+
+    assertEquals(numConnections, connectionQuotas.get(adminListener.defaultIp),
+      s"Number of connections on $adminListener:")
+
+    // acceptor shouldn't block for IP rate throttling
+    verifyNoBlockedPercentRecordedOnAllListeners()
+    // no IP throttle time should be recorded on any listeners
+    listeners.values.map(_.listenerName).foreach(verifyIpThrottleTimeOnListener(_, expectThrottle = false))
+  }
+
+  @Test
+  def testIpConnectionRateWhenActualRateAboveLimit(): Unit = {
+    val ipConnectionRateLimit = 20
+    val connCreateIntervalMs = 25 // connection creation rate = 40/sec
+    val props = brokerPropsWithDefaultConnectionLimits
+    val config = KafkaConfig.fromProps(props)
+    // use MockTime for IP connection rate quota tests that don't expect to block
+    setupMockTime()
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
+    addListenersAndVerify(config, connectionQuotas)
+    val externalListener = listeners("EXTERNAL")
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), Some(ipConnectionRateLimit))
+    // create connections with the rate > ip quota
+    val numConnections = 80
+    acceptConnectionsAndVerifyRate(connectionQuotas, externalListener, numConnections, connCreateIntervalMs, ipConnectionRateLimit,
+      1, expectIpThrottle = true)
+    verifyIpThrottleTimeOnListener(externalListener.listenerName, expectThrottle = true)
+
+    // verify that default quota applies to IPs without a quota override
+    connectionQuotas.updateIpConnectionRateQuota(None, Some(ipConnectionRateLimit))
+    val adminListener = listeners("ADMIN")
+    // listener shouldn't have any IP throttle time recorded
+    verifyIpThrottleTimeOnListener(adminListener.listenerName, expectThrottle = false)
+    acceptConnectionsAndVerifyRate(connectionQuotas, adminListener, numConnections, connCreateIntervalMs, ipConnectionRateLimit,
+      1, expectIpThrottle = true)
+    verifyIpThrottleTimeOnListener(adminListener.listenerName, expectThrottle = true)
+
+    // acceptor shouldn't block for IP rate throttling
+    verifyNoBlockedPercentRecordedOnAllListeners()
+    // replication listener shouldn't have any IP throttling recorded
+    verifyIpThrottleTimeOnListener(listeners("REPLICATION").listenerName, expectThrottle = false)
+  }
+
+  @Test
+  def testIpConnectionRateWithListenerConnectionRate(): Unit = {
+    val ipConnectionRateLimit = 25
+    val listenerRateLimit = 35
+    val props = brokerPropsWithDefaultConnectionLimits
+    val config = KafkaConfig.fromProps(props)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
+    // with a default per-IP limit of 25 and a listener rate of 30, only one IP should be able to saturate their IP rate
+    // limit, the other IP will hit listener rate limits and block
+    connectionQuotas.updateIpConnectionRateQuota(None, Some(ipConnectionRateLimit))
+    val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> listenerRateLimit.toString).asJava
+    addListenersAndVerify(config, listenerConfig, connectionQuotas)
+    val listener = listeners("EXTERNAL").listenerName
+    // use a small number of connections because a longer-running test will have both IPs throttle at different times
+    val numConnections = 35
+    val futures = List(
+      executor.submit((() => acceptConnections(connectionQuotas, listener, knownHost, numConnections,
+        0, true)): Callable[Boolean]),
+      executor.submit((() => acceptConnections(connectionQuotas, listener, unknownHost, numConnections,
+        0, true)): Callable[Boolean])
+    )
+
+    val ipsThrottledResults = futures.map(_.get(3, TimeUnit.SECONDS))
+    val throttledIps = ipsThrottledResults.filter(identity)
+    // at most one IP should get IP throttled before the acceptor blocks on listener quota
+    assertTrue(blockedPercentMeters("EXTERNAL").count() > 0,
+      "Expected BlockedPercentMeter metric for EXTERNAL listener to be recorded")
+    assertTrue(throttledIps.size < 2,
+      "Expect at most one IP to get throttled")
+  }
+
+  @Test
+  def testRejectedIpConnectionUnrecordedFromConnectionRateQuotas(): Unit = {
+    val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
+    connectionQuotas = new ConnectionQuotas(config, new MockTime(), metrics)
+    addListenersAndVerify(config, connectionQuotas)
+    val externalListener = listeners("EXTERNAL")
+    val protectedListener = listeners("REPLICATION")
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), Some(0))
+    connectionQuotas.updateIpConnectionRateQuota(Some(protectedListener.defaultIp), Some(0))
+
+    assertThrows(classOf[ConnectionThrottledException],
+      () => connectionQuotas.inc(externalListener.listenerName, externalListener.defaultIp, blockedPercentMeters("EXTERNAL"))
+    )
+
+    val brokerRateMetric = brokerConnRateMetric()
+    // rejected connection shouldn't be recorded for any of the connection accepted rate metrics
+    assertEquals(0, metricValue(ipConnRateMetric(externalListener.defaultIp.getHostAddress)), eps)
+    assertEquals(0, metricValue(listenerConnRateMetric(externalListener.listenerName.value)), eps)
+    assertEquals(0, metricValue(brokerRateMetric), eps)
+
+    assertThrows(classOf[ConnectionThrottledException],
+      () => connectionQuotas.inc(protectedListener.listenerName, protectedListener.defaultIp, blockedPercentMeters("REPLICATION"))
+    )
+
+    assertEquals(0, metricValue(ipConnRateMetric(protectedListener.defaultIp.getHostAddress)), eps)
+    assertEquals(0, metricValue(listenerConnRateMetric(protectedListener.listenerName.value)), eps)
+    assertEquals(0, metricValue(brokerRateMetric), eps)
+  }
+
+  @Test
   def testMaxListenerConnectionListenerMustBeAboveZero(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     val maxListenerConnectionRate = 0
     val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> maxListenerConnectionRate.toString).asJava
-    assertThrows[ConfigException] {
-      connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).validateReconfiguration(listenerConfig)
-    }
+    assertThrows(classOf[ConfigException],
+      () => connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).validateReconfiguration(listenerConfig)
+    )
   }
 
   @Test
   def testMaxListenerConnectionRateReconfiguration(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     val listenerRateLimit = 20
@@ -442,7 +579,8 @@ class ConnectionQuotasTest {
       acceptConnections(connectionQuotas, listeners("EXTERNAL"), 1000)): Runnable
     ).get(10, TimeUnit.SECONDS)
     // verify no throttling
-    assertEquals(s"BlockedPercentMeter metric for EXTERNAL listener", 0, blockedPercentMeters("EXTERNAL").count())
+    assertEquals(0, blockedPercentMeters("EXTERNAL").count(),
+      s"BlockedPercentMeter metric for EXTERNAL listener")
 
     // configure 100 connection/second rate limit
     val newMaxListenerConnectionRate = 10
@@ -454,13 +592,14 @@ class ConnectionQuotasTest {
     executor.submit((() =>
       acceptConnectionsAndVerifyRate(connectionQuotas, listeners("EXTERNAL"), connectionsPerListener, 5, newMaxListenerConnectionRate, 3)): Runnable
     ).get(30, TimeUnit.SECONDS)
-    assertTrue("Expected BlockedPercentMeter metric for EXTERNAL listener to be recorded", blockedPercentMeters("EXTERNAL").count() > 0)
+    assertTrue(blockedPercentMeters("EXTERNAL").count() > 0,
+      "Expected BlockedPercentMeter metric for EXTERNAL listener to be recorded")
   }
 
   @Test
   def testMaxBrokerConnectionRateReconfiguration(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     addListenersAndVerify(config, connectionQuotas)
@@ -474,7 +613,102 @@ class ConnectionQuotasTest {
       // this is a short run, so setting epsilon higher (enough to check that the rate is not unlimited)
       acceptConnectionsAndVerifyRate(connectionQuotas, listeners("EXTERNAL"), totalConnections, 5, maxBrokerConnectionRate, 20)): Runnable
     ).get(10, TimeUnit.SECONDS)
-    assertTrue("Expected BlockedPercentMeter metric for EXTERNAL listener to be recorded", blockedPercentMeters("EXTERNAL").count() > 0)
+    assertTrue(blockedPercentMeters("EXTERNAL").count() > 0,
+      "Expected BlockedPercentMeter metric for EXTERNAL listener to be recorded")
+  }
+
+  @Test
+  def testIpConnectionRateMetricUpdate(): Unit = {
+    val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
+    connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
+    connectionQuotas.addListener(config, listeners("ADMIN").listenerName)
+    val defaultIpRate = 50
+    val defaultOverrideRate = 20
+    val overrideIpRate = 30
+    val externalListener = listeners("EXTERNAL")
+    val adminListener = listeners("ADMIN")
+    // set a non-unlimited default quota so that we create ip rate sensors/metrics
+    connectionQuotas.updateIpConnectionRateQuota(None, Some(defaultIpRate))
+    connectionQuotas.inc(externalListener.listenerName, externalListener.defaultIp, blockedPercentMeters("EXTERNAL"))
+    connectionQuotas.inc(adminListener.listenerName, adminListener.defaultIp, blockedPercentMeters("ADMIN"))
+
+    // both IPs should have the default rate
+    verifyIpConnectionQuota(externalListener.defaultIp, defaultIpRate)
+    verifyIpConnectionQuota(adminListener.defaultIp, defaultIpRate)
+
+    // external listener should have its in-memory quota and metric config updated
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), Some(overrideIpRate))
+    verifyIpConnectionQuota(externalListener.defaultIp, overrideIpRate)
+
+    // update default
+    connectionQuotas.updateIpConnectionRateQuota(None, Some(defaultOverrideRate))
+
+    // external listener IP should not have its quota updated to the new default
+    verifyIpConnectionQuota(externalListener.defaultIp, overrideIpRate)
+    // admin listener IP should have its quota updated with to the new default
+    verifyIpConnectionQuota(adminListener.defaultIp, defaultOverrideRate)
+
+    // remove default connection rate quota
+    connectionQuotas.updateIpConnectionRateQuota(None, None)
+    verifyIpConnectionQuota(adminListener.defaultIp, QuotaConfigs.IP_CONNECTION_RATE_DEFAULT)
+    verifyIpConnectionQuota(externalListener.defaultIp, overrideIpRate)
+
+    // remove override for external listener IP
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), None)
+    verifyIpConnectionQuota(externalListener.defaultIp, QuotaConfigs.IP_CONNECTION_RATE_DEFAULT)
+  }
+
+  @Test
+  def testEnforcedIpConnectionRateQuotaUpdate(): Unit = {
+    val ipConnectionRateLimit = 20
+    val props = brokerPropsWithDefaultConnectionLimits
+    val config = KafkaConfig.fromProps(props)
+    // use MockTime for IP connection rate quota tests that don't expect to block
+    setupMockTime()
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
+    addListenersAndVerify(config, connectionQuotas)
+    val externalListener = listeners("EXTERNAL")
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), Some(ipConnectionRateLimit))
+    // create connections with the rate > ip quota
+    val connectionRate = 40
+    assertThrows(classOf[ConnectionThrottledException],
+      () => acceptConnections(connectionQuotas, externalListener, connectionRate)
+    )
+    assertEquals(ipConnectionRateLimit, connectionQuotas.get(externalListener.defaultIp),
+      s"Number of connections on $externalListener:")
+
+    // increase ip quota, we should accept connections up to the new quota limit
+    val updatedRateLimit = 30
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), Some(updatedRateLimit))
+    assertThrows(classOf[ConnectionThrottledException],
+      () => acceptConnections(connectionQuotas, externalListener, connectionRate)
+    )
+    assertEquals(updatedRateLimit, connectionQuotas.get(externalListener.defaultIp),
+      s"Number of connections on $externalListener:")
+
+    // remove IP quota, all connections should get accepted
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), None)
+    acceptConnections(connectionQuotas, externalListener, connectionRate)
+    assertEquals(connectionRate + updatedRateLimit, connectionQuotas.get(externalListener.defaultIp),
+      s"Number of connections on $externalListener:")
+
+    // create connections on a different IP,
+    val adminListener = listeners("ADMIN")
+    acceptConnections(connectionQuotas, adminListener, connectionRate)
+    assertEquals(connectionRate, connectionQuotas.get(adminListener.defaultIp),
+      s"Number of connections on $adminListener:")
+
+    // set a default IP quota, verify that quota gets propagated
+    connectionQuotas.updateIpConnectionRateQuota(None, Some(ipConnectionRateLimit))
+    assertThrows(classOf[ConnectionThrottledException],
+      () => acceptConnections(connectionQuotas, adminListener, connectionRate)
+    )
+    assertEquals(connectionRate + ipConnectionRateLimit, connectionQuotas.get(adminListener.defaultIp),
+      s"Number of connections on $adminListener:")
+
+    // acceptor shouldn't block for IP rate throttling
+    verifyNoBlockedPercentRecordedOnAllListeners()
   }
 
   @Test
@@ -485,7 +719,7 @@ class ConnectionQuotasTest {
     props.put(KafkaConfig.MaxConnectionsProp, maxConnections.toString)
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     addListenersAndVerify(config, connectionQuotas)
@@ -495,19 +729,22 @@ class ConnectionQuotasTest {
     executor.submit((() =>
       acceptConnectionsAndVerifyRate(connectionQuotas, listener, maxConnections, 10, brokerRateLimit, 8)): Runnable
     ).get(20, TimeUnit.SECONDS)
-    assertTrue("Expected BlockedPercentMeter metric for EXTERNAL listener to be recorded", blockedPercentMeters("EXTERNAL").count() > 0)
-    assertEquals(s"Number of connections on EXTERNAL listener:", maxConnections, connectionQuotas.get(listener.defaultIp))
+    assertTrue(blockedPercentMeters("EXTERNAL").count() > 0,
+      "Expected BlockedPercentMeter metric for EXTERNAL listener to be recorded")
+    assertEquals(maxConnections, connectionQuotas.get(listener.defaultIp),
+      s"Number of connections on EXTERNAL listener:")
 
     // adding one more connection will block ConnectionQuota.inc()
     val future = executor.submit((() =>
       acceptConnections(connectionQuotas, listeners("EXTERNAL"), 1)): Runnable
     )
-    intercept[TimeoutException](future.get(100, TimeUnit.MILLISECONDS))
+    assertThrows(classOf[TimeoutException], () => future.get(100, TimeUnit.MILLISECONDS))
 
     // removing one connection should make the waiting connection to succeed
     connectionQuotas.dec(listener.listenerName, listener.defaultIp)
     future.get(1, TimeUnit.SECONDS)
-    assertEquals(s"Number of connections on EXTERNAL listener:", maxConnections, connectionQuotas.get(listener.defaultIp))
+    assertEquals(maxConnections, connectionQuotas.get(listener.defaultIp),
+      s"Number of connections on EXTERNAL listener:")
   }
 
   private def addListenersAndVerify(config: KafkaConfig, connectionQuotas: ConnectionQuotas) : Unit = {
@@ -517,68 +754,86 @@ class ConnectionQuotasTest {
   private def addListenersAndVerify(config: KafkaConfig,
                                     listenerConfig: util.Map[String, _],
                                     connectionQuotas: ConnectionQuotas) : Unit = {
-    assertNotNull("Expected broker-connection-accept-rate metric to exist", brokerConnRateMetric())
+    assertNotNull(brokerConnRateMetric(),
+      "Expected broker-connection-accept-rate metric to exist")
 
     // add listeners and verify connection limits not exceeded
-    listeners.foreach { case (name, listener) =>
+    listeners.forKeyValue { (name, listener) =>
       val listenerName = listener.listenerName
       connectionQuotas.addListener(config, listenerName)
       connectionQuotas.maxConnectionsPerListener(listenerName).configure(listenerConfig)
-      assertFalse(s"Should not exceed max connection limit on $name listener after initialization",
-        connectionQuotas.maxConnectionsExceeded(listenerName))
-      assertEquals(s"Number of connections on $listener listener:",
-        0, connectionQuotas.get(listener.defaultIp))
-      assertNotNull(s"Expected connection-accept-rate metric to exist for listener ${listenerName.value}",
-        listenerConnRateMetric(listenerName.value))
-      assertEquals(s"Connection acceptance rate metric for listener ${listenerName.value}",
-          0, listenerConnRateMetric(listenerName.value).metricValue.asInstanceOf[Double].toLong)
-      assertNotNull(s"Expected connection-accept-throttle-time metric to exist for listener ${listenerName.value}",
-        listenerConnThrottleMetric(listenerName.value))
-      assertEquals(s"Connection throttle metric for listener ${listenerName.value}",
-        0, listenerConnThrottleMetric(listenerName.value).metricValue.asInstanceOf[Double].toLong)
+      assertFalse(connectionQuotas.maxConnectionsExceeded(listenerName),
+        s"Should not exceed max connection limit on $name listener after initialization")
+      assertEquals(0, connectionQuotas.get(listener.defaultIp),
+        s"Number of connections on $listener listener:")
+      assertNotNull(listenerConnRateMetric(listenerName.value),
+        s"Expected connection-accept-rate metric to exist for listener ${listenerName.value}")
+      assertEquals(0, metricValue(listenerConnRateMetric(listenerName.value)), eps,
+        s"Connection acceptance rate metric for listener ${listenerName.value}")
+      assertNotNull(listenerConnThrottleMetric(listenerName.value),
+        s"Expected connection-accept-throttle-time metric to exist for listener ${listenerName.value}")
+      assertEquals(0, metricValue(listenerConnThrottleMetric(listenerName.value)).toLong,
+        s"Listener connection throttle metric for listener ${listenerName.value}")
+      assertEquals(0, metricValue(ipConnThrottleMetric(listenerName.value)).toLong,
+      s"Ip connection throttle metric for listener ${listenerName.value}")
     }
     verifyNoBlockedPercentRecordedOnAllListeners()
-    assertEquals("Broker-wide connection acceptance rate metric",
-      0, brokerConnRateMetric().metricValue.asInstanceOf[Double].toLong)
+    assertEquals(0, metricValue(brokerConnRateMetric()), eps,
+      "Broker-wide connection acceptance rate metric")
   }
 
   private def verifyNoBlockedPercentRecordedOnAllListeners(): Unit = {
-    blockedPercentMeters.foreach { case (name, meter) =>
-      assertEquals(s"BlockedPercentMeter metric for $name listener", 0, meter.count())
+    blockedPercentMeters.forKeyValue { (name, meter) =>
+      assertEquals(0, meter.count(),
+        s"BlockedPercentMeter metric for $name listener")
     }
   }
 
   private def verifyNonZeroBlockedPercentAndThrottleTimeOnAllListeners(): Unit = {
-    blockedPercentMeters.foreach { case (name, meter) =>
-      assertTrue(s"Expected BlockedPercentMeter metric for $name listener to be recorded", meter.count() > 0)
+    blockedPercentMeters.forKeyValue { (name, meter) =>
+      assertTrue(meter.count() > 0,
+        s"Expected BlockedPercentMeter metric for $name listener to be recorded")
     }
     listeners.values.foreach { listener =>
-      assertTrue(s"Connection throttle metric for listener ${listener.listenerName.value}",
-        listenerConnThrottleMetric(listener.listenerName.value).metricValue.asInstanceOf[Double].toLong > 0)
+      assertTrue(metricValue(listenerConnThrottleMetric(listener.listenerName.value)).toLong > 0,
+        s"Connection throttle metric for listener ${listener.listenerName.value}")
     }
   }
 
+  private def verifyIpThrottleTimeOnListener(listener: ListenerName, expectThrottle: Boolean): Unit = {
+    assertEquals(expectThrottle, metricValue(ipConnThrottleMetric(listener.value)).toLong > 0,
+      s"IP connection throttle recorded for listener ${listener.value}")
+  }
+
   private def verifyOnlyNonInterBrokerListenersBlockedPercentRecorded(): Unit = {
-    blockedPercentMeters.foreach { case (name, meter) =>
+    blockedPercentMeters.forKeyValue { (name, meter) =>
       name match {
         case "REPLICATION" =>
-          assertEquals(s"BlockedPercentMeter metric for $name listener", 0, meter.count())
+          assertEquals(0, meter.count(), s"BlockedPercentMeter metric for $name listener")
         case _ =>
-          assertTrue(s"Expected BlockedPercentMeter metric for $name listener to be recorded", meter.count() > 0)
+          assertTrue(meter.count() > 0, s"Expected BlockedPercentMeter metric for $name listener to be recorded")
       }
     }
   }
 
   private def verifyConnectionCountOnEveryListener(connectionQuotas: ConnectionQuotas, expectedConnectionCount: Int): Unit = {
     listeners.values.foreach { listener =>
-      assertEquals(s"Number of connections on $listener:",
-        expectedConnectionCount, connectionQuotas.get(listener.defaultIp))
+      assertEquals(expectedConnectionCount, connectionQuotas.get(listener.defaultIp),
+        s"Number of connections on $listener:")
     }
   }
 
   private def listenerConnThrottleMetric(listener: String) : KafkaMetric = {
     val metricName = metrics.metricName(
       "connection-accept-throttle-time",
+      SocketServer.MetricsGroup,
+      Collections.singletonMap(Processor.ListenerMetricTag, listener))
+    metrics.metric(metricName)
+  }
+
+  private def ipConnThrottleMetric(listener: String): KafkaMetric = {
+    val metricName = metrics.metricName(
+      "ip-connection-accept-throttle-time",
       SocketServer.MetricsGroup,
       Collections.singletonMap(Processor.ListenerMetricTag, listener))
     metrics.metric(metricName)
@@ -599,12 +854,35 @@ class ConnectionQuotasTest {
     metrics.metric(metricName)
   }
 
+  private def ipConnRateMetric(ip: String): KafkaMetric = {
+    val metricName = metrics.metricName(
+      s"connection-accept-rate",
+      SocketServer.MetricsGroup,
+      Collections.singletonMap("ip", ip))
+    metrics.metric(metricName)
+  }
+
+  private def metricValue(metric: KafkaMetric): Double = {
+    metric.metricValue.asInstanceOf[Double]
+  }
+
+  private def verifyIpConnectionQuota(ip: InetAddress, quota: Int): Unit = {
+    // verify connection quota in-memory rate and metric
+    assertEquals(quota, connectionQuotas.connectionRateForIp(ip))
+    Option(ipConnRateMetric(ip.getHostAddress)) match {
+      case Some(metric) => assertEquals(quota, metric.config.quota.bound, 0.1)
+      case None => fail(s"Expected $ip connection rate metric to be defined")
+    }
+  }
+
   // this method must be called on a separate thread, because connectionQuotas.inc() may block
   private def acceptConnections(connectionQuotas: ConnectionQuotas,
                                 listenerDesc: ListenerDesc,
                                 numConnections: Long,
-                                timeIntervalMs: Long = 0L) : Unit = {
-    acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections, timeIntervalMs)
+                                timeIntervalMs: Long = 0L,
+                                expectIpThrottle: Boolean = false) : Unit = {
+    acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections,
+      timeIntervalMs, expectIpThrottle)
   }
 
   // this method must be called on a separate thread, because connectionQuotas.inc() may block
@@ -613,13 +891,17 @@ class ConnectionQuotasTest {
                                              numConnections: Long,
                                              timeIntervalMs: Long,
                                              expectedRate: Int,
-                                             epsilon: Int) : Unit = {
-    val startTimeMs = System.currentTimeMillis
-    acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections, timeIntervalMs)
-    val elapsedSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis - startTimeMs)
-    val actualRate = (numConnections.toDouble / elapsedSeconds).toInt
-    assertTrue(s"Expected rate ($expectedRate +- $epsilon), but got $actualRate ($numConnections connections / $elapsedSeconds sec)",
-      actualRate <= expectedRate + epsilon && actualRate >= expectedRate - epsilon)
+                                             epsilon: Int,
+                                             expectIpThrottle: Boolean = false) : Unit = {
+    val startTimeMs = time.milliseconds
+    val startNumConnections = connectionQuotas.get(listenerDesc.defaultIp)
+    acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections,
+      timeIntervalMs, expectIpThrottle)
+    val elapsedSeconds = MetricsUtils.convert(time.milliseconds - startTimeMs, TimeUnit.SECONDS)
+    val createdConnections = connectionQuotas.get(listenerDesc.defaultIp) - startNumConnections
+    val actualRate = createdConnections.toDouble / elapsedSeconds
+    assertEquals(expectedRate.toDouble, actualRate, epsilon,
+      s"Expected rate ($expectedRate +- $epsilon), but got $actualRate ($createdConnections connections / $elapsedSeconds sec)")
   }
 
   /**
@@ -633,18 +915,27 @@ class ConnectionQuotasTest {
                                 listenerName: ListenerName,
                                 address: InetAddress,
                                 numConnections: Long,
-                                timeIntervalMs: Long) : Unit = {
-    var nextSendTime = System.currentTimeMillis + timeIntervalMs
+                                timeIntervalMs: Long,
+                                expectIpThrottle: Boolean): Boolean = {
+    var nextSendTime = time.milliseconds + timeIntervalMs
+    var ipThrottled = false
     for (_ <- 0L until numConnections) {
       // this method may block if broker-wide or listener limit on the number of connections is reached
-      connectionQuotas.inc(listenerName, address, blockedPercentMeters(listenerName.value))
-
-      val sleepMs = math.max(nextSendTime - System.currentTimeMillis, 0)
+      try {
+        connectionQuotas.inc(listenerName, address, blockedPercentMeters(listenerName.value))
+      } catch {
+        case e: ConnectionThrottledException =>
+          if (!expectIpThrottle)
+            throw e
+          ipThrottled = true
+      }
+      val sleepMs = math.max(nextSendTime - time.milliseconds, 0)
       if (sleepMs > 0)
-        Utils.sleep(sleepMs)
+        time.sleep(sleepMs)
 
       nextSendTime = nextSendTime + timeIntervalMs
     }
+    ipThrottled
   }
 
   // this method must be called on a separate thread, because connectionQuotas.inc() may block
@@ -654,8 +945,8 @@ class ConnectionQuotasTest {
     val listenerName = listenerDesc.listenerName
     for (i <- 0L until numConnections) {
       // this method may block if broker-wide or listener limit is reached
-      intercept[TooManyConnectionsException](
-        connectionQuotas.inc(listenerName, listenerDesc.defaultIp, blockedPercentMeters(listenerName.value))
+      assertThrows(classOf[TooManyConnectionsException],
+        () => connectionQuotas.inc(listenerName, listenerDesc.defaultIp, blockedPercentMeters(listenerName.value))
       )
     }
   }

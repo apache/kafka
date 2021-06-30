@@ -17,71 +17,98 @@
 
 package kafka.server
 
-import java.util.concurrent.{CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import java.util.Collections
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
-import kafka.cluster.{Broker, EndPoint}
 import kafka.utils.TestUtils
-import org.apache.kafka.test.{TestUtils => ClientsTestUtils}
-import org.apache.kafka.clients.{ManualMetadataUpdater, Metadata, MockClient}
-import org.apache.kafka.common.feature.Features
-import org.apache.kafka.common.feature.Features.emptySupportedFeatures
-import org.apache.kafka.common.utils.SystemTime
+import org.apache.kafka.clients.{ClientResponse, ManualMetadataUpdater, Metadata, MockClient}
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.message.MetadataRequestData
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, MetadataRequest}
-import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.Test
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{AbstractRequest, MetadataRequest, MetadataResponse, RequestTestUtils}
+import org.apache.kafka.common.utils.MockTime
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.mockito.Mockito._
 
 class BrokerToControllerRequestThreadTest {
 
   @Test
+  def testRetryTimeoutWhileControllerNotAvailable(): Unit = {
+    val time = new MockTime()
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val metadata = mock(classOf[Metadata])
+    val mockClient = new MockClient(time, metadata)
+    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+
+    when(controllerNodeProvider.get()).thenReturn(None)
+
+    val retryTimeoutMs = 30000
+    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
+      config, time, "", retryTimeoutMs)
+    testRequestThread.started = true
+
+    val completionHandler = new TestRequestCompletionHandler(None)
+    val queueItem = BrokerToControllerQueueItem(
+      time.milliseconds(),
+      new MetadataRequest.Builder(new MetadataRequestData()),
+      completionHandler
+    )
+
+    testRequestThread.enqueue(queueItem)
+    testRequestThread.doWork()
+    assertEquals(1, testRequestThread.queueSize)
+
+    time.sleep(retryTimeoutMs)
+    testRequestThread.doWork()
+    assertEquals(0, testRequestThread.queueSize)
+    assertTrue(completionHandler.timedOut.get)
+  }
+
+  @Test
   def testRequestsSent(): Unit = {
     // just a simple test that tests whether the request from 1 -> 2 is sent and the response callback is called
-    val time = new SystemTime
+    val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val controllerId = 2
 
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
-    val metadataCache = mock(classOf[MetadataCache])
-    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val activeController = new Broker(controllerId,
-      Seq(new EndPoint("host", 1234, listenerName, SecurityProtocol.PLAINTEXT)), None, emptySupportedFeatures)
+    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val activeController = new Node(controllerId, "host", 1234)
 
-    when(metadataCache.getControllerId).thenReturn(Some(controllerId))
-    when(metadataCache.getAliveBrokers).thenReturn(Seq(activeController))
-    when(metadataCache.getAliveBroker(controllerId)).thenReturn(Some(activeController))
+    when(controllerNodeProvider.get()).thenReturn(Some(activeController))
 
-    val expectedResponse = ClientsTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", new Integer(2)))
-    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
-      config, listenerName, time, "")
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", 2))
+    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
+      config, time, "", retryTimeoutMs = Long.MaxValue)
+    testRequestThread.started = true
     mockClient.prepareResponse(expectedResponse)
 
-    val responseLatch = new CountDownLatch(1)
+    val completionHandler = new TestRequestCompletionHandler(Some(expectedResponse))
     val queueItem = BrokerToControllerQueueItem(
-      new MetadataRequest.Builder(new MetadataRequestData()), response => {
-        assertEquals(expectedResponse, response.responseBody())
-        responseLatch.countDown()
-      })
-    requestQueue.put(queueItem)
+      time.milliseconds(),
+      new MetadataRequest.Builder(new MetadataRequestData()),
+      completionHandler
+    )
+
+    testRequestThread.enqueue(queueItem)
+    assertEquals(1, testRequestThread.queueSize)
+
     // initialize to the controller
     testRequestThread.doWork()
     // send and process the request
     testRequestThread.doWork()
 
-    assertTrue(responseLatch.await(10, TimeUnit.SECONDS))
+    assertEquals(0, testRequestThread.queueSize)
+    assertTrue(completionHandler.completed.get())
   }
 
   @Test
   def testControllerChanged(): Unit = {
     // in this test the current broker is 1, and the controller changes from 2 -> 3 then back: 3 -> 2
-    val time = new SystemTime
+    val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val oldControllerId = 1
     val newControllerId = 2
@@ -89,56 +116,45 @@ class BrokerToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
-    val metadataCache = mock(classOf[MetadataCache])
-    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val oldController = new Broker(oldControllerId,
-      Seq(new EndPoint("host1", 1234, listenerName, SecurityProtocol.PLAINTEXT)), None, Features.emptySupportedFeatures)
-    val oldControllerNode = oldController.node(listenerName)
-    val newController = new Broker(newControllerId,
-      Seq(new EndPoint("host2", 1234, listenerName, SecurityProtocol.PLAINTEXT)), None, Features.emptySupportedFeatures)
+    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val oldController = new Node(oldControllerId, "host1", 1234)
+    val newController = new Node(newControllerId, "host2", 1234)
 
-    when(metadataCache.getControllerId).thenReturn(Some(oldControllerId), Some(newControllerId))
-    when(metadataCache.getAliveBroker(oldControllerId)).thenReturn(Some(oldController))
-    when(metadataCache.getAliveBroker(newControllerId)).thenReturn(Some(newController))
-    when(metadataCache.getAliveBrokers).thenReturn(Seq(oldController, newController))
+    when(controllerNodeProvider.get()).thenReturn(Some(oldController), Some(newController))
 
-    val expectedResponse = ClientsTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", new Integer(2)))
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(),
-      requestQueue, metadataCache, config, listenerName, time, "")
+      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
+    testRequestThread.started = true
 
-    val responseLatch = new CountDownLatch(1)
-
+    val completionHandler = new TestRequestCompletionHandler(Some(expectedResponse))
     val queueItem = BrokerToControllerQueueItem(
-      new MetadataRequest.Builder(new MetadataRequestData()), response => {
-        assertEquals(expectedResponse, response.responseBody())
-        responseLatch.countDown()
-      })
-    requestQueue.put(queueItem)
+      time.milliseconds(),
+      new MetadataRequest.Builder(new MetadataRequestData()),
+      completionHandler,
+    )
+
+    testRequestThread.enqueue(queueItem)
     mockClient.prepareResponse(expectedResponse)
     // initialize the thread with oldController
     testRequestThread.doWork()
-    // assert queue correctness
-    assertFalse(requestQueue.isEmpty)
-    assertEquals(1, requestQueue.size())
-    assertEquals(queueItem, requestQueue.peek())
+    assertFalse(completionHandler.completed.get())
+
     // disconnect the node
-    mockClient.setUnreachable(oldControllerNode, time.milliseconds() + 5000)
+    mockClient.setUnreachable(oldController, time.milliseconds() + 5000)
     // verify that the client closed the connection to the faulty controller
     testRequestThread.doWork()
-    assertFalse(requestQueue.isEmpty)
-    assertEquals(1, requestQueue.size())
     // should connect to the new controller
     testRequestThread.doWork()
     // should send the request and process the response
     testRequestThread.doWork()
 
-    assertTrue(responseLatch.await(10, TimeUnit.SECONDS))
+    assertTrue(completionHandler.completed.get())
   }
 
   @Test
   def testNotController(): Unit = {
-    val time = new SystemTime
+    val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val oldControllerId = 1
     val newControllerId = 2
@@ -146,48 +162,232 @@ class BrokerToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
-    val metadataCache = mock(classOf[MetadataCache])
-    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val oldController = new Broker(oldControllerId,
-      Seq(new EndPoint("host1", 1234, listenerName, SecurityProtocol.PLAINTEXT)), None, Features.emptySupportedFeatures)
-    val newController = new Broker(2,
-      Seq(new EndPoint("host2", 1234, listenerName, SecurityProtocol.PLAINTEXT)), None, Features.emptySupportedFeatures)
+    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val port = 1234
+    val oldController = new Node(oldControllerId, "host1", port)
+    val newController = new Node(newControllerId, "host2", port)
 
-    when(metadataCache.getControllerId).thenReturn(Some(oldControllerId), Some(newControllerId))
-    when(metadataCache.getAliveBrokers).thenReturn(Seq(oldController, newController))
-    when(metadataCache.getAliveBroker(oldControllerId)).thenReturn(Some(oldController))
-    when(metadataCache.getAliveBroker(newControllerId)).thenReturn(Some(newController))
+    when(controllerNodeProvider.get()).thenReturn(Some(oldController), Some(newController))
 
-    val responseWithNotControllerError = ClientsTestUtils.metadataUpdateWith("cluster1", 2,
+    val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
-      Collections.singletonMap("a", new Integer(2)))
-    val expectedResponse = ClientsTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", new Integer(2)))
-    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
-      config, listenerName, time, "")
+      Collections.singletonMap("a", 2))
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
+    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
+      config, time, "", retryTimeoutMs = Long.MaxValue)
+    testRequestThread.started = true
 
-    val responseLatch = new CountDownLatch(1)
+    val completionHandler = new TestRequestCompletionHandler(Some(expectedResponse))
     val queueItem = BrokerToControllerQueueItem(
+      time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()
-        .setAllowAutoTopicCreation(true)), response => {
-        assertEquals(expectedResponse, response.responseBody())
-        responseLatch.countDown()
-      })
-    requestQueue.put(queueItem)
+        .setAllowAutoTopicCreation(true)),
+      completionHandler
+    )
+    testRequestThread.enqueue(queueItem)
     // initialize to the controller
     testRequestThread.doWork()
+
+    val oldBrokerNode = new Node(oldControllerId, "host1", port)
+    assertEquals(Some(oldBrokerNode), testRequestThread.activeControllerAddress())
+
     // send and process the request
     mockClient.prepareResponse((body: AbstractRequest) => {
       body.isInstanceOf[MetadataRequest] &&
       body.asInstanceOf[MetadataRequest].allowAutoTopicCreation()
     }, responseWithNotControllerError)
     testRequestThread.doWork()
+    assertEquals(None, testRequestThread.activeControllerAddress())
     // reinitialize the controller to a different node
     testRequestThread.doWork()
     // process the request again
     mockClient.prepareResponse(expectedResponse)
     testRequestThread.doWork()
 
-    assertTrue(responseLatch.await(10, TimeUnit.SECONDS))
+    val newControllerNode = new Node(newControllerId, "host2", port)
+    assertEquals(Some(newControllerNode), testRequestThread.activeControllerAddress())
+
+    assertTrue(completionHandler.completed.get())
+  }
+
+  @Test
+  def testRetryTimeout(): Unit = {
+    val time = new MockTime()
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val controllerId = 1
+
+    val metadata = mock(classOf[Metadata])
+    val mockClient = new MockClient(time, metadata)
+
+    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controller = new Node(controllerId, "host1", 1234)
+
+    when(controllerNodeProvider.get()).thenReturn(Some(controller))
+
+    val retryTimeoutMs = 30000
+    val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
+      Collections.singletonMap("a", Errors.NOT_CONTROLLER),
+      Collections.singletonMap("a", 2))
+    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
+      config, time, "", retryTimeoutMs)
+    testRequestThread.started = true
+
+    val completionHandler = new TestRequestCompletionHandler()
+    val queueItem = BrokerToControllerQueueItem(
+      time.milliseconds(),
+      new MetadataRequest.Builder(new MetadataRequestData()
+        .setAllowAutoTopicCreation(true)),
+      completionHandler
+    )
+
+    testRequestThread.enqueue(queueItem)
+
+    // initialize to the controller
+    testRequestThread.doWork()
+
+    time.sleep(retryTimeoutMs)
+
+    // send and process the request
+    mockClient.prepareResponse((body: AbstractRequest) => {
+      body.isInstanceOf[MetadataRequest] &&
+        body.asInstanceOf[MetadataRequest].allowAutoTopicCreation()
+    }, responseWithNotControllerError)
+
+    testRequestThread.doWork()
+
+    assertTrue(completionHandler.timedOut.get())
+  }
+
+  @Test
+  def testUnsupportedVersionHandling(): Unit = {
+    val time = new MockTime()
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val controllerId = 2
+
+    val metadata = mock(classOf[Metadata])
+    val mockClient = new MockClient(time, metadata)
+
+    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val activeController = new Node(controllerId, "host", 1234)
+
+    when(controllerNodeProvider.get()).thenReturn(Some(activeController))
+
+    val callbackResponse = new AtomicReference[ClientResponse]()
+    val completionHandler = new ControllerRequestCompletionHandler {
+      override def onTimeout(): Unit = fail("Unexpected timeout exception")
+      override def onComplete(response: ClientResponse): Unit = callbackResponse.set(response)
+    }
+
+    val queueItem = BrokerToControllerQueueItem(
+      time.milliseconds(),
+      new MetadataRequest.Builder(new MetadataRequestData()),
+      completionHandler
+    )
+
+    mockClient.prepareUnsupportedVersionResponse(request => request.apiKey == ApiKeys.METADATA)
+
+    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
+      config, time, "", retryTimeoutMs = Long.MaxValue)
+    testRequestThread.started = true
+
+    testRequestThread.enqueue(queueItem)
+    pollUntil(testRequestThread, () => callbackResponse.get != null)
+    assertNotNull(callbackResponse.get.versionMismatch)
+  }
+
+  @Test
+  def testAuthenticationExceptionHandling(): Unit = {
+    val time = new MockTime()
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val controllerId = 2
+
+    val metadata = mock(classOf[Metadata])
+    val mockClient = new MockClient(time, metadata)
+
+    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val activeController = new Node(controllerId, "host", 1234)
+
+    when(controllerNodeProvider.get()).thenReturn(Some(activeController))
+
+    val callbackResponse = new AtomicReference[ClientResponse]()
+    val completionHandler = new ControllerRequestCompletionHandler {
+      override def onTimeout(): Unit = fail("Unexpected timeout exception")
+      override def onComplete(response: ClientResponse): Unit = callbackResponse.set(response)
+    }
+
+    val queueItem = BrokerToControllerQueueItem(
+      time.milliseconds(),
+      new MetadataRequest.Builder(new MetadataRequestData()),
+      completionHandler
+    )
+
+    mockClient.createPendingAuthenticationError(activeController, 50)
+
+    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
+      config, time, "", retryTimeoutMs = Long.MaxValue)
+    testRequestThread.started = true
+
+    testRequestThread.enqueue(queueItem)
+    pollUntil(testRequestThread, () => callbackResponse.get != null)
+    assertNotNull(callbackResponse.get.authenticationException)
+  }
+
+  @Test
+  def testThreadNotStarted(): Unit = {
+    // Make sure we throw if we enqueue anything while the thread is not running
+    val time = new MockTime()
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+
+    val metadata = mock(classOf[Metadata])
+    val mockClient = new MockClient(time, metadata)
+
+    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+
+    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
+      config, time, "", retryTimeoutMs = Long.MaxValue)
+
+    val completionHandler = new TestRequestCompletionHandler(None)
+    val queueItem = BrokerToControllerQueueItem(
+      time.milliseconds(),
+      new MetadataRequest.Builder(new MetadataRequestData()),
+      completionHandler
+    )
+
+    assertThrows(classOf[IllegalStateException], () => testRequestThread.enqueue(queueItem))
+    assertEquals(0, testRequestThread.queueSize)
+  }
+
+  private def pollUntil(
+    requestThread: BrokerToControllerRequestThread,
+    condition: () => Boolean,
+    maxRetries: Int = 10
+  ): Unit = {
+    var tries = 0
+    do {
+      requestThread.doWork()
+      tries += 1
+    } while (!condition.apply() && tries < maxRetries)
+
+    if (!condition.apply()) {
+      fail(s"Condition failed to be met after polling $tries times")
+    }
+  }
+
+  class TestRequestCompletionHandler(
+    expectedResponse: Option[MetadataResponse] = None
+  ) extends ControllerRequestCompletionHandler {
+    val completed: AtomicBoolean = new AtomicBoolean(false)
+    val timedOut: AtomicBoolean = new AtomicBoolean(false)
+
+    override def onComplete(response: ClientResponse): Unit = {
+      expectedResponse.foreach { expected =>
+        assertEquals(expected, response.responseBody())
+      }
+      completed.set(true)
+    }
+
+    override def onTimeout(): Unit = {
+      timedOut.set(true)
+    }
   }
 }

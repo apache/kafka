@@ -75,7 +75,11 @@ There are several primitive field types available.
 
 * "int16": a 16-bit integer.
 
+* "uint16": a 16-bit unsigned integer.
+
 * "int32": a 32-bit integer.
+
+* "uint32": a 32-bit unsigned integer.
 
 * "int64": a 64-bit integer.
 
@@ -83,7 +87,11 @@ There are several primitive field types available.
 
 * "string": a UTF-8 string.
 
+* "uuid": a type 4 immutable universally unique identifier.
+
 * "bytes": binary data.
+
+* "records": recordset such as memory recordset.
 
 In addition to these primitive field types, there is also an array type.  Array
 types start with a "[]" and end with the name of the element type.  For
@@ -96,12 +104,12 @@ Guide](https://kafka.apache.org/protocol.html).
 Nullable Fields
 ---------------
 Booleans, ints, and floats can never be null.  However, fields that are strings,
-bytes, or arrays may optionally be "nullable."  When a field is "nullable," that
-simply means that we are prepared to serialize and deserialize null entries for
-that field.
+bytes, uuid, records, or arrays may optionally be "nullable".  When a field is 
+"nullable", that simply means that we are prepared to serialize and deserialize
+null entries for that field.
 
 If you want to declare a field as nullable, you set "nullableVersions" for that
-field.  Nullability is implemented as a version range in order to accomodate a
+field.  Nullability is implemented as a version range in order to accommodate a
 very common pattern in Kafka where a field that was originally not nullable
 becomes nullable in a later version.
 
@@ -127,7 +135,7 @@ version.
 You can remove support for a tagged field from a specific version of a message,
 but you can't reuse a tag once it has been used for something else.  Once tags
 have been used for something, they can't be used for anything else, without
-breaking compatibilty.
+breaking compatibility.
 
 Note that tagged fields can only be added to "flexible" message versions.
 
@@ -137,7 +145,7 @@ Kafka serialization has been improved over time to be more flexible and
 efficient.  Message versions that contain these improvements are referred to as
 "flexible versions."
 
-In flexible verisons, variable-length fields such as strings, arrays, and bytes
+In flexible versions, variable-length fields such as strings, arrays, and bytes
 fields are serialized in a more efficient way that saves space.  The new
 serialization types start with compact.  For example COMPACT_STRING is a more
 efficient form of STRING.
@@ -157,16 +165,10 @@ meaning of the request, such as a "validateOnly" boolean, should not be ignored.
 It's often useful to know how much space a message will take up before writing
 it out to a buffer.  You can find this out by calling the Message#size method.
 
-You can also convert a message to a Struct by calling Message#toStruct.  This
-allows you to use the functions that serialize Structs to buffers.
-
 Deserializing Messages
 ----------------------
 Message objects may be deserialized using the Message#read method.  This method
 overwrites all the data currently in the message object with new data.
-
-You can also deserialize a message from a Struct by calling Message#fromStruct.
-The Struct will not be modified.
 
 Any fields in the message object that are not present in the version that you
 are deserializing will be reset to default values.  Unless a custom default has
@@ -182,9 +184,13 @@ been set:
 
 * Bytes fields default to the empty byte array.
 
+* Uuid fields default to zero uuid.
+
+* Records fields default to null.
+
 * Array fields default to empty.
 
-You can specify "null" as a default value for a string field by specifing the
+You can specify "null" as a default value for a string field by specifying the
 literal string "null".  Note that you can only specify null as a default if all
 versions of the field are nullable.
 

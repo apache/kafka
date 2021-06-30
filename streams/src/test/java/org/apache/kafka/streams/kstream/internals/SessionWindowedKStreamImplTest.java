@@ -52,7 +52,9 @@ import java.util.Properties;
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertThrows;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class SessionWindowedKStreamImplTest {
     private static final String TOPIC = "input";
     private final StreamsBuilder builder = new StreamsBuilder();
@@ -213,83 +215,82 @@ public class SessionWindowedKStreamImplTest {
         }
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnAggregateIfInitializerIsNull() {
-        stream.aggregate(null, MockAggregator.TOSTRING_ADDER, sessionMerger);
+        assertThrows(NullPointerException.class, () -> stream.aggregate(null, MockAggregator.TOSTRING_ADDER, sessionMerger));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull() {
-        stream.aggregate(MockInitializer.STRING_INIT, null, sessionMerger);
+        assertThrows(NullPointerException.class, () -> stream.aggregate(MockInitializer.STRING_INIT, null, sessionMerger));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnAggregateIfMergerIsNull() {
-        stream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null);
+        assertThrows(NullPointerException.class, () -> stream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnReduceIfReducerIsNull() {
-        stream.reduce(null);
+        assertThrows(NullPointerException.class, () -> stream.reduce(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull() {
-        stream.aggregate(
+        assertThrows(NullPointerException.class, () -> stream.aggregate(
             null,
             MockAggregator.TOSTRING_ADDER,
             sessionMerger,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull() {
-        stream.aggregate(
+        assertThrows(NullPointerException.class, () -> stream.aggregate(
             MockInitializer.STRING_INIT,
             null,
             sessionMerger,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnMaterializedAggregateIfMergerIsNull() {
-        stream.aggregate(
+        assertThrows(NullPointerException.class, () -> stream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             null,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull() {
-        stream.aggregate(
+        assertThrows(NullPointerException.class, () -> stream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             sessionMerger,
-            (Materialized) null);
+            (Materialized) null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull() {
-        stream.reduce(null, Materialized.as("store"));
+        assertThrows(NullPointerException.class, () -> stream.reduce(null, Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
-        stream.reduce(MockReducer.STRING_ADDER, (Materialized) null);
+        assertThrows(NullPointerException.class, () -> stream.reduce(MockReducer.STRING_ADDER, (Materialized) null));
     }
 
-    @Test(expected = NullPointerException.class)
-    @SuppressWarnings("unchecked")
+    @Test
     public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
-        stream.reduce(MockReducer.STRING_ADDER, (Named) null);
+        assertThrows(NullPointerException.class, () -> stream.reduce(MockReducer.STRING_ADDER, (Named) null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnCountIfMaterializedIsNull() {
-        stream.count((Materialized<String, Long, SessionStore<Bytes, byte[]>>) null);
+        assertThrows(NullPointerException.class, () -> stream.count((Materialized<String, Long, SessionStore<Bytes, byte[]>>) null));
     }
 
     private void processData(final TopologyTestDriver driver) {

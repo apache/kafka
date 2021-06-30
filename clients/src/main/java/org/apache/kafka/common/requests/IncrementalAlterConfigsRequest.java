@@ -17,14 +17,18 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
+import java.util.Map;
 
 public class IncrementalAlterConfigsRequest extends AbstractRequest {
 
@@ -34,6 +38,32 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
         public Builder(IncrementalAlterConfigsRequestData data) {
             super(ApiKeys.INCREMENTAL_ALTER_CONFIGS);
             this.data = data;
+        }
+
+        public Builder(final Collection<ConfigResource> resources,
+                       final Map<ConfigResource, Collection<AlterConfigOp>> configs,
+                       final boolean validateOnly) {
+            super(ApiKeys.INCREMENTAL_ALTER_CONFIGS);
+            this.data = new IncrementalAlterConfigsRequestData()
+                            .setValidateOnly(validateOnly);
+            for (ConfigResource resource : resources) {
+                IncrementalAlterConfigsRequestData.AlterableConfigCollection alterableConfigSet =
+                    new IncrementalAlterConfigsRequestData.AlterableConfigCollection();
+                for (AlterConfigOp configEntry : configs.get(resource))
+                    alterableConfigSet.add(new IncrementalAlterConfigsRequestData.AlterableConfig()
+                                               .setName(configEntry.configEntry().name())
+                                               .setValue(configEntry.configEntry().value())
+                                               .setConfigOperation(configEntry.opType().id()));
+                IncrementalAlterConfigsRequestData.AlterConfigsResource alterConfigsResource = new IncrementalAlterConfigsRequestData.AlterConfigsResource();
+                alterConfigsResource.setResourceType(resource.type().id())
+                    .setResourceName(resource.name()).setConfigs(alterableConfigSet);
+                data.resources().add(alterConfigsResource);
+            }
+        }
+
+        public Builder(final Map<ConfigResource, Collection<AlterConfigOp>> configs,
+                       final boolean validateOnly) {
+            this(configs.keySet(), configs, validateOnly);
         }
 
         @Override
@@ -56,23 +86,14 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
         this.version = version;
     }
 
-    IncrementalAlterConfigsRequest(final Struct struct, final short version) {
-        super(ApiKeys.INCREMENTAL_ALTER_CONFIGS, version);
-        this.data = new IncrementalAlterConfigsRequestData(struct, version);
-        this.version = version;
-    }
-
     public static IncrementalAlterConfigsRequest parse(ByteBuffer buffer, short version) {
-        return new IncrementalAlterConfigsRequest(ApiKeys.INCREMENTAL_ALTER_CONFIGS.parseRequest(version, buffer), version);
-    }
-
-    public IncrementalAlterConfigsRequestData data() {
-        return data;
+        return new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData(
+            new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version);
+    public IncrementalAlterConfigsRequestData data() {
+        return data;
     }
 
     @Override

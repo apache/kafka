@@ -22,11 +22,11 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
@@ -54,7 +54,7 @@ import java.util.regex.Pattern;
  */
 public class Topology {
 
-    final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
+    protected final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
 
     /**
      * Sets the {@code auto.offset.reset} configuration when
@@ -646,11 +646,16 @@ public class Topology {
      * Add a new processor node that receives and processes records output by one or more parent source or processor
      * node.
      * Any new record output by this processor will be forwarded to its child processor or sink nodes.
+     * The supplier should always generate a new instance each time
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} gets called. Creating a single
+     * {@link org.apache.kafka.streams.processor.Processor} object and returning the same object reference in
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} would be a violation of the supplier pattern
+     * and leads to runtime exceptions.
      * If {@code supplier} provides stores via {@link ConnectedStoreProvider#stores()}, the provided {@link StoreBuilder}s
      * will be added to the topology and connected to this processor automatically.
      *
      * @param name the unique name of the processor node
-     * @param supplier the supplier used to obtain this node's {@link Processor} instance
+     * @param supplier the supplier used to obtain this node's {@link org.apache.kafka.streams.processor.Processor} instance
      * @param parentNames the name of one or more source or processor nodes whose output records this processor should receive
      * and process
      * @return itself
@@ -730,6 +735,11 @@ public class Topology {
      * <p>
      * The provided {@link org.apache.kafka.streams.processor.ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
      * records forwarded from the {@link SourceNode}.
+     * The supplier should always generate a new instance each time
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} gets called. Creating a single
+     * {@link org.apache.kafka.streams.processor.Processor} object and returning the same object reference in
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} would be a violation of the supplier pattern
+     * and leads to runtime exceptions.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      *
@@ -775,6 +785,11 @@ public class Topology {
      * <p>
      * The provided {@link org.apache.kafka.streams.processor.ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
      * records forwarded from the {@link SourceNode}.
+     * The supplier should always generate a new instance each time
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} gets called. Creating a single
+     * {@link org.apache.kafka.streams.processor.Processor} object and returning the same object reference in
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} would be a violation of the supplier pattern
+     * and leads to runtime exceptions.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      *
      * @param storeBuilder          user defined key value store builder

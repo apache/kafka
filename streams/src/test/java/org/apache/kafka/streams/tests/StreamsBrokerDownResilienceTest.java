@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 
@@ -67,7 +68,7 @@ public class StreamsBrokerDownResilienceTest {
         streamsProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-resilience");
         streamsProperties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
 
 
         // it is expected that max.poll.interval, retries, request.timeout and max.block.ms set
@@ -105,10 +106,10 @@ public class StreamsBrokerDownResilienceTest {
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
 
-        streams.setUncaughtExceptionHandler((t, e) -> {
+        streams.setUncaughtExceptionHandler(e -> {
                 System.err.println("FATAL: An unexpected exception " + e);
                 System.err.flush();
-                streams.close(Duration.ofSeconds(30));
+                return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
             }
         );
 

@@ -16,15 +16,22 @@
  */
 package kafka.admin
 
-import kafka.admin.TopicCommand.PartitionDescription
+import kafka.admin.TopicCommand.{PartitionDescription, TopicCommandOptions}
+import kafka.common.AdminCommandFailedException
+import kafka.utils.Exit
 import org.apache.kafka.clients.admin.PartitionReassignment
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartitionInfo
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
+
 import scala.jdk.CollectionConverters._
 
 class TopicCommandTest {
+
+  private[this] val brokerList = "localhost:9092"
+  private[this] val topicName = "topicName"
+
   @Test
   def testIsNotUnderReplicatedWhenAdding(): Unit = {
     val replicaIds = List(1, 2)
@@ -41,7 +48,7 @@ class TopicCommandTest {
         List(new Node(1, "localhost", 9091)).asJava
       ),
       None,
-      false,
+      markedForDeletion = false,
       Some(
         new PartitionReassignment(
           replicaIds.map(id => id: java.lang.Integer).asJava,
@@ -52,5 +59,93 @@ class TopicCommandTest {
     )
 
     assertFalse(partitionDescription.isUnderReplicated)
+  }
+
+  @Test
+  def testAlterWithUnspecifiedPartitionCount(): Unit = {
+    assertCheckArgsExitCode(1, new TopicCommandOptions(
+      Array("--bootstrap-server", brokerList ,"--alter", "--topic", topicName)))
+  }
+
+  @Test
+  def testConfigOptWithBootstrapServers(): Unit = {
+    assertCheckArgsExitCode(1,
+      new TopicCommandOptions(Array("--bootstrap-server", brokerList ,"--alter", "--topic", topicName, "--partitions", "3", "--config", "cleanup.policy=compact")))
+    assertCheckArgsExitCode(1,
+      new TopicCommandOptions(Array("--bootstrap-server", brokerList ,"--alter", "--topic", topicName, "--partitions", "3", "--delete-config", "cleanup.policy")))
+    val opts =
+      new TopicCommandOptions(Array("--bootstrap-server", brokerList ,"--create", "--topic", topicName, "--partitions", "3", "--replication-factor", "3", "--config", "cleanup.policy=compact"))
+    opts.checkArgs()
+    assertTrue(opts.hasCreateOption)
+    assertEquals(brokerList, opts.bootstrapServer.get)
+    assertEquals("cleanup.policy=compact", opts.topicConfig.get.get(0))
+  }
+
+  @Test
+  def testCreateWithPartitionCountWithoutReplicationFactor(): Unit = {
+    assertCheckArgsExitCode(1,
+      new TopicCommandOptions(
+        Array("--bootstrap-server", brokerList,
+          "--create",
+          "--partitions", "2",
+          "--topic", topicName)))
+  }
+
+  @Test
+  def testCreateWithReplicationFactorWithoutPartitionCount(): Unit = {
+    assertCheckArgsExitCode(1,
+      new TopicCommandOptions(
+        Array("--bootstrap-server", brokerList,
+          "--create",
+          "--replication-factor", "3",
+          "--topic", topicName)))
+  }
+
+  @Test
+  def testCreateWithAssignmentAndPartitionCount(): Unit = {
+    assertCheckArgsExitCode(1,
+      new TopicCommandOptions(
+        Array("--bootstrap-server", brokerList,
+          "--create",
+          "--replica-assignment", "3:0,5:1",
+          "--partitions", "2",
+          "--topic", topicName)))
+  }
+
+  @Test
+  def testCreateWithAssignmentAndReplicationFactor(): Unit = {
+    assertCheckArgsExitCode(1,
+      new TopicCommandOptions(
+        Array("--bootstrap-server", brokerList,
+          "--create",
+          "--replica-assignment", "3:0,5:1",
+          "--replication-factor", "2",
+          "--topic", topicName)))
+  }
+
+  @Test
+  def testParseAssignmentDuplicateEntries(): Unit = {
+    assertThrows(classOf[AdminCommandFailedException], () => TopicCommand.parseReplicaAssignment("5:5"))
+  }
+
+  @Test
+  def testParseAssignmentPartitionsOfDifferentSize(): Unit = {
+    assertThrows(classOf[AdminOperationException], () => TopicCommand.parseReplicaAssignment("5:4:3,2:1"))
+  }
+
+  @Test
+  def testParseAssignment(): Unit = {
+    val actualAssignment = TopicCommand.parseReplicaAssignment("5:4,3:2,1:0")
+    val expectedAssignment = Map(0 -> List(5, 4), 1 -> List(3, 2), 2 -> List(1, 0))
+    assertEquals(expectedAssignment, actualAssignment)
+  }
+
+  private[this] def assertCheckArgsExitCode(expected: Int, options: TopicCommandOptions): Unit = {
+    Exit.setExitProcedure {
+      (exitCode: Int, _: Option[String]) =>
+        assertEquals(expected, exitCode)
+        throw new RuntimeException
+    }
+    try assertThrows(classOf[RuntimeException], () => options.checkArgs()) finally Exit.resetExitProcedure()
   }
 }

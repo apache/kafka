@@ -106,7 +106,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
             Object value = entry.getValue();
             if (value == null) {
                 newRecord.put(fieldName(fieldNamePrefix, entry.getKey()), null);
-                return;
+                continue;
             }
 
             Schema.Type inferredType = ConnectSchema.schemaType(value.getClass());

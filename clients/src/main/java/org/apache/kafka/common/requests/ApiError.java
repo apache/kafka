@@ -19,12 +19,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.util.Objects;
-
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
 
 /**
  * Encapsulates an error code (via the Errors enum) and an optional message. Generally, the optional message is only
@@ -47,12 +43,6 @@ public class ApiError {
         return new ApiError(error, message);
     }
 
-    public ApiError(Struct struct) {
-        error = Errors.forCode(struct.get(ERROR_CODE));
-        // In some cases, the error message field was introduced in newer version
-        message = struct.getOrElse(ERROR_MESSAGE, null);
-    }
-
     public ApiError(Errors error) {
         this(error, error.message());
     }
@@ -65,12 +55,6 @@ public class ApiError {
     public ApiError(short code, String message) {
         this.error = Errors.forCode(code);
         this.message = message;
-    }
-
-    public void write(Struct struct) {
-        struct.set(ERROR_CODE, error.code());
-        if (error != Errors.NONE)
-            struct.setIfExists(ERROR_MESSAGE, message);
     }
 
     public boolean is(Errors error) {

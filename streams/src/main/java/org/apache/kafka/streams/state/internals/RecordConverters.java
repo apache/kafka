@@ -23,7 +23,6 @@ import java.nio.ByteBuffer;
 public final class RecordConverters {
     private static final RecordConverter IDENTITY_INSTANCE = record -> record;
 
-    @SuppressWarnings("deprecation")
     private static final RecordConverter RAW_TO_TIMESTAMED_INSTANCE = record -> {
         final byte[] rawValue = record.value();
         final long timestamp = record.timestamp();
@@ -38,7 +37,6 @@ public final class RecordConverters {
             record.offset(),
             timestamp,
             record.timestampType(),
-            record.checksum(),
             record.serializedKeySize(),
             record.serializedValueSize(),
             record.key(),

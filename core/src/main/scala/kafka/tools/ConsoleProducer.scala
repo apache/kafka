@@ -266,6 +266,7 @@ object ConsoleProducer {
     var keySeparator = "\t"
     var ignoreError = false
     var lineNumber = 0
+    var printPrompt = System.console != null
 
     override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
@@ -280,7 +281,8 @@ object ConsoleProducer {
 
     override def readMessage() = {
       lineNumber += 1
-      print(">")
+      if (printPrompt)
+        print(">")
       (reader.readLine(), parseKey) match {
         case (null, _) => null
         case (line, true) =>

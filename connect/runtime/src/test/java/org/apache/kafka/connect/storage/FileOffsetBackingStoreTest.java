@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
@@ -59,7 +60,7 @@ public class FileOffsetBackingStoreTest {
     public void setup() throws IOException {
         store = new FileOffsetBackingStore();
         tempFile = File.createTempFile("fileoffsetbackingstore", null);
-        props = new HashMap<String, String>();
+        props = new HashMap<>();
         props.put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, tempFile.getAbsolutePath());
         props.put(StandaloneConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         props.put(StandaloneConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
@@ -84,7 +85,7 @@ public class FileOffsetBackingStoreTest {
 
         Map<ByteBuffer, ByteBuffer> values = store.get(Arrays.asList(buffer("key"), buffer("bad"))).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
-        assertEquals(null, values.get(buffer("bad")));
+        assertNull(values.get(buffer("bad")));
 
         PowerMock.verifyAll();
     }

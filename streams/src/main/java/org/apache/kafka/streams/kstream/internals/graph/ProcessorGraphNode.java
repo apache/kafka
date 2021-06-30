@@ -19,12 +19,14 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.util.Properties;
+
 /**
  * Used to represent any type of stateless operation:
  *
  * map, mapValues, flatMap, flatMapValues, filter, filterNot, branch
  */
-public class ProcessorGraphNode<K, V> extends StreamsGraphNode {
+public class ProcessorGraphNode<K, V> extends GraphNode {
 
     private final ProcessorParameters<K, V, ?, ?> processorParameters;
 
@@ -55,7 +57,7 @@ public class ProcessorGraphNode<K, V> extends StreamsGraphNode {
     }
 
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
 
         topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), parentNodeNames());
     }

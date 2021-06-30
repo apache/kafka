@@ -33,6 +33,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -42,6 +43,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Optional;
@@ -55,7 +57,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 
 /**
@@ -65,19 +67,35 @@ import static org.junit.Assert.assertFalse;
 @Category(IntegrationTest.class)
 public class EOSUncleanShutdownIntegrationTest {
 
+    @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")
     public static Collection<String[]> data() {
         return Arrays.asList(new String[][] {
             {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_BETA}
+            {StreamsConfig.EXACTLY_ONCE_V2}
         });
     }
 
     @Parameterized.Parameter
     public String eosConfig;
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+        STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
+        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TEST_FOLDER.getRoot().getPath());
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
 
     @ClassRule
     public static final TemporaryFolder TEST_FOLDER = new TemporaryFolder(TestUtils.tempDirectory());
@@ -87,16 +105,6 @@ public class EOSUncleanShutdownIntegrationTest {
     private static final Long COMMIT_INTERVAL = 100L;
 
     private static final int RECORD_TOTAL = 3;
-
-    @BeforeClass
-    public static void setupConfigsAndUtils() {
-        STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
-        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TEST_FOLDER.getRoot().getPath());
-    }
 
     @Test
     public void shouldWorkWithUncleanShutdownWipeOutStateStore() throws InterruptedException {
@@ -132,17 +140,21 @@ public class EOSUncleanShutdownIntegrationTest {
             mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
             mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
-        final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(STREAMS_CONFIG, builder, true);
+        final KafkaStreams driver =  new KafkaStreams(builder.build(), STREAMS_CONFIG);
+        driver.cleanUp();
+        driver.start();
 
-        final File stateDir = new File(String.join("/", TEST_FOLDER.getRoot().getPath(), appId, "0_0"));
+        // Task's StateDir
+        final File taskStateDir = new File(String.join("/", TEST_FOLDER.getRoot().getPath(), appId, "0_0"));
+        final File taskCheckpointFile = new File(taskStateDir, ".checkpoint");
 
         try {
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
 
-            TestUtils.waitForCondition(stateDir::exists,
+            // wait until the first request is processed and some files are created in it
+            TestUtils.waitForCondition(() -> taskStateDir.exists() && taskStateDir.isDirectory() && taskStateDir.list().length > 0,
                 "Failed awaiting CreateTopics first request failure");
-
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 asList(new KeyValueTimestamp<>("k2", "v2", 1L),
                     new KeyValueTimestamp<>("k3", "v3", 2L)));
@@ -155,8 +167,13 @@ public class EOSUncleanShutdownIntegrationTest {
 
             driver.close();
 
-            // the state directory should still exist with the empty checkpoint file
-            assertFalse(stateDir.exists());
+            // Although there is an uncaught exception,
+            // case 1: the state directory is cleaned up without any problems.
+            // case 2: The state directory is not cleaned up, for it does not include any checkpoint file.
+            // case 3: The state directory is not cleaned up, for it includes a checkpoint file but it is empty.
+            assertTrue(!taskStateDir.exists()
+                || (taskStateDir.exists() && taskStateDir.list().length > 0 && !taskCheckpointFile.exists())
+                || (taskCheckpointFile.exists() && taskCheckpointFile.length() == 0L));
 
             quietlyCleanStateAfterTest(CLUSTER, driver);
         }

@@ -16,29 +16,29 @@
  */
 package org.apache.kafka.streams.scala.kstream
 
-import java.time.Duration
-
 import org.apache.kafka.streams.kstream.internals.StreamJoinedInternal
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.state.Stores
-import org.junit.runner.RunWith
-import org.scalatest.{FlatSpec, Matchers}
-import org.scalatestplus.junit.JUnitRunner
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
-@RunWith(classOf[JUnitRunner])
-class StreamJoinedTest extends FlatSpec with Matchers {
+import java.time.Duration
 
-  "Create a StreamJoined" should "create a StreamJoined with Serdes" in {
+class StreamJoinedTest {
+
+  @Test
+  def testCreateStreamJoinedWithSerdes(): Unit = {
     val streamJoined: StreamJoined[String, String, Long] = StreamJoined.`with`[String, String, Long]
 
     val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined)
-    streamJoinedInternal.keySerde().getClass shouldBe Serdes.stringSerde.getClass
-    streamJoinedInternal.valueSerde().getClass shouldBe Serdes.stringSerde.getClass
-    streamJoinedInternal.otherValueSerde().getClass shouldBe Serdes.longSerde.getClass
+    assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.keySerde().getClass)
+    assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.valueSerde().getClass)
+    assertEquals(Serdes.longSerde.getClass, streamJoinedInternal.otherValueSerde().getClass)
   }
 
-  "Create a StreamJoined" should "create a StreamJoined with Serdes and Store Suppliers" in {
+  @Test
+  def testCreateStreamJoinedWithSerdesAndStoreSuppliers(): Unit = {
     val storeSupplier = Stores.inMemoryWindowStore("myStore", Duration.ofMillis(500), Duration.ofMillis(250), false)
 
     val otherStoreSupplier =
@@ -48,21 +48,22 @@ class StreamJoinedTest extends FlatSpec with Matchers {
       StreamJoined.`with`[String, String, Long](storeSupplier, otherStoreSupplier)
 
     val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined)
-    streamJoinedInternal.keySerde().getClass shouldBe Serdes.stringSerde.getClass
-    streamJoinedInternal.valueSerde().getClass shouldBe Serdes.stringSerde.getClass
-    streamJoinedInternal.otherValueSerde().getClass shouldBe Serdes.longSerde.getClass
-    streamJoinedInternal.otherStoreSupplier().equals(otherStoreSupplier)
-    streamJoinedInternal.thisStoreSupplier().equals(storeSupplier)
+    assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.keySerde().getClass)
+    assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.valueSerde().getClass)
+    assertEquals(Serdes.longSerde.getClass, streamJoinedInternal.otherValueSerde().getClass)
+    assertEquals(otherStoreSupplier, streamJoinedInternal.otherStoreSupplier())
+    assertEquals(storeSupplier, streamJoinedInternal.thisStoreSupplier())
   }
 
-  "Create a StreamJoined" should "create a StreamJoined with Serdes and a State Store name" in {
+  @Test
+  def testCreateStreamJoinedWithSerdesAndStateStoreName(): Unit = {
     val streamJoined: StreamJoined[String, String, Long] = StreamJoined.as[String, String, Long]("myStoreName")
 
     val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined)
-    streamJoinedInternal.keySerde().getClass shouldBe Serdes.stringSerde.getClass
-    streamJoinedInternal.valueSerde().getClass shouldBe Serdes.stringSerde.getClass
-    streamJoinedInternal.otherValueSerde().getClass shouldBe Serdes.longSerde.getClass
-    streamJoinedInternal.storeName().equals("myStoreName")
+    assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.keySerde().getClass)
+    assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.valueSerde().getClass)
+    assertEquals(Serdes.longSerde.getClass, streamJoinedInternal.otherValueSerde().getClass)
+    assertEquals("myStoreName", streamJoinedInternal.storeName())
   }
 
 }

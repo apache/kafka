@@ -30,7 +30,7 @@ import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
-import org.junit.{After, Before}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import scala.collection.mutable
 import scala.collection.Seq
@@ -79,7 +79,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     }
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     doSetup(createOffsetsTopic = true)
   }
@@ -147,7 +147,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     adminClient
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     producers.foreach(_.close(Duration.ZERO))
     consumers.foreach(_.wakeup())

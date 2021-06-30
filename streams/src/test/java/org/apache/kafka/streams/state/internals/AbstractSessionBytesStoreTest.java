@@ -64,6 +64,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 
@@ -82,13 +83,11 @@ public abstract class AbstractSessionBytesStoreTest {
                                                          final Serde<K> keySerde,
                                                          final Serde<V> valueSerde);
 
-    abstract String getMetricsScope();
-
     @Before
     public void setUp() {
         sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
         recordCollector = new MockRecordCollector();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
@@ -369,6 +368,7 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldFetchExactKeys() {
+        sessionStore.close();
         sessionStore = buildSessionStore(0x7a00000000000000L, Serdes.String(), Serdes.Long());
         sessionStore.init((StateStoreContext) context, sessionStore);
 
@@ -406,6 +406,7 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldBackwardFetchExactKeys() {
+        sessionStore.close();
         sessionStore = buildSessionStore(0x7a00000000000000L, Serdes.String(), Serdes.Long());
         sessionStore.init((StateStoreContext) context, sessionStore);
 
@@ -468,6 +469,8 @@ public abstract class AbstractSessionBytesStoreTest {
         assertThat(valuesToSet(sessionStore.findSessions(key2, 0L, Long.MAX_VALUE)), equalTo(expectedKey2));
         final Set<String> expectedKey3 = new HashSet<>(asList("3", "6", "9"));
         assertThat(valuesToSet(sessionStore.findSessions(key3, 0L, Long.MAX_VALUE)), equalTo(expectedKey3));
+
+        sessionStore.close();
     }
 
     @Test
@@ -497,6 +500,8 @@ public abstract class AbstractSessionBytesStoreTest {
         assertThat(valuesToSet(sessionStore.backwardFindSessions(key2, 0L, Long.MAX_VALUE)), equalTo(expectedKey2));
         final Set<String> expectedKey3 = new HashSet<>(asList("3", "6", "9"));
         assertThat(valuesToSet(sessionStore.backwardFindSessions(key3, 0L, Long.MAX_VALUE)), equalTo(expectedKey3));
+
+        sessionStore.close();
     }
 
     @Test
@@ -529,6 +534,7 @@ public abstract class AbstractSessionBytesStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldRestore() {
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
@@ -594,18 +600,8 @@ public abstract class AbstractSessionBytesStoreTest {
     }
 
     @Test
-    public void shouldLogAndMeasureExpiredRecordsWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeasureExpiredRecords(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldLogAndMeasureExpiredRecordsWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeasureExpiredRecords(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldLogAndMeasureExpiredRecords(final String builtInMetricsVersion) {
+    public void shouldLogAndMeasureExpiredRecords() {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
-        streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final SessionStore<String, Long> sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
@@ -631,55 +627,32 @@ public abstract class AbstractSessionBytesStoreTest {
         }
 
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-        final String metricScope = getMetricsScope();
         final String threadId = Thread.currentThread().getName();
         final Metric dropTotal;
         final Metric dropRate;
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            dropTotal = metrics.get(new MetricName(
-                "expired-window-record-drop-total",
-                "stream-" + metricScope + "-metrics",
-                "The total number of dropped records due to an expired window",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0"),
-                    mkEntry(metricScope + "-state-id", sessionStore.name())
-                )
-            ));
+        dropTotal = metrics.get(new MetricName(
+            "dropped-records-total",
+            "stream-task-metrics",
+            "",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        ));
 
-            dropRate = metrics.get(new MetricName(
-                "expired-window-record-drop-rate",
-                "stream-" + metricScope + "-metrics",
-                "The average number of dropped records due to an expired window per second",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0"),
-                    mkEntry(metricScope + "-state-id", sessionStore.name())
-                )
-            ));
-        } else {
-            dropTotal = metrics.get(new MetricName(
-                "dropped-records-total",
-                "stream-task-metrics",
-                "",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            ));
-
-            dropRate = metrics.get(new MetricName(
-                "dropped-records-rate",
-                "stream-task-metrics",
-                "",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            ));
-        }
+        dropRate = metrics.get(new MetricName(
+            "dropped-records-rate",
+            "stream-task-metrics",
+            "",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        ));
         assertEquals(1.0, dropTotal.metricValue());
         assertNotEquals(0.0, dropRate.metricValue());
+
+        sessionStore.close();
     }
 
     @Test
@@ -687,44 +660,44 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.remove(new Windowed<>("a", new SessionWindow(0, 1)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFindSessionsNullKey() {
-        sessionStore.findSessions(null, 1L, 2L);
+        assertThrows(NullPointerException.class, () -> sessionStore.findSessions(null, 1L, 2L));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFindSessionsNullFromKey() {
-        sessionStore.findSessions(null, "anyKeyTo", 1L, 2L);
+        assertThrows(NullPointerException.class, () -> sessionStore.findSessions(null, "anyKeyTo", 1L, 2L));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFindSessionsNullToKey() {
-        sessionStore.findSessions("anyKeyFrom", null, 1L, 2L);
+        assertThrows(NullPointerException.class, () -> sessionStore.findSessions("anyKeyFrom", null, 1L, 2L));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFetchNullFromKey() {
-        sessionStore.fetch(null, "anyToKey");
+        assertThrows(NullPointerException.class, () -> sessionStore.fetch(null, "anyToKey"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFetchNullToKey() {
-        sessionStore.fetch("anyFromKey", null);
+        assertThrows(NullPointerException.class, () -> sessionStore.fetch("anyFromKey", null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFetchNullKey() {
-        sessionStore.fetch(null);
+        assertThrows(NullPointerException.class, () -> sessionStore.fetch(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnRemoveNullKey() {
-        sessionStore.remove(null);
+        assertThrows(NullPointerException.class, () -> sessionStore.remove(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
-        sessionStore.put(null, 1L);
+        assertThrows(NullPointerException.class, () -> sessionStore.put(null, 1L));
     }
 
     @Test
