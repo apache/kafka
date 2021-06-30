@@ -158,3 +158,4 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
 
         self.enable_idempotence=True
         self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))
+        self.kafka.replica_leader_epochs_match(self.topic, range(0, self.num_partitions))
