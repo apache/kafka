@@ -41,6 +41,7 @@ import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.admin.internals.DescribeProducersHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
+import org.apache.kafka.clients.admin.internals.FenceProducersHandler;
 import org.apache.kafka.clients.admin.internals.ListTransactionsHandler;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
@@ -134,7 +135,6 @@ import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.U
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
-import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.ListGroupsRequestData;
@@ -227,8 +227,6 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
-import org.apache.kafka.common.requests.InitProducerIdRequest;
-import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
@@ -4773,107 +4771,11 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public FenceProducersResult fenceProducers(Collection<String> transactionalIds, FenceProducersOptions options) {
-        Map<String, KafkaFutureImpl<ProducerIdAndEpoch>> futures = new HashMap<>();
-        final long now = time.milliseconds();
-        final long deadlineMs = calcDeadlineMs(now, options.timeoutMs);
-        for (String transactionalId : transactionalIds) {
-            KafkaFutureImpl<ProducerIdAndEpoch> future = new KafkaFutureImpl<>();
-            futures.put(transactionalId, future);
-            Call call = getFindTransactionCoordinatorCall(
-                    transactionalId, deadlineMs, future,
-                    getFenceProducerCallFunction(transactionalId, future, deadlineMs));
-            runnable.call(call, time.milliseconds());
-        }
-        return new FenceProducersResult(futures);
-    }
-
-    private Function<Node, Call> getFenceProducerCallFunction(String transactionalId, KafkaFutureImpl<ProducerIdAndEpoch> future, long deadlineMs) {
-        return node -> new Call("fenceProducer", deadlineMs,
-                new ConstantNodeIdProvider(node.id())) {
-
-            @Override
-            InitProducerIdRequest.Builder createRequest(int timeoutMs) {
-                InitProducerIdRequestData data = new InitProducerIdRequestData()
-                        .setProducerEpoch(ProducerIdAndEpoch.NONE.epoch)
-                        .setProducerId(ProducerIdAndEpoch.NONE.producerId)
-                        .setTransactionalId(transactionalId)
-                        // Set transaction timeout to 1 since it's only being initialized to fence out older producers with the same transactional ID,
-                        // and shouldn't be used for any actual record writes
-                        .setTransactionTimeoutMs(1);
-                return new InitProducerIdRequest.Builder(data);
-            }
-
-            @Override
-            void handleResponse(AbstractResponse abstractResponse) {
-                final InitProducerIdResponse response =
-                        (InitProducerIdResponse) abstractResponse;
-                Errors error = Errors.forCode(response.data().errorCode());
-                switch (error) {
-                    case NONE:
-                        ProducerIdAndEpoch result = new ProducerIdAndEpoch(
-                                response.data().producerId(),
-                                response.data().producerEpoch());
-                        future.complete(result);
-                        break;
-                    case REQUEST_TIMED_OUT:
-                    case NOT_COORDINATOR:
-                    case COORDINATOR_NOT_AVAILABLE:
-                        throw error.exception();
-                    case COORDINATOR_LOAD_IN_PROGRESS:
-                    case CONCURRENT_TRANSACTIONS:
-                        runnable.call(this, time.milliseconds());
-                        break;
-                    default:
-                        log.error("Fence producer request for transactional ID {} failed: {}",
-                                transactionalId, error.message());
-                        future.completeExceptionally(error.exception());
-                        break;
-                }
-            }
-
-            @Override
-            void handleFailure(Throwable throwable) {
-                future.completeExceptionally(throwable);
-            }
-        };
-    }
-
-    /**
-     * Returns a {@code Call} object to fetch the coordinator for a transactional id. Takes another Call
-     * parameter to schedule action that need to be taken using the coordinator. The param is a Function
-     * so that it can be lazily created, so that it can use the results of find coordinator call in its
-     * construction.
-     *
-     * @param <T> The type of return value of the KafkaFuture, like ConsumerGroupDescription, Void etc.
-     */
-    private <T> Call getFindTransactionCoordinatorCall(String transactionalId,
-                                                                          long deadlineMs,
-                                                                          KafkaFutureImpl<T> future,
-                                                                          Function<Node, Call> nextCall) {
-        return new Call("findCoordinator", deadlineMs, new LeastLoadedNodeProvider()) {
-            @Override
-            FindCoordinatorRequest.Builder createRequest(int timeoutMs) {
-                return new FindCoordinatorRequest.Builder(
-                        new FindCoordinatorRequestData()
-                                .setKeyType(CoordinatorType.TRANSACTION.id())
-                                .setKey(transactionalId));
-            }
-
-            @Override
-            void handleResponse(AbstractResponse abstractResponse) {
-                final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
-
-                if (handleGroupRequestError(response.error(), future))
-                    return;
-
-                runnable.call(nextCall.apply(response.node()), time.milliseconds());
-            }
-
-            @Override
-            void handleFailure(Throwable throwable) {
-                future.completeExceptionally(throwable);
-            }
-        };
+        AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, ProducerIdAndEpoch> future =
+            FenceProducersHandler.newFuture(transactionalIds);
+        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new FenceProducersResult(future.all());
     }
 
     private <K, V> void invokeDriver(

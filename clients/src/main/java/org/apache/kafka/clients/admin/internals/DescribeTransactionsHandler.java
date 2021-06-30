@@ -41,7 +41,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorKey, TransactionDescription> {
+public class DescribeTransactionsHandler extends AdminApiHandler.Batched<CoordinatorKey, TransactionDescription> {
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
@@ -75,7 +75,7 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
     }
 
     @Override
-    public DescribeTransactionsRequest.Builder buildRequest(
+    public DescribeTransactionsRequest.Builder buildBatchedRequest(
         int brokerId,
         Set<CoordinatorKey> keys
     ) {

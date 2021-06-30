@@ -37,7 +37,7 @@ import java.util.Set;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
-public class AbortTransactionHandler implements AdminApiHandler<TopicPartition, Void> {
+public class AbortTransactionHandler extends AdminApiHandler.Batched<TopicPartition, Void> {
     private final Logger log;
     private final AbortTransactionSpec abortSpec;
     private final PartitionLeaderStrategy lookupStrategy;
@@ -68,7 +68,7 @@ public class AbortTransactionHandler implements AdminApiHandler<TopicPartition, 
     }
 
     @Override
-    public WriteTxnMarkersRequest.Builder buildRequest(
+    public WriteTxnMarkersRequest.Builder buildBatchedRequest(
         int brokerId,
         Set<TopicPartition> topicPartitions
     ) {

@@ -45,7 +45,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class DescribeProducersHandler implements AdminApiHandler<TopicPartition, PartitionProducerState> {
+public class DescribeProducersHandler extends AdminApiHandler.Batched<TopicPartition, PartitionProducerState> {
     private final Logger log;
     private final DescribeProducersOptions options;
     private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
@@ -81,7 +81,7 @@ public class DescribeProducersHandler implements AdminApiHandler<TopicPartition,
     }
 
     @Override
-    public DescribeProducersRequest.Builder buildRequest(
+    public DescribeProducersRequest.Builder buildBatchedRequest(
         int brokerId,
         Set<TopicPartition> topicPartitions
     ) {

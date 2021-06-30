@@ -5860,6 +5860,8 @@ public class KafkaAdminClientTest {
 
             FenceProducersResult result = env.adminClient().fenceProducers(Collections.singleton(transactionalId));
             assertNull(result.all().get());
+            assertEquals(4761, result.producerId(transactionalId).get());
+            assertEquals((short) 489, result.epochId(transactionalId).get());
         }
     }
 

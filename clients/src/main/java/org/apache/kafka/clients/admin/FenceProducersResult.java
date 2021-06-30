@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * The result of the {@link Admin#fenceProducers(Collection)} call.
@@ -33,9 +35,9 @@ import java.util.Map;
 @InterfaceStability.Evolving
 public class FenceProducersResult {
 
-    private final Map<String, KafkaFutureImpl<ProducerIdAndEpoch>> futures;
+    private final Map<CoordinatorKey, KafkaFutureImpl<ProducerIdAndEpoch>> futures;
 
-    FenceProducersResult(Map<String, KafkaFutureImpl<ProducerIdAndEpoch>> futures) {
+    FenceProducersResult(Map<CoordinatorKey, KafkaFutureImpl<ProducerIdAndEpoch>> futures) {
         this.futures = futures;
     }
 
@@ -44,21 +46,24 @@ public class FenceProducersResult {
      * individual fencings.
      */
     public Map<String, KafkaFuture<Void>> fencedProducers() {
-        return null;
+        return futures.entrySet().stream().collect(Collectors.toMap(
+            e -> e.getKey().idValue,
+            e -> e.getValue().thenApply(p -> null)
+        ));
     }
 
     /**
      * Returns a future that provides the producer ID generated while initializing the given transaction when the request completes.
      */
     public KafkaFuture<Long> producerId(String transactionalId) {
-        return futures.get(transactionalId).thenApply(p -> p.producerId);
+        return findAndApply(transactionalId, p -> p.producerId);
     }
 
     /**
      * Returns a future that provides the epoch ID generated while initializing the given transaction when the request completes.
      */
     public KafkaFuture<Short> epochId(String transactionalId) {
-        return futures.get(transactionalId).thenApply(p -> p.epoch);
+        return findAndApply(transactionalId, p -> p.epoch);
     }
 
     /**
@@ -66,5 +71,15 @@ public class FenceProducersResult {
      */
     public KafkaFuture<Void> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+    }
+
+    private <T> KafkaFuture<T> findAndApply(String transactionalId, KafkaFuture.BaseFunction<ProducerIdAndEpoch, T> followup) {
+        CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
+        KafkaFuture<ProducerIdAndEpoch> future = futures.get(key);
+        if (future == null) {
+            throw new IllegalArgumentException("TransactionalId " +
+                "`" + transactionalId + "` was not included in the request");
+        }
+        return future.thenApply(followup);
     }
 }
