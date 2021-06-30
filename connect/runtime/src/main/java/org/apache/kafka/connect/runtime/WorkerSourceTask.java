@@ -101,7 +101,9 @@ class WorkerSourceTask extends WorkerTask {
     // A second buffer is used while an offset flush is running
     private IdentityHashMap<ProducerRecord<byte[], byte[]>, ProducerRecord<byte[], byte[]>> outstandingMessagesBacklog;
     private boolean flushing;
-    private CountDownLatch stopRequestedLatch;
+    private final CountDownLatch stopRequestedLatch;
+    private volatile boolean currentBatchFailed = false;
+    private volatile boolean backlogBatchFailed = false;
 
     private Map<String, String> taskConfig;
     private boolean started = false;
@@ -372,6 +374,7 @@ class WorkerSourceTask extends WorkerTask {
                             log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
                             log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
                             producerSendException.compareAndSet(null, e);
+                            recordSendFailed(producerRecord);
                         } else {
                             recordSent(producerRecord);
                             counter.completeRecord();
@@ -399,6 +402,7 @@ class WorkerSourceTask extends WorkerTask {
                 log.trace("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
                 throw e;
             } catch (KafkaException e) {
+                recordSendFailed(producerRecord);
                 throw new ConnectException("Unrecoverable exception trying to send", e);
             }
             processed++;
@@ -482,6 +486,22 @@ class WorkerSourceTask extends WorkerTask {
         }
     }
 
+    private synchronized void recordSendFailed(ProducerRecord<byte[], byte[]> record) {
+        if (outstandingMessages.containsKey(record)) {
+            currentBatchFailed = true;
+            if (flushing) {
+                // flush thread may be waiting on the outstanding messages to clear
+                this.notifyAll();
+            }
+        } else if (outstandingMessagesBacklog.containsKey(record)) {
+            backlogBatchFailed = true;
+        }
+    }
+
+    public boolean shouldCommitOffsets() {
+        return offsetWriter.willFlush() && !currentBatchFailed;
+    }
+
     public boolean commitOffsets() {
         long commitTimeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
@@ -506,9 +526,10 @@ class WorkerSourceTask extends WorkerTask {
             while (!outstandingMessages.isEmpty()) {
                 try {
                     long timeoutMs = timeout - time.milliseconds();
-                    // If the task has been cancelled, no more records will be sent from the producer; in that case, if any outstanding messages remain,
-                    // we can stop flushing immediately
-                    if (isCancelled() || timeoutMs <= 0) {
+                    // If the producer has failed to send a record in the current batch with a non-retriable error, we'll never be able to clear the
+                    // outstanding messages, so we can stop flushing immediately. Similarly, if the task has been cancelled, no more records will be
+                    // sent from the producer; in that case, if any outstanding messages remain, we can also stop flushing immediately
+                    if (currentBatchFailed || isCancelled() || timeoutMs <= 0) {
                         log.error("{} Failed to flush, timed out while waiting for producer to flush outstanding {} messages", this, outstandingMessages.size());
                         finishFailedFlush();
                         recordCommitFailure(time.milliseconds() - started, null);
@@ -604,6 +625,7 @@ class WorkerSourceTask extends WorkerTask {
         outstandingMessages.putAll(outstandingMessagesBacklog);
         outstandingMessagesBacklog.clear();
         flushing = false;
+        currentBatchFailed |= backlogBatchFailed;
     }
 
     private synchronized void finishSuccessfulFlush() {
@@ -612,6 +634,7 @@ class WorkerSourceTask extends WorkerTask {
         outstandingMessages = outstandingMessagesBacklog;
         outstandingMessagesBacklog = temp;
         flushing = false;
+        currentBatchFailed = backlogBatchFailed;
     }
 
     @Override

@@ -21,6 +21,7 @@ import org.apache.kafka.connect.util.Callback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -38,6 +39,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
@@ -84,7 +86,7 @@ public class OffsetStorageWriterTest {
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
 
-        assertTrue(writer.beginFlush());
+        assertBeginFlush(true);
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
 
         PowerMock.verifyAll();
@@ -101,7 +103,7 @@ public class OffsetStorageWriterTest {
 
         writer.offset(OFFSET_KEY, null);
 
-        assertTrue(writer.beginFlush());
+        assertBeginFlush(true);
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
 
         PowerMock.verifyAll();
@@ -119,7 +121,7 @@ public class OffsetStorageWriterTest {
 
         writer.offset(null, OFFSET_VALUE);
 
-        assertTrue(writer.beginFlush());
+        assertBeginFlush(true);
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
 
         PowerMock.verifyAll();
@@ -132,8 +134,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        // Should not return a future
-        assertFalse(writer.beginFlush());
+        assertBeginFlush(false);
 
         PowerMock.verifyAll();
     }
@@ -154,11 +155,11 @@ public class OffsetStorageWriterTest {
         PowerMock.replayAll();
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(writer.beginFlush());
+        assertBeginFlush(true);
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
-        assertTrue(writer.beginFlush());
+        assertBeginFlush(true);
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
-        assertFalse(writer.beginFlush());
+        assertBeginFlush(false);
 
         PowerMock.verifyAll();
     }
@@ -174,7 +175,7 @@ public class OffsetStorageWriterTest {
         PowerMock.replayAll();
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(writer.beginFlush());
+        assertBeginFlush(true);
         writer.doFlush(callback);
         assertThrows(ConnectException.class, writer::beginFlush);
 
@@ -186,7 +187,7 @@ public class OffsetStorageWriterTest {
         PowerMock.replayAll();
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(writer.beginFlush());
+        assertBeginFlush(true);
         writer.cancelFlush();
 
         PowerMock.verifyAll();
@@ -204,7 +205,7 @@ public class OffsetStorageWriterTest {
         PowerMock.replayAll();
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(writer.beginFlush());
+        assertBeginFlush(true);
         // Start the flush, then immediately cancel before allowing the mocked store request to finish
         Future<Void> flushFuture = writer.doFlush(callback);
         writer.cancelFlush();
@@ -212,6 +213,12 @@ public class OffsetStorageWriterTest {
         flushFuture.get(1000, TimeUnit.MILLISECONDS);
 
         PowerMock.verifyAll();
+    }
+
+    private void assertBeginFlush(boolean shouldFlush) {
+        Consumer<Boolean> assertion = shouldFlush ? Assert::assertTrue : Assert::assertFalse;
+        assertion.accept(writer.willFlush());
+        assertion.accept(writer.beginFlush());
     }
 
     /**

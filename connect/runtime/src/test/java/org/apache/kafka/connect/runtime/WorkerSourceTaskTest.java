@@ -382,9 +382,10 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
+        expectEmptyOffsetFlush();
 
         expectClose();
+        EasyMock.expect(offsetWriter.willFlush()).andReturn(false);
 
         PowerMock.replayAll();
 
@@ -392,8 +393,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Future<?> taskFuture = executor.submit(workerTask);
 
         assertTrue(awaitLatch(pollLatch));
-        //Failure in poll should trigger automatic stop of the worker
+        //Failure in poll should trigger automatic stop of the task
         assertTrue(workerTask.awaitStop(1000));
+        assertFalse(workerTask.shouldCommitOffsets());
 
         taskFuture.get();
         assertPollMetrics(0);
@@ -477,6 +479,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         expectOffsetFlush(true);
 
         expectClose();
+        EasyMock.expect(offsetWriter.willFlush()).andReturn(false);
 
         PowerMock.replayAll();
 
@@ -487,6 +490,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         workerTask.stop();
         workerStopLatch.countDown();
         assertTrue(workerTask.awaitStop(1000));
+        assertFalse(workerTask.shouldCommitOffsets());
 
         taskFuture.get();
         assertPollMetrics(0);
@@ -508,16 +512,17 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectEmptyPolls(1, new AtomicInteger());
-        expectOffsetFlush(true);
+        expectEmptyOffsetFlush();
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
+        expectEmptyOffsetFlush();
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
 
         expectClose();
+        EasyMock.expect(offsetWriter.willFlush()).andReturn(false);
 
         PowerMock.replayAll();
 
@@ -528,6 +533,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertTrue(workerTask.commitOffsets());
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
+        assertFalse(workerTask.shouldCommitOffsets());
 
         taskFuture.get();
         assertPollMetrics(0);
@@ -555,7 +561,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
+        expectEmptyOffsetFlush();
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -755,18 +761,88 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         expectSendRecordProducerCallbackFail();
 
+        EasyMock.expect(offsetWriter.willFlush()).andReturn(true);
+
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
         assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
+        assertFalse(workerTask.shouldCommitOffsets());
+    }
+
+    @Test
+    public void testSendRecordsProducerCallbackFailInBacklog() throws Exception {
+        /*
+            1. A record is sent successfully
+            2. Flush for offset commit begins
+            3. Another record is dispatched to the producer and, because of the active offset commit, added to the backlog
+            4. The producer fails to send that record and notifies the worker via producer callback
+            5. The first offset commit succeeds as the first record has been sent successfully
+            6. No further offset commits are attempted as the only remaining record has failed with a non-retriable error
+         */
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectTopicCreation(TOPIC);
+
+        expectSendRecordOnce(false);
+        expectSendRecordProducerCallbackFail();
+
+        expectOffsetFlush(true);
+        EasyMock.expect(offsetWriter.willFlush()).andReturn(true).anyTimes();
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Collections.singletonList(record1));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        Whitebox.setInternalState(workerTask, "flushing", true);
+        Whitebox.setInternalState(workerTask, "toSend", Collections.singletonList(record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertTrue(workerTask.shouldCommitOffsets());
+        assertTrue(workerTask.commitOffsets());
+        assertFalse(workerTask.shouldCommitOffsets());
+    }
+
+
+    @Test
+    public void testSendRecordsProducerCallbackFailInBacklogWithNonRetriedOffsetCommit() throws Exception {
+        /*
+            1. A record is sent successfully
+            2. Flush for offset commit begins
+            3. Another record is dispatched to the producer and, because of the active offset commit, added to the backlog
+            4. The producer fails to send that record and notifies the worker via producer callback
+            5. The first offset commit fails even though first record has been sent successfully, (possibly from failure to produce offsets to Kafka)
+            6. No further offset commits are attempted as the new record batch contains the second record, which has failed with a non-retriable error
+         */
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectTopicCreation(TOPIC);
+
+        expectSendRecordOnce(false);
+        expectSendRecordProducerCallbackFail();
+
+        expectOffsetFlush(false);
+        EasyMock.expect(offsetWriter.willFlush()).andReturn(true).anyTimes();
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Collections.singletonList(record1));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        Whitebox.setInternalState(workerTask, "flushing", true);
+        Whitebox.setInternalState(workerTask, "toSend", Collections.singletonList(record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertTrue(workerTask.shouldCommitOffsets());
+        assertFalse(workerTask.commitOffsets());
+        assertFalse(workerTask.shouldCommitOffsets());
     }
 
     @Test
     public void testSendRecordsProducerSendFailsImmediately() {
-        if (!enableTopicCreation)
-            // should only test with topic creation enabled
-            return;
-
         createWorkerTask();
 
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
@@ -778,12 +854,86 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject()))
             .andThrow(new KafkaException("Producer closed while send in progress", new InvalidTopicException(TOPIC)));
 
+        EasyMock.expect(offsetWriter.willFlush()).andReturn(true);
+
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
         assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
+        assertFalse(workerTask.shouldCommitOffsets());
     }
 
+    @Test
+    public void testSendRecordsProducerSendFailsImmediatelyInBacklog() throws Exception {
+        /*
+            1. A record is sent successfully
+            2. Flush for offset commit begins
+            3. The worker tries to send another record but fails synchronously with a non-retriable error
+            4. The first offset commit succeeds as the first record has been sent successfully
+            5. No further offset commits are attempted as the new record batch contains the second record, which has failed with a non-retriable error
+         */
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectPreliminaryCalls();
+        expectTopicCreation(TOPIC);
+
+        expectSendRecordOnce(false);
+        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject()))
+                .andThrow(new KafkaException("Producer closed while send in progress", new InvalidTopicException(TOPIC)));
+
+        expectOffsetFlush(true);
+        EasyMock.expect(offsetWriter.willFlush()).andReturn(true).anyTimes();
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Collections.singletonList(record1));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        Whitebox.setInternalState(workerTask, "flushing", true);
+        Whitebox.setInternalState(workerTask, "toSend", Collections.singletonList(record2));
+        assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
+        assertTrue(workerTask.shouldCommitOffsets());
+        assertTrue(workerTask.commitOffsets());
+        assertFalse(workerTask.shouldCommitOffsets());
+    }
+
+    @Test
+    public void testSendRecordsProducerSendFailsImmediatelyInBacklogWithNonRetriedOffsetCommit() throws Exception {
+        /*
+            1. A record is sent successfully
+            2. Flush for offset commit begins
+            3. The worker tries to send another record but fails synchronously with a non-retriable error
+            4. The first offset commit fails even though first record has been sent successfully, (possibly from failure to produce offsets to Kafka)
+            5. No further offset commits are attempted as the new record batch contains the second record, which has failed with a non-retriable error
+         */
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectPreliminaryCalls();
+        expectTopicCreation(TOPIC);
+
+        expectSendRecordOnce(false);
+        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject()))
+                .andThrow(new KafkaException("Producer closed while send in progress", new InvalidTopicException(TOPIC)));
+
+        expectOffsetFlush(false);
+        EasyMock.expect(offsetWriter.willFlush()).andReturn(true).anyTimes();
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Collections.singletonList(record1));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        Whitebox.setInternalState(workerTask, "flushing", true);
+        Whitebox.setInternalState(workerTask, "toSend", Collections.singletonList(record2));
+        assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
+        assertTrue(workerTask.shouldCommitOffsets());
+        assertFalse(workerTask.commitOffsets());
+        assertFalse(workerTask.shouldCommitOffsets());
+    }
     @Test
     public void testSendRecordsTaskCommitRecordFail() throws Exception {
         createWorkerTask();
@@ -1551,6 +1701,12 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             offsetWriter.cancelFlush();
             PowerMock.expectLastCall();
         }
+    }
+
+    private void expectEmptyOffsetFlush() throws Exception {
+        EasyMock.expect(offsetWriter.beginFlush()).andReturn(false);
+        sourceTask.commit();
+        EasyMock.expectLastCall();
     }
 
     private void assertPollMetrics(int minimumPollCountExpected) {
