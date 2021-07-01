@@ -17,7 +17,9 @@
 
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -160,6 +162,22 @@ public class PartitionRegistration {
             setLeader(leader).
             setLeaderEpoch(leaderEpoch).
             setPartitionEpoch(partitionEpoch), PARTITION_RECORD.highestSupportedVersion());
+    }
+
+    public LeaderAndIsrPartitionState toLeaderAndIsrPartitionState(TopicPartition tp,
+                                                                   boolean isNew) {
+        return new LeaderAndIsrPartitionState().
+            setTopicName(tp.topic()).
+            setPartitionIndex(tp.partition()).
+            setControllerEpoch(-1).
+            setLeader(leader).
+            setLeaderEpoch(leaderEpoch).
+            setIsr(Replicas.toList(isr)).
+            setZkVersion(partitionEpoch).
+            setReplicas(Replicas.toList(replicas)).
+            setAddingReplicas(Replicas.toList(addingReplicas)).
+            setRemovingReplicas(Replicas.toList(removingReplicas)).
+            setIsNew(isNew);
     }
 
     @Override
