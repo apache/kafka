@@ -1436,6 +1436,7 @@ project(':server-common') {
 }
 
 project(':storage') {
+  apply plugin: 'scala'
   archivesBaseName = "kafka-storage"
 
   dependencies {
@@ -1444,14 +1445,18 @@ project(':storage') {
     compile project(':clients')
     compile libs.slf4jApi
     compile libs.jacksonDatabind
+    compile libs.scalaLibrary
+    compile libs.scalaCollectionCompat
 
     testCompile project(':clients')
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
     testCompile libs.junitJupiter
+    testCompile libs.junitPlatformRunner
     testCompile libs.mockitoCore
     testCompile libs.bcpkix
+    testCompile libs.hamcrest
 
     testRuntime libs.slf4jlog4j
   }
@@ -1494,6 +1499,9 @@ project(':storage') {
       java {
         srcDirs = ["src/generated/java", "src/test/java"]
       }
+      scala {
+        srcDirs = ["src/test/scala"]
+      }
     }
   }
 
@@ -1511,12 +1519,17 @@ project(':storage') {
       includeEngines 'junit-jupiter'
     }
   }
+  // test.dependsOn(':spotlessScalaCheck')
 
   clean.doFirst {
     delete "$buildDir/kafka/"
   }
 
   javadoc {
+    enabled = false
+  }
+
+  scaladoc {
     enabled = false
   }
 }
