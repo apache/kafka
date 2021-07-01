@@ -211,8 +211,11 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Append a control batch from a supplied memory record.
      *
-     * It is expected that the memory records returned by `valueCreator` contains one
-     * batch and that batch contains one record.
+     * See the {@code valueCreator} parameter description for requirements on this function.
+     *
+     * @param valueCreator a function that uses the passed buffer to create the control
+     *        batch that will be appended. The memory records returned must contain one
+     *        control batch and that control batch have one record.
      */
     private void appendControlMessage(Function<ByteBuffer, MemoryRecords> valueCreator) {
         appendLock.lock();
@@ -508,6 +511,9 @@ public class BatchAccumulator<T> implements Closeable {
         }
 
         public long appendTimestamp() {
+            // 1. firstBatch is not null because data has one and only one batch
+            // 2. maxTimestamp is the append time of the batch. This needs to be changed
+            //    to return the LastContainedLogTimestamp of the SnapshotHeaderRecord
             return data.firstBatch().maxTimestamp();
         }
     }

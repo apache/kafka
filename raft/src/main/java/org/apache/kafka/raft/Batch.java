@@ -65,7 +65,7 @@ public final class Batch<T> implements Iterable<T> {
     }
 
     /**
-     * The append timestamp of the batch.
+     * The append timestamp in milliseconds of the batch.
      */
     public long appendTimestamp() {
         return appendTimestamp;
@@ -141,7 +141,7 @@ public final class Batch<T> implements Iterable<T> {
      *
      * @param baseOffset offset of the batch
      * @param epoch epoch of the leader that created this batch
-     * @param appendTimestamp timestamp of when the batch was appended
+     * @param appendTimestamp timestamp in milliseconds of when the batch was appended
      * @param sizeInBytes number of bytes used by this batch
      * @param lastOffset offset of the last record of this batch
      */
@@ -167,7 +167,7 @@ public final class Batch<T> implements Iterable<T> {
      *
      * @param baseOffset offset of the first record in the batch
      * @param epoch epoch of the leader that created this batch
-     * @param appendTimestamp timestamp of when the batch was appended
+     * @param appendTimestamp timestamp in milliseconds of when the batch was appended
      * @param sizeInBytes number of bytes used by this batch
      * @param records the list of records in this batch
      */

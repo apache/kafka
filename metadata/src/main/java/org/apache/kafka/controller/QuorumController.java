@@ -1023,7 +1023,7 @@ public final class QuorumController implements Controller {
     private int lastCommittedEpoch = -1;
 
     /**
-     * The timestamp of the last batch we have committed, or -1 if we have nto commmitted any offset.
+     * The timestamp in milliseconds of the last batch we have committed, or -1 if we have not commmitted any offset.
      */
     private long lastCommittedTimestamp = -1;
 

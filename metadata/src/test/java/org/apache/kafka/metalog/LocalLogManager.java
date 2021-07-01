@@ -209,7 +209,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
         synchronized long tryAppend(int nodeId, int epoch, List<ApiMessageAndVersion> batch) {
             // No easy access to the concept of time. Use the base offset as the append timestamp
-            return tryAppend(nodeId, epoch, new LocalRecordBatch(epoch, prevOffset + 1, batch));
+            long appendTimestamp = (prevOffset + 1) * 10;
+            return tryAppend(nodeId, epoch, new LocalRecordBatch(epoch, appendTimestamp, batch));
         }
 
         synchronized long tryAppend(int nodeId, int epoch, LocalBatch batch) {
