@@ -2213,10 +2213,15 @@ public class TransactionManagerTest {
         txnOffsetCommitResponse.put(tp0, Errors.NONE);
         txnOffsetCommitResponse.put(tp1, Errors.COORDINATOR_LOAD_IN_PROGRESS);
 
-        prepareGroupMetadataCommit(
+        TransactionalRequestResult addOffsetsResult = prepareGroupMetadataCommit(
             () -> prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse));
 
-        assertThrows(UnsupportedVersionException.class, () -> sender.runOnce());
+        sender.runOnce();
+
+        assertTrue(addOffsetsResult.isCompleted());
+        assertFalse(addOffsetsResult.isSuccessful());
+        assertTrue(addOffsetsResult.error() instanceof UnsupportedVersionException);
+        assertFatalError(UnsupportedVersionException.class);
     }
 
     private TransactionalRequestResult prepareGroupMetadataCommit(Runnable prepareTxnCommitResponse) {
