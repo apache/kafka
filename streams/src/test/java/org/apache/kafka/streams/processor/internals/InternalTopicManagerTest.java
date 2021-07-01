@@ -1732,7 +1732,7 @@ public class InternalTopicManagerTest {
 
     private static class MockDeleteTopicsResult extends DeleteTopicsResult {
         MockDeleteTopicsResult(final Map<String, KafkaFuture<Void>> futures) {
-            super(futures);
+            super(null, futures);
         }
     }
 

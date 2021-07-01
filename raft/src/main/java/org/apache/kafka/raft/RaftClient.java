@@ -171,9 +171,12 @@ public interface RaftClient<T> extends AutoCloseable {
     CompletableFuture<Void> shutdown(int timeoutMs);
 
     /**
-     * Resign the leadership. The leader will give up its leadership in the current epoch,
-     * and a new election will be held. Note that nothing prevents this leader from getting
-     * reelected.
+     * Resign the leadership. The leader will give up its leadership in the passed epoch
+     * (if it matches the current epoch), and a new election will be held. Note that nothing
+     * prevents this node from being reelected as the leader.
+     *
+     * Notification of successful resignation can be observed through
+     * {@link Listener#handleLeaderChange(LeaderAndEpoch)}.
      *
      * @param epoch the epoch to resign from. If this does not match the current epoch, this
      *              call will be ignored.
@@ -188,11 +191,12 @@ public interface RaftClient<T> extends AutoCloseable {
      * how to use this object. If a snapshot already exists then returns an
      * {@link Optional#empty()}.
      *
-     * @param committedOffset the last committed offset that will be included in the snapshot
      * @param committedEpoch the epoch of the committed offset
+     * @param committedOffset the last committed offset that will be included in the snapshot
+     * @param lastContainedLogTime The append time of the highest record contained in this snapshot
      * @return a writable snapshot if it doesn't already exists
      * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
      *         or less than the log start offset.
      */
-    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch);
+    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime);
 }

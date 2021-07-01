@@ -2594,7 +2594,7 @@ object Log extends Logging {
                                           producerStateManager: ProducerStateManager,
                                           logPrefix: String): List[LogSegment] = {
     require(Log.isLogFile(segment.log.file), s"Cannot split file ${segment.log.file.getAbsoluteFile}")
-    require(segment.hasOverflow, "Split operation is only permitted for segments with overflow")
+    require(segment.hasOverflow, s"Split operation is only permitted for segments with overflow, and the problem path is ${segment.log.file.getAbsoluteFile}")
 
     info(s"${logPrefix}Splitting overflowed segment $segment")
 

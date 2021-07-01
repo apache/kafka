@@ -58,7 +58,7 @@ public class AdminClientTestUtils {
     public static DeleteTopicsResult deleteTopicsResult(String topic, Throwable t) {
         KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
         future.completeExceptionally(t);
-        return new DeleteTopicsResult(Collections.singletonMap(topic, future));
+        return DeleteTopicsResult.ofTopicNames(Collections.singletonMap(topic, future));
     }
 
     /**
