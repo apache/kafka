@@ -20,8 +20,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.SerdeGetter;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
 import java.util.Locale;
 
@@ -41,8 +41,8 @@ public class WrappingNullableUtils {
             deserializerToUse = (Deserializer<T>) (isKey ? contextKeyDeserializer : contextValueDeserializer);
         } else {
             deserializerToUse = specificDeserializer;
+            initNullableDeserializer(deserializerToUse, new SerdeGetter(context));
         }
-        initNullableDeserializer(deserializerToUse, context);
         return deserializerToUse;
     }
     @SuppressWarnings("unchecked")
@@ -54,8 +54,8 @@ public class WrappingNullableUtils {
             serializerToUse = (Serializer<T>) (isKey ? contextKeySerializer : contextValueSerializer);
         } else {
             serializerToUse = specificSerializer;
+            initNullableSerializer(serializerToUse, new SerdeGetter(context));
         }
-        initNullableSerializer(serializerToUse, context);
         return serializerToUse;
     }
 

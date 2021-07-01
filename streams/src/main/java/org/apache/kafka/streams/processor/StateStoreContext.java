@@ -26,7 +26,7 @@ import java.util.Map;
 /**
  * State store context interface.
  */
-public interface StateStoreContext extends SerdeGetter {
+public interface StateStoreContext {
 
     /**
      * Returns the application id.

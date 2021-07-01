@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -193,13 +192,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     @Override
     public void setSerdesIfNull(final ProcessorContext context) {
         keySerde = (keySerde == null) ? (Serde<K>) context.keySerde() : keySerde;
-        if (keySerde == null) {
-            throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
-        }
         valueSerde = valueSerde == null ? FullChangeSerde.wrap((Serde<V>) context.valueSerde()) : valueSerde;
-        if (this.valueSerde == null) {
-            throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
-        }
     }
 
     @Deprecated

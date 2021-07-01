@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.SerdeGetter;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -129,8 +129,8 @@ public class MeteredWindowStore<K, V>
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            prepareKeySerde(keySerde, context),
-            prepareValueSerde(valueSerde, context));
+            prepareKeySerde(keySerde, new SerdeGetter(context)),
+            prepareValueSerde(valueSerde, new SerdeGetter(context)));
     }
 
     private void initStoreSerde(final StateStoreContext context) {
@@ -140,8 +140,8 @@ public class MeteredWindowStore<K, V>
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            prepareKeySerde(keySerde, context),
-            prepareValueSerde(valueSerde, context));
+            prepareKeySerde(keySerde, new SerdeGetter(context)),
+            prepareValueSerde(valueSerde, new SerdeGetter(context)));
     }
 
     @SuppressWarnings("unchecked")
