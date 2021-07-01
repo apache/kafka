@@ -1602,6 +1602,16 @@ class LogLoaderTest {
     assertEquals(4, log.activeSegment.baseOffset)
     assertEquals(4, log.logEndOffset)
 
+    val offsetsWithSnapshotFiles = (1 until 5)
+        .map(offset => SnapshotFile(Log.producerSnapshotFile(logDir, offset)))
+        .filter(snapshotFile => snapshotFile.file.exists())
+        .map(_.offset)
+    val inMemorySnapshotFiles = (1 until 5)
+        .flatMap(offset => log.producerStateManager.snapshotFileForOffset(offset))
+
+    assertTrue(offsetsWithSnapshotFiles.isEmpty, s"Found offsets with producer state snapshot files: $offsetsWithSnapshotFiles while none were expected.")
+    assertTrue(inMemorySnapshotFiles.isEmpty, s"Found in-memory producer state snapshot files: $inMemorySnapshotFiles while none were expected.")
+
     // Append records, roll the segments and check that the producer state snapshots are defined.
     // The expected segments and producer state snapshots, after the appends are complete and segments are rolled,
     // is as shown below:
@@ -1624,16 +1634,6 @@ class LogLoaderTest {
       assertTrue(snapshotFileBeforeDeletion.get.file.exists)
     }
 
-    val offsetsWithSnapshotFiles = (1 until 5)
-        .map(offset => SnapshotFile(Log.producerSnapshotFile(logDir, offset)))
-        .filter(snapshotFile => snapshotFile.file.exists())
-        .map(_.offset)
-    val inMemorySnapshotFiles = (1 until 5)
-        .flatMap(offset => log.producerStateManager.snapshotFileForOffset(offset))
-
-    assertTrue(offsetsWithSnapshotFiles.isEmpty, s"Found offsets with producer state snapshot files: $offsetsWithSnapshotFiles while none were expected.")
-    assertTrue(inMemorySnapshotFiles.isEmpty, s"Found in-memory producer state snapshot files: $inMemorySnapshotFiles while none were expected.")
-
     // Wait for all async segment deletions scheduled during Log recovery to complete.
     // The expected segments and producer state snapshot after the deletions, is as shown below:
     // [4-4], [5-5], [6-6], [7-7], [8-8], [9-]
@@ -1654,5 +1654,6 @@ class LogLoaderTest {
     }
     assertTrue(offsetsWithMissingSnapshotFiles.isEmpty,
       s"Found offsets with missing producer state snapshot files: $offsetsWithMissingSnapshotFiles")
+    assertFalse(logDir.list().exists(_.endsWith(Log.DeletedFileSuffix)), "Expected no files to be present with the deleted file suffix")
   }
 }
