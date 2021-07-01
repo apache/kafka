@@ -1498,7 +1498,7 @@ public class KafkaAdminClient extends AdminClient {
                 public void handleResponse(AbstractResponse abstractResponse) {
                     MetadataResponse response = (MetadataResponse) abstractResponse;
                     long now = time.milliseconds();
-                    metadataManager.update(response.cluster(), now);
+                    metadataManager.update(response.buildCluster(), now);
 
                     // Unassign all unsent requests after a metadata refresh to allow for a new
                     // destination to be selected from the new metadata
@@ -1953,7 +1953,7 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
                 // Handle server responses for particular topics.
-                Cluster cluster = response.cluster();
+                Cluster cluster = response.buildCluster();
                 Map<String, Errors> errors = response.errors();
                 for (Map.Entry<String, KafkaFutureImpl<TopicDescription>> entry : topicFutures.entrySet()) {
                     String topicName = entry.getKey();
@@ -2869,7 +2869,7 @@ public class KafkaAdminClient extends AdminClient {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
 
                 Map<String, Errors> errors = response.errors();
-                Cluster cluster = response.cluster();
+                Cluster cluster = response.buildCluster();
 
                 // Group topic partitions by leader
                 Map<Node, Map<String, DeleteRecordsTopic>> leaders = new HashMap<>();
@@ -4200,7 +4200,7 @@ public class KafkaAdminClient extends AdminClient {
                                            Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
 
         MetadataResponse mr = context.response().orElseThrow(() -> new IllegalStateException("No Metadata response"));
-        Cluster clusterSnapshot = mr.cluster();
+        Cluster clusterSnapshot = mr.buildCluster();
         List<Call> calls = new ArrayList<>();
         // grouping topic partitions per leader
         Map<Node, Map<String, ListOffsetsTopic>> leaders = new HashMap<>();
