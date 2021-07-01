@@ -23,6 +23,7 @@ import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, NewTopic}
 import org.apache.kafka.common.message.DescribeClusterRequestData
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.metadata.BrokerState
@@ -334,21 +335,24 @@ class RaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
-      cluster.brokers().values().forEach { broker =>
-        TestUtils.waitUntilTrue(() => broker.currentState() == BrokerState.RUNNING,
-          "Broker never made it to RUNNING state.")
+
+      val (runningBrokerServer, foundRunningBroker) = TestUtils.computeUntilTrue(anyBrokerServer(cluster)){
+        brokerServer => brokerServer.currentState() == BrokerState.RUNNING
       }
+      assertTrue(foundRunningBroker, "No Broker never made it to RUNNING state.")
 
-      val describeClusterResponse = connectAndReceive[DescribeClusterResponse](
-        request = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
-        destination = anyBrokerSocketServer(cluster),
-        listenerName = cluster.nodes().externalListenerName()
-      )
+      val (describeClusterResponse, metadataUpToDate) = TestUtils.computeUntilTrue(
+        sendDescribeClusterRequest(runningBrokerServer.socketServer, nodes.externalListenerName())
+      ) {
+        response => response.nodes().size() == nodes.brokerNodes().size()
+      }
+      assertTrue(metadataUpToDate, s"Broker never reached expected cluster size of ${nodes.brokerNodes().size()}")
 
-      assertEquals(nodes.brokerNodes().size(), describeClusterResponse.nodes().size())
       describeClusterResponse.nodes().values().forEach { node =>
-        assertEquals("localhost", node.host)
-        assertEquals(cluster.brokers().get(node.id).socketServer.boundPort(nodes.externalListenerName()), node.port)
+        assertEquals("localhost", node.host,
+          "Did not advertise configured advertised host")
+        assertEquals(cluster.brokers().get(node.id).socketServer.boundPort(nodes.externalListenerName()), node.port,
+          "Did not advertise bound socket port")
       }
     } finally {
       cluster.close()
@@ -371,31 +375,37 @@ class RaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
-      cluster.brokers().values().forEach { broker =>
-        TestUtils.waitUntilTrue(() => broker.currentState() == BrokerState.RUNNING,
-          "Broker never made it to RUNNING state.")
+
+      val (runningBrokerServer, foundRunningBroker) = TestUtils.computeUntilTrue(anyBrokerServer(cluster)){
+        brokerServer => brokerServer.currentState() == BrokerState.RUNNING
       }
+      assertTrue(foundRunningBroker, "No Broker never made it to RUNNING state.")
 
-      val describeClusterResponse = connectAndReceive[DescribeClusterResponse](
-        request = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
-        destination = anyBrokerSocketServer(cluster),
-        listenerName = cluster.nodes().externalListenerName()
-      )
+      val (describeClusterResponse, metadataUpToDate) = TestUtils.computeUntilTrue(
+        sendDescribeClusterRequest(runningBrokerServer.socketServer, nodes.externalListenerName())
+      ) {
+        response => response.nodes().size() == nodes.brokerNodes().size()
+      }
+      assertTrue(metadataUpToDate, s"Broker never reached expected cluster size of ${nodes.brokerNodes().size()}")
 
-      assertEquals(nodes.brokerNodes().size(), describeClusterResponse.nodes().size())
       describeClusterResponse.nodes().values().forEach { broker =>
-        assertEquals(s"advertised-host-${broker.id}", broker.host)
-        assertEquals(broker.id + 100, broker.port)
+        assertEquals(s"advertised-host-${broker.id}", broker.host,
+          "Did not advertise configured advertised host")
+        assertEquals(broker.id + 100, broker.port,
+          "Did not advertise configured advertised port")
       }
     } finally {
       cluster.close()
     }
   }
 
-  private def anyBrokerSocketServer(cluster: KafkaClusterTestKit): SocketServer =
-    cluster.brokers.values.asScala
-      .map(b => b.socketServer)
-      .find(_ => true)
-      .getOrElse(throw new RuntimeException("No broker SocketServers found"))
+  private def anyBrokerServer(cluster: KafkaClusterTestKit): BrokerServer = cluster.brokers().values().asScala.head
+
+  private def sendDescribeClusterRequest(destination: SocketServer, listenerName: ListenerName): DescribeClusterResponse =
+    connectAndReceive[DescribeClusterResponse](
+      request = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
+      destination = destination,
+      listenerName = listenerName
+    )
 
 }
