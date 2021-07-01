@@ -175,6 +175,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putAll(stringsWithPrefix("header.converter"));
         props.putAll(stringsWithPrefix("task"));
         props.putAll(stringsWithPrefix("worker"));
+        props.putAll(stringsWithPrefix("replication.policy"));
  
         // transform any expression like ${provider:path:key}, since the worker doesn't do so
         props = transform(props);
@@ -203,6 +204,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.keySet().retainAll(MirrorConnectorConfig.CONNECTOR_CONFIG_DEF.names());
         
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
+        props.putAll(stringsWithPrefix("replication.policy"));
 
         Map<String, String> sourceClusterProps = clusterProps(sourceAndTarget.source());
         // attrs non prefixed with producer|consumer|admin

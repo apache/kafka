@@ -371,7 +371,7 @@ public class EmbeddedKafkaCluster {
                     + brokers.length + ") for desired replication (" + replication + ")");
         }
 
-        log.debug("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
+        log.info("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
                 topic, partitions, replication, topicConfig);
         final NewTopic newTopic = new NewTopic(topic, partitions, (short) replication);
         newTopic.configs(topicConfig);

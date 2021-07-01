@@ -77,8 +77,30 @@ public class MirrorSourceConnectorTest {
         assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("source.target.topic1"), "should not allow cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.target.topic1"), "should not allow cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.source.topic1"), "should not allow cycles");
         assertTrue(connector.shouldReplicateTopic("topic1"), "should allow anything else");
         assertTrue(connector.shouldReplicateTopic("source.topic1"), "should allow anything else");
+    }
+
+    @Test
+    public void testIdentityReplication() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new IdentityReplicationPolicy(), x -> true, x -> true);
+        assertTrue(connector.shouldReplicateTopic("target.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("target.source.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("source.target.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("target.source.target.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("source.target.source.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("topic1"), "should allow normal topics");
+        assertTrue(connector.shouldReplicateTopic("othersource.topic1"), "should allow normal topics");
+        assertFalse(connector.shouldReplicateTopic("target.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.target.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.source.heartbeats"), "should not allow heartbeat cycles");
+        assertTrue(connector.shouldReplicateTopic("heartbeats"), "should allow heartbeat topics");
+        assertTrue(connector.shouldReplicateTopic("othersource.heartbeats"), "should allow heartbeat topics");
     }
 
     @Test
