@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
@@ -170,6 +172,15 @@ public class AbstractProcessorContextTest {
             equalTo("user-supplied-value")
         );
     }
+    @Test
+    public void shouldThrowErrorIfSerdeDefaultNotSet() {
+        final Properties config = getStreamsConfig();
+        config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
+        config.put("user.supplied.config", "user-supplied-value");
+        final TestProcessorContext pc = new TestProcessorContext(metrics, config);
+        assertThrows(ConfigException.class, pc::keySerde);
+        assertThrows(ConfigException.class, pc::valueSerde);
+    }
 
     private static class TestProcessorContext extends AbstractProcessorContext<Object, Object> {
         static Properties config;
@@ -177,10 +188,16 @@ public class AbstractProcessorContextTest {
             config = getStreamsConfig();
             // Value must be a string to test className -> class conversion
             config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
+            config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+            config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
             config.put("user.supplied.config", "user-supplied-value");
         }
 
         TestProcessorContext(final MockStreamsMetrics metrics) {
+            super(new TaskId(0, 0), new StreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
+        }
+
+        TestProcessorContext(final MockStreamsMetrics metrics, final Properties config) {
             super(new TaskId(0, 0), new StreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
         }
 

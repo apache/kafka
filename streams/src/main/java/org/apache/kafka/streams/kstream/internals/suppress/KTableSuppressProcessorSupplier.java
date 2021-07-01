@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
@@ -28,6 +27,7 @@ import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.TimeDefinitions.TimeDefinition;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Maybe;
@@ -134,7 +134,6 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
             safeToDropTombstones = suppress.safeToDropTombstones();
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
@@ -147,7 +146,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
             );
 
             buffer = requireNonNull(context.getStateStore(storeName));
-            buffer.setSerdesIfNull((Serde<K>) context.keySerde(), (Serde<V>) context.valueSerde());
+            buffer.setSerdesIfNull(new SerdeGetter(context));
         }
 
         @Override

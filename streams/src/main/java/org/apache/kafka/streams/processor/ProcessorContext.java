@@ -22,11 +22,11 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 
 import java.io.File;
 import java.time.Duration;
 import java.util.Map;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 
 /**
  * Processor context interface.

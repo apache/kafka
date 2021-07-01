@@ -56,8 +56,8 @@ public abstract class AbstractProcessorContext<KOut, VOut> implements InternalPr
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.config = config;
         this.metrics = metrics;
-        valueSerde = config.defaultValueSerde();
-        keySerde = config.defaultKeySerde();
+        valueSerde = null;
+        keySerde = null;
         this.cache = cache;
     }
 
@@ -85,11 +85,17 @@ public abstract class AbstractProcessorContext<KOut, VOut> implements InternalPr
 
     @Override
     public Serde<?> keySerde() {
+        if (keySerde == null) {
+            return config.defaultKeySerde();
+        }
         return keySerde;
     }
 
     @Override
     public Serde<?> valueSerde() {
+        if (valueSerde == null) {
+            return config.defaultValueSerde();
+        }
         return valueSerde;
     }
 

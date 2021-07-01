@@ -74,10 +74,8 @@ public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
         super.init(context);
         this.context = context;
 
-        final Deserializer<?> contextKeyDeserializer = ProcessorContextUtils.getKeyDeserializer(context);
-        final Deserializer<?> contextValueDeserializer = ProcessorContextUtils.getValueDeserializer(context);
-        keyDeserializer = prepareKeyDeserializer(keyDeserializer, contextKeyDeserializer, contextValueDeserializer);
-        valDeserializer = prepareValueDeserializer(valDeserializer, contextKeyDeserializer, contextValueDeserializer);
+        keyDeserializer = prepareKeyDeserializer(keyDeserializer, context, name());
+        valDeserializer = prepareValueDeserializer(valDeserializer, context, name());
     }
 
 
