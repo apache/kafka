@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.TimeDefinitions.TimeDefinition;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Maybe;
@@ -145,7 +146,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
             );
 
             buffer = requireNonNull(context.getStateStore(storeName));
-            buffer.setSerdesIfNull(context);
+            buffer.setSerdesIfNull(new SerdeGetter(context));
         }
 
         @Override

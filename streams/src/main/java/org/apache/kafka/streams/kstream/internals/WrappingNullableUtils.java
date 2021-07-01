@@ -16,14 +16,11 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
-
-import java.util.Locale;
 
 /**
  * If a component's serdes are Wrapping serdes, then they require a little extra setup
@@ -67,10 +64,7 @@ public class WrappingNullableUtils {
         } else {
             serdeToUse = specificSerde;
         }
-        if (serdeToUse == null) {
-            final String serde = isKey ? "key" : "value";
-            throw new ConfigException("Please specify a " + serde + " serde or set one through StreamsConfig#DEFAULT_" + serde.toUpperCase(Locale.ROOT) + "_SERDE_CLASS_CONFIG");
-        } else if (serdeToUse instanceof WrappingNullableSerde) {
+        if (serdeToUse instanceof WrappingNullableSerde) {
             ((WrappingNullableSerde) serdeToUse).setIfUnset(getter);
         }
         return serdeToUse;

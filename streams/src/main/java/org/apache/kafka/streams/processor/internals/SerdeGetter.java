@@ -24,29 +24,31 @@ import org.apache.kafka.streams.processor.StateStoreContext;
  */
 public class SerdeGetter {
 
-    private final org.apache.kafka.streams.processor.ProcessorContext pc;
-    private final org.apache.kafka.streams.processor.api.ProcessorContext apiPc;
-    private final StateStoreContext ssc;
-    public SerdeGetter(final org.apache.kafka.streams.processor.ProcessorContext c) {
-        pc = c;
-        apiPc = null;
-        ssc = null;
+    private final org.apache.kafka.streams.processor.ProcessorContext oldProcessorContext;
+    private final org.apache.kafka.streams.processor.api.ProcessorContext newProcessorContext;
+    private final StateStoreContext stateStorecontext;
+    public SerdeGetter(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        oldProcessorContext = context;
+        newProcessorContext = null;
+        stateStorecontext = null;
     }
-    public SerdeGetter(final org.apache.kafka.streams.processor.api.ProcessorContext c) {
-        pc = null;
-        apiPc = c;
-        ssc = null;
+    public SerdeGetter(final org.apache.kafka.streams.processor.api.ProcessorContext context) {
+        oldProcessorContext = null;
+        newProcessorContext = context;
+        stateStorecontext = null;
     }
-    public SerdeGetter(final StateStoreContext c) {
-        pc = null;
-        apiPc = null;
-        ssc = c;
+    public SerdeGetter(final StateStoreContext context) {
+        oldProcessorContext = null;
+        newProcessorContext = null;
+        stateStorecontext = context;
     }
     public Serde keySerde() {
-        return pc != null ? pc.keySerde() : ssc != null ? ssc.keySerde() : apiPc.keySerde();
+        return oldProcessorContext != null ? oldProcessorContext.keySerde() :
+            newProcessorContext != null ? newProcessorContext.keySerde() : stateStorecontext.keySerde();
     }
     public Serde valueSerde() {
-        return pc != null ? pc.valueSerde() : ssc != null ? ssc.valueSerde() : apiPc.valueSerde();
+        return oldProcessorContext != null ? oldProcessorContext.valueSerde() :
+            newProcessorContext != null ? newProcessorContext.valueSerde() : stateStorecontext.valueSerde();
     }
 
 }
