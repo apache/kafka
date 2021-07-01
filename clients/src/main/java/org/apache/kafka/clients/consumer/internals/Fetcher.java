@@ -378,7 +378,7 @@ public class Fetcher<K, V> implements Closeable {
 
             if (future.succeeded()) {
                 MetadataResponse response = (MetadataResponse) future.value().responseBody();
-                Cluster cluster = response.cluster();
+                Cluster cluster = response.buildCluster();
 
                 Set<String> unauthorizedTopics = cluster.unauthorizedTopics();
                 if (!unauthorizedTopics.isEmpty())
