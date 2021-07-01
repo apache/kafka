@@ -61,7 +61,7 @@ class KStreamImplJoin {
         private long emitIntervalMs = 50L;
         long streamTime = ConsumerRecord.NO_TIMESTAMP;
         long minTime = Long.MAX_VALUE;
-        long nextTimeToEmit = Long.MAX_VALUE;
+        long nextTimeToEmit;
 
         public void setEmitInterval(final long emitIntervalMs) {
             this.emitIntervalMs = emitIntervalMs;
