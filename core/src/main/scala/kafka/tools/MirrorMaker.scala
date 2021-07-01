@@ -55,6 +55,7 @@ import scala.util.{Failure, Success, Try}
  *            max.block.ms=max long
  *            max.in.flight.requests.per.connection=1
  *       2. Consumer Settings
+ *            auto.offset.reset=earliest
  *            enable.auto.commit=false
  *       3. Mirror Maker Setting:
  *            abort.on.send.failure=true
@@ -99,6 +100,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                       consumerConfigProps: Properties,
                       customRebalanceListener: Option[ConsumerRebalanceListener],
                       whitelist: Option[String]): Seq[ConsumerWrapper] = {
+    // Replicate from the beginning of the topic
+    maybeSetDefaultProperty(consumerConfigProps, "auto.offset.reset", "earliest")
     // Disable consumer auto offsets commit to prevent data loss.
     maybeSetDefaultProperty(consumerConfigProps, "enable.auto.commit", "false")
     // Hardcode the deserializer to ByteArrayDeserializer
