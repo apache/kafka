@@ -50,18 +50,25 @@ public final class TransactionalRequestResult {
 
     public void await() {
         boolean completed = false;
+        boolean interrupted = false;
 
         while (!completed) {
             try {
                 latch.await();
                 completed = true;
             } catch (InterruptedException e) {
+                interrupted = true;
                 // Keep waiting until done, we have no other option for these transactional requests.
             }
         }
 
-        if (!isSuccessful())
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+
+        if (!isSuccessful()) {
             throw error();
+        }
     }
 
     public void await(long timeout, TimeUnit unit) {

@@ -74,6 +74,7 @@ class SourceTaskOffsetCommitter {
             }
         } catch (InterruptedException e) {
             // ignore and allow to exit immediately
+            Thread.currentThread().interrupt();
         }
     }
 

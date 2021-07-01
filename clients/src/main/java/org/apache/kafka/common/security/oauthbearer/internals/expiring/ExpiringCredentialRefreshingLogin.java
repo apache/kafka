@@ -245,7 +245,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
     }
 
     public void close() {
-        if (refresherThread != null && refresherThread.isAlive()) {
+        if (refresherThread != null) {
             refresherThread.interrupt();
             try {
                 refresherThread.join();

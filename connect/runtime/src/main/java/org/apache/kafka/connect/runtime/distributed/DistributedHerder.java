@@ -745,7 +745,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             if (!startAndStopExecutor.awaitTermination(START_AND_STOP_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS))
                 startAndStopExecutor.shutdownNow();
         } catch (InterruptedException e) {
-            // ignore
+            Thread.currentThread().interrupt();
         }
 
         log.info("Herder stopped");
@@ -1363,7 +1363,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         try {
             startAndStopExecutor.invokeAll(callables);
         } catch (InterruptedException e) {
-            // ignore
+            Thread.currentThread().interrupt();
         }
     }
 
