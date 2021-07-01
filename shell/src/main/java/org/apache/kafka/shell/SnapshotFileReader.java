@@ -158,6 +158,7 @@ public final class SnapshotFileReader implements AutoCloseable {
                     Batch.of(
                         batch.baseOffset(),
                         batch.partitionLeaderEpoch(),
+                        batch.sizeInBytes(),
                         messages
                     )
                 ),

@@ -30,12 +30,14 @@ public final class Batch<T> implements Iterable<T> {
     private final long baseOffset;
     private final int epoch;
     private final long lastOffset;
+    private final int sizeInBytes;
     private final List<T> records;
 
-    private Batch(long baseOffset, int epoch, long lastOffset, List<T> records) {
+    private Batch(long baseOffset, int epoch, long lastOffset, int sizeInBytes, List<T> records) {
         this.baseOffset = baseOffset;
         this.epoch = epoch;
         this.lastOffset = lastOffset;
+        this.sizeInBytes = sizeInBytes;
         this.records = records;
     }
 
@@ -67,6 +69,13 @@ public final class Batch<T> implements Iterable<T> {
         return epoch;
     }
 
+    /**
+     * The number of bytes used by this batch.
+     */
+    public int sizeInBytes() {
+        return sizeInBytes;
+    }
+
     @Override
     public Iterator<T> iterator() {
         return records.iterator();
@@ -78,6 +87,7 @@ public final class Batch<T> implements Iterable<T> {
             "baseOffset=" + baseOffset +
             ", epoch=" + epoch +
             ", lastOffset=" + lastOffset +
+            ", sizeInBytes=" + sizeInBytes +
             ", records=" + records +
             ')';
     }
@@ -89,12 +99,14 @@ public final class Batch<T> implements Iterable<T> {
         Batch<?> batch = (Batch<?>) o;
         return baseOffset == batch.baseOffset &&
             epoch == batch.epoch &&
+            lastOffset == batch.lastOffset &&
+            sizeInBytes == batch.sizeInBytes &&
             Objects.equals(records, batch.records);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(baseOffset, epoch, records);
+        return Objects.hash(baseOffset, epoch, lastOffset, sizeInBytes, records);
     }
 
     /**
@@ -105,9 +117,10 @@ public final class Batch<T> implements Iterable<T> {
      * @param baseOffset offset of the batch
      * @param epoch epoch of the leader that created this batch
      * @param lastOffset offset of the last record of this batch
+     * @param sizeInBytes number of bytes used by this batch
      */
-    public static <T> Batch<T> empty(long baseOffset, int epoch, long lastOffset) {
-        return new Batch<>(baseOffset, epoch, lastOffset, Collections.emptyList());
+    public static <T> Batch<T> empty(long baseOffset, int epoch, long lastOffset, int sizeInBytes) {
+        return new Batch<>(baseOffset, epoch, lastOffset, sizeInBytes, Collections.emptyList());
     }
 
     /**
@@ -117,7 +130,7 @@ public final class Batch<T> implements Iterable<T> {
      * @param epoch epoch of the leader that created this batch
      * @param records the list of records in this batch
      */
-    public static <T> Batch<T> of(long baseOffset, int epoch, List<T> records) {
+    public static <T> Batch<T> of(long baseOffset, int epoch, int sizeInBytes, List<T> records) {
         if (records.isEmpty()) {
             throw new IllegalArgumentException(
                 String.format(
@@ -128,6 +141,6 @@ public final class Batch<T> implements Iterable<T> {
             );
         }
 
-        return new Batch<>(baseOffset, epoch, baseOffset + records.size() - 1, records);
+        return new Batch<>(baseOffset, epoch, baseOffset + records.size() - 1, sizeInBytes, records);
     }
 }
