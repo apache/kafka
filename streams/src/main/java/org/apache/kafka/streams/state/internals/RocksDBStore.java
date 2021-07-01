@@ -57,6 +57,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -505,6 +507,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
     }
 
+    private ByteBuffer createDirectByteBufferAndPut(byte[] bytes) {
+        ByteBuffer directBuffer = ByteBuffer.allocateDirect(bytes.length);
+        directBuffer.clear();
+        directBuffer.put(bytes);
+        directBuffer.flip();
+        return directBuffer;
+    }
+
     interface RocksDBAccessor {
 
         void put(final byte[] key,
@@ -547,11 +557,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                         final byte[] value,
                         final WriteBatch batch) throws RocksDBException;
 
+        void addToBatchDirect(final ByteBuffer key,
+                              final ByteBuffer value,
+                              final WriteBatch batch) throws RocksDBException;
+
         void close();
     }
 
     class SingleColumnFamilyAccessor implements RocksDBAccessor {
         private final ColumnFamilyHandle columnFamily;
+
 
         SingleColumnFamilyAccessor(final ColumnFamilyHandle columnFamily) {
             this.columnFamily = columnFamily;
@@ -580,10 +595,24 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
                                  final WriteBatch batch) throws RocksDBException {
+
+            final ByteBuffer keyDirectBuffer = ByteBuffer.allocateDirect(128);
+            final ByteBuffer valueDirectBuffer = ByteBuffer.allocateDirect(128);
+
+            keyDirectBuffer.order(ByteOrder.BIG_ENDIAN);
+            valueDirectBuffer.order(ByteOrder.BIG_ENDIAN);
+
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
-                addToBatch(entry.key.get(), entry.value, batch);
+                keyDirectBuffer.clear();
+                valueDirectBuffer.clear();
+                keyDirectBuffer.put(entry.key.get());
+                valueDirectBuffer.put(entry.value);
+                keyDirectBuffer.flip();
+                valueDirectBuffer.flip();
+                addToBatchDirect(keyDirectBuffer, valueDirectBuffer, batch);
             }
+
         }
 
         @Override
@@ -673,6 +702,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             } else {
                 batch.put(columnFamily, key, value);
             }
+        }
+
+        @Override
+        public void addToBatchDirect(ByteBuffer key, ByteBuffer value, WriteBatch batch) throws RocksDBException {
+            batch.put(columnFamily, key, value);
         }
 
         @Override
