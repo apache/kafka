@@ -173,6 +173,8 @@ public class ClientCompatibilityTest {
             .metavar("DESCRIBE_CONFIGS_SUPPORTED")
             .help("Whether describeConfigs is supported in the AdminClient.");
 
+        ToolsUtils.addOptionVersion(parser);
+
         Namespace res = null;
         try {
             res = parser.parseArgs(args);

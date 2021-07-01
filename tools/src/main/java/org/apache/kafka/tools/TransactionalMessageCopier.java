@@ -169,6 +169,8 @@ public class TransactionalMessageCopier {
                 .dest("useGroupMetadata")
                 .help("Whether to use the new transactional commit API with group metadata");
 
+        ToolsUtils.addOptionVersion(parser);
+
         return parser;
     }
 

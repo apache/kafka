@@ -149,6 +149,8 @@ public class VerifiableLog4jAppender {
             .dest("kerb5ConfPath")
             .help("Path of Kerb5 config file.");
 
+        ToolsUtils.addOptionVersion(parser);
+
         return parser;
     }
 

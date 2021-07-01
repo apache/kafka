@@ -196,6 +196,8 @@ public class VerifiableProducer implements AutoCloseable {
             .dest("repeatingKeys")
             .help("If specified, each produced record will have a key starting at 0 increment by 1 up to the number specified (exclusive), then the key is set to 0 again");
 
+        ToolsUtils.addOptionVersion(parser);
+
         return parser;
     }
     

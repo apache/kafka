@@ -18,9 +18,12 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.utils.AppInfoParser;
 
 import java.util.Map;
 import java.util.TreeMap;
+import static net.sourceforge.argparse4j.impl.Arguments.version;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
 
 public class ToolsUtils {
 
@@ -51,5 +54,21 @@ public class ToolsUtils {
                 System.out.println(String.format(outputFormat, entry.getKey(), entry.getValue()));
             }
         }
+    }
+
+    /**
+     * Add '--version' option to parser
+     * @param parser   ArgumentParser to which '-version' will be added
+     */
+    public static void addOptionVersion(ArgumentParser parser) {
+        String version = AppInfoParser.getVersion();
+        String commitId = AppInfoParser.getCommitId();
+        String versionString = version + " " + "(" + "Commit:" + commitId + ")";
+        parser.version(versionString);
+        parser.addArgument("--version")
+                .action(version())
+                .required(false)
+                .metavar("VERSION")
+                .help("Display Kafka version.");
     }
 }
