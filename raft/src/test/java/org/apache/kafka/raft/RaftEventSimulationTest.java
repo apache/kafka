@@ -1027,10 +1027,7 @@ public class RaftEventSimulationTest {
             for (RaftNode raftNode : cluster.running()) {
                 if (raftNode.counter.isWritable()) {
                     assertEquals(0, raftNode.counter.handleSnapshotCalls());
-                } else {
-                    assertTrue(raftNode.counter.handleSnapshotCalls() >= 0);
                 }
-
             }
         }
     }

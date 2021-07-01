@@ -160,7 +160,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     public synchronized void handleLeaderChange(LeaderAndEpoch newLeader) {
         if (newLeader.isLeader(nodeId)) {
             log.debug("Counter uncommitted value initialized to {} after claiming leadership in epoch {}",
-                    committed, newLeader);
+                committed, newLeader);
             uncommitted = committed;
             claimedEpoch = OptionalInt.of(newLeader.epoch());
         } else {
@@ -171,6 +171,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
         handleSnapshotCalls = 0;
     }
 
+    /** Use handleSnapshotCalls to verify leader is never asked to load snapshot */
     public int handleSnapshotCalls() {
         return handleSnapshotCalls;
     }
