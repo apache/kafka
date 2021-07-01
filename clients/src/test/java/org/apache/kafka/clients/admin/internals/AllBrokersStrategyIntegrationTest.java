@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -96,7 +97,7 @@ public class AllBrokersStrategyIntegrationTest {
 
         AdminApiDriver.RequestSpec<AllBrokersStrategy.BrokerKey> retrySpec = retrySpecs.get(0);
         assertEquals(AllBrokersStrategy.LOOKUP_KEYS, retrySpec.keys);
-        assertEquals(time.milliseconds() + RETRY_BACKOFF_MS, retrySpec.nextAllowedTryMs);
+        assertEquals(time.milliseconds(), retrySpec.nextAllowedTryMs);
         assertEquals(Collections.emptyList(), driver.poll());
     }
 
@@ -110,7 +111,7 @@ public class AllBrokersStrategyIntegrationTest {
         AdminApiDriver.RequestSpec<AllBrokersStrategy.BrokerKey> lookupSpec = lookupSpecs.get(0);
 
         Set<Integer> brokerIds = Utils.mkSet(1, 2);
-        driver.onResponse(time.milliseconds(), lookupSpec, responseWithBrokers(brokerIds));
+        driver.onResponse(time.milliseconds(), lookupSpec, responseWithBrokers(brokerIds), Node.noNode());
         assertTrue(result.all().isDone());
 
         Map<Integer, KafkaFutureImpl<Integer>> brokerFutures = result.all().get();
@@ -123,7 +124,7 @@ public class AllBrokersStrategyIntegrationTest {
         int brokerId1 = requestSpec1.scope.destinationBrokerId().getAsInt();
         assertTrue(brokerIds.contains(brokerId1));
 
-        driver.onResponse(time.milliseconds(), requestSpec1, null);
+        driver.onResponse(time.milliseconds(), requestSpec1, null, Node.noNode());
         KafkaFutureImpl<Integer> future1 = brokerFutures.get(brokerId1);
         assertTrue(future1.isDone());
 
@@ -133,7 +134,7 @@ public class AllBrokersStrategyIntegrationTest {
         assertNotEquals(brokerId1, brokerId2);
         assertTrue(brokerIds.contains(brokerId2));
 
-        driver.onResponse(time.milliseconds(), requestSpec2, null);
+        driver.onResponse(time.milliseconds(), requestSpec2, null, Node.noNode());
         KafkaFutureImpl<Integer> future2 = brokerFutures.get(brokerId2);
         assertTrue(future2.isDone());
         assertEquals(Collections.emptyList(), driver.poll());
@@ -149,7 +150,7 @@ public class AllBrokersStrategyIntegrationTest {
         AdminApiDriver.RequestSpec<AllBrokersStrategy.BrokerKey> lookupSpec = lookupSpecs.get(0);
 
         int brokerId = 1;
-        driver.onResponse(time.milliseconds(), lookupSpec, responseWithBrokers(Collections.singleton(brokerId)));
+        driver.onResponse(time.milliseconds(), lookupSpec, responseWithBrokers(Collections.singleton(brokerId)), Node.noNode());
         assertTrue(result.all().isDone());
 
         Map<Integer, KafkaFutureImpl<Integer>> brokerFutures = result.all().get();
@@ -169,7 +170,7 @@ public class AllBrokersStrategyIntegrationTest {
         assertEquals(time.milliseconds() + RETRY_BACKOFF_MS, retrySpec.nextAllowedTryMs);
         assertEquals(OptionalInt.of(brokerId), retrySpec.scope.destinationBrokerId());
 
-        driver.onResponse(time.milliseconds(), retrySpec, null);
+        driver.onResponse(time.milliseconds(), retrySpec, null, new Node(brokerId, "host", 1234));
         assertTrue(future.isDone());
         assertEquals(brokerId, future.get());
         assertEquals(Collections.emptyList(), driver.poll());
@@ -185,7 +186,7 @@ public class AllBrokersStrategyIntegrationTest {
         AdminApiDriver.RequestSpec<AllBrokersStrategy.BrokerKey> lookupSpec = lookupSpecs.get(0);
 
         int brokerId = 1;
-        driver.onResponse(time.milliseconds(), lookupSpec, responseWithBrokers(Collections.singleton(brokerId)));
+        driver.onResponse(time.milliseconds(), lookupSpec, responseWithBrokers(Collections.singleton(brokerId)), Node.noNode());
         assertTrue(result.all().isDone());
 
         Map<Integer, KafkaFutureImpl<Integer>> brokerFutures = result.all().get();
@@ -232,11 +233,11 @@ public class AllBrokersStrategyIntegrationTest {
 
         @Override
         public ApiResult<AllBrokersStrategy.BrokerKey, Integer> handleResponse(
-            int brokerId,
+            Node broker,
             Set<AllBrokersStrategy.BrokerKey> keys,
             AbstractResponse response
         ) {
-            return ApiResult.completed(keys.iterator().next(), brokerId);
+            return ApiResult.completed(keys.iterator().next(), broker.id());
         }
 
         @Override

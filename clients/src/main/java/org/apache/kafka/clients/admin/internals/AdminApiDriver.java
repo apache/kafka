@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -187,7 +189,7 @@ public class AdminApiDriver<K, V> {
      * Check whether any requests need to be sent. This should be called immediately
      * after the driver is constructed and then again after each request returns
      * (i.e. after {@link #onFailure(long, RequestSpec, Throwable)} or
-     * {@link #onResponse(long, RequestSpec, AbstractResponse)}).
+     * {@link #onResponse(long, RequestSpec, AbstractResponse, Node)}).
      *
      * @return A list of requests that need to be sent
      */
@@ -204,14 +206,14 @@ public class AdminApiDriver<K, V> {
     public void onResponse(
         long currentTimeMs,
         RequestSpec<K> spec,
-        AbstractResponse response
+        AbstractResponse response,
+        Node node
     ) {
         clearInflightRequest(currentTimeMs, spec);
 
         if (spec.scope instanceof FulfillmentScope) {
-            int brokerId = ((FulfillmentScope) spec.scope).destinationBrokerId;
             AdminApiHandler.ApiResult<K, V> result = handler.handleResponse(
-                brokerId,
+                node,
                 spec.keys,
                 response
             );
@@ -250,6 +252,13 @@ public class AdminApiDriver<K, V> {
                 .filter(future.lookupKeys()::contains)
                 .collect(Collectors.toSet());
             retryLookup(keysToUnmap);
+
+        } else if (t instanceof NoBatchedFindCoordinatorsException) {
+            ((CoordinatorStrategy) handler.lookupStrategy()).disableBatch();
+            Set<K> keysToUnmap = spec.keys.stream()
+                .filter(future.lookupKeys()::contains)
+                .collect(Collectors.toSet());
+            retryLookup(keysToUnmap);
         } else {
             Map<K, Throwable> errors = spec.keys.stream().collect(Collectors.toMap(
                 Function.identity(),
@@ -267,7 +276,12 @@ public class AdminApiDriver<K, V> {
     private void clearInflightRequest(long currentTimeMs, RequestSpec<K> spec) {
         RequestState requestState = requestStates.get(spec.scope);
         if (requestState != null) {
-            requestState.clearInflight(currentTimeMs);
+            // Only apply backoff if it's not a retry of a lookup request
+            if (spec.scope instanceof FulfillmentScope) {
+                requestState.clearInflight(currentTimeMs + retryBackoffMs);
+            } else {
+                requestState.clearInflight(currentTimeMs);
+            }
         }
     }
 
@@ -384,9 +398,9 @@ public class AdminApiDriver<K, V> {
             return inflightRequest.isPresent();
         }
 
-        public void clearInflight(long currentTimeMs) {
+        public void clearInflight(long nextAllowedRetryMs) {
             this.inflightRequest = Optional.empty();
-            this.nextAllowedRetryMs = currentTimeMs + retryBackoffMs;
+            this.nextAllowedRetryMs = nextAllowedRetryMs;
         }
 
         public void setInflight(RequestSpec<K> spec) {

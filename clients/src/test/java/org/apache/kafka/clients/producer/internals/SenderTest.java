@@ -580,7 +580,7 @@ public class SenderTest {
         // Verify producerId after the sender is run to process responses.
         MetadataResponse metadataUpdate = RequestTestUtils.metadataUpdateWith(1, Collections.emptyMap());
         client.respond(metadataUpdate);
-        prepareFindCoordinatorResponse(Errors.NONE);
+        prepareFindCoordinatorResponse(Errors.NONE, "testInitProducerIdWithPendingMetadataRequest");
         prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
         waitForProducerId(transactionManager, producerIdAndEpoch);
     }
@@ -630,13 +630,13 @@ public class SenderTest {
 
         Node node = metadata.fetch().nodes().get(0);
         client.delayReady(node, REQUEST_TIMEOUT + 20);
-        prepareFindCoordinatorResponse(Errors.NONE);
+        prepareFindCoordinatorResponse(Errors.NONE, "testNodeNotReady");
         sender.runOnce();
         sender.runOnce();
         assertNotNull(transactionManager.coordinator(CoordinatorType.TRANSACTION), "Coordinator not found");
 
         client.throttle(node, REQUEST_TIMEOUT + 20);
-        prepareFindCoordinatorResponse(Errors.NONE);
+        prepareFindCoordinatorResponse(Errors.NONE, "Coordinator not found");
         prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
         waitForProducerId(transactionManager, producerIdAndEpoch);
     }
@@ -3192,7 +3192,7 @@ public class SenderTest {
 
     private void doInitTransactions(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch) {
         transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE);
+        prepareFindCoordinatorResponse(Errors.NONE, transactionManager.transactionalId());
         sender.runOnce();
         sender.runOnce();
 
@@ -3201,9 +3201,9 @@ public class SenderTest {
         assertTrue(transactionManager.hasProducerId());
     }
 
-    private void prepareFindCoordinatorResponse(Errors error) {
+    private void prepareFindCoordinatorResponse(Errors error, String txnid) {
         Node node = metadata.fetch().nodes().get(0);
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(error, node));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(error, txnid, node));
     }
 
     private void prepareInitProducerResponse(Errors error, long producerId, short producerEpoch) {

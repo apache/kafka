@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -29,9 +32,9 @@ import java.util.Map;
  */
 @InterfaceStability.Evolving
 public class DeleteConsumerGroupsResult {
-    private final Map<String, KafkaFuture<Void>> futures;
+    private final Map<CoordinatorKey, KafkaFutureImpl<Void>> futures;
 
-    DeleteConsumerGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
+    DeleteConsumerGroupsResult(final Map<CoordinatorKey, KafkaFutureImpl<Void>> futures) {
         this.futures = futures;
     }
 
@@ -40,7 +43,9 @@ public class DeleteConsumerGroupsResult {
      * individual deletions.
      */
     public Map<String, KafkaFuture<Void>> deletedGroups() {
-        return futures;
+        Map<String, KafkaFuture<Void>> deletedGroups = new HashMap<>(futures.size());
+        futures.forEach((key, future) -> deletedGroups.put(key.idValue, future));
+        return deletedGroups;
     }
 
     /**

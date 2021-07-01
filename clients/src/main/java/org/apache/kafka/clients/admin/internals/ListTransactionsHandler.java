@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
 import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.clients.admin.TransactionState;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.message.ListTransactionsRequestData;
 import org.apache.kafka.common.protocol.Errors;
@@ -77,10 +78,11 @@ public class ListTransactionsHandler implements AdminApiHandler<AllBrokersStrate
 
     @Override
     public ApiResult<AllBrokersStrategy.BrokerKey, Collection<TransactionListing>> handleResponse(
-        int brokerId,
+        Node broker,
         Set<AllBrokersStrategy.BrokerKey> keys,
         AbstractResponse abstractResponse
     ) {
+        int brokerId = broker.id();
         AllBrokersStrategy.BrokerKey key = requireSingleton(keys, brokerId);
 
         ListTransactionsResponse response = (ListTransactionsResponse) abstractResponse;

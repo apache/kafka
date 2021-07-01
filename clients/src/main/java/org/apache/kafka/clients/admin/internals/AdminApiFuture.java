@@ -121,5 +121,9 @@ public interface AdminApiFuture<K, V> {
         public Map<K, KafkaFutureImpl<V>> all() {
             return futures;
         }
+
+        public KafkaFutureImpl<V> get(K key) {
+            return futures.get(key);
+        }
     }
 }

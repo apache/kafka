@@ -327,7 +327,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new FindCoordinatorRequest.Builder(
               new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
-                .setKey("test-group"))
+                .setCoordinatorKeys(Collections.singletonList("test-group")))
 
         case ApiKeys.JOIN_GROUP =>
           new JoinGroupRequest.Builder(

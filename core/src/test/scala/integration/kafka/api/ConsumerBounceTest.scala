@@ -261,7 +261,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   private def findCoordinator(group: String): Int = {
     val request = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
       .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
-      .setKey(group)).build()
+      .setCoordinatorKeys(Collections.singletonList(group))).build()
     var nodeId = -1
     TestUtils.waitUntilTrue(() => {
       val response = connectAndReceive[FindCoordinatorResponse](request)

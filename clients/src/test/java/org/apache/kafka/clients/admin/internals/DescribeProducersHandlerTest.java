@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerState;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
@@ -63,6 +64,7 @@ public class DescribeProducersHandlerTest {
             new LogContext()
         );
     }
+    
 
     @Test
     public void testBrokerIdSetInOptions() {
@@ -192,14 +194,14 @@ public class DescribeProducersHandlerTest {
         DescribeProducersOptions options = new DescribeProducersOptions().brokerId(1);
         DescribeProducersHandler handler = newHandler(options);
 
-        int brokerId = 3;
         PartitionResponse partitionResponse = sampleProducerState(topicPartition);
         DescribeProducersResponse response = describeProducersResponse(
             singletonMap(topicPartition, partitionResponse)
         );
+        Node node = new Node(3, "host", 1);
 
         ApiResult<TopicPartition, PartitionProducerState> result =
-            handler.handleResponse(brokerId, mkSet(topicPartition), response);
+            handler.handleResponse(node, mkSet(topicPartition), response);
 
         assertEquals(mkSet(topicPartition), result.completedKeys.keySet());
         assertEquals(emptyMap(), result.failedKeys);
@@ -238,9 +240,9 @@ public class DescribeProducersHandlerTest {
         Errors error
     ) {
         DescribeProducersHandler handler = newHandler(options);
-        int brokerId = options.brokerId().orElse(3);
         DescribeProducersResponse response = buildResponseWithError(topicPartition, error);
-        return handler.handleResponse(brokerId, mkSet(topicPartition), response);
+        Node node = new Node(options.brokerId().orElse(3), "host", 1);
+        return handler.handleResponse(node, mkSet(topicPartition), response);
     }
 
     private DescribeProducersResponse buildResponseWithError(

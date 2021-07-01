@@ -3319,10 +3319,13 @@ public class TransactionManagerTest {
                                                 final String coordinatorKey) {
         client.prepareResponse(body -> {
             FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
-            assertEquals(CoordinatorType.forId(findCoordinatorRequest.data().keyType()), coordinatorType);
-            assertEquals(findCoordinatorRequest.data().key(), coordinatorKey);
+            assertEquals(coordinatorType, CoordinatorType.forId(findCoordinatorRequest.data().keyType()));
+            String key = findCoordinatorRequest.data().coordinatorKeys().isEmpty()
+                    ? findCoordinatorRequest.data().key()
+                    : findCoordinatorRequest.data().coordinatorKeys().get(0);
+            assertEquals(coordinatorKey, key);
             return true;
-        }, FindCoordinatorResponse.prepareResponse(error, brokerNode), shouldDisconnect);
+        }, FindCoordinatorResponse.prepareResponse(error, coordinatorKey, brokerNode), shouldDisconnect);
     }
 
     private void prepareInitPidResponse(Errors error, boolean shouldDisconnect, long producerId, short producerEpoch) {

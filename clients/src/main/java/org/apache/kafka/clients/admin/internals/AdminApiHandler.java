@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 
@@ -57,13 +58,13 @@ public interface AdminApiHandler<K, V> {
      * Note that keys which received a retriable error should be left out of the
      * result. They will be retried automatically.
      *
-     * @param brokerId the brokerId that the associated request was sent to
+     * @param broker the broker that the associated request was sent to
      * @param keys the set of keys from the associated request
      * @param response the response received from the broker
      *
      * @return result indicating key completion, failure, and unmapping
      */
-    ApiResult<K, V> handleResponse(int brokerId, Set<K> keys, AbstractResponse response);
+    ApiResult<K, V> handleResponse(Node broker, Set<K> keys, AbstractResponse response);
 
     /**
      * Get the lookup strategy that is responsible for finding the brokerId

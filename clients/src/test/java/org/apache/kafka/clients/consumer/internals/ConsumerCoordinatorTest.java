@@ -3029,7 +3029,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     private FindCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
-        return FindCoordinatorResponse.prepareResponse(error, node);
+        return FindCoordinatorResponse.prepareResponse(error, groupId, node);
     }
 
     private HeartbeatResponse heartbeatResponse(Errors error) {

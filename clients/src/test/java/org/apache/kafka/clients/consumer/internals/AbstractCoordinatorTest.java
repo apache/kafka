@@ -1343,7 +1343,7 @@ public class AbstractCoordinatorTest {
     }
 
     private FindCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
-        return FindCoordinatorResponse.prepareResponse(error, node);
+        return FindCoordinatorResponse.prepareResponse(error, GROUP_ID, node);
     }
 
     private HeartbeatResponse heartbeatResponse(Errors error) {

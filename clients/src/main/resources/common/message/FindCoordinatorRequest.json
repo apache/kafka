@@ -23,12 +23,16 @@
   // Version 2 is the same as version 1.
   //
   // Version 3 is the first flexible version.
-  "validVersions": "0-3",
+  //
+  // Version 4 adds support for batching via CoordinatorKeys (KIP-699)
+  "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
-    { "name": "Key", "type": "string", "versions": "0+",
+    { "name": "Key", "type": "string", "versions": "0-3",
       "about": "The coordinator key." },
     { "name": "KeyType", "type": "int8", "versions": "1+", "default": "0", "ignorable": false,
-      "about": "The coordinator key type.  (Group, transaction, etc.)" }
+      "about": "The coordinator key type. (Group, transaction, etc.)" },
+    { "name": "CoordinatorKeys", "type": "[]string", "versions": "4+",
+      "about": "The coordinator keys." }
   ]
 }
