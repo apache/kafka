@@ -146,7 +146,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
         final long sizeMs = validateMillisecondDuration(size, msgPrefix);
 
-        return new TimeWindows(sizeMs, sizeMs, DEPRECATED_OLD_24_HR_GRACE_PERIOD);
+        return new TimeWindows(sizeMs, sizeMs, Math.max(DEPRECATED_OLD_24_HR_GRACE_PERIOD - sizeMs, 0));
     }
 
     /**
