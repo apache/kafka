@@ -17,12 +17,12 @@
 package kafka.raft
 
 import kafka.api.ApiVersion
-import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
+import kafka.log.{AppendOrigin, Defaults, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, KafkaConfig, LogDirFailureChannel, RequestLocal}
 import kafka.utils.{CoreUtils, Logging, Scheduler}
 import org.apache.kafka.common.config.AbstractConfig
-import org.apache.kafka.common.record.{MemoryRecords, Records}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.record.{ControlRecordUtils, MemoryRecords, Records}
+import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
@@ -42,14 +42,10 @@ final class KafkaMetadataLog private (
   // polling thread when snapshots are created. This object is also used to store any opened snapshot reader.
   snapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
   topicPartition: TopicPartition,
-  maxFetchSizeInBytes: Int,
-  // Visible for testing
-  val fileDeleteDelayMs: Long,
-  val retentionSize: Long,
-  val retentionMs: Long,
+  config: MetadataLogConfig
 ) extends ReplicatedLog with Logging {
 
-  this.logIdent = s"[MetadataLog partition=$topicPartition, dir=${log.dir.getParent}] "
+  this.logIdent = s"[MetadataLog partition=$topicPartition, nodeId=${config.nodeId}] "
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
@@ -59,7 +55,7 @@ final class KafkaMetadataLog private (
     }
 
     val fetchInfo = log.read(startOffset,
-      maxLength = maxFetchSizeInBytes,
+      maxLength = config.maxFetchSizeInBytes,
       isolation = isolation,
       minOneMessage = true)
 
@@ -356,12 +352,17 @@ final class KafkaMetadataLog private (
   /**
    * Return the max timestamp of the first batch in a snapshot, if the snapshot exists and has records
    */
-  private def firstBatchMaxTimestamp(snapshotId: OffsetAndEpoch): Option[Long] = {
+  private def readSnapshotTimestamp(snapshotId: OffsetAndEpoch): Option[Long] = {
     readSnapshot(snapshotId).asScala.flatMap { reader =>
-      val it = reader.records().batchIterator()
-      if (it.hasNext) {
-        Some(it.next.maxTimestamp())
+      val batchIterator = reader.records().batchIterator()
+
+      val firstBatch = batchIterator.next()
+      val records = firstBatch.streamingIterator(new BufferSupplier.GrowableBufferSupplier())
+      if (firstBatch.isControlBatch) {
+        val header = ControlRecordUtils.deserializedSnapshotHeaderRecord(records.next());
+        Some(header.lastContainedLogTimestamp())
       } else {
+        warn("Did not find control record at beginning of snapshot")
         None
       }
     }
@@ -392,14 +393,14 @@ final class KafkaMetadataLog private (
    *
    * For the given predicate, we are testing if the snapshot identified by the first argument should be deleted.
    */
-  private def cleanSnapshots(predicate: (OffsetAndEpoch, OffsetAndEpoch) => Boolean): Boolean = {
+  private def cleanSnapshots(predicate: (OffsetAndEpoch) => Boolean): Boolean = {
     if (snapshots.size < 2)
       return false;
 
     var didClean = false
     snapshots.keys.toSeq.sliding(2).toSeq.takeWhile {
       case Seq(snapshot: OffsetAndEpoch, nextSnapshot: OffsetAndEpoch) =>
-        if (predicate(snapshot, nextSnapshot) && deleteSnapshot(snapshot, nextSnapshot)) {
+        if (predicate(snapshot) && deleteSnapshot(snapshot, nextSnapshot)) {
           didClean = true
           true
         } else {
@@ -411,15 +412,14 @@ final class KafkaMetadataLog private (
   }
 
   private def cleanSnapshotsRetentionMs(): Boolean = {
-    if (retentionMs < 0)
+    if (config.retentionMillis < 0)
       return false
 
-    // If the timestamp of the first batch in the _next_ snapshot exceeds retention time, then we infer that
-    // the current snapshot also exceeds retention time. We make this inference to avoid reading the full snapshot.
-    def shouldClean(snapshotId: OffsetAndEpoch, nextSnapshotId: OffsetAndEpoch): Boolean = {
+    // Keep deleting snapshots as long as the
+    def shouldClean(snapshotId: OffsetAndEpoch): Boolean = {
       val now = time.milliseconds()
-      firstBatchMaxTimestamp(nextSnapshotId).exists { timestamp =>
-        if (now - timestamp > retentionMs) {
+      readSnapshotTimestamp(snapshotId).exists { timestamp =>
+        if (now - timestamp > config.retentionMillis) {
           true
         } else {
           false
@@ -431,7 +431,7 @@ final class KafkaMetadataLog private (
   }
 
   private def cleanSnapshotsRetentionSize(): Boolean = {
-    if (retentionSize < 0)
+    if (config.retentionMaxBytes < 0)
       return false
 
     val snapshotSizes = loadSnapshotSizes().toMap
@@ -439,9 +439,9 @@ final class KafkaMetadataLog private (
     var snapshotTotalSize: Long = snapshotSizes.values.sum
 
     // Keep deleting snapshots and segments as long as we exceed the retention size
-    def shouldClean(snapshotId: OffsetAndEpoch, nextSnapshotId: OffsetAndEpoch): Boolean = {
+    def shouldClean(snapshotId: OffsetAndEpoch): Boolean = {
       snapshotSizes.get(snapshotId).exists { snapshotSize =>
-        if (log.size + snapshotTotalSize > retentionSize) {
+        if (log.size + snapshotTotalSize > config.retentionMaxBytes) {
           snapshotTotalSize -= snapshotSize
           true
         } else {
@@ -485,7 +485,7 @@ final class KafkaMetadataLog private (
       scheduler.schedule(
         "delete-snapshot-files",
         KafkaMetadataLog.deleteSnapshotFiles(log.dir.toPath, expiredSnapshots, this),
-        fileDeleteDelayMs
+        config.fileDeleteDelayMs
       )
     }
   }
@@ -506,14 +506,16 @@ final class KafkaMetadataLog private (
 }
 
 object MetadataLogConfig {
-  def apply(abstractConfig: AbstractConfig, maxBatchSizeInBytes: Int, maxFetchSizeInBytes: Int): MetadataLogConfig = {
+  def apply(config: AbstractConfig, maxBatchSizeInBytes: Int, maxFetchSizeInBytes: Int): MetadataLogConfig = {
     new MetadataLogConfig(
-      abstractConfig.getInt(KafkaConfig.MetadataLogSegmentBytesProp),
-      abstractConfig.getLong(KafkaConfig.MetadataLogSegmentMillisProp),
-      abstractConfig.getLong(KafkaConfig.MetadataMaxRetentionBytesProp),
-      abstractConfig.getLong(KafkaConfig.MetadataMaxRetentionMillisProp),
+      config.getInt(KafkaConfig.MetadataLogSegmentBytesProp),
+      config.getLong(KafkaConfig.MetadataLogSegmentMillisProp),
+      config.getLong(KafkaConfig.MetadataMaxRetentionBytesProp),
+      config.getLong(KafkaConfig.MetadataMaxRetentionMillisProp),
       maxBatchSizeInBytes,
-      maxFetchSizeInBytes
+      maxFetchSizeInBytes,
+      Defaults.FileDeleteDelayMs,
+      config.getInt(KafkaConfig.NodeIdProp)
     )
   }
 }
@@ -523,7 +525,9 @@ case class MetadataLogConfig(logSegmentBytes: Int,
                              retentionMaxBytes: Long,
                              retentionMillis: Long,
                              maxBatchSizeInBytes: Int,
-                             maxFetchSizeInBytes: Int)
+                             maxFetchSizeInBytes: Int,
+                             fileDeleteDelayMs: Int,
+                             nodeId: Int)
 
 object KafkaMetadataLog {
   def apply(
@@ -539,6 +543,7 @@ object KafkaMetadataLog {
     props.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString)
     props.put(LogConfig.SegmentBytesProp, Int.box(config.logSegmentBytes))
     props.put(LogConfig.SegmentMsProp, Long.box(config.logSegmentMillis))
+    props.put(LogConfig.FileDeleteDelayMsProp, Int.box(Defaults.FileDeleteDelayMs))
 
     LogConfig.validateValues(props)
     val defaultLogConfig = LogConfig(props)
@@ -565,10 +570,7 @@ object KafkaMetadataLog {
       scheduler,
       recoverSnapshots(log),
       topicPartition,
-      config.maxFetchSizeInBytes,
-      defaultLogConfig.fileDeleteDelayMs,
-      config.retentionMaxBytes,
-      config.retentionMillis
+      config
     )
 
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower

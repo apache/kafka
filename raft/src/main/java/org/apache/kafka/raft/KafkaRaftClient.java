@@ -160,7 +160,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final KafkaRaftMetrics kafkaRaftMetrics;
     private final QuorumState quorum;
     private final RequestManager requestManager;
-    private final RaftMetadataLogCleaner snapshotCleaner;
+    private final RaftMetadataLogCleanerManager snapshotCleaner;
 
     private final List<ListenerContext> listenerContexts = new ArrayList<>();
     private final ConcurrentLinkedQueue<Listener<T>> pendingListeners = new ConcurrentLinkedQueue<>();
@@ -231,7 +231,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
         this.raftConfig = raftConfig;
-        this.snapshotCleaner = new RaftMetadataLogCleaner(logger, time, 60000, log::maybeClean);
+        this.snapshotCleaner = new RaftMetadataLogCleanerManager(logger, time, 60000, log::maybeClean);
         Set<Integer> quorumVoterIds = raftConfig.quorumVoterIds();
         this.requestManager = new RequestManager(quorumVoterIds, raftConfig.retryBackoffMs(),
             raftConfig.requestTimeoutMs(), random);
@@ -2159,13 +2159,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     /**
      * A simple timer based log cleaner
      */
-    private static class RaftMetadataLogCleaner {
+    private static class RaftMetadataLogCleanerManager {
         private final Logger logger;
         private final Timer timer;
         private final long delayMs;
         private final Runnable cleaner;
 
-        RaftMetadataLogCleaner(Logger logger, Time time, long delayMs, Runnable cleaner) {
+        RaftMetadataLogCleanerManager(Logger logger, Time time, long delayMs, Runnable cleaner) {
             this.logger = logger;
             this.timer = time.timer(delayMs);
             this.delayMs = delayMs;
