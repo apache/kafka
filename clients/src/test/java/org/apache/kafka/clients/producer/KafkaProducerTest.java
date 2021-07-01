@@ -1315,8 +1315,6 @@ public class KafkaProducerTest {
             // is non-null and adheres to the onCompletion contract.
             Callback callBack = (recordMetadata, exception) -> {
                 assertNotNull(exception);
-                exception.printStackTrace();
-
                 assertNotNull(recordMetadata);
 
                 try {
