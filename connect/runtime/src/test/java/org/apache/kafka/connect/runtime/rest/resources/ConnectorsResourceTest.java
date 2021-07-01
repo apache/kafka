@@ -24,11 +24,14 @@ import javax.ws.rs.core.HttpHeaders;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.NotAssignedException;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
+import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
@@ -772,6 +775,79 @@ public class ConnectorsResourceTest {
     }
 
     @Test
+    public void testRestartConnectorAndTasksConnectorNotFound() {
+        RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
+        final Capture<Callback<ConnectorStateInfo>> cb = Capture.newInstance();
+        herder.restartConnectorAndTasks(EasyMock.eq(restartRequest), EasyMock.capture(cb));
+        expectAndCallbackException(cb, new NotFoundException("not found"));
+
+        PowerMock.replayAll();
+
+        assertThrows(NotFoundException.class, () ->
+                connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), FORWARD)
+        );
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartConnectorAndTasksLeaderRedirect() throws Throwable {
+        RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
+        final Capture<Callback<ConnectorStateInfo>> cb = Capture.newInstance();
+        herder.restartConnectorAndTasks(EasyMock.eq(restartRequest), EasyMock.capture(cb));
+        expectAndCallbackNotLeaderException(cb);
+
+        EasyMock.expect(RestClient.httpRequest(EasyMock.eq("http://leader:8083/connectors/" + CONNECTOR_NAME + "/restart?forward=true&includeTasks=" + restartRequest.includeTasks() + "&onlyFailed=" + restartRequest.onlyFailed()),
+                EasyMock.eq("POST"), EasyMock.isNull(), EasyMock.isNull(), EasyMock.<TypeReference>anyObject(), EasyMock.anyObject(WorkerConfig.class)))
+                .andReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
+
+        PowerMock.replayAll();
+
+        connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), null);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartConnectorAndTasksRebalanceNeeded() {
+        RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
+        final Capture<Callback<ConnectorStateInfo>> cb = Capture.newInstance();
+        herder.restartConnectorAndTasks(EasyMock.eq(restartRequest), EasyMock.capture(cb));
+        expectAndCallbackException(cb, new RebalanceNeededException("Request cannot be completed because a rebalance is expected"));
+
+        PowerMock.replayAll();
+
+        ConnectRestException ex = assertThrows(ConnectRestException.class, () ->
+                connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), FORWARD)
+        );
+        assertEquals(Response.Status.CONFLICT.getStatusCode(), ex.statusCode());
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartConnectorAndTasksRequestAccepted() throws Throwable {
+        ConnectorStateInfo.ConnectorState state = new ConnectorStateInfo.ConnectorState(
+                AbstractStatus.State.RESTARTING.name(),
+                "foo",
+                null
+        );
+        ConnectorStateInfo connectorStateInfo = new ConnectorStateInfo(CONNECTOR_NAME, state, Collections.emptyList(), ConnectorType.SOURCE);
+
+        RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
+        final Capture<Callback<ConnectorStateInfo>> cb = Capture.newInstance();
+        herder.restartConnectorAndTasks(EasyMock.eq(restartRequest), EasyMock.capture(cb));
+        expectAndCallbackResult(cb, connectorStateInfo);
+
+        PowerMock.replayAll();
+
+        Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), FORWARD);
+        assertEquals(CONNECTOR_NAME, ((ConnectorStateInfo) response.getEntity()).name());
+        assertEquals(state.state(), ((ConnectorStateInfo) response.getEntity()).connector().state());
+        assertEquals(Response.Status.ACCEPTED.getStatusCode(), response.getStatus());
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testRestartConnectorNotFound() {
         final Capture<Callback<Void>> cb = Capture.newInstance();
         herder.restartConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
@@ -779,7 +855,9 @@ public class ConnectorsResourceTest {
 
         PowerMock.replayAll();
 
-        assertThrows(NotFoundException.class, () -> connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
+        assertThrows(NotFoundException.class, () ->
+                connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, FORWARD)
+        );
 
         PowerMock.verifyAll();
     }
@@ -796,7 +874,7 @@ public class ConnectorsResourceTest {
 
         PowerMock.replayAll();
 
-        connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, null);
+        connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, null);
 
         PowerMock.verifyAll();
     }
@@ -814,7 +892,7 @@ public class ConnectorsResourceTest {
 
         PowerMock.replayAll();
 
-        connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, true);
+        connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, true);
 
         PowerMock.verifyAll();
     }

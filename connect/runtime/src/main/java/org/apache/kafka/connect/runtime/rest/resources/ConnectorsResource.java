@@ -18,12 +18,14 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.core.HttpHeaders;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
@@ -255,12 +257,30 @@ public class ConnectorsResource {
 
     @POST
     @Path("/{connector}/restart")
-    public void restartConnector(final @PathParam("connector") String connector,
+    public Response restartConnector(final @PathParam("connector") String connector,
                                  final @Context HttpHeaders headers,
+                                 final @DefaultValue("false") @QueryParam("includeTasks") Boolean includeTasks,
+                                 final @DefaultValue("false") @QueryParam("onlyFailed") Boolean onlyFailed,
                                  final @QueryParam("forward") Boolean forward) throws Throwable {
-        FutureCallback<Void> cb = new FutureCallback<>();
-        herder.restartConnector(connector, cb);
-        completeOrForwardRequest(cb, "/connectors/" + connector + "/restart", "POST", headers, null, forward);
+        RestartRequest restartRequest = new RestartRequest(connector, onlyFailed, includeTasks);
+        String forwardingPath = "/connectors/" + connector + "/restart";
+        if (restartRequest.forceRestartConnectorOnly()) {
+            // For backward compatibility, just restart the connector instance and return OK with no body
+            FutureCallback<Void> cb = new FutureCallback<>();
+            herder.restartConnector(connector, cb);
+            completeOrForwardRequest(cb, forwardingPath, "POST", headers, null, forward);
+            return Response.ok().build();
+        }
+
+        // In all other cases, submit the async restart request and return connector state
+        FutureCallback<ConnectorStateInfo> cb = new FutureCallback<>();
+        herder.restartConnectorAndTasks(restartRequest, cb);
+        Map<String, String> queryParameters = new HashMap<>();
+        queryParameters.put("includeTasks", includeTasks.toString());
+        queryParameters.put("onlyFailed", onlyFailed.toString());
+        ConnectorStateInfo stateInfo = completeOrForwardRequest(cb, forwardingPath, "POST", headers, queryParameters, null, new TypeReference<ConnectorStateInfo>() {
+        }, new IdentityTranslator<>(), forward);
+        return Response.accepted().entity(stateInfo).build();
     }
 
     @PUT
@@ -348,6 +368,7 @@ public class ConnectorsResource {
                                               String path,
                                               String method,
                                               HttpHeaders headers,
+                                              Map<String, String> queryParameters,
                                               Object body,
                                               TypeReference<U> resultType,
                                               Translator<T, U> translator,
@@ -371,11 +392,13 @@ public class ConnectorsResource {
                                 "Cannot complete request momentarily due to no known leader URL, "
                                 + "likely because a rebalance was underway.");
                     }
-                    String forwardUrl = UriBuilder.fromUri(forwardedUrl)
+                    UriBuilder uriBuilder = UriBuilder.fromUri(forwardedUrl)
                             .path(path)
-                            .queryParam("forward", recursiveForward)
-                            .build()
-                            .toString();
+                            .queryParam("forward", recursiveForward);
+                    if (queryParameters != null) {
+                        queryParameters.forEach((k, v) ->  uriBuilder.queryParam(k, v));
+                    }
+                    String forwardUrl = uriBuilder.build().toString();
                     log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
                     return translator.translate(RestClient.httpRequest(forwardUrl, method, headers, body, resultType, config));
                 } else {
@@ -397,6 +420,11 @@ public class ConnectorsResource {
         } catch (InterruptedException e) {
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), "Request interrupted");
         }
+    }
+
+    private <T, U> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers, Object body,
+                                              TypeReference<U> resultType, Translator<T, U> translator, Boolean forward) throws Throwable {
+        return completeOrForwardRequest(cb, path, method, headers, null, body, resultType, translator, forward);
     }
 
     private <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers, Object body,

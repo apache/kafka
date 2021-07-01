@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -72,6 +73,15 @@ public class ConnectorHandle {
      */
     public TaskHandle taskHandle(String taskId, Consumer<SinkRecord> consumer) {
         return taskHandles.computeIfAbsent(taskId, k -> new TaskHandle(this, taskId, consumer));
+    }
+
+    /**
+     * Gets the start and stop counter corresponding to this handle.
+     *
+     * @return the start and stop counter
+     */
+    public StartAndStopCounter startAndStopCounter() {
+        return startAndStopCounter;
     }
 
     /**
@@ -271,12 +281,20 @@ public class ConnectorHandle {
      * @return the latch that can be used to wait for the starts to complete; never null
      */
     public StartAndStopLatch expectedStarts(int expectedStarts, boolean includeTasks) {
-        List<StartAndStopLatch> taskLatches = null;
-        if (includeTasks) {
-            taskLatches = taskHandles.values().stream()
-                                     .map(task -> task.expectedStarts(expectedStarts))
-                                     .collect(Collectors.toList());
-        }
+        List<StartAndStopLatch> taskLatches = includeTasks
+                ? taskHandles.values().stream()
+                .map(task -> task.expectedStarts(expectedStarts))
+                .collect(Collectors.toList())
+                : Collections.emptyList();
+        return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
+    }
+
+    public StartAndStopLatch expectedStarts(int expectedStarts, Map<String, Integer> expectedTasksStarts, boolean includeTasks) {
+        List<StartAndStopLatch> taskLatches = includeTasks
+                ? taskHandles.values().stream()
+                .map(task -> task.expectedStarts(expectedTasksStarts.get(task.taskId())))
+                .collect(Collectors.toList())
+                : Collections.emptyList();
         return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
     }
 
@@ -325,12 +343,20 @@ public class ConnectorHandle {
      * @return the latch that can be used to wait for the starts to complete; never null
      */
     public StartAndStopLatch expectedStops(int expectedStops, boolean includeTasks) {
-        List<StartAndStopLatch> taskLatches = null;
-        if (includeTasks) {
-            taskLatches = taskHandles.values().stream()
-                                     .map(task -> task.expectedStops(expectedStops))
-                                     .collect(Collectors.toList());
-        }
+        List<StartAndStopLatch> taskLatches = includeTasks
+                ? taskHandles.values().stream()
+                .map(task -> task.expectedStops(expectedStops))
+                .collect(Collectors.toList())
+                : Collections.emptyList();
+        return startAndStopCounter.expectedStops(expectedStops, taskLatches);
+    }
+
+    public StartAndStopLatch expectedStops(int expectedStops, Map<String, Integer> expectedTasksStops, boolean includeTasks) {
+        List<StartAndStopLatch> taskLatches = includeTasks
+                ? taskHandles.values().stream()
+                .map(task -> task.expectedStops(expectedTasksStops.get(task.taskId())))
+                .collect(Collectors.toList())
+                : Collections.emptyList();
         return startAndStopCounter.expectedStops(expectedStops, taskLatches);
     }
 

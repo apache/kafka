@@ -203,6 +203,50 @@ class ConnectDistributedTest(Test):
 
     @cluster(num_nodes=5)
     @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
+    def test_restart_connector_and_tasks_failed_connector(self, connect_protocol):
+        self.CONNECT_PROTOCOL = connect_protocol
+        self.setup_services()
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
+
+        self.sink = MockSink(self.cc, self.topics.keys(), mode='connector-failure', delay_sec=5)
+        self.sink.start()
+
+        wait_until(lambda: self.connector_is_failed(self.sink), timeout_sec=15,
+                   err_msg="Failed to see connector transition to the FAILED state")
+
+        self.cc.restart_connector_and_tasks(self.sink.name, only_failed = "true", include_tasks = "false")
+
+        wait_until(lambda: self.connector_is_running(self.sink), timeout_sec=10,
+                   err_msg="Failed to see connector transition to the RUNNING state")
+
+    @cluster(num_nodes=5)
+    @matrix(connector_type=['source', 'sink'], connect_protocol=['sessioned', 'compatible', 'eager'])
+    def test_restart_connector_and_tasks_failed_task(self, connector_type, connect_protocol):
+        self.CONNECT_PROTOCOL = connect_protocol
+        self.setup_services()
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
+
+        connector = None
+        if connector_type == "sink":
+            connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5)
+        else:
+            connector = MockSource(self.cc, mode='task-failure', delay_sec=5)
+
+        connector.start()
+
+        task_id = 0
+        wait_until(lambda: self.task_is_failed(connector, task_id), timeout_sec=20,
+                   err_msg="Failed to see task transition to the FAILED state")
+
+        self.cc.restart_connector_and_tasks(connector.name, only_failed = "false", include_tasks = "true")
+
+        wait_until(lambda: self.task_is_running(connector, task_id), timeout_sec=10,
+                   err_msg="Failed to see task transition to the RUNNING state")
+
+    @cluster(num_nodes=5)
+    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
     def test_pause_and_resume_source(self, connect_protocol):
         """
         Verify that source connectors stop producing records when paused and begin again after

@@ -49,6 +49,7 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate connectorFailedTaskCount;
     public final MetricNameTemplate connectorUnassignedTaskCount;
     public final MetricNameTemplate connectorDestroyedTaskCount;
+    public final MetricNameTemplate connectorRestartingTaskCount;
     public final MetricNameTemplate taskStatus;
     public final MetricNameTemplate taskRunningRatio;
     public final MetricNameTemplate taskPauseRatio;
@@ -315,6 +316,9 @@ public class ConnectMetricsRegistry {
         connectorDestroyedTaskCount = createTemplate("connector-destroyed-task-count",
             WORKER_GROUP_NAME,
             "The number of destroyed tasks of the connector on the worker.", workerConnectorTags);
+        connectorRestartingTaskCount = createTemplate("connector-restarting-task-count",
+            WORKER_GROUP_NAME,
+            "The number of restarting tasks of the connector on the worker.", workerConnectorTags);
 
         connectorStatusMetrics = new HashMap<>();
         connectorStatusMetrics.put(connectorRunningTaskCount, TaskStatus.State.RUNNING);
@@ -322,6 +326,7 @@ public class ConnectMetricsRegistry {
         connectorStatusMetrics.put(connectorFailedTaskCount, TaskStatus.State.FAILED);
         connectorStatusMetrics.put(connectorUnassignedTaskCount, TaskStatus.State.UNASSIGNED);
         connectorStatusMetrics.put(connectorDestroyedTaskCount, TaskStatus.State.DESTROYED);
+        connectorStatusMetrics.put(connectorRestartingTaskCount, TaskStatus.State.RESTARTING);
         connectorStatusMetrics = Collections.unmodifiableMap(connectorStatusMetrics);
 
         /***** Worker rebalance level *****/

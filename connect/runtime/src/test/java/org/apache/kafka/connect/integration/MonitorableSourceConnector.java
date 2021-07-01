@@ -58,6 +58,9 @@ public class MonitorableSourceConnector extends TestSourceConnector {
         commonConfigs = props;
         log.info("Started {} connector {}", this.getClass().getSimpleName(), connectorName);
         connectorHandle.recordConnectorStart();
+        if (Boolean.parseBoolean(props.getOrDefault("connector.start.inject.error", "false"))) {
+            throw new RuntimeException("Injecting errors during connector start");
+        }
     }
 
     @Override
@@ -121,6 +124,9 @@ public class MonitorableSourceConnector extends TestSourceConnector {
             log.info("Started {} task {} with properties {}", this.getClass().getSimpleName(), taskId, props);
             throttler = new ThroughputThrottler(throughput, System.currentTimeMillis());
             taskHandle.recordTaskStart();
+            if (Boolean.parseBoolean(props.getOrDefault("task-" + taskId + ".start.inject.error", "false"))) {
+                throw new RuntimeException("Injecting errors during task start");
+            }
         }
 
         @Override

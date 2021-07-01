@@ -59,6 +59,7 @@ import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -210,6 +211,15 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         statusBackingStore.put(new TaskStatus(id, TaskStatus.State.DESTROYED, workerId, generation()));
     }
 
+    public void onRestart(String connector) {
+        statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.RESTARTING,
+                workerId, generation()));
+    }
+
+    public void onRestart(ConnectorTaskId id) {
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RESTARTING, workerId, generation()));
+    }
+
     @Override
     public void pauseConnector(String connector) {
         if (!configBackingStore.contains(connector))
@@ -355,6 +365,54 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 callback.onCompletion(t, null);
             }
         });
+    }
+
+    /**
+     * Build the {@link RestartPlan} that describes what should and should not be restarted given the restart request
+     * and the current status of the connector and task instances.
+     *
+     * @param request the restart request; may not be null
+     * @return the restart plan, or empty if this worker has no status for the connector named in the request and therefore the
+     *         connector cannot be restarted
+     */
+    public Optional<RestartPlan> buildRestartPlan(RestartRequest request) {
+        String connectorName = request.connectorName();
+        ConnectorStatus connectorStatus = statusBackingStore.get(connectorName);
+        if (connectorStatus == null) {
+            return Optional.empty();
+        }
+
+        // If requested, mark the connector as restarting
+        AbstractStatus.State connectorState = request.shouldRestartConnector(connectorStatus) ? AbstractStatus.State.RESTARTING : connectorStatus.state();
+        ConnectorStateInfo.ConnectorState connectorInfoState = new ConnectorStateInfo.ConnectorState(
+                connectorState.toString(),
+                connectorStatus.workerId(),
+                connectorStatus.trace()
+        );
+
+        // Collect the task states, If requested, mark the task as restarting
+        List<ConnectorStateInfo.TaskState> taskStates = statusBackingStore.getAll(connectorName)
+                .stream()
+                .map(taskStatus -> {
+                    AbstractStatus.State taskState = request.shouldRestartTask(taskStatus) ? AbstractStatus.State.RESTARTING : taskStatus.state();
+                    return new ConnectorStateInfo.TaskState(
+                            taskStatus.id().task(),
+                            taskState.toString(),
+                            taskStatus.workerId(),
+                            taskStatus.trace()
+                    );
+                })
+                .collect(Collectors.toList());
+        // Construct the response from the various states
+        Map<String, String> conf = rawConfig(connectorName);
+        ConnectorStateInfo stateInfo = new ConnectorStateInfo(
+                connectorName,
+                connectorInfoState,
+                taskStates,
+                conf == null ? ConnectorType.UNKNOWN : connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))
+        );
+        return Optional.of(new RestartPlan(request, stateInfo));
+
     }
 
     ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
