@@ -1192,7 +1192,7 @@ public class RequestResponseTest {
 
     private FindCoordinatorResponse createFindCoordinatorResponse() {
         Node node = new Node(10, "host1", 2014);
-        return FindCoordinatorResponse.prepareResponse(Errors.NONE, node);
+        return FindCoordinatorResponse.prepareOldResponse(Errors.NONE, node);
     }
 
     private FetchRequest createFetchRequest(int version, FetchMetadata metadata, List<TopicPartition> toForget) {
