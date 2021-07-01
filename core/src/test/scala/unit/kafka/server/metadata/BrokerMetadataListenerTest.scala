@@ -131,9 +131,10 @@ class BrokerMetadataListenerTest {
       val objectCache = new ObjectSerializationCache()
       MemoryBatchReader.of(
         List(
-          Batch.of(
+          Batch.data(
             baseOffset,
             leaderEpoch,
+            baseOffset, // Use the base offset as the append time
             records.map(metadataSerde.recordSize(_, objectCache)).sum,
             records.asJava
           )
