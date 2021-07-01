@@ -138,6 +138,7 @@ public final class RecordsIteratorTest {
         Random random = new Random(seed);
         long baseOffset = random.nextInt(100);
         int epoch = random.nextInt(3) + 1;
+        long appendTimestamp = random.nextInt(1000);
 
         int numberOfBatches = random.nextInt(100) + 1;
         List<TestBatch<String>> batches = new ArrayList<>(numberOfBatches);
@@ -148,11 +149,12 @@ public final class RecordsIteratorTest {
                 .mapToObj(String::valueOf)
                 .collect(Collectors.toList());
 
-            batches.add(new TestBatch<>(baseOffset, epoch, records));
+            batches.add(new TestBatch<>(baseOffset, epoch, appendTimestamp, records));
             baseOffset += records.size();
             if (i % 5 == 0) {
                 epoch += random.nextInt(3);
             }
+            appendTimestamp += random.nextInt(1000);
         }
 
         return batches;
@@ -170,7 +172,7 @@ public final class RecordsIteratorTest {
                 STRING_SERDE,
                 compressionType,
                 batch.baseOffset,
-                12345L,
+                batch.appendTimestamp,
                 false,
                 batch.epoch,
                 1024
@@ -190,11 +192,13 @@ public final class RecordsIteratorTest {
     public static final class TestBatch<T> {
         final long baseOffset;
         final int epoch;
+        final long appendTimestamp;
         final List<T> records;
 
-        TestBatch(long baseOffset, int epoch, List<T> records) {
+        TestBatch(long baseOffset, int epoch, long appendTimestamp, List<T> records) {
             this.baseOffset = baseOffset;
             this.epoch = epoch;
+            this.appendTimestamp = appendTimestamp;
             this.records = records;
         }
 
@@ -224,7 +228,7 @@ public final class RecordsIteratorTest {
         }
 
         static <T> TestBatch<T> from(Batch<T> batch) {
-            return new TestBatch<>(batch.baseOffset(), batch.epoch(), batch.records());
+            return new TestBatch<>(batch.baseOffset(), batch.epoch(), batch.appendTimestamp(), batch.records());
         }
     }
 }

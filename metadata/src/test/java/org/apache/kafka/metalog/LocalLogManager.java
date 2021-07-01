@@ -108,10 +108,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     static class LocalRecordBatch implements LocalBatch {
         private final int leaderEpoch;
+        private final long appendTimestamp;
         private final List<ApiMessageAndVersion> records;
 
-        LocalRecordBatch(int leaderEpoch, List<ApiMessageAndVersion> records) {
+        LocalRecordBatch(int leaderEpoch, long appendTimestamp, List<ApiMessageAndVersion> records) {
             this.leaderEpoch = leaderEpoch;
+            this.appendTimestamp = appendTimestamp;
             this.records = records;
         }
 
@@ -129,18 +131,25 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         public boolean equals(Object o) {
             if (!(o instanceof LocalRecordBatch)) return false;
             LocalRecordBatch other = (LocalRecordBatch) o;
-            if (!other.records.equals(records)) return false;
-            return true;
+
+            return leaderEpoch == other.leaderEpoch &&
+                appendTimestamp == other.appendTimestamp &&
+                Objects.equals(records, other.records);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(records);
+            return Objects.hash(leaderEpoch, appendTimestamp, records);
         }
 
         @Override
         public String toString() {
-            return "LocalRecordBatch(records=" + records + ")";
+            return String.format(
+                "LocalRecordBatch(leaderEpoch=%s, appendTimestamp=%s, records=%s)",
+                leaderEpoch,
+                appendTimestamp,
+                records
+            );
         }
     }
 
@@ -198,7 +207,13 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             }
         }
 
-        synchronized long tryAppend(int nodeId, long epoch, LocalBatch batch) {
+        synchronized long tryAppend(int nodeId, int epoch, List<ApiMessageAndVersion> batch) {
+            // No easy access to the concept of time. Use the base offset as the append timestamp
+            long appendTimestamp = (prevOffset + 1) * 10;
+            return tryAppend(nodeId, epoch, new LocalRecordBatch(epoch, appendTimestamp, batch));
+        }
+
+        synchronized long tryAppend(int nodeId, int epoch, LocalBatch batch) {
             if (epoch != leader.epoch()) {
                 log.trace("tryAppend(nodeId={}, epoch={}): the provided epoch does not " +
                     "match the current leader epoch of {}.", nodeId, epoch, leader.epoch());
@@ -475,9 +490,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             listenerData.handleCommit(
                                 MemoryBatchReader.of(
                                     Collections.singletonList(
-                                        Batch.of(
+                                        Batch.data(
                                             entryOffset - batch.records.size() + 1,
                                             batch.leaderEpoch,
+                                            batch.appendTimestamp,
                                             batch
                                                 .records
                                                 .stream()
@@ -599,11 +615,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     @Override
     public Long scheduleAtomicAppend(int epoch, List<ApiMessageAndVersion> batch) {
-        return shared.tryAppend(
-            nodeId,
-            leader.epoch(),
-            new LocalRecordBatch(leader.epoch(), batch)
-        );
+        return shared.tryAppend(nodeId, leader.epoch(), batch);
     }
 
     @Override
@@ -617,7 +629,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(
         long committedOffset,
         int committedEpoch,
-        long lastContainedLogTime
+        long lastContainedLogTimestamp
     ) {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, committedEpoch);
         return SnapshotWriter.createWithHeader(
@@ -625,7 +637,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             1024,
             MemoryPool.NONE,
             new MockTime(),
-            lastContainedLogTime,
+            lastContainedLogTimestamp,
             CompressionType.NONE,
             new MetadataRecordSerde()
         );

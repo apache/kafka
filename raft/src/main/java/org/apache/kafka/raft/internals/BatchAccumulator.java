@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.Function;
@@ -207,6 +208,15 @@ public class BatchAccumulator<T> implements Closeable {
         currentBatch = null;
     }
 
+    /**
+     * Append a control batch from a supplied memory record.
+     *
+     * See the {@code valueCreator} parameter description for requirements on this function.
+     *
+     * @param valueCreator a function that uses the passed buffer to create the control
+     *        batch that will be appended. The memory records returned must contain one
+     *        control batch and that control batch have one record.
+     */
     private void appendControlMessage(Function<ByteBuffer, MemoryRecords> valueCreator) {
         appendLock.lock();
         try {
@@ -225,7 +235,7 @@ public class BatchAccumulator<T> implements Closeable {
                     );
                     nextOffset += 1;
                 } catch (Exception e) {
-                    // Release the buffer now since the buffer was not stored in completed for a delay release
+                    // Release the buffer now since the buffer was not stored in completed for a delayed release
                     memoryPool.release(buffer);
                     throw e;
                 }
@@ -263,7 +273,7 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Append a {@link SnapshotHeaderRecord} record to the batch
      *
-     * @param @SnapshotHeaderRecord The message to append
+     * @param snapshotHeaderRecord The message to append
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
     public void appendSnapshotHeaderMessage(
@@ -284,7 +294,7 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Append a {@link SnapshotFooterRecord} record to the batch
      *
-     * @param @SnapshotFooterRecord The message to append
+     * @param snapshotFooterRecord The message to append
      * @param currentTimeMs
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
@@ -465,6 +475,8 @@ public class BatchAccumulator<T> implements Closeable {
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
+            Objects.requireNonNull(data.firstBatch(), "Exptected memory records to contain one batch");
+
             this.baseOffset = baseOffset;
             this.records = Optional.of(records);
             this.numRecords = records.size();
@@ -480,6 +492,8 @@ public class BatchAccumulator<T> implements Closeable {
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
+            Objects.requireNonNull(data.firstBatch(), "Exptected memory records to contain one batch");
+
             this.baseOffset = baseOffset;
             this.records = Optional.empty();
             this.numRecords = numRecords;
@@ -494,6 +508,13 @@ public class BatchAccumulator<T> implements Closeable {
 
         public void release() {
             pool.release(initialBuffer);
+        }
+
+        public long appendTimestamp() {
+            // 1. firstBatch is not null because data has one and only one batch
+            // 2. maxTimestamp is the append time of the batch. This needs to be changed
+            //    to return the LastContainedLogTimestamp of the SnapshotHeaderRecord
+            return data.firstBatch().maxTimestamp();
         }
     }
 

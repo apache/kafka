@@ -336,7 +336,7 @@ public final class QuorumController implements Controller {
         private final ExponentialBackoff exponentialBackoff = new ExponentialBackoff(10, 2, 5000, 0);
         private SnapshotGenerator generator = null;
 
-        void createSnapshotGenerator(long committedOffset, int committedEpoch) {
+        void createSnapshotGenerator(long committedOffset, int committedEpoch, long committedTimestamp) {
             if (generator != null) {
                 throw new RuntimeException("Snapshot generator already exists.");
             }
@@ -351,7 +351,7 @@ public final class QuorumController implements Controller {
             Optional<SnapshotWriter<ApiMessageAndVersion>> writer = raftClient.createSnapshot(
                 committedOffset,
                 committedEpoch,
-                0
+                committedTimestamp
             );
             if (writer.isPresent()) {
                 generator = new SnapshotGenerator(
@@ -674,6 +674,7 @@ public final class QuorumController implements Controller {
 
                         lastCommittedOffset = offset;
                         lastCommittedEpoch = batch.epoch();
+                        lastCommittedTimestamp = batch.appendTimestamp();
                         processedRecordsSize += batch.sizeInBytes();
                     }
 
@@ -735,6 +736,7 @@ public final class QuorumController implements Controller {
 
                     lastCommittedOffset = reader.lastContainedLogOffset();
                     lastCommittedEpoch = reader.lastContainedLogEpoch();
+                    lastCommittedTimestamp = reader.lastContainedLogTimestamp();
                     snapshotRegistry.createSnapshot(lastCommittedOffset);
                 } finally {
                     reader.close();
@@ -899,7 +901,7 @@ public final class QuorumController implements Controller {
             log.info("Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot.",
                 lastCommittedEpoch, lastCommittedOffset, newBytesSinceLastSnapshot);
 
-            snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch);
+            snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch, lastCommittedTimestamp);
             newBytesSinceLastSnapshot = 0;
         }
     }
@@ -1019,6 +1021,11 @@ public final class QuorumController implements Controller {
      * The epoch of the last offset we have committed, or -1 if we have not committed any offsets.
      */
     private int lastCommittedEpoch = -1;
+
+    /**
+     * The timestamp in milliseconds of the last batch we have committed, or -1 if we have not commmitted any offset.
+     */
+    private long lastCommittedTimestamp = -1;
 
     /**
      * If we have called scheduleWrite, this is the last offset we got back from it.
@@ -1293,7 +1300,11 @@ public final class QuorumController implements Controller {
         CompletableFuture<Long> future = new CompletableFuture<>();
         appendControlEvent("beginWritingSnapshot", () -> {
             if (snapshotGeneratorManager.generator == null) {
-                snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch);
+                snapshotGeneratorManager.createSnapshotGenerator(
+                    lastCommittedOffset,
+                    lastCommittedEpoch,
+                    lastCommittedTimestamp
+                );
             }
             future.complete(snapshotGeneratorManager.generator.lastContainedLogOffset());
         });

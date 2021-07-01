@@ -163,7 +163,7 @@ public class RecordTestUtils {
         List<ApiMessageAndVersion> curRecords = new ArrayList<>();
         while (true) {
             if (!iterator.hasNext() || curRecords.size() >= 2) {
-                batches.add(Batch.of(offset, 0, 0, curRecords));
+                batches.add(Batch.data(offset, 0, 0, 0, curRecords));
                 if (!iterator.hasNext()) {
                     break;
                 }

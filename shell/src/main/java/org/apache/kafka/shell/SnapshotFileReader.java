@@ -155,9 +155,10 @@ public final class SnapshotFileReader implements AutoCloseable {
         listener.handleCommit(
             MemoryBatchReader.of(
                 Collections.singletonList(
-                    Batch.of(
+                    Batch.data(
                         batch.baseOffset(),
                         batch.partitionLeaderEpoch(),
+                        batch.maxTimestamp(),
                         batch.sizeInBytes(),
                         messages
                     )
