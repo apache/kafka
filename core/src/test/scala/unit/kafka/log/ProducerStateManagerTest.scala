@@ -20,7 +20,7 @@ package kafka.log
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
+import java.nio.file.{Files, StandardOpenOption}
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -898,6 +898,38 @@ class ProducerStateManagerTest {
 
     stateManager.removeStraySnapshots(Seq(42))
     assertEquals(Seq(42), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
+  }
+
+  /**
+   * Test that removeAndMarkSnapshotForDeletion will rename the SnapshotFile with
+   * the deletion suffix and remove it from the producer state.
+   */
+  @Test
+  def testRemoveAndMarkSnapshotForDeletion(): Unit = {
+    Log.producerSnapshotFile(logDir, 5).createNewFile()
+    val manager = new ProducerStateManager(partition, logDir, time = time)
+    assertTrue(manager.latestSnapshotOffset.isDefined)
+    val snapshot = manager.removeAndMarkSnapshotForDeletion(5).get
+    assertTrue(snapshot.file.toPath.toString.endsWith(Log.DeletedFileSuffix))
+    assertTrue(manager.latestSnapshotOffset.isEmpty)
+  }
+
+  /**
+   * Test that marking a snapshot for deletion when the file has already been deleted
+   * returns None instead of the SnapshotFile. The snapshot file should be removed from
+   * the in-memory state of the ProducerStateManager. This scenario can occur during log
+   * recovery when the intermediate ProducerStateManager instance deletes a file without
+   * updating the state of the "real" ProducerStateManager instance which is passed to the Log.
+   */
+  @Test
+  def testRemoveAndMarkSnapshotForDeletionAlreadyDeleted(): Unit = {
+    val file = Log.producerSnapshotFile(logDir, 5)
+    file.createNewFile()
+    val manager = new ProducerStateManager(partition, logDir, time = time)
+    assertTrue(manager.latestSnapshotOffset.isDefined)
+    Files.delete(file.toPath)
+    assertTrue(manager.removeAndMarkSnapshotForDeletion(5).isEmpty)
+    assertTrue(manager.latestSnapshotOffset.isEmpty)
   }
 
   private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {
