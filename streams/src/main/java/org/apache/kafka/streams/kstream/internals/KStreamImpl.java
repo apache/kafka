@@ -58,7 +58,7 @@ import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode.UnoptimizableRepartitionNodeBuilder;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.kstream.ForeachProcessor;
@@ -1215,7 +1215,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final KTableValueGetterSupplier<KG, VG> valueGetterSupplier =
             ((GlobalKTableImpl<KG, VG>) globalTable).valueGetterSupplier();
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, LEFTJOIN_NAME);
-        final ProcessorSupplier<K, V> processorSupplier = new KStreamGlobalKTableJoin<>(
+        // Old PAPI. Needs to be migrated.
+        @SuppressWarnings("deprecation")
+        final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> processorSupplier = new KStreamGlobalKTableJoin<>(
             valueGetterSupplier,
             joiner,
             keySelector,
@@ -1251,7 +1253,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final NamedInternal renamed = new NamedInternal(joinedInternal.name());
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
-        final ProcessorSupplier<K, V> processorSupplier = new KStreamKTableJoin<>(
+        // Old PAPI. Needs to be migrated.
+        @SuppressWarnings("deprecation")
+        final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> processorSupplier = new KStreamKTableJoin<>(
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier(),
             joiner,
             leftJoin);
@@ -1466,13 +1470,42 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
+    @Deprecated
+    public void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
                         final String... stateStoreNames) {
         process(processorSupplier, Named.as(builder.newProcessorName(PROCESSOR_NAME)), stateStoreNames);
     }
 
     @Override
-    public void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
+    public void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
+                        final String... stateStoreNames) {
+        process(processorSupplier, Named.as(builder.newProcessorName(PROCESSOR_NAME)), stateStoreNames);
+    }
+
+    @Override
+    @Deprecated
+    public void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
+                        final Named named,
+                        final String... stateStoreNames) {
+        Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");
+        Objects.requireNonNull(named, "named can't be null");
+        Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
+        ApiUtils.checkSupplier(processorSupplier);
+        for (final String stateStoreName : stateStoreNames) {
+            Objects.requireNonNull(stateStoreName, "stateStoreNames can't be null");
+        }
+
+        final String name = new NamedInternal(named).name();
+        final StatefulProcessorNode<? super K, ? super V> processNode = new StatefulProcessorNode<>(
+            name,
+            new ProcessorParameters<>(processorSupplier, name),
+            stateStoreNames);
+
+        builder.addGraphNode(graphNode, processNode);
+    }
+
+    @Override
+    public void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
                         final Named named,
                         final String... stateStoreNames) {
         Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");

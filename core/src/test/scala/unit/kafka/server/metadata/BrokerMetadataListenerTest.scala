@@ -25,9 +25,12 @@ import kafka.server.RaftReplicaManager
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.metadata.{ConfigRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
+import org.apache.kafka.common.protocol.ObjectSerializationCache
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.Batch
+import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Assertions._
@@ -51,6 +54,7 @@ class BrokerMetadataListenerTest {
   private val txnCoordinator = mock(classOf[TransactionCoordinator])
   private val clientQuotaManager = mock(classOf[ClientQuotaMetadataManager])
   private var lastMetadataOffset = 0L
+  private val metadataSerde = new MetadataRecordSerde
 
   private val listener = new BrokerMetadataListener(
     brokerId,
@@ -77,6 +81,11 @@ class BrokerMetadataListenerTest {
     deleteTopic(topicId, topic, numPartitions, localPartitions)
   }
 
+  @Test
+  def testEmptyBatchReader(): Unit = {
+    applyBatch(List.empty);
+  }
+
   private def deleteTopic(
     topicId: Uuid,
     topic: String,
@@ -86,9 +95,7 @@ class BrokerMetadataListenerTest {
     val deleteRecord = new RemoveTopicRecord()
       .setTopicId(topicId)
 
-    applyBatch(List[ApiMessageAndVersion](
-      new ApiMessageAndVersion(deleteRecord, 0.toShort),
-    ))
+    applyBatch(List(new ApiMessageAndVersion(deleteRecord, 0.toShort)))
     assertFalse(metadataCache.contains(topic))
     assertEquals(new Properties, configRepository.topicConfig(topic))
 
@@ -114,19 +121,28 @@ class BrokerMetadataListenerTest {
     records: List[ApiMessageAndVersion]
   ): Unit = {
     val baseOffset = lastMetadataOffset + 1
-    lastMetadataOffset += records.size
-    listener.execCommits(
-      new MemoryBatchReader(
+    // For testing purposes if "records" is empty just assume that there
+    // is one control record in the batch
+    lastMetadataOffset += Math.max(1, records.size)
+
+    val batchReader = if (records.isEmpty) {
+      MemoryBatchReader.empty[ApiMessageAndVersion](baseOffset, baseOffset, _ => ())
+    } else {
+      val objectCache = new ObjectSerializationCache()
+      MemoryBatchReader.of(
         List(
           Batch.of(
             baseOffset,
             leaderEpoch,
+            records.map(metadataSerde.recordSize(_, objectCache)).sum,
             records.asJava
           )
         ).asJava,
-        reader => ()
+        (_: BatchReader[ApiMessageAndVersion]) => ()
       )
-    )
+    }
+
+    listener.execCommits(batchReader)
   }
 
   private def createAndAssert(

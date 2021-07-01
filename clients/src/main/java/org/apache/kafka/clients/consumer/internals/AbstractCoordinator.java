@@ -52,6 +52,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
@@ -138,6 +139,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private RequestFuture<ByteBuffer> joinFuture = null;
     private RequestFuture<Void> findCoordinatorFuture = null;
     private volatile RuntimeException fatalFindCoordinatorException = null;
+    private volatile boolean batchFindCoordinator = true;
     private Generation generation = Generation.NO_GENERATION;
     private long lastRebalanceStartMs = -1L;
     private long lastRebalanceEndMs = -1L;
@@ -813,34 +815,56 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     private RequestFuture<Void> sendFindCoordinatorRequest(Node node) {
         // initiate the group metadata request
-        log.debug("Sending FindCoordinator request to broker {}", node);
-        FindCoordinatorRequest.Builder requestBuilder =
-                new FindCoordinatorRequest.Builder(
-                        new FindCoordinatorRequestData()
-                            .setKeyType(CoordinatorType.GROUP.id())
-                            .setKey(this.rebalanceConfig.groupId));
+        log.debug("Sending FindCoordinator request to broker {} with batch={}", node, batchFindCoordinator);
+        FindCoordinatorRequestData data = new FindCoordinatorRequestData()
+                .setKeyType(CoordinatorType.GROUP.id());
+        if (batchFindCoordinator) {
+            data.setCoordinatorKeys(Collections.singletonList(this.rebalanceConfig.groupId));
+        } else {
+            data.setKey(this.rebalanceConfig.groupId);
+        }
+        FindCoordinatorRequest.Builder requestBuilder = new FindCoordinatorRequest.Builder(data);
         return client.send(node, requestBuilder)
-                .compose(new FindCoordinatorResponseHandler());
+                .compose(new FindCoordinatorResponseHandler(batchFindCoordinator));
     }
 
     private class FindCoordinatorResponseHandler extends RequestFutureAdapter<ClientResponse, Void> {
+        private boolean batch;
+        FindCoordinatorResponseHandler(boolean batch) {
+            this.batch = batch;
+        }
 
         @Override
         public void onSuccess(ClientResponse resp, RequestFuture<Void> future) {
             log.debug("Received FindCoordinator response {}", resp);
 
             FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) resp.responseBody();
-            Errors error = findCoordinatorResponse.error();
+            if (batch && findCoordinatorResponse.data().coordinators().size() != 1) {
+                log.error("Group coordinator lookup failed: Invalid response containing more than a single coordinator");
+                future.raise(new IllegalStateException("Group coordinator lookup failed: Invalid response containing more than a single coordinator"));
+            }
+            Errors error = batch
+                    ? Errors.forCode(findCoordinatorResponse.data().coordinators().get(0).errorCode())
+                    : findCoordinatorResponse.error();
             if (error == Errors.NONE) {
                 synchronized (AbstractCoordinator.this) {
+                    int nodeId = batch
+                            ? findCoordinatorResponse.data().coordinators().get(0).nodeId()
+                            : findCoordinatorResponse.data().nodeId();
+                    String host = batch
+                            ? findCoordinatorResponse.data().coordinators().get(0).host()
+                            : findCoordinatorResponse.data().host();
+                    int port = batch
+                            ? findCoordinatorResponse.data().coordinators().get(0).port()
+                            : findCoordinatorResponse.data().port();
                     // use MAX_VALUE - node.id as the coordinator id to allow separate connections
                     // for the coordinator in the underlying network client layer
-                    int coordinatorConnectionId = Integer.MAX_VALUE - findCoordinatorResponse.data().nodeId();
+                    int coordinatorConnectionId = Integer.MAX_VALUE - nodeId;
 
                     AbstractCoordinator.this.coordinator = new Node(
                             coordinatorConnectionId,
-                            findCoordinatorResponse.data().host(),
-                            findCoordinatorResponse.data().port());
+                            host,
+                            port);
                     log.info("Discovered group coordinator {}", coordinator);
                     client.tryConnect(coordinator);
                     heartbeat.resetSessionTimeout();
@@ -849,7 +873,10 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
             } else {
-                log.debug("Group coordinator lookup failed: {}", findCoordinatorResponse.data().errorMessage());
+                String errorMessage = batch
+                        ? findCoordinatorResponse.data().coordinators().get(0).errorMessage()
+                        : findCoordinatorResponse.data().errorMessage();
+                log.debug("Group coordinator lookup failed: {}", errorMessage);
                 future.raise(error);
             }
         }
@@ -858,6 +885,12 @@ public abstract class AbstractCoordinator implements Closeable {
         public void onFailure(RuntimeException e, RequestFuture<Void> future) {
             log.debug("FindCoordinator request failed due to {}", e.toString());
 
+            if (e instanceof NoBatchedFindCoordinatorsException) {
+                batchFindCoordinator = false;
+                clearFindCoordinatorFuture();
+                lookupCoordinator();
+                return;
+            } 
             if (!(e instanceof RetriableException)) {
                 // Remember the exception if fatal so we can ensure it gets thrown by the main thread
                 fatalFindCoordinatorException = e;
@@ -1119,12 +1152,14 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                 // since we may be sending the request during rebalance, we should check
                 // this case and ignore the REBALANCE_IN_PROGRESS error
-                if (state == MemberState.STABLE) {
-                    requestRejoin("group is already rebalancing");
-                    future.raise(error);
-                } else {
-                    log.debug("Ignoring heartbeat response with error {} during {} state", error, state);
-                    future.complete(null);
+                synchronized (AbstractCoordinator.this) {
+                    if (state == MemberState.STABLE) {
+                        requestRejoin("group is already rebalancing");
+                        future.raise(error);
+                    } else {
+                        log.debug("Ignoring heartbeat response with error {} during {} state", error, state);
+                        future.complete(null);
+                    }
                 }
             } else if (error == Errors.ILLEGAL_GENERATION ||
                        error == Errors.UNKNOWN_MEMBER_ID ||

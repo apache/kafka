@@ -62,10 +62,12 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation")
 public class KStreamWindowAggregateTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final String threadId = Thread.currentThread().getName();
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testAggBasic() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -143,6 +145,7 @@ public class KStreamWindowAggregateTest {
         );
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testJoin() {
         final StreamsBuilder builder = new StreamsBuilder();

@@ -53,6 +53,10 @@ public final class MessageSpec {
         this.type = Objects.requireNonNull(type);
         this.commonStructs = commonStructs == null ? Collections.emptyList() :
                 Collections.unmodifiableList(new ArrayList<>(commonStructs));
+        if (flexibleVersions == null) {
+            throw new RuntimeException("You must specify a value for flexibleVersions. " +
+                    "Please use 0+ for all new messages.");
+        }
         this.flexibleVersions = Versions.parse(flexibleVersions, Versions.NONE);
         if ((!this.flexibleVersions().empty()) &&
                 (this.flexibleVersions.highest() < Short.MAX_VALUE)) {

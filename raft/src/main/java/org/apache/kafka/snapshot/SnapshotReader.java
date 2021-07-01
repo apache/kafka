@@ -18,6 +18,9 @@
 package org.apache.kafka.snapshot;
 
 import java.util.Iterator;
+import java.util.Optional;
+import java.util.NoSuchElementException;
+
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
@@ -30,10 +33,20 @@ import org.apache.kafka.raft.internals.RecordsIterator;
  * A snapshot reader can be used to scan through all of the objects T in a snapshot. It
  * is assumed that the content of the snapshot represents all of the objects T for the topic
  * partition from offset 0 up to but not including the end offset in the snapshot id.
+ *
+ * The offsets ({@code baseOffset()} and {@code lastOffset()} stored in {@code Batch<T>}
+ * objects returned by this iterator are independent of the offset of the records in the
+ * log used to generate this batch.
+ *
+ * Use {@code lastContainedLogOffset()} and {@code lastContainedLogEpoch()} to query which
+ * offsets and epoch from the log are included in this snapshot. Both of these values are
+ * inclusive.
  */
 public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>> {
     private final OffsetAndEpoch snapshotId;
     private final RecordsIterator<T> iterator;
+
+    private Optional<Batch<T>> nextBatch = Optional.empty();
 
     private SnapshotReader(
         OffsetAndEpoch snapshotId,
@@ -50,14 +63,39 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
         return snapshotId;
     }
 
+    /**
+     * Returns the last log offset which is represented in the snapshot.
+     */
+    public long lastContainedLogOffset() {
+        return snapshotId.offset - 1;
+    }
+
+    /**
+     * Returns the epoch of the last log offset which is represented in the snapshot.
+     */
+    public int lastContainedLogEpoch() {
+        return snapshotId.epoch;
+    }
+
     @Override
     public boolean hasNext() {
-        return iterator.hasNext();
+        if (!nextBatch.isPresent()) {
+            nextBatch = nextBatch();
+        }
+
+        return nextBatch.isPresent();
     }
 
     @Override
     public Batch<T> next() {
-        return iterator.next();
+        if (!hasNext()) {
+            throw new NoSuchElementException("Snapshot reader doesn't have any more elements");
+        }
+
+        Batch<T> batch = nextBatch.get();
+        nextBatch = Optional.empty();
+
+        return batch;
     }
 
     /**
@@ -77,5 +115,20 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
             snapshot.snapshotId(),
             new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize)
         );
+    }
+
+    /**
+     * Returns the next non-control Batch
+     */
+    private Optional<Batch<T>> nextBatch() {
+        while (iterator.hasNext()) {
+            Batch<T> batch = iterator.next();
+
+            if (!batch.records().isEmpty()) {
+                return Optional.of(batch);
+            }
+        }
+
+        return Optional.empty();
     }
 }

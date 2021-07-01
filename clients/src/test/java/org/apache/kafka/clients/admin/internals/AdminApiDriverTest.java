@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.clients.admin.internals.AdminApiDriver.RequestSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.LookupResult;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -26,6 +27,7 @@ import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -35,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -42,6 +45,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -321,8 +325,44 @@ class AdminApiDriverTest {
         assertEquals(1, retryLookupSpecs.size());
 
         RequestSpec<String> retryLookupSpec = retryLookupSpecs.get(0);
-        assertEquals(ctx.time.milliseconds() + RETRY_BACKOFF_MS, retryLookupSpec.nextAllowedTryMs);
+        assertEquals(ctx.time.milliseconds(), retryLookupSpec.nextAllowedTryMs);
         assertEquals(1, retryLookupSpec.tries);
+    }
+
+    @Test
+    public void testRetryLookupAndDisableBatchAfterNoBatchedFindCoordinatorsException() {
+        MockTime time = new MockTime();
+        LogContext lc = new LogContext();
+        Set<String> groupIds = new HashSet<>(Arrays.asList("g1", "g2"));
+        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(lc);
+        AdminApiFuture<CoordinatorKey, Void> future = AdminApiFuture.forKeys(
+                groupIds.stream().map(g -> CoordinatorKey.byGroupId(g)).collect(Collectors.toSet()));
+
+        AdminApiDriver<CoordinatorKey, Void> driver = new AdminApiDriver<>(
+            handler,
+            future,
+            time.milliseconds() + API_TIMEOUT_MS,
+            RETRY_BACKOFF_MS,
+            new LogContext()
+        );
+
+        assertTrue(((CoordinatorStrategy) handler.lookupStrategy()).batch);
+        List<RequestSpec<CoordinatorKey>> requestSpecs = driver.poll();
+        // Expect CoordinatorStrategy to try resolving all coordinators in a single request
+        assertEquals(1, requestSpecs.size());
+
+        RequestSpec<CoordinatorKey> requestSpec = requestSpecs.get(0);
+        driver.onFailure(time.milliseconds(), requestSpec, new NoBatchedFindCoordinatorsException("message"));
+        assertFalse(((CoordinatorStrategy) handler.lookupStrategy()).batch);
+
+        // Batching is now disabled, so we now have a request per groupId
+        List<RequestSpec<CoordinatorKey>> retryLookupSpecs = driver.poll();
+        assertEquals(groupIds.size(), retryLookupSpecs.size());
+        // These new requests are treated a new requests and not retries
+        for (RequestSpec<CoordinatorKey> retryLookupSpec : retryLookupSpecs) {
+            assertEquals(0, retryLookupSpec.nextAllowedTryMs);
+            assertEquals(0, retryLookupSpec.tries);
+        }
     }
 
     @Test
@@ -417,7 +457,7 @@ class AdminApiDriverTest {
 
         RequestSpec<String> retrySpec = retrySpecs.get(0);
         assertEquals(1, retrySpec.tries);
-        assertEquals(ctx.time.milliseconds() + RETRY_BACKOFF_MS, retrySpec.nextAllowedTryMs);
+        assertEquals(ctx.time.milliseconds(), retrySpec.nextAllowedTryMs);
     }
 
     @Test
@@ -433,7 +473,7 @@ class AdminApiDriverTest {
         RequestSpec<String> requestSpec = requestSpecs.get(0);
         assertEquals(0, requestSpec.tries);
         assertEquals(0L, requestSpec.nextAllowedTryMs);
-        ctx.assertResponse(requestSpec, emptyFulfillment);
+        ctx.assertResponse(requestSpec, emptyFulfillment, Node.noNode());
 
         List<RequestSpec<String>> retrySpecs = ctx.driver.poll();
         assertEquals(1, retrySpecs.size());
@@ -580,7 +620,7 @@ class AdminApiDriverTest {
             // The response is just a placeholder. The result is all we are interested in
             MetadataResponse response = new MetadataResponse(new MetadataResponseData(),
                 ApiKeys.METADATA.latestVersion());
-            driver.onResponse(time.milliseconds(), requestSpec, response);
+            driver.onResponse(time.milliseconds(), requestSpec, response, Node.noNode());
 
             result.mappedKeys.forEach((key, brokerId) -> {
                 assertMappedKey(this, key, brokerId);
@@ -593,7 +633,8 @@ class AdminApiDriverTest {
 
         private void assertResponse(
             RequestSpec<String> requestSpec,
-            ApiResult<String, Long> result
+            ApiResult<String, Long> result,
+            Node node
         ) {
             int brokerId = requestSpec.scope.destinationBrokerId().orElseThrow(() ->
                 new AssertionError("Fulfillment requests must specify a target brokerId"));
@@ -606,7 +647,7 @@ class AdminApiDriverTest {
             MetadataResponse response = new MetadataResponse(new MetadataResponseData(),
                 ApiKeys.METADATA.latestVersion());
 
-            driver.onResponse(time.milliseconds(), requestSpec, response);
+            driver.onResponse(time.milliseconds(), requestSpec, response, node);
 
             result.unmappedKeys.forEach(key -> {
                 assertUnmappedKey(this, key);
@@ -649,7 +690,7 @@ class AdminApiDriverTest {
                     assertLookupResponse(requestSpec, result);
                 } else if (expectedRequests.containsKey(keys)) {
                     ApiResult<String, Long> result = expectedRequests.get(keys);
-                    assertResponse(requestSpec, result);
+                    assertResponse(requestSpec, result, Node.noNode());
                 } else {
                     fail("Unexpected request for keys " + keys);
                 }
@@ -723,7 +764,7 @@ class AdminApiDriverTest {
         }
 
         @Override
-        public ApiResult<K, V> handleResponse(int brokerId, Set<K> keys, AbstractResponse response) {
+        public ApiResult<K, V> handleResponse(Node broker, Set<K> keys, AbstractResponse response) {
             return Optional.ofNullable(expectedRequests.get(keys)).orElseThrow(() ->
                 new AssertionError("Unexpected fulfillment request for keys " + keys)
             );

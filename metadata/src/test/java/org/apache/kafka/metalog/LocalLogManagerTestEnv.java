@@ -133,6 +133,18 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return logManagers;
     }
 
+    public RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
+        return shared.waitForSnapshot(committedOffset);
+    }
+
+    public RawSnapshotReader waitForLatestSnapshot() throws InterruptedException {
+        return shared.waitForLatestSnapshot();
+    }
+
+    public long appendedBytes() {
+        return shared.appendedBytes();
+    }
+
     @Override
     public void close() throws InterruptedException {
         try {

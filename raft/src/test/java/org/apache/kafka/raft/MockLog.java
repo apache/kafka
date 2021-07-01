@@ -48,6 +48,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class MockLog implements ReplicatedLog {
@@ -184,9 +185,17 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public OffsetAndEpoch endOffsetForEpoch(int epoch) {
+        return lastOffsetAndEpochFiltered(epochStartOffset -> epochStartOffset.epoch <= epoch);
+    }
+
+    private OffsetAndEpoch epochForEndOffset(long endOffset) {
+        return lastOffsetAndEpochFiltered(epochStartOffset -> epochStartOffset.startOffset < endOffset);
+    }
+
+    private OffsetAndEpoch lastOffsetAndEpochFiltered(Predicate<EpochStartOffset> predicate) {
         int epochLowerBound = earliestSnapshotId().map(id -> id.epoch).orElse(0);
         for (EpochStartOffset epochStartOffset : epochStartOffsets) {
-            if (epochStartOffset.epoch > epoch) {
+            if (!predicate.test(epochStartOffset)) {
                 return new OffsetAndEpoch(epochStartOffset.startOffset, epochLowerBound);
             }
             epochLowerBound = epochStartOffset.epoch;
@@ -405,10 +414,53 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId) {
-        return new MockRawSnapshotWriter(snapshotId, buffer -> {
-            snapshots.putIfAbsent(snapshotId, new MockRawSnapshotReader(snapshotId, buffer));
-        });
+    public Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId) {
+        long highWatermarkOffset = highWatermark().offset;
+        if (snapshotId.offset > highWatermarkOffset) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Cannot create a snapshot with an id (%s) greater than the high-watermark (%s)",
+                    snapshotId,
+                    highWatermarkOffset
+                )
+            );
+        }
+
+        if (snapshotId.offset < logStartOffset()) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Cannot create a snapshot with and id (%s) less than the log start offset (%s)",
+                    snapshotId,
+                    logStartOffset()
+                )
+            );
+        }
+
+        ValidOffsetAndEpoch validOffsetAndEpoch = validateOffsetAndEpoch(snapshotId.offset, snapshotId.epoch);
+        if (validOffsetAndEpoch.kind() != ValidOffsetAndEpoch.Kind.VALID) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Snapshot id (%s) is not valid according to the log: %s",
+                    snapshotId,
+                    validOffsetAndEpoch
+                )
+            );
+        }
+
+        return storeSnapshot(snapshotId);
+    }
+
+    @Override
+    public Optional<RawSnapshotWriter> storeSnapshot(OffsetAndEpoch snapshotId) {
+        if (snapshots.containsKey(snapshotId)) {
+            return Optional.empty();
+        } else {
+            return Optional.of(
+                new MockRawSnapshotWriter(snapshotId, buffer -> {
+                    snapshots.putIfAbsent(snapshotId, new MockRawSnapshotReader(snapshotId, buffer));
+                })
+            );
+        }
     }
 
     @Override
@@ -614,6 +666,11 @@ public class MockLog implements ReplicatedLog {
         private EpochStartOffset(int epoch, long startOffset) {
             this.epoch = epoch;
             this.startOffset = startOffset;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("EpochStartOffset(epoch=%s, startOffset=%s)", epoch, startOffset);
         }
     }
 }

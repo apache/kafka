@@ -22,6 +22,8 @@ import org.slf4j.Logger;
 
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.record.ControlRecordUtils;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -51,8 +53,10 @@ public class LeaderState<T> implements EpochState {
     private final Map<Integer, ReplicaState> observerStates = new HashMap<>();
     private final Set<Integer> grantingVoters = new HashSet<>();
     private final Logger log;
-
     private final BatchAccumulator<T> accumulator;
+
+    // This is volatile because resignation can be requested from an external thread.
+    private volatile boolean resignRequested = false;
 
     protected LeaderState(
         int localId,
@@ -92,12 +96,21 @@ public class LeaderState<T> implements EpochState {
         List<Voter> grantingVoters = convertToVoters(this.grantingVoters());
 
         LeaderChangeMessage leaderChangeMessage = new LeaderChangeMessage()
+            .setVersion(ControlRecordUtils.LEADER_CHANGE_SCHEMA_HIGHEST_VERSION)
             .setLeaderId(this.election().leaderId())
             .setVoters(voters)
             .setGrantingVoters(grantingVoters);
         
         accumulator.appendLeaderChangeMessage(leaderChangeMessage, currentTimeMs);
         accumulator.forceDrain();
+    }
+
+    public boolean isResignRequested() {
+        return resignRequested;
+    }
+
+    public void requestResign() {
+        this.resignRequested = true;
     }
 
     @Override

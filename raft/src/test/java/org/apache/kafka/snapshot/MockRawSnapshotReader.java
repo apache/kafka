@@ -54,4 +54,9 @@ public final class MockRawSnapshotReader implements RawSnapshotReader {
     public Records records() {
         return data;
     }
+
+    @Override
+    public String toString() {
+        return String.format("MockRawSnapshotReader(snapshotId=%s, data=%s)", snapshotId, data);
+    }
 }
