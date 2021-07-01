@@ -16,7 +16,7 @@
   */
 package kafka.admin
 
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collection, Collections, Optional, Properties}
 
 import kafka.admin.TopicCommand.{TopicCommandOptions, TopicService}
 import kafka.integration.KafkaServerTestHarness
@@ -773,7 +773,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     when(adminClient.listTopics(any())).thenReturn(listResult)
 
     val result = AdminClientTestUtils.deleteTopicsResult(testTopicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception())
-    when(adminClient.deleteTopics(any(), any())).thenReturn(result)
+    when(adminClient.deleteTopics(any[Collection[String]](), any())).thenReturn(result)
 
     val exception = assertThrows(classOf[ExecutionException],
       () => topicService.deleteTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
