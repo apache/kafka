@@ -4244,7 +4244,9 @@ public class KafkaAdminClient extends AdminClient {
 
                 final List<ListOffsetsTopic> partitionsToQuery = new ArrayList<>(entry.getValue().values());
 
-                private boolean supportsMaxTimestamp = true;
+                private boolean supportsMaxTimestamp = partitionsToQuery.stream()
+                        .flatMap(t -> t.partitions().stream())
+                        .anyMatch(p -> p.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP);
 
                 @Override
                 ListOffsetsRequest.Builder createRequest(int timeoutMs) {
@@ -4315,7 +4317,6 @@ public class KafkaAdminClient extends AdminClient {
                         supportsMaxTimestamp = false;
 
                         // fail any unsupported futures and remove partitions from the downgraded retry
-                        boolean foundMaxTimestampPartition = false;
                         Iterator<ListOffsetsTopic> topicIterator = partitionsToQuery.iterator();
                         while (topicIterator.hasNext()) {
                             ListOffsetsTopic topic = topicIterator.next();
@@ -4323,7 +4324,6 @@ public class KafkaAdminClient extends AdminClient {
                             while (partitionIterator.hasNext()) {
                                 ListOffsetsPartition partition = partitionIterator.next();
                                 if (partition.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP) {
-                                    foundMaxTimestampPartition = true;
                                     futures.get(new TopicPartition(topic.name(), partition.partitionIndex()))
                                         .completeExceptionally(new UnsupportedVersionException(
                                             "Broker " + brokerId + " does not support MAX_TIMESTAMP offset spec"));
@@ -4334,7 +4334,7 @@ public class KafkaAdminClient extends AdminClient {
                                 topicIterator.remove();
                             }
                         }
-                        return foundMaxTimestampPartition && !partitionsToQuery.isEmpty();
+                        return !partitionsToQuery.isEmpty();
                     }
                     return false;
                 }
