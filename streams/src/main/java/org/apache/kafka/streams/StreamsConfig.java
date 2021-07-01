@@ -952,6 +952,18 @@ public class StreamsConfig extends AbstractConfig {
                 return defaultValue;
             }
         }
+
+        public static long getLong(final Map<String, Object> configs, final String key, final long defaultValue) {
+            final Object value = configs.getOrDefault(key, defaultValue);
+            if (value instanceof Number) {
+                return ((Number) value).longValue();
+            } else if (value instanceof String) {
+                return Long.parseLong((String) value);
+            } else {
+                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a numeric value.");
+                return defaultValue;
+            }
+        }
     }
 
     /**

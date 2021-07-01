@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
@@ -105,13 +106,13 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
                 outerJoinWindowStore = outerJoinWindowName.map(context::getStateStore);
                 sharedTimeTracker.nextTimeToEmit = context.currentSystemTimeMs();
 
-                final Object emitIntervalConfig = context.appConfigs()
-                    .get(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX);
-                if (emitIntervalConfig instanceof Number) {
-                    sharedTimeTracker.setEmitInterval(((Number) emitIntervalConfig).longValue());
-                } else if (emitIntervalConfig instanceof String) {
-                    sharedTimeTracker.setEmitInterval(Long.parseLong((String) emitIntervalConfig));
-                }
+                sharedTimeTracker.setEmitInterval(
+                    StreamsConfig.InternalConfig.getLong(
+                        context.appConfigs(),
+                        EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
+                        100L
+                    )
+                );
             }
         }
 
