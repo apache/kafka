@@ -109,8 +109,10 @@ class ConsumerGroupServiceTest {
       topicPartitionOffsets => topicPartitionOffsets != null && topicPartitionOffsets.keySet.asScala.equals(expectedPartitions)
     }
 
+    val future = new KafkaFutureImpl[ConsumerGroupDescription]()
+    future.complete(consumerGroupDescription)
     when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any()))
-      .thenReturn(new DescribeConsumerGroupsResult(Collections.singletonMap(group, KafkaFuture.completedFuture(consumerGroupDescription))))
+      .thenReturn(new DescribeConsumerGroupsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future)))
     when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(group), any()))
       .thenReturn(AdminClientTestUtils.listConsumerGroupOffsetsResult(commitedOffsets))
     when(admin.listOffsets(

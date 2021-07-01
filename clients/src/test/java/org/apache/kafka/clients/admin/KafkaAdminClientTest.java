@@ -3155,6 +3155,8 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Arrays.asList(findCoordinatorV3, describeGroups)));
 
+            // dummy response for MockCLient to handle the UnsupportedVersionException correctly
+            env.kafkaClient().prepareResponse(null);
             //Retriable FindCoordinatorResponse errors should be retried
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
@@ -3175,6 +3177,8 @@ public class KafkaAdminClientTest {
             final KafkaFuture<Void> results = result.deletedGroups().get("groupId");
             assertNull(results.get());
 
+            // dummy response for MockCLient to handle the UnsupportedVersionException correctly
+            env.kafkaClient().prepareResponse(null);
             //should throw error for non-retriable errors
             env.kafkaClient().prepareResponse(
                 prepareOldFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
@@ -3182,6 +3186,8 @@ public class KafkaAdminClientTest {
             final DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
             TestUtils.assertFutureError(errorResult.deletedGroups().get("groupId"), GroupAuthorizationException.class);
 
+            // dummy response for MockCLient to handle the UnsupportedVersionException correctly
+            env.kafkaClient().prepareResponse(null);
             //Retriable errors should be retried
             env.kafkaClient().prepareResponse(
                 prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
