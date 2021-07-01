@@ -2651,7 +2651,7 @@ object Log extends Logging {
    * @tparam T the type of object held within the iterator
    * @return Some(iterator.next) if a next element exists, None otherwise.
    */
-  def nextOption[T](iterator: Iterator[T]): Option[T] = {
+  private def nextOption[T](iterator: Iterator[T]): Option[T] = {
     if (iterator.hasNext)
       Some(iterator.next())
     else

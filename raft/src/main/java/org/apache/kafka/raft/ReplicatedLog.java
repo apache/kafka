@@ -175,6 +175,14 @@ public interface ReplicatedLog extends AutoCloseable {
     void updateHighWatermark(LogOffsetMetadata offsetMetadata);
 
     /**
+     * Delete all snapshots prior to the given snapshot
+     *
+     * The replicated log's start offset can be increased and older segments can be deleted when
+     * there is a snapshot greater than the current log start offset.
+     */
+    boolean deleteBeforeSnapshot(OffsetAndEpoch snapshotId);
+
+    /**
      * Flush the current log to disk.
      */
     void flush();

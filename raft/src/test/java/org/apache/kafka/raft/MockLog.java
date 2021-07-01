@@ -488,6 +488,7 @@ public class MockLog implements ReplicatedLog {
     @Override
     public void onSnapshotFrozen(OffsetAndEpoch snapshotId) {}
 
+    @Override
     public boolean deleteBeforeSnapshot(OffsetAndEpoch snapshotId) {
         if (logStartOffset() > snapshotId.offset) {
             throw new OffsetOutOfRangeException(

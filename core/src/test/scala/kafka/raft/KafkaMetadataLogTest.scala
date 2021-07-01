@@ -284,7 +284,7 @@ final class KafkaMetadataLogTest {
     append(log, offset, epoch)
     log.updateHighWatermark(new LogOffsetMetadata(offset))
 
-    assertFalse(log.deleteSnapshot(new OffsetAndEpoch(1L, epoch), new OffsetAndEpoch(2L, epoch)))
+    assertFalse(log.deleteBeforeSnapshot(new OffsetAndEpoch(2L, epoch)))
     assertEquals(0, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(offset, log.endOffset().offset)
@@ -863,7 +863,7 @@ object KafkaMetadataLogTest {
     }
   }
 
-  val DefaultMetadataLogConfig = new MetadataLogConfig(
+  val DefaultMetadataLogConfig = MetadataLogConfig(
     logSegmentBytes = 100 * 1024,
     logSegmentMillis = 10 * 1000,
     retentionMaxBytes = 100 * 1024,

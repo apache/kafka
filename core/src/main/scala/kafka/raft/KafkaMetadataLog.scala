@@ -312,32 +312,35 @@ final class KafkaMetadataLog private (
   }
 
   /**
-   * Delete a snapshot, advance the log start offset, and clean old log segments. This will only happen if the
-   * following invariants all hold true:
+   * Delete snapshots that come before a given snapshot ID. This is done by advancing the log start offset to the given
+   * snapshot and cleaning old log segments.
    *
-   * <li>This is not the latest snapshot (i.e., another snapshot proceeds this one)</li>
-   * <li>The offset of the next snapshot is greater than the log start offset</li>
-   * <li>The log can be advanced to the offset of the next snapshot</li>
+   * This will only happen if the following invariants all hold true:
    *
-   * This method is not thread safe and assumes a lock on the snapshots collection is held
+   * <li>The given snapshot precedes the latest snapshot</li>
+   * <li>The offset of the given snapshot is greater than the log start offset</li>
+   * <li>The log layer can advance the offset to the given snapshot</li>
+   *
+   * This method is thread-safe
    */
-  private[raft] def deleteSnapshot(snapshotId: OffsetAndEpoch, nextSnapshotId: OffsetAndEpoch): Boolean = {
-    if (snapshots.contains(snapshotId) &&
-        snapshots.contains(nextSnapshotId) &&
-        startOffset < nextSnapshotId.offset &&
-        snapshotId.offset < nextSnapshotId.offset &&
-        log.maybeIncrementLogStartOffset(nextSnapshotId.offset, SnapshotGenerated)) {
-      log.deleteOldSegments()
-      val forgotten = mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]]
-      snapshots.remove(snapshotId) match {
-        case Some(removedSnapshot) => forgotten.put(snapshotId, removedSnapshot)
-        case None => throw new IllegalStateException(s"Could not remove snapshot $snapshotId from our cache.")
+  override def deleteBeforeSnapshot(snapshotId: OffsetAndEpoch): Boolean = {
+    val (deleted, forgottenSnapshots) = snapshots synchronized {
+      latestSnapshotId().asScala match {
+        case Some(latestSnapshotId) if
+          snapshots.contains(snapshotId) &&
+          startOffset < snapshotId.offset &&
+          snapshotId.offset <= latestSnapshotId.offset &&
+          log.maybeIncrementLogStartOffset(snapshotId.offset, SnapshotGenerated) =>
+            // Delete all segments that have a "last offset" less than the log start offset
+            log.deleteOldSegments()
+            // Remove older snapshots from the snapshots cache
+            (true, forgetSnapshotsBefore(snapshotId))
+        case _ =>
+            (false, mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]])
       }
-      removeSnapshots(forgotten)
-      true
-    } else {
-      false
     }
+    removeSnapshots(forgottenSnapshots)
+    deleted
   }
 
   /**
@@ -400,13 +403,13 @@ final class KafkaMetadataLog private (
     var didClean = false
     snapshots.keys.toSeq.sliding(2).toSeq.takeWhile {
       case Seq(snapshot: OffsetAndEpoch, nextSnapshot: OffsetAndEpoch) =>
-        if (predicate(snapshot) && deleteSnapshot(snapshot, nextSnapshot)) {
+        if (predicate(snapshot) && deleteBeforeSnapshot(nextSnapshot)) {
           didClean = true
           true
         } else {
           false
         }
-      case _ => false // Shouldn't get here with sliding(2)
+      case _ => false // Shouldn't get here with the sliding window
     }
     didClean
   }
