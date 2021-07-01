@@ -1648,7 +1648,7 @@ class LogLoaderTest {
     val offsetsWithMissingSnapshotFiles = ListBuffer[Long]()
     for (offset <- 5 until 10) {
       val snapshotFile = log.producerStateManager.snapshotFileForOffset(offset)
-      if (!snapshotFile.isDefined || !snapshotFile.get.file.exists) {
+      if (snapshotFile.isEmpty || !snapshotFile.get.file.exists) {
         offsetsWithMissingSnapshotFiles.append(offset)
       }
     }
