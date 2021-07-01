@@ -47,6 +47,7 @@ import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
 
+@SuppressWarnings("deprecation")
 public class StreamsOptimizedTest {
 
     public static void main(final String[] args) throws Exception {

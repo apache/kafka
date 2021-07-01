@@ -351,6 +351,61 @@ public class EmbeddedConnectClusterAssertions {
     }
 
     /**
+     * Assert that a connector is running, that it has a specific number of tasks out of that numFailedTasks are in the FAILED state.
+     *
+     * @param connectorName the connector name
+     * @param numTasks the number of tasks
+     * @param numFailedTasks the number of failed tasks
+     * @param detailMessage the assertion message
+     * @throws InterruptedException
+     */
+    public void assertConnectorIsRunningAndNumTasksHaveFailed(String connectorName, int numTasks, int numFailedTasks, String detailMessage)
+            throws InterruptedException {
+        try {
+            waitForCondition(
+                    () -> checkConnectorState(
+                            connectorName,
+                            AbstractStatus.State.RUNNING,
+                            numTasks,
+                            numFailedTasks,
+                            AbstractStatus.State.FAILED,
+                            (actual, expected) -> actual >= expected
+                    ).orElse(false),
+                    CONNECTOR_SETUP_DURATION_MS,
+                    "Either the connector is not running or not all the " + numTasks + " tasks have failed.");
+        } catch (AssertionError e) {
+            throw new AssertionError(detailMessage, e);
+        }
+    }
+
+    /**
+     * Assert that a connector is in FAILED state, that it has a specific number of tasks, and that all of
+     * its tasks are in the FAILED state.
+     *
+     * @param connectorName the connector name
+     * @param numTasks the number of tasks
+     * @param detailMessage the assertion message
+     * @throws InterruptedException
+     */
+    public void assertConnectorIsFailedAndTasksHaveFailed(String connectorName, int numTasks, String detailMessage)
+            throws InterruptedException {
+        try {
+            waitForCondition(
+                    () -> checkConnectorState(
+                            connectorName,
+                            AbstractStatus.State.FAILED,
+                            numTasks,
+                            AbstractStatus.State.FAILED,
+                            (actual, expected) -> actual >= expected
+                    ).orElse(false),
+                    CONNECTOR_SETUP_DURATION_MS,
+                    "Either the connector is running or not all the " + numTasks + " tasks have failed.");
+        } catch (AssertionError e) {
+            throw new AssertionError(detailMessage, e);
+        }
+    }
+
+    /**
      * Assert that a connector and its tasks are not running.
      *
      * @param connectorName the connector name
@@ -422,6 +477,36 @@ public class EmbeddedConnectClusterAssertions {
         }
     }
 
+    /**
+     * Check whether the given connector state matches the current state of the connector and
+     * whether it has at least the given number of tasks, with numTasksInTasksState matching the given
+     * task state.
+     * @param connectorName the connector
+     * @param connectorState
+     * @param numTasks the expected number of tasks
+     * @param tasksState
+     * @return true if the connector and tasks are in RUNNING state; false otherwise
+     */
+    protected Optional<Boolean> checkConnectorState(
+            String connectorName,
+            AbstractStatus.State connectorState,
+            int numTasks,
+            int numTasksInTasksState,
+            AbstractStatus.State tasksState,
+            BiFunction<Integer, Integer, Boolean> comp
+    ) {
+        try {
+            ConnectorStateInfo info = connect.connectorStatus(connectorName);
+            boolean result = info != null
+                    && comp.apply(info.tasks().size(), numTasks)
+                    && info.connector().state().equals(connectorState.toString())
+                    && info.tasks().stream().filter(s -> s.state().equals(tasksState.toString())).count() == numTasksInTasksState;
+            return Optional.of(result);
+        } catch (Exception e) {
+            log.error("Could not check connector state info.", e);
+            return Optional.empty();
+        }
+    }
     /**
      * Assert that a connector's set of active topics matches the given collection of topic names.
      *
