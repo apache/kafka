@@ -2118,7 +2118,7 @@ class ReplicaManager(val config: KafkaConfig,
     stateChangeLogger.info(s"Transitioning ${newLocalLeaders.size} partition(s) to " +
       "local leaders.")
     replicaFetcherManager.removeFetcherForPartitions(newLocalLeaders.keySet)
-    newLocalLeaders.foreachEntry { case (tp, info) =>
+    newLocalLeaders.forKeyValue { case (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
           val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
@@ -2151,7 +2151,7 @@ class ReplicaManager(val config: KafkaConfig,
     val shuttingDown = isShuttingDown.get()
     val partitionsToMakeFollower = new mutable.HashMap[TopicPartition, InitialFetchState]
     val newFollowerTopicSet = new mutable.HashSet[String]
-    newLocalFollowers.foreachEntry { case (tp, info) =>
+    newLocalFollowers.forKeyValue { case (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
           newFollowerTopicSet.add(tp.topic())
