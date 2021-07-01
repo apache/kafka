@@ -54,6 +54,7 @@ import scala.jdk.CollectionConverters._
  * @param inner The underlying Java abstraction for KStream
  * @see `org.apache.kafka.streams.kstream.KStream`
  */
+//noinspection ScalaDeprecation
 class KStream[K, V](val inner: KStreamJ[K, V]) {
 
   /**

@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.raft.Batch;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.internals.RecordsIteratorTest.TestBatch;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mockito;
@@ -50,7 +50,7 @@ class RecordsBatchReaderTest {
     public void testReadFromMemoryRecords(CompressionType compressionType) {
         long baseOffset = 57;
 
-        List<Batch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
+        List<TestBatch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
         MemoryRecords memRecords = RecordsIteratorTest.buildRecords(compressionType, batches);
 
         testBatchReader(baseOffset, memRecords, batches);
@@ -61,7 +61,7 @@ class RecordsBatchReaderTest {
     public void testReadFromFileRecords(CompressionType compressionType) throws Exception {
         long baseOffset = 57;
 
-        List<Batch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
+        List<TestBatch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
         MemoryRecords memRecords = RecordsIteratorTest.buildRecords(compressionType, batches);
 
         FileRecords fileRecords = FileRecords.open(tempFile());
@@ -73,7 +73,7 @@ class RecordsBatchReaderTest {
     private void testBatchReader(
         long baseOffset,
         Records records,
-        List<Batch<String>> expectedBatches
+        List<TestBatch<String>> expectedBatches
     ) {
         BufferSupplier bufferSupplier = Mockito.mock(BufferSupplier.class);
         Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -103,9 +103,9 @@ class RecordsBatchReaderTest {
             closeListener
         );
 
-        for (Batch<String> batch : expectedBatches) {
+        for (TestBatch<String> batch : expectedBatches) {
             assertTrue(reader.hasNext());
-            assertEquals(batch, reader.next());
+            assertEquals(batch, TestBatch.from(reader.next()));
         }
 
         assertFalse(reader.hasNext());

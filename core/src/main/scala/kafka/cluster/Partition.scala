@@ -25,7 +25,6 @@ import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.server.metadata.ConfigRepository
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zookeeper.ZooKeeperClientException
@@ -68,7 +67,6 @@ class DelayedOperations(topicPartition: TopicPartition,
 object Partition extends KafkaMetricsGroup {
   def apply(topicPartition: TopicPartition,
             time: Time,
-            configRepository: ConfigRepository,
             replicaManager: ReplicaManager): Partition = {
 
     val isrChangeListener = new IsrChangeListener {
@@ -882,7 +880,7 @@ class Partition(val topicPartition: TopicPartition,
     // care has been taken to avoid generating unnecessary collections in this code
     var lowWaterMark = localLogOrException.logStartOffset
     remoteReplicas.foreach { replica =>
-      if (metadataCache.getAliveBroker(replica.brokerId).nonEmpty && replica.logStartOffset < lowWaterMark) {
+      if (metadataCache.hasAliveBroker(replica.brokerId) && replica.logStartOffset < lowWaterMark) {
         lowWaterMark = replica.logStartOffset
       }
     }

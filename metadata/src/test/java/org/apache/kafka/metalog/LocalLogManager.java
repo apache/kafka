@@ -18,6 +18,7 @@
 package org.apache.kafka.metalog;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
@@ -57,6 +58,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 
 /**
@@ -296,7 +298,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         /**
          * Returns the snapshot whos last offset is the committed offset.
          *
-         * If such snapshot doesn't exists it wait until it does.
+         * If such snapshot doesn't exists, it waits until it does.
          */
         synchronized RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
             while (true) {
@@ -308,14 +310,74 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 }
             }
         }
+
+        /**
+         * Returns the latest snapshot.
+         *
+         * If a snapshot doesn't exists, it waits until it does.
+         */
+        synchronized RawSnapshotReader waitForLatestSnapshot() throws InterruptedException {
+            while (snapshots.isEmpty()) {
+                this.wait();
+            }
+
+            return Objects.requireNonNull(snapshots.lastEntry()).getValue();
+        }
+
+        synchronized long appendedBytes() {
+            ObjectSerializationCache objectCache = new ObjectSerializationCache();
+
+            return batches
+                .values()
+                .stream()
+                .flatMapToInt(batch -> {
+                    if (batch instanceof LocalRecordBatch) {
+                        LocalRecordBatch localBatch = (LocalRecordBatch) batch;
+                        return localBatch.records.stream().mapToInt(record -> messageSize(record, objectCache));
+                    } else {
+                        return IntStream.empty();
+                    }
+                })
+                .sum();
+        }
     }
 
     private static class MetaLogListenerData {
         private long offset = -1;
+        private LeaderAndEpoch notifiedLeader = new LeaderAndEpoch(OptionalInt.empty(), 0);
+
         private final RaftClient.Listener<ApiMessageAndVersion> listener;
 
         MetaLogListenerData(RaftClient.Listener<ApiMessageAndVersion> listener) {
             this.listener = listener;
+        }
+
+        long offset() {
+            return offset;
+        }
+
+        LeaderAndEpoch notifiedLeader() {
+            return notifiedLeader;
+        }
+
+        void handleCommit(MemoryBatchReader<ApiMessageAndVersion> reader) {
+            listener.handleCommit(reader);
+            offset = reader.lastOffset().getAsLong();
+        }
+
+        void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+            listener.handleSnapshot(reader);
+            offset = reader.lastContainedLogOffset();
+        }
+
+        void handleLeaderChange(long offset, LeaderAndEpoch leader) {
+            listener.handleLeaderChange(leader);
+            notifiedLeader = leader;
+            this.offset = offset;
+        }
+
+        void beginShutdown() {
+            listener.beginShutdown();
         }
     }
 
@@ -380,22 +442,24 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 int numEntriesFound = 0;
                 for (MetaLogListenerData listenerData : listeners) {
                     while (true) {
-                        // Load the snapshot if needed
-                        Optional<RawSnapshotReader> snapshot = shared.nextSnapshot(listenerData.offset);
-                        if (snapshot.isPresent()) {
-                            log.trace("Node {}: handling snapshot with id {}.", nodeId, snapshot.get().snapshotId());
-                            listenerData.listener.handleSnapshot(
-                                SnapshotReader.of(
-                                    snapshot.get(),
-                                    new  MetadataRecordSerde(),
-                                    BufferSupplier.create(),
-                                    Integer.MAX_VALUE
-                                )
-                            );
-                            listenerData.offset = snapshot.get().snapshotId().offset - 1;
+                        // Load the snapshot if needed and we are not the leader
+                        LeaderAndEpoch notifiedLeader = listenerData.notifiedLeader();
+                        if (!OptionalInt.of(nodeId).equals(notifiedLeader.leaderId())) {
+                            Optional<RawSnapshotReader> snapshot = shared.nextSnapshot(listenerData.offset());
+                            if (snapshot.isPresent()) {
+                                log.trace("Node {}: handling snapshot with id {}.", nodeId, snapshot.get().snapshotId());
+                                listenerData.handleSnapshot(
+                                    SnapshotReader.of(
+                                        snapshot.get(),
+                                        new  MetadataRecordSerde(),
+                                        BufferSupplier.create(),
+                                        Integer.MAX_VALUE
+                                    )
+                                );
+                            }
                         }
 
-                        Entry<Long, LocalBatch> entry = shared.nextBatch(listenerData.offset);
+                        Entry<Long, LocalBatch> entry = shared.nextBatch(listenerData.offset());
                         if (entry == null) {
                             log.trace("Node {}: reached the end of the log after finding " +
                                 "{} entries.", nodeId, numEntriesFound);
@@ -412,7 +476,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             LeaderChangeBatch batch = (LeaderChangeBatch) entry.getValue();
                             log.trace("Node {}: handling LeaderChange to {}.",
                                 nodeId, batch.newLeader);
-                            listenerData.listener.handleLeaderChange(batch.newLeader);
+                            listenerData.handleLeaderChange(entryOffset, batch.newLeader);
                             if (batch.newLeader.epoch() > leader.epoch()) {
                                 leader = batch.newLeader;
                             }
@@ -420,13 +484,20 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             LocalRecordBatch batch = (LocalRecordBatch) entry.getValue();
                             log.trace("Node {}: handling LocalRecordBatch with offset {}.",
                                 nodeId, entryOffset);
-                            listenerData.listener.handleCommit(
+                            ObjectSerializationCache objectCache = new ObjectSerializationCache();
+
+                            listenerData.handleCommit(
                                 MemoryBatchReader.of(
                                     Collections.singletonList(
-                                        Batch.of(
+                                        Batch.data(
                                             entryOffset - batch.records.size() + 1,
-                                            Math.toIntExact(batch.leaderEpoch),
+                                            batch.leaderEpoch,
                                             batch.appendTimestamp,
+                                            batch
+                                                .records
+                                                .stream()
+                                                .mapToInt(record -> messageSize(record, objectCache))
+                                                .sum(),
                                             batch.records
                                         )
                                     ),
@@ -435,7 +506,6 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             );
                         }
                         numEntriesFound++;
-                        listenerData.offset = entryOffset;
                     }
                 }
                 log.trace("Completed log check for node " + nodeId);
@@ -445,6 +515,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         });
     }
 
+    private static int messageSize(ApiMessageAndVersion messageAndVersion, ObjectSerializationCache objectCache) {
+        return new MetadataRecordSerde().recordSize(messageAndVersion, objectCache);
+    }
+
     public void beginShutdown() {
         eventQueue.beginShutdown("beginShutdown", () -> {
             try {
@@ -452,7 +526,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                     log.debug("Node {}: beginning shutdown.", nodeId);
                     resign(leader.epoch());
                     for (MetaLogListenerData listenerData : listeners) {
-                        listenerData.listener.beginShutdown();
+                        listenerData.beginShutdown();
                     }
                     shared.unregisterLogManager(this);
                 }

@@ -186,6 +186,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
                 batch.baseOffset(),
                 batch.partitionLeaderEpoch(),
                 batch.maxTimestamp(),
+                batch.sizeInBytes(),
                 batch.lastOffset()
             );
         } else {
@@ -202,7 +203,13 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
                 }
             }
 
-            result = Batch.of(batch.baseOffset(), batch.partitionLeaderEpoch(), batch.maxTimestamp(), records);
+            result = Batch.data(
+                batch.baseOffset(),
+                batch.partitionLeaderEpoch(),
+                batch.maxTimestamp(),
+                batch.sizeInBytes(),
+                records
+            );
         }
 
         return result;
