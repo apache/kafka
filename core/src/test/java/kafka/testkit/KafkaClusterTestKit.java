@@ -127,7 +127,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         public KafkaClusterTestKit build() throws Exception {
             Map<Integer, ControllerServer> controllers = new HashMap<>();
             Map<Integer, BrokerServer> brokers = new HashMap<>();
-            Map<Integer, KafkaRaftManager> raftManagers = new HashMap<>();
+            Map<Integer, KafkaRaftManager<ApiMessageAndVersion>> raftManagers = new HashMap<>();
             String uninitializedQuorumVotersString = nodes.controllerNodes().keySet().stream().
                 map(controllerNode -> String.format("%d@0.0.0.0:0", controllerNode)).
                 collect(Collectors.joining(","));
@@ -250,7 +250,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 for (BrokerServer brokerServer : brokers.values()) {
                     brokerServer.shutdown();
                 }
-                for (KafkaRaftManager raftManager : raftManagers.values()) {
+                for (KafkaRaftManager<ApiMessageAndVersion> raftManager : raftManagers.values()) {
                     raftManager.shutdown();
                 }
                 connectFutureManager.close();
@@ -278,7 +278,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final TestKitNodes nodes;
     private final Map<Integer, ControllerServer> controllers;
     private final Map<Integer, BrokerServer> brokers;
-    private final Map<Integer, KafkaRaftManager> raftManagers;
+    private final Map<Integer, KafkaRaftManager<ApiMessageAndVersion>> raftManagers;
     private final ControllerQuorumVotersFutureManager controllerQuorumVotersFutureManager;
     private final File baseDirectory;
 
@@ -286,7 +286,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 TestKitNodes nodes,
                                 Map<Integer, ControllerServer> controllers,
                                 Map<Integer, BrokerServer> brokers,
-                                Map<Integer, KafkaRaftManager> raftManagers,
+                                Map<Integer, KafkaRaftManager<ApiMessageAndVersion>> raftManagers,
                                 ControllerQuorumVotersFutureManager controllerQuorumVotersFutureManager,
                                 File baseDirectory) {
         this.executorService = executorService;
@@ -350,7 +350,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             for (ControllerServer controller : controllers.values()) {
                 futures.add(executorService.submit(controller::startup));
             }
-            for (KafkaRaftManager raftManager : raftManagers.values()) {
+            for (KafkaRaftManager<ApiMessageAndVersion> raftManager : raftManagers.values()) {
                 futures.add(controllerQuorumVotersFutureManager.future.thenRunAsync(raftManager::startup));
             }
             for (BrokerServer broker : brokers.values()) {
@@ -430,7 +430,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         return brokers;
     }
 
-    public Map<Integer, KafkaRaftManager> raftManagers() {
+    public Map<Integer, KafkaRaftManager<ApiMessageAndVersion>> raftManagers() {
         return raftManagers;
     }
 
@@ -459,9 +459,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             waitForAllFutures(futureEntries);
             futureEntries.clear();
-            for (Entry<Integer, KafkaRaftManager> entry : raftManagers.entrySet()) {
+            for (Entry<Integer, KafkaRaftManager<ApiMessageAndVersion>> entry : raftManagers.entrySet()) {
                 int raftManagerId = entry.getKey();
-                KafkaRaftManager raftManager = entry.getValue();
+                KafkaRaftManager<ApiMessageAndVersion> raftManager = entry.getValue();
                 futureEntries.add(new SimpleImmutableEntry<>("raftManager" + raftManagerId,
                     executorService.submit(raftManager::shutdown)));
             }

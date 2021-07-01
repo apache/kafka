@@ -182,7 +182,12 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     private Batch<T> readBatch(DefaultRecordBatch batch) {
         final Batch<T> result;
         if (batch.isControlBatch()) {
-            result = Batch.empty(batch.baseOffset(), batch.partitionLeaderEpoch(), batch.lastOffset());
+            result = Batch.empty(
+                batch.baseOffset(),
+                batch.partitionLeaderEpoch(),
+                batch.lastOffset(),
+                batch.sizeInBytes()
+            );
         } else {
             Integer numRecords = batch.countOrNull();
             if (numRecords == null) {
@@ -197,7 +202,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
                 }
             }
 
-            result = Batch.of(batch.baseOffset(), batch.partitionLeaderEpoch(), records);
+            result = Batch.of(batch.baseOffset(), batch.partitionLeaderEpoch(), batch.sizeInBytes(), records);
         }
 
         return result;
