@@ -18,7 +18,6 @@ package kafka.admin
 
 import java.util
 import java.util.Properties
-
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.api.ApiVersion
 import kafka.cluster.{Broker, EndPoint}
@@ -85,6 +84,22 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  def shouldExitWithNonZeroStatusOnZkCommandWithUsersEntityWithoutZkTlsConfigFile(): Unit = {
+    assertNonZeroStatusExit(Array(
+      "--zookeeper", zkConnect,
+      "--entity-type", "users",
+      "--describe"))
+  }
+
+  @Test
+  def shouldExitWithNonZeroStatusOnZkCommandWithBrokersEntityWithoutZkTlsConfigFile(): Unit = {
+    assertNonZeroStatusExit(Array(
+      "--zookeeper", zkConnect,
+      "--entity-type", "brokers",
+      "--describe"))
+  }
+
+  @Test
   def shouldExitWithNonZeroStatusAlterUserQuotaWithoutEntityName(): Unit = {
     assertNonZeroStatusExit(Array(
       "--zookeeper", zkConnect,
@@ -130,13 +145,18 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  def shouldFailParseArgumentsForClientsEntityTypeUsingZookeeper(): Unit = {
+    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("clients", zkConfig = true))
+  }
+
+  @Test
   def shouldParseArgumentsForClientsEntityType(): Unit = {
     testArgumentParse("clients", zkConfig = false)
   }
 
   @Test
-  def shouldParseArgumentsForUsersEntityTypeUsingZookeeper(): Unit = {
-    testArgumentParse("users", zkConfig = true)
+  def shouldFailParseArgumentsForUsersEntityTypeUsingZookeeper(): Unit = {
+    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("users", zkConfig = true))
   }
 
   @Test
@@ -145,13 +165,18 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  def shouldParseArgumentsForTopicsEntityTypeUsingZookeeper(): Unit = {
+    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("topics", zkConfig = true))
+  }
+
+  @Test
   def shouldParseArgumentsForTopicsEntityType(): Unit = {
     testArgumentParse("topics", zkConfig = false)
   }
 
   @Test
-  def shouldParseArgumentsForBrokersEntityTypeUsingZookeeper(): Unit = {
-    testArgumentParse("brokers", zkConfig = true)
+  def shouldFailParseArgumentsForBrokersEntityTypeUsingZookeeper(): Unit = {
+    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("brokers", zkConfig = true))
   }
 
   @Test
@@ -162,6 +187,11 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def shouldParseArgumentsForBrokerLoggersEntityType(): Unit = {
     testArgumentParse("broker-loggers", zkConfig = false)
+  }
+
+  @Test
+  def shouldParseArgumentsForIpEntityTypeUsingZookeeper(): Unit = {
+    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("ips", zkConfig = true))
   }
 
   @Test
@@ -317,14 +347,9 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     assertEquals("[[1, 2], [3, 4]]", addedProps.getProperty("nested"))
   }
 
-  def doTestOptionEntityTypeNames(zkConfig: Boolean): Unit = {
-    val connectOpts = if (zkConfig)
-      ("--zookeeper", zkConnect)
-    else
-      ("--bootstrap-server", "localhost:9092")
-
+  def doTestOptionEntityTypeNames(): Unit = {
     def testExpectedEntityTypeNames(expectedTypes: List[String], expectedNames: List[String], args: String*): Unit = {
-      val createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2, "--describe") ++ args)
+      val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092", "--describe") ++ args)
       createOpts.checkArgs()
       assertEquals(createOpts.entityTypes, expectedTypes)
       assertEquals(createOpts.entityNames, expectedNames)
@@ -354,7 +379,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testOptionEntityTypeNames(): Unit = {
-    doTestOptionEntityTypeNames(zkConfig = false)
+    doTestOptionEntityTypeNames()
   }
 
   @Test
@@ -872,22 +897,14 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldAddBrokerQuotaConfig(): Unit = {
+  def shouldNotAddBrokerQuotaConfigUsingZookeeper(): Unit = {
     val alterOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "1",
+      "--entity-name", "0",
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "leader.replication.throttled.rate=10,follower.replication.throttled.rate=20"))
 
-    class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
-      override def changeBrokerConfig(brokerIds: Seq[Int], configChange: Properties): Unit = {
-        assertEquals(Seq(1), brokerIds)
-        assertEquals("10", configChange.get("leader.replication.throttled.rate"))
-        assertEquals("20", configChange.get("follower.replication.throttled.rate"))
-      }
-    }
-
-    ConfigCommand.alterConfigWithZk(null, alterOpts, new TestAdminZkClient(zkClient))
+    assertThrows(classOf[IllegalArgumentException], () => alterOpts.checkArgs())
   }
 
   @Test
@@ -898,16 +915,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       new ConfigEntry("kafka.server.ReplicaManager", "INFO"),
       new ConfigEntry("kafka.server.KafkaApi", "INFO")
     ))
-  }
-
-  @Test
-  def testNoSpecifiedEntityOptionWithDescribeBrokersInZKIsAllowed(): Unit = {
-    val optsList = List("--zookeeper", zkConnect,
-      "--entity-type", ConfigType.Broker,
-      "--describe"
-    )
-
-    new ConfigCommandOptions(optsList.toArray).checkArgs()
   }
 
   @Test
@@ -1421,6 +1428,11 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ConfigCommand.alterConfigWithZk(null, del512, CredentialChange("userB", Set(), 4096))
   }
 
+  @Test
+  def testQuotaConfigEntityUsingZookeeper(): Unit = {
+    assertThrows(classOf[IllegalArgumentException], () => doTestQuotaConfigEntity(zkConfig = true))
+  }
+
   def doTestQuotaConfigEntity(zkConfig: Boolean): Unit = {
     val connectOpts = if (zkConfig)
       ("--zookeeper", zkConnect)
@@ -1498,6 +1510,11 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def testQuotaConfigEntity(): Unit = {
     doTestQuotaConfigEntity(zkConfig = false)
+  }
+
+  @Test
+  def testUserClientQuotaOptsUsingZookeeper(): Unit = {
+    assertThrows(classOf[IllegalArgumentException], () => doTestUserClientQuotaOpts(zkConfig = true))
   }
 
   def doTestUserClientQuotaOpts(zkConfig: Boolean): Unit = {

@@ -70,15 +70,6 @@ object ConfigCommand extends Config {
   val BrokerSupportedConfigTypes = ConfigType.all :+ BrokerLoggerConfigType
   val ZkSupportedConfigTypes = Seq(ConfigType.User, ConfigType.Broker)
   val DefaultScramIterations = 4096
-  // Dynamic broker configs can only be updated using the new AdminClient once brokers have started
-  // so that configs may be fully validated. Prior to starting brokers, updates may be performed using
-  // ZooKeeper for bootstrapping. This allows all password configs to be stored encrypted in ZK,
-  // avoiding clear passwords in server.properties. For consistency with older versions, quota-related
-  // broker configs can still be updated using ZooKeeper at any time.
-  val BrokerConfigsUpdatableUsingZooKeeperWhileBrokerRunning = Set(
-    DynamicConfig.Broker.LeaderReplicationThrottledRateProp,
-    DynamicConfig.Broker.FollowerReplicationThrottledRateProp,
-    DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp)
 
   def main(args: Array[String]): Unit = {
     try {
@@ -135,13 +126,10 @@ object ConfigCommand extends Config {
     if (entityType == ConfigType.User)
       preProcessScramCredentials(configsToBeAdded)
     else if (entityType == ConfigType.Broker) {
-      // Replication quota configs may be updated using ZK at any time. Other dynamic broker configs
-      // may be updated using ZooKeeper only if the corresponding broker is not running. Dynamic broker
-      // configs at cluster-default level may be configured using ZK only if there are no brokers running.
-      val dynamicBrokerConfigs = configsToBeAdded.asScala.keySet.filterNot(BrokerConfigsUpdatableUsingZooKeeperWhileBrokerRunning.contains)
-      if (dynamicBrokerConfigs.nonEmpty) {
+      // Dynamic broker configs may be updated using ZooKeeper only if the corresponding broker is not running.
+      if (!configsToBeAdded.isEmpty) {
         val perBrokerConfig = entityName != ConfigEntityName.Default
-        val errorMessage = s"--bootstrap-server option must be specified to update broker configs $dynamicBrokerConfigs."
+        val errorMessage = s"--bootstrap-server option must be specified to update broker configs $configsToBeAdded."
         val info = "Broker configuration updates using ZooKeeper are supported for bootstrapping before brokers" +
           " are started to enable encrypted password configs to be stored in ZooKeeper."
         if (perBrokerConfig) {
@@ -877,7 +865,14 @@ object ConfigCommand extends Config {
       }
 
       if (options.has(zkTlsConfigFile) && options.has(bootstrapServerOpt)) {
-        throw new IllegalArgumentException(s"--zookeeper must be specified for --zk-tls-config-file")
+        throw new IllegalArgumentException("--bootstrap-server doesn't support --zk-tls-config-file option. " +
+          "Please use --zookeeper option instead")
+      }
+
+      // for --zookeeper option, the --zk-tls-config-file option is required to support SCRAM credential and password update
+      // before broker started operation. Other operation are not supported to use --zookeeper anymore.
+      if (options.has(zkConnectOpt) && !options.has(zkTlsConfigFile)) {
+        throw new IllegalArgumentException("--zk-tls-config-file must be specified for --zookeeper option")
       }
 
       if (hasEntityName && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
