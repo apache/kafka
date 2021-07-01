@@ -17,10 +17,14 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
+
 import java.time.Duration;
 import java.util.Objects;
+
+import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
+import static org.apache.kafka.streams.kstream.Windows.NO_GRACE_PERIOD;
 
 /**
  * A sliding window used for aggregating events.
@@ -78,6 +82,45 @@ public final class SlidingWindows {
     private SlidingWindows(final long timeDifferenceMs, final long graceMs) {
         this.timeDifferenceMs = timeDifferenceMs;
         this.graceMs = graceMs;
+
+        if (timeDifferenceMs < 0) {
+            throw new IllegalArgumentException("Window time difference must not be negative.");
+        }
+
+        if (graceMs < 0) {
+            throw new IllegalArgumentException("Window grace period must not be negative.");
+        }
+    }
+
+    /**
+     * Return a window definition with the window size
+     * Using the method implicitly sets the grace period to zero which means that
+     * out of order records arriving after the window end will be dropped
+     *
+     * @param timeDifference the max time difference (inclusive) between two records in a window
+     * @return a new window definition with no grace period. Note that this means out of order records arriving after the window end will be dropped
+     * @throws IllegalArgumentException if the timeDifference is negative
+     */
+    public static SlidingWindows ofTimeDifferenceWithNoGrace(final Duration timeDifference) throws IllegalArgumentException {
+        return ofTimeDifferenceAndGrace(timeDifference, ofMillis(NO_GRACE_PERIOD));
+    }
+
+    /**
+     * Return a window definition with the window size based on the given maximum time difference (inclusive) between
+     * records in the same window and given window grace period. Reject out-of-order events that arrive after {@code afterWindowEnd}.
+     * A window is closed when {@code stream-time > window-end + grace-period}.
+     *
+     * @param timeDifference the max time difference (inclusive) between two records in a window
+     * @param afterWindowEnd  the grace period to admit out-of-order events to a window
+     * @return a new window definition with the specified grace period
+     * @throws IllegalArgumentException if the timeDifference or afterWindowEnd (grace period) is negative
+     */
+    public static SlidingWindows ofTimeDifferenceAndGrace(final Duration timeDifference, final Duration afterWindowEnd) throws IllegalArgumentException {
+
+        final long timeDifferenceMs = timeDifference.toMillis();
+        final long afterWindowEndMs = afterWindowEnd.toMillis();
+
+        return new SlidingWindows(timeDifferenceMs, afterWindowEndMs);
     }
 
     /**
@@ -89,18 +132,16 @@ public final class SlidingWindows {
      * @param grace the grace period to admit out-of-order events to a window
      * @return a new window definition
      * @throws IllegalArgumentException if the specified window size is &lt; 0 or grace &lt; 0, or either can't be represented as {@code long milliseconds}
+     * @deprecated since 3.0 Use {@link #ofTimeDifferenceWithNoGrace(Duration)} or {@link #ofTimeDifferenceAndGrace(Duration, Duration)} instead
      */
+    @Deprecated
     public static SlidingWindows withTimeDifferenceAndGrace(final Duration timeDifference, final Duration grace) throws IllegalArgumentException {
         final String msgPrefixSize = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
         final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefixSize);
-        if (timeDifferenceMs < 0) {
-            throw new IllegalArgumentException("Window time difference must not be negative.");
-        }
+
         final String msgPrefixGrace = prepareMillisCheckFailMsgPrefix(grace, "grace");
         final long graceMs = validateMillisecondDuration(grace, msgPrefixGrace);
-        if (graceMs < 0) {
-            throw new IllegalArgumentException("Window grace period must not be negative.");
-        }
+
         return new SlidingWindows(timeDifferenceMs, graceMs);
     }
 

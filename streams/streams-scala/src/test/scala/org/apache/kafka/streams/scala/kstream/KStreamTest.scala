@@ -17,9 +17,7 @@
 package org.apache.kafka.streams.scala.kstream
 
 import java.time.Duration.ofSeconds
-import java.time.Instant
-import java.util.regex.Pattern
-
+import java.time.{Duration, Instant}
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
   JoinWindows,
@@ -192,6 +190,7 @@ class KStreamTest extends TestDriver {
     testDriver.close()
   }
 
+  //noinspection ScalaDeprecation
   @Test
   def testJoinCorrectlyRecords(): Unit = {
     val builder = new StreamsBuilder()
@@ -201,7 +200,9 @@ class KStreamTest extends TestDriver {
 
     val stream1 = builder.stream[String, String](sourceTopic1)
     val stream2 = builder.stream[String, String](sourceTopic2)
-    stream1.join(stream2)((a, b) => s"$a-$b", JoinWindows.of(ofSeconds(1))).to(sinkTopic)
+    stream1
+      .join(stream2)((a, b) => s"$a-$b", JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(1), Duration.ofHours(24)))
+      .to(sinkTopic)
 
     val now = Instant.now()
 
@@ -464,23 +465,4 @@ class KStreamTest extends TestDriver {
     val transformNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.toList(1)
     assertEquals("my-name", transformNode.name())
   }
-
-  @Test
-  def testSettingNameOnStream(): Unit = {
-    val builder = new StreamsBuilder()
-    val topicsPattern = "t-[A-Za-z0-9-].suffix"
-    val sinkTopic = "sink"
-
-    builder
-      .stream[String, String](Pattern.compile(topicsPattern))(
-        Consumed.`with`[String, String].withName("my-fancy-name")
-      )
-      .to(sinkTopic)
-
-    import scala.jdk.CollectionConverters._
-
-    val streamNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.head
-    assertEquals("my-fancy-name", streamNode.name())
-  }
-
 }

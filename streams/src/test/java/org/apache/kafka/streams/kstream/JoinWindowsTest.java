@@ -28,11 +28,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 public class JoinWindowsTest {
 
     private static final long ANY_SIZE = 123L;
     private static final long ANY_OTHER_SIZE = 456L; // should be larger than anySize
+    private static final long ANY_GRACE = 1024L;
 
+    @SuppressWarnings("deprecation")
     @Test
     public void validWindows() {
         JoinWindows.of(ofMillis(ANY_OTHER_SIZE))   // [ -anyOtherSize ; anyOtherSize ]
@@ -69,6 +72,8 @@ public class JoinWindowsTest {
     @Test
     public void timeDifferenceMustNotBeNegative() {
         assertThrows(IllegalArgumentException.class, () -> JoinWindows.of(ofMillis(-1)));
+        assertThrows(IllegalArgumentException.class, () -> JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(-1)));
+        assertThrows(IllegalArgumentException.class, () -> JoinWindows.ofTimeDifferenceAndGrace(ofMillis(-1), ofMillis(ANY_GRACE)));
     }
 
     @Test
@@ -133,6 +138,16 @@ public class JoinWindowsTest {
             JoinWindows.of(ofMillis(9)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3)).grace(ofMillis(60)),
             JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3)).grace(ofMillis(60))
         );
+
+        verifyEquality(
+                JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(3)),
+                JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(3))
+        );
+
+        verifyEquality(
+                JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3), ofMillis(4)),
+                JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3), ofMillis(4))
+        );
     }
 
     @Test
@@ -161,6 +176,16 @@ public class JoinWindowsTest {
         verifyInEquality(
             JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(9)),
             JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3))
+        );
+
+        verifyInEquality(
+                JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(9)),
+                JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(3))
+        );
+
+        verifyInEquality(
+                JoinWindows.ofTimeDifferenceAndGrace(ofMillis(9), ofMillis(9)),
+                JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3), ofMillis(9))
         );
     }
 }

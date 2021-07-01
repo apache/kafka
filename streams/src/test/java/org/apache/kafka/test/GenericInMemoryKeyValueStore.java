@@ -58,6 +58,7 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V>
         return this.name;
     }
 
+    @SuppressWarnings("deprecation")
     @Deprecated
     @Override
     /* This is a "dummy" store used for testing;
