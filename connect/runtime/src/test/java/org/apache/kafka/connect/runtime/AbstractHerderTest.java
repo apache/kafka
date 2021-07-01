@@ -62,6 +62,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -267,6 +268,108 @@ public class AbstractHerderTest {
         verifyAll();
     }
 
+    @Test
+    public void testBuildRestartPlanForUnknownConnector() {
+        String connectorName = "UnknownConnector";
+        RestartRequest restartRequest = new RestartRequest(connectorName, false, true);
+        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
+                        ConnectorClientConfigOverridePolicy.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .addMockedMethod("generation")
+                .createMock();
+
+        EasyMock.expect(herder.generation()).andStubReturn(generation);
+
+        EasyMock.expect(statusStore.get(connectorName)).andReturn(null);
+        replayAll();
+
+        Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
+
+        assertFalse(mayBeRestartPlan.isPresent());
+    }
+
+    @Test
+    public void testBuildRestartPlanForConnectorAndTasks() {
+        RestartRequest restartRequest = new RestartRequest(connector, false, true);
+
+        ConnectorTaskId taskId1 = new ConnectorTaskId(connector, 1);
+        ConnectorTaskId taskId2 = new ConnectorTaskId(connector, 2);
+        List<TaskStatus> taskStatuses = new ArrayList<>();
+        taskStatuses.add(new TaskStatus(taskId1, AbstractStatus.State.RUNNING, workerId, generation));
+        taskStatuses.add(new TaskStatus(taskId2, AbstractStatus.State.FAILED, workerId, generation));
+
+        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
+                        ConnectorClientConfigOverridePolicy.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .addMockedMethod("generation")
+                .createMock();
+
+        EasyMock.expect(herder.generation()).andStubReturn(generation);
+        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
+
+        EasyMock.expect(statusStore.get(connector))
+                .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
+
+        EasyMock.expect(statusStore.getAll(connector))
+                .andReturn(taskStatuses);
+        EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
+
+        replayAll();
+
+        Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
+
+        assertTrue(mayBeRestartPlan.isPresent());
+        RestartPlan restartPlan = mayBeRestartPlan.get();
+        assertTrue(restartPlan.shouldRestartConnector());
+        assertTrue(restartPlan.shouldRestartTasks());
+        assertEquals(2, restartPlan.taskIdsToRestart().size());
+        assertTrue(restartPlan.taskIdsToRestart().contains(taskId1));
+        assertTrue(restartPlan.taskIdsToRestart().contains(taskId2));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testBuildRestartPlanForNoRestart() {
+        RestartRequest restartRequest = new RestartRequest(connector, true, false);
+
+        ConnectorTaskId taskId1 = new ConnectorTaskId(connector, 1);
+        ConnectorTaskId taskId2 = new ConnectorTaskId(connector, 2);
+        List<TaskStatus> taskStatuses = new ArrayList<>();
+        taskStatuses.add(new TaskStatus(taskId1, AbstractStatus.State.RUNNING, workerId, generation));
+        taskStatuses.add(new TaskStatus(taskId2, AbstractStatus.State.FAILED, workerId, generation));
+
+        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
+                        ConnectorClientConfigOverridePolicy.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .addMockedMethod("generation")
+                .createMock();
+
+        EasyMock.expect(herder.generation()).andStubReturn(generation);
+        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
+
+        EasyMock.expect(statusStore.get(connector))
+                .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
+
+        EasyMock.expect(statusStore.getAll(connector))
+                .andReturn(taskStatuses);
+        EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
+
+        replayAll();
+
+        Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
+
+        assertTrue(mayBeRestartPlan.isPresent());
+        RestartPlan restartPlan = mayBeRestartPlan.get();
+        assertFalse(restartPlan.shouldRestartConnector());
+        assertFalse(restartPlan.shouldRestartTasks());
+        assertTrue(restartPlan.taskIdsToRestart().isEmpty());
+
+        PowerMock.verifyAll();
+    }
 
     @Test
     public void testConfigValidationEmptyConfig() {
