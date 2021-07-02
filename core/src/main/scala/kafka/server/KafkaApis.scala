@@ -775,9 +775,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         val unconvertedRecords = FetchResponse.recordsOrFail(partitionData)
         val downConvertMagic =
           logConfig.map(_.messageFormatVersion.recordVersion.value).flatMap { magic =>
-            if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
+            if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1)
               Some(RecordBatch.MAGIC_VALUE_V0)
-            else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
+            else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3)
               Some(RecordBatch.MAGIC_VALUE_V1)
             else
               None
