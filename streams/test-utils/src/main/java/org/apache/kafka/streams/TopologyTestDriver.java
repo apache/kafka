@@ -37,6 +37,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -315,6 +316,9 @@ public class TopologyTestDriver implements Closeable {
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
         // provide randomized dummy app-id if it's not specified
         configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG,  "dummy-topology-test-driver-app-id-" + ThreadLocalRandom.current().nextInt());
+        // provide default serde since we change default serde to be null in KIP-741
+        configCopy.putIfAbsent(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+        configCopy.putIfAbsent(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
         final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(configCopy);
         logIfTaskIdleEnabled(streamsConfig);
 

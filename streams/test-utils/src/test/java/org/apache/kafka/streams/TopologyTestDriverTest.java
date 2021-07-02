@@ -98,6 +98,8 @@ public abstract class TopologyTestDriverTest {
                 mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath())
         ));
         config.putAll(overrides);
+        config.putIfAbsent(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+        config.putIfAbsent(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
     }
 
     private final static String SOURCE_TOPIC_1 = "source-topic-1";
@@ -383,7 +385,7 @@ public abstract class TopologyTestDriverTest {
                 () -> new Processor<Object, Object, Void, Void>() {
                     KeyValueStore<Object, Object> store;
 
-                    @SuppressWarnings("unchecked")
+                    // @SuppressWarnings("unchecked")
                     @Override
                     public void init(final ProcessorContext<Void, Void> context) {
                         store = context.getStateStore(sourceTopicName + "-globalStore");
