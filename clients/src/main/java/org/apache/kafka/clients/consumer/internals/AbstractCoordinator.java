@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
@@ -887,8 +888,8 @@ public abstract class AbstractCoordinator implements Closeable {
 
             if (e instanceof NoBatchedFindCoordinatorsException) {
                 batchFindCoordinator = false;
-                clearFindCoordinatorFuture();
-                lookupCoordinator();
+                // make a fast failure to send next request without batching
+                super.onFailure(new TimeoutException(e), future);
                 return;
             } 
             if (!(e instanceof RetriableException)) {
