@@ -59,7 +59,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public <R> KafkaFuture<R> thenApply(BaseFunction<T, R> function) {
-        CompletableFuture<R> completableFuture = this.completableFuture.thenApply((java.util.function.Function<? super T, ? extends R>) value -> {
+        CompletableFuture<R> appliedFuture = completableFuture.thenApply((java.util.function.Function<? super T, ? extends R>) value -> {
             try {
                 return function.apply(value);
             } catch (Throwable t) {
@@ -70,25 +70,24 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
                 }
             }
         });
-        return new KafkaFutureImpl<>(true, toKafkaCompletableFuture(completableFuture));
+        return new KafkaFutureImpl<>(true, toKafkaCompletableFuture(appliedFuture));
     }
 
-    private <U> KafkaCompletableFuture<U> toKafkaCompletableFuture(CompletableFuture<U> tCompletableFuture) {
-        KafkaCompletableFuture<U> res;
-        if (tCompletableFuture instanceof KafkaCompletableFuture) {
-            res = (KafkaCompletableFuture<U>) tCompletableFuture;
+    private static <U> KafkaCompletableFuture<U> toKafkaCompletableFuture(CompletableFuture<U> completableFuture) {
+        final KafkaCompletableFuture<U> result;
+        if (completableFuture instanceof KafkaCompletableFuture) {
+            result = (KafkaCompletableFuture<U>) completableFuture;
         } else {
-            KafkaCompletableFuture<U> result = new KafkaCompletableFuture<>();
-            tCompletableFuture.whenComplete((x, y) -> {
+            result = new KafkaCompletableFuture<>();
+            completableFuture.whenComplete((x, y) -> {
                 if (y != null) {
                     result.kafkaCompleteExceptionally(y);
                 } else {
                     result.kafkaComplete(x);
                 }
             });
-            res = result;
         }
-        return res;
+        return result;
     }
 
     /**
@@ -125,10 +124,11 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
 
     @Override
     public boolean completeExceptionally(Throwable newException) {
-        // CF#get() always wraps the _cause_ of a CompletionException in EE (which KF does not)
-        // so wrap CompletionException in an extra one to avoid losing the first CompletionException
-        // in the exception chain.
-        return completableFuture.kafkaCompleteExceptionally(newException instanceof CompletionException ? new CompletionException(newException) : newException);
+        // CompletableFuture#get() always wraps the _cause_ of a CompletionException in ExecutionException
+        // (which KafkaFuture does not) so wrap CompletionException in an extra one to avoid losing the
+        // first CompletionException in the exception chain.
+        return completableFuture.kafkaCompleteExceptionally(
+                newException instanceof CompletionException ? new CompletionException(newException) : newException);
     }
 
     /**
@@ -141,12 +141,13 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         return completableFuture.cancel(mayInterruptIfRunning);
     }
 
-    // We need to deal with differences between KF's historic API and the API of CF:
-    // CF#get() does not wrap CancellationException in ExecutionException (nor does KF).
-    // CF#get() always wraps the _cause_ of a CompletionException in ExecutionException (which KF does not).
+    // We need to deal with differences between KafkaFuture's historic API and the API of CompletableFuture:
+    // CompletableFuture#get() does not wrap CancellationException in ExecutionException (nor does KafkaFuture).
+    // CompletableFuture#get() always wraps the _cause_ of a CompletionException in ExecutionException
+    // (which KafkaFuture does not).
     //
-    // The semantics for KafkaFuture are that all exceptional completions of the future (via #completeExceptionally() or exceptions from dependants)
-    // manifest as ExecutionException, as observed via both get() and getNow().
+    // The semantics for KafkaFuture are that all exceptional completions of the future (via #completeExceptionally()
+    // or exceptions from dependants) manifest as ExecutionException, as observed via both get() and getNow().
     private void maybeRewrapAndThrow(Throwable cause) {
         if (cause instanceof CancellationException) {
             throw (CancellationException) cause;
@@ -191,8 +192,9 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             return completableFuture.getNow(valueIfAbsent);
         } catch (CompletionException e) {
             maybeRewrapAndThrow(e.getCause());
-            // Note, unlike CF#get() which throws ExecutionException, CF#getNow() throws CompletionException
-            // thus needs rewrapping to conform to KafkaFuture API, where KF#getNow() throws ExecutionException.
+            // Note, unlike CompletableFuture#get() which throws ExecutionException, CompletableFuture#getNow()
+            // throws CompletionException, thus needs rewrapping to conform to KafkaFuture API,
+            // where KafkaFuture#getNow() throws ExecutionException.
             throw new ExecutionException(e.getCause());
         }
     }
@@ -203,15 +205,13 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     @Override
     public synchronized boolean isCancelled() {
         if (isDependant) {
-            Throwable exception;
             try {
                 completableFuture.getNow(null);
                 return false;
             } catch (Exception e) {
-                exception = e;
+                return e instanceof CompletionException
+                        && e.getCause() instanceof CancellationException;
             }
-            return exception instanceof CompletionException
-                    && exception.getCause() instanceof CancellationException;
         } else {
             return completableFuture.isCancelled();
         }
@@ -236,14 +236,14 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     @Override
     public String toString() {
         T value = null;
-        Throwable ex = null;
+        Throwable exception = null;
         try {
             value = completableFuture.getNow(null);
         } catch (CompletionException e) {
-            ex = e.getCause();
+            exception = e.getCause();
         } catch (Exception e) {
-            ex = e;
+            exception = e;
         }
-        return String.format("KafkaFuture{value=%s,exception=%s,done=%b}", value, ex, ex != null || value != null);
+        return String.format("KafkaFuture{value=%s,exception=%s,done=%b}", value, exception, exception != null || value != null);
     }
 }
