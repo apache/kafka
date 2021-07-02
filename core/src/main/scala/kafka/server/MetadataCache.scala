@@ -87,7 +87,7 @@ object MetadataCache {
     new ZkMetadataCache(brokerId)
   }
 
-  def raftMetadataCache(brokerId: Int): KRaftMetadataCache = {
+  def kRaftMetadataCache(brokerId: Int): KRaftMetadataCache = {
     new KRaftMetadataCache(brokerId)
   }
 }

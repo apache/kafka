@@ -48,7 +48,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   // This is the cache state. Every MetadataImage instance is immutable, and updates
   // replace this value with a completely new one. This means reads (which are not under
   // any lock) need to grab the value of this variable once, and retain that read copy for
-  // the /duration of their operation. Multiple reads of this value risk getting different
+  // the duration of their operation. Multiple reads of this value risk getting different
   // image values.
   @volatile private var _currentImage: MetadataImage = MetadataImage.EMPTY
 

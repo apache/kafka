@@ -175,7 +175,7 @@ class BrokerServer(
       logManager = LogManager(config, initialOfflineDirs, metadataCache, kafkaScheduler, time,
         brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
 
-      metadataCache = MetadataCache.raftMetadataCache(config.nodeId)
+      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
@@ -266,8 +266,6 @@ class BrokerServer(
       /* Add all reconfigurables for config change notification before starting the metadata listener */
       config.dynamicConfig.addReconfigurables(this)
 
-      // TODO : check that we're properly handling  "ConfigType" Client, User, and Ip (which are not
-      // actually configuration types...)
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
@@ -340,7 +338,8 @@ class BrokerServer(
         SocketServer.DataPlaneThreadPrefix)
 
       if (socketServer.controlPlaneRequestChannelOpt.isDefined) {
-        throw new RuntimeException("KIP-291 endpoints are not supported when in KRaft mode.")
+        throw new RuntimeException("KIP-291 control plane listeners are not supported " +
+          "when in KRaft mode.")
       }
       // Block until we've caught up with the latest metadata from the controller quorum.
       lifecycleManager.initialCatchUpFuture.get()

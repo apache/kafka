@@ -141,7 +141,7 @@ class BrokerMetadataListener(
   }
 
   private def loadBatches(delta: MetadataDelta,
-                         iterator: util.Iterator[Batch[ApiMessageAndVersion]]): BatchLoadResults = {
+                          iterator: util.Iterator[Batch[ApiMessageAndVersion]]): BatchLoadResults = {
     val startTimeNs = time.nanoseconds()
     var numBatches = 0
     var numRecords = 0

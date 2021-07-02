@@ -50,7 +50,7 @@ object MetadataCacheTest {
   def cacheProvider(): util.stream.Stream[MetadataCache] = {
     util.stream.Stream.of(
       MetadataCache.zkMetadataCache(1),
-      MetadataCache.raftMetadataCache(1)
+      MetadataCache.kRaftMetadataCache(1)
     )
   }
 

@@ -119,11 +119,13 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
 
     quotaDelta.changes().entrySet().forEach { e =>
       // The connection quota only understands the connection rate limit
-      if (!e.getKey().equals(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)) {
-        warn(s"Ignoring unexpected quota key ${e.getKey()} for entity $ipEntity")
+      val quotaName = e.getKey()
+      val quotaValue = e.getValue()
+      if (!quotaName.equals(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)) {
+        warn(s"Ignoring unexpected quota key ${quotaName} for entity $ipEntity")
       } else {
         try {
-          connectionQuotas.updateIpConnectionRateQuota(inetAddress, e.getValue.asScala.map(_.toInt))
+          connectionQuotas.updateIpConnectionRateQuota(inetAddress, quotaValue.asScala.map(_.toInt))
         } catch {
           case t: Throwable => error(s"Failed to update IP quota $ipEntity", t)
         }

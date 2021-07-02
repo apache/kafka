@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util
+import java.util.Collections
 import kafka.utils.Logging
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 import org.apache.kafka.image.FeaturesDelta
@@ -143,8 +144,8 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
           new FinalizedVersionRange(feature.min(), feature.max()))
       }
     }
-    featuresAndEpoch = Some(FinalizedFeaturesAndEpoch(
-      Features.finalizedFeatures(newFeatures), highestMetadataOffset))
+    featuresAndEpoch = Some(FinalizedFeaturesAndEpoch(Features.finalizedFeatures(
+      Collections.unmodifiableMap(newFeatures)), highestMetadataOffset))
   }
 
   /**

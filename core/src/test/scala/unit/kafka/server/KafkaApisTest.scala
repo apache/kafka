@@ -151,7 +151,7 @@ class KafkaApisTest {
       // with a KRaftMetadataCache instance
       metadataCache match {
         case cache: KRaftMetadataCache => RaftSupport(forwardingManager, cache)
-        case _ => throw new IllegalStateException("Test must set an instance of RaftMetadataCache")
+        case _ => throw new IllegalStateException("Test must set an instance of KRaftMetadataCache")
       }
     } else {
       metadataCache match {
@@ -481,7 +481,7 @@ class KafkaApisTest {
   def testDescribeQuorumForwardedForKRaftClusters(): Unit = {
     val requestData = DescribeQuorumRequest.singletonRequest(KafkaRaftServer.MetadataPartition)
     val requestBuilder = new DescribeQuorumRequest.Builder(requestData)
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
 
     testForwardableApi(
       createKafkaApis(raftSupport = true),
@@ -3857,121 +3857,121 @@ class KafkaApisTest {
 
   @Test
   def testRaftShouldNeverHandleLeaderAndIsrRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleLeaderAndIsrRequest)
   }
 
   @Test
   def testRaftShouldNeverHandleStopReplicaRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleStopReplicaRequest)
   }
 
   @Test
   def testRaftShouldNeverHandleUpdateMetadataRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleUpdateMetadataRequest(_, RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
   def testRaftShouldNeverHandleControlledShutdownRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleControlledShutdownRequest)
   }
 
   @Test
   def testRaftShouldNeverHandleAlterIsrRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleAlterIsrRequest)
   }
 
   @Test
   def testRaftShouldNeverHandleEnvelope(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleEnvelope(_, RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
   def testRaftShouldAlwaysForwardCreateTopicsRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreateTopicsRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardCreatePartitionsRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreatePartitionsRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardDeleteTopicsRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleDeleteTopicsRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardCreateAcls(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreateAcls)
   }
 
   @Test
   def testRaftShouldAlwaysForwardDeleteAcls(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleDeleteAcls)
   }
 
   @Test
   def testRaftShouldAlwaysForwardAlterConfigsRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterConfigsRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardAlterPartitionReassignmentsRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterPartitionReassignmentsRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardIncrementalAlterConfigsRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardCreateTokenRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreateTokenRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardRenewTokenRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleRenewTokenRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardExpireTokenRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleExpireTokenRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardAlterClientQuotasRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterClientQuotasRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardAlterUserScramCredentialsRequest(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterUserScramCredentialsRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardUpdateFeatures(): Unit = {
-    metadataCache = MetadataCache.raftMetadataCache(brokerId)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleUpdateFeatures)
   }
 }

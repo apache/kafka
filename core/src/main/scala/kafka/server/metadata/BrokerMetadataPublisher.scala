@@ -103,7 +103,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
   /**
    * True if this is the first time we have published metadata.
    */
-  var _firstPublish = false
+  var _firstPublish = true
 
   override def publish(newHighestMetadataOffset: Long,
                        delta: MetadataDelta,
@@ -180,7 +180,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
             id => deletedTopicPartitions += new TopicPartition(topicImage.name(), id)
           }
         }
-        if (!deletedTopicPartitions.isEmpty) {
+        if (deletedTopicPartitions.nonEmpty) {
           groupCoordinator.handleDeletedPartitions(deletedTopicPartitions, RequestLocal.NoCaching)
         }
       }
@@ -238,7 +238,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
     // latest metadata. This is only necessary to do when we're first starting up. If
     // we have to load a snapshot later, these topics will appear in deletedTopicIds.
     val ghostReplicas = findGhostReplicas(brokerId, newImage, logManager.allLogs)
-    if (!ghostReplicas.isEmpty) {
+    if (ghostReplicas.nonEmpty) {
       replicaManager.deleteGhostReplicas(ghostReplicas)
     }
 
