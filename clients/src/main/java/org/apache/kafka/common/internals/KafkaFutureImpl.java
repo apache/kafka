@@ -211,6 +211,12 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     @Override
     public synchronized boolean isCancelled() {
         if (isDependant) {
+            // Having isCancelled() for a dependent future just return
+            // CompletableFuture.isCancelled() would break the historical KafkaFuture behaviour because
+            // CompleteableFuture#isCancelled() just checks for the exception being CancellationException
+            // whereas it will be a CompletionException wrapping a CancellationException
+            // due needing to compensate for CompleteableFuture's CompletionException unwrapping
+            // shenanigans in other methods.
             try {
                 completableFuture.getNow(null);
                 return false;
