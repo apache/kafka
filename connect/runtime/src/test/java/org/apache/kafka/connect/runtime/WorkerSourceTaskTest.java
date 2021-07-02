@@ -190,10 +190,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Map<String, String> props = new HashMap<>();
         props.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         props.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        props.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        props.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        props.put("internal.key.converter.schemas.enable", "false");
-        props.put("internal.value.converter.schemas.enable", "false");
         props.put("offset.storage.file.filename", "/tmp/connect.offsets");
         props.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
         return props;
