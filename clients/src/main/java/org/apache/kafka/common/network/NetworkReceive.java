@@ -46,7 +46,6 @@ public class NetworkReceive implements Receive {
     public NetworkReceive(String source, ByteBuffer buffer) {
         this.source = source;
         this.buffer = buffer;
-        this.size = null;
         this.maxSize = UNLIMITED;
         this.memoryPool = MemoryPool.NONE;
     }
@@ -54,7 +53,6 @@ public class NetworkReceive implements Receive {
     public NetworkReceive(String source) {
         this.source = source;
         this.size = ByteBuffer.allocate(4);
-        this.buffer = null;
         this.maxSize = UNLIMITED;
         this.memoryPool = MemoryPool.NONE;
     }
@@ -62,7 +60,6 @@ public class NetworkReceive implements Receive {
     public NetworkReceive(int maxSize, String source) {
         this.source = source;
         this.size = ByteBuffer.allocate(4);
-        this.buffer = null;
         this.maxSize = maxSize;
         this.memoryPool = MemoryPool.NONE;
     }
@@ -70,7 +67,6 @@ public class NetworkReceive implements Receive {
     public NetworkReceive(int maxSize, String source, MemoryPool memoryPool) {
         this.source = source;
         this.size = ByteBuffer.allocate(4);
-        this.buffer = null;
         this.maxSize = maxSize;
         this.memoryPool = memoryPool;
     }
