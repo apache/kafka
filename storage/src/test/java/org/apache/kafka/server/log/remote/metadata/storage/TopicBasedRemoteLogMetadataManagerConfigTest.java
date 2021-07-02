@@ -34,7 +34,7 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_PRODUCER_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP;
-import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_PROP;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP;
 
 public class TopicBasedRemoteLogMetadataManagerConfigTest {
     private static final  Logger log = LoggerFactory.getLogger(TopicBasedRemoteLogMetadataManagerConfigTest.class);
@@ -73,7 +73,7 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
             Assertions.assertEquals(entry.getValue(),
                                     rlmmConfig.producerProperties().get(entry.getKey()));
             Assertions.assertEquals(entry.getValue(),
-                                    rlmmConfig.producerProperties().get(entry.getKey()));
+                                    rlmmConfig.consumerProperties().get(entry.getKey()));
         }
 
         // Check for producer configs.
@@ -125,9 +125,9 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
         props.put("broker.id", 1);
 
-        props.put(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP, 3);
+        props.put(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP, (short) 3);
         props.put(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, 10);
-        props.put(REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_PROP, 60 * 60 * 1000L);
+        props.put(REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP, 60 * 60 * 1000L);
 
         // common client configs
         for (Map.Entry<String, Object> entry : commonClientConfig.entrySet()) {

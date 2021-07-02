@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -56,7 +57,7 @@ public class ConsumerManager implements Closeable {
         //Create a task to consume messages and submit the respective events to RemotePartitionMetadataEventHandler.
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(rlmmConfig.consumerProperties());
         consumerTask = new ConsumerTask(consumer, remotePartitionMetadataEventHandler, rlmmTopicPartitioner);
-        consumerTaskThread = KafkaThread.daemon("RLMMConsumerTask", consumerTask);
+        consumerTaskThread = KafkaThread.nonDaemon("RLMMConsumerTask", consumerTask);
     }
 
     public void startConsumerThread() {
@@ -78,25 +79,24 @@ public class ConsumerManager implements Closeable {
 
         // If the current assignment does not have the subscription for this partition then return immediately.
         if (!consumerTask.isPartitionAssigned(partition)) {
-            log.warn("This consumer is not subscribed to the target partition [{}] on which message is produced.",
-                    partition);
-            return;
+            throw new KafkaException("This consumer is not subscribed to the target partition " + partition + " on which message is produced.");
         }
 
         final long offset = recordMetadata.offset();
         long startTimeMs = time.milliseconds();
         while (true) {
-            long committedOffset = consumerTask.receivedOffsetForPartition(partition).orElse(-1L);
-            if (committedOffset >= offset) {
+            long receivedOffset = consumerTask.receivedOffsetForPartition(partition).orElse(-1L);
+            if (receivedOffset >= offset) {
                 break;
             }
 
             log.debug("Committed offset [{}] for partition [{}], but the target offset: [{}],  Sleeping for [{}] to retry again",
-                    offset, partition, committedOffset, CONSUME_RECHECK_INTERVAL_MS);
+                    offset, partition, receivedOffset, CONSUME_RECHECK_INTERVAL_MS);
 
             if (time.milliseconds() - startTimeMs > rlmmConfig.consumeWaitMs()) {
                 log.warn("Committed offset for partition:[{}] is : [{}], but the target offset: [{}] ",
-                        partition, committedOffset, offset);
+                        partition, receivedOffset, offset);
+                throw new TimeoutException("Timed out in catching up with the expected offset by consumer.");
             }
 
             time.sleep(CONSUME_RECHECK_INTERVAL_MS);

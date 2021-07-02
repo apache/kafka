@@ -21,8 +21,6 @@ import kafka.utils.TestUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,16 +35,15 @@ import java.util.concurrent.TimeoutException;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP;
-import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_PROP;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP;
 
 public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHarness {
     private static final Logger log = LoggerFactory.getLogger(TopicBasedRemoteLogMetadataManagerHarness.class);
 
     protected static final int METADATA_TOPIC_PARTITIONS_COUNT = 3;
-    protected static final int METADATA_TOPIC_REPLICATION_FACTOR = 2;
+    protected static final short METADATA_TOPIC_REPLICATION_FACTOR = 2;
     protected static final long METADATA_TOPIC_RETENTION_MS = 24 * 60 * 60 * 1000L;
 
-    private final Time time = new MockTime(1);
     private TopicBasedRemoteLogMetadataManager topicBasedRemoteLogMetadataManager;
 
     protected Map<String, Object> overrideRemoteLogMetadataManagerProps() {
@@ -57,10 +54,7 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         // Call setup to start the cluster.
         super.setUp();
 
-        // Make sure the remote log metadata topic is created before it is used.
-        createMetadataTopic();
-
-        topicBasedRemoteLogMetadataManager = new TopicBasedRemoteLogMetadataManager(time);
+        topicBasedRemoteLogMetadataManager = new TopicBasedRemoteLogMetadataManager();
 
         // Initialize TopicBasedRemoteLogMetadataManager.
         Map<String, Object> configs = new HashMap<>();
@@ -68,7 +62,7 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         configs.put("broker.id", 0);
         configs.put(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, METADATA_TOPIC_PARTITIONS_COUNT);
         configs.put(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP, METADATA_TOPIC_REPLICATION_FACTOR);
-        configs.put(REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_PROP, METADATA_TOPIC_RETENTION_MS);
+        configs.put(REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP, METADATA_TOPIC_RETENTION_MS);
 
         log.debug("TopicBasedRemoteLogMetadataManager configs before adding overridden properties: {}", configs);
         // Add override properties.
@@ -77,7 +71,7 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
 
         topicBasedRemoteLogMetadataManager.configure(configs);
         try {
-            waitUntilInitialized(120_000);
+            waitUntilInitialized(60_000);
         } catch (TimeoutException e) {
             throw new RuntimeException(e);
         }
@@ -94,7 +88,7 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
                 throw new TimeoutException("Time out reached before it is initialized successfully");
             }
 
-            Utils.sleep(1000);
+            Utils.sleep(100);
         }
     }
 

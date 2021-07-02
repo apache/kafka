@@ -147,7 +147,6 @@ public class RemoteLogMetadataManagerTest {
     }
 
     private static Collection<Arguments> remoteLogMetadataManagers() {
-        return Arrays.asList(Arguments.of(new InmemoryRemoteLogMetadataManager()),
-                             Arguments.of(new TopicBasedRemoteLogMetadataManagerWrapperWithHarness()));
+        return Arrays.asList(Arguments.of(new InmemoryRemoteLogMetadataManager()), Arguments.of(new TopicBasedRemoteLogMetadataManagerWrapperWithHarness()));
     }
 }

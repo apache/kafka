@@ -30,6 +30,9 @@ import java.util.Optional;
  * This interface defines the lifecycle methods for {@code RemoteLogSegmentMetadata}. {@link RemoteLogSegmentLifecycleTest} tests
  * different implementations of this interface. This is responsible for managing all the segments for a given {@code topicIdPartition}
  * registered with {@link #initialize(TopicIdPartition)}.
+ *
+ * @see org.apache.kafka.server.log.remote.metadata.storage.RemoteLogSegmentLifecycleTest.RemoteLogMetadataCacheWrapper
+ * @see org.apache.kafka.server.log.remote.metadata.storage.RemoteLogSegmentLifecycleTest.TopicBasedRemoteLogMetadataManagerWrapper
  */
 public interface RemoteLogSegmentLifecycleManager extends Closeable {
 

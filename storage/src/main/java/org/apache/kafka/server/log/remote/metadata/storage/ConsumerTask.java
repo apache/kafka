@@ -60,7 +60,7 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 class ConsumerTask implements Runnable, Closeable {
     private static final Logger log = LoggerFactory.getLogger(ConsumerTask.class);
 
-    private static final long POLL_INTERVAL_MS = 30L;
+    private static final long POLL_INTERVAL_MS = 100;
 
     private final RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
     private final KafkaConsumer<byte[], byte[]> consumer;
@@ -102,15 +102,11 @@ class ConsumerTask implements Runnable, Closeable {
         log.info("Started Consumer task thread.");
         try {
             while (!closing) {
-                Set<Integer> assignedMetaPartitionsSnapshot = maybeWaitForPartitionsAssignment();
-
-                if (!assignedMetaPartitionsSnapshot.isEmpty()) {
-                    executeReassignment(assignedMetaPartitionsSnapshot);
-                }
+                maybeWaitForPartitionsAssignment();
 
                 log.info("Polling consumer to receive remote log metadata topic records");
                 ConsumerRecords<byte[], byte[]> consumerRecords
-                        = consumer.poll(Duration.ofSeconds(POLL_INTERVAL_MS));
+                        = consumer.poll(Duration.ofMillis(POLL_INTERVAL_MS));
                 for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {
                     handleRemoteLogMetadata(serde.deserialize(record.value()));
                     partitionToConsumedOffsets.put(record.partition(), record.offset());
@@ -118,10 +114,10 @@ class ConsumerTask implements Runnable, Closeable {
             }
         } catch (Exception e) {
             log.error("Error occurred in consumer task, close:[{}]", closing, e);
+        } finally {
+            closeConsumer();
+            log.info("Exiting from consumer task thread");
         }
-
-        closeConsumer();
-        log.info("Exiting from consumer task thread");
     }
 
     private void closeConsumer() {
@@ -133,13 +129,22 @@ class ConsumerTask implements Runnable, Closeable {
         }
     }
 
-    private Set<Integer> maybeWaitForPartitionsAssignment() {
+    private void maybeWaitForPartitionsAssignment() {
         Set<Integer> assignedMetaPartitionsSnapshot = Collections.emptySet();
         synchronized (assignPartitionsLock) {
-            while (assignedMetaPartitions.isEmpty()) {
+            // If it is closing, return immediately. This should be inside the assignPartitionsLock as the closing is updated
+            // in close() method with in the same lock to avoid any race conditions.
+            if (closing) {
+                return;
+            }
+
+            while (assignedMetaPartitions.isEmpty() && !closing) {
                 // If no partitions are assigned, wait until they are assigned.
-                log.info("Waiting for assigned remote log metadata partitions..");
+                log.debug("Waiting for assigned remote log metadata partitions..");
                 try {
+                    // No timeout is set here, as it is always notified. Even when it is closed, the race can happen
+                    // between the thread calling this method and the thread calling close() but closing check earlier
+                    // will guard against not coming here after closing is set and notify is invoked.
                     assignPartitionsLock.wait();
                 } catch (InterruptedException e) {
                     throw new KafkaException(e);
@@ -151,7 +156,10 @@ class ConsumerTask implements Runnable, Closeable {
                 assignPartitions = false;
             }
         }
-        return assignedMetaPartitionsSnapshot;
+
+        if (!assignedMetaPartitionsSnapshot.isEmpty()) {
+            executeReassignment(assignedMetaPartitionsSnapshot);
+        }
     }
 
     private void handleRemoteLogMetadata(RemoteLogMetadata remoteLogMetadata) {
@@ -181,7 +189,6 @@ class ConsumerTask implements Runnable, Closeable {
     private void updateAssignmentsForPartitions(Set<TopicIdPartition> addedPartitions,
                                                 Set<TopicIdPartition> removedPartitions) {
         log.info("Updating assignments for addedPartitions: {} and removedPartition: {}", addedPartitions, removedPartitions);
-        ensureNotClosed();
 
         Objects.requireNonNull(addedPartitions, "addedPartitions must not be null");
         Objects.requireNonNull(removedPartitions, "removedPartitions must not be null");
@@ -220,16 +227,16 @@ class ConsumerTask implements Runnable, Closeable {
         return assignedMetaPartitions.contains(partition);
     }
 
-    private void ensureNotClosed() {
-        if (closing) {
-            throw new IllegalStateException("This instance is already closed");
-        }
-    }
-
     public void close() {
         if (!closing) {
-            closing = true;
-            consumer.wakeup();
+            synchronized (assignPartitionsLock) {
+                // Closing should be updated only after acquiring the lock to avoid race in
+                // maybeWaitForPartitionsAssignment() where it waits on assignPartitionsLock. It should not wait
+                // if the closing is already set.
+                closing = true;
+                consumer.wakeup();
+                assignPartitionsLock.notifyAll();
+            }
         }
     }
 }
