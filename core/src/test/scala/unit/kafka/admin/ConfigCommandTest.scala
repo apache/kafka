@@ -84,25 +84,18 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldExitWithNonZeroStatusOnZkCommandWithUsersEntityWithoutZkTlsConfigFile(): Unit = {
+  def shouldExitWithNonZeroStatusOnZkCommandAlterUserQuota(): Unit = {
     assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
+      "--bootstrap-server", "localhost:9092",
       "--entity-type", "users",
-      "--describe"))
-  }
-
-  @Test
-  def shouldExitWithNonZeroStatusOnZkCommandWithBrokersEntityWithoutZkTlsConfigFile(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
-      "--entity-type", "brokers",
-      "--describe"))
+      "--entity-name", "admin",
+      "--alter", "--add-config", "consumer_byte_rate=20000"))
   }
 
   @Test
   def shouldExitWithNonZeroStatusAlterUserQuotaWithoutEntityName(): Unit = {
     assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
+      "--bootstrap-server", "localhost:9092",
       "--entity-type", "users",
       "--alter", "--add-config", "consumer_byte_rate=20000"))
   }
@@ -155,8 +148,8 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldFailParseArgumentsForUsersEntityTypeUsingZookeeper(): Unit = {
-    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("users", zkConfig = true))
+  def shouldParseArgumentsForUsersEntityTypeUsingZookeeper(): Unit = {
+    testArgumentParse("users", zkConfig = true)
   }
 
   @Test
@@ -176,7 +169,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def shouldFailParseArgumentsForBrokersEntityTypeUsingZookeeper(): Unit = {
-    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("brokers", zkConfig = true))
+    testArgumentParse("brokers", zkConfig = true)
   }
 
   @Test
@@ -897,14 +890,19 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldNotAddBrokerQuotaConfigUsingZookeeper(): Unit = {
+  def shouldNotAllowAddBrokerQuotaConfigUsingZookeeper(): Unit = {
     val alterOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "0",
+      "--entity-name", "1",
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "leader.replication.throttled.rate=10,follower.replication.throttled.rate=20"))
 
-    assertThrows(classOf[IllegalArgumentException], () => alterOpts.checkArgs())
+    val mockZkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    val mockBroker: Broker = EasyMock.createNiceMock(classOf[Broker])
+    EasyMock.expect(mockZkClient.getBroker(1)).andReturn(Option(mockBroker))
+    EasyMock.replay(mockZkClient)
+
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(mockZkClient, alterOpts, new DummyAdminZkClient(zkClient)))
   }
 
   @Test
@@ -915,6 +913,16 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       new ConfigEntry("kafka.server.ReplicaManager", "INFO"),
       new ConfigEntry("kafka.server.KafkaApi", "INFO")
     ))
+  }
+
+  @Test
+  def testNoSpecifiedEntityOptionWithDescribeBrokersInZKIsAllowed(): Unit = {
+    val optsList = List("--zookeeper", zkConnect,
+      "--entity-type", ConfigType.Broker,
+      "--describe"
+    )
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
   }
 
   @Test
@@ -1358,7 +1366,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldDeleteBrokerConfig(): Unit = {
+  def shouldNotDeleteBrokerConfigWhileBrokerUpUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
       "--entity-type", "brokers",
@@ -1380,7 +1388,12 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
     }
 
-    ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient))
+    val mockZkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    val mockBroker: Broker = EasyMock.createNiceMock(classOf[Broker])
+    EasyMock.expect(mockZkClient.getBroker(1)).andReturn(Option(mockBroker))
+    EasyMock.replay(mockZkClient)
+
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(mockZkClient, createOpts, new TestAdminZkClient(zkClient)))
   }
 
   @Test

@@ -122,14 +122,22 @@ object ConfigCommand extends Config {
     val entity = parseEntity(opts)
     val entityType = entity.root.entityType
     val entityName = entity.fullSanitizedName
+    val errorMessage = s"--bootstrap-server option must be specified to update $entityType configs $configsToBeAdded $configsToBeDeleted."
 
-    if (entityType == ConfigType.User)
+    if (entityType == ConfigType.User) {
+      if (!configsToBeAdded.isEmpty || !configsToBeDeleted.isEmpty) {
+        val info = "User configuration updates using ZooKeeper are only supported for SCRAM credential updates."
+        // make sure every added/deleted configs are SCRAM related, other configs are not supported using zookeeper
+        require(configsToBeAdded.keys().asScala.forall(propertyKey => ScramMechanism.values().map(_.mechanismName()).contains(propertyKey.toString)),
+          s"$errorMessage $info")
+        require(configsToBeDeleted.forall(propertyKey => ScramMechanism.values().map(_.mechanismName()).contains(propertyKey)),
+          s"$errorMessage $info")
+      }
       preProcessScramCredentials(configsToBeAdded)
-    else if (entityType == ConfigType.Broker) {
+    } else if (entityType == ConfigType.Broker) {
       // Dynamic broker configs may be updated using ZooKeeper only if the corresponding broker is not running.
-      if (!configsToBeAdded.isEmpty) {
+      if (!configsToBeAdded.isEmpty || !configsToBeDeleted.isEmpty) {
         val perBrokerConfig = entityName != ConfigEntityName.Default
-        val errorMessage = s"--bootstrap-server option must be specified to update broker configs $configsToBeAdded."
         val info = "Broker configuration updates using ZooKeeper are supported for bootstrapping before brokers" +
           " are started to enable encrypted password configs to be stored in ZooKeeper."
         if (perBrokerConfig) {
@@ -867,12 +875,6 @@ object ConfigCommand extends Config {
       if (options.has(zkTlsConfigFile) && options.has(bootstrapServerOpt)) {
         throw new IllegalArgumentException("--bootstrap-server doesn't support --zk-tls-config-file option. " +
           "Please use --zookeeper option instead")
-      }
-
-      // for --zookeeper option, the --zk-tls-config-file option is required to support SCRAM credential and password update
-      // before broker started operation. Other operation are not supported to use --zookeeper anymore.
-      if (options.has(zkConnectOpt) && !options.has(zkTlsConfigFile)) {
-        throw new IllegalArgumentException("--zk-tls-config-file must be specified for --zookeeper option")
       }
 
       if (hasEntityName && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
