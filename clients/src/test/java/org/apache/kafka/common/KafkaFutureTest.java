@@ -328,6 +328,19 @@ public class KafkaFutureTest {
     }
 
     @Test
+    public void testThenApplyOnSucceededFutureAndFunctionThrowsCompletionException() {
+        KafkaFutureImpl<Integer> future = new KafkaFutureImpl<>();
+        KafkaFuture<Integer> dependantFuture = future.thenApply(integer -> {
+            throw new CompletionException(new RuntimeException("We require more vespene gas"));
+        });
+        future.complete(21);
+        assertIsSuccessful(future);
+        assertIsFailed(dependantFuture);
+        awaitAndAssertResult(future, 21, null);
+        awaitAndAssertFailure(dependantFuture, RuntimeException.class, "We require more vespene gas");
+    }
+
+    @Test
     public void testThenApplyOnFailedFutureFunctionNotCalled() {
         KafkaFutureImpl<Integer> future = new KafkaFutureImpl<>();
         boolean[] ran = {false};
