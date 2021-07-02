@@ -1346,8 +1346,8 @@ class Log(@volatile private var _dir: File,
         val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
         val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
         val latestTimestampAndOffset = latestTimestampSegment.maxTimestampAndOffsetSoFar
-        Some(new TimestampAndOffset(latestTimestampAndOffset._1,
-          latestTimestampAndOffset._2,
+        Some(new TimestampAndOffset(latestTimestampAndOffset.timestamp,
+          latestTimestampAndOffset.offset,
           epochOptional))
       } else {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
