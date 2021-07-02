@@ -73,7 +73,10 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     public OffsetFetchRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         // Set the flag to false as for admin client request,
         // we don't need to wait for any pending offset state to clear.
-        return new OffsetFetchRequest.Builder(groupId.idValue, false, partitions, false);
+        return new OffsetFetchRequest.Builder(
+            Collections.singletonMap(groupId.idValue, partitions),
+            false,
+            false);
     }
 
     @Override
@@ -87,12 +90,26 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         List<CoordinatorKey> unmapped = new ArrayList<>();
 
-        if (response.error() != Errors.NONE) {
-            handleError(groupId, response.error(), failed, unmapped);
+        Errors responseError = response.error();
+        // check if error is null, if it is we are dealing with v8 response
+        if (responseError == null) {
+            if (response.groupHasError(groupId.idValue)) {
+                responseError = response.groupLevelError(groupId.idValue);
+            } else {
+                responseError = Errors.NONE;
+            }
+        }
+
+        if (responseError != Errors.NONE) {
+            handleError(groupId, responseError, failed, unmapped);
         } else {
             final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
-            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
-                response.responseData().entrySet()) {
+            // if entry for group level response data is null, we are getting back an older version
+            // of the response
+            Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData =
+                response.responseData(groupId.idValue) == null ? response.oldResponseData() :
+                    response.responseData(groupId.idValue);
+            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
                 final TopicPartition topicPartition = entry.getKey();
                 OffsetFetchResponse.PartitionData partitionData = entry.getValue();
                 final Errors error = partitionData.error;

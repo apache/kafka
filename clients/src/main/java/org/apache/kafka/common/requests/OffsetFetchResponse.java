@@ -16,10 +16,14 @@
  */
 package org.apache.kafka.common.requests;
 
+import java.util.Map.Entry;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseGroup;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponsePartition;
+import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponsePartitions;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopic;
+import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -65,6 +69,8 @@ public class OffsetFetchResponse extends AbstractResponse {
 
     private final OffsetFetchResponseData data;
     private final Errors error;
+    private final Map<String, Errors> groupLevelErrors = new HashMap<>();
+    private final Map<String, Map<TopicPartition, PartitionData>> groupToPartitionData = new HashMap<>();
 
     public static final class PartitionData {
         public final long offset;
@@ -113,8 +119,14 @@ public class OffsetFetchResponse extends AbstractResponse {
         }
     }
 
+    public OffsetFetchResponse(OffsetFetchResponseData data) {
+        super(ApiKeys.OFFSET_FETCH);
+        this.data = data;
+        this.error = null;
+    }
+
     /**
-     * Constructor for all versions without throttle time.
+     * Constructor without throttle time for version 0 to version 7.
      * @param error Potential coordinator or group level error code (for api version 2 and later)
      * @param responseData Fetched offset information grouped by topic-partition
      */
@@ -123,7 +135,7 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     /**
-     * Constructor with throttle time
+     * Constructor with throttle time for version 0 to 7
      * @param throttleTimeMs The time in milliseconds that this response was throttled
      * @param error Potential coordinator or group level error code (for api version 2 and later)
      * @param responseData Fetched offset information grouped by topic-partition
@@ -154,6 +166,56 @@ public class OffsetFetchResponse extends AbstractResponse {
         this.error = error;
     }
 
+    /**
+     * Constructor without throttle time for version 8 and above.
+     * @param errors Error code on a per group level basis
+     * @param responseData Fetched offset information grouped group id
+     */
+    public OffsetFetchResponse(Map<String, Errors> errors, Map<String, Map<TopicPartition, PartitionData>> responseData) {
+        this(DEFAULT_THROTTLE_TIME, errors, responseData);
+    }
+
+    /**
+     * Constructor with throttle time for version 8 and above.
+     * @param throttleTimeMs The time in milliseconds that this response was throttled
+     * @param errors Potential coordinator or group level error code (for api version 2 and later)
+     * @param responseData Fetched offset information grouped by topic-partition and by group
+     */
+    public OffsetFetchResponse(int throttleTimeMs, Map<String, Errors> errors, Map<String,
+        Map<TopicPartition, PartitionData>> responseData) {
+        super(ApiKeys.OFFSET_FETCH);
+        List<OffsetFetchResponseGroup> groupList = new ArrayList<>();
+        for (Entry<String, Map<TopicPartition, PartitionData>> entry : responseData.entrySet()) {
+            Map<String, OffsetFetchResponseTopics> offsetFetchResponseTopicsMap = new HashMap<>();
+            for (Entry<TopicPartition, PartitionData> partitionEntry :
+                responseData.get(entry.getKey()).entrySet()) {
+                String topicName = partitionEntry.getKey().topic();
+                OffsetFetchResponseTopics topic =
+                    offsetFetchResponseTopicsMap.getOrDefault(topicName,
+                        new OffsetFetchResponseTopics().setName(topicName));
+                PartitionData partitionData = partitionEntry.getValue();
+                topic.partitions().add(new OffsetFetchResponsePartitions()
+                    .setPartitionIndex(partitionEntry.getKey().partition())
+                    .setErrorCode(partitionData.error.code())
+                    .setCommittedOffset(partitionData.offset)
+                    .setCommittedLeaderEpoch(
+                        partitionData.leaderEpoch.orElse(NO_PARTITION_LEADER_EPOCH))
+                    .setMetadata(partitionData.metadata));
+                offsetFetchResponseTopicsMap.put(topicName, topic);
+            }
+            groupList.add(new OffsetFetchResponseGroup()
+                .setGroupId(entry.getKey())
+                .setTopics(new ArrayList<>(offsetFetchResponseTopicsMap.values()))
+                .setErrorCode(errors.get(entry.getKey()).code()));
+            groupLevelErrors.put(entry.getKey(), errors.get(entry.getKey()));
+            groupToPartitionData.put(entry.getKey(), responseData.get(entry.getKey()));
+        }
+        this.data = new OffsetFetchResponseData()
+            .setGroupIds(groupList)
+            .setThrottleTimeMs(throttleTimeMs);
+        this.error = null;
+    }
+
     public OffsetFetchResponse(OffsetFetchResponseData data, short version) {
         super(ApiKeys.OFFSET_FETCH);
         this.data = data;
@@ -161,7 +223,31 @@ public class OffsetFetchResponse extends AbstractResponse {
         // for older versions there is no top-level error in the response and all errors are partition errors,
         // so if there is a group or coordinator error at the partition level use that as the top-level error.
         // this way clients can depend on the top-level error regardless of the offset fetch version.
-        this.error = version >= 2 ? Errors.forCode(data.errorCode()) : topLevelError(data);
+        // we return the error differently starting with version 8, so we will only populate the
+        // error field if we are between version 2 and 7. if we are in version 8 or greater, then
+        // we will populate the map of group id to error codes.
+        if (version < 8) {
+            this.error = version >= 2 ? Errors.forCode(data.errorCode()) : topLevelError(data);
+        } else {
+            for (OffsetFetchResponseGroup group : data.groupIds()) {
+                this.groupLevelErrors.put(group.groupId(), Errors.forCode(group.errorCode()));
+                Map<TopicPartition, PartitionData> partitionDataMap = new HashMap<>();
+                for (OffsetFetchResponseTopics topic : group.topics()) {
+                    for (OffsetFetchResponsePartitions partition : topic.partitions()) {
+                        TopicPartition tp = new TopicPartition(topic.name(),
+                            partition.partitionIndex());
+                        PartitionData pd = new PartitionData(
+                            partition.committedOffset(),
+                            Optional.of(partition.committedLeaderEpoch()),
+                            partition.metadata(),
+                            Errors.forCode(partition.errorCode()));
+                        partitionDataMap.put(tp, pd);
+                    }
+                }
+                this.groupToPartitionData.put(group.groupId(), partitionDataMap);
+            }
+            this.error = null;
+        }
     }
 
     private static Errors topLevelError(OffsetFetchResponseData data) {
@@ -185,21 +271,42 @@ public class OffsetFetchResponse extends AbstractResponse {
         return error != Errors.NONE;
     }
 
+    public boolean groupHasError(String groupId) {
+        return groupLevelErrors.get(groupId) != Errors.NONE;
+    }
+
     public Errors error() {
         return error;
+    }
+
+    public Errors groupLevelError(String groupId) {
+        return groupLevelErrors.get(groupId);
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
-        updateErrorCounts(counts, error);
-        data.topics().forEach(topic ->
-                topic.partitions().forEach(partition ->
+        if (!groupLevelErrors.isEmpty()) {
+            // built response with v8 or above
+            for (Map.Entry<String, Errors> entry : groupLevelErrors.entrySet()) {
+                updateErrorCounts(counts, entry.getValue());
+            }
+            for (OffsetFetchResponseGroup group : data.groupIds()) {
+                group.topics().forEach(topic ->
+                    topic.partitions().forEach(partition ->
                         updateErrorCounts(counts, Errors.forCode(partition.errorCode()))));
+            }
+        } else {
+            // built response with v0-v7
+            updateErrorCounts(counts, error);
+            data.topics().forEach(topic ->
+                topic.partitions().forEach(partition ->
+                    updateErrorCounts(counts, Errors.forCode(partition.errorCode()))));
+        }
         return counts;
     }
 
-    public Map<TopicPartition, PartitionData> responseData() {
+    public Map<TopicPartition, PartitionData> oldResponseData() {
         Map<TopicPartition, PartitionData> responseData = new HashMap<>();
         for (OffsetFetchResponseTopic topic : data.topics()) {
             for (OffsetFetchResponsePartition partition : topic.partitions()) {
@@ -212,6 +319,10 @@ public class OffsetFetchResponse extends AbstractResponse {
             }
         }
         return responseData;
+    }
+
+    public Map<TopicPartition, PartitionData> responseData(String groupId) {
+        return groupToPartitionData.get(groupId);
     }
 
     public static OffsetFetchResponse parse(ByteBuffer buffer, short version) {

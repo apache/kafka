@@ -175,7 +175,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }),
     ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => Errors.forCode(
       resp.data.topics().get(0).partitions().get(0).errorCode)),
-    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error),
+    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.groupLevelError(group)),
     ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => {
       Errors.forCode(resp.data.coordinators.asScala.find(g => group == g.key).head.errorCode)
     }),
@@ -1360,15 +1360,15 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     // without describe permission on the topic, we shouldn't be able to fetch offsets
     val offsetFetchRequest = new requests.OffsetFetchRequest.Builder(group, false, null, false).build()
     var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    assertEquals(Errors.NONE, offsetFetchResponse.error)
-    assertTrue(offsetFetchResponse.responseData.isEmpty)
+    assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(group))
+    assertTrue(offsetFetchResponse.oldResponseData.isEmpty)
 
     // now add describe permission on the topic and verify that the offset can be fetched
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    assertEquals(Errors.NONE, offsetFetchResponse.error)
-    assertTrue(offsetFetchResponse.responseData.containsKey(tp))
-    assertEquals(offset, offsetFetchResponse.responseData.get(tp).offset)
+    assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(group))
+    assertTrue(offsetFetchResponse.responseData(group).containsKey(tp))
+    assertEquals(offset, offsetFetchResponse.responseData(group).get(tp).offset)
   }
 
   @Test
