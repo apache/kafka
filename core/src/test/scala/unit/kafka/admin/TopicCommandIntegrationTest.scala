@@ -287,7 +287,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--partitions", "3")))
 
-    val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).values().get(testTopicName).get()
+    val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get()
     assertTrue(topicDescription.partitions().size() == 3)
   }
 
@@ -300,7 +300,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3")))
 
-    val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).values().get(testTopicName).get()
+    val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get()
     assertTrue(topicDescription.partitions().size() == 3)
     assertEquals(List(4,2), topicDescription.partitions().get(2).replicas().asScala.map(_.id()))
   }
@@ -797,7 +797,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       Collections.emptyList(), Collections.emptyList())
     val describeResult = AdminClientTestUtils.describeTopicsResult(testTopicName, new TopicDescription(
       testTopicName, false, Collections.singletonList(topicPartitionInfo)))
-    when(adminClient.describeTopics(any())).thenReturn(describeResult)
+    when(adminClient.describeTopics(any(classOf[java.util.Collection[String]]))).thenReturn(describeResult)
 
     val result = AdminClientTestUtils.createPartitionsResult(testTopicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception())
     when(adminClient.createPartitions(any(), any())).thenReturn(result)

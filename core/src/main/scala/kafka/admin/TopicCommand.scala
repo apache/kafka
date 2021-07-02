@@ -28,7 +28,7 @@ import org.apache.kafka.clients.admin.CreatePartitionsOptions
 import org.apache.kafka.clients.admin.CreateTopicsOptions
 import org.apache.kafka.clients.admin.DeleteTopicsOptions
 import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, Config => JConfig}
-import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo, Uuid}
+import org.apache.kafka.common.{TopicCollection, TopicPartition, TopicPartitionInfo, Uuid}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, TopicExistsException, UnsupportedVersionException}
@@ -264,7 +264,7 @@ object TopicCommand extends Logging {
       ensureTopicExists(topics, opts.topic, !opts.ifExists)
 
       if (topics.nonEmpty) {
-        val topicsInfo = adminClient.describeTopics(topics.asJavaCollection).values()
+        val topicsInfo = adminClient.describeTopics(topics.asJavaCollection).topicNameValues()
         val newPartitions = topics.map { topicName =>
           if (topic.hasReplicaAssignment) {
             val startPartitionId = topicsInfo.get(topicName).get().partitions().size()
@@ -313,9 +313,9 @@ object TopicCommand extends Logging {
         ensureTopicExists(topics, opts.topic, !opts.ifExists)
 
       val topicDescriptions = if (topicIds.nonEmpty) {
-        adminClient.describeTopicsWithIds(topicIds.toSeq.asJavaCollection).all().get().values().asScala
+        adminClient.describeTopics(TopicCollection.ofTopicIds(topicIds.toSeq.asJavaCollection)).allTopicIds().get().values().asScala
       } else if (topics.nonEmpty) {
-        adminClient.describeTopics(topics.asJavaCollection).all().get().values().asScala
+        adminClient.describeTopics(TopicCollection.ofTopicNames(topics.asJavaCollection)).allTopicNames().get().values().asScala
       } else {
         Seq()
       }

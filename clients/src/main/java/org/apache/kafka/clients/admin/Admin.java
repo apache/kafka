@@ -25,7 +25,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -304,30 +303,33 @@ public interface Admin extends AutoCloseable {
      * @param options    The options to use when describing the topic.
      * @return The DescribeTopicsResult.
      */
-    DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options);
-
-    /**
-     * Describe some topics in the cluster by their topicId, with the default options.
-     * <p>
-     * This is a convenience method for {@link #describeTopicsWithIds(Collection, DescribeTopicsOptions)} with
-     * default options. See the overload for more details.
-     *
-     * @param topicIds The ids of the topics to describe.
-     * @return The DescribeTopicsResultWithIds
-     */
-    default DescribeTopicsResultWithIds describeTopicsWithIds(Collection<Uuid> topicIds) {
-        return describeTopicsWithIds(topicIds, new DescribeTopicsOptions());
+    default DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options) {
+        return describeTopics(TopicCollection.ofTopicNames(topicNames), options);
     }
 
     /**
-     * Describe some topics in the cluster by their topicId, with specified options.
+     * This is a convenience method for {@link #describeTopics(TopicCollection, DescribeTopicsOptions)}
+     * with default options. See the overload for more details.
+     * <p>
+     * When using topic IDs, this operation is supported by brokers with version 3.0.0 or higher.
      *
-     * @param topicIds The ids of the topics to describe.
-     * @param options  The options to use when describing the topic.
-     * @return DescribeTopicsResultWithIds
+     * @param topics The topics to delete.
+     * @return The DescribeTopicsResult.
      */
-    DescribeTopicsResultWithIds describeTopicsWithIds(Collection<Uuid> topicIds, DescribeTopicsOptions options);
+    default DescribeTopicsResult describeTopics(TopicCollection topics) {
+        return describeTopics(topics, new DescribeTopicsOptions());
+    }
 
+    /**
+     * describe a batch of topics.
+     *
+     * When using topic IDs, this operation is supported by brokers with version 3.0.0 or higher.
+     *
+     * @param topics  The topics to delete.
+     * @param options The options to use when deleting the topics.
+     * @return The DescribeTopicsResult.
+     */
+    DescribeTopicsResult describeTopics(TopicCollection topics, DescribeTopicsOptions options);
 
     /**
      * Get information about the nodes in the cluster, using the default options.

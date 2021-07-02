@@ -94,11 +94,11 @@ public class AdminClientTestUtils {
     public static DescribeTopicsResult describeTopicsResult(String topic, TopicDescription description) {
         KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
         future.complete(description);
-        return new DescribeTopicsResult(Collections.singletonMap(topic, future));
+        return DescribeTopicsResult.ofTopicNames(Collections.singletonMap(topic, future));
     }
 
     public static DescribeTopicsResult describeTopicsResult(Map<String, TopicDescription> topicDescriptions) {
-        return new DescribeTopicsResult(topicDescriptions.entrySet().stream()
+        return DescribeTopicsResult.ofTopicNames(topicDescriptions.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> KafkaFuture.completedFuture(e.getValue()))));
     }
 

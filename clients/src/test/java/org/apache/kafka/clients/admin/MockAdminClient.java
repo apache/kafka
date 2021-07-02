@@ -368,8 +368,18 @@ public class MockAdminClient extends AdminClient {
         return new ListTopicsResult(future);
     }
 
+
     @Override
-    synchronized public DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options) {
+    synchronized public DescribeTopicsResult describeTopics(TopicCollection topics, DescribeTopicsOptions options) {
+        if (topics instanceof TopicIdCollection)
+            return DescribeTopicsResult.ofTopicIds(new HashMap<>(handleDescribeTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options)));
+        else if (topics instanceof TopicNameCollection)
+            return DescribeTopicsResult.ofTopicNames(new HashMap<>(handleDescribeTopicsByNames(((TopicNameCollection) topics).topicNames(), options)));
+        else
+            throw new IllegalArgumentException("The TopicCollection provided did not match any supported classes for deleteTopics.");
+    }
+
+    private Map<String, KafkaFuture<TopicDescription>> handleDescribeTopicsByNames(Collection<String> topicNames, DescribeTopicsOptions options) {
         Map<String, KafkaFuture<TopicDescription>> topicDescriptions = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
@@ -380,7 +390,7 @@ public class MockAdminClient extends AdminClient {
             }
 
             --timeoutNextRequests;
-            return new DescribeTopicsResult(topicDescriptions);
+            return topicDescriptions;
         }
 
         for (String requestedTopic : topicNames) {
@@ -406,10 +416,10 @@ public class MockAdminClient extends AdminClient {
             }
         }
 
-        return new DescribeTopicsResult(topicDescriptions);
+        return topicDescriptions;
     }
 
-    synchronized public DescribeTopicsResultWithIds describeTopicsWithIds(Collection<Uuid> topicIds, DescribeTopicsOptions options) {
+    synchronized public Map<Uuid, KafkaFuture<TopicDescription>>  handleDescribeTopicsUsingIds(Collection<Uuid> topicIds, DescribeTopicsOptions options) {
 
         Map<Uuid, KafkaFuture<TopicDescription>> topicDescriptions = new HashMap<>();
 
@@ -421,7 +431,7 @@ public class MockAdminClient extends AdminClient {
             }
 
             --timeoutNextRequests;
-            return new DescribeTopicsResultWithIds(topicDescriptions);
+            return topicDescriptions;
         }
 
         for (Uuid requestedTopicId : topicIds) {
@@ -448,7 +458,7 @@ public class MockAdminClient extends AdminClient {
             }
         }
 
-        return new DescribeTopicsResultWithIds(topicDescriptions);
+        return topicDescriptions;
     }
 
     @Override

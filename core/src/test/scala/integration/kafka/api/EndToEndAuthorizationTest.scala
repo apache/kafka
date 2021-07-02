@@ -356,7 +356,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     sendRecords(producer, numRecords, tp2)
     consumer.assign(List(tp2).asJava)
     consumeRecords(consumer, numRecords, topic = topic2)
-    val describeResults = adminClient.describeTopics(Set(topic, topic2).asJava).values
+    val describeResults = adminClient.describeTopics(Set(topic, topic2).asJava).topicNameValues()
     assertEquals(1, describeResults.get(topic2).get().partitions().size())
     val e2 = assertThrows(classOf[ExecutionException], () => adminClient.describeTopics(Set(topic).asJava).all().get())
     assertTrue(e2.getCause.isInstanceOf[TopicAuthorizationException], "Unexpected exception " + e2.getCause)
@@ -382,7 +382,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
     sendRecords(producer, numRecords, tp)
     consumeRecordsIgnoreOneAuthorizationException(consumer, numRecords, startingOffset = 0, topic)
-    val describeResults2 = adminClient.describeTopics(Set(topic, topic2).asJava).values
+    val describeResults2 = adminClient.describeTopics(Set(topic, topic2).asJava).topicNameValues
     assertEquals(1, describeResults2.get(topic).get().partitions().size())
     assertEquals(1, describeResults2.get(topic2).get().partitions().size())
   }
