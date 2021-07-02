@@ -1420,17 +1420,17 @@ public class WorkerTest extends ThreadedTest {
 
         // Instantiate and configure internal
         EasyMock.expect(
-                plugins.newConverter(
-                        config,
-                        WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG,
-                        ClassLoaderUsage.PLUGINS
+                plugins.newInternalConverter(
+                        EasyMock.eq(true),
+                        EasyMock.anyString(),
+                        EasyMock.anyObject()
                 )
         ).andReturn(internalKeyConverter);
         EasyMock.expect(
-                plugins.newConverter(
-                        config,
-                        WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG,
-                        ClassLoaderUsage.PLUGINS
+                plugins.newInternalConverter(
+                        EasyMock.eq(false),
+                        EasyMock.anyString(),
+                        EasyMock.anyObject()
                 )
         ).andReturn(internalValueConverter);
         EasyMock.expectLastCall();

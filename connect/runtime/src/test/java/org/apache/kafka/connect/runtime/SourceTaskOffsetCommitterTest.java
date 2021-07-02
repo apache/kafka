@@ -67,10 +67,6 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter.schemas.enable", "false");
-        workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         workerProps.put("offset.flush.interval.ms",
                 Long.toString(DEFAULT_OFFSET_COMMIT_INTERVAL_MS));

@@ -133,10 +133,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter.schemas.enable", "false");
-        workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         workerConfig = new StandaloneConfig(workerProps);
