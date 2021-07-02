@@ -19,6 +19,8 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.AbstractIterator;
@@ -629,12 +631,13 @@ public class MemoryRecords extends AbstractRecords {
                                                    int partitionLeaderEpoch, long producerId, short producerEpoch,
                                                    EndTransactionMarker marker) {
         boolean isTransactional = true;
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
                 TimestampType.CREATE_TIME, initialOffset, timestamp, producerId, producerEpoch,
                 RecordBatch.NO_SEQUENCE, isTransactional, true, partitionLeaderEpoch,
-                buffer.capacity());
-        builder.appendEndTxnMarker(timestamp, marker);
-        builder.close();
+                buffer.capacity())
+        ) {
+            builder.appendEndTxnMarker(timestamp, marker);
+        }
     }
 
     public static MemoryRecords withLeaderChangeMessage(
@@ -654,14 +657,69 @@ public class MemoryRecords extends AbstractRecords {
                                                  long timestamp,
                                                  int leaderEpoch,
                                                  LeaderChangeMessage leaderChangeMessage) {
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
+        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
             buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
             TimestampType.CREATE_TIME, initialOffset, timestamp,
             RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-            false, true, leaderEpoch, buffer.capacity()
-        );
-        builder.appendLeaderChangeMessage(timestamp, leaderChangeMessage);
-        builder.close();
+            false, true, leaderEpoch, buffer.capacity())
+        ) {
+            builder.appendLeaderChangeMessage(timestamp, leaderChangeMessage);
+        }
     }
 
+    public static MemoryRecords withSnapshotHeaderRecord(
+        long initialOffset,
+        long timestamp,
+        int leaderEpoch,
+        ByteBuffer buffer,
+        SnapshotHeaderRecord snapshotHeaderRecord
+    ) {
+        writeSnapshotHeaderRecord(buffer, initialOffset, timestamp, leaderEpoch, snapshotHeaderRecord);
+        buffer.flip();
+        return MemoryRecords.readableRecords(buffer);
+    }
+
+    private static void writeSnapshotHeaderRecord(ByteBuffer buffer,
+        long initialOffset,
+        long timestamp,
+        int leaderEpoch,
+        SnapshotHeaderRecord snapshotHeaderRecord
+    ) {
+        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
+            buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+            TimestampType.CREATE_TIME, initialOffset, timestamp,
+            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+            false, true, leaderEpoch, buffer.capacity())
+        ) {
+            builder.appendSnapshotHeaderMessage(timestamp, snapshotHeaderRecord);
+        }
+    }
+
+    public static MemoryRecords withSnapshotFooterRecord(
+        long initialOffset,
+        long timestamp,
+        int leaderEpoch,
+        ByteBuffer buffer,
+        SnapshotFooterRecord snapshotFooterRecord
+    ) {
+        writeSnapshotFooterRecord(buffer, initialOffset, timestamp, leaderEpoch, snapshotFooterRecord);
+        buffer.flip();
+        return MemoryRecords.readableRecords(buffer);
+    }
+
+    private static void writeSnapshotFooterRecord(ByteBuffer buffer,
+        long initialOffset,
+        long timestamp,
+        int leaderEpoch,
+        SnapshotFooterRecord snapshotFooterRecord
+    ) {
+        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
+            buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+            TimestampType.CREATE_TIME, initialOffset, timestamp,
+            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+            false, true, leaderEpoch, buffer.capacity())
+        ) {
+            builder.appendSnapshotFooterMessage(timestamp, snapshotFooterRecord);
+        }
+    }
 }

@@ -858,9 +858,10 @@ public class StreamsConfigTest {
     @Test
     public void shouldUseCorrectDefaultsWhenNoneSpecified() {
         final StreamsConfig config = new StreamsConfig(getStreamsConfig());
-        assertTrue(config.defaultKeySerde() instanceof Serdes.ByteArraySerde);
-        assertTrue(config.defaultValueSerde() instanceof Serdes.ByteArraySerde);
+
         assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
+        assertThrows(ConfigException.class, config::defaultKeySerde);
+        assertThrows(ConfigException.class, config::defaultValueSerde);
     }
 
     @Test

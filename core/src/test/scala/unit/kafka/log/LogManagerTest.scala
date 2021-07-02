@@ -20,7 +20,7 @@ package kafka.log
 import com.yammer.metrics.core.MetricName
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.OffsetCheckpointFile
-import kafka.server.metadata.{CachedConfigRepository, ConfigRepository}
+import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.server.{FetchDataInfo, FetchLogEnd}
 import kafka.utils._
 import org.apache.directory.api.util.FileUtils
@@ -245,10 +245,11 @@ class LogManagerTest {
   def testCleanupSegmentsToMaintainSize(): Unit = {
     val setSize = TestUtils.singletonRecords("test".getBytes()).sizeInBytes
     logManager.shutdown()
-    val configRepository = new CachedConfigRepository
     val segmentBytes = 10 * setSize
-    configRepository.setTopicConfig(name, LogConfig.SegmentBytesProp, segmentBytes.toString)
-    configRepository.setTopicConfig(name, LogConfig.RetentionBytesProp, (5L * 10L * setSize + 10L).toString)
+    val properties = new Properties()
+    properties.put(LogConfig.SegmentBytesProp, segmentBytes.toString)
+    properties.put(LogConfig.RetentionBytesProp, (5L * 10L * setSize + 10L).toString)
+    val configRepository = MockConfigRepository.forTopic(name, properties)
 
     logManager = createLogManager(configRepository = configRepository)
     logManager.startup(Set.empty)
@@ -302,8 +303,7 @@ class LogManagerTest {
 
   private def testDoesntCleanLogs(policy: String): Unit = {
     logManager.shutdown()
-    val configRepository = new CachedConfigRepository
-    configRepository.setTopicConfig(name, LogConfig.CleanupPolicyProp, policy)
+    val configRepository = MockConfigRepository.forTopic(name, LogConfig.CleanupPolicyProp, policy)
 
     logManager = createLogManager(configRepository = configRepository)
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), topicId = None)
@@ -329,8 +329,7 @@ class LogManagerTest {
   @Test
   def testTimeBasedFlush(): Unit = {
     logManager.shutdown()
-    val configRepository = new CachedConfigRepository
-    configRepository.setTopicConfig(name, LogConfig.FlushMsProp, "1000")
+    val configRepository = MockConfigRepository.forTopic(name, LogConfig.FlushMsProp, "1000")
 
     logManager = createLogManager(configRepository = configRepository)
     logManager.startup(Set.empty)
@@ -421,7 +420,7 @@ class LogManagerTest {
   }
 
   private def createLogManager(logDirs: Seq[File] = Seq(this.logDir),
-                               configRepository: ConfigRepository = new CachedConfigRepository): LogManager = {
+                               configRepository: ConfigRepository = new MockConfigRepository): LogManager = {
     TestUtils.createLogManager(
       defaultConfig = logConfig,
       configRepository = configRepository,
@@ -509,7 +508,7 @@ class LogManagerTest {
   @Test
   def testTopicConfigChangeUpdatesLogConfig(): Unit = {
     logManager.shutdown()
-    val spyConfigRepository = spy(new CachedConfigRepository)
+    val spyConfigRepository = spy(new MockConfigRepository)
     logManager = createLogManager(configRepository = spyConfigRepository)
     val spyLogManager = spy(logManager)
     val mockLog = mock(classOf[Log])
@@ -545,7 +544,7 @@ class LogManagerTest {
   @Test
   def testConfigChangeGetsCleanedUp(): Unit = {
     logManager.shutdown()
-    val spyConfigRepository = spy(new CachedConfigRepository)
+    val spyConfigRepository = spy(new MockConfigRepository)
     logManager = createLogManager(configRepository = spyConfigRepository)
     val spyLogManager = spy(logManager)
 
@@ -564,7 +563,7 @@ class LogManagerTest {
   @Test
   def testBrokerConfigChangeDeliveredToAllLogs(): Unit = {
     logManager.shutdown()
-    val spyConfigRepository = spy(new CachedConfigRepository)
+    val spyConfigRepository = spy(new MockConfigRepository)
     logManager = createLogManager(configRepository = spyConfigRepository)
     val spyLogManager = spy(logManager)
     val mockLog = mock(classOf[Log])

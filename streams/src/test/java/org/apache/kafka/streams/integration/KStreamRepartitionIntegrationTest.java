@@ -81,6 +81,7 @@ import static org.junit.Assert.assertTrue;
 
 @RunWith(value = Parameterized.class)
 @Category({IntegrationTest.class})
+@SuppressWarnings("deprecation")
 public class KStreamRepartitionIntegrationTest {
     private static final int NUM_BROKERS = 1;
 

@@ -58,10 +58,8 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
     public void init(final InternalProcessorContext<Void, Void> context) {
         super.init(context);
         this.context = context;
-        final Serializer<?> contextKeySerializer = ProcessorContextUtils.getKeySerializer(context);
-        final Serializer<?> contextValueSerializer = ProcessorContextUtils.getValueSerializer(context);
-        keySerializer = prepareKeySerializer(keySerializer, contextKeySerializer, contextValueSerializer);
-        valSerializer = prepareValueSerializer(valSerializer, contextKeySerializer, contextValueSerializer);
+        keySerializer = prepareKeySerializer(keySerializer, context, this.name());
+        valSerializer = prepareValueSerializer(valSerializer, context, this.name());
     }
 
     @Override

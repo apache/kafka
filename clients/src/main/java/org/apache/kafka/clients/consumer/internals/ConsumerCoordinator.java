@@ -1216,13 +1216,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             if (generationUnchanged()) {
                                 future.raise(error);
                             } else {
-                                if (ConsumerCoordinator.this.state == MemberState.PREPARING_REBALANCE) {
-                                    future.raise(new RebalanceInProgressException("Offset commit cannot be completed since the " +
-                                        "consumer member's old generation is fenced by its group instance id, it is possible that " +
-                                        "this consumer has already participated another rebalance and got a new generation"));
-                                } else {
-                                    future.raise(new CommitFailedException());
+                                KafkaException exception;
+                                synchronized (ConsumerCoordinator.this) {
+                                    if (ConsumerCoordinator.this.state == MemberState.PREPARING_REBALANCE) {
+                                        exception = new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                                            "consumer member's old generation is fenced by its group instance id, it is possible that " +
+                                            "this consumer has already participated another rebalance and got a new generation");
+                                    } else {
+                                        exception = new CommitFailedException();
+                                    }
                                 }
+                                future.raise(exception);
                             }
                             return;
                         } else if (error == Errors.REBALANCE_IN_PROGRESS) {
@@ -1245,14 +1249,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                             // only need to reset generation and re-join group if generation has not changed or we are not in rebalancing;
                             // otherwise only raise rebalance-in-progress error
-                            if (!generationUnchanged() && ConsumerCoordinator.this.state == MemberState.PREPARING_REBALANCE) {
-                                future.raise(new RebalanceInProgressException("Offset commit cannot be completed since the " +
-                                    "consumer member's generation is already stale, meaning it has already participated another rebalance and " +
-                                    "got a new generation. You can try completing the rebalance by calling poll() and then retry commit again"));
-                            } else {
-                                resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
-                                future.raise(new CommitFailedException());
+                            KafkaException exception;
+                            synchronized (ConsumerCoordinator.this) {
+                                if (!generationUnchanged() && ConsumerCoordinator.this.state == MemberState.PREPARING_REBALANCE) {
+                                    exception = new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                                        "consumer member's generation is already stale, meaning it has already participated another rebalance and " +
+                                        "got a new generation. You can try completing the rebalance by calling poll() and then retry commit again");
+                                } else {
+                                    resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
+                                    exception = new CommitFailedException();
+                                }
                             }
+                            future.raise(exception);
                             return;
                         } else {
                             future.raise(new KafkaException("Unexpected error in commit: " + error.message()));

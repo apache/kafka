@@ -101,7 +101,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   def createConsumers(numStreams: Int,
                       consumerConfigProps: Properties,
                       customRebalanceListener: Option[ConsumerRebalanceListener],
-                      whitelist: Option[String]): Seq[ConsumerWrapper] = {
+                      include: Option[String]): Seq[ConsumerWrapper] = {
     // Disable consumer auto offsets commit to prevent data loss.
     maybeSetDefaultProperty(consumerConfigProps, "enable.auto.commit", "false")
     // Hardcode the deserializer to ByteArrayDeserializer
@@ -113,8 +113,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       consumerConfigProps.setProperty("client.id", groupIdString + "-" + i.toString)
       new KafkaConsumer[Array[Byte], Array[Byte]](consumerConfigProps)
     }
-    whitelist.getOrElse(throw new IllegalArgumentException("White list cannot be empty"))
-    consumers.map(consumer => new ConsumerWrapper(consumer, customRebalanceListener, whitelist))
+    include.getOrElse(throw new IllegalArgumentException("include list cannot be empty"))
+    consumers.map(consumer => new ConsumerWrapper(consumer, customRebalanceListener, include))
   }
 
   def commitOffsets(consumerWrapper: ConsumerWrapper): Unit = {
@@ -295,8 +295,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   // Visible for testing
   private[tools] class ConsumerWrapper(private[tools] val consumer: Consumer[Array[Byte], Array[Byte]],
                                        customRebalanceListener: Option[ConsumerRebalanceListener],
-                                       whitelistOpt: Option[String]) {
-    val regex = whitelistOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports whitelist."))
+                                       includeOpt: Option[String]) {
+    val regex = includeOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports include."))
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
 
     // We manually maintain the consumed offsets for historical reasons and it could be simplified
@@ -306,12 +306,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     def init(): Unit = {
       debug("Initiating consumer")
       val consumerRebalanceListener = new InternalRebalanceListener(this, customRebalanceListener)
-      whitelistOpt.foreach { whitelist =>
+      includeOpt.foreach { include =>
         try {
-          consumer.subscribe(Pattern.compile(IncludeList(whitelist).regex), consumerRebalanceListener)
+          consumer.subscribe(Pattern.compile(IncludeList(include).regex), consumerRebalanceListener)
         } catch {
           case pse: RuntimeException =>
-            error(s"Invalid expression syntax: $whitelist")
+            error(s"Invalid expression syntax: $include")
             throw pse
         }
       }
@@ -455,7 +455,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       .defaultsTo(1)
 
     val whitelistOpt = parser.accepts("whitelist",
-      "Whitelist of topics to mirror.")
+      "DEPRECATED, use --include instead; ignored if --include specified. List of included topics to mirror.")
+      .withRequiredArg()
+      .describedAs("Java regex (String)")
+      .ofType(classOf[String])
+
+    val includeOpt = parser.accepts("include",
+      "List of included topics to mirror.")
       .withRequiredArg()
       .describedAs("Java regex (String)")
       .ofType(classOf[String])
@@ -504,8 +510,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       CommandLineUtils.checkRequiredArgs(parser, options, consumerConfigOpt, producerConfigOpt)
       val consumerProps = Utils.loadProps(options.valueOf(consumerConfigOpt))
 
-      if (!options.has(whitelistOpt)) {
-        error("whitelist must be specified")
+
+      if (!options.has(includeOpt) && !options.has(whitelistOpt)) {
+        error("include list must be specified")
         sys.exit(1)
       }
 
@@ -548,11 +555,17 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           None
         }
       }
+
+      val includedTopicsValue = if (options.has(includeOpt))
+        Option(options.valueOf(includeOpt))
+      else
+        Option(options.valueOf(whitelistOpt))
+
       val mirrorMakerConsumers = createConsumers(
         numStreams,
         consumerProps,
         customRebalanceListener,
-        Option(options.valueOf(whitelistOpt)))
+        includedTopicsValue)
 
       // Create mirror maker threads.
       mirrorMakerThreads = (0 until numStreams) map (i =>

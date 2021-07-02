@@ -36,7 +36,7 @@ import kafka.log._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
-import kafka.server.metadata.{CachedConfigRepository, ConfigRepository, MetadataBroker}
+import kafka.server.metadata.{ConfigRepository, MetadataBroker, MockConfigRepository}
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -677,12 +677,6 @@ object TestUtils extends Logging {
     brokers
   }
 
-  def deleteBrokersInZk(zkClient: KafkaZkClient, ids: Seq[Int]): Seq[MetadataBroker] = {
-    val brokers = ids.map(createBroker(_, "localhost", 6667, SecurityProtocol.PLAINTEXT))
-    ids.foreach(b => zkClient.deletePath(BrokerIdsZNode.path + "/" + b))
-    brokers
-  }
-
   def getMsgStrings(n: Int): Seq[String] = {
     val buffer = new ListBuffer[String]
     for (i <- 0 until  n)
@@ -936,7 +930,7 @@ object TestUtils extends Logging {
                                           timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = servers.map(_.config.brokerId).toSet
     waitUntilTrue(() => servers.forall(server =>
-      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers.map(_.id).toSet
+      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers().map(_.id).toSet
     ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
   }
 
@@ -952,10 +946,7 @@ object TestUtils extends Logging {
                                    topic: String, expectedNumPartitions: Int): Map[TopicPartition, UpdateMetadataPartitionState] = {
     waitUntilTrue(
       () => servers.forall { server =>
-        server.metadataCache.numPartitions(topic) match {
-          case Some(numPartitions) => numPartitions == expectedNumPartitions
-          case _ => false
-        }
+        server.metadataCache.numPartitions(topic) == Some(expectedNumPartitions)
       },
       s"Topic [$topic] metadata not propagated after 60000 ms", waitTimeMs = 60000L)
 
@@ -1094,7 +1085,7 @@ object TestUtils extends Logging {
    */
   def createLogManager(logDirs: Seq[File] = Seq.empty[File],
                        defaultConfig: LogConfig = LogConfig(),
-                       configRepository: ConfigRepository = new CachedConfigRepository,
+                       configRepository: ConfigRepository = new MockConfigRepository,
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
                        time: MockTime = new MockTime()): LogManager = {
     new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
@@ -1173,12 +1164,6 @@ object TestUtils extends Logging {
     new MockIsrChangeListener()
   }
 
-  def createConfigRepository(topic: String, props: Properties): CachedConfigRepository = {
-    val configRepository = new CachedConfigRepository()
-    props.entrySet().forEach(e => configRepository.setTopicConfig(topic, e.getKey.toString, e.getValue.toString))
-    configRepository
-  }
-
   def produceMessages(servers: Seq[KafkaServer],
                       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
                       acks: Int = -1): Unit = {
@@ -1207,16 +1192,17 @@ object TestUtils extends Logging {
     values
   }
 
-  def produceMessage(servers: Seq[KafkaServer], topic: String, message: String,
+  def produceMessage(servers: Seq[KafkaServer], topic: String, message: String, timestamp: java.lang.Long = null,
                      deliveryTimeoutMs: Int = 30 * 1000, requestTimeoutMs: Int = 20 * 1000): Unit = {
     val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers),
       deliveryTimeoutMs = deliveryTimeoutMs, requestTimeoutMs = requestTimeoutMs)
     try {
-      producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
+      producer.send(new ProducerRecord(topic, null, timestamp, topic.getBytes, message.getBytes)).get
     } finally {
       producer.close()
     }
   }
+
 
   def verifyTopicDeletion(zkClient: KafkaZkClient, topic: String, numPartitions: Int, servers: Seq[KafkaServer]): Unit = {
     val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))

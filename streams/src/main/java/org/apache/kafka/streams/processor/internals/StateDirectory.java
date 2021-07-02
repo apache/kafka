@@ -129,6 +129,9 @@ public class StateDirectory {
             if (!stateDir.exists() && !stateDir.mkdir()) {
                 throw new ProcessorStateException(
                     String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
+            } else if (stateDir.exists() && !stateDir.isDirectory()) {
+                throw new ProcessorStateException(
+                    String.format("state directory [%s] can't be created as there is an existing file with the same name", stateDir.getPath()));
             }
 
             if (stateDirName.startsWith(System.getProperty("java.io.tmpdir"))) {
@@ -230,21 +233,26 @@ public class StateDirectory {
     public File getOrCreateDirectoryForTask(final TaskId taskId) {
         final File taskParentDir = getTaskDirectoryParentName(taskId);
         final File taskDir = new File(taskParentDir, StateManagerUtil.toTaskDirString(taskId));
-        if (hasPersistentStores && !taskDir.exists()) {
-            synchronized (taskDirCreationLock) {
-                // to avoid a race condition, we need to check again if the directory does not exist:
-                // otherwise, two threads might pass the outer `if` (and enter the `then` block),
-                // one blocks on `synchronized` while the other creates the directory,
-                // and the blocking one fails when trying to create it after it's unblocked
-                if (!taskParentDir.exists() && !taskParentDir.mkdir()) {
-                    throw new ProcessorStateException(
+        if (hasPersistentStores) {
+            if (!taskDir.exists()) {
+                synchronized (taskDirCreationLock) {
+                    // to avoid a race condition, we need to check again if the directory does not exist:
+                    // otherwise, two threads might pass the outer `if` (and enter the `then` block),
+                    // one blocks on `synchronized` while the other creates the directory,
+                    // and the blocking one fails when trying to create it after it's unblocked
+                    if (!taskParentDir.exists() && !taskParentDir.mkdir()) {
+                        throw new ProcessorStateException(
                             String.format("Parent [%s] of task directory [%s] doesn't exist and couldn't be created",
-                                    taskParentDir.getPath(), taskDir.getPath()));
+                                taskParentDir.getPath(), taskDir.getPath()));
+                    }
+                    if (!taskDir.exists() && !taskDir.mkdir()) {
+                        throw new ProcessorStateException(
+                            String.format("task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
+                    }
                 }
-                if (!taskDir.exists() && !taskDir.mkdir()) {
-                    throw new ProcessorStateException(
-                        String.format("task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
-                }
+            } else if (!taskDir.isDirectory()) {
+                throw new ProcessorStateException(
+                    String.format("state directory [%s] can't be created as there is an existing file with the same name", taskDir.getPath()));
             }
         }
         return taskDir;
@@ -312,9 +320,14 @@ public class StateDirectory {
      */
     File globalStateDir() {
         final File dir = new File(stateDir, "global");
-        if (hasPersistentStores && !dir.exists() && !dir.mkdir()) {
-            throw new ProcessorStateException(
-                String.format("global state directory [%s] doesn't exist and couldn't be created", dir.getPath()));
+        if (hasPersistentStores) {
+            if (!dir.exists() && !dir.mkdir()) {
+                throw new ProcessorStateException(
+                    String.format("global state directory [%s] doesn't exist and couldn't be created", dir.getPath()));
+            } else if (dir.exists() && !dir.isDirectory()) {
+                throw new ProcessorStateException(
+                    String.format("global state directory [%s] can't be created as there is an existing file with the same name", dir.getPath()));
+            }
         }
         return dir;
     }
