@@ -83,7 +83,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -162,6 +164,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private final WorkerGroupMember member;
     private final AtomicBoolean stopping;
     private final boolean isTopicTrackingEnabled;
+    private volatile CompletableFuture<Void> startupFuture;
 
     // Track enough information about the current membership state to be able to determine which requests via the API
     // and the from other nodes are safe to process
@@ -309,19 +312,36 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     @Override
     public void start() {
+        CompletableFuture<Void> result = this.startupFuture = new CompletableFuture<>();
         this.herderExecutor.submit(this);
+        while (true) {
+            try {
+                result.get();
+                break;
+            } catch (ExecutionException e) {
+                log.error("Exception starting herder", e.getCause());
+                break;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     @Override
     public void run() {
         try {
-            log.info("Herder starting");
+            try {
+                log.info("Herder starting");
 
-            startServices();
+                startServices();
 
-            log.info("Herder started");
-            running = true;
-
+                log.info("Herder started");
+                running = true;
+                startupFuture.complete(null);
+            } catch (Throwable t) {
+                startupFuture.completeExceptionally(t);
+                throw t;
+            }
             while (!stopping.get()) {
                 tick();
             }
