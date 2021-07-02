@@ -128,19 +128,25 @@ class StreamsEosTest(KafkaTest):
         verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % verifier.STDOUT_FILE, allow_fail=False)
 
     def add_streams(self, processor):
-        with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-            processor.start()
-            self.wait_for_startup(monitor, processor)
+        with processor.node.account.monitor_log(processor.LOG_FILE) as log_monitor:
+            with processor.node.account.monitor_log(processor.STDOUT_FILE) as stdout_monitor:
+                processor.start()
+                self.wait_for_running(stdout_monitor, processor)
+                self.wait_for_commit(log_monitor, processor)
 
     def add_streams2(self, running_processor, processor_to_be_started):
-        with running_processor.node.account.monitor_log(running_processor.STDOUT_FILE) as monitor:
-            self.add_streams(processor_to_be_started)
-            self.wait_for_startup(monitor, running_processor)
+        with running_processor.node.account.monitor_log(running_processor.LOG_FILE) as log_monitor:
+            with running_processor.node.account.monitor_log(running_processor.STDOUT_FILE) as stdout_monitor:
+                self.add_streams(processor_to_be_started)
+                self.wait_for_running(stdout_monitor, running_processor)
+                self.wait_for_commit(log_monitor, running_processor)
 
     def add_streams3(self, running_processor1, running_processor2, processor_to_be_started):
-        with running_processor1.node.account.monitor_log(running_processor1.STDOUT_FILE) as monitor:
-            self.add_streams2(running_processor2, processor_to_be_started)
-            self.wait_for_startup(monitor, running_processor1)
+        with running_processor1.node.account.monitor_log(running_processor1.LOG_FILE) as log_monitor:
+            with running_processor1.node.account.monitor_log(running_processor1.STDOUT_FILE) as stdout_monitor:
+                self.add_streams2(running_processor2, processor_to_be_started)
+                self.wait_for_running(stdout_monitor, running_processor1)
+                self.wait_for_commit(log_monitor, running_processor1)
 
     def stop_streams(self, processor_to_be_stopped):
         with processor_to_be_stopped.node.account.monitor_log(processor_to_be_stopped.STDOUT_FILE) as monitor2:
@@ -148,24 +154,35 @@ class StreamsEosTest(KafkaTest):
             self.wait_for(monitor2, processor_to_be_stopped, "StateChange: PENDING_SHUTDOWN -> NOT_RUNNING")
 
     def stop_streams2(self, keep_alive_processor, processor_to_be_stopped):
-        with keep_alive_processor.node.account.monitor_log(keep_alive_processor.STDOUT_FILE) as monitor:
-            self.stop_streams(processor_to_be_stopped)
-            self.wait_for_startup(monitor, keep_alive_processor)
+        with keep_alive_processor.node.account.monitor_log(keep_alive_processor.LOG_FILE) as log_monitor:
+            with keep_alive_processor.node.account.monitor_log(keep_alive_processor.STDOUT_FILE) as stdout_monitor:
+                self.stop_streams(processor_to_be_stopped)
+                self.wait_for_running(stdout_monitor, keep_alive_processor)
+                self.wait_for_commit(log_monitor, keep_alive_processor)
 
     def stop_streams3(self, keep_alive_processor1, keep_alive_processor2, processor_to_be_stopped):
-        with keep_alive_processor1.node.account.monitor_log(keep_alive_processor1.STDOUT_FILE) as monitor:
-            self.stop_streams2(keep_alive_processor2, processor_to_be_stopped)
-            self.wait_for_startup(monitor, keep_alive_processor1)
+        with keep_alive_processor1.node.account.monitor_log(keep_alive_processor1.LOG_FILE) as log_monitor:
+            with keep_alive_processor1.node.account.monitor_log(keep_alive_processor1.STDOUT_FILE) as stdout_monitor:
+                self.stop_streams2(keep_alive_processor2, processor_to_be_stopped)
+                self.wait_for_running(stdout_monitor, keep_alive_processor1)
+                self.wait_for_commit(log_monitor, keep_alive_processor1)
 
     def abort_streams(self, keep_alive_processor1, keep_alive_processor2, processor_to_be_aborted):
-        with keep_alive_processor1.node.account.monitor_log(keep_alive_processor1.STDOUT_FILE) as monitor1:
-            with keep_alive_processor2.node.account.monitor_log(keep_alive_processor2.STDOUT_FILE) as monitor2:
-                processor_to_be_aborted.stop_nodes(False)
-            self.wait_for_startup(monitor2, keep_alive_processor2)
-        self.wait_for_startup(monitor1, keep_alive_processor1)
+        with keep_alive_processor1.node.account.monitor_log(keep_alive_processor1.LOG_FILE) as log_monitor1:
+            with keep_alive_processor1.node.account.monitor_log(keep_alive_processor1.STDOUT_FILE) as stdout_monitor1:
+                with keep_alive_processor2.node.account.monitor_log(keep_alive_processor1.LOG_FILE) as log_monitor2:
+                    with keep_alive_processor2.node.account.monitor_log(keep_alive_processor1.STDOUT_FILE) as stdout_monitor2:
+                        processor_to_be_aborted.stop_nodes(False)
+                        self.wait_for_running(stdout_monitor2, keep_alive_processor2)
+                        self.wait_for_running(stdout_monitor1, keep_alive_processor1)
+                        self.wait_for_commit(log_monitor2, keep_alive_processor2)
+                        self.wait_for_commit(log_monitor1, keep_alive_processor1)
 
-    def wait_for_startup(self, monitor, processor):
+    def wait_for_running(self, monitor, processor):
         self.wait_for(monitor, processor, "StateChange: REBALANCING -> RUNNING")
+
+    def wait_for_commit(self, monitor, processor):
+        self.wait_for(monitor, processor, "Committed all active tasks \[[0-9_,]+\] and standby tasks \[[0-9_,]+\]")
 
     def wait_for(self, monitor, processor, output):
         monitor.wait_until(output,
