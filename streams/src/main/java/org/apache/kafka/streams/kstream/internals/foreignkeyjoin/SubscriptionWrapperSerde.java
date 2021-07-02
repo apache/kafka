@@ -23,9 +23,9 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
 import java.nio.ByteBuffer;
-import java.util.Objects;
 import java.util.function.Supplier;
 
 public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<SubscriptionWrapper<K>, K, Void> {
@@ -52,10 +52,11 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             this.primaryKeySerializer = primaryKeySerializer;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public void setIfUnset(final Serializer<K> defaultKeySerializer, final Serializer<Void> defaultValueSerializer) {
+        public void setIfUnset(final SerdeGetter getter) {
             if (primaryKeySerializer == null) {
-                primaryKeySerializer = Objects.requireNonNull(defaultKeySerializer);
+                primaryKeySerializer = (Serializer<K>) getter.keySerde().serializer();
             }
         }
 
@@ -112,10 +113,11 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             this.primaryKeyDeserializer = primaryKeyDeserializer;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public void setIfUnset(final Deserializer<K> defaultKeyDeserializer, final Deserializer<Void> defaultValueDeserializer) {
+        public void setIfUnset(final SerdeGetter getter) {
             if (primaryKeyDeserializer == null) {
-                primaryKeyDeserializer = Objects.requireNonNull(defaultKeyDeserializer);
+                primaryKeyDeserializer = (Deserializer<K>) getter.keySerde().deserializer();
             }
         }
 
