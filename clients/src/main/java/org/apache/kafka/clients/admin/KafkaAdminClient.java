@@ -3677,7 +3677,8 @@ public class KafkaAdminClient extends AdminClient {
         return new ListOffsetsResult(new HashMap<>(futures));
     }
 
-    private List<Call> getListOffsetsCalls(MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context,
+    // visible for benchmark
+    public List<Call> getListOffsetsCalls(MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context,
                                            Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
                                            Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
 
