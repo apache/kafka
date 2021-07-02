@@ -86,9 +86,9 @@ public class KafkaFutureTest {
         }
     }
 
-    private void awaitAndAssertFailure(KafkaFuture<?> future,
-                                       Class<? extends Throwable> expectedException,
-                                       String expectedMessage) {
+    private Throwable awaitAndAssertFailure(KafkaFuture<?> future,
+                                            Class<? extends Throwable> expectedException,
+                                            String expectedMessage) {
         try {
             future.get(5, TimeUnit.MINUTES);
             fail("Expected an exception");
@@ -113,9 +113,11 @@ public class KafkaFutureTest {
         } catch (ExecutionException e) {
             assertEquals(expectedException, e.getCause().getClass());
             assertEquals(expectedMessage, e.getCause().getMessage());
+            return e.getCause();
         } catch (Exception e) {
             throw new AssertionError("Unexpected exception", e);
         }
+        throw new AssertionError("Unexpected lack of exception");
     }
 
 
@@ -337,7 +339,9 @@ public class KafkaFutureTest {
         assertIsSuccessful(future);
         assertIsFailed(dependantFuture);
         awaitAndAssertResult(future, 21, null);
-        awaitAndAssertFailure(dependantFuture, RuntimeException.class, "We require more vespene gas");
+        Throwable cause = awaitAndAssertFailure(dependantFuture, CompletionException.class, "java.lang.RuntimeException: We require more vespene gas");
+        assertTrue(cause.getCause() instanceof RuntimeException);
+        assertEquals(cause.getCause().getMessage(), "We require more vespene gas");
     }
 
     @Test
