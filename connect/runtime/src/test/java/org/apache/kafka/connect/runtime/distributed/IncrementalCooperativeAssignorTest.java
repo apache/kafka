@@ -37,6 +37,7 @@ import org.mockito.junit.MockitoRule;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1235,6 +1236,66 @@ public class IncrementalCooperativeAssignorTest {
         verify(coordinator, times(2 * rebalanceNum)).generationId();
         verify(coordinator, times(rebalanceNum)).memberId();
         verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+    }
+
+    @Test
+    public void testComputeRevoked() {
+        Map<String, ConnectorsAndTasks> revoking = new HashMap<>();
+        Collection<WorkerLoad> existingWorkers = Arrays.asList(
+            new WorkerLoad.Builder("w0")
+                .with(Arrays.asList("c0", "c1"),
+                    Arrays.asList(new ConnectorTaskId("c0", 0),
+                        new ConnectorTaskId("c0", 1),
+                        new ConnectorTaskId("c0", 2),
+                        new ConnectorTaskId("c0", 3),
+                        new ConnectorTaskId("c1", 0),
+                        new ConnectorTaskId("c1", 1),
+                        new ConnectorTaskId("c1", 2),
+                        new ConnectorTaskId("c1", 3)))
+                .build(),
+            new WorkerLoad.Builder("w1")
+                .with(Arrays.asList("c2", "c3"),
+                    Arrays.asList(new ConnectorTaskId("c2", 0),
+                        new ConnectorTaskId("c2", 1),
+                        new ConnectorTaskId("c2", 2),
+                        new ConnectorTaskId("c2", 3),
+                        new ConnectorTaskId("c3", 0),
+                        new ConnectorTaskId("c3", 1),
+                        new ConnectorTaskId("c3", 2),
+                        new ConnectorTaskId("c3", 3)))
+                .build()
+        );
+
+        // test connectors
+        IncrementalCooperativeAssignor.computeRevoked(
+            revoking,
+            existingWorkers,
+            3,
+            4,
+            false
+        );
+        // connectors distribution from (2, 2) -> (1, 2)
+        // total revoked: 1
+        assertEquals(1, revoking.size());
+        assertEquals(1, revoking.get("w1").connectors().size());
+
+        // test tasks
+        IncrementalCooperativeAssignor.computeRevoked(
+            revoking,
+            existingWorkers,
+            3,
+            16,
+            true
+        );
+
+        // tasks distribution from (8, 8) -> (6, 5)
+        // total revoked: 5
+        assertEquals(2, revoking.size());
+        int minNumberOfTasks = revoking.values().stream().mapToInt(c -> c.tasks().size()).min().orElse(0);
+        int maxNumberOfTasks = revoking.values().stream().mapToInt(c -> c.tasks().size()).max().orElse(0);
+        assertEquals(1, maxNumberOfTasks - minNumberOfTasks);
+        assertEquals(2, revoking.get("w0").tasks().size());
+        assertEquals(3, revoking.get("w1").tasks().size());
     }
 
     private WorkerLoad emptyWorkerLoad(String worker) {
