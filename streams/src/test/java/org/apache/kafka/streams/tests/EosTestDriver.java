@@ -19,6 +19,7 @@ package org.apache.kafka.streams.tests;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -272,8 +273,12 @@ public class EosTestDriver extends SmokeTestUtil {
         final Map<TopicPartition, OffsetAndMetadata> topicPartitionOffsetAndMetadataMap;
 
         try {
-            final ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult = adminClient.listConsumerGroupOffsets(EosTestClient.APP_ID);
-            topicPartitionOffsetAndMetadataMap = listConsumerGroupOffsetsResult.partitionsToOffsetAndMetadata().get(10, TimeUnit.SECONDS);
+            final ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult =
+                adminClient.listConsumerGroupOffsets(Collections.singletonList(EosTestClient.APP_ID));
+            topicPartitionOffsetAndMetadataMap =
+                listConsumerGroupOffsetsResult.groupIdsToPartitionsAndOffsetAndMetadata()
+                    .get(EosTestClient.APP_ID)
+                    .get(10, TimeUnit.SECONDS);
         } catch (final Exception e) {
             e.printStackTrace();
             throw new RuntimeException(e);

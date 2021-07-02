@@ -888,22 +888,26 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * List the consumer group offsets available in the cluster.
-     *
+     * List the consumer group offsets available in the cluster for the given list of consumer
+     * groups.
+     * @param groupIds List of consumer group ids to list offsets for.
      * @param options The options to use when listing the consumer group offsets.
      * @return The ListGroupOffsetsResult
      */
-    ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options);
+    ListConsumerGroupOffsetsResult listConsumerGroupOffsets(List<String> groupIds, ListConsumerGroupOffsetsOptions options);
 
     /**
      * List the consumer group offsets available in the cluster with the default options.
      * <p>
-     * This is a convenience method for {@link #listConsumerGroupOffsets(String, ListConsumerGroupOffsetsOptions)} with default options.
+     * This is a convenience method for
+     * {@link #listConsumerGroupOffsets(List, ListConsumerGroupOffsetsOptions)} with
+     * default options.
      *
+     * @param groupIds List of consumer group ids to list offsets for.
      * @return The ListGroupOffsetsResult.
      */
-    default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId) {
-        return listConsumerGroupOffsets(groupId, new ListConsumerGroupOffsetsOptions());
+    default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(List<String> groupIds) {
+        return listConsumerGroupOffsets(groupIds, new ListConsumerGroupOffsetsOptions(groupIds));
     }
 
     /**

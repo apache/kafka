@@ -2371,7 +2371,9 @@ public abstract class ConsumerCoordinatorTest {
         OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset, leaderEpoch,
                 metadata, Errors.NONE);
 
-        client.prepareResponse(new OffsetFetchResponse(Errors.NONE, singletonMap(t1p, data)));
+        client.prepareResponse(new OffsetFetchResponse(
+            singletonMap(groupId, Errors.NONE),
+            singletonMap(groupId, singletonMap(t1p, data))));
         Map<TopicPartition, OffsetAndMetadata> fetchedOffsets = coordinator.fetchCommittedOffsets(singleton(t1p),
                 time.timer(Long.MAX_VALUE));
 
@@ -2387,7 +2389,9 @@ public abstract class ConsumerCoordinatorTest {
         OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(-1, Optional.empty(),
                 "", Errors.TOPIC_AUTHORIZATION_FAILED);
 
-        client.prepareResponse(new OffsetFetchResponse(Errors.NONE, singletonMap(t1p, data)));
+        client.prepareResponse(new OffsetFetchResponse(
+            singletonMap(groupId, Errors.NONE),
+            singletonMap(groupId, singletonMap(t1p, data))));
         TopicAuthorizationException exception = assertThrows(TopicAuthorizationException.class, () ->
                 coordinator.fetchCommittedOffsets(singleton(t1p), time.timer(Long.MAX_VALUE)));
 
@@ -2862,7 +2866,13 @@ public abstract class ConsumerCoordinatorTest {
         OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset, leaderEpoch,
             metadata, Errors.NONE);
 
-        client.prepareResponse(new OffsetFetchResponse(Errors.NONE, singletonMap(t1p, data)));
+        if (upperVersion < 8) {
+            client.prepareResponse(new OffsetFetchResponse(Errors.NONE, singletonMap(t1p, data)));
+        } else {
+            client.prepareResponse(new OffsetFetchResponse(
+                singletonMap(groupId, Errors.NONE),
+                singletonMap(groupId, singletonMap(t1p, data))));
+        }
         if (expectThrows) {
             assertThrows(UnsupportedVersionException.class,
                 () -> coordinator.fetchCommittedOffsets(singleton(t1p), time.timer(Long.MAX_VALUE)));
@@ -3086,7 +3096,9 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     private OffsetFetchResponse offsetFetchResponse(Errors topLevelError) {
-        return new OffsetFetchResponse(topLevelError, Collections.emptyMap());
+        return new OffsetFetchResponse(
+            singletonMap(groupId, topLevelError),
+            singletonMap(groupId, Collections.emptyMap()));
     }
 
     private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset) {
@@ -3096,7 +3108,9 @@ public abstract class ConsumerCoordinatorTest {
     private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset, Optional<Integer> epoch) {
         OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset,
                 epoch, metadata, partitionLevelError);
-        return new OffsetFetchResponse(Errors.NONE, singletonMap(tp, data));
+        return new OffsetFetchResponse(
+            singletonMap(groupId, Errors.NONE),
+            singletonMap(groupId, singletonMap(tp, data)));
     }
 
     private OffsetCommitCallback callback(final AtomicBoolean success) {

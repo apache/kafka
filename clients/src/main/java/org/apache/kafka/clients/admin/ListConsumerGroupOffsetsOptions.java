@@ -17,37 +17,51 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.List;
 
 /**
- * Options for {@link Admin#listConsumerGroupOffsets(String)}.
+ * Options for {@link Admin#listConsumerGroupOffsets(List)}.
  * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class ListConsumerGroupOffsetsOptions extends AbstractOptions<ListConsumerGroupOffsetsOptions> {
 
-    private List<TopicPartition> topicPartitions = null;
+    private Map<String, List<TopicPartition>> groupToTopicPartitions = new HashMap<>();
 
     /**
-     * Set the topic partitions to list as part of the result.
-     * {@code null} includes all topic partitions.
-     *
-     * @param topicPartitions List of topic partitions to include
+     * Default constructor for {@code ListConsumerGroupOffsetsOptions}. Sets the topic partitions
+     * to fetch for each group id to {@code null}, which indicates to fetch all offsets for all
+     * topic partitions for that group.
+     * */
+    public ListConsumerGroupOffsetsOptions(List<String> groupIds) {
+        for (String group : groupIds) {
+            groupToTopicPartitions.put(group, null);
+        }
+    }
+
+    /**
+     * Set the topic partitions for each group we want to fetch offsets for as part of the result.
+     * {@code null} mapping for a specific group id means to fetch offsets for all topic
+     * partitions for that specific group.
+     * @param groupToTopicPartitions Map of group id to list of topic partitions to fetch offsets
+     *                              for.
      * @return This ListGroupOffsetsOptions
      */
-    public ListConsumerGroupOffsetsOptions topicPartitions(List<TopicPartition> topicPartitions) {
-        this.topicPartitions = topicPartitions;
+    public ListConsumerGroupOffsetsOptions groupToTopicPartitions(Map<String, List<TopicPartition>> groupToTopicPartitions) {
+        this.groupToTopicPartitions = groupToTopicPartitions;
         return this;
     }
 
     /**
-     * Returns a list of topic partitions to add as part of the result.
+     * Returns a map of group id to topic partitions to fetch offsets for.
      */
-    public List<TopicPartition> topicPartitions() {
-        return topicPartitions;
+    public Map<String, List<TopicPartition>> groupToTopicPartitions() {
+        return groupToTopicPartitions;
     }
 }

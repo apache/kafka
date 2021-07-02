@@ -33,6 +33,8 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -58,6 +60,8 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
+import org.apache.kafka.common.requests.OffsetFetchRequest.Builder;
+import org.apache.kafka.common.requests.OffsetFetchRequest.NoBatchedOffsetFetchRequestException;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -109,6 +113,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private AtomicBoolean asyncCommitFenced;
     private ConsumerGroupMetadata groupMetadata;
     private final boolean throwOnFetchStableOffsetsUnsupported;
+    private volatile boolean batchFetchOffsets = true;
 
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
@@ -1291,25 +1296,41 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (coordinator == null)
             return RequestFuture.coordinatorNotAvailable();
 
-        log.debug("Fetching committed offsets for partitions: {}", partitions);
+        log.debug("Fetching committed with batch={} offsets for partitions: {}",
+            batchFetchOffsets, partitions);
         // construct the request
-        OffsetFetchRequest.Builder requestBuilder =
-            new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId, true, new ArrayList<>(partitions), throwOnFetchStableOffsetsUnsupported);
+        OffsetFetchRequest.Builder requestBuilder;
+        if (batchFetchOffsets) {
+            requestBuilder = new OffsetFetchRequest.Builder(
+                Collections.singletonMap(this.rebalanceConfig.groupId, new ArrayList<>(partitions)),
+                true,
+                throwOnFetchStableOffsetsUnsupported);
+        } else {
+            requestBuilder = new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId,
+                true,
+                new ArrayList<>(partitions),
+                throwOnFetchStableOffsetsUnsupported);
+        }
 
         // send the request with a callback
         return client.send(coordinator, requestBuilder)
-                .compose(new OffsetFetchResponseHandler());
+                .compose(new OffsetFetchResponseHandler(batchFetchOffsets));
     }
 
     private class OffsetFetchResponseHandler extends CoordinatorResponseHandler<OffsetFetchResponse, Map<TopicPartition, OffsetAndMetadata>> {
-        private OffsetFetchResponseHandler() {
+        private boolean batch;
+        private OffsetFetchResponseHandler(boolean batch) {
             super(Generation.NO_GENERATION);
+            this.batch = batch;
         }
 
         @Override
         public void handle(OffsetFetchResponse response, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
-            if (response.hasError()) {
-                Errors error = response.error();
+            boolean groupHasError = batch ?
+                response.groupHasError(rebalanceConfig.groupId) : response.hasError();
+            if (groupHasError) {
+                Errors error = batch ?
+                    response.groupLevelError(rebalanceConfig.groupId) : response.error();
                 log.debug("Offset fetch failed: {}", error.message());
 
                 if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
@@ -1328,9 +1349,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
 
             Set<String> unauthorizedTopics = null;
-            Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(response.responseData().size());
+            Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = batch ?
+                response.responseData(rebalanceConfig.groupId) : response.oldResponseData();
+            Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(responseData.size());
             Set<TopicPartition> unstableTxnOffsetTopicPartitions = new HashSet<>();
-            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : response.responseData().entrySet()) {
+            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
                 TopicPartition tp = entry.getKey();
                 OffsetFetchResponse.PartitionData partitionData = entry.getValue();
                 if (partitionData.hasError()) {
@@ -1375,6 +1398,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             } else {
                 future.complete(offsets);
             }
+        }
+
+        @Override
+        public void onFailure(RuntimeException e, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
+            if (e instanceof NoBatchedOffsetFetchRequestException) {
+                // set batchFetchOffsets to false and raise retriable exception so we retry the
+                // fetch offset request
+                batchFetchOffsets = false;
+                future.raise(new CoordinatorLoadInProgressException("Got "
+                    + "NoBatchedOffsetFetchRequestException. Raising "
+                    + "CoordinatorLoadInProgressException to retry FetchOffset request."));
+                return;
+            }
+            super.onFailure(e, future);
         }
     }
 

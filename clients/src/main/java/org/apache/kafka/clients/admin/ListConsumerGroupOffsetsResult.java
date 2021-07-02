@@ -17,33 +17,62 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 /**
- * The result of the {@link Admin#listConsumerGroupOffsets(String)} call.
+ * The result of the {@link Admin#listConsumerGroupOffsets(List)} call.
  * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class ListConsumerGroupOffsetsResult {
 
-    final KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future;
+    final Map<CoordinatorKey, KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>>> futures;
 
-    ListConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
-        this.future = future;
+    ListConsumerGroupOffsetsResult(final Map<CoordinatorKey, KafkaFutureImpl<Map<TopicPartition,
+        OffsetAndMetadata>>> futures) {
+        this.futures = futures;
     }
 
     /**
-     * Return a future which yields a map of topic partitions to OffsetAndMetadata objects.
-     * If the group does not have a committed offset for this partition, the corresponding value in the returned map will be null.
+     * Return a future which yields a map of group ids to a map of topic partitions to
+     * OffsetAndMetadata objects. If the group doesn't have a committed offset for a specific
+     * partition, the corresponding value in the returned map for that group id will be null.
      */
-    public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> partitionsToOffsetAndMetadata() {
-        return future;
+    public Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> groupIdsToPartitionsAndOffsetAndMetadata() {
+        Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> listedConsumerGroupOffsets = new HashMap<>(futures.size());
+        futures.forEach((key, future) -> listedConsumerGroupOffsets.put(key.idValue, future));
+        return listedConsumerGroupOffsets;
     }
 
+    /**
+     * Return a future which yields all Map<String, Map<TopicPartition, OffsetAndMetadata> objects,
+     * if all the describes succeed.
+     */
+    public KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> all() {
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
+            nil -> {
+                Map<String, Map<TopicPartition, OffsetAndMetadata>> listedConsumerGroupOffsets = new HashMap<>(futures.size());
+                futures.forEach((key, future) -> {
+                    try {
+                        listedConsumerGroupOffsets.put(key.idValue, future.get());
+                    } catch (InterruptedException | ExecutionException e) {
+                        // This should be unreachable, since the KafkaFuture#allOf already ensured
+                        // that all of the futures completed successfully.
+                        throw new RuntimeException(e);
+                    }
+                });
+                return listedConsumerGroupOffsets;
+            });
+    }
 }

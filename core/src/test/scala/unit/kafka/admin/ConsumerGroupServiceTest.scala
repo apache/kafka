@@ -50,8 +50,8 @@ class ConsumerGroupServiceTest {
 
     when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any()))
       .thenReturn(describeGroupsResult(ConsumerGroupState.STABLE))
-    when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(group), any()))
-      .thenReturn(listGroupOffsetsResult)
+    when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(Collections.singletonList(group)), any()))
+      .thenReturn(listGroupOffsetsResult(group))
     when(admin.listOffsets(offsetsArgMatcher, any()))
       .thenReturn(listOffsetsResult)
 
@@ -61,7 +61,7 @@ class ConsumerGroupServiceTest {
     assertEquals(topicPartitions.size, assignments.get.size)
 
     verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any())
-    verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(group), any())
+    verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(Collections.singletonList(group)), any())
     verify(admin, times(1)).listOffsets(offsetsArgMatcher, any())
   }
 
@@ -193,9 +193,9 @@ class ConsumerGroupServiceTest {
     new DescribeConsumerGroupsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future))
   }
 
-  private def listGroupOffsetsResult: ListConsumerGroupOffsetsResult = {
+  private def listGroupOffsetsResult(groupId: String): ListConsumerGroupOffsetsResult = {
     val offsets = topicPartitions.map(_ -> new OffsetAndMetadata(100)).toMap.asJava
-    AdminClientTestUtils.listConsumerGroupOffsetsResult(offsets)
+    AdminClientTestUtils.listConsumerGroupOffsetsResult(Map(groupId -> offsets).asJava)
   }
 
   private def offsetsArgMatcher: util.Map[TopicPartition, OffsetSpec] = {

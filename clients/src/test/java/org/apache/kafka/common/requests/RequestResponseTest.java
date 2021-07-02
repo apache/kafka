@@ -231,6 +231,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.JOIN_GROUP;
 import static org.apache.kafka.common.protocol.ApiKeys.LEADER_AND_ISR;
 import static org.apache.kafka.common.protocol.ApiKeys.LIST_GROUPS;
 import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
+import static org.apache.kafka.common.protocol.ApiKeys.OFFSET_FETCH;
 import static org.apache.kafka.common.protocol.ApiKeys.STOP_REPLICA;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
@@ -315,21 +316,30 @@ public class RequestResponseTest {
         checkErrorResponse(createMetadataRequest(3, Collections.singletonList("topic1")), unknownServerException, true);
         checkResponse(createMetadataResponse(), 4, true);
         checkErrorResponse(createMetadataRequest(4, Collections.singletonList("topic1")), unknownServerException, true);
-        checkRequest(createOffsetFetchRequestForAllPartition("group1", false), true);
-        checkRequest(createOffsetFetchRequestForAllPartition("group1", true), true);
-        checkErrorResponse(createOffsetFetchRequestForAllPartition("group1", false), new NotCoordinatorException("Not Coordinator"), true);
-        checkErrorResponse(createOffsetFetchRequestForAllPartition("group1", true), new NotCoordinatorException("Not Coordinator"), true);
         checkRequest(createOffsetFetchRequest(0, false), true);
         checkRequest(createOffsetFetchRequest(1, false), true);
         checkRequest(createOffsetFetchRequest(2, false), true);
         checkRequest(createOffsetFetchRequest(7, true), true);
-        checkRequest(createOffsetFetchRequestForAllPartition("group1", false), true);
-        checkRequest(createOffsetFetchRequestForAllPartition("group1", true), true);
+        checkRequest(createOffsetFetchRequest(8, true), true);
+        checkRequest(createOffsetFetchRequestWithMultipleGroups(8, true), true);
+        checkRequest(createOffsetFetchRequestWithMultipleGroups(8, false), true);
+        checkRequest(createOffsetFetchRequestForAllPartition(7, true), true);
+        checkRequest(createOffsetFetchRequestForAllPartition(8, true), true);
         checkErrorResponse(createOffsetFetchRequest(0, false), unknownServerException, true);
         checkErrorResponse(createOffsetFetchRequest(1, false), unknownServerException, true);
         checkErrorResponse(createOffsetFetchRequest(2, false), unknownServerException, true);
         checkErrorResponse(createOffsetFetchRequest(7, true), unknownServerException, true);
-        checkResponse(createOffsetFetchResponse(), 0, true);
+        checkErrorResponse(createOffsetFetchRequest(8, true), unknownServerException, true);
+        checkErrorResponse(createOffsetFetchRequestWithMultipleGroups(8, true), unknownServerException, true);
+        checkErrorResponse(createOffsetFetchRequestForAllPartition(7, true),
+            new NotCoordinatorException("Not Coordinator"), true);
+        checkErrorResponse(createOffsetFetchRequestForAllPartition(8, true),
+            new NotCoordinatorException("Not Coordinator"), true);
+        checkErrorResponse(createOffsetFetchRequestWithMultipleGroups(8, true),
+            new NotCoordinatorException("Not Coordinator"), true);
+        checkResponse(createOffsetFetchResponse(0), 0, true);
+        checkResponse(createOffsetFetchResponse(7), 7, true);
+        checkResponse(createOffsetFetchResponse(8), 8, true);
         checkRequest(createProduceRequest(2), true);
         checkErrorResponse(createProduceRequest(2), unknownServerException, true);
         checkRequest(createProduceRequest(3), true);
@@ -1039,18 +1049,51 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testOffsetFetchRequestBuilderToString() {
+    public void testOffsetFetchRequestBuilderToStringV0ToV7() {
         List<Boolean> stableFlags = Arrays.asList(true, false);
         for (Boolean requireStable : stableFlags) {
-            String allTopicPartitionsString = new OffsetFetchRequest.Builder("someGroup", requireStable, null, false).toString();
+            String allTopicPartitionsString = new OffsetFetchRequest.Builder("someGroup",
+                requireStable,
+                null,
+                false)
+                .toString();
 
-            assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=null, requireStable="
-                                                             + requireStable.toString()));
+            assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=null,"
+                + " groupIds=[], requireStable=" + requireStable));
             String string = new OffsetFetchRequest.Builder("group1",
-                requireStable, Collections.singletonList(new TopicPartition("test11", 1)), false).toString();
+                requireStable,
+                Collections.singletonList(
+                    new TopicPartition("test11", 1)),
+                false)
+                .toString();
             assertTrue(string.contains("test11"));
             assertTrue(string.contains("group1"));
-            assertTrue(string.contains("requireStable=" + requireStable.toString()));
+            assertTrue(string.contains("requireStable=" + requireStable));
+        }
+    }
+
+    @Test
+    public void testOffsetFetchRequestBuilderToStringV8AndAbove() {
+        List<Boolean> stableFlags = Arrays.asList(true, false);
+        for (Boolean requireStable : stableFlags) {
+            String allTopicPartitionsString = new OffsetFetchRequest.Builder(
+                Collections.singletonMap("someGroup", null),
+                requireStable,
+                false)
+                .toString();
+            assertTrue(allTopicPartitionsString.contains("groupIds=[OffsetFetchRequestGroup"
+                + "(groupId='someGroup', topics=null)], requireStable=" + requireStable));
+
+            String subsetTopicPartitionsString = new OffsetFetchRequest.Builder(
+                Collections.singletonMap(
+                    "group1",
+                    Collections.singletonList(new TopicPartition("test11", 1))),
+                requireStable,
+                false)
+                .toString();
+            assertTrue(subsetTopicPartitionsString.contains("test11"));
+            assertTrue(subsetTopicPartitionsString.contains("group1"));
+            assertTrue(subsetTopicPartitionsString.contains("requireStable=" + requireStable));
         }
     }
 
@@ -1580,21 +1623,82 @@ public class RequestResponseTest {
     }
 
     private OffsetFetchRequest createOffsetFetchRequest(int version, boolean requireStable) {
-        return new OffsetFetchRequest.Builder("group1", requireStable, Collections.singletonList(new TopicPartition("test11", 1)), false)
+        if (version < 8) {
+            return new OffsetFetchRequest.Builder(
+                "group1",
+                requireStable,
+                Collections.singletonList(
+                    new TopicPartition("test11", 1)),
+                false)
                 .build((short) version);
+        }
+        return new OffsetFetchRequest.Builder(
+            Collections.singletonMap(
+                "group1",
+                Collections.singletonList(
+                    new TopicPartition("test11", 1))),
+            requireStable,
+            false)
+            .build((short) (version));
     }
 
-    private OffsetFetchRequest createOffsetFetchRequestForAllPartition(String groupId, boolean requireStable) {
-        return new OffsetFetchRequest.Builder(groupId, requireStable, null, false).build();
+    private OffsetFetchRequest createOffsetFetchRequestWithMultipleGroups(int version,
+        boolean requireStable) {
+        Map<String, List<TopicPartition>> groupToPartitionMap = new HashMap<>();
+        List<TopicPartition> topic1 = singletonList(
+            new TopicPartition("topic1", 0));
+        List<TopicPartition> topic2 = Arrays.asList(
+            new TopicPartition("topic1", 0),
+            new TopicPartition("topic2", 0),
+            new TopicPartition("topic2", 1));
+        List<TopicPartition> topic3 = Arrays.asList(
+            new TopicPartition("topic1", 0),
+            new TopicPartition("topic2", 0),
+            new TopicPartition("topic2", 1),
+            new TopicPartition("topic3", 0),
+            new TopicPartition("topic3", 1),
+            new TopicPartition("topic3", 2));
+        groupToPartitionMap.put("group1", topic1);
+        groupToPartitionMap.put("group2", topic2);
+        groupToPartitionMap.put("group3", topic3);
+        groupToPartitionMap.put("group4", null);
+        groupToPartitionMap.put("group5", null);
+
+        return new OffsetFetchRequest.Builder(
+            groupToPartitionMap,
+            requireStable,
+            false
+        ).build((short) version);
     }
 
-    private OffsetFetchResponse createOffsetFetchResponse() {
+    private OffsetFetchRequest createOffsetFetchRequestForAllPartition(int version, boolean requireStable) {
+        if (version < 8) {
+            return new OffsetFetchRequest.Builder(
+                "group1",
+                requireStable,
+                null,
+                false)
+                .build((short) (version));
+        }
+        return new OffsetFetchRequest.Builder(
+            Collections.singletonMap(
+                "group1", null),
+            requireStable,
+            false)
+            .build((short) (version));
+    }
+
+    private OffsetFetchResponse createOffsetFetchResponse(int version) {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(
-                100L, Optional.empty(), "", Errors.NONE));
+            100L, Optional.empty(), "", Errors.NONE));
         responseData.put(new TopicPartition("test", 1), new OffsetFetchResponse.PartitionData(
-                100L, Optional.of(10), null, Errors.NONE));
-        return new OffsetFetchResponse(Errors.NONE, responseData);
+            100L, Optional.of(10), null, Errors.NONE));
+        if (version < 8) {
+            return new OffsetFetchResponse(Errors.NONE, responseData);
+        }
+        return new OffsetFetchResponse(Collections.singletonMap("group1", Errors.NONE),
+            Collections.singletonMap("group1", responseData));
     }
 
     @SuppressWarnings("deprecation")
@@ -2840,7 +2944,7 @@ public class RequestResponseTest {
         assertEquals(Integer.valueOf(3), createMetadataResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createOffsetCommitResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(2), createOffsetDeleteResponse().errorCounts().get(Errors.NONE));
-        assertEquals(Integer.valueOf(3), createOffsetFetchResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(3), createOffsetFetchResponse(OFFSET_FETCH.latestVersion()).errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createProduceResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createRenewTokenResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createSaslAuthenticateResponse().errorCounts().get(Errors.NONE));

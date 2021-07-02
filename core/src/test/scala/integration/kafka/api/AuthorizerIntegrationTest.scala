@@ -175,7 +175,24 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }),
     ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => Errors.forCode(
       resp.data.topics().get(0).partitions().get(0).errorCode)),
-    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error),
+    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => {
+      println("OFFSET_FETCH RESPONSE DATA: ")
+      println(resp.data())
+      Errors.forCode(resp.data.groupIds.get(0).errorCode)
+/*
+OFFSET_FETCH RESPONSE DATA:
+OffsetFetchResponseData(throttleTimeMs=0, topics=[], errorCode=30)
+OFFSET_FETCH RESPONSE DATA:
+OffsetFetchResponseData(throttleTimeMs=0, topics=[], errorCode=30)
+OFFSET_FETCH RESPONSE DATA:
+OffsetFetchResponseData(throttleTimeMs=0, topics=[OffsetFetchResponseTopic(name='topic', partitions=[OffsetFetchResponsePartition(partitionIndex=0, committedOffset=-1, committedLeaderEpoch=-1, metadata='', errorCode=0)])], errorCode=0)
+
+
+OFFSET_FETCH RESPONSE DATA:
+OffsetFetchResponseData(throttleTimeMs=0, topics=[], errorCode=0, groupIds=[OffsetFetchResponseGroup(groupId='my-group', topics=[OffsetFetchResponseTopics(name='topic', partitions=[OffsetFetchResponsePartitions(partitionIndex=0, committedOffset=-1, committedLeaderEpoch=-1, metadata='', errorCode=29)])], errorCode=29)])
+OFFSET_FETCH RESPONSE DATA:
+OffsetFetchResponseData(throttleTimeMs=0, topics=[], errorCode=0, groupIds=[OffsetFetchResponseGroup(groupId='my-group', topics=[OffsetFetchResponseTopics(name='topic', partitions=[OffsetFetchResponsePartitions(partitionIndex=0, committedOffset=-1, committedLeaderEpoch=-1, metadata='', errorCode=0)])], errorCode=0)])*/
+    }),
     ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => {
       Errors.forCode(resp.data.coordinators.asScala.find(g => group == g.key).head.errorCode)
     }),
@@ -379,7 +396,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createOffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(group, false, List(tp).asJava, false).build()
+    new requests.OffsetFetchRequest.Builder(
+      Map(group -> List(tp).asJava).asJava,
+      false,
+      false)
+      .build()
   }
 
   private def createFindCoordinatorRequest = {
@@ -1358,17 +1379,19 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     // note there's only one broker, so no need to lookup the group coordinator
 
     // without describe permission on the topic, we shouldn't be able to fetch offsets
-    val offsetFetchRequest = new requests.OffsetFetchRequest.Builder(group, false, null, false).build()
+    val offsetFetchRequest = new requests.OffsetFetchRequest.Builder(
+      util.Collections.singletonMap(group, null), false, false)
+      .build()
     var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    assertEquals(Errors.NONE, offsetFetchResponse.error)
-    assertTrue(offsetFetchResponse.responseData.isEmpty)
+    assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(group))
+    assertTrue(offsetFetchResponse.responseData(group).isEmpty)
 
     // now add describe permission on the topic and verify that the offset can be fetched
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    assertEquals(Errors.NONE, offsetFetchResponse.error)
-    assertTrue(offsetFetchResponse.responseData.containsKey(tp))
-    assertEquals(offset, offsetFetchResponse.responseData.get(tp).offset)
+    assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(group))
+    assertTrue(offsetFetchResponse.responseData(group).containsKey(tp))
+    assertEquals(offset, offsetFetchResponse.responseData(group).get(tp).offset)
   }
 
   @Test

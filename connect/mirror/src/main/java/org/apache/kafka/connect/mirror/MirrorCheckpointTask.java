@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.connect.source.SourceTask;
@@ -179,7 +180,11 @@ public class MirrorCheckpointTask extends SourceTask {
             // short circuit if stopping
             return Collections.emptyMap();
         }
-        return sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
+        return sourceAdminClient
+            .listConsumerGroupOffsets(Collections.singletonList(group))
+            .groupIdsToPartitionsAndOffsetAndMetadata()
+            .get(group)
+            .get();
     }
 
     Checkpoint checkpoint(String group, TopicPartition topicPartition,
@@ -234,9 +239,14 @@ public class MirrorCheckpointTask extends SourceTask {
                 // (1) idle: because the consumer at target is not actively consuming the mirrored topic
                 // (2) dead: the new consumer that is recently created at source and never exist at target
                 if (consumerGroupState.equals(ConsumerGroupState.EMPTY)) {
-                    idleConsumerGroupsOffset.put(group, targetAdminClient.listConsumerGroupOffsets(group)
-                        .partitionsToOffsetAndMetadata().get().entrySet().stream().collect(
-                            Collectors.toMap(Entry::getKey, Entry::getValue)));
+                    idleConsumerGroupsOffset.put(group,
+                        targetAdminClient.listConsumerGroupOffsets(Collections.singletonList(group))
+                            .groupIdsToPartitionsAndOffsetAndMetadata()
+                            .get(group)
+                            .get()
+                            .entrySet()
+                            .stream()
+                            .collect(Collectors.toMap(Entry::getKey, Entry::getValue)));
                 }
                 // new consumer upstream has state "DEAD" and will be identified during the offset sync-up
             } catch (InterruptedException | ExecutionException e) {
