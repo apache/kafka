@@ -154,7 +154,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      * The semantics for KafkaFuture are that all exceptional completions of the future (via #completeExceptionally()
      * or exceptions from dependants) manifest as ExecutionException, as observed via both get() and getNow().
      */
-    private void maybeRewrapAndThrow(Throwable cause) {
+    private void maybeThrowCancellationException(Throwable cause) {
         if (cause instanceof CancellationException) {
             throw (CancellationException) cause;
         }
@@ -168,7 +168,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         try {
             return completableFuture.get();
         } catch (ExecutionException e) {
-            maybeRewrapAndThrow(e.getCause());
+            maybeThrowCancellationException(e.getCause());
             throw e;
         }
     }
@@ -183,7 +183,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         try {
             return completableFuture.get(timeout, unit);
         } catch (ExecutionException e) {
-            maybeRewrapAndThrow(e.getCause());
+            maybeThrowCancellationException(e.getCause());
             throw e;
         }
     }
@@ -197,7 +197,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         try {
             return completableFuture.getNow(valueIfAbsent);
         } catch (CompletionException e) {
-            maybeRewrapAndThrow(e.getCause());
+            maybeThrowCancellationException(e.getCause());
             // Note, unlike CompletableFuture#get() which throws ExecutionException, CompletableFuture#getNow()
             // throws CompletionException, thus needs rewrapping to conform to KafkaFuture API,
             // where KafkaFuture#getNow() throws ExecutionException.
