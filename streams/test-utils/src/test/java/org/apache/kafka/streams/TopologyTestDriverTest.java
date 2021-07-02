@@ -418,16 +418,9 @@ public abstract class TopologyTestDriverTest {
         return builder.build(config);
     }
 
-    private Properties defaultProperties() {
-        final Properties properties = new Properties();
-        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
-        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
-        return properties;
-    }
-
     @Test
     public void shouldNotRequireParameters() {
-        new TopologyTestDriver(setupSingleProcessorTopology(), defaultProperties());
+        new TopologyTestDriver(setupSingleProcessorTopology(), config);
     }
 
     @Test
@@ -474,7 +467,7 @@ public abstract class TopologyTestDriverTest {
 
     @Test
     public void shouldThrowNoSuchElementExceptionForUnusedOutputTopicWithDynamicRouting() {
-        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), defaultProperties());
+        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
         final TestOutputTopic<String, String> outputTopic = new TestOutputTopic<>(
             testDriver,
             "unused-topic",
@@ -488,7 +481,7 @@ public abstract class TopologyTestDriverTest {
 
     @Test
     public void shouldCaptureSinkTopicNamesIfWrittenInto() {
-        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), defaultProperties());
+        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
         assertThat(testDriver.producedTopicNames(), is(Collections.emptySet()));
 
@@ -534,7 +527,7 @@ public abstract class TopologyTestDriverTest {
         builder.globalTable(SOURCE_TOPIC_1, Materialized.as("globalTable"));
         builder.stream(SOURCE_TOPIC_2).to(SOURCE_TOPIC_1);
 
-        testDriver = new TopologyTestDriver(builder.build(), defaultProperties());
+        testDriver = new TopologyTestDriver(builder.build(), config);
 
         assertThat(testDriver.producedTopicNames(), is(Collections.emptySet()));
 
@@ -547,7 +540,7 @@ public abstract class TopologyTestDriverTest {
 
     @Test
     public void shouldProcessRecordForTopic() {
-        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), defaultProperties());
+        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
         final ProducerRecord<byte[], byte[]> outputRecord = testDriver.readRecord(SINK_TOPIC_1);
@@ -559,7 +552,7 @@ public abstract class TopologyTestDriverTest {
 
     @Test
     public void shouldSetRecordMetadata() {
-        testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), defaultProperties());
+        testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
 
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
@@ -579,7 +572,7 @@ public abstract class TopologyTestDriverTest {
 
     @Test
     public void shouldSendRecordViaCorrectSourceTopic() {
-        testDriver = new TopologyTestDriver(setupMultipleSourceTopology(SOURCE_TOPIC_1, SOURCE_TOPIC_2), defaultProperties());
+        testDriver = new TopologyTestDriver(setupMultipleSourceTopology(SOURCE_TOPIC_1, SOURCE_TOPIC_2), config);
 
         final List<TTDTestRecord> processedRecords1 = mockProcessors.get(0).processedRecords;
         final List<TTDTestRecord> processedRecords2 = mockProcessors.get(1).processedRecords;
@@ -669,7 +662,7 @@ public abstract class TopologyTestDriverTest {
 
     @Test
     public void shouldPassRecordHeadersIntoSerializersAndDeserializers() {
-        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), defaultProperties());
+        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
         final AtomicBoolean passedHeadersToKeySerializer = new AtomicBoolean(false);
         final AtomicBoolean passedHeadersToValueSerializer = new AtomicBoolean(false);
@@ -762,7 +755,7 @@ public abstract class TopologyTestDriverTest {
 
     @Test
     public void shouldForwardRecordsFromSubtopologyToSubtopology() {
-        testDriver = new TopologyTestDriver(setupTopologyWithTwoSubtopologies(), defaultProperties());
+        testDriver = new TopologyTestDriver(setupTopologyWithTwoSubtopologies(), config);
 
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
@@ -779,7 +772,7 @@ public abstract class TopologyTestDriverTest {
 
     @Test
     public void shouldPopulateGlobalStore() {
-        testDriver = new TopologyTestDriver(setupGlobalStoreTopology(SOURCE_TOPIC_1), defaultProperties());
+        testDriver = new TopologyTestDriver(setupGlobalStoreTopology(SOURCE_TOPIC_1), config);
 
         final KeyValueStore<byte[], byte[]> globalStore = testDriver.getKeyValueStore(SOURCE_TOPIC_1 + "-globalStore");
         assertNotNull(globalStore);
@@ -795,7 +788,7 @@ public abstract class TopologyTestDriverTest {
         final MockPunctuator mockPunctuator = new MockPunctuator();
         testDriver = new TopologyTestDriver(
             setupSingleProcessorTopology(10L, PunctuationType.STREAM_TIME, mockPunctuator),
-            defaultProperties()
+            config
         );
 
         final List<Long> expectedPunctuations = new LinkedList<>();
@@ -892,7 +885,7 @@ public abstract class TopologyTestDriverTest {
             "globalProcessorName",
             voidProcessorSupplier);
 
-        testDriver = new TopologyTestDriver(topology, defaultProperties());
+        testDriver = new TopologyTestDriver(topology, config);
 
         final Set<String> expectedStoreNames = new HashSet<>();
         expectedStoreNames.add("store");
@@ -936,7 +929,7 @@ public abstract class TopologyTestDriverTest {
             globalTimestampedKeyValueStoreName);
 
 
-        testDriver = new TopologyTestDriver(topology, defaultProperties());
+        testDriver = new TopologyTestDriver(topology, config);
 
         // verify state stores
         assertNotNull(testDriver.getKeyValueStore(keyValueStoreName));
@@ -1015,7 +1008,7 @@ public abstract class TopologyTestDriverTest {
             globalTimestampedKeyValueStoreName);
 
 
-        testDriver = new TopologyTestDriver(topology, defaultProperties());
+        testDriver = new TopologyTestDriver(topology, config);
 
         {
             final IllegalArgumentException e = assertThrows(
@@ -1207,7 +1200,7 @@ public abstract class TopologyTestDriverTest {
             "globalProcessorName",
             voidProcessorSupplier);
 
-        testDriver = new TopologyTestDriver(topology, defaultProperties());
+        testDriver = new TopologyTestDriver(topology, config);
 
         final Set<String> expectedStoreNames = new HashSet<>();
         expectedStoreNames.add("store");
@@ -1354,7 +1347,7 @@ public abstract class TopologyTestDriverTest {
             Serdes.Long()).withCachingEnabled(), // intentionally turn on caching to achieve better test coverage
             "aggregator");
 
-        testDriver = new TopologyTestDriver(topology, defaultProperties());
+        testDriver = new TopologyTestDriver(topology, config);
 
         store = testDriver.getKeyValueStore("aggStore");
         store.put("a", 21L);
@@ -1491,7 +1484,7 @@ public abstract class TopologyTestDriverTest {
         topology.addSource(sourceName, pattern2Source1);
         topology.addSink("sink", SINK_TOPIC_1, sourceName);
 
-        testDriver = new TopologyTestDriver(topology, defaultProperties());
+        testDriver = new TopologyTestDriver(topology, config);
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
         final ProducerRecord<byte[], byte[]> outputRecord = testDriver.readRecord(SINK_TOPIC_1);
@@ -1510,7 +1503,7 @@ public abstract class TopologyTestDriverTest {
         topology.addSource(sourceName, pattern2Source1);
         topology.addSink("sink", SINK_TOPIC_1, sourceName);
 
-        testDriver = new TopologyTestDriver(topology, defaultProperties());
+        testDriver = new TopologyTestDriver(topology, config);
         try {
             pipeRecord(SOURCE_TOPIC_1, testRecord1);
         } catch (final TopologyException exception) {
