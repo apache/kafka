@@ -90,7 +90,7 @@ for %%p in (api runtime file json tools) do (
 )
 
 rem Classpath addition for release
-for %%i in ("%BASE_DIR%\libs\*") do (
+for %%i in ("%BASE_DIR%\libs\kafka_%SCALA_BINARY_VERSION%-classpath*.jar") do (
 	call :concat "%%i"
 )
 
