@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.jmh.admin;
+package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
@@ -124,7 +124,7 @@ public class GetListOffsetsCallsBenchmark {
     }
 
     @Benchmark
-    public Object testGetListOffsetsCalls() {
+    public List<KafkaAdminClient.Call> testGetListOffsetsCalls() {
         return admin.getListOffsetsCalls(context, topicPartitionOffsets, futures);
     }
 
