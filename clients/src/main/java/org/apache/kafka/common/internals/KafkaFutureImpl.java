@@ -64,9 +64,11 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
                 return function.apply(value);
             } catch (Throwable t) {
                 if (t instanceof CompletionException) {
-                    // CompletableFuture#get() always wraps the _cause_ of a CompletionException in ExecutionException
-                    // (which KafkaFuture does not) so wrap CompletionException in an extra one to avoid losing the
-                    // first CompletionException in the exception chain.
+                    // KafkaFuture#thenApply, when the function threw CompletionException should return
+                    // an ExecutionException wrapping a CompletionException wrapping the exception thrown by the
+                    // function. CompletableFuture#thenApply will just return ExecutionException wrapping the
+                    // exception thrown by the function, so we add an extra CompletionException here to
+                    // maintain the KafkaFuture behaviour.
                     throw new CompletionException(t);
                 } else {
                     throw t;
