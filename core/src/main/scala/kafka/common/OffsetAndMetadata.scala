@@ -19,11 +19,11 @@ package kafka.common
 
 import java.util.Optional
 
-case class OffsetAndMetadata(offset: Long,
-                             leaderEpoch: Optional[Integer],
-                             metadata: String,
-                             commitTimestamp: Long,
-                             expireTimestamp: Option[Long]) {
+final case class OffsetAndMetadata(offset: Long,
+                                   leaderEpoch: Optional[Integer],
+                                   metadata: String,
+                                   commitTimestamp: Long,
+                                   expireTimestamp: Option[Long]) {
 
 
   override def toString: String  = {

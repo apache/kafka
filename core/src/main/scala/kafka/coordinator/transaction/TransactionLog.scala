@@ -186,6 +186,6 @@ object TransactionLog {
 
 }
 
-case class TxnKey(version: Short, transactionalId: String) {
+final case class TxnKey(version: Short, transactionalId: String) {
   override def toString: String = transactionalId
 }

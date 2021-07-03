@@ -26,7 +26,7 @@ import scala.collection._
 /**
   * The create metadata maintained by the delayed create topic or create partitions operations.
   */
-case class CreatePartitionsMetadata(topic: String, partitions: Set[Int], error: ApiError)
+final case class CreatePartitionsMetadata(topic: String, partitions: Set[Int], error: ApiError)
 
 object CreatePartitionsMetadata {
   def apply(topic: String, partitions: Set[Int]): CreatePartitionsMetadata = {

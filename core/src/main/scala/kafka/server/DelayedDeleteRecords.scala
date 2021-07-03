@@ -30,8 +30,8 @@ import org.apache.kafka.common.requests.DeleteRecordsResponse
 import scala.collection._
 
 
-case class DeleteRecordsPartitionStatus(requiredOffset: Long,
-                                        responseStatus: DeleteRecordsResponseData.DeleteRecordsPartitionResult) {
+final case class DeleteRecordsPartitionStatus(requiredOffset: Long,
+                                              responseStatus: DeleteRecordsResponseData.DeleteRecordsPartitionResult) {
   @volatile var acksPending = false
 
   override def toString = "[acksPending: %b, error: %s, lowWatermark: %d, requiredOffset: %d]"

@@ -97,6 +97,11 @@
         <code>DefaultReplicationPolicy</code>, cannot prevent replication cycles based on topic names, so take care to avoid cycles when constructing your
         replication topology.
     </li>
+    <li> All Scala <code>case class</code>'s have been made <code>final</code>. This doesn't break binary compatibility, the only source breaking change is if you subclass
+        any of these <code>case class</code>'s. Note that this was done in order to guarantee correctness of code that uses these <code>case class</code>'s
+        (the change prevents users from overriding <code>hashcode</code>/<code>equals</code>/<code>unapply</code> which can break behavior)
+    </li>
+
 </ul>
 
 <h5><a id="upgrade_280_notable" href="#upgrade_280_notable">Notable changes in 2.8.0</a></h5>

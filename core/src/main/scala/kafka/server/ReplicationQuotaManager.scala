@@ -39,9 +39,9 @@ import org.apache.kafka.common.utils.Time
   * @param quotaWindowSizeSeconds     The time span of each sample
   *
   */
-case class ReplicationQuotaManagerConfig(quotaBytesPerSecondDefault: Long = QuotaBytesPerSecondDefault,
-                                         numQuotaSamples: Int = DefaultNumQuotaSamples,
-                                         quotaWindowSizeSeconds: Int = DefaultQuotaWindowSizeSeconds)
+final case class ReplicationQuotaManagerConfig(quotaBytesPerSecondDefault: Long = QuotaBytesPerSecondDefault,
+                                               numQuotaSamples: Int = DefaultNumQuotaSamples,
+                                               quotaWindowSizeSeconds: Int = DefaultQuotaWindowSizeSeconds)
 
 object ReplicationQuotaManagerConfig {
   val QuotaBytesPerSecondDefault = Long.MaxValue

@@ -36,7 +36,7 @@ import scala.collection.{Iterable, Seq, mutable}
 private[log] sealed trait LogCleaningState
 private[log] case object LogCleaningInProgress extends LogCleaningState
 private[log] case object LogCleaningAborted extends LogCleaningState
-private[log] case class LogCleaningPaused(pausedCount: Int) extends LogCleaningState
+private[log] final case class LogCleaningPaused(pausedCount: Int) extends LogCleaningState
 
 private[log] class LogCleaningException(val log: Log,
                                         private val message: String,

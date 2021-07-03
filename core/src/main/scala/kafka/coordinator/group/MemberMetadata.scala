@@ -21,12 +21,12 @@ import java.util
 
 import kafka.utils.nonthreadsafe
 
-case class MemberSummary(memberId: String,
-                         groupInstanceId: Option[String],
-                         clientId: String,
-                         clientHost: String,
-                         metadata: Array[Byte],
-                         assignment: Array[Byte])
+final case class MemberSummary(memberId: String,
+                               groupInstanceId: Option[String],
+                               clientId: String,
+                               clientHost: String,
+                               metadata: Array[Byte],
+                               assignment: Array[Byte])
 
 private object MemberMetadata {
   def plainProtocolSet(supportedProtocols: List[(String, Array[Byte])]) = supportedProtocols.map(_._1).toSet

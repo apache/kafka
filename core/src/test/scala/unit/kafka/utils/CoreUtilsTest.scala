@@ -47,7 +47,7 @@ class CoreUtilsTest extends Logging {
 
   @Test
   def testTryAll(): Unit = {
-    case class TestException(key: String) extends Exception
+    final case class TestException(key: String) extends Exception
 
     val recorded = mutable.Map.empty[String, Either[TestException, String]]
     def recordingFunction(v: Either[TestException, String]): Unit = {

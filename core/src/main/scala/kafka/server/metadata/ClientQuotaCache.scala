@@ -29,16 +29,16 @@ import scala.jdk.CollectionConverters._
 // A type for the cache index keys
 sealed trait CacheIndexKey
 case object DefaultUser extends CacheIndexKey
-case class SpecificUser(user: String) extends CacheIndexKey
+final case class SpecificUser(user: String) extends CacheIndexKey
 case object DefaultClientId extends CacheIndexKey
-case class SpecificClientId(clientId: String) extends CacheIndexKey
+final case class SpecificClientId(clientId: String) extends CacheIndexKey
 case object DefaultIp extends CacheIndexKey
-case class SpecificIp(ip: String) extends CacheIndexKey
+final case class SpecificIp(ip: String) extends CacheIndexKey
 
 
 // Different types of matching constraints
 sealed trait QuotaMatch
-case class ExactMatch(entityName: String) extends QuotaMatch
+final case class ExactMatch(entityName: String) extends QuotaMatch
 case object DefaultMatch extends QuotaMatch
 case object TypeMatch extends QuotaMatch
 

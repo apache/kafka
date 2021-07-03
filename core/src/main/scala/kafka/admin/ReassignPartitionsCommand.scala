@@ -261,10 +261,10 @@ object ReassignPartitionsCommand extends Logging {
    * @param moveStates    A map from log directories to movement states.
    * @param movesOngoing  True if there are any ongoing moves that we know about.
    */
-  case class VerifyAssignmentResult(partStates: Map[TopicPartition, PartitionReassignmentState],
-                                    partsOngoing: Boolean = false,
-                                    moveStates: Map[TopicPartitionReplica, LogDirMoveState] = Map.empty,
-                                    movesOngoing: Boolean = false)
+  final case class VerifyAssignmentResult(partStates: Map[TopicPartition, PartitionReassignmentState],
+                                          partsOngoing: Boolean = false,
+                                          moveStates: Map[TopicPartitionReplica, LogDirMoveState] = Map.empty,
+                                          movesOngoing: Boolean = false)
 
   /**
    * The entry point for the --verify command.

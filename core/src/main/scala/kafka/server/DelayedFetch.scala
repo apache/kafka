@@ -29,7 +29,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 
 import scala.collection._
 
-case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData) {
+final case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData) {
 
   override def toString: String = {
     "[startOffsetMetadata: " + startOffsetMetadata +
@@ -41,14 +41,14 @@ case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInf
 /**
  * The fetch metadata maintained by the delayed fetch operation
  */
-case class FetchMetadata(fetchMinBytes: Int,
-                         fetchMaxBytes: Int,
-                         hardMaxBytesLimit: Boolean,
-                         fetchOnlyLeader: Boolean,
-                         fetchIsolation: FetchIsolation,
-                         isFromFollower: Boolean,
-                         replicaId: Int,
-                         fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
+final case class FetchMetadata(fetchMinBytes: Int,
+                               fetchMaxBytes: Int,
+                               hardMaxBytesLimit: Boolean,
+                               fetchOnlyLeader: Boolean,
+                               fetchIsolation: FetchIsolation,
+                               isFromFollower: Boolean,
+                               replicaId: Int,
+                               fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
 
   override def toString = "FetchMetadata(minBytes=" + fetchMinBytes + ", " +
     "maxBytes=" + fetchMaxBytes + ", " +

@@ -38,9 +38,9 @@ object ReplicaAssignment {
  * @param addingReplicas the replicas that are being added if there is a pending reassignment
  * @param removingReplicas the replicas that are being removed if there is a pending reassignment
  */
-case class ReplicaAssignment private (replicas: Seq[Int],
-                                      addingReplicas: Seq[Int],
-                                      removingReplicas: Seq[Int]) {
+final case class ReplicaAssignment private (replicas: Seq[Int],
+                                            addingReplicas: Seq[Int],
+                                            removingReplicas: Seq[Int]) {
 
   lazy val originReplicas: Seq[Int] = replicas.diff(addingReplicas)
   lazy val targetReplicas: Seq[Int] = replicas.diff(removingReplicas)

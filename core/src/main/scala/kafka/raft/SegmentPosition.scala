@@ -18,6 +18,6 @@ package kafka.raft
 
 import org.apache.kafka.raft.OffsetMetadata
 
-case class SegmentPosition(baseOffset: Long, relativePosition: Int) extends OffsetMetadata {
+final case class SegmentPosition(baseOffset: Long, relativePosition: Int) extends OffsetMetadata {
   override def toString: String = s"(segmentBaseOffset=$baseOffset,relativePositionInSegment=$relativePosition)"
 }

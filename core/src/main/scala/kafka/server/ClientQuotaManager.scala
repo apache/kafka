@@ -40,7 +40,7 @@ import scala.jdk.CollectionConverters._
  * @param quotaSensor @Sensor that tracks the quota
  * @param throttleTimeSensor @Sensor that tracks the throttle time
  */
-case class ClientSensors(metricTags: Map[String, String], quotaSensor: Sensor, throttleTimeSensor: Sensor)
+final case class ClientSensors(metricTags: Map[String, String], quotaSensor: Sensor, throttleTimeSensor: Sensor)
 
 /**
  * Configuration settings for quota management
@@ -48,10 +48,10 @@ case class ClientSensors(metricTags: Map[String, String], quotaSensor: Sensor, t
  * @param quotaWindowSizeSeconds The time span of each sample
  *
  */
-case class ClientQuotaManagerConfig(numQuotaSamples: Int =
-                                        ClientQuotaManagerConfig.DefaultNumQuotaSamples,
-                                    quotaWindowSizeSeconds: Int =
-                                        ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds)
+final case class ClientQuotaManagerConfig(numQuotaSamples: Int =
+                                              ClientQuotaManagerConfig.DefaultNumQuotaSamples,
+                                          quotaWindowSizeSeconds: Int =
+                                              ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds)
 
 object ClientQuotaManagerConfig {
   // Always have 10 whole windows + 1 current window
@@ -77,13 +77,13 @@ object ClientQuotaManager {
 
   sealed trait BaseUserEntity extends ClientQuotaEntity.ConfigEntity
 
-  case class UserEntity(sanitizedUser: String) extends BaseUserEntity {
+  final case class UserEntity(sanitizedUser: String) extends BaseUserEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.USER
     override def name: String = Sanitizer.desanitize(sanitizedUser)
     override def toString: String = s"user $sanitizedUser"
   }
 
-  case class ClientIdEntity(clientId: String) extends ClientQuotaEntity.ConfigEntity {
+  final case class ClientIdEntity(clientId: String) extends ClientQuotaEntity.ConfigEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.CLIENT_ID
     override def name: String = clientId
     override def toString: String = s"client-id $clientId"
@@ -101,7 +101,7 @@ object ClientQuotaManager {
     override def toString: String = "default client-id"
   }
 
-  case class KafkaQuotaEntity(userEntity: Option[BaseUserEntity],
+  final case class KafkaQuotaEntity(userEntity: Option[BaseUserEntity],
                               clientIdEntity: Option[ClientQuotaEntity.ConfigEntity]) extends ClientQuotaEntity {
     override def configEntities: util.List[ClientQuotaEntity.ConfigEntity] =
       (userEntity.toList ++ clientIdEntity.toList).asJava

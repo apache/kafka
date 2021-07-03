@@ -335,7 +335,7 @@ object LogCompactionTester {
 
 }
 
-case class TestRecord(topic: String, key: Int, value: Long, delete: Boolean) {
+final case class TestRecord(topic: String, key: Int, value: Long, delete: Boolean) {
   override def toString = topic + "\t" + key + "\t" + value + "\t" + (if (delete) "d" else "u")
   def topicAndKey = topic + key
 }

@@ -294,7 +294,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
 }
 
 // Mapping of epoch to the first offset of the subsequent epoch
-case class EpochEntry(epoch: Int, startOffset: Long) {
+final case class EpochEntry(epoch: Int, startOffset: Long) {
   override def toString: String = {
     s"EpochEntry(epoch=$epoch, startOffset=$startOffset)"
   }

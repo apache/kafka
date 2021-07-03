@@ -60,7 +60,7 @@ object AclAuthorizer {
   // If set to true when no acls are found for a resource, authorizer allows access to everyone. Defaults to false.
   val AllowEveryoneIfNoAclIsFoundProp = "allow.everyone.if.no.acl.found"
 
-  case class VersionedAcls(acls: Set[AclEntry], zkVersion: Int) {
+  final case class VersionedAcls(acls: Set[AclEntry], zkVersion: Int) {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
   }
 
@@ -747,8 +747,8 @@ class AclAuthorizer extends Authorizer with Logging {
       processAclChangeNotification(resource)
     }
   }
-
-  private case class ResourceTypeKey(ace: AccessControlEntry,
-                                     resourceType: ResourceType,
-                                     patternType: PatternType)
 }
+
+private[authorizer] final case class ResourceTypeKey(ace: AccessControlEntry,
+                                                     resourceType: ResourceType,
+                                                     patternType: PatternType)
