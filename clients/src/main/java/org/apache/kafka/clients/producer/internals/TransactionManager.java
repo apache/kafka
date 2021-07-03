@@ -58,7 +58,6 @@ import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
-import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
@@ -72,7 +71,6 @@ import org.apache.kafka.common.utils.PrimitiveRef;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -99,7 +97,6 @@ public class TransactionManager {
     private final String transactionalId;
     private final int transactionTimeoutMs;
     private final ApiVersions apiVersions;
-    private boolean batchFindCoordinator = true;
 
     private static class TopicPartitionBookkeeper {
 
@@ -1145,11 +1142,7 @@ public class TransactionManager {
 
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(type.id());
-        if (batchFindCoordinator) {
-            data.setCoordinatorKeys(Collections.singletonList(coordinatorKey));
-        } else {
-            data.setKey(coordinatorKey);
-        }
+        data.setKey(coordinatorKey);
         FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(data);
         enqueueRequest(new FindCoordinatorHandler(builder));
     }
@@ -1284,16 +1277,13 @@ public class TransactionManager {
                     if (this.needsCoordinator())
                         lookupCoordinator(this.coordinatorType(), this.coordinatorKey());
                     reenqueue();
-                } else if (response.versionMismatch() instanceof NoBatchedFindCoordinatorsException && response.requestHeader().apiKey() == ApiKeys.FIND_COORDINATOR) {
-                    batchFindCoordinator = false;
-                    reenqueue();
                 } else if (response.versionMismatch() != null) {
                     fatalError(response.versionMismatch());
                 } else if (response.hasResponse()) {
                     log.trace("Received transactional response {} for request {}", response.responseBody(),
                             requestBuilder());
                     synchronized (TransactionManager.this) {
-                        handleResponse(response.responseBody());
+                        handleResponse(response.responseBody(), response.requestHeader().apiVersion());
                     }
                 } else {
                     fatalError(new KafkaException("Could not execute transactional request for unknown reasons"));
@@ -1327,7 +1317,7 @@ public class TransactionManager {
 
         abstract AbstractRequest.Builder<?> requestBuilder();
 
-        abstract void handleResponse(AbstractResponse responseBody);
+        abstract void handleResponse(AbstractResponse responseBody, short requestVersion);
 
         abstract Priority priority();
     }
@@ -1362,7 +1352,7 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AbstractResponse response) {
+        public void handleResponse(AbstractResponse response, short requestVersion) {
             InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response;
             Errors error = initProducerIdResponse.error();
 
@@ -1415,7 +1405,7 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AbstractResponse response) {
+        public void handleResponse(AbstractResponse response, short requestVersion) {
             AddPartitionsToTxnResponse addPartitionsToTxnResponse = (AddPartitionsToTxnResponse) response;
             Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
             boolean hasPartitionErrors = false;
@@ -1532,9 +1522,10 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AbstractResponse response) {
+        public void handleResponse(AbstractResponse response, short requestVersion) {
             FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) response;
             CoordinatorType coordinatorType = CoordinatorType.forId(builder.data().keyType());
+            boolean batchFindCoordinator = requestVersion >= FindCoordinatorRequest.MIN_BATCHED_VERSION;
 
             if (batchFindCoordinator && findCoordinatorResponse.data().coordinators().size() != 1) {
                 log.error("Group coordinator lookup failed: Invalid response containing more than a single coordinator");
@@ -1608,7 +1599,7 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AbstractResponse response) {
+        public void handleResponse(AbstractResponse response, short requestVersion) {
             EndTxnResponse endTxnResponse = (EndTxnResponse) response;
             Errors error = endTxnResponse.error();
 
@@ -1661,7 +1652,7 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AbstractResponse response) {
+        public void handleResponse(AbstractResponse response, short requestVersion) {
             AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) response;
             Errors error = Errors.forCode(addOffsetsToTxnResponse.data().errorCode());
 
@@ -1723,7 +1714,7 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AbstractResponse response) {
+        public void handleResponse(AbstractResponse response, short requestVersion) {
             TxnOffsetCommitResponse txnOffsetCommitResponse = (TxnOffsetCommitResponse) response;
             boolean coordinatorReloaded = false;
             Map<TopicPartition, Errors> errors = txnOffsetCommitResponse.errors();

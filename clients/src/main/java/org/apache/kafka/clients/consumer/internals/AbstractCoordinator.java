@@ -52,7 +52,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
-import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
@@ -139,7 +138,6 @@ public abstract class AbstractCoordinator implements Closeable {
     private RequestFuture<ByteBuffer> joinFuture = null;
     private RequestFuture<Void> findCoordinatorFuture = null;
     private volatile RuntimeException fatalFindCoordinatorException = null;
-    private volatile boolean batchFindCoordinator = true;
     private Generation generation = Generation.NO_GENERATION;
     private long lastRebalanceStartMs = -1L;
     private long lastRebalanceEndMs = -1L;
@@ -815,29 +813,22 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     private RequestFuture<Void> sendFindCoordinatorRequest(Node node) {
         // initiate the group metadata request
-        log.debug("Sending FindCoordinator request to broker {} with batch={}", node, batchFindCoordinator);
+        log.debug("Sending FindCoordinator request to broker {}", node);
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(CoordinatorType.GROUP.id());
-        if (batchFindCoordinator) {
-            data.setCoordinatorKeys(Collections.singletonList(this.rebalanceConfig.groupId));
-        } else {
-            data.setKey(this.rebalanceConfig.groupId);
-        }
+        data.setKey(this.rebalanceConfig.groupId);
         FindCoordinatorRequest.Builder requestBuilder = new FindCoordinatorRequest.Builder(data);
         return client.send(node, requestBuilder)
-                .compose(new FindCoordinatorResponseHandler(batchFindCoordinator));
+                .compose(new FindCoordinatorResponseHandler());
     }
 
     private class FindCoordinatorResponseHandler extends RequestFutureAdapter<ClientResponse, Void> {
-        private boolean batch;
-        FindCoordinatorResponseHandler(boolean batch) {
-            this.batch = batch;
-        }
 
         @Override
         public void onSuccess(ClientResponse resp, RequestFuture<Void> future) {
             log.debug("Received FindCoordinator response {}", resp);
 
+            boolean batch = resp.requestHeader().apiVersion() >= FindCoordinatorRequest.MIN_BATCHED_VERSION;
             FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) resp.responseBody();
             if (batch && findCoordinatorResponse.data().coordinators().size() != 1) {
                 log.error("Group coordinator lookup failed: Invalid response containing more than a single coordinator");
@@ -885,12 +876,6 @@ public abstract class AbstractCoordinator implements Closeable {
         public void onFailure(RuntimeException e, RequestFuture<Void> future) {
             log.debug("FindCoordinator request failed due to {}", e.toString());
 
-            if (e instanceof NoBatchedFindCoordinatorsException) {
-                batchFindCoordinator = false;
-                clearFindCoordinatorFuture();
-                lookupCoordinator();
-                return;
-            } 
             if (!(e instanceof RetriableException)) {
                 // Remember the exception if fatal so we can ensure it gets thrown by the main thread
                 fatalFindCoordinatorException = e;
