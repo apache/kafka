@@ -17,7 +17,6 @@
 
 package kafka.common
 
-class StateChangeFailedException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
-  def this(message: String) = this(message, null)
-  def this() = this(null, null)
+class StateChangeFailedException(message: String) extends RuntimeException(message) {
+  override def fillInStackTrace: Throwable = this
 }
