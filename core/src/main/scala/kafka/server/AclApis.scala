@@ -32,7 +32,6 @@ import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.server.authorizer._
 
 import java.util
-import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable
 import scala.compat.java8.OptionConverters._
@@ -49,11 +48,11 @@ class AclApis(authHelper: AuthHelper,
   this.logIdent = "[AclApis-%s-%s] ".format(name, config.nodeId)
   private val alterAclsPurgatory =
       new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.nodeId)
-  private val _isClosed = new AtomicBoolean(false)
+  private var _isClosed = false
 
-  def isClosed: Boolean = _isClosed.get()
+  def isClosed: Boolean = _isClosed
 
-  def close(): Unit = if (_isClosed.compareAndSet(false, true)) alterAclsPurgatory.shutdown()
+  def close(): Unit =  try alterAclsPurgatory.shutdown() finally _isClosed = true
 
   def handleDescribeAcls(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, DESCRIBE)

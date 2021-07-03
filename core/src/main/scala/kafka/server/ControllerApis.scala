@@ -54,7 +54,6 @@ import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply,
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 
-import java.util.concurrent.atomic.AtomicBoolean
 import scala.jdk.CollectionConverters._
 
 
@@ -76,14 +75,14 @@ class ControllerApis(val requestChannel: RequestChannel,
   val authHelper = new AuthHelper(authorizer)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   private[server] val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
-  private val _isClosed = new AtomicBoolean(false)
+  private var _isClosed = false
 
-  def isClosed: Boolean = _isClosed.get()
+  def isClosed: Boolean = _isClosed
 
-  def close(): Unit = if (_isClosed.compareAndSet(false, true)) {
+  def close(): Unit = try {
     aclApis.close()
     info("Shutdown complete.")
-  }
+  } finally _isClosed = true
 
   override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     try {
