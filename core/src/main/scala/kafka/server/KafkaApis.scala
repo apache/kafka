@@ -141,6 +141,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     metadataSupport.maybeForward(request, handler, responseCallback)
   }
 
+  private def forwardToControllerOrFail(
+    request: RequestChannel.Request
+  ): Unit = {
+    def errorHandler(request: RequestChannel.Request): Unit = {
+      throw new IllegalStateException(s"Unable to forward $request to the controller")
+    }
+
+    maybeForwardToController(request, errorHandler)
+  }
+
   /**
    * Top-level method that handles all requests and multiplexes to the right api
    */
@@ -217,6 +227,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_TRANSACTIONS => handleDescribeTransactionsRequest(request)
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
         case ApiKeys.ALLOCATE_PRODUCER_IDS => maybeForwardToController(request, handleAllocateProducerIdsRequest)
+        case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -1164,7 +1175,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     var unauthorizedForCreateTopics = Set[String]()
 
     if (authorizedTopics.nonEmpty) {
-      val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
+      val nonExistingTopics = authorizedTopics.filterNot(metadataCache.contains(_))
       if (metadataRequest.allowAutoTopicCreation && config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
         if (!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false)) {
           val authorizedForCreateTopics = authHelper.filterByAuthorized(request.context, CREATE, TOPIC,
@@ -1223,7 +1234,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
-    val brokers = metadataCache.getAliveBrokers
+    val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
 
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
@@ -1232,7 +1243,7 @@ class KafkaApis(val requestChannel: RequestChannel,
        MetadataResponse.prepareResponse(
          requestVersion,
          requestThrottleMs,
-         brokers.flatMap(_.endpoints.get(request.context.listenerName.value())).toList.asJava,
+         brokers.toList.asJava,
          clusterId,
          metadataSupport.controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
          completeTopicMetadata.asJava,
@@ -1320,28 +1331,44 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleFindCoordinatorRequest(request: RequestChannel.Request): Unit = {
+    val version = request.header.apiVersion
+    if (version < 4) {
+      handleFindCoordinatorRequestLessThanV4(request)
+    } else {
+      handleFindCoordinatorRequestV4AndAbove(request)
+    }
+  }
+
+  private def handleFindCoordinatorRequestV4AndAbove(request: RequestChannel.Request): Unit = {
     val findCoordinatorRequest = request.body[FindCoordinatorRequest]
 
-    if (findCoordinatorRequest.data.keyType == CoordinatorType.GROUP.id &&
-        !authHelper.authorize(request.context, DESCRIBE, GROUP, findCoordinatorRequest.data.key))
-      requestHelper.sendErrorResponseMaybeThrottle(request, Errors.GROUP_AUTHORIZATION_FAILED.exception)
-    else if (findCoordinatorRequest.data.keyType == CoordinatorType.TRANSACTION.id &&
-        !authHelper.authorize(request.context, DESCRIBE, TRANSACTIONAL_ID, findCoordinatorRequest.data.key))
-      requestHelper.sendErrorResponseMaybeThrottle(request, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception)
-    else {
-      val (partition, internalTopicName) = CoordinatorType.forId(findCoordinatorRequest.data.keyType) match {
-        case CoordinatorType.GROUP =>
-          (groupCoordinator.partitionFor(findCoordinatorRequest.data.key), GROUP_METADATA_TOPIC_NAME)
+    val coordinators = findCoordinatorRequest.data.coordinatorKeys.asScala.map { key =>
+      val (error, node) = getCoordinator(request, findCoordinatorRequest.data.keyType, key)
+      new FindCoordinatorResponseData.Coordinator()
+        .setKey(key)
+        .setErrorCode(error.code)
+        .setHost(node.host)
+        .setNodeId(node.id)
+        .setPort(node.port)
+    }
+    def createResponse(requestThrottleMs: Int): AbstractResponse = {
+      val response = new FindCoordinatorResponse(
+              new FindCoordinatorResponseData()
+                .setCoordinators(coordinators.asJava)
+                .setThrottleTimeMs(requestThrottleMs))
+      trace("Sending FindCoordinator response %s for correlation id %d to client %s."
+              .format(response, request.header.correlationId, request.header.clientId))
+      response
+    }
+    requestHelper.sendResponseMaybeThrottle(request, createResponse)
+  }
 
-        case CoordinatorType.TRANSACTION =>
-          (txnCoordinator.partitionFor(findCoordinatorRequest.data.key), TRANSACTION_STATE_TOPIC_NAME)
-      }
+  private def handleFindCoordinatorRequestLessThanV4(request: RequestChannel.Request): Unit = {
+    val findCoordinatorRequest = request.body[FindCoordinatorRequest]
 
-      val topicMetadata = metadataCache.getTopicMetadata(Set(internalTopicName), request.context.listenerName)
-      def createFindCoordinatorResponse(error: Errors,
-                                        node: Node,
-                                        requestThrottleMs: Int): FindCoordinatorResponse = {
-        new FindCoordinatorResponse(
+    val (error, node) = getCoordinator(request, findCoordinatorRequest.data.keyType, findCoordinatorRequest.data.key)
+    def createResponse(requestThrottleMs: Int): AbstractResponse = {
+      val responseBody = new FindCoordinatorResponse(
           new FindCoordinatorResponseData()
             .setErrorCode(error.code)
             .setErrorMessage(error.message())
@@ -1349,37 +1376,56 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setHost(node.host)
             .setPort(node.port)
             .setThrottleTimeMs(requestThrottleMs))
+      trace("Sending FindCoordinator response %s for correlation id %d to client %s."
+        .format(responseBody, request.header.correlationId, request.header.clientId))
+      responseBody
+    }
+    if (error == Errors.NONE) {
+      requestHelper.sendResponseMaybeThrottle(request, createResponse)
+    } else {
+      requestHelper.sendErrorResponseMaybeThrottle(request, error.exception)
+    }
+  }
+
+  private def getCoordinator(request: RequestChannel.Request, keyType: Byte, key: String): (Errors, Node) = {
+    if (keyType == CoordinatorType.GROUP.id &&
+        !authHelper.authorize(request.context, DESCRIBE, GROUP, key))
+      (Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode)
+    else if (keyType == CoordinatorType.TRANSACTION.id &&
+        !authHelper.authorize(request.context, DESCRIBE, TRANSACTIONAL_ID, key))
+      (Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, Node.noNode)
+    else {
+      val (partition, internalTopicName) = CoordinatorType.forId(keyType) match {
+        case CoordinatorType.GROUP =>
+          (groupCoordinator.partitionFor(key), GROUP_METADATA_TOPIC_NAME)
+
+        case CoordinatorType.TRANSACTION =>
+          (txnCoordinator.partitionFor(key), TRANSACTION_STATE_TOPIC_NAME)
       }
+
+      val topicMetadata = metadataCache.getTopicMetadata(Set(internalTopicName), request.context.listenerName)
 
       if (topicMetadata.headOption.isEmpty) {
         val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
         autoTopicCreationManager.createTopics(Seq(internalTopicName).toSet, controllerMutationQuota, None)
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => createFindCoordinatorResponse(
-          Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode, requestThrottleMs))
+        (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
       } else {
-        def createResponse(requestThrottleMs: Int): AbstractResponse = {
-          val responseBody = if (topicMetadata.head.errorCode != Errors.NONE.code) {
-            createFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode, requestThrottleMs)
-          } else {
-            val coordinatorEndpoint = topicMetadata.head.partitions.asScala
-              .find(_.partitionIndex == partition)
-              .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
-              .flatMap(metadata => metadataCache.getAliveBroker(metadata.leaderId))
-              .flatMap(_.endpoints.get(request.context.listenerName.value()))
-              .filterNot(_.isEmpty)
+        if (topicMetadata.head.errorCode != Errors.NONE.code) {
+          (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+        } else {
+          val coordinatorEndpoint = topicMetadata.head.partitions.asScala
+            .find(_.partitionIndex == partition)
+            .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
+            .flatMap(metadata => metadataCache.
+                getAliveBrokerNode(metadata.leaderId, request.context.listenerName))
 
-            coordinatorEndpoint match {
-              case Some(endpoint) =>
-                createFindCoordinatorResponse(Errors.NONE, endpoint, requestThrottleMs)
-              case _ =>
-                createFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode, requestThrottleMs)
-            }
+          coordinatorEndpoint match {
+            case Some(endpoint) =>
+              (Errors.NONE, endpoint)
+            case _ =>
+              (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
           }
-          trace("Sending FindCoordinator response %s for correlation id %d to client %s."
-            .format(responseBody, request.header.correlationId, request.header.clientId))
-          responseBody
         }
-        requestHelper.sendResponseMaybeThrottle(request, createResponse)
       }
     }
   }
@@ -1899,10 +1945,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         results.asScala.filter(result => result.name() != null))(_.name)
       results.forEach { topic =>
         val unresolvedTopicId = topic.topicId() != Uuid.ZERO_UUID && topic.name() == null
-        if (!config.usesTopicId && topicIdsFromRequest.contains(topic.topicId)) {
-          topic.setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-          topic.setErrorMessage("Topic IDs are not supported on the server.")
-        } else if (unresolvedTopicId) {
+        if (unresolvedTopicId) {
           topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
         } else if (topicIdsFromRequest.contains(topic.topicId) && !authorizedDescribeTopics.contains(topic.name)) {
 
@@ -2886,7 +2929,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(error)(partitionErrors)
     } else {
       val partitions = if (electionRequest.data.topicPartitions == null) {
-        metadataCache.getAllPartitions()
+        metadataCache.getAllTopics().flatMap(metadataCache.getTopicPartitions)
       } else {
         electionRequest.topicPartitions
       }
@@ -3130,7 +3173,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         clusterAuthorizedOperations = 0
     }
 
-    val brokers = metadataCache.getAliveBrokers
+    val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
     val controllerId = metadataSupport.controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
@@ -3141,7 +3184,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setClusterAuthorizedOperations(clusterAuthorizedOperations);
 
 
-      brokers.flatMap(_.endpoints.get(request.context.listenerName.value())).foreach { broker =>
+      brokers.foreach { broker =>
         data.brokers.add(new DescribeClusterResponseData.DescribeClusterBroker()
           .setBrokerId(broker.id)
           .setHost(broker.host)

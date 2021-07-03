@@ -18,6 +18,10 @@
 package org.apache.kafka.snapshot;
 
 import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.OptionalLong;
+
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
@@ -42,6 +46,9 @@ import org.apache.kafka.raft.internals.RecordsIterator;
 public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>> {
     private final OffsetAndEpoch snapshotId;
     private final RecordsIterator<T> iterator;
+
+    private Optional<Batch<T>> nextBatch = Optional.empty();
+    private OptionalLong lastContainedLogTimestamp = OptionalLong.empty();
 
     private SnapshotReader(
         OffsetAndEpoch snapshotId,
@@ -72,14 +79,37 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
         return snapshotId.epoch;
     }
 
+    /**
+     * Returns the timestamp of the last log offset which is represented in the snapshot.
+     */
+    public long lastContainedLogTimestamp() {
+        if (!lastContainedLogTimestamp.isPresent()) {
+            // nextBatch is expected to be empty
+            nextBatch = nextBatch();
+        }
+
+        return lastContainedLogTimestamp.getAsLong();
+    }
+
     @Override
     public boolean hasNext() {
-        return iterator.hasNext();
+        if (!nextBatch.isPresent()) {
+            nextBatch = nextBatch();
+        }
+
+        return nextBatch.isPresent();
     }
 
     @Override
     public Batch<T> next() {
-        return iterator.next();
+        if (!hasNext()) {
+            throw new NoSuchElementException("Snapshot reader doesn't have any more elements");
+        }
+
+        Batch<T> batch = nextBatch.get();
+        nextBatch = Optional.empty();
+
+        return batch;
     }
 
     /**
@@ -99,5 +129,26 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
             snapshot.snapshotId(),
             new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize)
         );
+    }
+
+    /**
+     * Returns the next non-control Batch
+     */
+    private Optional<Batch<T>> nextBatch() {
+        while (iterator.hasNext()) {
+            Batch<T> batch = iterator.next();
+
+            if (!lastContainedLogTimestamp.isPresent()) {
+                // The Batch type doesn't support returning control batches. For now lets just use
+                // the append time of the first batch
+                lastContainedLogTimestamp = OptionalLong.of(batch.appendTimestamp());
+            }
+
+            if (!batch.records().isEmpty()) {
+                return Optional.of(batch);
+            }
+        }
+
+        return Optional.empty();
     }
 }

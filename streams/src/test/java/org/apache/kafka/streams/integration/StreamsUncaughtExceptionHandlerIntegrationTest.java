@@ -31,7 +31,6 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
@@ -226,7 +225,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             timestamp);
     }
 
-    private static class ShutdownProcessor extends AbstractProcessor<String, String> {
+    private static class ShutdownProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
         final List<String> valueList;
 
         ShutdownProcessor(final List<String> valueList) {

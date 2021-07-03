@@ -240,7 +240,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setPartitionIndex(tp.partition)
               .setTimestamp(0L)
               .setCurrentLeaderEpoch(15)).asJava)
-          ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+          ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
             .setTargetTimes(List(topic).asJava)
 
         case ApiKeys.LEADER_AND_ISR =>
@@ -327,7 +327,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new FindCoordinatorRequest.Builder(
               new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
-                .setKey("test-group"))
+                .setCoordinatorKeys(Collections.singletonList("test-group")))
 
         case ApiKeys.JOIN_GROUP =>
           new JoinGroupRequest.Builder(

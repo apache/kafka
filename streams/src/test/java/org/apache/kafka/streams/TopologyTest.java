@@ -52,6 +52,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -62,6 +63,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 public class TopologyTest {
 
     private final StoreBuilder<MockKeyValueStore> storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
@@ -358,8 +360,11 @@ public class TopologyTest {
                 goodNodeName)
             .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
 
+        final Properties config = new Properties();
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
         try {
-            new TopologyTestDriver(topology);
+            new TopologyTestDriver(topology, config);
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             final String error = e.toString();

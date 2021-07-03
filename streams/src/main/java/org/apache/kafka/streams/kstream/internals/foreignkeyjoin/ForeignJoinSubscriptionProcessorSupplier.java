@@ -22,10 +22,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -37,7 +33,8 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements ProcessorSupplier<KO, Change<VO>> {
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements org.apache.kafka.streams.processor.ProcessorSupplier<KO, Change<VO>> {
     private static final Logger LOG = LoggerFactory.getLogger(ForeignJoinSubscriptionProcessorSupplier.class);
     private final StoreBuilder<TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>>> storeBuilder;
     private final CombinedKeySchema<KO, K> keySchema;
@@ -51,17 +48,17 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements Proc
     }
 
     @Override
-    public Processor<KO, Change<VO>> get() {
+    public org.apache.kafka.streams.processor.Processor<KO, Change<VO>> get() {
         return new KTableKTableJoinProcessor();
     }
 
 
-    private final class KTableKTableJoinProcessor extends AbstractProcessor<KO, Change<VO>> {
+    private final class KTableKTableJoinProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<KO, Change<VO>> {
         private Sensor droppedRecordsSensor;
         private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> store;
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
             final InternalProcessorContext<?, ?> internalProcessorContext = (InternalProcessorContext<?, ?>) context;
             droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(

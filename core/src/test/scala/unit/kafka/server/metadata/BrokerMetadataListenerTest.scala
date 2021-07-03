@@ -25,8 +25,10 @@ import kafka.server.RaftReplicaManager
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.metadata.{ConfigRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
+import org.apache.kafka.common.protocol.ObjectSerializationCache
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.Batch
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
@@ -52,6 +54,7 @@ class BrokerMetadataListenerTest {
   private val txnCoordinator = mock(classOf[TransactionCoordinator])
   private val clientQuotaManager = mock(classOf[ClientQuotaMetadataManager])
   private var lastMetadataOffset = 0L
+  private val metadataSerde = new MetadataRecordSerde
 
   private val listener = new BrokerMetadataListener(
     brokerId,
@@ -92,9 +95,7 @@ class BrokerMetadataListenerTest {
     val deleteRecord = new RemoveTopicRecord()
       .setTopicId(topicId)
 
-    applyBatch(List[ApiMessageAndVersion](
-      new ApiMessageAndVersion(deleteRecord, 0.toShort),
-    ))
+    applyBatch(List(new ApiMessageAndVersion(deleteRecord, 0.toShort)))
     assertFalse(metadataCache.contains(topic))
     assertEquals(new Properties, configRepository.topicConfig(topic))
 
@@ -127,11 +128,14 @@ class BrokerMetadataListenerTest {
     val batchReader = if (records.isEmpty) {
       MemoryBatchReader.empty[ApiMessageAndVersion](baseOffset, baseOffset, _ => ())
     } else {
+      val objectCache = new ObjectSerializationCache()
       MemoryBatchReader.of(
         List(
-          Batch.of(
+          Batch.data(
             baseOffset,
             leaderEpoch,
+            baseOffset, // Use the base offset as the append time
+            records.map(metadataSerde.recordSize(_, objectCache)).sum,
             records.asJava
           )
         ).asJava,

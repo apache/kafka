@@ -434,6 +434,12 @@ abstract class WorkerTask implements Runnable {
             delegateListener.onDeletion(id);
         }
 
+        @Override
+        public void onRestart(ConnectorTaskId id) {
+            taskStateTimer.changeState(State.RESTARTING, time.milliseconds());
+            delegateListener.onRestart(id);
+        }
+
         public void recordState(TargetState state) {
             switch (state) {
                 case STARTED:

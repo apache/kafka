@@ -41,6 +41,7 @@ public class KStreamFlatMapValuesTest {
     private final String topicName = "topic";
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testFlatMapValues() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -77,6 +78,7 @@ public class KStreamFlatMapValuesTest {
     }
 
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testFlatMapValuesWithKeys() {
         final StreamsBuilder builder = new StreamsBuilder();
