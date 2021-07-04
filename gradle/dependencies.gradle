@@ -70,7 +70,7 @@ versions += [
   jacksonDatabind: "2.10.5.1",
   jacoco: "0.8.5",
   javassist: "3.27.0-GA",
-  jetty: "9.4.39.v20210325",
+  jetty: "9.4.42.v20210604",
   jersey: "2.34",
   jline: "3.12.1",
   jmh: "1.27",
