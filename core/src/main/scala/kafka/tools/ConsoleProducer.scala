@@ -141,7 +141,7 @@ object ConsoleProducer {
                                     .withOptionalArg()
                                     .describedAs("compression-codec")
                                     .ofType(classOf[String])
-    val batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch if they are not being sent synchronously.")
+    val batchSizeOpt = parser.accepts("batch-size", "DEPRECATED, use --max-partition-memory-bytes instead; to batch/group the messages.")
       .withRequiredArg
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
