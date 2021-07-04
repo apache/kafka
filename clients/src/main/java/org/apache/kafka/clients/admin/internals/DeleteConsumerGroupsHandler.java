@@ -117,11 +117,16 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
                 failed.put(groupId, error.exception());
                 break;
             case COORDINATOR_LOAD_IN_PROGRESS:
-            case COORDINATOR_NOT_AVAILABLE:
+                // If the coordinator is in the middle of loading, then we just need to retry
+                log.debug("DeleteConsumerGroups request for group {} failed because the coordinator " +
+                        "is still in the process of loading state. Will retry", groupId);
                 break;
+            case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
-                log.debug("DeleteConsumerGroups request for group {} returned error {}. Will retry",
-                        groupId, error);
+                // If the coordinator is unavailable or there was a coordinator change, then we unmap
+                // the key so that we retry the `FindCoordinator` request
+                log.debug("DeleteConsumerGroups request for group {} returned error {}. " +
+                        "Will attempt to find the coordinator again and retry", groupId, error);
                 unmapped.add(groupId);
                 break;
             default:

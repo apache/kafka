@@ -69,12 +69,12 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
     @Test
     public void testUnmappedHandleResponse() {
         assertUnmapped(handleWithError(Errors.NOT_COORDINATOR));
+        assertUnmapped(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE));
     }
 
     @Test
     public void testRetriableHandleResponse() {
         assertRetriable(handleWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
-        assertRetriable(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE));
     }
 
     @Test
