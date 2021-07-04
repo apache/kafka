@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -55,6 +57,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -1026,6 +1029,22 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE));
         assertNotSame(future, coordinator.lookupCoordinator(), "New request not sent after previous completed");
+    }
+
+    @Timeout(10)
+    @Test
+    public void pollShouldBeDoneByNoBatchedFindCoordinatorsException() throws InterruptedException {
+        setupCoordinator();
+        mockClient.setNodeApiVersions(NodeApiVersions.create(ApiKeys.FIND_COORDINATOR.id, (short) 3, (short) 3));
+        RequestFuture<Void> future = coordinator.lookupCoordinator();
+        assertFalse(future.isDone());
+        // first response is replaced by UnsupportedVersionException
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        // second response is what mock client pass to network client
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(10));
+        assertTrue(future.isDone());
+        assertTrue(future.failed());
     }
 
     @Test
