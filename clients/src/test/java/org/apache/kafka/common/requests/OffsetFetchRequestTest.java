@@ -36,9 +36,7 @@ import java.util.Optional;
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -94,7 +92,7 @@ public class OffsetFetchRequestTest {
                     "Incorrect error count for version " + version);
 
                 if (version <= 1) {
-                    assertEquals(expectedData, response.oldResponseData());
+                    assertEquals(expectedData, response.responseDataV0ToV7());
                 }
 
                 if (version >= 3) {
@@ -109,7 +107,7 @@ public class OffsetFetchRequestTest {
                     request.groupIdsToPartitions();
                 Map<String, List<OffsetFetchRequestTopics>> groupToTopicMap =
                     request.groupIdsToTopics();
-                assertNotSame(groupToTopicMap.get(group1), request.isAllPartitionsForGroup());
+                assertFalse(request.isAllPartitionsForGroup(group1));
                 assertTrue(groupToPartitionMap.containsKey(group1) && groupToTopicMap.containsKey(
                     group1));
                 assertEquals(partitions, groupToPartitionMap.get(group1));
@@ -152,11 +150,11 @@ public class OffsetFetchRequestTest {
                     request.groupIdsToTopics();
                 assertEquals(groupToTp.keySet(), groupToTopicMap.keySet());
                 assertEquals(groupToTp.keySet(), groupToPartitionMap.keySet());
-                assertNotSame(groupToTopicMap.get(group1), request.isAllPartitionsForGroup());
-                assertNotSame(groupToTopicMap.get(group2), request.isAllPartitionsForGroup());
-                assertNotSame(groupToTopicMap.get(group3), request.isAllPartitionsForGroup());
-                assertSame(groupToTopicMap.get(group4), request.isAllPartitionsForGroup());
-                assertSame(groupToTopicMap.get(group5), request.isAllPartitionsForGroup());
+                assertFalse(request.isAllPartitionsForGroup(group1));
+                assertFalse(request.isAllPartitionsForGroup(group2));
+                assertFalse(request.isAllPartitionsForGroup(group3));
+                assertTrue(request.isAllPartitionsForGroup(group4));
+                assertTrue(request.isAllPartitionsForGroup(group5));
                 OffsetFetchResponse response = request.getErrorResponse(throttleTimeMs, Errors.NONE);
                 assertEquals(Errors.NONE, response.groupLevelError(group1));
                 assertEquals(Errors.NONE, response.groupLevelError(group2));
@@ -219,7 +217,7 @@ public class OffsetFetchRequestTest {
                 assertTrue(groupToPartitionMap.containsKey(group1) && groupToTopicMap.containsKey(
                     group1));
                 assertNull(groupToPartitionMap.get(group1));
-                assertSame(groupToTopicMap.get(group1), request.isAllPartitionsForGroup());
+                assertTrue(request.isAllPartitionsForGroup(group1));
                 assertTrue(request.requireStable());
             }
         }

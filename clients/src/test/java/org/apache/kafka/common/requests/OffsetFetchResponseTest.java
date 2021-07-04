@@ -94,7 +94,7 @@ public class OffsetFetchResponseTest {
 
                 assertEquals(throttleTimeMs, response.throttleTimeMs());
 
-                Map<TopicPartition, PartitionData> responseData = response.oldResponseData();
+                Map<TopicPartition, PartitionData> responseData = response.responseDataV0ToV7();
                 assertEquals(partitionDataMap, responseData);
                 responseData.forEach((tp, data) -> assertTrue(data.hasError()));
             } else {
@@ -236,7 +236,7 @@ public class OffsetFetchResponseTest {
                     ));
                 }
 
-                Map<TopicPartition, PartitionData> responseData = oldResponse.oldResponseData();
+                Map<TopicPartition, PartitionData> responseData = oldResponse.responseDataV0ToV7();
                 assertEquals(expectedDataMap, responseData);
 
                 responseData.forEach((tp, rdata) -> assertTrue(rdata.hasError()));

@@ -1308,15 +1308,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         @Override
         public void handle(OffsetFetchResponse response, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
-            Errors responseError = response.error();
-            // check if error is null, if it is we are dealing with v8 response
-            if (responseError == null) {
-                if (response.groupHasError(rebalanceConfig.groupId)) {
-                    responseError = response.groupLevelError(rebalanceConfig.groupId);
-                } else {
-                    responseError = Errors.NONE;
-                }
-            }
+            Errors responseError = response.groupLevelError(rebalanceConfig.groupId);
             if (responseError != Errors.NONE) {
                 log.debug("Offset fetch failed: {}", responseError.message());
 
@@ -1336,10 +1328,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
 
             Set<String> unauthorizedTopics = null;
-            // if map entry is null, we know we are handling a response less than V8
-            boolean useV8 = response.responseData(rebalanceConfig.groupId) != null;
-            Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = useV8 ?
-                response.responseData(rebalanceConfig.groupId) : response.oldResponseData();
+            Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData =
+                response.responseData(rebalanceConfig.groupId);
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(responseData.size());
             Set<TopicPartition> unstableTxnOffsetTopicPartitions = new HashSet<>();
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {

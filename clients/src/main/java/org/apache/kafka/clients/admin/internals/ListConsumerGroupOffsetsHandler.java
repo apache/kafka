@@ -90,16 +90,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         List<CoordinatorKey> unmapped = new ArrayList<>();
 
-        Errors responseError = response.error();
-        // check if error is null, if it is we are dealing with v8 response
-        if (responseError == null) {
-            if (response.groupHasError(groupId.idValue)) {
-                responseError = response.groupLevelError(groupId.idValue);
-            } else {
-                responseError = Errors.NONE;
-            }
-        }
-
+        Errors responseError = response.groupLevelError(groupId.idValue);
         if (responseError != Errors.NONE) {
             handleError(groupId, responseError, failed, unmapped);
         } else {
@@ -107,8 +98,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
             // if entry for group level response data is null, we are getting back an older version
             // of the response
             Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData =
-                response.responseData(groupId.idValue) == null ? response.oldResponseData() :
-                    response.responseData(groupId.idValue);
+                response.responseData(groupId.idValue);
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
                 final TopicPartition topicPartition = entry.getKey();
                 OffsetFetchResponse.PartitionData partitionData = entry.getValue();

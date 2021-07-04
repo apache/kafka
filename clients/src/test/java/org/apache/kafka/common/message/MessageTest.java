@@ -38,9 +38,14 @@ import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitReque
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
+import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestGroup;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopic;
+import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopics;
+import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseGroup;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponsePartition;
+import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponsePartitions;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopic;
+import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopics;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
@@ -607,7 +612,7 @@ public final class MessageTest {
     }
 
     @Test
-    public void testOffsetFetchVersions() throws Exception {
+    public void testOffsetFetchV0ToV7() throws Exception {
         String groupId = "groupId";
         String topicName = "topic";
 
@@ -615,11 +620,11 @@ public final class MessageTest {
             new OffsetFetchRequestTopic()
                 .setName(topicName)
                 .setPartitionIndexes(Collections.singletonList(5)));
-        testAllMessageRoundTrips(new OffsetFetchRequestData()
+        testAllMessageRoundTripsOffsetFetchV0ToV7(new OffsetFetchRequestData()
                                      .setTopics(new ArrayList<>())
                                      .setGroupId(groupId));
 
-        testAllMessageRoundTrips(new OffsetFetchRequestData()
+        testAllMessageRoundTripsOffsetFetchV0ToV7(new OffsetFetchRequestData()
                                      .setGroupId(groupId)
                                      .setTopics(topics));
 
@@ -633,17 +638,19 @@ public final class MessageTest {
                                                        .setRequireStable(true);
 
         for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
-            final short finalVersion = version;
-            if (version < 2) {
-                assertThrows(NullPointerException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
-            } else {
-                testAllMessageRoundTripsFromVersion(version, allPartitionData);
-            }
+            if (version < 8) {
+                final short finalVersion = version;
+                if (version < 2) {
+                    assertThrows(NullPointerException.class, () -> testAllMessageRoundTripsOffsetFetchFromVersionV0ToV7(finalVersion, allPartitionData));
+                } else {
+                    testAllMessageRoundTripsOffsetFetchFromVersionV0ToV7(version, allPartitionData);
+                }
 
-            if (version < 7) {
-                assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, requireStableData));
-            } else {
-                testAllMessageRoundTripsFromVersion(finalVersion, requireStableData);
+                if (version < 7) {
+                    assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsOffsetFetchFromVersionV0ToV7(finalVersion, requireStableData));
+                } else {
+                    testAllMessageRoundTripsOffsetFetchFromVersionV0ToV7(finalVersion, requireStableData);
+                }
             }
         }
 
@@ -662,20 +669,179 @@ public final class MessageTest {
                       .setErrorCode(Errors.NOT_COORDINATOR.code())
                       .setThrottleTimeMs(10);
         for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
-            OffsetFetchResponseData responseData = response.get();
-            if (version <= 1) {
-                responseData.setErrorCode(Errors.NONE.code());
-            }
+            if (version < 8) {
+                OffsetFetchResponseData responseData = response.get();
+                if (version <= 1) {
+                    responseData.setErrorCode(Errors.NONE.code());
+                }
 
-            if (version <= 2) {
-                responseData.setThrottleTimeMs(0);
-            }
+                if (version <= 2) {
+                    responseData.setThrottleTimeMs(0);
+                }
 
-            if (version <= 4) {
-                responseData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
-            }
+                if (version <= 4) {
+                    responseData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
+                }
 
-            testAllMessageRoundTripsFromVersion(version, responseData);
+                testAllMessageRoundTripsOffsetFetchFromVersionV0ToV7(version, responseData);
+            }
+        }
+    }
+
+    private void testAllMessageRoundTripsOffsetFetchV0ToV7(Message message) throws Exception {
+        testDuplication(message);
+        testAllMessageRoundTripsOffsetFetchFromVersionV0ToV7(message.lowestSupportedVersion(), message);
+    }
+
+    private void testAllMessageRoundTripsOffsetFetchFromVersionV0ToV7(short fromVersion,
+        Message message) throws Exception {
+        for (short version = fromVersion; version <= 7; version++) {
+            testEquivalentMessageRoundTrip(version, message);
+        }
+    }
+
+    @Test
+    public void testOffsetFetchV8AndAbove() throws Exception {
+        String groupOne = "group1";
+        String groupTwo = "group2";
+        String groupThree = "group3";
+        String groupFour = "group4";
+        String groupFive = "group5";
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+        String topic3 = "topic3";
+
+        OffsetFetchRequestTopics topicOne = new OffsetFetchRequestTopics()
+            .setName(topic1)
+            .setPartitionIndexes(Collections.singletonList(5));
+        OffsetFetchRequestTopics topicTwo = new OffsetFetchRequestTopics()
+            .setName(topic2)
+            .setPartitionIndexes(Collections.singletonList(10));
+        OffsetFetchRequestTopics topicThree = new OffsetFetchRequestTopics()
+            .setName(topic3)
+            .setPartitionIndexes(Collections.singletonList(15));
+
+        List<OffsetFetchRequestTopics> groupOneTopics = singletonList(topicOne);
+        OffsetFetchRequestGroup group1 =
+            new OffsetFetchRequestGroup()
+                .setGroupId(groupOne)
+                .setTopics(groupOneTopics);
+
+        List<OffsetFetchRequestTopics> groupTwoTopics = Arrays.asList(topicOne, topicTwo);
+        OffsetFetchRequestGroup group2 =
+            new OffsetFetchRequestGroup()
+                .setGroupId(groupTwo)
+                .setTopics(groupTwoTopics);
+
+        List<OffsetFetchRequestTopics> groupThreeTopics = Arrays.asList(topicOne, topicTwo, topicThree);
+        OffsetFetchRequestGroup group3 =
+            new OffsetFetchRequestGroup()
+                .setGroupId(groupThree)
+                .setTopics(groupThreeTopics);
+
+        OffsetFetchRequestGroup group4 =
+            new OffsetFetchRequestGroup()
+                .setGroupId(groupFour)
+                .setTopics(null);
+
+        OffsetFetchRequestGroup group5 =
+            new OffsetFetchRequestGroup()
+                .setGroupId(groupFive)
+                .setTopics(null);
+
+        OffsetFetchRequestData requestData = new OffsetFetchRequestData()
+            .setGroupIds(Arrays.asList(group1, group2, group3, group4, group5))
+            .setRequireStable(true);
+
+        testAllMessageRoundTripsOffsetFetchV8AndAbove(requestData);
+
+        testAllMessageRoundTripsOffsetFetchV8AndAbove(requestData.setRequireStable(false));
+
+
+        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
+            if (version >= 8) {
+                testAllMessageRoundTripsOffsetFetchFromVersionV8AndAbove(version, requestData);
+            }
+        }
+
+        OffsetFetchResponseTopics responseTopic1 =
+            new OffsetFetchResponseTopics()
+                .setName(topic1)
+                .setPartitions(Collections.singletonList(
+                    new OffsetFetchResponsePartitions()
+                        .setPartitionIndex(5)
+                        .setMetadata(null)
+                        .setCommittedOffset(100)
+                        .setCommittedLeaderEpoch(3)
+                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())));
+        OffsetFetchResponseTopics responseTopic2 =
+            new OffsetFetchResponseTopics()
+                .setName(topic2)
+                .setPartitions(Collections.singletonList(
+                    new OffsetFetchResponsePartitions()
+                        .setPartitionIndex(10)
+                        .setMetadata("foo")
+                        .setCommittedOffset(200)
+                        .setCommittedLeaderEpoch(2)
+                        .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code())));
+        OffsetFetchResponseTopics responseTopic3 =
+            new OffsetFetchResponseTopics()
+                .setName(topic3)
+                .setPartitions(Collections.singletonList(
+                    new OffsetFetchResponsePartitions()
+                        .setPartitionIndex(15)
+                        .setMetadata("bar")
+                        .setCommittedOffset(300)
+                        .setCommittedLeaderEpoch(1)
+                        .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())));
+
+        OffsetFetchResponseGroup responseGroup1 =
+            new OffsetFetchResponseGroup()
+                .setGroupId(groupOne)
+                .setTopics(Collections.singletonList(responseTopic1))
+                .setErrorCode(Errors.NOT_COORDINATOR.code());
+        OffsetFetchResponseGroup responseGroup2 =
+            new OffsetFetchResponseGroup()
+                .setGroupId(groupTwo)
+                .setTopics(Arrays.asList(responseTopic1, responseTopic2))
+                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code());
+        OffsetFetchResponseGroup responseGroup3 =
+            new OffsetFetchResponseGroup()
+                .setGroupId(groupThree)
+                .setTopics(Arrays.asList(responseTopic1, responseTopic2, responseTopic3))
+                .setErrorCode(Errors.NONE.code());
+        OffsetFetchResponseGroup responseGroup4 =
+            new OffsetFetchResponseGroup()
+                .setGroupId(groupFour)
+                .setTopics(Arrays.asList(responseTopic1, responseTopic2, responseTopic3))
+                .setErrorCode(Errors.NONE.code());
+        OffsetFetchResponseGroup responseGroup5 =
+            new OffsetFetchResponseGroup()
+                .setGroupId(groupFive)
+                .setTopics(Arrays.asList(responseTopic1, responseTopic2, responseTopic3))
+                .setErrorCode(Errors.NONE.code());
+
+        Supplier<OffsetFetchResponseData> response =
+            () -> new OffsetFetchResponseData()
+                .setGroupIds(Arrays.asList(responseGroup1, responseGroup2, responseGroup3,
+                    responseGroup4, responseGroup5))
+                .setThrottleTimeMs(10);
+        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
+            if (version >= 8) {
+                OffsetFetchResponseData responseData = response.get();
+                testAllMessageRoundTripsOffsetFetchFromVersionV8AndAbove(version, responseData);
+            }
+        }
+    }
+
+    private void testAllMessageRoundTripsOffsetFetchV8AndAbove(Message message) throws Exception {
+        testDuplication(message);
+        testAllMessageRoundTripsOffsetFetchFromVersionV8AndAbove((short) 8, message);
+    }
+
+    private void testAllMessageRoundTripsOffsetFetchFromVersionV8AndAbove(short fromVersion, Message message) throws Exception {
+        for (short version = fromVersion; version <= message.highestSupportedVersion(); version++) {
+            testEquivalentMessageRoundTrip(version, message);
         }
     }
 

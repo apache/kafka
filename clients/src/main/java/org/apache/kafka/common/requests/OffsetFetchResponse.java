@@ -17,6 +17,8 @@
 package org.apache.kafka.common.requests;
 
 import java.util.Map.Entry;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseGroup;
@@ -70,7 +72,6 @@ public class OffsetFetchResponse extends AbstractResponse {
     private final OffsetFetchResponseData data;
     private final Errors error;
     private final Map<String, Errors> groupLevelErrors = new HashMap<>();
-    private final Map<String, Map<TopicPartition, PartitionData>> groupToPartitionData = new HashMap<>();
 
     public static final class PartitionData {
         public final long offset;
@@ -178,7 +179,7 @@ public class OffsetFetchResponse extends AbstractResponse {
     /**
      * Constructor with throttle time for version 8 and above.
      * @param throttleTimeMs The time in milliseconds that this response was throttled
-     * @param errors Potential coordinator or group level error code (for api version 2 and later)
+     * @param errors Potential coordinator or group level error code
      * @param responseData Fetched offset information grouped by topic-partition and by group
      */
     public OffsetFetchResponse(int throttleTimeMs, Map<String, Errors> errors, Map<String,
@@ -186,9 +187,10 @@ public class OffsetFetchResponse extends AbstractResponse {
         super(ApiKeys.OFFSET_FETCH);
         List<OffsetFetchResponseGroup> groupList = new ArrayList<>();
         for (Entry<String, Map<TopicPartition, PartitionData>> entry : responseData.entrySet()) {
+            String groupName = entry.getKey();
+            Map<TopicPartition, PartitionData> partitionDataMap = entry.getValue();
             Map<String, OffsetFetchResponseTopics> offsetFetchResponseTopicsMap = new HashMap<>();
-            for (Entry<TopicPartition, PartitionData> partitionEntry :
-                responseData.get(entry.getKey()).entrySet()) {
+            for (Entry<TopicPartition, PartitionData> partitionEntry : partitionDataMap.entrySet()) {
                 String topicName = partitionEntry.getKey().topic();
                 OffsetFetchResponseTopics topic =
                     offsetFetchResponseTopicsMap.getOrDefault(topicName,
@@ -204,11 +206,10 @@ public class OffsetFetchResponse extends AbstractResponse {
                 offsetFetchResponseTopicsMap.put(topicName, topic);
             }
             groupList.add(new OffsetFetchResponseGroup()
-                .setGroupId(entry.getKey())
+                .setGroupId(groupName)
                 .setTopics(new ArrayList<>(offsetFetchResponseTopicsMap.values()))
-                .setErrorCode(errors.get(entry.getKey()).code()));
-            groupLevelErrors.put(entry.getKey(), errors.get(entry.getKey()));
-            groupToPartitionData.put(entry.getKey(), responseData.get(entry.getKey()));
+                .setErrorCode(errors.get(groupName).code()));
+            groupLevelErrors.put(groupName, errors.get(groupName));
         }
         this.data = new OffsetFetchResponseData()
             .setGroupIds(groupList)
@@ -231,20 +232,6 @@ public class OffsetFetchResponse extends AbstractResponse {
         } else {
             for (OffsetFetchResponseGroup group : data.groupIds()) {
                 this.groupLevelErrors.put(group.groupId(), Errors.forCode(group.errorCode()));
-                Map<TopicPartition, PartitionData> partitionDataMap = new HashMap<>();
-                for (OffsetFetchResponseTopics topic : group.topics()) {
-                    for (OffsetFetchResponsePartitions partition : topic.partitions()) {
-                        TopicPartition tp = new TopicPartition(topic.name(),
-                            partition.partitionIndex());
-                        PartitionData pd = new PartitionData(
-                            partition.committedOffset(),
-                            Optional.of(partition.committedLeaderEpoch()),
-                            partition.metadata(),
-                            Errors.forCode(partition.errorCode()));
-                        partitionDataMap.put(tp, pd);
-                    }
-                }
-                this.groupToPartitionData.put(group.groupId(), partitionDataMap);
             }
             this.error = null;
         }
@@ -280,6 +267,9 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     public Errors groupLevelError(String groupId) {
+        if (error != null) {
+            return error;
+        }
         return groupLevelErrors.get(groupId);
     }
 
@@ -306,7 +296,8 @@ public class OffsetFetchResponse extends AbstractResponse {
         return counts;
     }
 
-    public Map<TopicPartition, PartitionData> oldResponseData() {
+    //public for testing purposes
+    public Map<TopicPartition, PartitionData> responseDataV0ToV7() {
         Map<TopicPartition, PartitionData> responseData = new HashMap<>();
         for (OffsetFetchResponseTopic topic : data.topics()) {
             for (OffsetFetchResponsePartition partition : topic.partitions()) {
@@ -321,8 +312,44 @@ public class OffsetFetchResponse extends AbstractResponse {
         return responseData;
     }
 
+    private Map<TopicPartition, PartitionData> buildResponseData(String groupId) {
+        Map<TopicPartition, PartitionData> responseData = new HashMap<>();
+        OffsetFetchResponseGroup group = data
+            .groupIds()
+            .stream()
+            .filter(g -> g.groupId().equals(groupId))
+            .collect(toSingleton());
+        for (OffsetFetchResponseTopics topic : group.topics()) {
+            for (OffsetFetchResponsePartitions partition : topic.partitions()) {
+                responseData.put(new TopicPartition(topic.name(), partition.partitionIndex()),
+                    new PartitionData(partition.committedOffset(),
+                        RequestUtils.getLeaderEpoch(partition.committedLeaderEpoch()),
+                        partition.metadata(),
+                        Errors.forCode(partition.errorCode()))
+                );
+            }
+        }
+        return responseData;
+    }
+
+    // Custom collector to filter a single element
+    private <T> Collector<T, ?, T> toSingleton() {
+        return Collectors.collectingAndThen(
+            Collectors.toList(),
+            list -> {
+                if (list.size() != 1) {
+                    throw new IllegalStateException();
+                }
+                return list.get(0);
+            }
+        );
+    }
+
     public Map<TopicPartition, PartitionData> responseData(String groupId) {
-        return groupToPartitionData.get(groupId);
+        if (groupLevelErrors.isEmpty()) {
+            return responseDataV0ToV7();
+        }
+        return buildResponseData(groupId);
     }
 
     public static OffsetFetchResponse parse(ByteBuffer buffer, short version) {

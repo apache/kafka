@@ -73,7 +73,7 @@
             "about": "The committed message offset." },
           { "name": "CommittedLeaderEpoch", "type": "int32", "versions": "8+", "default": "-1",
             "ignorable": true, "about": "The leader epoch." },
-          { "name": "Metadata", "type": "string", "versions": "8+", "nullableVersions": "0+",
+          { "name": "Metadata", "type": "string", "versions": "8+", "nullableVersions": "8+",
             "about": "The partition metadata." },
           { "name": "ErrorCode", "type": "int16", "versions": "8+",
             "about": "The partition-level error code, or 0 if there was no error." }

@@ -1338,11 +1338,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     val groupIds = offsetFetchRequest.groupIds().asScala
     val groupToErrorMap =  mutable.Map.empty[String, Errors]
     val groupToPartitionData =  mutable.Map.empty[String, util.Map[TopicPartition, PartitionData]]
-    val groupToTopics = offsetFetchRequest.groupIdsToTopics()
     val groupToTopicPartitions = offsetFetchRequest.groupIdsToPartitions()
     groupIds.foreach(g => {
       val (error, partitionData) = fetchOffsets(g,
-        groupToTopics.get(g) == offsetFetchRequest.isAllPartitionsForGroup,
+        offsetFetchRequest.isAllPartitionsForGroup(g),
         offsetFetchRequest.requireStable(),
         groupToTopicPartitions.get(g), request.context)
       groupToErrorMap += (g -> error)
@@ -1383,11 +1382,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           (error, authorizedPartitionData)
         } else {
           val unauthorizedPartitionData = unauthorizedPartitions.map(_ -> OffsetFetchResponse.UNAUTHORIZED_PARTITION).toMap
-          if (unauthorizedPartitionData.nonEmpty) {
-            (OffsetFetchResponse.UNAUTHORIZED_PARTITION.error, authorizedPartitionData ++ unauthorizedPartitionData)
-          } else {
-            (Errors.NONE, authorizedPartitionData ++ unauthorizedPartitionData)
-          }
+          (Errors.NONE, authorizedPartitionData ++ unauthorizedPartitionData)
         }
       }
     }
