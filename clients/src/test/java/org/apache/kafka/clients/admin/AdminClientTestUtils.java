@@ -18,11 +18,13 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
@@ -101,8 +103,17 @@ public class AdminClientTestUtils {
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> KafkaFuture.completedFuture(e.getValue()))));
     }
 
-    public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(Map<TopicPartition, OffsetAndMetadata> offsets) {
-        return new ListConsumerGroupOffsetsResult(KafkaFuture.completedFuture(offsets));
+    public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(Map<String,
+        Map<TopicPartition, OffsetAndMetadata>> offsets) {
+        Map<CoordinatorKey, KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>>> resultMap =
+            new HashMap<>();
+        for (String group : offsets.keySet()) {
+            CoordinatorKey key = CoordinatorKey.byGroupId(group);
+            KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future =
+                (KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>>) KafkaFutureImpl.completedFuture(offsets.get(group));
+            resultMap.put(key, future);
+        }
+        return new ListConsumerGroupOffsetsResult(resultMap);
     }
 
     /**

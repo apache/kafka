@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -39,6 +40,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
 
     private final CoordinatorKey groupId;
     private final List<TopicPartition> partitions;
+    private final Map<String, List<TopicPartition>> groupIdToTopicPartitions;
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
@@ -51,6 +53,26 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         this.partitions = partitions;
         this.log = logContext.logger(ListConsumerGroupOffsetsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
+        groupIdToTopicPartitions = new HashMap<>();
+    }
+
+    public ListConsumerGroupOffsetsHandler(
+        Map<String, List<TopicPartition>> groupIdToTopicPartitions,
+        LogContext logContext
+    ) {
+        this.log = logContext.logger(ListConsumerGroupOffsetsHandler.class);
+        this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
+        this.groupIdToTopicPartitions = groupIdToTopicPartitions;
+        partitions = new ArrayList<>();
+        groupId = null;
+    }
+
+    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition,
+        OffsetAndMetadata>> newFuture(List<String> groupIds) {
+        return AdminApiFuture.forKeys(groupIds
+            .stream()
+            .map(CoordinatorKey::byGroupId)
+            .collect(Collectors.toSet()));
     }
 
     public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> newFuture(
@@ -73,7 +95,11 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     public OffsetFetchRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         // Set the flag to false as for admin client request,
         // we don't need to wait for any pending offset state to clear.
-        return new OffsetFetchRequest.Builder(groupId.idValue, false, partitions, false);
+        if (groupIdToTopicPartitions.isEmpty()) {
+            // using older version of offsetFetch request if group to topic partition map is empty
+            return new OffsetFetchRequest.Builder(groupId.idValue, false, partitions, false);
+        }
+        return new OffsetFetchRequest.Builder(groupIdToTopicPartitions, false, false);
     }
 
     @Override
@@ -87,33 +113,64 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         List<CoordinatorKey> unmapped = new ArrayList<>();
 
-        Errors responseError = response.groupLevelError(groupId.idValue);
-        if (responseError != Errors.NONE) {
-            handleError(groupId, responseError, failed, unmapped);
-        } else {
-            final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
-            Map<TopicPartition, OffsetFetchResponse.PartitionData> partitionDataMap =
-                response.partitionDataMap(groupId.idValue);
-            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : partitionDataMap.entrySet()) {
-                final TopicPartition topicPartition = entry.getKey();
-                OffsetFetchResponse.PartitionData partitionData = entry.getValue();
-                final Errors error = partitionData.error;
+        if (groupIdToTopicPartitions.isEmpty()) {
+            Errors responseError = response.groupLevelError(groupId.idValue);
+            if (responseError != Errors.NONE) {
+                handleError(groupId, responseError, failed, unmapped);
+            } else {
+                final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
+                Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = response.partitionDataMap(groupId.idValue);
+                for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
+                    final TopicPartition topicPartition = entry.getKey();
+                    OffsetFetchResponse.PartitionData partitionData = entry.getValue();
+                    final Errors error = partitionData.error;
 
-                if (error == Errors.NONE) {
-                    final long offset = partitionData.offset;
-                    final String metadata = partitionData.metadata;
-                    final Optional<Integer> leaderEpoch = partitionData.leaderEpoch;
-                    // Negative offset indicates that the group has no committed offset for this partition
-                    if (offset < 0) {
-                        groupOffsetsListing.put(topicPartition, null);
+                    if (error == Errors.NONE) {
+                        final long offset = partitionData.offset;
+                        final String metadata = partitionData.metadata;
+                        final Optional<Integer> leaderEpoch = partitionData.leaderEpoch;
+                        // Negative offset indicates that the group has no committed offset for this partition
+                        if (offset < 0) {
+                            groupOffsetsListing.put(topicPartition, null);
+                        } else {
+                            groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
+                        }
                     } else {
-                        groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
+                        log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
                     }
+                }
+                completed.put(groupId, groupOffsetsListing);
+            }
+        } else {
+            for (Map.Entry<String, List<TopicPartition>> entry : groupIdToTopicPartitions.entrySet()) {
+                String group = entry.getKey();
+                if (response.groupHasError(group)) {
+                    handleError(CoordinatorKey.byGroupId(group), response.groupLevelError(entry.getKey()), failed, unmapped);
                 } else {
-                    log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
+                    final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
+                    Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = response.partitionDataMap(group);
+                    for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> partitionEntry : responseData.entrySet()) {
+                        final TopicPartition topicPartition = partitionEntry.getKey();
+                        OffsetFetchResponse.PartitionData partitionData = partitionEntry.getValue();
+                        final Errors error = partitionData.error;
+
+                        if (error == Errors.NONE) {
+                            final long offset = partitionData.offset;
+                            final String metadata = partitionData.metadata;
+                            final Optional<Integer> leaderEpoch = partitionData.leaderEpoch;
+                            // Negative offset indicates that the group has no committed offset for this partition
+                            if (offset < 0) {
+                                groupOffsetsListing.put(topicPartition, null);
+                            } else {
+                                groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
+                            }
+                        } else {
+                            log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
+                        }
+                    }
+                    completed.put(CoordinatorKey.byGroupId(group), groupOffsetsListing);
                 }
             }
-            completed.put(groupId, groupOffsetsListing);
         }
         return new ApiResult<>(completed, failed, unmapped);
     }
@@ -146,5 +203,4 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                         "Received unexpected error for group " + groupId + " in `OffsetFetch` response"));
         }
     }
-
 }
