@@ -1317,6 +1317,9 @@ public class TransactionManager {
 
         abstract AbstractRequest.Builder<?> requestBuilder();
 
+        // Propagate requestVersion for parsing response since some responses use
+        // different fields depending on the API version. For example, FindCoordinator
+        // uses different format for versions that support batching.
         abstract void handleResponse(AbstractResponse responseBody, short requestVersion);
 
         abstract Priority priority();

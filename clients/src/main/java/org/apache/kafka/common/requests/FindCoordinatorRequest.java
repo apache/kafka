@@ -50,7 +50,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
             if (version < MIN_BATCHED_VERSION) {
                 if (batchedKeys > 1)
                     throw new NoBatchedFindCoordinatorsException("Cannot create a v" + version + " FindCoordinator request " +
-                        "because we require features supported only in 4 or later.");
+                        "because we require features supported only in " + MIN_BATCHED_VERSION + " or later.");
                 if (batchedKeys == 1) {
                     data.setKey(data.coordinatorKeys().get(0));
                     data.setCoordinatorKeys(Collections.emptyList());

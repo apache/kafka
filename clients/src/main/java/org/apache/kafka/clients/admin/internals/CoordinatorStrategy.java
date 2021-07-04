@@ -98,6 +98,7 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
                 key.idValue + "' cannot be represented in a request."));
         }
         FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
+        // Handle response based on whether batched version is used by checking `coordinators()` in the response data
         if (!response.data().coordinators().isEmpty()) {
             for (Coordinator coordinator : response.data().coordinators()) {
                 CoordinatorKey key = (type == CoordinatorType.GROUP)
