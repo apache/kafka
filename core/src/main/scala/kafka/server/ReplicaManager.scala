@@ -2012,10 +2012,9 @@ class ReplicaManager(val config: KafkaConfig,
         None
 
       case HostedPartition.Online(partition) => {
-        if (partition.topicId.isDefined && !partition.topicId.equals(topicId)) {
-          // Note: the check for isDefined is here because the Partition object doesn't
-          // actually store the topic ID currently. It's actually stored in a Log object,
-          // which may or may not exist even if the Partition exists.
+        if (partition.topicId.exists(_ != topicId)) {
+          // Note: Partition#topicId will be None here if the Log object for this partition
+          // has not been created.
           throw new IllegalStateException(s"Topic ${tp} exists, but its ID is " +
             s"${partition.topicId.get}, not ${topicId} as expected")
         }

@@ -338,8 +338,8 @@ class BrokerServer(
         SocketServer.DataPlaneThreadPrefix)
 
       if (socketServer.controlPlaneRequestChannelOpt.isDefined) {
-        throw new RuntimeException("KIP-291 control plane listeners are not supported " +
-          "when in KRaft mode.")
+        throw new RuntimeException(KafkaConfig.ControlPlaneListenerNameProp + " is not " +
+          "supported when in KRaft mode.")
       }
       // Block until we've caught up with the latest metadata from the controller quorum.
       lifecycleManager.initialCatchUpFuture.get()
