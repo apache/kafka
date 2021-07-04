@@ -1720,7 +1720,8 @@ public class RequestResponseTest {
         if (version < 8) {
             return new OffsetFetchResponse(Errors.NONE, responseData);
         }
-        return new OffsetFetchResponse(Collections.singletonMap("group1", Errors.NONE),
+        int throttleMs = 10;
+        return new OffsetFetchResponse(throttleMs, Collections.singletonMap("group1", Errors.NONE),
             Collections.singletonMap("group1", responseData));
     }
 

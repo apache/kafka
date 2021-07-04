@@ -73,10 +73,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     public OffsetFetchRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         // Set the flag to false as for admin client request,
         // we don't need to wait for any pending offset state to clear.
-        return new OffsetFetchRequest.Builder(
-            Collections.singletonMap(groupId.idValue, partitions),
-            false,
-            false);
+        return new OffsetFetchRequest.Builder(groupId.idValue, false, partitions, false);
     }
 
     @Override

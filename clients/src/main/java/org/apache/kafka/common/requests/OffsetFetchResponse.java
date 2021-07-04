@@ -168,15 +168,6 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     /**
-     * Constructor without throttle time for version 8 and above.
-     * @param errors Error code on a per group level basis
-     * @param responseData Fetched offset information grouped group id
-     */
-    public OffsetFetchResponse(Map<String, Errors> errors, Map<String, Map<TopicPartition, PartitionData>> responseData) {
-        this(DEFAULT_THROTTLE_TIME, errors, responseData);
-    }
-
-    /**
      * Constructor with throttle time for version 8 and above.
      * @param throttleTimeMs The time in milliseconds that this response was throttled
      * @param errors Potential coordinator or group level error code
