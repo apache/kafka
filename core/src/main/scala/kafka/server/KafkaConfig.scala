@@ -19,16 +19,16 @@ package kafka.server
 
 import java.util
 import java.util.{Collections, Locale, Properties}
-
-import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_0_10_0_IV1, KAFKA_2_1_IV0, KAFKA_2_7_IV0, KAFKA_2_8_IV0}
+import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_0_10_0_IV1, KAFKA_2_1_IV0, KAFKA_2_7_IV0, KAFKA_2_8_IV0, KAFKA_3_0_IV1}
 import kafka.cluster.EndPoint
 import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.log.LogConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, ZStdCompressionCodec}
 import kafka.security.authorizer.AuthorizerUtils
+import kafka.server.KafkaConfig.LogMessageFormatVersionProp
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole, ProcessRole}
-import kafka.utils.CoreUtils
+import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.Reconfigurable
@@ -48,6 +48,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.zookeeper.client.ZKClientConfig
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 
@@ -135,8 +136,11 @@ object Defaults {
   val LogFlushOffsetCheckpointIntervalMs = 60000
   val LogFlushStartOffsetCheckpointIntervalMs = 60000
   val LogPreAllocateEnable = false
-  // lazy val as `InterBrokerProtocolVersion` is defined later
-  lazy val LogMessageFormatVersion = InterBrokerProtocolVersion
+
+  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
+  @deprecated("3.0")
+  val LogMessageFormatVersion = KAFKA_3_0_IV1.version
+
   val LogMessageTimestampType = "CreateTime"
   val LogMessageTimestampDifferenceMaxMs = Long.MaxValue
   val NumRecoveryThreadsPerDataDir = 1
@@ -444,7 +448,11 @@ object KafkaConfig {
   val LogFlushOffsetCheckpointIntervalMsProp = "log.flush.offset.checkpoint.interval.ms"
   val LogFlushStartOffsetCheckpointIntervalMsProp = "log.flush.start.offset.checkpoint.interval.ms"
   val LogPreAllocateProp = "log.preallocate"
+
+  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
+  @deprecated("3.0")
   val LogMessageFormatVersionProp = LogConfigPrefix + "message.format.version"
+
   val LogMessageTimestampTypeProp = LogConfigPrefix + "message.timestamp.type"
   val LogMessageTimestampDifferenceMaxMsProp = LogConfigPrefix + "message.timestamp.difference.max.ms"
   val LogMaxIdMapSnapshotsProp = LogConfigPrefix + "max.id.map.snapshots"
@@ -1014,6 +1022,7 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
+  @nowarn("cat=deprecation")
   private[server] val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
@@ -1378,7 +1387,7 @@ object KafkaConfig {
 }
 
 class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig])
-  extends AbstractConfig(KafkaConfig.configDef, props, doLog) {
+  extends AbstractConfig(KafkaConfig.configDef, props, doLog) with Logging {
 
   def this(props: java.util.Map[_, _]) = this(props, true, None)
   def this(props: java.util.Map[_, _], doLog: Boolean) = this(props, doLog, None)
@@ -1631,10 +1640,18 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def logFlushIntervalMs: java.lang.Long = Option(getLong(KafkaConfig.LogFlushIntervalMsProp)).getOrElse(getLong(KafkaConfig.LogFlushSchedulerIntervalMsProp))
   def minInSyncReplicas = getInt(KafkaConfig.MinInSyncReplicasProp)
   def logPreAllocateEnable: java.lang.Boolean = getBoolean(KafkaConfig.LogPreAllocateProp)
+
   // We keep the user-provided String as `ApiVersion.apply` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
-  val logMessageFormatVersionString = getString(KafkaConfig.LogMessageFormatVersionProp)
-  val logMessageFormatVersion = ApiVersion(logMessageFormatVersionString)
+  @nowarn("cat=deprecation")
+  private val logMessageFormatVersionString = getString(KafkaConfig.LogMessageFormatVersionProp)
+
+  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
+  @deprecated("3.0")
+  lazy val logMessageFormatVersion =
+    if (interBrokerProtocolVersion >= KAFKA_3_0_IV1) ApiVersion(Defaults.LogMessageFormatVersion)
+    else ApiVersion(logMessageFormatVersionString)
+
   def logMessageTimestampType = TimestampType.forName(getString(KafkaConfig.LogMessageTimestampTypeProp))
   def logMessageTimestampDifferenceMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
   def logMessageDownConversionEnable: Boolean = getBoolean(KafkaConfig.LogMessageDownConversionEnableProp)
@@ -1884,6 +1901,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   validateValues()
 
+  @nowarn("cat=deprecation")
   private def validateValues(): Unit = {
     if (requiresZookeeper) {
       if (zkConnect == null) {
@@ -1946,6 +1964,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s"${KafkaConfig.ControlPlaneListenerNameProp}, when defined, should have a different value from the inter broker listener name. " +
         s"Currently they both have the value ${controlPlaneListenerName.get}")
     }
+
+    if (interBrokerProtocolVersion >= KAFKA_3_0_IV1 && originals.containsKey(LogMessageFormatVersionProp))
+      warn(s"Property $LogMessageFormatVersionProp is ignored if inter-broker protocol is ${KAFKA_3_0_IV1.shortVersion} or higher")
 
     val recordVersion = logMessageFormatVersion.recordVersion
     require(interBrokerProtocolVersion.recordVersion.value >= recordVersion.value,

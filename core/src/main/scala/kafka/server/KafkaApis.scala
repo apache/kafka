@@ -774,7 +774,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // which were written in the new format prior to the version downgrade.
         val unconvertedRecords = FetchResponse.recordsOrFail(partitionData)
         val downConvertMagic =
-          logConfig.map(_.messageFormatVersion.recordVersion.value).flatMap { magic =>
+          logConfig.map(_.recordVersion.value).flatMap { magic =>
             if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1)
               Some(RecordBatch.MAGIC_VALUE_V0)
             else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3)

@@ -22,7 +22,6 @@ import java.nio.channels.ClosedChannelException
 import java.nio.charset.StandardCharsets
 import java.util.regex.Pattern
 import java.util.{Collections, Properties}
-
 import kafka.server.{FetchDataInfo, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils.{MockTime, Scheduler, TestUtils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -32,6 +31,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertFalse, _}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 class LocalLogTest {
@@ -701,6 +701,7 @@ class LocalLogTest {
 }
 
 object LocalLogTest {
+  @nowarn("cat=deprecation")
   def createLogConfig(segmentMs: Long = Defaults.SegmentMs,
                       segmentBytes: Int = Defaults.SegmentSize,
                       retentionMs: Long = Defaults.RetentionMs,

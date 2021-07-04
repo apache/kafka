@@ -1981,6 +1981,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   // Verify that createTopics and alterConfigs fail with null values
+  @nowarn("cat=deprecation")
   @Test
   def testNullConfigs(): Unit = {
 

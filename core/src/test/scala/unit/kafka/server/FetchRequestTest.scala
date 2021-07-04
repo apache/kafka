@@ -33,6 +33,7 @@ import org.junit.jupiter.api.{AfterEach, Test}
 import java.io.DataInputStream
 import java.util
 import java.util.{Optional, Properties}
+import scala.annotation.nowarn
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 import scala.util.Random
@@ -483,6 +484,7 @@ class FetchRequestTest extends BaseRequestTest {
     * record batch to multiple v0/v1 record batches with size 1. If the fetch offset points to inside the record batch,
     * some records have to be dropped during the conversion.
     */
+  @nowarn("cat=deprecation")
   @Test
   def testDownConversionFromBatchedToUnbatchedRespectsOffset(): Unit = {
     // Increase linger so that we have control over the batches created
@@ -706,8 +708,7 @@ class FetchRequestTest extends BaseRequestTest {
   @Test
   def testZStdCompressedRecords(): Unit = {
     // Producer compressed topic
-    val topicConfig = Map(LogConfig.CompressionTypeProp -> ProducerCompressionCodec.name,
-      LogConfig.MessageFormatVersionProp -> "2.0.0")
+    val topicConfig = Map(LogConfig.CompressionTypeProp -> ProducerCompressionCodec.name)
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, configs = topicConfig).head
     val topicIds = getTopicIds().asJava
     val topicNames = topicIds.asScala.map(_.swap).asJava

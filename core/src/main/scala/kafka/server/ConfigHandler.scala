@@ -20,7 +20,7 @@ package kafka.server
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import DynamicConfig.Broker._
-import kafka.api.ApiVersion
+import kafka.api.{ApiVersion, KAFKA_3_0_IV1}
 import kafka.controller.KafkaController
 import kafka.log.{LogConfig, LogManager}
 import kafka.network.ConnectionQuotas
@@ -34,8 +34,10 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
+import org.apache.kafka.common.record.RecordVersion
 import org.apache.kafka.common.utils.Sanitizer
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.util.Try
@@ -108,12 +110,21 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     }
   }
 
+  @nowarn("cat=deprecation")
   def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
+    def logMessageFormatIgnoredWarning(versionString: String): Unit =
+      warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
+        s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
+
     // Verify message format version
     Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
-      if (kafkaConfig.interBrokerProtocolVersion < ApiVersion(versionString)) {
-        warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
-          s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
+      val messageFormatVersion = ApiVersion(versionString)
+      if (kafkaConfig.interBrokerProtocolVersion >= KAFKA_3_0_IV1) {
+        if (messageFormatVersion.recordVersion.precedes(RecordVersion.V2))
+          logMessageFormatIgnoredWarning(versionString)
+        Some(LogConfig.MessageFormatVersionProp)
+      } else if (kafkaConfig.interBrokerProtocolVersion < messageFormatVersion) {
+        logMessageFormatIgnoredWarning(versionString)
         Some(LogConfig.MessageFormatVersionProp)
       } else
         None

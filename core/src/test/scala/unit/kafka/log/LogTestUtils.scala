@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io.File
 import java.util.Properties
-
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchIsolation, FetchLogEnd, LogDirFailureChannel}
 import kafka.utils.{Scheduler, TestUtils}
@@ -28,6 +27,7 @@ import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTr
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
+import scala.annotation.nowarn
 import scala.collection.Iterable
 import scala.jdk.CollectionConverters._
 
@@ -47,6 +47,7 @@ object LogTestUtils {
     new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
   }
 
+  @nowarn("cat=deprecation")
   def createLogConfig(segmentMs: Long = Defaults.SegmentMs,
                       segmentBytes: Int = Defaults.SegmentSize,
                       retentionMs: Long = Defaults.RetentionMs,

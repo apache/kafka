@@ -29,6 +29,7 @@ import org.apache.kafka.common.record.{LegacyRecord, TimestampType}
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 
 import java.util.{Collections, Locale, Properties}
+import scala.annotation.nowarn
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -56,7 +57,11 @@ object Defaults {
   val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
   val CompressionType = kafka.server.Defaults.CompressionType
   val PreAllocateEnable = kafka.server.Defaults.LogPreAllocateEnable
+
+  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
+  @deprecated("3.0")
   val MessageFormatVersion = kafka.server.Defaults.LogMessageFormatVersion
+
   val MessageTimestampType = kafka.server.Defaults.LogMessageTimestampType
   val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
   val LeaderReplicationThrottledReplicas = Collections.emptyList[String]()
@@ -92,7 +97,11 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val minInSyncReplicas = getInt(LogConfig.MinInSyncReplicasProp)
   val compressionType = getString(LogConfig.CompressionTypeProp).toLowerCase(Locale.ROOT)
   val preallocate = getBoolean(LogConfig.PreAllocateEnableProp)
+
+  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
+  @deprecated("3.0")
   val messageFormatVersion = ApiVersion(getString(LogConfig.MessageFormatVersionProp))
+
   val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp).longValue
   val LeaderReplicationThrottledReplicas = getList(LogConfig.LeaderReplicationThrottledReplicasProp)
@@ -137,6 +146,9 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
       localLogRetentionBytes
     }
   }
+
+  @nowarn("cat=deprecation")
+  def recordVersion = messageFormatVersion.recordVersion
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -192,6 +204,9 @@ object LogConfig {
   val MinInSyncReplicasProp = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG
   val CompressionTypeProp = TopicConfig.COMPRESSION_TYPE_CONFIG
   val PreAllocateEnableProp = TopicConfig.PREALLOCATE_CONFIG
+
+  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
+  @deprecated("3.0") @nowarn("cat=deprecation")
   val MessageFormatVersionProp = TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG
   val MessageTimestampTypeProp = TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG
   val MessageTimestampDifferenceMaxMsProp = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG
@@ -224,7 +239,11 @@ object LogConfig {
   val MinInSyncReplicasDoc = TopicConfig.MIN_IN_SYNC_REPLICAS_DOC
   val CompressionTypeDoc = TopicConfig.COMPRESSION_TYPE_DOC
   val PreAllocateEnableDoc = TopicConfig.PREALLOCATE_DOC
+
+  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
+  @deprecated("3.0") @nowarn("cat=deprecation")
   val MessageFormatVersionDoc = TopicConfig.MESSAGE_FORMAT_VERSION_DOC
+
   val MessageTimestampTypeDoc = TopicConfig.MESSAGE_TIMESTAMP_TYPE_DOC
   val MessageTimestampDifferenceMaxMsDoc = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC
   val MessageDownConversionEnableDoc = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC
@@ -295,6 +314,7 @@ object LogConfig {
     import org.apache.kafka.common.config.ConfigDef.Type._
     import org.apache.kafka.common.config.ConfigDef.ValidString._
 
+    @nowarn("cat=deprecation")
     val logConfigDef = new LogConfigDef()
       .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
         SegmentSizeDoc, KafkaConfig.LogSegmentBytesProp)
@@ -417,6 +437,7 @@ object LogConfig {
    * Map topic config to the broker config with highest priority. Some of these have additional synonyms
    * that can be obtained using [[kafka.server.DynamicBrokerConfig#brokerConfigSynonyms]]
    */
+  @nowarn("cat=deprecation")
   val TopicConfigSynonyms = Map(
     SegmentBytesProp -> KafkaConfig.LogSegmentBytesProp,
     SegmentMsProp -> KafkaConfig.LogRollTimeMillisProp,
@@ -449,6 +470,7 @@ object LogConfig {
    * Copy the subset of properties that are relevant to Logs. The individual properties
    * are listed here since the names are slightly different in each Config class...
    */
+  @nowarn("cat=deprecation")
   def extractLogConfigMap(
     kafkaConfig: KafkaConfig
   ): java.util.Map[String, Object] = {

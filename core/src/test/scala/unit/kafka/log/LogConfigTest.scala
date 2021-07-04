@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.util.{Collections, Properties}
+import scala.annotation.nowarn
 
 class LogConfigTest {
 
@@ -69,6 +70,7 @@ class LogConfigTest {
     assertEquals(LogConfig(), config)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testFromPropsInvalid(): Unit = {
     LogConfig.configNames.foreach(name => name match {

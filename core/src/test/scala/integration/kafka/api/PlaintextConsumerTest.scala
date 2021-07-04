@@ -17,7 +17,6 @@ import java.util
 import java.util.Arrays.asList
 import java.util.regex.Pattern
 import java.util.{Collections, Locale, Optional, Properties}
-
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
@@ -37,6 +36,7 @@ import scala.collection.mutable.Buffer
 import kafka.server.QuotaType
 import kafka.server.KafkaServer
 
+import scala.annotation.nowarn
 import scala.collection.mutable
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
@@ -1215,6 +1215,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(2, topics.get(topic3).size)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testOffsetsForTimes(): Unit = {
     val numParts = 2
@@ -1276,6 +1277,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(timestampOffsets.get(new TopicPartition(topic3, 1)))
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testEarliestOrLatestOffsets(): Unit = {
     val topic0 = "topicWithNewMessageFormat"

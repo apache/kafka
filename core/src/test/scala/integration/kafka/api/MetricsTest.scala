@@ -13,7 +13,6 @@
 package kafka.api
 
 import java.util.{Locale, Properties}
-
 import kafka.log.LogConfig
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{JaasTestUtils, TestUtils}
@@ -30,6 +29,7 @@ import org.apache.kafka.common.security.authenticator.TestJaasConfig
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 class MetricsTest extends IntegrationTestHarness with SaslSetup {
@@ -69,6 +69,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   /**
    * Verifies some of the metrics of producer, consumer as well as server.
    */
+  @nowarn("cat=deprecation")
   @Test
   def testMetrics(): Unit = {
     val topic = "topicWithOldMessageFormat"
