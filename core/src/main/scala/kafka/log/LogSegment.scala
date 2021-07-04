@@ -155,7 +155,7 @@ class LogSegment private[log] (val log: FileRecords,
 
       // append the messages
       val appendedBytes = log.append(records)
-      trace(s"Appended $appendedBytes to ${log.file} at end offset $largestOffset")
+      trace(s"Appended $appendedBytes bytes to ${log.file} at end offset $largestOffset")
       // Update the in memory max timestamp and corresponding offset.
       if (largestTimestamp > maxTimestampSoFar) {
         maxTimestampSoFar = largestTimestamp
