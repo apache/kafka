@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.internals.BatchBuilder
-import org.apache.kafka.raft.{KafkaRaftClient, LogAppendInfo, LogOffsetMetadata, OffsetAndEpoch, ReplicatedLog, ValidOffsetAndEpoch}
+import org.apache.kafka.raft.{LogAppendInfo, LogOffsetMetadata, OffsetAndEpoch, ReplicatedLog, ValidOffsetAndEpoch}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.snapshot.{SnapshotPath, Snapshots}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
@@ -803,6 +803,8 @@ final class KafkaMetadataLogTest {
 }
 
 object KafkaMetadataLogTest {
+  val REPLICA_FETCH_RESPONSE_MAX_BYTES: Int = 8 * 1024 * 1024
+
   class ByteArraySerde extends RecordSerde[Array[Byte]] {
     override def recordSize(data: Array[Byte], serializationCache: ObjectSerializationCache): Int = {
       data.length
@@ -818,10 +820,10 @@ object KafkaMetadataLogTest {
   }
 
   def buildMetadataLogAndDir(
-    tempDir: File,
-    time: MockTime,
-    maxBatchSizeInBytes: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-    maxFetchSizeInBytes: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                              tempDir: File,
+                              time: MockTime,
+                              maxBatchSizeInBytes: Int = REPLICA_FETCH_RESPONSE_MAX_BYTES,
+                              maxFetchSizeInBytes: Int = REPLICA_FETCH_RESPONSE_MAX_BYTES
   ): (Path, KafkaMetadataLog) = {
 
     val logDir = createLogDirectory(
@@ -843,10 +845,10 @@ object KafkaMetadataLogTest {
   }
 
   def buildMetadataLog(
-    tempDir: File,
-    time: MockTime,
-    maxBatchSizeInBytes: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-    maxFetchSizeInBytes: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                        tempDir: File,
+                        time: MockTime,
+                        maxBatchSizeInBytes: Int = REPLICA_FETCH_RESPONSE_MAX_BYTES,
+                        maxFetchSizeInBytes: Int = REPLICA_FETCH_RESPONSE_MAX_BYTES
   ): KafkaMetadataLog = {
     val (_, log) = buildMetadataLogAndDir(tempDir, time, maxBatchSizeInBytes, maxFetchSizeInBytes)
     log

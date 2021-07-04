@@ -99,6 +99,7 @@ public class RaftConfig {
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
     private final Map<Integer, AddressSpec> voterConnections;
+    private final int replicaFetchResponseMaxBytes;
 
     public interface AddressSpec {
     }
@@ -138,14 +139,15 @@ public class RaftConfig {
         }
     }
 
-    public RaftConfig(AbstractConfig abstractConfig) {
+    public RaftConfig(AbstractConfig abstractConfig, int replicaFetchResponseMaxBytes) {
         this(parseVoterConnections(abstractConfig.getList(QUORUM_VOTERS_CONFIG)),
             abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG),
             abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG),
             abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG),
             abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG),
             abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG));
+            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG),
+            replicaFetchResponseMaxBytes);
     }
 
     public RaftConfig(
@@ -155,7 +157,8 @@ public class RaftConfig {
         int electionTimeoutMs,
         int electionBackoffMaxMs,
         int fetchTimeoutMs,
-        int appendLingerMs
+        int appendLingerMs,
+        int replicaFetchResponseMaxBytes
     ) {
         this.voterConnections = voterConnections;
         this.requestTimeoutMs = requestTimeoutMs;
@@ -164,6 +167,7 @@ public class RaftConfig {
         this.electionBackoffMaxMs = electionBackoffMaxMs;
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.appendLingerMs = appendLingerMs;
+        this.replicaFetchResponseMaxBytes = replicaFetchResponseMaxBytes;
     }
 
     public int requestTimeoutMs() {
@@ -188,6 +192,10 @@ public class RaftConfig {
 
     public int appendLingerMs() {
         return appendLingerMs;
+    }
+
+    public int replicaFetchResponseMaxBytes() {
+        return replicaFetchResponseMaxBytes;
     }
 
     public Set<Integer> quorumVoterIds() {

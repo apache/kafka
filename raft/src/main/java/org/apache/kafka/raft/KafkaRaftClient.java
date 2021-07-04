@@ -141,7 +141,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int RETRY_BACKOFF_BASE_MS = 100;
     public static final int MAX_FETCH_WAIT_MS = 500;
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
-    public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final Logger logger;
@@ -188,7 +187,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             new BlockingMessageQueue(),
             log,
             quorumStateStore,
-            new BatchMemoryPool(5, MAX_BATCH_SIZE_BYTES),
+            new BatchMemoryPool(5, raftConfig.replicaFetchResponseMaxBytes()),
             time,
             metrics,
             expirationService,
@@ -336,7 +335,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             log
             .readSnapshot(snapshotId)
             .map(reader ->
-                SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
+                SnapshotReader.of(reader, serde, BufferSupplier.create(), raftConfig.replicaFetchResponseMaxBytes())
             )
         );
     }
@@ -416,7 +415,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             quorum.epoch(),
             endOffset,
             raftConfig.appendLingerMs(),
-            MAX_BATCH_SIZE_BYTES,
+            raftConfig.replicaFetchResponseMaxBytes(),
             memoryPool,
             time,
             CompressionType.NONE,
@@ -1776,7 +1775,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 .setFetchOffset(log.endOffset().offset);
         });
         return request
-            .setMaxBytes(MAX_FETCH_SIZE_BYTES)
+            .setMaxBytes(raftConfig.replicaFetchResponseMaxBytes())
             .setMaxWaitMs(fetchMaxWaitMs)
             .setClusterId(clusterId)
             .setReplicaId(quorum.localIdOrSentinel());
@@ -1808,7 +1807,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     .setCurrentLeaderEpoch(quorum.epoch())
                     .setSnapshotId(requestSnapshotId)
                     .setPosition(snapshotSize);
-            }
+            },
+            raftConfig.replicaFetchResponseMaxBytes()
         );
 
         return request.setReplicaId(quorum.localIdOrSentinel());
@@ -2306,7 +2306,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         return SnapshotWriter.createWithHeader(
                 () -> log.createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, committedEpoch)),
-                MAX_BATCH_SIZE_BYTES,
+                raftConfig.replicaFetchResponseMaxBytes(),
                 memoryPool,
                 time,
                 lastContainedLogTime,
@@ -2441,7 +2441,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     records,
                     serde,
                     BufferSupplier.create(),
-                    MAX_BATCH_SIZE_BYTES,
+                    raftConfig.replicaFetchResponseMaxBytes(),
                     this
                 )
             );

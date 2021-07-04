@@ -1054,7 +1054,8 @@ class KafkaConfigTest {
   private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, AddressSpec]): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
-    val raftConfig = new RaftConfig(KafkaConfig.fromProps(props))
+    val kafkaConfig = KafkaConfig.fromProps(props)
+    val raftConfig = new RaftConfig(kafkaConfig, kafkaConfig.replicaFetchResponseMaxBytes)
     assertEquals(expectedVoters, raftConfig.quorumVoterConnections())
   }
 

@@ -120,7 +120,7 @@ class KafkaRaftManager[T](
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
 ) extends RaftManager[T] with Logging {
 
-  private val raftConfig = new RaftConfig(config)
+  private val raftConfig = new RaftConfig(config, config.replicaFetchResponseMaxBytes)
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
   private val logContext = new LogContext(s"[RaftManager nodeId=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix()
@@ -254,8 +254,8 @@ class KafkaRaftManager[T](
       dataDir,
       time,
       scheduler,
-      maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-      maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+      maxBatchSizeInBytes = raftConfig.replicaFetchResponseMaxBytes(),
+      maxFetchSizeInBytes = raftConfig.replicaFetchResponseMaxBytes()
     )
   }
 
