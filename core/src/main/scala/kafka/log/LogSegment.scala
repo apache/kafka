@@ -385,7 +385,7 @@ class LogSegment private[log] (val log: FileRecords,
   private def loadLargestTimestamp(): Unit = {
     // Get the last time index entry. If the time index is empty, it will return (-1, baseOffset)
     val lastTimeIndexEntry = timeIndex.lastEntry
-    maxTimestampAndOffsetSoFar = TimestampOffset(lastTimeIndexEntry.timestamp, lastTimeIndexEntry.offset)
+    maxTimestampAndOffsetSoFar = lastTimeIndexEntry
 
     val offsetPosition = offsetIndex.lookup(lastTimeIndexEntry.offset)
     // Scan the rest of the messages to see if there is a larger timestamp after the last time index entry.
