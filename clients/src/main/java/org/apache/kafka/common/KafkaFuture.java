@@ -194,7 +194,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
      * Returns the result value (or throws any encountered exception) if completed, else returns
      * the given valueIfAbsent.
      */
-    public abstract T getNow(T valueIfAbsent) throws ExecutionException;
+    public abstract T getNow(T valueIfAbsent) throws InterruptedException, ExecutionException;
 
     /**
      * Returns true if this CompletableFuture was cancelled before it completed normally.
