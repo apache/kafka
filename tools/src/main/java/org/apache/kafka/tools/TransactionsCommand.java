@@ -28,6 +28,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult;
+import org.apache.kafka.clients.admin.DescribeTransactionsResult;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
 import org.apache.kafka.clients.admin.ProducerState;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -35,6 +36,7 @@ import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -442,7 +444,7 @@ public abstract class TransactionsCommand {
             final Map<Integer, Collection<TransactionListing>> result;
 
             try {
-                result = admin.listTransactions()
+                result = admin.listTransactions(new ListTransactionsOptions())
                     .allByBrokerId()
                     .get();
             } catch (ExecutionException e) {
@@ -621,14 +623,19 @@ public abstract class TransactionsCommand {
                     // producerId of an open transaction, then the transaction is hanging.
                     hangingTransactions.addAll(openTransactions);
                 } else {
-                    // Otherwise, we need to check the current transaction state
+                    // Otherwise, we need to check the current transaction state.
                     TransactionDescription description = descriptions.get(transactionalId);
                     if (description == null) {
                         hangingTransactions.addAll(openTransactions);
                     } else {
                         for (OpenTransaction openTransaction : openTransactions) {
-                            if (description.producerEpoch() > openTransaction.producerState.producerEpoch()
-                                || !description.topicPartitions().contains(openTransaction.topicPartition)) {
+                            // The `DescribeTransactions` API returns all partitions being
+                            // written to in an ongoing transaction and any partition which
+                            // does not yet have markers written when in the `PendingAbort` or
+                            // `PendingCommit` states. If the topic partition that we found is
+                            // among these, then we can still expect the coordinator to write
+                            // the marker. Otherwise, it is a hanging transaction.
+                            if (!description.topicPartitions().contains(openTransaction.topicPartition)) {
                                 hangingTransactions.add(openTransaction);
                             }
                         }
@@ -670,7 +677,23 @@ public abstract class TransactionsCommand {
             Collection<String> transactionalIds
         ) throws Exception {
             try {
-                return admin.describeTransactions(new HashSet<>(transactionalIds)).all().get();
+                DescribeTransactionsResult result = admin.describeTransactions(new HashSet<>(transactionalIds));
+                Map<String, TransactionDescription> descriptions = new HashMap<>();
+
+                for (String transactionalId : transactionalIds) {
+                    try {
+                        TransactionDescription description = result.description(transactionalId).get();
+                        descriptions.put(transactionalId, description);
+                    } catch (ExecutionException e) {
+                        if (e.getCause() instanceof TransactionalIdNotFoundException) {
+                            descriptions.put(transactionalId, null);
+                        } else {
+                            throw e;
+                        }
+                    }
+                }
+
+                return descriptions;
             } catch (ExecutionException e) {
                 printErrorAndExit("Failed to describe " + transactionalIds.size()
                     + " transactions", e.getCause());
@@ -873,8 +896,7 @@ public abstract class TransactionsCommand {
                     batchStartIndex + batchSize
                 );
 
-                List<T> batch = list.subList(batchStartIndex, batchEndIndex);
-                consumer.accept(batch);
+                consumer.accept(list.subList(batchStartIndex, batchEndIndex));
                 batchStartIndex = batchEndIndex;
             }
         }

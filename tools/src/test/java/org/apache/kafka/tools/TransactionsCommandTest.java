@@ -36,6 +36,8 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -467,7 +469,7 @@ public class TransactionsCommandTest {
     private void expectListTransactions(
         Map<Integer, Collection<TransactionListing>> listingsByBroker
     ) {
-        expectListTransactions(null, listingsByBroker);
+        expectListTransactions(new ListTransactionsOptions(), listingsByBroker);
     }
 
     private void expectListTransactions(
@@ -475,12 +477,7 @@ public class TransactionsCommandTest {
         Map<Integer, Collection<TransactionListing>> listingsByBroker
     ) {
         ListTransactionsResult listResult = Mockito.mock(ListTransactionsResult.class);
-
-        if (options == null) {
-            Mockito.when(admin.listTransactions()).thenReturn(listResult);
-        } else {
-            Mockito.when(admin.listTransactions(options)).thenReturn(listResult);
-        }
+        Mockito.when(admin.listTransactions(options)).thenReturn(listResult);
 
         List<TransactionListing> allListings = new ArrayList<>();
         listingsByBroker.values().forEach(allListings::addAll);
@@ -523,6 +520,10 @@ public class TransactionsCommandTest {
         Map<String, TransactionDescription> descriptions
     ) {
         DescribeTransactionsResult result = Mockito.mock(DescribeTransactionsResult.class);
+        descriptions.forEach((transactionalId, description) -> {
+            Mockito.when(result.description(transactionalId))
+                .thenReturn(completedFuture(description));
+        });
         Mockito.when(result.all()).thenReturn(completedFuture(descriptions));
         Mockito.when(admin.describeTransactions(descriptions.keySet())).thenReturn(result);
     }
@@ -752,7 +753,7 @@ public class TransactionsCommandTest {
     }
 
     @Test
-    public void testFindHangingTransactionStateWithLargerEpoch() throws Exception {
+    public void testFindHangingWithNoTransactionDescription() throws Exception {
         TopicPartition topicPartition = new TopicPartition("foo", 5);
 
         String[] args = new String[]{
@@ -792,19 +793,10 @@ public class TransactionsCommandTest {
             singletonMap(1, Collections.singletonList(listing))
         );
 
-        // There is a transaction in progress which includes the partition, but the
-        // producer epoch has been bumped, so we still consider it hanging.
-        TransactionDescription description = new TransactionDescription(
-            1,
-            TransactionState.COMPLETE_COMMIT,
-            producerId,
-            producerEpoch + 1,
-            60000,
-            OptionalLong.of(time.milliseconds()),
-            singleton(topicPartition)
-        );
-
-        expectDescribeTransactions(singletonMap(transactionalId, description));
+        DescribeTransactionsResult result = Mockito.mock(DescribeTransactionsResult.class);
+        Mockito.when(result.description(transactionalId))
+            .thenReturn(failedFuture(new TransactionalIdNotFoundException(transactionalId + " not found")));
+        Mockito.when(admin.describeTransactions(singleton(transactionalId))).thenReturn(result);
 
         execute(args);
         assertNormalExit();
@@ -826,6 +818,12 @@ public class TransactionsCommandTest {
             "60"
         );
         assertEquals(expectedRow, table.get(1));
+    }
+
+    private <T> KafkaFuture<T> failedFuture(Exception e) {
+        KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(e);
+        return future;
     }
 
     @Test
