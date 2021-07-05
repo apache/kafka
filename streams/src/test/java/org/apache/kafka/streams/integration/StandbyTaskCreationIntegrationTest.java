@@ -22,13 +22,13 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -167,14 +167,14 @@ public class StandbyTaskCreationIntegrationTest {
     private void setStateListenersForVerification(final Predicate<ThreadMetadata> taskCondition) {
         client1.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client1.localThreadsMetadata().stream().allMatch(taskCondition)) {
+                client1.metadataForLocalThreads().stream().allMatch(taskCondition)) {
 
                 client1IsOk = true;
             }
         });
         client2.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client2.localThreadsMetadata().stream().allMatch(taskCondition)) {
+                client2.metadataForLocalThreads().stream().allMatch(taskCondition)) {
 
                 client2IsOk = true;
             }

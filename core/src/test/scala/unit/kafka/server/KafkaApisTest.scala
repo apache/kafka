@@ -23,6 +23,7 @@ import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Optional, Properties, Random}
+
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
@@ -32,7 +33,7 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{CachedConfigRepository, ClientQuotaCache, ConfigRepository, RaftMetadataCache}
+import kafka.server.metadata.{ClientQuotaCache, ConfigRepository, MockConfigRepository, RaftMetadataCache}
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -80,6 +81,7 @@ import org.mockito.{ArgumentMatchers, Mockito}
 
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
+import java.util.Arrays
 
 class KafkaApisTest {
 
@@ -124,7 +126,7 @@ class KafkaApisTest {
   def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
                       authorizer: Option[Authorizer] = None,
                       enableForwarding: Boolean = false,
-                      configRepository: ConfigRepository = new CachedConfigRepository(),
+                      configRepository: ConfigRepository = new MockConfigRepository(),
                       raftSupport: Boolean = false,
                       overrideProperties: Map[String, String] = Map.empty): KafkaApis = {
 
@@ -890,12 +892,32 @@ class KafkaApisTest {
     testFindCoordinatorWithTopicCreation(CoordinatorType.TRANSACTION, hasEnoughLiveBrokers = false)
   }
 
+  @Test
+  def testOldFindCoordinatorAutoTopicCreationForOffsetTopic(): Unit = {
+    testFindCoordinatorWithTopicCreation(CoordinatorType.GROUP, version = 3)
+  }
+
+  @Test
+  def testOldFindCoordinatorAutoTopicCreationForTxnTopic(): Unit = {
+    testFindCoordinatorWithTopicCreation(CoordinatorType.TRANSACTION, version = 3)
+  }
+
+  @Test
+  def testOldFindCoordinatorNotEnoughBrokersForOffsetTopic(): Unit = {
+    testFindCoordinatorWithTopicCreation(CoordinatorType.GROUP, hasEnoughLiveBrokers = false, version = 3)
+  }
+
+  @Test
+  def testOldFindCoordinatorNotEnoughBrokersForTxnTopic(): Unit = {
+    testFindCoordinatorWithTopicCreation(CoordinatorType.TRANSACTION, hasEnoughLiveBrokers = false, version = 3)
+  }
+
   private def testFindCoordinatorWithTopicCreation(coordinatorType: CoordinatorType,
-                                                   hasEnoughLiveBrokers: Boolean = true): Unit = {
+                                                   hasEnoughLiveBrokers: Boolean = true,
+                                                   version: Short = ApiKeys.FIND_COORDINATOR.latestVersion): Unit = {
     val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
 
-    val requestHeader = new RequestHeader(ApiKeys.FIND_COORDINATOR, ApiKeys.FIND_COORDINATOR.latestVersion,
-      clientId, 0)
+    val requestHeader = new RequestHeader(ApiKeys.FIND_COORDINATOR, version, clientId, 0)
 
     val numBrokersNeeded = 3
 
@@ -926,12 +948,18 @@ class KafkaApisTest {
           throw new IllegalStateException(s"Unknown coordinator type $coordinatorType")
       }
 
-    val findCoordinatorRequest = new FindCoordinatorRequest.Builder(
-      new FindCoordinatorRequestData()
-        .setKeyType(coordinatorType.id())
-        .setKey(groupId)
-    ).build(requestHeader.apiVersion)
-    val request = buildRequest(findCoordinatorRequest)
+    val findCoordinatorRequestBuilder = if (version >= 4) {
+      new FindCoordinatorRequest.Builder(
+        new FindCoordinatorRequestData()
+          .setKeyType(coordinatorType.id())
+          .setCoordinatorKeys(Arrays.asList(groupId)))
+    } else {
+      new FindCoordinatorRequest.Builder(
+        new FindCoordinatorRequestData()
+          .setKeyType(coordinatorType.id())
+          .setKey(groupId))
+    }
+    val request = buildRequest(findCoordinatorRequestBuilder.build(requestHeader.apiVersion))
 
     val capturedResponse = expectNoThrottling(request)
 
@@ -944,7 +972,12 @@ class KafkaApisTest {
       overrideProperties = topicConfigOverride).handleFindCoordinatorRequest(request)
 
     val response = capturedResponse.getValue.asInstanceOf[FindCoordinatorResponse]
-    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, response.error())
+    if (version >= 4) {
+      assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code, response.data.coordinators.get(0).errorCode)
+      assertEquals(groupId, response.data.coordinators.get(0).key)
+    } else {
+      assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code, response.data.errorCode)
+    }
 
     assertTrue(capturedRequest.getValue.isEmpty)
 
@@ -2080,7 +2113,7 @@ class KafkaApisTest {
         .setPartitionIndex(tp.partition)
         .setTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP)
         .setCurrentLeaderEpoch(currentLeaderEpoch.get)).asJava)).asJava
-    val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel)
+    val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel, false)
       .setTargetTimes(targetTimes).build()
     val request = buildRequest(listOffsetRequest)
     val capturedResponse = expectNoThrottling(request)
@@ -3121,7 +3154,7 @@ class KafkaApisTest {
     assertEquals(metadataCache.getControllerId.get, describeClusterResponse.data.controllerId)
     assertEquals(clusterId, describeClusterResponse.data.clusterId)
     assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
-    assertEquals(metadataCache.getAliveBrokers.map(_.endpoints(plaintextListener.value())).toSet,
+    assertEquals(metadataCache.getAliveBrokerNodes(plaintextListener).toSet,
       describeClusterResponse.nodes.asScala.values.toSet)
   }
 
@@ -3192,7 +3225,7 @@ class KafkaApisTest {
       .setPartitions(List(new ListOffsetsPartition()
         .setPartitionIndex(tp.partition)
         .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP)).asJava)).asJava
-    val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel)
+    val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel, false)
       .setTargetTimes(targetTimes).build()
     val request = buildRequest(listOffsetRequest)
     val capturedResponse = expectNoThrottling(request)

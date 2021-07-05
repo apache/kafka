@@ -36,6 +36,8 @@ import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePo
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectorType;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter;
@@ -147,17 +149,9 @@ public class Worker {
         this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
         this.workerMetricsGroup = new WorkerMetricsGroup(metrics);
 
-        // Internal converters are required properties, thus getClass won't return null.
-        this.internalKeyConverter = plugins.newConverter(
-                config,
-                WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG,
-                ClassLoaderUsage.PLUGINS
-        );
-        this.internalValueConverter = plugins.newConverter(
-                config,
-                WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG,
-                ClassLoaderUsage.PLUGINS
-        );
+        Map<String, String> internalConverterConfig = Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false");
+        this.internalKeyConverter = plugins.newInternalConverter(true, JsonConverter.class.getName(), internalConverterConfig);
+        this.internalValueConverter = plugins.newInternalConverter(false, JsonConverter.class.getName(), internalConverterConfig);
 
         this.offsetBackingStore = offsetBackingStore;
         this.offsetBackingStore.configure(config);

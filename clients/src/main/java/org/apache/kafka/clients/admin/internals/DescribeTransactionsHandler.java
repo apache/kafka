@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.TransactionState;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.DescribeTransactionsRequest;
 import org.apache.kafka.common.requests.DescribeTransactionsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -49,7 +51,7 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
         LogContext logContext
     ) {
         this.log = logContext.logger(DescribeTransactionsHandler.class);
-        this.lookupStrategy = new CoordinatorStrategy(logContext);
+        this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.TRANSACTION, logContext);
     }
 
     public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, TransactionDescription> newFuture(
@@ -93,7 +95,7 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
 
     @Override
     public ApiResult<CoordinatorKey, TransactionDescription> handleResponse(
-        int brokerId,
+        Node broker,
         Set<CoordinatorKey> keys,
         AbstractResponse abstractResponse
     ) {
@@ -122,7 +124,7 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
                 OptionalLong.of(transactionState.transactionStartTimeMs());
 
             completed.put(transactionalIdKey, new TransactionDescription(
-                brokerId,
+                broker.id(),
                 TransactionState.parse(transactionState.transactionState()),
                 transactionState.producerId(),
                 transactionState.producerEpoch(),

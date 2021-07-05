@@ -24,10 +24,10 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -77,7 +77,8 @@ public class TaskMetadataIntegrationTest {
     private String inputTopic;
     private static StreamsBuilder builder;
     private static Properties properties;
-    private static String appId = "TaskMetadataTest_";
+    private static String appIdPrefix = "TaskMetadataTest_";
+    private static String appId;
     private AtomicBoolean process;
     private AtomicBoolean commit;
 
@@ -85,7 +86,7 @@ public class TaskMetadataIntegrationTest {
     @Before
     public void setup() {
         final String testId = safeUniqueTestName(getClass(), testName);
-        appId = appId + testId;
+        appId = appIdPrefix + testId;
         inputTopic = "input" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
 
@@ -158,7 +159,7 @@ public class TaskMetadataIntegrationTest {
     }
 
     private TaskMetadata getTaskMetadata(final KafkaStreams kafkaStreams) {
-        final List<TaskMetadata> taskMetadataList = kafkaStreams.localThreadsMetadata().stream().flatMap(t -> t.activeTasks().stream()).collect(Collectors.toList());
+        final List<TaskMetadata> taskMetadataList = kafkaStreams.metadataForLocalThreads().stream().flatMap(t -> t.activeTasks().stream()).collect(Collectors.toList());
         assertThat("only one task", taskMetadataList.size() == 1);
         return taskMetadataList.get(0);
     }

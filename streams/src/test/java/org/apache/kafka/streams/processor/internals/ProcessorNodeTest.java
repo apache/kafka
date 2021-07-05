@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -35,7 +37,7 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
+import java.util.Properties;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -134,7 +136,30 @@ public class ProcessorNodeTest {
 
     @Test
     public void testTopologyLevelClassCastException() {
-        // Serdes configuration is missing (default will be used which don't match the DSL below), which will trigger the new exception
+        // Serdes configuration is missing and no default is set which will trigger an exception
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.<String, String>stream("streams-plaintext-input")
+            .flatMapValues(value -> {
+                return Collections.singletonList("");
+            });
+        final Topology topology = builder.build();
+        final Properties config = new Properties();
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+
+        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
+        final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
+
+        final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
+        final String msg = se.getMessage();
+        assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
+        assertTrue("Error about class cast with serdes", msg.contains("Serdes"));
+    }
+
+    @Test
+    public void testTopologyLevelConfigException() {
+        // Serdes configuration is missing and no default is set which will trigger an exception
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.<String, String>stream("streams-plaintext-input")
@@ -143,13 +168,10 @@ public class ProcessorNodeTest {
             });
         final Topology topology = builder.build();
 
-        final TopologyTestDriver testDriver = new TopologyTestDriver(topology);
-        final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
-
-        final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
+        final ConfigException se = assertThrows(ConfigException.class, () -> new TopologyTestDriver(topology));
         final String msg = se.getMessage();
-        assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
-        assertTrue("Error about class cast with serdes", msg.contains("Serdes"));
+        assertTrue("Error about class cast with serdes", msg.contains("StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
+        assertTrue("Error about class cast with serdes", msg.contains("specify a key serde"));
     }
 
     private static class ClassCastProcessor extends ExceptionalProcessor {
