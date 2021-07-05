@@ -101,9 +101,10 @@ class LogSegment private[log] (val log: FileRecords,
 
   /* The maximum timestamp and offset we see so far */
   @volatile private var _maxTimestampAndOffsetSoFar: TimestampOffset = TimestampOffset.Unknown
+  def maxTimestampAndOffsetSoFar_= (timestampOffset: TimestampOffset) : Unit = _maxTimestampAndOffsetSoFar = timestampOffset
   def maxTimestampAndOffsetSoFar: TimestampOffset = {
     if (_maxTimestampAndOffsetSoFar == TimestampOffset.Unknown)
-      _maxTimestampAndOffsetSoFar = TimestampOffset(timeIndex.lastEntry.timestamp,timeIndex.lastEntry.offset)
+      _maxTimestampAndOffsetSoFar = timeIndex.lastEntry
     _maxTimestampAndOffsetSoFar
   }
 
@@ -158,12 +159,12 @@ class LogSegment private[log] (val log: FileRecords,
       trace(s"Appended $appendedBytes to ${log.file} at end offset $largestOffset")
       // Update the in memory max timestamp and corresponding offset.
       if (largestTimestamp > maxTimestampSoFar) {
-        _maxTimestampAndOffsetSoFar = TimestampOffset(largestTimestamp, shallowOffsetOfMaxTimestamp)
+        maxTimestampAndOffsetSoFar = TimestampOffset(largestTimestamp, shallowOffsetOfMaxTimestamp)
       }
       // append an entry to the index (if needed)
       if (bytesSinceLastIndexEntry > indexIntervalBytes) {
         offsetIndex.append(largestOffset, physicalPosition)
-        timeIndex.maybeAppend(maxTimestampAndOffsetSoFar.timestamp, maxTimestampAndOffsetSoFar.offset)
+        timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar)
         bytesSinceLastIndexEntry = 0
       }
       bytesSinceLastIndexEntry += records.sizeInBytes
@@ -376,7 +377,7 @@ class LogSegment private[log] (val log: FileRecords,
     log.truncateTo(validBytes)
     offsetIndex.trimToValidSize()
     // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
-    timeIndex.maybeAppend(maxTimestampAndOffsetSoFar.timestamp, maxTimestampAndOffsetSoFar.offset, skipFullCheck = true)
+    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar, skipFullCheck = true)
     timeIndex.trimToValidSize()
     truncated
   }
@@ -499,7 +500,7 @@ class LogSegment private[log] (val log: FileRecords,
    * The time index entry appended will be used to decide when to delete the segment.
    */
   def onBecomeInactiveSegment(): Unit = {
-    timeIndex.maybeAppend(maxTimestampAndOffsetSoFar.timestamp, maxTimestampAndOffsetSoFar.offset, skipFullCheck = true)
+    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar, skipFullCheck = true)
     offsetIndex.trimToValidSize()
     timeIndex.trimToValidSize()
     log.trim()
@@ -581,7 +582,7 @@ class LogSegment private[log] (val log: FileRecords,
    */
   def close(): Unit = {
     if (_maxTimestampAndOffsetSoFar != TimestampOffset.Unknown)
-      CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampAndOffsetSoFar.timestamp, maxTimestampAndOffsetSoFar.offset,
+      CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar,
         skipFullCheck = true), this)
     CoreUtils.swallow(lazyOffsetIndex.close(), this)
     CoreUtils.swallow(lazyTimeIndex.close(), this)
