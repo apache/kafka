@@ -57,7 +57,7 @@ public class DeleteConsumerGroupsHandlerTest {
     @Test
     public void testUnmappedHandleResponse() {
         assertUnmapped(handleWithError(Errors.NOT_COORDINATOR));
-        assertRetriable(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE));
+        assertUnmapped(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE));
     }
 
     @Test

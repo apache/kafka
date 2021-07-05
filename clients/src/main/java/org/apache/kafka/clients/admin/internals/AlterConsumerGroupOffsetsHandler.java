@@ -111,6 +111,7 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
         List<CoordinatorKey> unmapped = new ArrayList<>();
 
         Map<TopicPartition, Errors> partitions = new HashMap<>();
+        int totalPartitionCount = 0;
         for (OffsetCommitResponseTopic topic : response.data().topics()) {
             for (OffsetCommitResponsePartition partition : topic.partitions()) {
                 TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
@@ -120,9 +121,14 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
                 } else {
                     partitions.put(tp, error);
                 }
+                totalPartitionCount++;
             }
         }
-        if (failed.isEmpty() && unmapped.isEmpty())
+        // only complete this request when:
+        // 1. no fail
+        // 2. no unmapped
+        // 3. all partitions are handled (i.e. no need to retry)
+        if (failed.isEmpty() && unmapped.isEmpty() && partitions.size() == totalPartitionCount)
             completed.put(groupId, partitions);
 
         return new ApiResult<>(completed, failed, unmapped);
