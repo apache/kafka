@@ -39,10 +39,6 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         this(false, new KafkaCompletableFuture<>());
     }
 
-    public KafkaFutureImpl(KafkaCompletableFuture<T> completableFuture) {
-        this(false, completableFuture);
-    }
-
     private KafkaFutureImpl(boolean isDependant, KafkaCompletableFuture<T> completableFuture) {
         this.isDependant = isDependant;
         this.completableFuture = completableFuture;
