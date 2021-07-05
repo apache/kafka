@@ -40,7 +40,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * A unit test for KafkaFuture.
@@ -95,66 +94,32 @@ public class KafkaFutureTest {
     private Throwable awaitAndAssertFailure(KafkaFuture<?> future,
                                             Class<? extends Throwable> expectedException,
                                             String expectedMessage) {
-        try {
-            future.get(5, TimeUnit.MINUTES);
-            fail("Expected an exception");
-        } catch (ExecutionException e) {
-            assertEquals(expectedException, e.getCause().getClass());
-            assertEquals(expectedMessage, e.getCause().getMessage());
-        } catch (Exception e) {
-            throw new AssertionError("Unexpected exception", e);
-        }
-        try {
-            future.get();
-            fail("Expected an exception");
-        } catch (ExecutionException e) {
-            assertEquals(expectedException, e.getCause().getClass());
-            assertEquals(expectedMessage, e.getCause().getMessage());
-        } catch (Exception e) {
-            throw new AssertionError("Unexpected exception", e);
-        }
-        try {
-            future.getNow(null);
-            fail("Expected an exception");
-        } catch (ExecutionException e) {
-            assertEquals(expectedException, e.getCause().getClass());
-            assertEquals(expectedMessage, e.getCause().getMessage());
-            return e.getCause();
-        } catch (Exception e) {
-            throw new AssertionError("Unexpected exception", e);
-        }
-        throw new AssertionError("Unexpected lack of exception");
+        ExecutionException executionException = assertThrows(ExecutionException.class, () -> future.get(5, TimeUnit.MINUTES));
+        assertEquals(expectedException, executionException.getCause().getClass());
+        assertEquals(expectedMessage, executionException.getCause().getMessage());
+
+        executionException = assertThrows(ExecutionException.class, () -> future.get());
+        assertEquals(expectedException, executionException.getCause().getClass());
+        assertEquals(expectedMessage, executionException.getCause().getMessage());
+
+        executionException = assertThrows(ExecutionException.class, () -> future.getNow(null));
+        assertEquals(expectedException, executionException.getCause().getClass());
+        assertEquals(expectedMessage, executionException.getCause().getMessage());
+        return executionException.getCause();
     }
 
-
     private void awaitAndAssertCancelled(KafkaFuture<?> future, String expectedMessage) {
-        try {
-            future.get(5, TimeUnit.MINUTES);
-            fail("Expected an exception");
-        } catch (CancellationException e) {
-            assertEquals(CancellationException.class, e.getClass());
-            assertEquals(expectedMessage, e.getMessage());
-        } catch (Exception e) {
-            throw new AssertionError("Unexpected exception", e);
-        }
-        try {
-            future.get();
-            fail("Expected an exception");
-        } catch (CancellationException e) {
-            assertEquals(CancellationException.class, e.getClass());
-            assertEquals(expectedMessage, e.getMessage());
-        } catch (Exception e) {
-            throw new AssertionError("Unexpected exception", e);
-        }
-        try {
-            future.getNow(null);
-            fail("Expected an exception");
-        } catch (CancellationException e) {
-            assertEquals(CancellationException.class, e.getClass());
-            assertEquals(expectedMessage, e.getMessage());
-        } catch (Exception e) {
-            throw new AssertionError("Unexpected exception", e);
-        }
+        CancellationException cancellationException = assertThrows(CancellationException.class, () -> future.get(5, TimeUnit.MINUTES));
+        assertEquals(expectedMessage, cancellationException.getMessage());
+        assertEquals(CancellationException.class, cancellationException.getClass());
+
+        cancellationException = assertThrows(CancellationException.class, () -> future.get());
+        assertEquals(expectedMessage, cancellationException.getMessage());
+        assertEquals(CancellationException.class, cancellationException.getClass());
+
+        cancellationException = assertThrows(CancellationException.class, () -> future.getNow(null));
+        assertEquals(expectedMessage, cancellationException.getMessage());
+        assertEquals(CancellationException.class, cancellationException.getClass());
     }
 
     @Test
@@ -180,13 +145,10 @@ public class KafkaFutureTest {
         assertIsFailed(futureFail);
         assertFalse(futureFail.completeExceptionally(new RuntimeException("We require more minerals")));
         assertFalse(futureFail.cancel(true));
-        try {
-            futureFail.get();
-            fail("Expected an exception");
-        } catch (ExecutionException e) {
-            assertEquals(RuntimeException.class, e.getCause().getClass());
-            assertEquals("We require more vespene gas", e.getCause().getMessage());
-        }
+
+        ExecutionException executionException = assertThrows(ExecutionException.class, () -> futureFail.get());
+        assertEquals(RuntimeException.class, executionException.getCause().getClass());
+        assertEquals("We require more vespene gas", executionException.getCause().getMessage());
 
         KafkaFutureImpl<Integer> tricky1 = new KafkaFutureImpl<>();
         assertTrue(tricky1.completeExceptionally(new CompletionException(new CancellationException())));
