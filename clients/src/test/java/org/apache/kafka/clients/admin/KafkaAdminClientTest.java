@@ -3246,9 +3246,9 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(
                     NodeApiVersions.create(Arrays.asList(findCoordinatorV3, describeGroups)));
 
-            // dummy response for MockClient to handle the UnsupportedVersionException correctly to switch from batched to un-batched
+            // Dummy response for MockClient to handle the UnsupportedVersionException correctly to switch from batched to un-batched
             env.kafkaClient().prepareResponse(null);
-            //Retriable FindCoordinatorResponse errors should be retried
+            // Retriable FindCoordinatorResponse errors should be retried
             for (int i = 0; i < groupIds.size(); i++) {
                 env.kafkaClient().prepareResponse(
                         prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
