@@ -194,6 +194,7 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.CreateTopicsRequest.Builder;
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigType;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
@@ -227,6 +228,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.CREATE_TOPICS;
 import static org.apache.kafka.common.protocol.ApiKeys.DELETE_TOPICS;
 import static org.apache.kafka.common.protocol.ApiKeys.DESCRIBE_CONFIGS;
 import static org.apache.kafka.common.protocol.ApiKeys.FETCH;
+import static org.apache.kafka.common.protocol.ApiKeys.FIND_COORDINATOR;
 import static org.apache.kafka.common.protocol.ApiKeys.JOIN_GROUP;
 import static org.apache.kafka.common.protocol.ApiKeys.LEADER_AND_ISR;
 import static org.apache.kafka.common.protocol.ApiKeys.LIST_GROUPS;
@@ -249,12 +251,6 @@ public class RequestResponseTest {
 
     @Test
     public void testSerialization() throws Exception {
-        checkRequest(createFindCoordinatorRequest(0), true);
-        checkRequest(createFindCoordinatorRequest(1), true);
-        checkErrorResponse(createFindCoordinatorRequest(0), unknownServerException, true);
-        checkErrorResponse(createFindCoordinatorRequest(1), unknownServerException, true);
-        checkResponse(createFindCoordinatorResponse(), 0, true);
-        checkResponse(createFindCoordinatorResponse(), 1, true);
         checkRequest(createControlledShutdownRequest(), true);
         checkResponse(createControlledShutdownResponse(), 1, true);
         checkErrorResponse(createControlledShutdownRequest(), unknownServerException, true);
@@ -593,6 +589,22 @@ public class RequestResponseTest {
             checkRequest(createUnregisterBrokerRequest(version), true);
             checkErrorResponse(createUnregisterBrokerRequest(version), unknownServerException, true);
             checkResponse(createUnregisterBrokerResponse(), version, true);
+        }
+    }
+
+    @Test
+    public void testFindCoordinatorRequestSerialization() {
+        for (short version : ApiKeys.FIND_COORDINATOR.allVersions()) {
+            checkRequest(createFindCoordinatorRequest(version), true);
+            checkRequest(createBatchedFindCoordinatorRequest(Collections.singletonList("group1"), version), true);
+            if (version < FindCoordinatorRequest.MIN_BATCHED_VERSION) {
+                assertThrows(NoBatchedFindCoordinatorsException.class, () ->
+                        createBatchedFindCoordinatorRequest(Arrays.asList("group1", "group2"), version));
+            } else {
+                checkRequest(createBatchedFindCoordinatorRequest(Arrays.asList("group1", "group2"), version), true);
+            }
+            checkErrorResponse(createFindCoordinatorRequest(version), unknownServerException, true);
+            checkResponse(createFindCoordinatorResponse(version), version, true);
         }
     }
 
@@ -1190,9 +1202,20 @@ public class RequestResponseTest {
                 .build((short) version);
     }
 
-    private FindCoordinatorResponse createFindCoordinatorResponse() {
+    private FindCoordinatorRequest createBatchedFindCoordinatorRequest(List<String> coordinatorKeys, int version) {
+        return new FindCoordinatorRequest.Builder(
+                new FindCoordinatorRequestData()
+                        .setKeyType(CoordinatorType.GROUP.id())
+                        .setCoordinatorKeys(coordinatorKeys))
+                .build((short) version);
+    }
+
+    private FindCoordinatorResponse createFindCoordinatorResponse(short version) {
         Node node = new Node(10, "host1", 2014);
-        return FindCoordinatorResponse.prepareOldResponse(Errors.NONE, node);
+        if (version < FindCoordinatorRequest.MIN_BATCHED_VERSION)
+            return FindCoordinatorResponse.prepareOldResponse(Errors.NONE, node);
+        else
+            return FindCoordinatorResponse.prepareResponse(Errors.NONE, "group", node);
     }
 
     private FetchRequest createFetchRequest(int version, FetchMetadata metadata, List<TopicPartition> toForget) {
@@ -2826,7 +2849,8 @@ public class RequestResponseTest {
         assertEquals(Integer.valueOf(1), createEndTxnResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createExpireTokenResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(3), createFetchResponse(123).errorCounts().get(Errors.NONE));
-        assertEquals(Integer.valueOf(1), createFindCoordinatorResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createFindCoordinatorResponse(FIND_COORDINATOR.oldestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createFindCoordinatorResponse(FIND_COORDINATOR.latestVersion()).errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createHeartBeatResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createIncrementalAlterConfigsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createJoinGroupResponse(JOIN_GROUP.latestVersion()).errorCounts().get(Errors.NONE));

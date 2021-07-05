@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
+import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -87,6 +88,21 @@ public class FindCoordinatorResponse extends AbstractResponse {
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 2;
+    }
+
+    public List<FindCoordinatorResponseData.Coordinator> coordinators() {
+        if (!data.coordinators().isEmpty())
+            return data.coordinators();
+        else {
+            FindCoordinatorResponseData.Coordinator coordinator = new Coordinator()
+                    .setErrorCode(data.errorCode())
+                    .setErrorMessage(data.errorMessage())
+                    .setKey(null)
+                    .setNodeId(data.nodeId())
+                    .setHost(data.host())
+                    .setPort(data.port());
+            return Collections.singletonList(coordinator);
+        }
     }
 
     public static FindCoordinatorResponse prepareOldResponse(Errors error, Node node) {

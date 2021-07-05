@@ -97,22 +97,21 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
             failedKeys.put(key, new InvalidGroupIdException("The given group id '" +
                 key.idValue + "' cannot be represented in a request."));
         }
-        FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
-        if (batch) {
-            for (Coordinator coordinator : response.data().coordinators()) {
-                CoordinatorKey key = (type == CoordinatorType.GROUP)
+
+        for (Coordinator coordinator : ((FindCoordinatorResponse) abstractResponse).coordinators()) {
+            CoordinatorKey key;
+            if (coordinator.key() == null) // old version without batching
+                key = requireSingletonAndType(keys);
+            else {
+                key = (type == CoordinatorType.GROUP)
                         ? CoordinatorKey.byGroupId(coordinator.key())
                         : CoordinatorKey.byTransactionalId(coordinator.key());
-                handleError(Errors.forCode(coordinator.errorCode()),
-                            key,
-                            coordinator.nodeId(),
-                            mappedKeys,
-                            failedKeys);
             }
-        } else {
-            CoordinatorKey key = requireSingletonAndType(keys);
-            Errors error = response.error();
-            handleError(error, key, response.node().id(), mappedKeys, failedKeys);
+            handleError(Errors.forCode(coordinator.errorCode()),
+                        key,
+                        coordinator.nodeId(),
+                        mappedKeys,
+                        failedKeys);
         }
         return new LookupResult<>(failedKeys, mappedKeys);
     }
