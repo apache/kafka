@@ -100,10 +100,10 @@ class LogSegment private[log] (val log: FileRecords,
   @volatile private var rollingBasedTimestamp: Option[Long] = None
 
   /* The maximum timestamp and offset we see so far */
-  @volatile private var _maxTimestampAndOffsetSoFar: MaxTimestampAndOffset = MaxTimestampAndOffset.empty
-  def maxTimestampAndOffsetSoFar: MaxTimestampAndOffset = {
-    if (_maxTimestampAndOffsetSoFar == MaxTimestampAndOffset.empty)
-      _maxTimestampAndOffsetSoFar = MaxTimestampAndOffset(timeIndex.lastEntry.timestamp,timeIndex.lastEntry.offset)
+  @volatile private var _maxTimestampAndOffsetSoFar: TimestampOffset = TimestampOffset.Unknown
+  def maxTimestampAndOffsetSoFar: TimestampOffset = {
+    if (_maxTimestampAndOffsetSoFar == TimestampOffset.Unknown)
+      _maxTimestampAndOffsetSoFar = TimestampOffset(timeIndex.lastEntry.timestamp,timeIndex.lastEntry.offset)
     _maxTimestampAndOffsetSoFar
   }
 
@@ -158,7 +158,7 @@ class LogSegment private[log] (val log: FileRecords,
       trace(s"Appended $appendedBytes to ${log.file} at end offset $largestOffset")
       // Update the in memory max timestamp and corresponding offset.
       if (largestTimestamp > maxTimestampSoFar) {
-        _maxTimestampAndOffsetSoFar = MaxTimestampAndOffset(largestTimestamp, shallowOffsetOfMaxTimestamp)
+        _maxTimestampAndOffsetSoFar = TimestampOffset(largestTimestamp, shallowOffsetOfMaxTimestamp)
       }
       // append an entry to the index (if needed)
       if (bytesSinceLastIndexEntry > indexIntervalBytes) {
@@ -337,7 +337,7 @@ class LogSegment private[log] (val log: FileRecords,
     txnIndex.reset()
     var validBytes = 0
     var lastIndexEntry = 0
-    _maxTimestampAndOffsetSoFar = MaxTimestampAndOffset.empty
+    _maxTimestampAndOffsetSoFar = TimestampOffset.Unknown
     try {
       for (batch <- log.batches.asScala) {
         batch.ensureValid()
@@ -345,7 +345,7 @@ class LogSegment private[log] (val log: FileRecords,
 
         // The max timestamp is exposed at the batch level, so no need to iterate the records
         if (batch.maxTimestamp > maxTimestampSoFar) {
-          _maxTimestampAndOffsetSoFar = MaxTimestampAndOffset(batch.maxTimestamp, batch.lastOffset)
+          _maxTimestampAndOffsetSoFar = TimestampOffset(batch.maxTimestamp, batch.lastOffset)
         }
 
         // Build offset index
@@ -384,13 +384,13 @@ class LogSegment private[log] (val log: FileRecords,
   private def loadLargestTimestamp(): Unit = {
     // Get the last time index entry. If the time index is empty, it will return (-1, baseOffset)
     val lastTimeIndexEntry = timeIndex.lastEntry
-    _maxTimestampAndOffsetSoFar = MaxTimestampAndOffset(lastTimeIndexEntry.timestamp, lastTimeIndexEntry.offset)
+    _maxTimestampAndOffsetSoFar = TimestampOffset(lastTimeIndexEntry.timestamp, lastTimeIndexEntry.offset)
 
     val offsetPosition = offsetIndex.lookup(lastTimeIndexEntry.offset)
     // Scan the rest of the messages to see if there is a larger timestamp after the last time index entry.
     val maxTimestampOffsetAfterLastEntry = log.largestTimestampAfter(offsetPosition.position)
     if (maxTimestampOffsetAfterLastEntry.timestamp > lastTimeIndexEntry.timestamp) {
-      _maxTimestampAndOffsetSoFar = MaxTimestampAndOffset(maxTimestampOffsetAfterLastEntry.timestamp, maxTimestampOffsetAfterLastEntry.offset)
+      _maxTimestampAndOffsetSoFar = TimestampOffset(maxTimestampOffsetAfterLastEntry.timestamp, maxTimestampOffsetAfterLastEntry.offset)
     }
   }
 
@@ -580,7 +580,7 @@ class LogSegment private[log] (val log: FileRecords,
    * Close this log segment
    */
   def close(): Unit = {
-    if (_maxTimestampAndOffsetSoFar != MaxTimestampAndOffset.empty)
+    if (_maxTimestampAndOffsetSoFar != TimestampOffset.Unknown)
       CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampAndOffsetSoFar.timestamp, maxTimestampAndOffsetSoFar.offset,
         skipFullCheck = true), this)
     CoreUtils.swallow(lazyOffsetIndex.close(), this)
@@ -676,10 +676,4 @@ object LogSegment {
 
 object LogFlushStats extends KafkaMetricsGroup {
   val logFlushTimer = new KafkaTimer(newTimer("LogFlushRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
-}
-
-case class MaxTimestampAndOffset(timestamp: Long, offset: Long)
-
-object MaxTimestampAndOffset {
-  val empty = MaxTimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L)
 }
