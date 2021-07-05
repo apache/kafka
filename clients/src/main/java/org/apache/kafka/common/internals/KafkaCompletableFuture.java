@@ -29,32 +29,44 @@ import java.util.function.Supplier;
  */
 public class KafkaCompletableFuture<T> extends CompletableFuture<T> {
 
+    /**
+     * Completes this future normally. For internal use by the Kafka clients, not by user code.
+     * @param value the result value
+     * @return {@code true} if this invocation caused this CompletableFuture
+     * to transition to a completed state, else {@code false}
+     */
     boolean kafkaComplete(T value) {
         return super.complete(value);
     }
 
+    /**
+     * Completes this future exceptionally. For internal use by the Kafka clients, not by user code.
+     * @param throwable the exception.
+     * @return {@code true} if this invocation caused this CompletableFuture
+     * to transition to a completed state, else {@code false}
+     */
     boolean kafkaCompleteExceptionally(Throwable throwable) {
         return super.completeExceptionally(throwable);
     }
 
     @Override
     public boolean complete(T value) {
-        throw new UnsupportedOperationException();
+        throw erroneousCompletionException();
     }
 
     @Override
     public boolean completeExceptionally(Throwable ex) {
-        throw new UnsupportedOperationException();
+        throw erroneousCompletionException();
     }
 
     @Override
     public void obtrudeValue(T value) {
-        throw new UnsupportedOperationException();
+        throw erroneousCompletionException();
     }
 
     @Override
     public void obtrudeException(Throwable ex) {
-        throw new UnsupportedOperationException();
+        throw erroneousCompletionException();
     }
 
     //@Override // enable once Kafka no longer supports Java 8
@@ -64,16 +76,20 @@ public class KafkaCompletableFuture<T> extends CompletableFuture<T> {
 
     //@Override // enable once Kafka no longer supports Java 8
     public CompletableFuture<T> completeAsync(Supplier<? extends T> supplier, Executor executor) {
-        throw new UnsupportedOperationException();
+        throw erroneousCompletionException();
     }
 
     //@Override // enable once Kafka no longer supports Java 8
     public CompletableFuture<T> completeAsync(Supplier<? extends T> supplier) {
-        throw new UnsupportedOperationException();
+        throw erroneousCompletionException();
     }
 
     //@Override // enable once Kafka no longer supports Java 8
     public CompletableFuture<T> completeOnTimeout(T value, long timeout, TimeUnit unit) {
-        throw new UnsupportedOperationException();
+        throw erroneousCompletionException();
+    }
+
+    private UnsupportedOperationException erroneousCompletionException() {
+        return new UnsupportedOperationException("User code should not complete futures returned from Kafka clients");
     }
 }

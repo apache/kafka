@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.Arrays;
@@ -39,7 +38,6 @@ import java.util.concurrent.TimeoutException;
  * {@code KafkaFuture} will fail with an {@code ExecutionException}, whereas a {@code CompletionStage} fails
  * with a {@code CompletionException}.
  */
-@InterfaceStability.Evolving
 public abstract class KafkaFuture<T> implements Future<T> {
     /**
      * A function which takes objects of type A and returns objects of type B.
@@ -196,7 +194,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
      * Returns the result value (or throws any encountered exception) if completed, else returns
      * the given valueIfAbsent.
      */
-    public abstract T getNow(T valueIfAbsent) throws InterruptedException, ExecutionException;
+    public abstract T getNow(T valueIfAbsent) throws ExecutionException;
 
     /**
      * Returns true if this CompletableFuture was cancelled before it completed normally.
