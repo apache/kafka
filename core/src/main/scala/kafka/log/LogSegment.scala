@@ -352,7 +352,7 @@ class LogSegment private[log] (val log: FileRecords,
         // Build offset index
         if (validBytes - lastIndexEntry > indexIntervalBytes) {
           offsetIndex.append(batch.lastOffset, validBytes)
-          timeIndex.maybeAppend(maxTimestampAndOffsetSoFar.timestamp, maxTimestampAndOffsetSoFar.offset)
+          timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar)
           lastIndexEntry = validBytes
         }
         validBytes += batch.sizeInBytes()
