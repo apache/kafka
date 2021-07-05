@@ -99,6 +99,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
     </Match>
 
+    <!-- false positive, see https://github.com/spotbugs/spotbugs/issues/1001 -->
+    <Match>
+        <Class name="org.apache.kafka.common.internals.KafkaFutureImpl"/>
+        <Bug pattern="NP_NONNULL_PARAM_VIOLATION"/>
+    </Match>
+
     <Match>
         <!-- Suppression for the equals() for extension methods. -->
         <Class name="kafka.api.package$ElectLeadersRequestOps"/>
