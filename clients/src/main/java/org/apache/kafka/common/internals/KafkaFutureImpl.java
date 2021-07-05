@@ -122,7 +122,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
 
 
     @Override
-    public synchronized boolean complete(T newValue) {
+    public boolean complete(T newValue) {
         return completableFuture.kafkaComplete(newValue);
     }
 
@@ -193,7 +193,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      * the given valueIfAbsent.
      */
     @Override
-    public synchronized T getNow(T valueIfAbsent) throws ExecutionException {
+    public T getNow(T valueIfAbsent) throws ExecutionException {
         try {
             return completableFuture.getNow(valueIfAbsent);
         } catch (CompletionException e) {
@@ -209,7 +209,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      * Returns true if this CompletableFuture was cancelled before it completed normally.
      */
     @Override
-    public synchronized boolean isCancelled() {
+    public boolean isCancelled() {
         if (isDependant) {
             // Having isCancelled() for a dependent future just return
             // CompletableFuture.isCancelled() would break the historical KafkaFuture behaviour because
@@ -233,7 +233,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      * Returns true if this CompletableFuture completed exceptionally, in any way.
      */
     @Override
-    public synchronized boolean isCompletedExceptionally() {
+    public boolean isCompletedExceptionally() {
         return completableFuture.isCompletedExceptionally();
     }
 
@@ -241,7 +241,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      * Returns true if completed in any fashion: normally, exceptionally, or via cancellation.
      */
     @Override
-    public synchronized boolean isDone() {
+    public boolean isDone() {
         return completableFuture.isDone();
     }
 
