@@ -15,8 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.jmh.admin;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
@@ -44,17 +56,6 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -124,8 +125,8 @@ public class GetListOffsetsCallsBenchmark {
     }
 
     @Benchmark
-    public List<KafkaAdminClient.Call> testGetListOffsetsCalls() {
-        return admin.getListOffsetsCalls(context, topicPartitionOffsets, futures);
+    public Object testGetListOffsetsCalls() {
+        return AdminClientTestUtils.getListOffsetsCalls(admin, context, topicPartitionOffsets, futures);
     }
 
     private Cluster mockCluster() {

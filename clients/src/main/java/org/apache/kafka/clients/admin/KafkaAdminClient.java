@@ -3679,8 +3679,8 @@ public class KafkaAdminClient extends AdminClient {
 
     // visible for benchmark
     List<Call> getListOffsetsCalls(MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context,
-                                           Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
-                                           Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
+                                   Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
+                                   Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
 
         MetadataResponse mr = context.response().orElseThrow(() -> new IllegalStateException("No Metadata response"));
         Cluster clusterSnapshot = mr.buildCluster();
