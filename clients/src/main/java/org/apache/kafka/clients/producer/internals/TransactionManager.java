@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.KafkaException;
@@ -75,6 +76,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -1140,10 +1142,10 @@ public class TransactionManager {
                 throw new IllegalStateException("Invalid coordinator type: " + type);
         }
 
-        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(
-                new FindCoordinatorRequestData()
-                    .setKeyType(type.id())
-                    .setKey(coordinatorKey));
+        FindCoordinatorRequestData data = new FindCoordinatorRequestData()
+                .setKeyType(type.id())
+                .setKey(coordinatorKey);
+        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(data);
         enqueueRequest(new FindCoordinatorHandler(builder));
     }
 
@@ -1523,12 +1525,19 @@ public class TransactionManager {
 
         @Override
         public void handleResponse(AbstractResponse response) {
-            FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) response;
-            Errors error = findCoordinatorResponse.error();
             CoordinatorType coordinatorType = CoordinatorType.forId(builder.data().keyType());
 
+            List<Coordinator> coordinators = ((FindCoordinatorResponse) response).coordinators();
+            if (coordinators.size() != 1) {
+                log.error("Group coordinator lookup failed: Invalid response containing more than a single coordinator");
+                fatalError(new IllegalStateException("Group coordinator lookup failed: Invalid response containing more than a single coordinator"));
+            }
+            Coordinator coordinatorData = coordinators.get(0);
+            // For older versions without batching, obtain key from request data since it is not included in response
+            String key = coordinatorData.key() == null ? builder.data().key() : coordinatorData.key();
+            Errors error = Errors.forCode(coordinatorData.errorCode());
             if (error == Errors.NONE) {
-                Node node = findCoordinatorResponse.node();
+                Node node = new Node(coordinatorData.nodeId(), coordinatorData.host(), coordinatorData.port());
                 switch (coordinatorType) {
                     case GROUP:
                         consumerGroupCoordinator = node;
@@ -1543,12 +1552,12 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
-            } else if (findCoordinatorResponse.error() == Errors.GROUP_AUTHORIZATION_FAILED) {
-                abortableError(GroupAuthorizationException.forGroupId(builder.data().key()));
+            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                abortableError(GroupAuthorizationException.forGroupId(key));
             } else {
                 fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to " +
-                        "unexpected error: %s", coordinatorType, builder.data().key(),
-                        findCoordinatorResponse.data().errorMessage())));
+                        "unexpected error: %s", coordinatorType, key,
+                        coordinatorData.errorMessage())));
             }
         }
     }

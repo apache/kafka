@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.admin.internals.AllBrokersStrategy.BrokerKey;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.ListTransactionsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListTransactionsRequest;
@@ -43,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class ListTransactionsHandlerTest {
     private final LogContext logContext = new LogContext();
+    private final Node node = new Node(1, "host", 1234);
 
     @Test
     public void testBuildRequestWithoutFilters() {
@@ -89,7 +91,7 @@ public class ListTransactionsHandlerTest {
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
         ListTransactionsResponse response = sampleListTransactionsResponse1();
         ApiResult<BrokerKey, Collection<TransactionListing>> result = handler.handleResponse(
-            brokerId, singleton(brokerKey), response);
+            node, singleton(brokerKey), response);
         assertEquals(singleton(brokerKey), result.completedKeys.keySet());
         assertExpectedTransactions(response.data().transactionStates(), result.completedKeys.get(brokerKey));
     }
@@ -134,7 +136,7 @@ public class ListTransactionsHandlerTest {
         ListTransactionsResponse response = new ListTransactionsResponse(
             new ListTransactionsResponseData().setErrorCode(error.code())
         );
-        return handler.handleResponse(brokerId, singleton(brokerKey), response);
+        return handler.handleResponse(node, singleton(brokerKey), response);
     }
 
     private ListTransactionsResponse sampleListTransactionsResponse1() {
