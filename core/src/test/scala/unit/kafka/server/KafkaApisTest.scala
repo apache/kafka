@@ -81,6 +81,7 @@ import org.mockito.{ArgumentMatchers, Mockito}
 
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
+import java.util.Arrays
 
 class KafkaApisTest {
 
@@ -891,12 +892,32 @@ class KafkaApisTest {
     testFindCoordinatorWithTopicCreation(CoordinatorType.TRANSACTION, hasEnoughLiveBrokers = false)
   }
 
+  @Test
+  def testOldFindCoordinatorAutoTopicCreationForOffsetTopic(): Unit = {
+    testFindCoordinatorWithTopicCreation(CoordinatorType.GROUP, version = 3)
+  }
+
+  @Test
+  def testOldFindCoordinatorAutoTopicCreationForTxnTopic(): Unit = {
+    testFindCoordinatorWithTopicCreation(CoordinatorType.TRANSACTION, version = 3)
+  }
+
+  @Test
+  def testOldFindCoordinatorNotEnoughBrokersForOffsetTopic(): Unit = {
+    testFindCoordinatorWithTopicCreation(CoordinatorType.GROUP, hasEnoughLiveBrokers = false, version = 3)
+  }
+
+  @Test
+  def testOldFindCoordinatorNotEnoughBrokersForTxnTopic(): Unit = {
+    testFindCoordinatorWithTopicCreation(CoordinatorType.TRANSACTION, hasEnoughLiveBrokers = false, version = 3)
+  }
+
   private def testFindCoordinatorWithTopicCreation(coordinatorType: CoordinatorType,
-                                                   hasEnoughLiveBrokers: Boolean = true): Unit = {
+                                                   hasEnoughLiveBrokers: Boolean = true,
+                                                   version: Short = ApiKeys.FIND_COORDINATOR.latestVersion): Unit = {
     val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
 
-    val requestHeader = new RequestHeader(ApiKeys.FIND_COORDINATOR, ApiKeys.FIND_COORDINATOR.latestVersion,
-      clientId, 0)
+    val requestHeader = new RequestHeader(ApiKeys.FIND_COORDINATOR, version, clientId, 0)
 
     val numBrokersNeeded = 3
 
@@ -927,12 +948,18 @@ class KafkaApisTest {
           throw new IllegalStateException(s"Unknown coordinator type $coordinatorType")
       }
 
-    val findCoordinatorRequest = new FindCoordinatorRequest.Builder(
-      new FindCoordinatorRequestData()
-        .setKeyType(coordinatorType.id())
-        .setKey(groupId)
-    ).build(requestHeader.apiVersion)
-    val request = buildRequest(findCoordinatorRequest)
+    val findCoordinatorRequestBuilder = if (version >= 4) {
+      new FindCoordinatorRequest.Builder(
+        new FindCoordinatorRequestData()
+          .setKeyType(coordinatorType.id())
+          .setCoordinatorKeys(Arrays.asList(groupId)))
+    } else {
+      new FindCoordinatorRequest.Builder(
+        new FindCoordinatorRequestData()
+          .setKeyType(coordinatorType.id())
+          .setKey(groupId))
+    }
+    val request = buildRequest(findCoordinatorRequestBuilder.build(requestHeader.apiVersion))
 
     val capturedResponse = expectNoThrottling(request)
 
@@ -945,7 +972,12 @@ class KafkaApisTest {
       overrideProperties = topicConfigOverride).handleFindCoordinatorRequest(request)
 
     val response = capturedResponse.getValue.asInstanceOf[FindCoordinatorResponse]
-    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, response.error())
+    if (version >= 4) {
+      assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code, response.data.coordinators.get(0).errorCode)
+      assertEquals(groupId, response.data.coordinators.get(0).key)
+    } else {
+      assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code, response.data.errorCode)
+    }
 
     assertTrue(capturedRequest.getValue.isEmpty)
 
@@ -3130,7 +3162,7 @@ class KafkaApisTest {
     assertEquals(metadataCache.getControllerId.get, describeClusterResponse.data.controllerId)
     assertEquals(clusterId, describeClusterResponse.data.clusterId)
     assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
-    assertEquals(metadataCache.getAliveBrokers.map(_.endpoints(plaintextListener.value())).toSet,
+    assertEquals(metadataCache.getAliveBrokerNodes(plaintextListener).toSet,
       describeClusterResponse.nodes.asScala.values.toSet)
   }
 

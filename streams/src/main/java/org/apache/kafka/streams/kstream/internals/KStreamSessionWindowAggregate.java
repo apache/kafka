@@ -106,7 +106,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
 
             final long timestamp = context().timestamp();
             observedStreamTime = Math.max(observedStreamTime, timestamp);
-            final long closeTime = observedStreamTime - windows.gracePeriodMs();
+            final long closeTime = observedStreamTime - windows.gracePeriodMs() - windows.inactivityGap();
 
             final List<KeyValue<Windowed<K>, Agg>> merged = new ArrayList<>();
             final SessionWindow newSessionWindow = new SessionWindow(timestamp, timestamp);

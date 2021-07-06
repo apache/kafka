@@ -21,6 +21,7 @@
 
 <h5><a id="upgrade_300_notable" href="#upgrade_300_notable">Notable changes in 3.0.0</a></h5>
 <ul>
+    <li>ZooKeeper has been upgraded to version 3.6.3.</li>
     <li>The release tarball no longer includes test, sources, javadoc and test sources jars. These are still published to the Maven Central repository. </li>
     <li>A number of implementation dependency jars are <a href="https://github.com/apache/kafka/pull/10203">now available in the runtime classpath
         instead of compile and runtime classpaths</a>. Compilation errors after the upgrade can be fixed by adding the missing dependency jar(s) explicitly
@@ -82,7 +83,24 @@
         understood by brokers or version 2.5 or higher, so you must upgrade your kafka cluster to get the stronger semantics. Otherwise, you can just pass
         in <code>new ConsumerGroupMetadata(consumerGroupId)</code> to work with older brokers. See <a href="https://cwiki.apache.org/confluence/x/zJONCg">KIP-732</a> for more details.
     </li>
-
+    <li>
+        The Connect <code>internal.key.converter</code> and <code>internal.value.converter</code> properties have been completely <a href="https://cwiki.apache.org/confluence/x/2YDOCg">removed</a>.
+        The use of these Connect worker properties has been deprecated since version 2.0.0. 
+        Workers are now hardcoded to use the JSON converter with <code>schemas.enable</code> set to <code>false</code>. If your cluster has been using
+        a different internal key or value converter, you can follow the migration steps outlined in <a href="https://cwiki.apache.org/confluence/x/2YDOCg">KIP-738</a>
+        to safely upgrade your Connect cluster to 3.0.
+    </li>
+    <li> The Connect-based MirrorMaker (MM2) includes changes to support <code>IdentityReplicationPolicy</code>, enabling replication without renaming topics.
+        The existing <code>DefaultReplicationPolicy</code> is still used by default, but identity replication can be enabled via the
+        <code>replication.policy</code> configuration property. This is especially useful for users migrating from the older MirrorMaker (MM1), or for
+        use-cases with simple one-way replication topologies where topic renaming is undesirable. Note that <code>IdentityReplicationPolicy</code>, unlike
+        <code>DefaultReplicationPolicy</code>, cannot prevent replication cycles based on topic names, so take care to avoid cycles when constructing your
+        replication topology.
+    </li>
+    <li> The original MirrorMaker (MM1) and related classes have been deprecated. Please use the Connect-based
+        MirrorMaker (MM2), as described in the
+        <a href="/{{version}}/documentation/#georeplication">Geo-Replication section</a>.
+    </li>
 </ul>
 
 <h5><a id="upgrade_280_notable" href="#upgrade_280_notable">Notable changes in 2.8.0</a></h5>

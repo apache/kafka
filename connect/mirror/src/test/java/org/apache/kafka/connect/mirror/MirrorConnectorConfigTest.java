@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -30,6 +31,7 @@ import java.util.HashSet;
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MirrorConnectorConfigTest {
@@ -260,6 +262,69 @@ public class MirrorConnectorConfigTest {
         Map<String, Object> expectedAdminProps = new HashMap<>();
         expectedAdminProps.put("connections.max.idle.ms", "10000");
         assertEquals(expectedAdminProps, connectorAdminProps, prefix + " source connector admin props not matching");
+    }
+
+    @Test
+    public void testOffsetSyncsTopic() {
+        // Invalid location
+        Map<String, String> connectorProps = makeProps("offset-syncs.topic.location", "something");
+        assertThrows(ConfigException.class, () -> new MirrorConnectorConfig(connectorProps));
+
+        connectorProps.put("offset-syncs.topic.location", "source");
+        MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
+        assertEquals("mm2-offset-syncs.target2.internal", config.offsetSyncsTopic());
+        connectorProps.put("offset-syncs.topic.location", "target");
+        config = new MirrorConnectorConfig(connectorProps);
+        assertEquals("mm2-offset-syncs.source1.internal", config.offsetSyncsTopic());
+        // Default to source
+        connectorProps.remove("offset-syncs.topic.location");
+        config = new MirrorConnectorConfig(connectorProps);
+        assertEquals("mm2-offset-syncs.target2.internal", config.offsetSyncsTopic());
+    }
+
+    @Test
+    public void testConsumerConfigsForOffsetSyncsTopic() {
+        Map<String, String> connectorProps = makeProps(
+                "source.consumer.max.partition.fetch.bytes", "1",
+                "target.consumer.heartbeat.interval.ms", "1",
+                "consumer.max.poll.interval.ms", "1",
+                "fetch.min.bytes", "1"
+        );
+        MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
+        assertEquals(config.sourceConsumerConfig(), config.offsetSyncsTopicConsumerConfig());
+        connectorProps.put("offset-syncs.topic.location", "target");
+        config = new MirrorConnectorConfig(connectorProps);
+        assertEquals(config.targetConsumerConfig(), config.offsetSyncsTopicConsumerConfig());
+    }
+
+    @Test
+    public void testProducerConfigsForOffsetSyncsTopic() {
+        Map<String, String> connectorProps = makeProps(
+                "source.producer.batch.size", "1",
+                "target.producer.acks", "1",
+                "producer.max.poll.interval.ms", "1",
+                "fetch.min.bytes", "1"
+        );
+        MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
+        assertEquals(config.sourceProducerConfig(), config.offsetSyncsTopicProducerConfig());
+        connectorProps.put("offset-syncs.topic.location", "target");
+        config = new MirrorConnectorConfig(connectorProps);
+        assertEquals(config.targetProducerConfig(), config.offsetSyncsTopicProducerConfig());
+    }
+
+    @Test
+    public void testAdminConfigsForOffsetSyncsTopic() {
+        Map<String, String> connectorProps = makeProps(
+                "source.admin.request.timeout.ms", "1",
+                "target.admin.send.buffer.bytes", "1",
+                "admin.reconnect.backoff.max.ms", "1",
+                "retries", "123"
+        );
+        MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
+        assertEquals(config.sourceAdminConfig(), config.offsetSyncsTopicAdminConfig());
+        connectorProps.put("offset-syncs.topic.location", "target");
+        config = new MirrorConnectorConfig(connectorProps);
+        assertEquals(config.targetAdminConfig(), config.offsetSyncsTopicAdminConfig());
     }
 
 }

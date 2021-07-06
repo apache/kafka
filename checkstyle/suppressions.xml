@@ -108,7 +108,7 @@
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
-              files="(DistributedHerder|Worker).java"/>
+              files="(AbstractHerder|DistributedHerder|Worker).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="Worker(|Test).java"/>
     <suppress checks="MethodLength"
@@ -276,9 +276,9 @@
     <suppress checks="ParameterNumber"
               files="(QuorumController).java"/>
     <suppress checks="CyclomaticComplexity"
-              files="(ReplicationControlManager).java"/>
+              files="(ClientQuotasImage|ReplicationControlManager).java"/>
     <suppress checks="NPathComplexity"
-              files="(KafkaEventQueue|ReplicationControlManager).java"/>
+              files="(ClientQuotasImage|KafkaEventQueue|ReplicationControlManager).java"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
             files="metadata[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 

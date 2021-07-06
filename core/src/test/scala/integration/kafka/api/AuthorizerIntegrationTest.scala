@@ -178,7 +178,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => Errors.forCode(
       resp.data.topics().get(0).partitions().get(0).errorCode)),
     ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error),
-    ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => resp.error),
+    ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => {
+      Errors.forCode(resp.data.coordinators.asScala.find(g => group == g.key).head.errorCode)
+    }),
     ApiKeys.UPDATE_METADATA -> ((resp: requests.UpdateMetadataResponse) => resp.error),
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.error),
     ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => Errors.forCode(resp.data.errorCode)),
@@ -392,7 +394,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     new FindCoordinatorRequest.Builder(
         new FindCoordinatorRequestData()
           .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
-          .setKey(group)).build()
+          .setCoordinatorKeys(Collections.singletonList(group))).build()
   }
 
   private def createUpdateMetadataRequest = {
