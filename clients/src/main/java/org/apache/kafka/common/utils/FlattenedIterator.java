@@ -18,27 +18,35 @@ package org.apache.kafka.common.utils;
 
 import java.util.Iterator;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Provides a flattened iterator over the inner elements of an outer iterator.
+ * this implementation is faster than java stream (see FlattenedIteratorBenchmark)
  */
 public final class FlattenedIterator<O, I> extends AbstractIterator<I> {
     private final Iterator<O> outerIterator;
+    private final Predicate<O> outerPredicate;
     private final Function<O, Iterator<I>> innerIteratorFunction;
     private Iterator<I> innerIterator;
 
     public FlattenedIterator(Iterator<O> outerIterator, Function<O, Iterator<I>> innerIteratorFunction) {
+        this(outerIterator, s -> true, innerIteratorFunction);
+    }
+
+    public FlattenedIterator(Iterator<O> outerIterator, Predicate<O> outerPredicate, Function<O, Iterator<I>> innerIteratorFunction) {
         this.outerIterator = outerIterator;
         this.innerIteratorFunction = innerIteratorFunction;
+        this.outerPredicate = outerPredicate;
     }
 
     @Override
     public I makeNext() {
         while (innerIterator == null || !innerIterator.hasNext()) {
-            if (outerIterator.hasNext())
-                innerIterator = innerIteratorFunction.apply(outerIterator.next());
-            else
-                return allDone();
+            if (outerIterator.hasNext()) {
+                O outerValue = outerIterator.next();
+                if (outerPredicate.test(outerValue)) innerIterator = innerIteratorFunction.apply(outerValue);
+            } else return allDone();
         }
         return innerIterator.next();
     }
