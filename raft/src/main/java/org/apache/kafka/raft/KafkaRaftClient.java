@@ -2092,8 +2092,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollCurrentState(long currentTimeMs) {
-        snapshotCleaner.maybeClean(currentTimeMs);
-
         if (quorum.isLeader()) {
             return pollLeader(currentTimeMs);
         } else if (quorum.isCandidate()) {
@@ -2172,7 +2170,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             this.cleaner = cleaner;
         }
 
-        public boolean maybeClean(long currentTimeMs) {
+        public long maybeClean(long currentTimeMs) {
             timer.update(currentTimeMs);
             if (timer.isExpired()) {
                 try {
@@ -2181,10 +2179,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     logger.error("Had an error during log cleaning", t);
                 }
                 timer.reset(delayMs);
-                return true;
-            } else {
-                return false;
             }
+            return timer.remainingMs();
         }
     }
 
@@ -2214,7 +2210,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return;
         }
 
-        long pollTimeoutMs = pollCurrentState(currentTimeMs);
+        long pollStateTimeoutMs = pollCurrentState(currentTimeMs);
+        long cleaningTimeoutMs = snapshotCleaner.maybeClean(currentTimeMs);
+        long pollTimeoutMs = Math.min(pollStateTimeoutMs, cleaningTimeoutMs);
+
         kafkaRaftMetrics.updatePollStart(currentTimeMs);
 
         RaftMessage message = messageQueue.poll(pollTimeoutMs);

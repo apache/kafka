@@ -385,7 +385,10 @@ final class KafkaMetadataLog private (
    */
   override def maybeClean(): Boolean = {
     snapshots synchronized {
-      cleanSnapshotsRetentionSize() || cleanSnapshotsRetentionMs()
+      var didClean = false
+      didClean |= cleanSnapshotsRetentionSize()
+      didClean |= cleanSnapshotsRetentionMs()
+      didClean
     }
   }
 
@@ -398,7 +401,7 @@ final class KafkaMetadataLog private (
    */
   private def cleanSnapshots(predicate: (OffsetAndEpoch) => Boolean): Boolean = {
     if (snapshots.size < 2)
-      return false;
+      return false
 
     var didClean = false
     snapshots.keys.toSeq.sliding(2).toSeq.takeWhile {
