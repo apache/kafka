@@ -20,7 +20,7 @@ package integration.kafka.server
 import java.time.Duration
 import java.util.Arrays.asList
 
-import kafka.api.{ApiVersion, DefaultApiVersion, KAFKA_2_7_IV0, KAFKA_2_8_IV1, KAFKA_3_0_IV2}
+import kafka.api.{ApiVersion, DefaultApiVersion, KAFKA_2_7_IV0, KAFKA_2_8_IV1, KAFKA_3_1_IV0}
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -38,7 +38,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     Seq(
       createConfig(0, KAFKA_2_7_IV0),
       createConfig(1, KAFKA_2_8_IV1),
-      createConfig(2, KAFKA_3_0_IV2)
+      createConfig(2, KAFKA_3_1_IV0)
     )
   }
 
@@ -51,8 +51,8 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
   @Test
   def testControllerNewIBP(): Unit = {
-    // Ensure controller version = KAFKA_3_0_IV2, and then create a topic where leader of partition 1 is the old version.
-    testControllerWithGivenIBP(KAFKA_3_0_IV2, 2)
+    // Ensure controller version = KAFKA_3_1_IV0, and then create a topic where leader of partition 1 is the old version.
+    testControllerWithGivenIBP(KAFKA_3_1_IV0, 2)
   }
 
   def testControllerWithGivenIBP(version: DefaultApiVersion, controllerBroker: Int): Unit = {
@@ -80,12 +80,12 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
   @Test
   def testControllerNewToOldIBP(): Unit = {
-    testControllerSwitchingIBP(KAFKA_3_0_IV2, 2, KAFKA_2_7_IV0, 0)
+    testControllerSwitchingIBP(KAFKA_3_1_IV0, 2, KAFKA_2_7_IV0, 0)
   }
 
   @Test
   def testControllerOldToNewIBP(): Unit = {
-    testControllerSwitchingIBP(KAFKA_2_7_IV0, 0, KAFKA_3_0_IV2, 2)
+    testControllerSwitchingIBP(KAFKA_2_7_IV0, 0, KAFKA_3_1_IV0, 2)
   }
 
 

@@ -269,8 +269,9 @@ public class FetchRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        // The error is indicated in two ways: by setting the same error code in all partitions, and by
-        // setting the top-level error code.  The form where we set the same error code in all partitions
+        // For versions 13+ the error is indicated by setting the top-level error code, and no partitions will be returned.
+        // For earlier versions, the error is indicated in two ways: by setting the same error code in all partitions,
+        // and by setting the top-level error code.  The form where we set the same error code in all partitions
         // is needed in order to maintain backwards compatibility with older versions of the protocol
         // in which there was no top-level error code. Note that for incremental fetch responses, there
         // may not be any partitions at all in the response.  For this reason, the top-level error code

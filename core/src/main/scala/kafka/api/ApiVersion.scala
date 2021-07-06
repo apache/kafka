@@ -118,7 +118,7 @@ object ApiVersion {
     // Introduce ListOffsets V7 which supports listing offsets by max timestamp (KIP-734)
     KAFKA_3_0_IV1,
     // Adds topic IDs to Fetch requests/responses (KIP-516)
-    KAFKA_3_0_IV2
+    KAFKA_3_1_IV0
   )
 
   // Map keys are the union of the short and full versions
@@ -469,9 +469,9 @@ case object KAFKA_3_0_IV1 extends DefaultApiVersion {
   val id: Int = 34
 }
 
-case object KAFKA_3_0_IV2 extends DefaultApiVersion {
-  val shortVersion: String = "3.0"
-  val subVersion = "IV2"
+case object KAFKA_3_1_IV0 extends DefaultApiVersion {
+  val shortVersion: String = "3.1"
+  val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
   val id: Int = 35
 }

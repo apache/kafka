@@ -72,7 +72,7 @@ class ReplicaFetcherThread(name: String,
 
   // Visible for testing
   private[server] val fetchRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_3_0_IV2) 13
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_3_1_IV0) 13
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_7_IV1) 12
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 11
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV2) 10
