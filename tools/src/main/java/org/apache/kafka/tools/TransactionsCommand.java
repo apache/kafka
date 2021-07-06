@@ -28,10 +28,15 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult;
+import org.apache.kafka.clients.admin.DescribeTransactionsResult;
+import org.apache.kafka.clients.admin.ListTransactionsOptions;
 import org.apache.kafka.clients.admin.ProducerState;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -43,12 +48,17 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -434,7 +444,7 @@ public abstract class TransactionsCommand {
             final Map<Integer, Collection<TransactionListing>> result;
 
             try {
-                result = admin.listTransactions()
+                result = admin.listTransactions(new ListTransactionsOptions())
                     .allByBrokerId()
                     .get();
             } catch (ExecutionException e) {
@@ -458,6 +468,436 @@ public abstract class TransactionsCommand {
             }
 
             prettyPrintTable(HEADERS, rows, out);
+        }
+    }
+
+    static class FindHangingTransactionsCommand extends TransactionsCommand {
+        private static final int MAX_BATCH_SIZE = 500;
+
+        static final String[] HEADERS = new String[] {
+            "Topic",
+            "Partition",
+            "ProducerId",
+            "ProducerEpoch",
+            "CoordinatorEpoch",
+            "StartOffset",
+            "LastTimestamp",
+            "Duration(min)"
+        };
+
+        FindHangingTransactionsCommand(Time time) {
+            super(time);
+        }
+
+        @Override
+        String name() {
+            return "find-hanging";
+        }
+
+        @Override
+        void addSubparser(Subparsers subparsers) {
+            Subparser subparser = subparsers.addParser(name())
+                .help("find hanging transactions");
+
+            subparser.addArgument("--broker-id")
+                .help("broker id to search for hanging transactions")
+                .action(store())
+                .type(Integer.class)
+                .required(false);
+
+            subparser.addArgument("--max-transaction-timeout")
+                .help("maximum transaction timeout in minutes to limit the scope of the search (15 minutes by default)")
+                .action(store())
+                .type(Integer.class)
+                .setDefault(15)
+                .required(false);
+
+            subparser.addArgument("--topic")
+                .help("topic name to limit search to (required if --partition is specified)")
+                .action(store())
+                .type(String.class)
+                .required(false);
+
+            subparser.addArgument("--partition")
+                .help("partition number")
+                .action(store())
+                .type(Integer.class)
+                .required(false);
+        }
+
+        @Override
+        void execute(Admin admin, Namespace ns, PrintStream out) throws Exception {
+            Optional<Integer> brokerId = Optional.ofNullable(ns.getInt("broker_id"));
+            Optional<String> topic = Optional.ofNullable(ns.getString("topic"));
+
+            if (!topic.isPresent() && !brokerId.isPresent()) {
+                printErrorAndExit("The `find-hanging` command requires either --topic " +
+                    "or --broker-id to limit the scope of the search");
+                return;
+            }
+
+            Optional<Integer> partition = Optional.ofNullable(ns.getInt("partition"));
+            if (partition.isPresent() && !topic.isPresent()) {
+                printErrorAndExit("The --partition argument requires --topic to be provided");
+                return;
+            }
+
+            long maxTransactionTimeoutMs = TimeUnit.MINUTES.toMillis(
+                ns.getInt("max_transaction_timeout"));
+
+            List<TopicPartition> topicPartitions = collectTopicPartitionsToSearch(
+                admin,
+                topic,
+                partition,
+                brokerId
+            );
+
+            List<OpenTransaction> candidates = collectCandidateOpenTransactions(
+                admin,
+                brokerId,
+                maxTransactionTimeoutMs,
+                topicPartitions
+            );
+
+            if (candidates.isEmpty()) {
+                printHangingTransactions(Collections.emptyList(), out);
+            } else {
+                Map<Long, List<OpenTransaction>> openTransactionsByProducerId = groupByProducerId(candidates);
+
+                Map<Long, String> transactionalIds = lookupTransactionalIds(
+                    admin,
+                    openTransactionsByProducerId.keySet()
+                );
+
+                Map<String, TransactionDescription> descriptions = describeTransactions(
+                    admin,
+                    transactionalIds.values()
+                );
+
+                List<OpenTransaction> hangingTransactions = filterHangingTransactions(
+                    openTransactionsByProducerId,
+                    transactionalIds,
+                    descriptions
+                );
+
+                printHangingTransactions(hangingTransactions, out);
+            }
+        }
+
+        private List<TopicPartition> collectTopicPartitionsToSearch(
+            Admin admin,
+            Optional<String> topic,
+            Optional<Integer> partition,
+            Optional<Integer> brokerId
+        ) throws Exception {
+            final List<String> topics;
+
+            if (topic.isPresent()) {
+                if (partition.isPresent()) {
+                    return Collections.singletonList(new TopicPartition(topic.get(), partition.get()));
+                } else {
+                    topics = Collections.singletonList(topic.get());
+                }
+            } else {
+                topics = listTopics(admin);
+            }
+
+            return findTopicPartitions(
+                admin,
+                brokerId,
+                topics
+            );
+        }
+
+        private List<OpenTransaction> filterHangingTransactions(
+            Map<Long, List<OpenTransaction>> openTransactionsByProducerId,
+            Map<Long, String> transactionalIds,
+            Map<String, TransactionDescription> descriptions
+        ) {
+            List<OpenTransaction> hangingTransactions = new ArrayList<>();
+
+            openTransactionsByProducerId.forEach((producerId, openTransactions) -> {
+                String transactionalId = transactionalIds.get(producerId);
+                if (transactionalId == null) {
+                    // If we could not find the transactionalId corresponding to the
+                    // producerId of an open transaction, then the transaction is hanging.
+                    hangingTransactions.addAll(openTransactions);
+                } else {
+                    // Otherwise, we need to check the current transaction state.
+                    TransactionDescription description = descriptions.get(transactionalId);
+                    if (description == null) {
+                        hangingTransactions.addAll(openTransactions);
+                    } else {
+                        for (OpenTransaction openTransaction : openTransactions) {
+                            // The `DescribeTransactions` API returns all partitions being
+                            // written to in an ongoing transaction and any partition which
+                            // does not yet have markers written when in the `PendingAbort` or
+                            // `PendingCommit` states. If the topic partition that we found is
+                            // among these, then we can still expect the coordinator to write
+                            // the marker. Otherwise, it is a hanging transaction.
+                            if (!description.topicPartitions().contains(openTransaction.topicPartition)) {
+                                hangingTransactions.add(openTransaction);
+                            }
+                        }
+                    }
+                }
+            });
+
+            return hangingTransactions;
+        }
+
+        private void printHangingTransactions(
+            List<OpenTransaction> hangingTransactions,
+            PrintStream out
+        ) {
+            long currentTimeMs = time.milliseconds();
+            List<String[]> rows = new ArrayList<>(hangingTransactions.size());
+
+            for (OpenTransaction transaction : hangingTransactions) {
+                long transactionDurationMinutes = TimeUnit.MILLISECONDS.toMinutes(
+                    currentTimeMs - transaction.producerState.lastTimestamp());
+
+                rows.add(new String[] {
+                    transaction.topicPartition.topic(),
+                    String.valueOf(transaction.topicPartition.partition()),
+                    String.valueOf(transaction.producerState.producerId()),
+                    String.valueOf(transaction.producerState.producerEpoch()),
+                    String.valueOf(transaction.producerState.coordinatorEpoch().orElse(-1)),
+                    String.valueOf(transaction.producerState.currentTransactionStartOffset().orElse(-1)),
+                    String.valueOf(transaction.producerState.lastTimestamp()),
+                    String.valueOf(transactionDurationMinutes)
+                });
+            }
+
+            prettyPrintTable(HEADERS, rows, out);
+        }
+
+        private Map<String, TransactionDescription> describeTransactions(
+            Admin admin,
+            Collection<String> transactionalIds
+        ) throws Exception {
+            try {
+                DescribeTransactionsResult result = admin.describeTransactions(new HashSet<>(transactionalIds));
+                Map<String, TransactionDescription> descriptions = new HashMap<>();
+
+                for (String transactionalId : transactionalIds) {
+                    try {
+                        TransactionDescription description = result.description(transactionalId).get();
+                        descriptions.put(transactionalId, description);
+                    } catch (ExecutionException e) {
+                        if (e.getCause() instanceof TransactionalIdNotFoundException) {
+                            descriptions.put(transactionalId, null);
+                        } else {
+                            throw e;
+                        }
+                    }
+                }
+
+                return descriptions;
+            } catch (ExecutionException e) {
+                printErrorAndExit("Failed to describe " + transactionalIds.size()
+                    + " transactions", e.getCause());
+                return Collections.emptyMap();
+            }
+        }
+
+        private Map<Long, List<OpenTransaction>> groupByProducerId(
+            List<OpenTransaction> openTransactions
+        ) {
+            Map<Long, List<OpenTransaction>> res = new HashMap<>();
+            for (OpenTransaction transaction : openTransactions) {
+                List<OpenTransaction> states = res.computeIfAbsent(
+                    transaction.producerState.producerId(),
+                    __ -> new ArrayList<>()
+                );
+                states.add(transaction);
+            }
+            return res;
+        }
+
+        private List<String> listTopics(
+            Admin admin
+        ) throws Exception {
+            try {
+                return new ArrayList<>(admin.listTopics().names().get());
+            } catch (ExecutionException e) {
+                printErrorAndExit("Failed to list topics", e.getCause());
+                return Collections.emptyList();
+            }
+        }
+
+        private List<TopicPartition> findTopicPartitions(
+            Admin admin,
+            Optional<Integer> brokerId,
+            List<String> topics
+        ) throws Exception {
+            List<TopicPartition> topicPartitions = new ArrayList<>();
+            consumeInBatches(topics, MAX_BATCH_SIZE, batch -> {
+                findTopicPartitions(
+                    admin,
+                    brokerId,
+                    batch,
+                    topicPartitions
+                );
+            });
+            return topicPartitions;
+        }
+
+        private void findTopicPartitions(
+            Admin admin,
+            Optional<Integer> brokerId,
+            List<String> topics,
+            List<TopicPartition> topicPartitions
+        ) throws Exception {
+            try {
+                Map<String, TopicDescription> topicDescriptions = admin.describeTopics(topics).all().get();
+                topicDescriptions.forEach((topic, description) -> {
+                    description.partitions().forEach(partitionInfo -> {
+                        if (!brokerId.isPresent() || hasReplica(brokerId.get(), partitionInfo)) {
+                            topicPartitions.add(new TopicPartition(topic, partitionInfo.partition()));
+                        }
+                    });
+                });
+            } catch (ExecutionException e) {
+                printErrorAndExit("Failed to describe " + topics.size() + " topics", e.getCause());
+            }
+        }
+
+        private boolean hasReplica(
+            int brokerId,
+            TopicPartitionInfo partitionInfo
+        ) {
+            return partitionInfo.replicas().stream().anyMatch(node -> node.id() == brokerId);
+        }
+
+        private List<OpenTransaction> collectCandidateOpenTransactions(
+            Admin admin,
+            Optional<Integer> brokerId,
+            long maxTransactionTimeoutMs,
+            List<TopicPartition> topicPartitions
+        ) throws Exception {
+            // We have to check all partitions on the broker. In order to avoid
+            // overwhelming it with a giant request, we break the requests into
+            // smaller batches.
+
+            List<OpenTransaction> candidateTransactions = new ArrayList<>();
+
+            consumeInBatches(topicPartitions, MAX_BATCH_SIZE, batch -> {
+                collectCandidateOpenTransactions(
+                    admin,
+                    brokerId,
+                    maxTransactionTimeoutMs,
+                    batch,
+                    candidateTransactions
+                );
+            });
+
+            return candidateTransactions;
+        }
+
+        private static class OpenTransaction {
+            private final TopicPartition topicPartition;
+            private final ProducerState producerState;
+
+            private OpenTransaction(
+                TopicPartition topicPartition,
+                ProducerState producerState
+            ) {
+                this.topicPartition = topicPartition;
+                this.producerState = producerState;
+            }
+        }
+
+        private void collectCandidateOpenTransactions(
+            Admin admin,
+            Optional<Integer> brokerId,
+            long maxTransactionTimeoutMs,
+            List<TopicPartition> topicPartitions,
+            List<OpenTransaction> candidateTransactions
+        ) throws Exception {
+            try {
+                DescribeProducersOptions describeOptions = new DescribeProducersOptions();
+                brokerId.ifPresent(describeOptions::brokerId);
+
+                Map<TopicPartition, DescribeProducersResult.PartitionProducerState> producersByPartition =
+                    admin.describeProducers(topicPartitions, describeOptions).all().get();
+
+                long currentTimeMs = time.milliseconds();
+
+                producersByPartition.forEach((topicPartition, producersStates) -> {
+                    producersStates.activeProducers().forEach(activeProducer -> {
+                        if (activeProducer.currentTransactionStartOffset().isPresent()) {
+                            long transactionDurationMs = currentTimeMs - activeProducer.lastTimestamp();
+                            if (transactionDurationMs > maxTransactionTimeoutMs) {
+                                candidateTransactions.add(new OpenTransaction(
+                                    topicPartition,
+                                    activeProducer
+                                ));
+                            }
+                        }
+                    });
+                });
+            } catch (ExecutionException e) {
+                printErrorAndExit("Failed to describe producers for " + topicPartitions.size() +
+                    " partitions on broker " + brokerId, e.getCause());
+            }
+        }
+
+        private Map<Long, String> lookupTransactionalIds(
+            Admin admin,
+            Set<Long> producerIds
+        ) throws Exception {
+            try {
+                ListTransactionsOptions listTransactionsOptions = new ListTransactionsOptions()
+                    .filterProducerIds(producerIds);
+
+                Collection<TransactionListing> transactionListings =
+                    admin.listTransactions(listTransactionsOptions).all().get();
+
+                Map<Long, String> transactionalIdMap = new HashMap<>();
+
+                transactionListings.forEach(listing -> {
+                    if (!producerIds.contains(listing.producerId())) {
+                        log.debug("Received transaction listing {} which has a producerId " +
+                            "which was not requested", listing);
+                    } else {
+                        transactionalIdMap.put(
+                            listing.producerId(),
+                            listing.transactionalId()
+                        );
+                    }
+                });
+
+                return transactionalIdMap;
+            } catch (ExecutionException e) {
+                printErrorAndExit("Failed to list transactions for " + producerIds.size() +
+                    " producers", e.getCause());
+                return Collections.emptyMap();
+            }
+        }
+
+        @FunctionalInterface
+        private interface ThrowableConsumer<T> {
+            void accept(T t) throws Exception;
+        }
+
+        private <T> void consumeInBatches(
+            List<T> list,
+            int batchSize,
+            ThrowableConsumer<List<T>> consumer
+        ) throws Exception {
+            int batchStartIndex = 0;
+            int limitIndex = list.size();
+
+            while (batchStartIndex < limitIndex) {
+                int batchEndIndex = Math.min(
+                    limitIndex,
+                    batchStartIndex + batchSize
+                );
+
+                consumer.accept(list.subList(batchStartIndex, batchEndIndex));
+                batchStartIndex = batchEndIndex;
+            }
         }
     }
 
@@ -580,7 +1020,8 @@ public abstract class TransactionsCommand {
             new ListTransactionsCommand(time),
             new DescribeTransactionsCommand(time),
             new DescribeProducersCommand(time),
-            new AbortTransactionCommand(time)
+            new AbortTransactionCommand(time),
+            new FindHangingTransactionsCommand(time)
         );
 
         ArgumentParser parser = buildBaseParser();

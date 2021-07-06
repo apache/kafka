@@ -22,14 +22,21 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult;
 import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerState;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTransactionsResult;
+import org.apache.kafka.clients.admin.ListTopicsResult;
+import org.apache.kafka.clients.admin.ListTransactionsOptions;
 import org.apache.kafka.clients.admin.ListTransactionsResult;
 import org.apache.kafka.clients.admin.ProducerState;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.MockTime;
@@ -48,7 +55,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -56,10 +65,14 @@ import java.util.Map;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.KafkaFuture.completedFuture;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -145,7 +158,7 @@ public class TransactionsCommandTest {
         DescribeProducersOptions expectedOptions
     ) throws Exception {
         DescribeProducersResult describeResult = Mockito.mock(DescribeProducersResult.class);
-        KafkaFuture<PartitionProducerState> describeFuture = KafkaFutureImpl.completedFuture(
+        KafkaFuture<PartitionProducerState> describeFuture = completedFuture(
             new PartitionProducerState(asList(
                 new ProducerState(12345L, 15, 1300, 1599509565L,
                     OptionalInt.of(20), OptionalLong.of(990)),
@@ -181,8 +194,6 @@ public class TransactionsCommandTest {
             "list"
         };
 
-        ListTransactionsResult listResult = Mockito.mock(ListTransactionsResult.class);
-
         Map<Integer, Collection<TransactionListing>> transactions = new HashMap<>();
         transactions.put(0, asList(
             new TransactionListing("foo", 12345L, TransactionState.ONGOING),
@@ -192,11 +203,7 @@ public class TransactionsCommandTest {
             new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
         ));
 
-        KafkaFuture<Map<Integer, Collection<TransactionListing>>> listTransactionsFuture =
-            KafkaFutureImpl.completedFuture(transactions);
-
-        Mockito.when(admin.listTransactions()).thenReturn(listResult);
-        Mockito.when(listResult.allByBrokerId()).thenReturn(listTransactionsFuture);
+        expectListTransactions(transactions);
 
         execute(args);
         assertNormalExit();
@@ -241,7 +248,7 @@ public class TransactionsCommandTest {
         int coordinatorId = 5;
         long transactionStartTime = time.milliseconds();
 
-        KafkaFuture<TransactionDescription> describeFuture = KafkaFutureImpl.completedFuture(
+        KafkaFuture<TransactionDescription> describeFuture = completedFuture(
             new TransactionDescription(
                 coordinatorId,
                 TransactionState.ONGOING,
@@ -373,14 +380,14 @@ public class TransactionsCommandTest {
         };
 
         DescribeProducersResult describeResult = Mockito.mock(DescribeProducersResult.class);
-        KafkaFuture<PartitionProducerState> describeFuture = KafkaFutureImpl.completedFuture(
+        KafkaFuture<PartitionProducerState> describeFuture = completedFuture(
             new PartitionProducerState(singletonList(
                 new ProducerState(producerId, producerEpoch, 1300, 1599509565L,
                     OptionalInt.of(coordinatorEpoch), OptionalLong.of(startOffset))
             )));
 
         AbortTransactionResult abortTransactionResult = Mockito.mock(AbortTransactionResult.class);
-        KafkaFuture<Void> abortFuture = KafkaFutureImpl.completedFuture(null);
+        KafkaFuture<Void> abortFuture = completedFuture(null);
         AbortTransactionSpec expectedAbortSpec = new AbortTransactionSpec(
             topicPartition, producerId, producerEpoch, coordinatorEpoch);
 
@@ -418,7 +425,7 @@ public class TransactionsCommandTest {
         };
 
         AbortTransactionResult abortTransactionResult = Mockito.mock(AbortTransactionResult.class);
-        KafkaFuture<Void> abortFuture = KafkaFutureImpl.completedFuture(null);
+        KafkaFuture<Void> abortFuture = completedFuture(null);
 
         final int expectedCoordinatorEpoch;
         if (coordinatorEpoch < 0) {
@@ -435,6 +442,579 @@ public class TransactionsCommandTest {
 
         execute(args);
         assertNormalExit();
+    }
+
+    @Test
+    public void testFindHangingRequiresEitherBrokerIdOrTopic() throws Exception {
+        assertCommandFailure(new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "find-hanging"
+        });
+    }
+
+    @Test
+    public void testFindHangingRequiresTopicIfPartitionIsSpecified() throws Exception {
+        assertCommandFailure(new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "find-hanging",
+            "--broker-id",
+            "0",
+            "--partition",
+            "5"
+        });
+    }
+
+    private void expectListTransactions(
+        Map<Integer, Collection<TransactionListing>> listingsByBroker
+    ) {
+        expectListTransactions(new ListTransactionsOptions(), listingsByBroker);
+    }
+
+    private void expectListTransactions(
+        ListTransactionsOptions options,
+        Map<Integer, Collection<TransactionListing>> listingsByBroker
+    ) {
+        ListTransactionsResult listResult = Mockito.mock(ListTransactionsResult.class);
+        Mockito.when(admin.listTransactions(options)).thenReturn(listResult);
+
+        List<TransactionListing> allListings = new ArrayList<>();
+        listingsByBroker.values().forEach(allListings::addAll);
+
+        Mockito.when(listResult.all()).thenReturn(completedFuture(allListings));
+        Mockito.when(listResult.allByBrokerId()).thenReturn(completedFuture(listingsByBroker));
+    }
+
+    private void expectDescribeProducers(
+        TopicPartition topicPartition,
+        long producerId,
+        short producerEpoch,
+        long lastTimestamp,
+        OptionalInt coordinatorEpoch,
+        OptionalLong txnStartOffset
+    ) {
+        PartitionProducerState partitionProducerState = new PartitionProducerState(singletonList(
+            new ProducerState(
+                producerId,
+                producerEpoch,
+                500,
+                lastTimestamp,
+                coordinatorEpoch,
+                txnStartOffset
+            )
+        ));
+
+        DescribeProducersResult result = Mockito.mock(DescribeProducersResult.class);
+        Mockito.when(result.all()).thenReturn(
+            completedFuture(singletonMap(topicPartition, partitionProducerState))
+        );
+
+        Mockito.when(admin.describeProducers(
+            Collections.singletonList(topicPartition),
+            new DescribeProducersOptions()
+        )).thenReturn(result);
+    }
+
+    private void expectDescribeTransactions(
+        Map<String, TransactionDescription> descriptions
+    ) {
+        DescribeTransactionsResult result = Mockito.mock(DescribeTransactionsResult.class);
+        descriptions.forEach((transactionalId, description) -> {
+            Mockito.when(result.description(transactionalId))
+                .thenReturn(completedFuture(description));
+        });
+        Mockito.when(result.all()).thenReturn(completedFuture(descriptions));
+        Mockito.when(admin.describeTransactions(descriptions.keySet())).thenReturn(result);
+    }
+
+    private void expectListTopics(
+        Set<String> topics
+    ) {
+        ListTopicsResult result = Mockito.mock(ListTopicsResult.class);
+        Mockito.when(result.names()).thenReturn(completedFuture(topics));
+        Mockito.when(admin.listTopics()).thenReturn(result);
+    }
+
+    private void expectDescribeTopics(
+        Map<String, TopicDescription> descriptions
+    ) {
+        DescribeTopicsResult result = Mockito.mock(DescribeTopicsResult.class);
+        Mockito.when(result.all()).thenReturn(completedFuture(descriptions));
+        Mockito.when(admin.describeTopics(new ArrayList<>(descriptions.keySet()))).thenReturn(result);
+    }
+
+    @Test
+    public void testFindHangingLookupTopicPartitionsForBroker() throws Exception {
+        int brokerId = 5;
+
+        String[] args = new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "find-hanging",
+            "--broker-id",
+            String.valueOf(brokerId)
+        };
+
+        String topic = "foo";
+        expectListTopics(singleton(topic));
+
+        Node node0 = new Node(0, "localhost", 9092);
+        Node node1 = new Node(1, "localhost", 9093);
+        Node node5 = new Node(5, "localhost", 9097);
+
+        TopicPartitionInfo partition0 = new TopicPartitionInfo(
+            0,
+            node0,
+            Arrays.asList(node0, node1),
+            Arrays.asList(node0, node1)
+        );
+        TopicPartitionInfo partition1 = new TopicPartitionInfo(
+            1,
+            node1,
+            Arrays.asList(node1, node5),
+            Arrays.asList(node1, node5)
+        );
+
+        TopicDescription description = new TopicDescription(
+            topic,
+            false,
+            Arrays.asList(partition0, partition1)
+        );
+        expectDescribeTopics(singletonMap(topic, description));
+
+        DescribeProducersResult result = Mockito.mock(DescribeProducersResult.class);
+        Mockito.when(result.all()).thenReturn(completedFuture(emptyMap()));
+
+        Mockito.when(admin.describeProducers(
+            Collections.singletonList(new TopicPartition(topic, 1)),
+            new DescribeProducersOptions().brokerId(brokerId)
+        )).thenReturn(result);
+
+        execute(args);
+        assertNormalExit();
+        assertNoHangingTransactions();
+    }
+
+    @Test
+    public void testFindHangingLookupTopicAndBrokerId() throws Exception {
+        int brokerId = 5;
+        String topic = "foo";
+
+        String[] args = new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "find-hanging",
+            "--broker-id",
+            String.valueOf(brokerId),
+            "--topic",
+            topic
+        };
+
+        Node node0 = new Node(0, "localhost", 9092);
+        Node node1 = new Node(1, "localhost", 9093);
+        Node node5 = new Node(5, "localhost", 9097);
+
+        TopicPartitionInfo partition0 = new TopicPartitionInfo(
+            0,
+            node0,
+            Arrays.asList(node0, node1),
+            Arrays.asList(node0, node1)
+        );
+        TopicPartitionInfo partition1 = new TopicPartitionInfo(
+            1,
+            node1,
+            Arrays.asList(node1, node5),
+            Arrays.asList(node1, node5)
+        );
+
+        TopicDescription description = new TopicDescription(
+            topic,
+            false,
+            Arrays.asList(partition0, partition1)
+        );
+        expectDescribeTopics(singletonMap(topic, description));
+
+        DescribeProducersResult result = Mockito.mock(DescribeProducersResult.class);
+        Mockito.when(result.all()).thenReturn(completedFuture(emptyMap()));
+
+        Mockito.when(admin.describeProducers(
+            Collections.singletonList(new TopicPartition(topic, 1)),
+            new DescribeProducersOptions().brokerId(brokerId)
+        )).thenReturn(result);
+
+        execute(args);
+        assertNormalExit();
+        assertNoHangingTransactions();
+    }
+
+    @Test
+    public void testFindHangingLookupTopicPartitionsForTopic() throws Exception {
+        String topic = "foo";
+
+        String[] args = new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "find-hanging",
+            "--topic",
+            topic
+        };
+
+        Node node0 = new Node(0, "localhost", 9092);
+        Node node1 = new Node(1, "localhost", 9093);
+        Node node5 = new Node(5, "localhost", 9097);
+
+        TopicPartitionInfo partition0 = new TopicPartitionInfo(
+            0,
+            node0,
+            Arrays.asList(node0, node1),
+            Arrays.asList(node0, node1)
+        );
+        TopicPartitionInfo partition1 = new TopicPartitionInfo(
+            1,
+            node1,
+            Arrays.asList(node1, node5),
+            Arrays.asList(node1, node5)
+        );
+
+        TopicDescription description = new TopicDescription(
+            topic,
+            false,
+            Arrays.asList(partition0, partition1)
+        );
+        expectDescribeTopics(singletonMap(topic, description));
+
+        DescribeProducersResult result = Mockito.mock(DescribeProducersResult.class);
+        Mockito.when(result.all()).thenReturn(completedFuture(emptyMap()));
+
+        Mockito.when(admin.describeProducers(
+            Arrays.asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1)),
+            new DescribeProducersOptions()
+        )).thenReturn(result);
+
+        execute(args);
+        assertNormalExit();
+        assertNoHangingTransactions();
+    }
+
+    private void assertNoHangingTransactions() throws Exception {
+        List<List<String>> table = readOutputAsTable();
+        assertEquals(1, table.size());
+
+        List<String> expectedHeaders = asList(TransactionsCommand.FindHangingTransactionsCommand.HEADERS);
+        assertEquals(expectedHeaders, table.get(0));
+    }
+
+    @Test
+    public void testFindHangingSpecifiedTopicPartition() throws Exception {
+        TopicPartition topicPartition = new TopicPartition("foo", 5);
+
+        String[] args = new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "find-hanging",
+            "--topic",
+            topicPartition.topic(),
+            "--partition",
+            String.valueOf(topicPartition.partition())
+        };
+
+        long producerId = 132L;
+        short producerEpoch = 5;
+        long lastTimestamp = time.milliseconds();
+        OptionalInt coordinatorEpoch = OptionalInt.of(19);
+        OptionalLong txnStartOffset = OptionalLong.of(29384L);
+
+        expectDescribeProducers(
+            topicPartition,
+            producerId,
+            producerEpoch,
+            lastTimestamp,
+            coordinatorEpoch,
+            txnStartOffset
+        );
+
+        execute(args);
+        assertNormalExit();
+
+        List<List<String>> table = readOutputAsTable();
+        assertEquals(1, table.size());
+
+        List<String> expectedHeaders = asList(TransactionsCommand.FindHangingTransactionsCommand.HEADERS);
+        assertEquals(expectedHeaders, table.get(0));
+    }
+
+    @Test
+    public void testFindHangingNoMappedTransactionalId() throws Exception {
+        TopicPartition topicPartition = new TopicPartition("foo", 5);
+
+        String[] args = new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "find-hanging",
+            "--topic",
+            topicPartition.topic(),
+            "--partition",
+            String.valueOf(topicPartition.partition())
+        };
+
+        long producerId = 132L;
+        short producerEpoch = 5;
+        long lastTimestamp = time.milliseconds() - TimeUnit.MINUTES.toMillis(60);
+        int coordinatorEpoch = 19;
+        long txnStartOffset = 29384L;
+
+        expectDescribeProducers(
+            topicPartition,
+            producerId,
+            producerEpoch,
+            lastTimestamp,
+            OptionalInt.of(coordinatorEpoch),
+            OptionalLong.of(txnStartOffset)
+        );
+
+        expectListTransactions(
+            new ListTransactionsOptions().filterProducerIds(singleton(producerId)),
+            singletonMap(1, Collections.emptyList())
+        );
+
+        expectDescribeTransactions(Collections.emptyMap());
+
+        execute(args);
+        assertNormalExit();
+
+        assertHangingTransaction(
+            topicPartition,
+            producerId,
+            producerEpoch,
+            coordinatorEpoch,
+            txnStartOffset,
+            lastTimestamp
+        );
+    }
+
+    @Test
+    public void testFindHangingWithNoTransactionDescription() throws Exception {
+        TopicPartition topicPartition = new TopicPartition("foo", 5);
+
+        String[] args = new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "find-hanging",
+            "--topic",
+            topicPartition.topic(),
+            "--partition",
+            String.valueOf(topicPartition.partition())
+        };
+
+        long producerId = 132L;
+        short producerEpoch = 5;
+        long lastTimestamp = time.milliseconds() - TimeUnit.MINUTES.toMillis(60);
+        int coordinatorEpoch = 19;
+        long txnStartOffset = 29384L;
+
+        expectDescribeProducers(
+            topicPartition,
+            producerId,
+            producerEpoch,
+            lastTimestamp,
+            OptionalInt.of(coordinatorEpoch),
+            OptionalLong.of(txnStartOffset)
+        );
+
+        String transactionalId = "bar";
+        TransactionListing listing = new TransactionListing(
+            transactionalId,
+            producerId,
+            TransactionState.ONGOING
+        );
+
+        expectListTransactions(
+            new ListTransactionsOptions().filterProducerIds(singleton(producerId)),
+            singletonMap(1, Collections.singletonList(listing))
+        );
+
+        DescribeTransactionsResult result = Mockito.mock(DescribeTransactionsResult.class);
+        Mockito.when(result.description(transactionalId))
+            .thenReturn(failedFuture(new TransactionalIdNotFoundException(transactionalId + " not found")));
+        Mockito.when(admin.describeTransactions(singleton(transactionalId))).thenReturn(result);
+
+        execute(args);
+        assertNormalExit();
+
+        assertHangingTransaction(
+            topicPartition,
+            producerId,
+            producerEpoch,
+            coordinatorEpoch,
+            txnStartOffset,
+            lastTimestamp
+        );
+    }
+
+    private <T> KafkaFuture<T> failedFuture(Exception e) {
+        KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(e);
+        return future;
+    }
+
+    @Test
+    public void testFindHangingDoesNotFilterByTransactionInProgressWithDifferentPartitions() throws Exception {
+        TopicPartition topicPartition = new TopicPartition("foo", 5);
+
+        String[] args = new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "find-hanging",
+            "--topic",
+            topicPartition.topic(),
+            "--partition",
+            String.valueOf(topicPartition.partition())
+        };
+
+        long producerId = 132L;
+        short producerEpoch = 5;
+        long lastTimestamp = time.milliseconds() - TimeUnit.MINUTES.toMillis(60);
+        int coordinatorEpoch = 19;
+        long txnStartOffset = 29384L;
+
+        expectDescribeProducers(
+            topicPartition,
+            producerId,
+            producerEpoch,
+            lastTimestamp,
+            OptionalInt.of(coordinatorEpoch),
+            OptionalLong.of(txnStartOffset)
+        );
+
+        String transactionalId = "bar";
+        TransactionListing listing = new TransactionListing(
+            transactionalId,
+            producerId,
+            TransactionState.ONGOING
+        );
+
+        expectListTransactions(
+            new ListTransactionsOptions().filterProducerIds(singleton(producerId)),
+            singletonMap(1, Collections.singletonList(listing))
+        );
+
+        // Although there is a transaction in progress from the same
+        // producer epoch, it does not include the topic partition we
+        // found when describing producers.
+        TransactionDescription description = new TransactionDescription(
+            1,
+            TransactionState.ONGOING,
+            producerId,
+            producerEpoch,
+            60000,
+            OptionalLong.of(time.milliseconds()),
+            singleton(new TopicPartition("foo", 10))
+        );
+
+        expectDescribeTransactions(singletonMap(transactionalId, description));
+
+        execute(args);
+        assertNormalExit();
+
+        assertHangingTransaction(
+            topicPartition,
+            producerId,
+            producerEpoch,
+            coordinatorEpoch,
+            txnStartOffset,
+            lastTimestamp
+        );
+    }
+
+    private void assertHangingTransaction(
+        TopicPartition topicPartition,
+        long producerId,
+        short producerEpoch,
+        int coordinatorEpoch,
+        long txnStartOffset,
+        long lastTimestamp
+    ) throws Exception {
+        List<List<String>> table = readOutputAsTable();
+        assertEquals(2, table.size());
+
+        List<String> expectedHeaders = asList(TransactionsCommand.FindHangingTransactionsCommand.HEADERS);
+        assertEquals(expectedHeaders, table.get(0));
+
+        long durationMinutes = TimeUnit.MILLISECONDS.toMinutes(time.milliseconds() - lastTimestamp);
+
+        List<String> expectedRow = asList(
+            topicPartition.topic(),
+            String.valueOf(topicPartition.partition()),
+            String.valueOf(producerId),
+            String.valueOf(producerEpoch),
+            String.valueOf(coordinatorEpoch),
+            String.valueOf(txnStartOffset),
+            String.valueOf(lastTimestamp),
+            String.valueOf(durationMinutes)
+        );
+        assertEquals(expectedRow, table.get(1));
+    }
+
+    @Test
+    public void testFindHangingFilterByTransactionInProgressWithSamePartition() throws Exception {
+        TopicPartition topicPartition = new TopicPartition("foo", 5);
+
+        String[] args = new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "find-hanging",
+            "--topic",
+            topicPartition.topic(),
+            "--partition",
+            String.valueOf(topicPartition.partition())
+        };
+
+        long producerId = 132L;
+        short producerEpoch = 5;
+        long lastTimestamp = time.milliseconds() - TimeUnit.MINUTES.toMillis(60);
+        int coordinatorEpoch = 19;
+        long txnStartOffset = 29384L;
+
+        expectDescribeProducers(
+            topicPartition,
+            producerId,
+            producerEpoch,
+            lastTimestamp,
+            OptionalInt.of(coordinatorEpoch),
+            OptionalLong.of(txnStartOffset)
+        );
+
+        String transactionalId = "bar";
+        TransactionListing listing = new TransactionListing(
+            transactionalId,
+            producerId,
+            TransactionState.ONGOING
+        );
+
+        expectListTransactions(
+            new ListTransactionsOptions().filterProducerIds(singleton(producerId)),
+            singletonMap(1, Collections.singletonList(listing))
+        );
+
+        // The coordinator shows an active transaction with the same epoch
+        // which includes the partition, so no hanging transaction should
+        // be detected.
+        TransactionDescription description = new TransactionDescription(
+            1,
+            TransactionState.ONGOING,
+            producerId,
+            producerEpoch,
+            60000,
+            OptionalLong.of(lastTimestamp),
+            singleton(topicPartition)
+        );
+
+        expectDescribeTransactions(singletonMap(transactionalId, description));
+
+        execute(args);
+        assertNormalExit();
+        assertNoHangingTransactions();
     }
 
     private void execute(String[] args) throws Exception {
