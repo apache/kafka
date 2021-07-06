@@ -43,6 +43,10 @@ public class FindCoordinatorRequest extends AbstractRequest {
                 throw new UnsupportedVersionException("Cannot create a v" + version + " FindCoordinator request " +
                         "because we require features supported only in 2 or later.");
             }
+            if (version < 4 && !data.coordinatorKeys().isEmpty()) {
+                throw new NoBatchedFindCoordinatorsException("Cannot create a v" + version + " FindCoordinator request " +
+                        "because we require features supported only in 4 or later.");
+            }
             return new FindCoordinatorRequest(data, version);
         }
 
@@ -53,6 +57,22 @@ public class FindCoordinatorRequest extends AbstractRequest {
 
         public FindCoordinatorRequestData data() {
             return data;
+        }
+    }
+
+    /**
+     * Indicates that it is not possible to lookup coordinators in batches with FindCoordinator. Instead
+     * coordinators must be looked up one by one.
+     */
+    public static class NoBatchedFindCoordinatorsException extends UnsupportedVersionException {
+        private static final long serialVersionUID = 1L;
+
+        public NoBatchedFindCoordinatorsException(String message, Throwable cause) {
+            super(message, cause);
+        }
+
+        public NoBatchedFindCoordinatorsException(String message) {
+            super(message);
         }
     }
 
@@ -70,7 +90,11 @@ public class FindCoordinatorRequest extends AbstractRequest {
             response.setThrottleTimeMs(throttleTimeMs);
         }
         Errors error = Errors.forException(e);
-        return FindCoordinatorResponse.prepareResponse(error, Node.noNode());
+        if (version() < 4) {
+            return FindCoordinatorResponse.prepareOldResponse(error, Node.noNode());
+        } else {
+            return FindCoordinatorResponse.prepareErrorResponse(error, data.coordinatorKeys());
+        }
     }
 
     public static FindCoordinatorRequest parse(ByteBuffer buffer, short version) {

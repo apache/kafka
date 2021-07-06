@@ -112,7 +112,7 @@ versions += [
   snappy: "1.1.8.1",
   spotbugs: "4.2.2",
   zinc: "1.3.5",
-  zookeeper: "3.5.9",
+  zookeeper: "3.6.3",
   zstd: "1.5.0-2"
 ]
 libs += [
@@ -173,6 +173,7 @@ libs += [
   log4j: "io.confluent:confluent-log4j:$versions.log4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
+  dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
   mockitoCore: "org.mockito:mockito-core:$versions.mockito",
   mockitoInline: "org.mockito:mockito-inline:$versions.mockito",
   mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$versions.mockito",

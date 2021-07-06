@@ -66,6 +66,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class RepartitionOptimizingTest {
 
     private final Logger log = LoggerFactory.getLogger(RepartitionOptimizingTest.class);
