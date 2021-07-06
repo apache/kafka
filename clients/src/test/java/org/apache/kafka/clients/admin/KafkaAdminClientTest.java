@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.MockClient.RequestMatcher;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
@@ -133,6 +134,7 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.record.RecordVersion;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
@@ -6148,6 +6150,39 @@ public class KafkaAdminClientTest {
                 "Timed out waiting for retry");
             env.kafkaClient().respond(prepareMetadataResponse(cluster, Errors.NONE));
             assertEquals(0, result.listings().get().size());
+        }
+    }
+
+    /**
+     * The {@link org.apache.kafka.clients.MockClient} methods that take a
+     * {@link org.apache.kafka.clients.MockClient.RequestMatcher} state that if the
+     * {@link RequestMatcher} returns <code>false</code> from its
+     * {@link org.apache.kafka.clients.MockClient.RequestMatcher#matches(AbstractRequest) matches}
+     * method, that an {@link IllegalStateException} should be thrown.
+     */
+    @Test
+    public void testRequestMatcherFailureThrowsException() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            // Here we return false in our RequestMatcher to tickle the IllegalStateException to
+            // be thrown.
+            env.kafkaClient().prepareUnsupportedVersionResponse(request -> false);
+
+            DescribeClusterOptions options = new DescribeClusterOptions();
+            DescribeClusterResult result = env.adminClient().describeCluster(options);
+
+            try {
+                result.clusterId().get();
+                fail("get() should throw ExecutionException");
+            } catch (ExecutionException e1) {
+                // Inside the ExecutionException should be a KafkaException...
+                assertTrue(e1.getCause() instanceof KafkaException);
+                KafkaException e2 = (KafkaException) e1.getCause();
+
+                // ...and inside our KafkaException should be our IllegalStateException
+                assertTrue(e2.getCause() instanceof IllegalStateException);
+                IllegalStateException e3 = (IllegalStateException) e2.getCause();
+                assertTrue(e3.getMessage().contains("Request matcher did not match next-in-line request"));
+            }
         }
     }
 

@@ -1161,7 +1161,15 @@ public class KafkaAdminClient extends AdminClient {
                         requestBuilder, now, true, timeoutMs, null);
                     log.debug("Sending {} to {}. correlationId={}, timeoutMs={}",
                         requestBuilder, node, clientRequest.correlationId(), timeoutMs);
-                    client.send(clientRequest, now);
+
+                    try {
+                        client.send(clientRequest, now);
+                    } catch (Throwable t) {
+                        call.fail(now, new KafkaException(String.format(
+                            "Internal error sending %s to %s.", call.callName, node), t));
+                        continue;
+                    }
+
                     callsInFlight.put(node.idString(), call);
                     correlationIdToCalls.put(clientRequest.correlationId(), call);
                     break;
