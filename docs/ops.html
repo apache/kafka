@@ -845,6 +845,11 @@ us-west->us-east.replication.policy.separator = _
     If you need further control over how replicated topics are named, you can implement a custom <code>ReplicationPolicy</code> and override <code>replication.policy.class</code> (default is <code>DefaultReplicationPolicy</code>) in the MirrorMaker configuration.
   </p>
 
+  <p>
+    As a special case, MirrorMaker includes <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror-client/src/main/java/org/apache/kafka/connect/mirror/IdentityReplicationPolicy.java">IdentityReplicationPolicy</a> (since version 3.0.0), which does not rename topics. This is useful for simple one-way replication topologies, where topic renaming is not strictly necessary; however, be careful not to introduce cycles when using <code>IdentityReplicationPolicy</code>, since this can result in the same records being replicated in an infinite loop.
+  </p>
+
+
   <h5 class="anchor-heading"><a id="georeplication-config-conflicts" class="anchor-link"></a><a href="#georeplication-config-conflicts">Preventing Configuration Conflicts</a></h5>
 
   <p>
