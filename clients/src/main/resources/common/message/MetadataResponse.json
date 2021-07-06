@@ -66,7 +66,7 @@
       "about": "Each topic in the response.", "fields": [
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The topic error, or 0 if there was no error." },
-      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName", "nullableVersions": "10+",
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName", "nullableVersions": "12+",
         "about": "The topic name." },
       { "name": "TopicId", "type": "uuid", "versions": "10+", "ignorable": true, "about": "The topic id." },
       { "name": "IsInternal", "type": "bool", "versions": "1+", "default": "false", "ignorable": true,

@@ -71,7 +71,7 @@ public class MetadataRequest extends AbstractRequest {
             if (topicIds == null)
                 data.setTopics(null);
             else {
-                topicIds.forEach(topicId -> data.topics().add(new MetadataRequestTopic().setTopicId(topicId).setName("")));
+                topicIds.forEach(topicId -> data.topics().add(new MetadataRequestTopic().setTopicId(topicId)));
             }
 
             // It's impossible to create topic with topicId

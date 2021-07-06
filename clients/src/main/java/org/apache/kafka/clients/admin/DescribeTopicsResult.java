@@ -74,7 +74,6 @@ public class DescribeTopicsResult {
         return nameFutures;
     }
 
-
     /**
      * Return a map from topic names to futures which can be used to check the status of
      * individual topics.
@@ -87,6 +86,7 @@ public class DescribeTopicsResult {
     /**
      * Return a future which succeeds only if all the topic descriptions succeed.
      */
+    @Deprecated
     public KafkaFuture<Map<String, TopicDescription>> all() {
         return all(nameFutures);
     }

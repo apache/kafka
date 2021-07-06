@@ -726,7 +726,7 @@ object ConsumerGroupCommand extends Logging {
         val descriptionMap = adminClient.describeTopics(
           topics.asJava,
           withTimeoutMs(new DescribeTopicsOptions)
-        ).all().get.asScala
+        ).allTopicNames().get.asScala
         descriptionMap.flatMap { case (topic, description) =>
           description.partitions().asScala.map { tpInfo =>
             new TopicPartition(topic, tpInfo.partition)

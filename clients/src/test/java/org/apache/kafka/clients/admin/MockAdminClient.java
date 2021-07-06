@@ -368,7 +368,6 @@ public class MockAdminClient extends AdminClient {
         return new ListTopicsResult(future);
     }
 
-
     @Override
     synchronized public DescribeTopicsResult describeTopics(TopicCollection topics, DescribeTopicsOptions options) {
         if (topics instanceof TopicIdCollection)
@@ -376,7 +375,7 @@ public class MockAdminClient extends AdminClient {
         else if (topics instanceof TopicNameCollection)
             return DescribeTopicsResult.ofTopicNames(new HashMap<>(handleDescribeTopicsByNames(((TopicNameCollection) topics).topicNames(), options)));
         else
-            throw new IllegalArgumentException("The TopicCollection provided did not match any supported classes for deleteTopics.");
+            throw new IllegalArgumentException("The TopicCollection provided did not match any supported classes for describeTopics.");
     }
 
     private Map<String, KafkaFuture<TopicDescription>> handleDescribeTopicsByNames(Collection<String> topicNames, DescribeTopicsOptions options) {

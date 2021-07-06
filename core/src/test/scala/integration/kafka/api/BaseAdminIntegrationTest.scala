@@ -110,7 +110,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     assertFutureExceptionTypeEquals(failedCreateResult.replicationFactor("mytopic3"), classOf[TopicExistsException])
     assertFutureExceptionTypeEquals(failedCreateResult.config("mytopic3"), classOf[TopicExistsException])
 
-    val topicToDescription = client.describeTopics(topics.asJava).all.get()
+    val topicToDescription = client.describeTopics(topics.asJava).allTopicNames.get()
     assertEquals(topics.toSet, topicToDescription.keySet.asScala)
 
     val topic0 = topicToDescription.get("mytopic")

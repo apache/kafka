@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.api.{ApiVersion, KAFKA_2_8_IV0, KAFKA_3_0_IV2}
+import kafka.api.{ApiVersion, KAFKA_2_8_IV0, KAFKA_3_0_IV1}
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import kafka.zk.ZkVersion
@@ -36,8 +36,8 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
   override def generateConfigs: Seq[KafkaConfig] = {
     Seq(
       createConfig(0, KAFKA_2_8_IV0),
-      createConfig(1, KAFKA_3_0_IV2),
-      createConfig(2, KAFKA_3_0_IV2)
+      createConfig(1, KAFKA_3_0_IV1),
+      createConfig(2, KAFKA_3_0_IV1)
     )
   }
 

@@ -145,7 +145,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val controller = servers.find(_.config.brokerId == TestUtils.waitUntilControllerElected(zkClient)).get
     controller.shutdown()
     controller.awaitShutdown()
-    val topicDesc = client.describeTopics(topics.asJava).all.get()
+    val topicDesc = client.describeTopics(topics.asJava).allTopicNames.get()
     assertEquals(topics.toSet, topicDesc.keySet.asScala)
   }
 

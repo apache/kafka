@@ -110,7 +110,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     val partitions = adminClient
       .describeTopics(Collections.singletonList(testTopicName))
-      .all()
+      .allTopicNames()
       .get()
       .get(testTopicName)
       .partitions()
@@ -125,7 +125,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     val partitions = adminClient
       .describeTopics(Collections.singletonList(testTopicName))
-      .all()
+      .allTopicNames()
       .get()
       .get(testTopicName)
       .partitions()
@@ -140,7 +140,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     val partitions = adminClient
       .describeTopics(Collections.singletonList(testTopicName))
-      .all()
+      .allTopicNames()
       .get()
       .get(testTopicName)
       .partitions()
@@ -190,7 +190,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     val partitions = adminClient
       .describeTopics(Collections.singletonList(testTopicName))
-      .all()
+      .allTopicNames()
       .get()
       .get(testTopicName)
       .partitions()
@@ -491,7 +491,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     try {
       // check which partition is on broker 0 which we'll kill
       val testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
-        .all().get().asScala(testTopicName)
+        .allTopicNames().get().asScala(testTopicName)
       val partitionOnBroker0 = testTopicDescription.partitions().asScala.find(_.leader().id() == 0).get.partition()
 
       killBroker(0)
@@ -586,7 +586,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     val brokerIds = servers.map(_.config.brokerId)
     TestUtils.setReplicationThrottleForPartitions(adminClient, brokerIds, Set(tp), throttleBytes = 1)
 
-    val testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).all().get().get(testTopicName)
+    val testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).allTopicNames().get().get(testTopicName)
     val firstPartition = testTopicDesc.partitions().asScala.head
 
     val replicasOfFirstPartition = firstPartition.replicas().asScala.map(_.id())
