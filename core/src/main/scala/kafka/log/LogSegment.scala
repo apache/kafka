@@ -101,7 +101,7 @@ class LogSegment private[log] (val log: FileRecords,
 
   /* The maximum timestamp and offset we see so far */
   @volatile private var _maxTimestampAndOffsetSoFar: TimestampOffset = TimestampOffset.Unknown
-  def maxTimestampAndOffsetSoFar_= (timestampOffset: TimestampOffset) : Unit = _maxTimestampAndOffsetSoFar = timestampOffset
+  def maxTimestampAndOffsetSoFar_= (timestampOffset: TimestampOffset): Unit = _maxTimestampAndOffsetSoFar = timestampOffset
   def maxTimestampAndOffsetSoFar: TimestampOffset = {
     if (_maxTimestampAndOffsetSoFar == TimestampOffset.Unknown)
       _maxTimestampAndOffsetSoFar = timeIndex.lastEntry
@@ -527,7 +527,7 @@ class LogSegment private[log] (val log: FileRecords,
    * segment is rolled if the difference between the current wall clock time and the segment create time exceeds the
    * segment rolling time.
    */
-  def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long = {
+  def timeWaitedForRoll(now: Long, messageTimestamp: Long): Long = {
     // Load the timestamp of the first message into memory
     loadFirstBatchTimestamp()
     rollingBasedTimestamp match {
@@ -539,7 +539,7 @@ class LogSegment private[log] (val log: FileRecords,
   /**
     * @return the first batch timestamp if the timestamp is available. Otherwise return Long.MaxValue
     */
-  def getFirstBatchTimestamp() : Long = {
+  def getFirstBatchTimestamp(): Long = {
     loadFirstBatchTimestamp()
     rollingBasedTimestamp match {
       case Some(t) if t >= 0 => t
