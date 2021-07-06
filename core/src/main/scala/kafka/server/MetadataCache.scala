@@ -18,8 +18,7 @@
 package kafka.server
 
 import kafka.admin.BrokerMetadata
-
-import kafka.server.metadata.RaftMetadataCache
+import kafka.server.metadata.{RaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 import org.apache.kafka.common.message.{MetadataResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.network.ListenerName
