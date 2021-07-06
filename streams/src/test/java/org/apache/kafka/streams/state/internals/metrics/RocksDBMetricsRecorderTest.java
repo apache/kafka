@@ -100,7 +100,6 @@ public class RocksDBMetricsRecorderTest {
 
         recorder.init(streamsMetrics, TASK_ID1);
 
-//        verify(RocksDBMetrics.class);
         assertThat(recorder.taskId(), is(TASK_ID1));
     }
 
