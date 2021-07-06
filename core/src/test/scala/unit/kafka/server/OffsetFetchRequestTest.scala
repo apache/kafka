@@ -31,7 +31,7 @@ import java.util.Collections.singletonList
 import scala.jdk.CollectionConverters._
 import java.util.{Optional, Properties}
 
-class OffsetFetchRequestTest extends BaseRequestTest{
+class OffsetFetchRequestTest extends BaseRequestTest {
 
   override def brokerCount: Int = 1
 
@@ -41,6 +41,7 @@ class OffsetFetchRequestTest extends BaseRequestTest{
   val metadata = "metadata"
   val topic = "topic"
   val groupId = "groupId"
+  val groups: Seq[String] = (0 until 5).map(i => s"group$i")
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
@@ -98,7 +99,7 @@ class OffsetFetchRequestTest extends BaseRequestTest{
           Map(groupId -> tpList).asJava, false, false)
           .build(version.asInstanceOf[Short])
         val response = connectAndReceive[OffsetFetchResponse](request)
-        val groupData = response.data().groupIds().get(0)
+        val groupData = response.data().groups().get(0)
         val topicData = groupData.topics().get(0)
         val partitionData = topicData.partitions().get(0)
         verifySingleGroupResponse(version.asInstanceOf[Short],
@@ -111,11 +112,6 @@ class OffsetFetchRequestTest extends BaseRequestTest{
 
   @Test
   def testOffsetFetchRequestV8AndAbove(): Unit = {
-    val groupOne = "group1"
-    val groupTwo = "group2"
-    val groupThree = "group3"
-    val groupFour = "group4"
-    val groupFive = "group5"
 
     val topic1 = "topic1"
     val topic1List = singletonList(new TopicPartition(topic1, 0))
@@ -136,11 +132,11 @@ class OffsetFetchRequestTest extends BaseRequestTest{
     // create group to partition map to build batched offsetFetch request
     val groupToPartitionMap: util.Map[String, util.List[TopicPartition]] =
       new util.HashMap[String, util.List[TopicPartition]]()
-    groupToPartitionMap.put(groupOne, topic1List)
-    groupToPartitionMap.put(groupTwo, topic1And2List)
-    groupToPartitionMap.put(groupThree, allTopicsList)
-    groupToPartitionMap.put(groupFour, null)
-    groupToPartitionMap.put(groupFive, null)
+    groupToPartitionMap.put(groups(1), topic1List)
+    groupToPartitionMap.put(groups(2), topic1And2List)
+    groupToPartitionMap.put(groups(3), allTopicsList)
+    groupToPartitionMap.put(groups(4), null)
+    groupToPartitionMap.put(groups(5), null)
 
     createTopic(topic1)
     createTopic(topic2, numPartitions = 2)
@@ -157,42 +153,42 @@ class OffsetFetchRequestTest extends BaseRequestTest{
     }.toMap.asJava
 
     // create 5 consumers to commit offsets so we can fetch them later
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupOne)
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(1))
     commitOffsets(topic1List, topicOneOffsets)
 
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupTwo)
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(2))
     commitOffsets(topic1And2List, topicOneAndTwoOffsets)
 
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupThree)
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(3))
     commitOffsets(allTopicsList, allTopicOffsets)
 
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupFour)
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(4))
     commitOffsets(allTopicsList, allTopicOffsets)
 
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupFive)
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(5))
     commitOffsets(allTopicsList, allTopicOffsets)
 
     for (version <- 8 to ApiKeys.OFFSET_FETCH.latestVersion()) {
       val request =  new OffsetFetchRequest.Builder(groupToPartitionMap, false, false)
         .build(version.asInstanceOf[Short])
       val response = connectAndReceive[OffsetFetchResponse](request)
-      response.data().groupIds().forEach(g =>
+      response.data().groups().forEach(g =>
         g.groupId() match {
           case "group1" =>
-            verifyResponse(response.groupLevelError(groupOne),
-              response.partitionDataMap(groupOne), topic1List)
+            verifyResponse(response.groupLevelError(groups(1)),
+              response.partitionDataMap(groups(1)), topic1List)
           case "group2" =>
-            verifyResponse(response.groupLevelError(groupTwo),
-              response.partitionDataMap(groupTwo), topic1And2List)
+            verifyResponse(response.groupLevelError(groups(2)),
+              response.partitionDataMap(groups(2)), topic1And2List)
           case "group3" =>
-            verifyResponse(response.groupLevelError(groupThree),
-              response.partitionDataMap(groupThree), allTopicsList)
+            verifyResponse(response.groupLevelError(groups(3)),
+              response.partitionDataMap(groups(3)), allTopicsList)
           case "group4" =>
-            verifyResponse(response.groupLevelError(groupFour),
-              response.partitionDataMap(groupFour), allTopicsList)
+            verifyResponse(response.groupLevelError(groups(4)),
+              response.partitionDataMap(groups(4)), allTopicsList)
           case "group5" =>
-            verifyResponse(response.groupLevelError(groupFive),
-              response.partitionDataMap(groupFive), allTopicsList)
+            verifyResponse(response.groupLevelError(groups(5)),
+              response.partitionDataMap(groups(5)), allTopicsList)
         })
     }
   }

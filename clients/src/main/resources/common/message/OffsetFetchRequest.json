@@ -45,7 +45,7 @@
       { "name": "PartitionIndexes", "type": "[]int32", "versions": "0-7",
         "about": "The partition indexes we would like to fetch offsets for." }
     ]},
-    { "name": "GroupIds", "type": "[]OffsetFetchRequestGroup", "versions": "8+",
+    { "name": "Groups", "type": "[]OffsetFetchRequestGroup", "versions": "8+",
       "about": "Each group we would like to fetch offsets for", "fields": [
       { "name": "groupId", "type": "string", "versions": "8+", "entityType": "groupId",
         "about": "The group ID."},

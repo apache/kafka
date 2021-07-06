@@ -253,7 +253,7 @@ public class OffsetFetchResponseTest {
                 OffsetFetchResponseData data = new OffsetFetchResponseData(
                     new ByteBufferAccessor(latestResponse.serialize(version)), version);
                 OffsetFetchResponse oldResponse = new OffsetFetchResponse(data, version);
-                assertEquals(Errors.NONE.code(), data.groupIds().get(0).errorCode());
+                assertEquals(Errors.NONE.code(), data.groups().get(0).errorCode());
 
                 assertEquals(Errors.NONE, oldResponse.groupLevelError(groupOne));
                 assertEquals(Utils.mkMap(
@@ -352,7 +352,7 @@ public class OffsetFetchResponseTest {
             Collections.singletonMap(groupOne, partitionDataMap));
         OffsetFetchResponseData expectedData =
             new OffsetFetchResponseData()
-                .setGroupIds(Collections.singletonList(
+                .setGroups(Collections.singletonList(
                     new OffsetFetchResponseGroup()
                         .setGroupId(groupOne)
                         .setTopics(Collections.singletonList(
@@ -421,7 +421,7 @@ public class OffsetFetchResponseTest {
             Collections.singletonMap(groupOne, partitionDataMap));
         OffsetFetchResponseData expectedData =
             new OffsetFetchResponseData()
-                .setGroupIds(Collections.singletonList(
+                .setGroups(Collections.singletonList(
                     new OffsetFetchResponseGroup()
                         .setGroupId(groupOne)
                         .setTopics(Collections.singletonList(

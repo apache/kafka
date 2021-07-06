@@ -203,7 +203,7 @@ public class OffsetFetchResponse extends AbstractResponse {
             groupLevelErrors.put(groupName, errors.get(groupName));
         }
         this.data = new OffsetFetchResponseData()
-            .setGroupIds(groupList)
+            .setGroups(groupList)
             .setThrottleTimeMs(throttleTimeMs);
         this.error = null;
     }
@@ -221,7 +221,7 @@ public class OffsetFetchResponse extends AbstractResponse {
         if (version < 8) {
             this.error = version >= 2 ? Errors.forCode(data.errorCode()) : topLevelError(data);
         } else {
-            for (OffsetFetchResponseGroup group : data.groupIds()) {
+            for (OffsetFetchResponseGroup group : data.groups()) {
                 this.groupLevelErrors.put(group.groupId(), Errors.forCode(group.errorCode()));
             }
             this.error = null;
@@ -272,7 +272,7 @@ public class OffsetFetchResponse extends AbstractResponse {
             for (Map.Entry<String, Errors> entry : groupLevelErrors.entrySet()) {
                 updateErrorCounts(counts, entry.getValue());
             }
-            for (OffsetFetchResponseGroup group : data.groupIds()) {
+            for (OffsetFetchResponseGroup group : data.groups()) {
                 group.topics().forEach(topic ->
                     topic.partitions().forEach(partition ->
                         updateErrorCounts(counts, Errors.forCode(partition.errorCode()))));
@@ -306,7 +306,7 @@ public class OffsetFetchResponse extends AbstractResponse {
     private Map<TopicPartition, PartitionData> buildResponseData(String groupId) {
         Map<TopicPartition, PartitionData> responseData = new HashMap<>();
         OffsetFetchResponseGroup group = data
-            .groupIds()
+            .groups()
             .stream()
             .filter(g -> g.groupId().equals(groupId))
             .collect(Collectors.toList())

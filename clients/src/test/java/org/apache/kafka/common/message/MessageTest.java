@@ -708,13 +708,13 @@ public final class MessageTest {
                 .setPartitionIndexes(Collections.singletonList(5)));
 
         OffsetFetchRequestData allPartitionData = new OffsetFetchRequestData()
-            .setGroupIds(Collections.singletonList(
+            .setGroups(Collections.singletonList(
                 new OffsetFetchRequestGroup()
                     .setGroupId(groupId)
                     .setTopics(null)));
 
         OffsetFetchRequestData specifiedPartitionData = new OffsetFetchRequestData()
-            .setGroupIds(Collections.singletonList(
+            .setGroups(Collections.singletonList(
                 new OffsetFetchRequestGroup()
                     .setGroupId(groupId)
                     .setTopics(topic)))
@@ -732,7 +732,7 @@ public final class MessageTest {
 
         Supplier<OffsetFetchResponseData> response =
             () -> new OffsetFetchResponseData()
-                .setGroupIds(Collections.singletonList(
+                .setGroups(Collections.singletonList(
                     new OffsetFetchResponseGroup()
                         .setGroupId(groupId)
                         .setTopics(Collections.singletonList(
@@ -804,7 +804,7 @@ public final class MessageTest {
                 .setTopics(null);
 
         OffsetFetchRequestData requestData = new OffsetFetchRequestData()
-            .setGroupIds(Arrays.asList(group1, group2, group3, group4, group5))
+            .setGroups(Arrays.asList(group1, group2, group3, group4, group5))
             .setRequireStable(true);
 
         testAllMessageRoundTripsOffsetFetchV8AndAbove(requestData);
@@ -877,7 +877,7 @@ public final class MessageTest {
 
         Supplier<OffsetFetchResponseData> response =
             () -> new OffsetFetchResponseData()
-                .setGroupIds(Arrays.asList(responseGroup1, responseGroup2, responseGroup3,
+                .setGroups(Arrays.asList(responseGroup1, responseGroup2, responseGroup3,
                     responseGroup4, responseGroup5))
                 .setThrottleTimeMs(10);
         for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {

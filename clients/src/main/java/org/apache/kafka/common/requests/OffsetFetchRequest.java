@@ -113,7 +113,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                     .setTopics(topics));
             }
             this.data = new OffsetFetchRequestData()
-                .setGroupIds(groups)
+                .setGroups(groups)
                 .setRequireStable(requireStable);
             this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
         }
@@ -124,7 +124,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                 throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
                     "v" + version + ", but we need v2 or newer to request all topic partitions.");
             }
-            if (data.groupIds().size() > 1 && version < 8) {
+            if (data.groups().size() > 1 && version < 8) {
                 throw new NoBatchedOffsetFetchRequestException("Broker does not support"
                     + " batching groups for fetch offset request on version " + version);
             }
@@ -142,8 +142,8 @@ public class OffsetFetchRequest extends AbstractRequest {
             // convert data to use the appropriate version since version 8 uses different format
             if (version < 8) {
                 OffsetFetchRequestData oldDataFormat = null;
-                if (!data.groupIds().isEmpty()) {
-                    OffsetFetchRequestGroup group = data.groupIds().get(0);
+                if (!data.groups().isEmpty()) {
+                    OffsetFetchRequestGroup group = data.groups().get(0);
                     String groupName = group.groupId();
                     List<OffsetFetchRequestTopics> topics = group.topics();
                     List<OffsetFetchRequestTopic> oldFormatTopics = null;
@@ -163,7 +163,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                 }
                 return new OffsetFetchRequest(oldDataFormat == null ? data : oldDataFormat, version);
             } else {
-                if (data.groupIds().isEmpty()) {
+                if (data.groups().isEmpty()) {
                     String groupName = data.groupId();
                     List<OffsetFetchRequestTopic> oldFormatTopics = data.topics();
                     List<OffsetFetchRequestTopics> topics = null;
@@ -177,7 +177,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                     }
                     OffsetFetchRequestData convertedDataFormat =
                         new OffsetFetchRequestData()
-                            .setGroupIds(Collections.singletonList(
+                            .setGroups(Collections.singletonList(
                                 new OffsetFetchRequestGroup()
                                     .setGroupId(groupName)
                                     .setTopics(topics)))
@@ -229,7 +229,7 @@ public class OffsetFetchRequest extends AbstractRequest {
 
     public Map<String, List<TopicPartition>> groupIdsToPartitions() {
         Map<String, List<TopicPartition>> groupIdsToPartitions = new HashMap<>();
-        for (OffsetFetchRequestGroup group : data.groupIds()) {
+        for (OffsetFetchRequestGroup group : data.groups()) {
             List<TopicPartition> tpList = null;
             if (group.topics() != ALL_TOPIC_PARTITIONS_BATCH) {
                 tpList = new ArrayList<>();
@@ -246,13 +246,13 @@ public class OffsetFetchRequest extends AbstractRequest {
 
     public Map<String, List<OffsetFetchRequestTopics>> groupIdsToTopics() {
         Map<String, List<OffsetFetchRequestTopics>> groupIdsToTopics =
-            new HashMap<>(data.groupIds().size());
-        data.groupIds().forEach(g -> groupIdsToTopics.put(g.groupId(), g.topics()));
+            new HashMap<>(data.groups().size());
+        data.groups().forEach(g -> groupIdsToTopics.put(g.groupId(), g.topics()));
         return groupIdsToTopics;
     }
 
     public List<String> groupIds() {
-        return data.groupIds()
+        return data.groups()
             .stream()
             .map(OffsetFetchRequestGroup::groupId)
             .collect(Collectors.toList());
@@ -316,7 +316,7 @@ public class OffsetFetchRequest extends AbstractRequest {
 
     public boolean isAllPartitionsForGroup(String groupId) {
         OffsetFetchRequestGroup group = data
-            .groupIds()
+            .groups()
             .stream()
             .filter(g -> g.groupId().equals(groupId))
             .collect(Collectors.toList())
