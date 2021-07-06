@@ -160,7 +160,7 @@ public class Plugins {
         return delegatingLoader.transformations();
     }
 
-    public Set<PluginDesc<Predicate>> predicates() {
+    public Set<PluginDesc<Predicate<?>>> predicates() {
         return delegatingLoader.predicates();
     }
 
