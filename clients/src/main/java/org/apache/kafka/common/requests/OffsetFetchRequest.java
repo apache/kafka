@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import java.util.Collections;
 import java.util.Map.Entry;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -86,8 +85,8 @@ public class OffsetFetchRequest extends AbstractRequest {
         }
 
         public Builder(Map<String, List<TopicPartition>> groupIdToTopicPartitionMap,
-            boolean requireStable,
-            boolean throwOnFetchStableOffsetsUnsupported) {
+                       boolean requireStable,
+                       boolean throwOnFetchStableOffsetsUnsupported) {
             super(ApiKeys.OFFSET_FETCH);
 
             List<OffsetFetchRequestGroup> groups = new ArrayList<>();
@@ -137,10 +136,10 @@ public class OffsetFetchRequest extends AbstractRequest {
                     log.trace("Fallback the requireStable flag to false as broker " +
                         "only supports OffsetFetchRequest version {}. Need " +
                         "v7 or newer to enable this feature", version);
-
-                    return new OffsetFetchRequest(data.setRequireStable(false), version);
+                    data.setRequireStable(false);
                 }
             }
+            // convert data to use the appropriate version since version 8 uses different format
             if (version < 8) {
                 OffsetFetchRequestData oldDataFormat = null;
                 if (!data.groupIds().isEmpty()) {
@@ -163,28 +162,28 @@ public class OffsetFetchRequest extends AbstractRequest {
                         .setRequireStable(data.requireStable());
                 }
                 return new OffsetFetchRequest(oldDataFormat == null ? data : oldDataFormat, version);
-            }
-            // version 8 but have used old format of request, convert to version 8 of request
-            if (data.groupIds().isEmpty()) {
-                String groupName = data.groupId();
-                List<OffsetFetchRequestTopic> oldFormatTopics = data.topics();
-                List<OffsetFetchRequestTopics> topics = null;
-                if (oldFormatTopics != null) {
-                    topics = oldFormatTopics
-                        .stream()
-                        .map(t -> new OffsetFetchRequestTopics()
-                            .setName(t.name())
-                            .setPartitionIndexes(t.partitionIndexes()))
-                        .collect(Collectors.toList());
+            } else {
+                if (data.groupIds().isEmpty()) {
+                    String groupName = data.groupId();
+                    List<OffsetFetchRequestTopic> oldFormatTopics = data.topics();
+                    List<OffsetFetchRequestTopics> topics = null;
+                    if (oldFormatTopics != null) {
+                        topics = oldFormatTopics
+                            .stream()
+                            .map(t -> new OffsetFetchRequestTopics()
+                                .setName(t.name())
+                                .setPartitionIndexes(t.partitionIndexes()))
+                            .collect(Collectors.toList());
+                    }
+                    OffsetFetchRequestData convertedDataFormat =
+                        new OffsetFetchRequestData()
+                            .setGroupIds(Collections.singletonList(
+                                new OffsetFetchRequestGroup()
+                                    .setGroupId(groupName)
+                                    .setTopics(topics)))
+                            .setRequireStable(data.requireStable());
+                    return new OffsetFetchRequest(convertedDataFormat, version);
                 }
-                OffsetFetchRequestData convertedDataFormat =
-                    new OffsetFetchRequestData()
-                        .setGroupIds(Collections.singletonList(
-                            new OffsetFetchRequestGroup()
-                                .setGroupId(groupName)
-                                .setTopics(topics)))
-                        .setRequireStable(data.requireStable());
-                return new OffsetFetchRequest(convertedDataFormat, version);
             }
             return new OffsetFetchRequest(data, version);
         }
@@ -320,21 +319,9 @@ public class OffsetFetchRequest extends AbstractRequest {
             .groupIds()
             .stream()
             .filter(g -> g.groupId().equals(groupId))
-            .collect(toSingleton());
+            .collect(Collectors.toList())
+            .get(0);
         return group.topics() == ALL_TOPIC_PARTITIONS_BATCH;
-    }
-
-    // Custom collector to filter a single element
-    private <T> Collector<T, ?, T> toSingleton() {
-        return Collectors.collectingAndThen(
-            Collectors.toList(),
-            list -> {
-                if (list.size() != 1) {
-                    throw new IllegalStateException();
-                }
-                return list.get(0);
-            }
-        );
     }
 
     @Override

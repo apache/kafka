@@ -111,7 +111,7 @@ public class OffsetFetchResponseTest {
 
                 assertEquals(throttleTimeMs, response.throttleTimeMs());
 
-                Map<TopicPartition, PartitionData> responseData = response.responseData(groupOne);
+                Map<TopicPartition, PartitionData> responseData = response.partitionDataMap(groupOne);
                 assertEquals(partitionDataMap, responseData);
                 responseData.forEach((tp, data) -> assertTrue(data.hasError()));
             }
@@ -167,13 +167,13 @@ public class OffsetFetchResponseTest {
 
                 assertEquals(throttleTimeMs, response.throttleTimeMs());
 
-                Map<TopicPartition, PartitionData> responseData1 = response.responseData(groupOne);
+                Map<TopicPartition, PartitionData> responseData1 = response.partitionDataMap(groupOne);
                 assertEquals(pd1, responseData1);
                 responseData1.forEach((tp, data) -> assertTrue(data.hasError()));
-                Map<TopicPartition, PartitionData> responseData2 = response.responseData(groupTwo);
+                Map<TopicPartition, PartitionData> responseData2 = response.partitionDataMap(groupTwo);
                 assertEquals(pd2, responseData2);
                 responseData2.forEach((tp, data) -> assertTrue(data.hasError()));
-                Map<TopicPartition, PartitionData> responseData3 = response.responseData(groupThree);
+                Map<TopicPartition, PartitionData> responseData3 = response.partitionDataMap(groupThree);
                 assertEquals(pd3, responseData3);
                 responseData3.forEach((tp, data) -> assertFalse(data.hasError()));
             }
@@ -274,7 +274,7 @@ public class OffsetFetchResponseTest {
                     ));
                 }
 
-                Map<TopicPartition, PartitionData> responseData = oldResponse.responseData(groupOne);
+                Map<TopicPartition, PartitionData> responseData = oldResponse.partitionDataMap(groupOne);
                 assertEquals(expectedDataMap, responseData);
 
                 responseData.forEach((tp, rdata) -> assertTrue(rdata.hasError()));

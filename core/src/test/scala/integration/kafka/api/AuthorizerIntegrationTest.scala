@@ -1370,14 +1370,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val offsetFetchRequest = createOffsetFetchRequestAllPartitions
     var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
     assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(group))
-    assertTrue(offsetFetchResponse.responseData(group).isEmpty)
+    assertTrue(offsetFetchResponse.partitionDataMap(group).isEmpty)
 
     // now add describe permission on the topic and verify that the offset can be fetched
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
     assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(group))
-    assertTrue(offsetFetchResponse.responseData(group).containsKey(tp))
-    assertEquals(offset, offsetFetchResponse.responseData(group).get(tp).offset)
+    assertTrue(offsetFetchResponse.partitionDataMap(group).containsKey(tp))
+    assertEquals(offset, offsetFetchResponse.partitionDataMap(group).get(tp).offset)
   }
 
   @Test
@@ -1424,59 +1424,49 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     createTopic(topic2, numPartitions = 2)
     createTopic(topic3, numPartitions = 3)
 
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupOneResource)
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupTwoResource)
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupThreeResource)
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupFourResource)
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupFiveResource)
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicOneResource)
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicTwoResource)
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicThreeResource)
+    val readAclsResources = Set(groupOneResource, groupTwoResource, groupThreeResource,
+      groupFourResource, groupFiveResource, topicOneResource, topicTwoResource, topicThreeResource)
+    readAclsResources.foreach(r => {
+      addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), r)
+    })
 
     val offset = 15L
     val leaderEpoch: Optional[Integer] = Optional.of(1)
     val metadata = "metadata"
-    val topicOneOffsets = topic1List.asScala.map{
+    val topicOneOffsets = topic1List.asScala.map {
       tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
     }.toMap.asJava
-    val topicOneAndTwoOffsets = topic1And2List.asScala.map{
+    val topicOneAndTwoOffsets = topic1And2List.asScala.map {
       tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
     }.toMap.asJava
-    val allTopicOffsets = allTopicsList.asScala.map{
+    val allTopicOffsets = allTopicsList.asScala.map {
       tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
     }.toMap.asJava
 
     // create 5 consumers to commit offsets so we can fetch them later
 
+    def commitOffsets(tpList: util.List[TopicPartition],
+                      offsets: util.Map[TopicPartition, OffsetAndMetadata]): Unit = {
+      val consumer = createConsumer()
+      consumer.assign(tpList)
+      consumer.commitSync(offsets)
+      consumer.close()
+    }
+
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupOne)
-    var consumer = createConsumer()
-    consumer.assign(topic1List)
-    consumer.commitSync(topicOneOffsets)
-    consumer.close()
+    commitOffsets(topic1List, topicOneOffsets)
 
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupTwo)
-    consumer = createConsumer()
-    consumer.assign(topic1And2List)
-    consumer.commitSync(topicOneAndTwoOffsets)
-    consumer.close()
+    commitOffsets(topic1And2List, topicOneAndTwoOffsets)
 
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupThree)
-    consumer = createConsumer()
-    consumer.assign(allTopicsList)
-    consumer.commitSync(allTopicOffsets)
-    consumer.close()
+    commitOffsets(allTopicsList, allTopicOffsets)
 
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupFour)
-    consumer = createConsumer()
-    consumer.assign(allTopicsList)
-    consumer.commitSync(allTopicOffsets)
-    consumer.close()
+    commitOffsets(allTopicsList, allTopicOffsets)
 
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupFive)
-    consumer = createConsumer()
-    consumer.assign(allTopicsList)
-    consumer.commitSync(allTopicOffsets)
-    consumer.close()
+    commitOffsets(allTopicsList, allTopicOffsets)
 
     removeAllClientAcls()
 
@@ -1499,11 +1489,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       g.groupId() match {
         case "group1" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupOne))
-          assertTrue(offsetFetchResponse.responseData(groupOne).size() == 1)
-          assertTrue(offsetFetchResponse.responseData(groupOne).containsKey(topic1List.get(0)))
+          assertTrue(offsetFetchResponse.partitionDataMap(groupOne).size() == 1)
+          assertTrue(offsetFetchResponse.partitionDataMap(groupOne).containsKey(topic1List.get(0)))
         case "group2" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupTwo))
-          val group2Response = offsetFetchResponse.responseData(groupTwo)
+          val group2Response = offsetFetchResponse.partitionDataMap(groupTwo)
           assertTrue(group2Response.size() == 3)
           assertTrue(group2Response.keySet().containsAll(topic1And2List))
           verifyPartitionData(group2Response.get(topic1And2List.get(0)))
@@ -1513,16 +1503,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group2Response.get(topic1And2List.get(2)))
         case "group3" =>
           assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, offsetFetchResponse.groupLevelError(groupThree))
-          assertTrue(offsetFetchResponse.responseData(groupThree).size() == 0)
+          assertTrue(offsetFetchResponse.partitionDataMap(groupThree).size() == 0)
         case "group4" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupFour))
-          val group4Response = offsetFetchResponse.responseData(groupFour)
+          val group4Response = offsetFetchResponse.partitionDataMap(groupFour)
           assertTrue(group4Response.size() == 1)
           assertTrue(group4Response.containsKey(allTopicsList.get(0)))
           verifyPartitionData(group4Response.get(allTopicsList.get(0)))
         case "group5" =>
           assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, offsetFetchResponse.groupLevelError(groupFive))
-          assertTrue(offsetFetchResponse.responseData(groupFive).size() == 0)
+          assertTrue(offsetFetchResponse.partitionDataMap(groupFive).size() == 0)
       })
 
     // test that after adding some of the ACLs, we get no group level authorization errors, but
@@ -1535,17 +1525,17 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       g.groupId() match {
         case "group1" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupOne))
-          assertTrue(offsetFetchResponse.responseData(groupOne).size() == 1)
-          assertTrue(offsetFetchResponse.responseData(groupOne).containsKey(topic1List.get(0)))
+          assertTrue(offsetFetchResponse.partitionDataMap(groupOne).size() == 1)
+          assertTrue(offsetFetchResponse.partitionDataMap(groupOne).containsKey(topic1List.get(0)))
         case "group2" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupTwo))
-          val group2Response = offsetFetchResponse.responseData(groupTwo)
+          val group2Response = offsetFetchResponse.partitionDataMap(groupTwo)
           assertTrue(group2Response.size() == 3)
           assertTrue(group2Response.keySet().containsAll(topic1And2List))
           topic1And2List.forEach(t => verifyPartitionData(group2Response.get(t)))
         case "group3" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupThree))
-          val group3Response = offsetFetchResponse.responseData(groupThree)
+          val group3Response = offsetFetchResponse.partitionDataMap(groupThree)
           assertTrue(group3Response.size() == 6)
           assertTrue(group3Response.keySet().containsAll(allTopicsList))
           verifyPartitionData(group3Response.get(allTopicsList.get(0)))
@@ -1559,12 +1549,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group3Response.get(allTopicsList.get(5)))
         case "group4" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupFour))
-          val group4Response = offsetFetchResponse.responseData(groupFour)
+          val group4Response = offsetFetchResponse.partitionDataMap(groupFour)
           assertTrue(group4Response.size() == 3)
           topic1And2List.forEach(t => verifyPartitionData(group4Response.get(t)))
         case "group5" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupFive))
-          val group5Response = offsetFetchResponse.responseData(groupFive)
+          val group5Response = offsetFetchResponse.partitionDataMap(groupFive)
           assertTrue(group5Response.size() == 3)
           topic1And2List.forEach(t => verifyPartitionData(group5Response.get(t)))
       })
@@ -1577,28 +1567,30 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       g.groupId() match {
         case "group1" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupOne))
-          assertTrue(offsetFetchResponse.responseData(groupOne).size() == 1)
-          assertTrue(offsetFetchResponse.responseData(groupOne).containsKey(topic1List.get(0)))
+          val group1Response = offsetFetchResponse.partitionDataMap(groupOne)
+          assertTrue(offsetFetchResponse.partitionDataMap(groupOne).size() == 1)
+          assertTrue(offsetFetchResponse.partitionDataMap(groupOne).containsKey(topic1List.get(0)))
+          topic1List.forEach(t => verifyPartitionData(group1Response.get(t)))
         case "group2" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupTwo))
-          val group2Response = offsetFetchResponse.responseData(groupTwo)
+          val group2Response = offsetFetchResponse.partitionDataMap(groupTwo)
           assertTrue(group2Response.size() == 3)
           assertTrue(group2Response.keySet().containsAll(topic1And2List))
           topic1And2List.forEach(t => verifyPartitionData(group2Response.get(t)))
         case "group3" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupThree))
-          val group3Response = offsetFetchResponse.responseData(groupThree)
+          val group3Response = offsetFetchResponse.partitionDataMap(groupThree)
           assertTrue(group3Response.size() == 6)
           assertTrue(group3Response.keySet().containsAll(allTopicsList))
           allTopicsList.forEach(t => verifyPartitionData(group3Response.get(t)))
         case "group4" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupFour))
-          val group4Response = offsetFetchResponse.responseData(groupFour)
+          val group4Response = offsetFetchResponse.partitionDataMap(groupFour)
           assertTrue(group4Response.size() == 6)
           allTopicsList.forEach(t => verifyPartitionData(group4Response.get(t)))
         case "group5" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groupFive))
-          val group5Response = offsetFetchResponse.responseData(groupFive)
+          val group5Response = offsetFetchResponse.partitionDataMap(groupFive)
           assertTrue(group5Response.size() == 6)
           allTopicsList.forEach(t => verifyPartitionData(group5Response.get(t)))
       })

@@ -52,6 +52,10 @@ public class OffsetFetchRequestTest {
     private final String group3 = "group3";
     private final String group4 = "group4";
     private final String group5 = "group5";
+    private List<String> groups = Arrays.asList(group1, group2, group3, group4, group5);
+
+    private final List<Integer> listOfVersionsNonBatchOffsetFetch = Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7);
+
 
     private OffsetFetchRequest.Builder builder;
 
@@ -156,16 +160,10 @@ public class OffsetFetchRequestTest {
                 assertTrue(request.isAllPartitionsForGroup(group4));
                 assertTrue(request.isAllPartitionsForGroup(group5));
                 OffsetFetchResponse response = request.getErrorResponse(throttleTimeMs, Errors.NONE);
-                assertEquals(Errors.NONE, response.groupLevelError(group1));
-                assertEquals(Errors.NONE, response.groupLevelError(group2));
-                assertEquals(Errors.NONE, response.groupLevelError(group3));
-                assertEquals(Errors.NONE, response.groupLevelError(group4));
-                assertEquals(Errors.NONE, response.groupLevelError(group5));
-                assertFalse(response.groupHasError(group1));
-                assertFalse(response.groupHasError(group2));
-                assertFalse(response.groupHasError(group3));
-                assertFalse(response.groupHasError(group4));
-                assertFalse(response.groupHasError(group5));
+                for (String group : groups) {
+                    assertEquals(Errors.NONE, response.groupLevelError(group));
+                    assertFalse(response.groupHasError(group));
+                }
                 assertEquals(Collections.singletonMap(Errors.NONE, 5), response.errorCounts(),
                     "Incorrect error count for version " + version);
                 assertEquals(throttleTimeMs, response.throttleTimeMs());
@@ -175,15 +173,13 @@ public class OffsetFetchRequestTest {
 
     @Test
     public void testBuildThrowForUnsupportedBatchRequest() {
-        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
-            if (version < 8) {
-                Map<String, List<TopicPartition>> groupPartitionMap = new HashMap<>();
-                groupPartitionMap.put(group1, null);
-                groupPartitionMap.put(group2, null);
-                builder = new Builder(groupPartitionMap, true, false);
-                final short finalVersion = version;
-                assertThrows(NoBatchedOffsetFetchRequestException.class, () -> builder.build(finalVersion));
-            }
+        for (int version : listOfVersionsNonBatchOffsetFetch) {
+            Map<String, List<TopicPartition>> groupPartitionMap = new HashMap<>();
+            groupPartitionMap.put(group1, null);
+            groupPartitionMap.put(group2, null);
+            builder = new Builder(groupPartitionMap, true, false);
+            final short finalVersion = (short) version;
+            assertThrows(NoBatchedOffsetFetchRequestException.class, () -> builder.build(finalVersion));
         }
     }
 
@@ -225,16 +221,14 @@ public class OffsetFetchRequestTest {
 
     @Test
     public void testBuildThrowForUnsupportedRequireStable() {
-        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
-            if (version < 8) {
-                builder = new OffsetFetchRequest.Builder(group1, true, null, true);
-                if (version < 7) {
-                    final short finalVersion = version;
-                    assertThrows(UnsupportedVersionException.class, () -> builder.build(finalVersion));
-                } else {
-                    OffsetFetchRequest request = builder.build(version);
-                    assertTrue(request.requireStable());
-                }
+        for (int version : listOfVersionsNonBatchOffsetFetch) {
+            builder = new OffsetFetchRequest.Builder(group1, true, null, true);
+            if (version < 7) {
+                final short finalVersion = (short) version;
+                assertThrows(UnsupportedVersionException.class, () -> builder.build(finalVersion));
+            } else {
+                OffsetFetchRequest request = builder.build((short) version);
+                assertTrue(request.requireStable());
             }
         }
     }

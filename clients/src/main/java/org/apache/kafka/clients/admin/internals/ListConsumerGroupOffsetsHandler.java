@@ -92,11 +92,9 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
             handleError(groupId, responseError, failed, unmapped);
         } else {
             final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
-            // if entry for group level response data is null, we are getting back an older version
-            // of the response
-            Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData =
-                response.responseData(groupId.idValue);
-            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
+            Map<TopicPartition, OffsetFetchResponse.PartitionData> partitionDataMap =
+                response.partitionDataMap(groupId.idValue);
+            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : partitionDataMap.entrySet()) {
                 final TopicPartition topicPartition = entry.getKey();
                 OffsetFetchResponse.PartitionData partitionData = entry.getValue();
                 final Errors error = partitionData.error;

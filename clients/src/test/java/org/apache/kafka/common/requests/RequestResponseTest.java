@@ -1650,16 +1650,14 @@ public class RequestResponseTest {
             return new OffsetFetchRequest.Builder(
                 "group1",
                 requireStable,
-                Collections.singletonList(
-                    new TopicPartition("test11", 1)),
+                Collections.singletonList(new TopicPartition("test11", 1)),
                 false)
                 .build((short) version);
         }
         return new OffsetFetchRequest.Builder(
             Collections.singletonMap(
                 "group1",
-                Collections.singletonList(
-                    new TopicPartition("test11", 1))),
+                Collections.singletonList(new TopicPartition("test11", 1))),
             requireStable,
             false)
             .build((short) version);

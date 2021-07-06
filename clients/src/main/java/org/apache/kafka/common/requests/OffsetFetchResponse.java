@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import java.util.Map.Entry;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
@@ -127,7 +126,7 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     /**
-     * Constructor without throttle time for version 0 to version 7.
+     * Constructor without throttle time.
      * @param error Potential coordinator or group level error code (for api version 2 and later)
      * @param responseData Fetched offset information grouped by topic-partition
      */
@@ -173,8 +172,9 @@ public class OffsetFetchResponse extends AbstractResponse {
      * @param errors Potential coordinator or group level error code
      * @param responseData Fetched offset information grouped by topic-partition and by group
      */
-    public OffsetFetchResponse(int throttleTimeMs, Map<String, Errors> errors, Map<String,
-        Map<TopicPartition, PartitionData>> responseData) {
+    public OffsetFetchResponse(int throttleTimeMs,
+                               Map<String, Errors> errors, Map<String,
+                               Map<TopicPartition, PartitionData>> responseData) {
         super(ApiKeys.OFFSET_FETCH);
         List<OffsetFetchResponseGroup> groupList = new ArrayList<>();
         for (Entry<String, Map<TopicPartition, PartitionData>> entry : responseData.entrySet()) {
@@ -287,8 +287,8 @@ public class OffsetFetchResponse extends AbstractResponse {
         return counts;
     }
 
-    //public for testing purposes
-    public Map<TopicPartition, PartitionData> responseDataV0ToV7() {
+    // package-private for testing purposes
+    Map<TopicPartition, PartitionData> responseDataV0ToV7() {
         Map<TopicPartition, PartitionData> responseData = new HashMap<>();
         for (OffsetFetchResponseTopic topic : data.topics()) {
             for (OffsetFetchResponsePartition partition : topic.partitions()) {
@@ -309,7 +309,8 @@ public class OffsetFetchResponse extends AbstractResponse {
             .groupIds()
             .stream()
             .filter(g -> g.groupId().equals(groupId))
-            .collect(toSingleton());
+            .collect(Collectors.toList())
+            .get(0);
         for (OffsetFetchResponseTopics topic : group.topics()) {
             for (OffsetFetchResponsePartitions partition : topic.partitions()) {
                 responseData.put(new TopicPartition(topic.name(), partition.partitionIndex()),
@@ -323,20 +324,7 @@ public class OffsetFetchResponse extends AbstractResponse {
         return responseData;
     }
 
-    // Custom collector to filter a single element
-    private <T> Collector<T, ?, T> toSingleton() {
-        return Collectors.collectingAndThen(
-            Collectors.toList(),
-            list -> {
-                if (list.size() != 1) {
-                    throw new IllegalStateException();
-                }
-                return list.get(0);
-            }
-        );
-    }
-
-    public Map<TopicPartition, PartitionData> responseData(String groupId) {
+    public Map<TopicPartition, PartitionData> partitionDataMap(String groupId) {
         if (groupLevelErrors.isEmpty()) {
             return responseDataV0ToV7();
         }

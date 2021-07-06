@@ -21,6 +21,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, OffsetAndMetadata}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.{AbstractResponse, OffsetFetchRequest, OffsetFetchResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -38,6 +39,8 @@ class OffsetFetchRequestTest extends BaseRequestTest{
   val offset = 15L
   val leaderEpoch: Optional[Integer] = Optional.of(3)
   val metadata = "metadata"
+  val topic = "topic"
+  val groupId = "groupId"
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
@@ -56,21 +59,17 @@ class OffsetFetchRequestTest extends BaseRequestTest{
   }
 
   @Test
-  def testOffsetFetchRequestLessThanV8(): Unit = {
-    val topic = "topic"
+  def testOffsetFetchRequestSingleGroup(): Unit = {
     createTopic(topic)
 
-    val groupId = "groupId"
     val tpList = singletonList(new TopicPartition(topic, 0))
     val topicOffsets = tpList.asScala.map{
       tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
     }.toMap.asJava
 
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    val consumer = createConsumer()
-    consumer.assign(tpList)
-    consumer.commitSync(topicOffsets)
-    consumer.close()
+    commitOffsets(tpList, topicOffsets)
+
     // testing from version 1 onward since version 0 read offsets from ZK
     for (version <- 1 to ApiKeys.OFFSET_FETCH.latestVersion()) {
       if (version < 8) {
@@ -90,16 +89,22 @@ class OffsetFetchRequestTest extends BaseRequestTest{
         if (version < 3) {
           assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs())
         }
-        assertEquals(Errors.NONE, response.error())
-        assertEquals(topic, topicData.name())
-        assertEquals(0, partitionData.partitionIndex())
-        assertEquals(offset, partitionData.committedOffset())
-        if (version >= 5) {
-          // committed leader epoch introduced with V5
-          assertEquals(leaderEpoch.get(), partitionData.committedLeaderEpoch())
-        }
-        assertEquals(metadata, partitionData.metadata())
-        assertEquals(Errors.NONE.code(), partitionData.errorCode())
+        verifySingleGroupResponse(version.asInstanceOf[Short],
+          response.error().code(), partitionData.errorCode(), topicData.name(),
+          partitionData.partitionIndex(), partitionData.committedOffset(),
+          partitionData.committedLeaderEpoch(), partitionData.metadata())
+      } else {
+        val request = new OffsetFetchRequest.Builder(
+          Map(groupId -> tpList).asJava, false, false)
+          .build(version.asInstanceOf[Short])
+        val response = connectAndReceive[OffsetFetchResponse](request)
+        val groupData = response.data().groupIds().get(0)
+        val topicData = groupData.topics().get(0)
+        val partitionData = topicData.partitions().get(0)
+        verifySingleGroupResponse(version.asInstanceOf[Short],
+          groupData.errorCode(), partitionData.errorCode(), topicData.name(),
+          partitionData.partitionIndex(), partitionData.committedOffset(),
+          partitionData.committedLeaderEpoch(), partitionData.metadata())
       }
     }
   }
@@ -129,8 +134,8 @@ class OffsetFetchRequestTest extends BaseRequestTest{
       new TopicPartition(topic3, 2))
 
     // create group to partition map to build batched offsetFetch request
-    val groupToPartitionMap: util.Map[String, util.List[TopicPartition]] = new util.HashMap[String, util
-    .List[TopicPartition]]()
+    val groupToPartitionMap: util.Map[String, util.List[TopicPartition]] =
+      new util.HashMap[String, util.List[TopicPartition]]()
     groupToPartitionMap.put(groupOne, topic1List)
     groupToPartitionMap.put(groupTwo, topic1And2List)
     groupToPartitionMap.put(groupThree, allTopicsList)
@@ -152,36 +157,21 @@ class OffsetFetchRequestTest extends BaseRequestTest{
     }.toMap.asJava
 
     // create 5 consumers to commit offsets so we can fetch them later
-
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupOne)
-    var consumer = createConsumer()
-    consumer.assign(topic1List)
-    consumer.commitSync(topicOneOffsets)
-    consumer.close()
+    commitOffsets(topic1List, topicOneOffsets)
 
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupTwo)
-    consumer = createConsumer()
-    consumer.assign(topic1And2List)
-    consumer.commitSync(topicOneAndTwoOffsets)
-    consumer.close()
+    commitOffsets(topic1And2List, topicOneAndTwoOffsets)
 
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupThree)
-    consumer = createConsumer()
-    consumer.assign(allTopicsList)
-    consumer.commitSync(allTopicOffsets)
-    consumer.close()
+    commitOffsets(allTopicsList, allTopicOffsets)
 
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupFour)
-    consumer = createConsumer()
-    consumer.assign(allTopicsList)
-    consumer.commitSync(allTopicOffsets)
-    consumer.close()
+    commitOffsets(allTopicsList, allTopicOffsets)
 
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupFive)
-    consumer = createConsumer()
-    consumer.assign(allTopicsList)
-    consumer.commitSync(allTopicOffsets)
-    consumer.close()
+    commitOffsets(allTopicsList, allTopicOffsets)
+
     for (version <- 8 to ApiKeys.OFFSET_FETCH.latestVersion()) {
       val request =  new OffsetFetchRequest.Builder(groupToPartitionMap, false, false)
         .build(version.asInstanceOf[Short])
@@ -189,33 +179,41 @@ class OffsetFetchRequestTest extends BaseRequestTest{
       response.data().groupIds().forEach(g =>
         g.groupId() match {
           case "group1" =>
-            assertEquals(Errors.NONE, response.groupLevelError(groupOne))
-            assertTrue(response.responseData(groupOne).size() == 1)
-            assertTrue(response.responseData(groupOne).containsKey(topic1List.get(0)))
+            verifyResponse(response.groupLevelError(groupOne),
+              response.partitionDataMap(groupOne), topic1List)
           case "group2" =>
-            assertEquals(Errors.NONE, response.groupLevelError(groupTwo))
-            val group2Response = response.responseData(groupTwo)
-            assertTrue(group2Response.size() == 3)
-            assertTrue(group2Response.keySet().containsAll(topic1And2List))
-            topic1And2List.forEach(t => verifyPartitionData(group2Response.get(t)))
+            verifyResponse(response.groupLevelError(groupTwo),
+              response.partitionDataMap(groupTwo), topic1And2List)
           case "group3" =>
-            assertEquals(Errors.NONE, response.groupLevelError(groupThree))
-            val group3Response = response.responseData(groupThree)
-            assertTrue(group3Response.size() == 6)
-            assertTrue(group3Response.keySet().containsAll(allTopicsList))
-            allTopicsList.forEach(t => verifyPartitionData(group3Response.get(t)))
+            verifyResponse(response.groupLevelError(groupThree),
+              response.partitionDataMap(groupThree), allTopicsList)
           case "group4" =>
-            assertEquals(Errors.NONE, response.groupLevelError(groupFour))
-            val group4Response = response.responseData(groupFour)
-            assertTrue(group4Response.size() == 6)
-            allTopicsList.forEach(t => verifyPartitionData(group4Response.get(t)))
+            verifyResponse(response.groupLevelError(groupFour),
+              response.partitionDataMap(groupFour), allTopicsList)
           case "group5" =>
-            assertEquals(Errors.NONE, response.groupLevelError(groupFive))
-            val group5Response = response.responseData(groupFive)
-            assertTrue(group5Response.size() == 6)
-            allTopicsList.forEach(t => verifyPartitionData(group5Response.get(t)))
+            verifyResponse(response.groupLevelError(groupFive),
+              response.partitionDataMap(groupFive), allTopicsList)
         })
     }
+  }
+
+  private def verifySingleGroupResponse(version: Short,
+                                        responseError: Short,
+                                        partitionError: Short,
+                                        topicName: String,
+                                        partitionIndex: Integer,
+                                        committedOffset: Long,
+                                        committedLeaderEpoch: Integer,
+                                        partitionMetadata: String): Unit = {
+    assertEquals(Errors.NONE.code(), responseError)
+    assertEquals(topic, topicName)
+    assertEquals(0, partitionIndex)
+    assertEquals(offset, committedOffset)
+    if (version >= 5) {
+      assertEquals(leaderEpoch.get(), committedLeaderEpoch)
+    }
+    assertEquals(metadata, partitionMetadata)
+    assertEquals(Errors.NONE.code(), partitionError)
   }
 
   private def verifyPartitionData(partitionData: OffsetFetchResponse.PartitionData): Unit = {
@@ -223,5 +221,21 @@ class OffsetFetchRequestTest extends BaseRequestTest{
     assertEquals(offset, partitionData.offset)
     assertEquals(metadata, partitionData.metadata)
     assertEquals(leaderEpoch.get(), partitionData.leaderEpoch.get())
+  }
+
+  private def verifyResponse(groupLevelResponse: Errors,
+                             partitionData: util.Map[TopicPartition, PartitionData],
+                             topicList: util.List[TopicPartition]): Unit = {
+    assertEquals(Errors.NONE, groupLevelResponse)
+    assertTrue(partitionData.size() == topicList.size())
+    topicList.forEach(t => verifyPartitionData(partitionData.get(t)))
+  }
+
+  private def commitOffsets(tpList: util.List[TopicPartition],
+                            offsets: util.Map[TopicPartition, OffsetAndMetadata]): Unit = {
+    val consumer = createConsumer()
+    consumer.assign(tpList)
+    consumer.commitSync(offsets)
+    consumer.close()
   }
 }
