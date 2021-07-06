@@ -22,13 +22,14 @@ import kafka.server.ConfigEntityName
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.common.config.internals.QuotaConfigs
-import org.apache.kafka.common.metadata.ClientQuotaRecord
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.utils.Sanitizer
-
 import java.net.{InetAddress, UnknownHostException}
-import scala.collection.mutable
+
+import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
+
+import scala.compat.java8.OptionConverters._
 
 
 // A strict hierarchy of entities that we support
@@ -48,30 +49,32 @@ case object DefaultUserDefaultClientIdEntity extends QuotaEntity
  * Process quota metadata records as they appear in the metadata log and update quota managers and cache as necessary
  */
 class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManagers,
-                                 private[metadata] val connectionQuotas: ConnectionQuotas,
-                                 private[metadata] val quotaCache: ClientQuotaCache) extends Logging {
+                                 private[metadata] val connectionQuotas: ConnectionQuotas) extends Logging {
 
-  def handleQuotaRecord(quotaRecord: ClientQuotaRecord): Unit = {
-    val entityMap = mutable.Map[String, String]()
-    quotaRecord.entity().forEach { entityData =>
-      entityMap.put(entityData.entityType(), entityData.entityName())
+  def update(quotasDelta: ClientQuotasDelta): Unit = {
+    quotasDelta.changes().entrySet().forEach { e =>
+      update(e.getKey, e.getValue)
     }
+  }
 
-    if (entityMap.contains(ClientQuotaEntity.IP)) {
+  private def update(entity: ClientQuotaEntity, quotaDelta: ClientQuotaDelta): Unit = {
+    if (entity.entries().containsKey(ClientQuotaEntity.IP)) {
       // In the IP quota manager, None is used for default entity
-      val ipEntity = Option(entityMap(ClientQuotaEntity.IP)) match {
+      val ipEntity = Option(entity.entries().get(ClientQuotaEntity.IP)) match {
         case Some(ip) => IpEntity(ip)
         case None => DefaultIpEntity
       }
-      handleIpQuota(ipEntity, quotaRecord)
-    } else if (entityMap.contains(ClientQuotaEntity.USER) || entityMap.contains(ClientQuotaEntity.CLIENT_ID)) {
-      // Need to handle null values for default entity name, so use "getOrElse" combined with "contains" checks
-      val userVal = entityMap.getOrElse(ClientQuotaEntity.USER, null)
-      val clientIdVal = entityMap.getOrElse(ClientQuotaEntity.CLIENT_ID, null)
+      handleIpQuota(ipEntity, quotaDelta)
+    } else if (entity.entries().containsKey(ClientQuotaEntity.USER) ||
+        entity.entries().containsKey(ClientQuotaEntity.CLIENT_ID)) {
+      // These values may be null, which is why we needed to use containsKey.
+      val userVal = entity.entries().get(ClientQuotaEntity.USER)
+      val clientIdVal = entity.entries().get(ClientQuotaEntity.CLIENT_ID)
 
       // In User+Client quota managers, "<default>" is used for default entity, so we need to represent all possible
       // combinations of values, defaults, and absent entities
-      val userClientEntity = if (entityMap.contains(ClientQuotaEntity.USER) && entityMap.contains(ClientQuotaEntity.CLIENT_ID)) {
+      val userClientEntity = if (entity.entries().containsKey(ClientQuotaEntity.USER) &&
+          entity.entries().containsKey(ClientQuotaEntity.CLIENT_ID)) {
         if (userVal == null && clientIdVal == null) {
           DefaultUserDefaultClientIdEntity
         } else if (userVal == null) {
@@ -81,7 +84,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
         } else {
           ExplicitUserExplicitClientIdEntity(userVal, clientIdVal)
         }
-      } else if (entityMap.contains(ClientQuotaEntity.USER)) {
+      } else if (entity.entries().containsKey(ClientQuotaEntity.USER)) {
         if (userVal == null) {
           DefaultUserEntity
         } else {
@@ -94,16 +97,15 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
           ClientIdEntity(clientIdVal)
         }
       }
-      handleUserClientQuota(
-        userClientEntity,
-        quotaRecord
-      )
+      quotaDelta.changes().entrySet().forEach { e =>
+        handleUserClientQuotaChange(userClientEntity, e.getKey(), e.getValue().asScala.map(_.toDouble))
+      }
     } else {
-      warn(s"Ignoring unsupported quota entity ${quotaRecord.entity()}")
+      warn(s"Ignoring unsupported quota entity ${entity}.")
     }
   }
 
-  def handleIpQuota(ipEntity: QuotaEntity, quotaRecord: ClientQuotaRecord): Unit = {
+  def handleIpQuota(ipEntity: QuotaEntity, quotaDelta: ClientQuotaDelta): Unit = {
     val inetAddress = ipEntity match {
       case IpEntity(ip) =>
         try {
@@ -115,36 +117,30 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       case _ => throw new IllegalStateException("Should only handle IP quota entities here")
     }
 
-    // The connection quota only understands the connection rate limit
-    if (quotaRecord.key() != QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG) {
-      warn(s"Ignoring unexpected quota key ${quotaRecord.key()} for entity $ipEntity")
-      return
+    quotaDelta.changes().entrySet().forEach { e =>
+      // The connection quota only understands the connection rate limit
+      val quotaName = e.getKey()
+      val quotaValue = e.getValue()
+      if (!quotaName.equals(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)) {
+        warn(s"Ignoring unexpected quota key ${quotaName} for entity $ipEntity")
+      } else {
+        try {
+          connectionQuotas.updateIpConnectionRateQuota(inetAddress, quotaValue.asScala.map(_.toInt))
+        } catch {
+          case t: Throwable => error(s"Failed to update IP quota $ipEntity", t)
+        }
+      }
     }
-
-    // Convert the value to an appropriate Option for the quota manager
-    val newValue = if (quotaRecord.remove()) {
-      None
-    } else {
-      Some(quotaRecord.value).map(_.toInt)
-    }
-    try {
-      connectionQuotas.updateIpConnectionRateQuota(inetAddress, newValue)
-    } catch {
-      case t: Throwable => error(s"Failed to update IP quota $ipEntity", t)
-    }
-
-    // Update the cache
-    quotaCache.updateQuotaCache(ipEntity, quotaRecord.key, quotaRecord.value, quotaRecord.remove)
   }
 
-  def handleUserClientQuota(quotaEntity: QuotaEntity, quotaRecord: ClientQuotaRecord): Unit = {
-    val manager = quotaRecord.key() match {
+  def handleUserClientQuotaChange(quotaEntity: QuotaEntity, key: String, newValue: Option[Double]): Unit = {
+    val manager = key match {
       case QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.fetch
       case QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.produce
       case QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG => quotaManagers.request
       case QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG => quotaManagers.controllerMutation
       case _ =>
-        warn(s"Ignoring unexpected quota key ${quotaRecord.key()} for entity $quotaEntity")
+        warn(s"Ignoring unexpected quota key ${key} for entity $quotaEntity")
         return
     }
 
@@ -161,12 +157,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       case IpEntity(_) | DefaultIpEntity => throw new IllegalStateException("Should not see IP quota entities here")
     }
 
-    val quotaValue = if (quotaRecord.remove()) {
-      None
-    } else {
-      Some(new Quota(quotaRecord.value(), true))
-    }
-
+    val quotaValue = newValue.map(new Quota(_, true))
     try {
       manager.updateQuota(
         sanitizedUser = sanitizedUser,
@@ -176,7 +167,5 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     } catch {
       case t: Throwable => error(s"Failed to update user-client quota $quotaEntity", t)
     }
-
-    quotaCache.updateQuotaCache(quotaEntity, quotaRecord.key, quotaRecord.value, quotaRecord.remove)
   }
 }

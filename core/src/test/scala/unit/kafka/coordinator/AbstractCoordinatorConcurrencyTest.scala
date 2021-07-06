@@ -157,7 +157,7 @@ object AbstractCoordinatorConcurrencyTest {
   }
 
   class TestReplicaManager extends ReplicaManager(
-    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None, null, null) {
+    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None, null) {
 
     @volatile var logs: mutable.Map[TopicPartition, (Log, Long)] = _
     var producePurgatory: DelayedOperationPurgatory[DelayedProduce] = _

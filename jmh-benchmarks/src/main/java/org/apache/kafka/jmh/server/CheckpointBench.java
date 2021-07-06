@@ -88,7 +88,6 @@ public class CheckpointBench {
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
     private AlterIsrManager alterIsrManager;
-    private final MockConfigRepository configRepository = new MockConfigRepository();
 
 
     @SuppressWarnings("deprecation")
@@ -131,7 +130,6 @@ public class CheckpointBench {
                 metadataCache,
                 this.failureChannel,
                 alterIsrManager,
-                configRepository,
                 Option.empty());
         replicaManager.startup();
 

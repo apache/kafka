@@ -151,6 +151,12 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     }
   }
 
+  def addFailedPartition(topicPartition: TopicPartition): Unit = {
+    lock synchronized {
+      failedPartitions.add(topicPartition)
+    }
+  }
+
   protected def addPartitionsToFetcherThread(fetcherThread: T,
                                              initialOffsetAndEpochs: collection.Map[TopicPartition, InitialFetchState]): Unit = {
     fetcherThread.addPartitions(initialOffsetAndEpochs)

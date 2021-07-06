@@ -210,6 +210,10 @@ public final class MetadataDelta {
         featuresDelta.replay(record);
     }
 
+    /**
+     * Create removal deltas for anything which was in the base image, but which was not
+     * referenced in the snapshot records we just applied.
+     */
     public void finishSnapshot() {
         if (featuresDelta != null) featuresDelta.finishSnapshot();
         if (clusterDelta != null) clusterDelta.finishSnapshot();

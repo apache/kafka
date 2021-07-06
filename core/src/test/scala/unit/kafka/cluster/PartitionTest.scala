@@ -160,7 +160,7 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testMakeLeaderDoesNotUpdateEpochCacheForOldFormats(): Unit = {
     val leaderEpoch = 8
-    configRepository.setTopicConfig(topicPartition.topic,
+    configRepository.setTopicConfig(topicPartition.topic(),
       LogConfig.MessageFormatVersionProp, kafka.api.KAFKA_0_10_2_IV0.shortVersion)
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     log.appendAsLeader(TestUtils.records(List(

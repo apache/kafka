@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.controller.KafkaController
 import kafka.network.RequestChannel
-import kafka.server.metadata.{ClientQuotaCache, RaftMetadataCache}
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.requests.AbstractResponse
 
@@ -91,7 +91,7 @@ case class ZkSupport(adminManager: ZkAdminManager,
   override def controllerId: Option[Int] =  metadataCache.getControllerId
 }
 
-case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: RaftMetadataCache, quotaCache: ClientQuotaCache)
+case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: KRaftMetadataCache)
     extends MetadataSupport {
   override val forwardingManager: Option[ForwardingManager] = Some(fwdMgr)
   override def requireZkOrThrow(createException: => Exception): ZkSupport = throw createException
@@ -113,13 +113,9 @@ case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: RaftMetadataCac
     }
   }
 
-  override def controllerId: Option[Int] = {
-    // We send back a random controller ID when running with a Raft-based metadata quorum.
-    // Raft-based controllers are not directly accessible to clients; rather, clients can send
-    // requests destined for the controller to any broker node, and the receiving broker will
-    // automatically forward the request on the client's behalf to the active Raft-based
-    // controller  as per KIP-590.
-    metadataCache.currentImage().brokers.randomAliveBrokerId()
-  }
-
+  /**
+   * Get the broker ID to return from a MetadataResponse. This will be a broker ID, as
+   * described in KRaftMetadataCache#getControllerId. See that function for more details.
+   */
+  override def controllerId: Option[Int] = metadataCache.getControllerId
 }

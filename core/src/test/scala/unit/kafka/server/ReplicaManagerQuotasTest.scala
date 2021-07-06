@@ -30,7 +30,6 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import EasyMock._
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.MockConfigRepository
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -199,7 +198,6 @@ class ReplicaManagerQuotasTest {
 
   def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record,
                  bothReplicasInSync: Boolean = false): Unit = {
-    val configRepository = new MockConfigRepository()
     val scheduler: KafkaScheduler = createNiceMock(classOf[KafkaScheduler])
 
     //Create log which handles both a regular read and a 0 bytes read
@@ -245,7 +243,7 @@ class ReplicaManagerQuotasTest {
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     replicaManager = new ReplicaManager(configs.head, metrics, time, None, scheduler, logManager,
       new AtomicBoolean(false), quotaManager,
-      new BrokerTopicStats, MetadataCache.zkMetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager, configRepository)
+      new BrokerTopicStats, MetadataCache.zkMetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {

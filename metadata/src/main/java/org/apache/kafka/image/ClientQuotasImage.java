@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeClientQuotasRequestData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntityData;
@@ -86,6 +87,11 @@ public final class ClientQuotasImage {
                 throw new InvalidRequestException("Entity type " + component.entityType() +
                     " cannot appear more than once in the filter.");
             }
+            if (!(component.entityType().equals(IP) || component.entityType().equals(USER) ||
+                    component.entityType().equals(CLIENT_ID))) {
+                throw new UnsupportedVersionException("Unsupported entity type " +
+                        component.entityType());
+            }
             switch (component.matchType()) {
                 case MATCH_TYPE_EXACT:
                     if (component.match() == null) {
@@ -141,6 +147,9 @@ public final class ClientQuotasImage {
             }
         }
         for (Entry<String, String> entry : exactMatch.entrySet()) {
+            if (!entity.entries().containsKey(entry.getKey())) {
+                return false;
+            }
             if (!Objects.equals(entity.entries().get(entry.getKey()), entry.getValue())) {
                 return false;
             }
