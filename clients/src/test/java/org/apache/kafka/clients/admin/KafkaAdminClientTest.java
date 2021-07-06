@@ -19,7 +19,6 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.MockClient.RequestMatcher;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
@@ -6156,8 +6155,8 @@ public class KafkaAdminClientTest {
     /**
      * The {@link org.apache.kafka.clients.MockClient} methods that take a
      * {@link org.apache.kafka.clients.MockClient.RequestMatcher} state that if the
-     * {@link RequestMatcher} returns <code>false</code> from its
-     * {@link org.apache.kafka.clients.MockClient.RequestMatcher#matches(AbstractRequest) matches}
+     * {@link org.apache.kafka.clients.MockClient.RequestMatcher} returns <code>false</code> from
+     * its {@link org.apache.kafka.clients.MockClient.RequestMatcher#matches(AbstractRequest)}
      * method, that an {@link IllegalStateException} should be thrown.
      */
     @Test
