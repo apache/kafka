@@ -20,6 +20,7 @@ package org.apache.kafka.connect.runtime.isolation;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.junit.Before;
@@ -48,6 +49,8 @@ public class PluginDescTest {
         pluginLoader = new PluginClassLoader(location, new URL[0], systemLoader);
     }
 
+    static abstract class SampleTransformation implements Transformation<SourceRecord> { }
+
     @Test
     public void testRegularPluginDesc() {
         PluginDesc<Connector> connectorDesc = new PluginDesc<>(
@@ -66,8 +69,8 @@ public class PluginDescTest {
 
         assertPluginDesc(converterDesc, Converter.class, snaphotVersion, pluginLoader.location());
 
-        PluginDesc<Transformation> transformDesc = new PluginDesc<>(
-                Transformation.class,
+        PluginDesc<SampleTransformation> transformDesc = new PluginDesc<>(
+                SampleTransformation.class,
                 noVersion,
                 pluginLoader
         );
@@ -94,8 +97,8 @@ public class PluginDescTest {
 
         assertPluginDesc(converterDesc, Converter.class, snaphotVersion, location);
 
-        PluginDesc<Transformation> transformDesc = new PluginDesc<>(
-                Transformation.class,
+        PluginDesc<SampleTransformation> transformDesc = new PluginDesc<>(
+                SampleTransformation.class,
                 noVersion,
                 systemLoader
         );
@@ -161,14 +164,14 @@ public class PluginDescTest {
         assertEquals(converterDescPluginPath, converterDescClasspath);
         assertEquals(converterDescPluginPath.hashCode(), converterDescClasspath.hashCode());
 
-        PluginDesc<Transformation> transformDescPluginPath = new PluginDesc<>(
-                Transformation.class,
+        PluginDesc<Transformation<?>> transformDescPluginPath = new PluginDesc<>(
+                SampleTransformation.class,
                 null,
                 pluginLoader
         );
 
-        PluginDesc<Transformation> transformDescClasspath = new PluginDesc<>(
-                Transformation.class,
+        PluginDesc<Transformation<?>> transformDescClasspath = new PluginDesc<>(
+                SampleTransformation.class,
                 noVersion,
                 pluginLoader
         );
@@ -206,14 +209,14 @@ public class PluginDescTest {
 
         assertNewer(converterDescPluginPath, converterDescClasspath);
 
-        PluginDesc<Transformation> transformDescPluginPath = new PluginDesc<>(
-                Transformation.class,
+        PluginDesc<Transformation<?>> transformDescPluginPath = new PluginDesc<>(
+                SampleTransformation.class,
                 null,
                 pluginLoader
         );
 
-        PluginDesc<Transformation> transformDescClasspath = new PluginDesc<>(
-                Transformation.class,
+        PluginDesc<Transformation<?>> transformDescClasspath = new PluginDesc<>(
+                SampleTransformation.class,
                 regularVersion,
                 systemLoader
         );
@@ -222,7 +225,7 @@ public class PluginDescTest {
     }
 
     private static <T> void assertPluginDesc(
-            PluginDesc<T> desc,
+            PluginDesc<? extends T> desc,
             Class<? extends T> klass,
             String version,
             String location
