@@ -435,7 +435,7 @@ class KafkaServer(
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
     new ReplicaManager(config, metrics, time, Some(zkClient), kafkaScheduler, logManager, isShuttingDown, quotaManagers,
-      brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager, configRepository)
+      brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager)
   }
 
   private def initZkClient(time: Time): Unit = {

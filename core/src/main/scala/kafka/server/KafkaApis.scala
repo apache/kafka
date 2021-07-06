@@ -57,7 +57,6 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
@@ -3035,17 +3034,12 @@ class KafkaApis(val requestChannel: RequestChannel,
             new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
               .setThrottleTimeMs(requestThrottleMs)
               .setEntries(entriesData.asJava)))
-        case RaftSupport(fwdMgr, metadataCache, quotaCache) =>
-          val result = quotaCache.describeClientQuotas(
-            describeClientQuotasRequest.filter().components().asScala.toSeq,
-            describeClientQuotasRequest.filter().strict())
-          val resultAsJava = new util.HashMap[ClientQuotaEntity, util.Map[String, java.lang.Double]](result.size)
-          result.foreach { case (entity, quotas) =>
-            resultAsJava.put(entity, quotas.map { case (key, quota) => key -> Double.box(quota)}.asJava)
-          }
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-            DescribeClientQuotasResponse.fromQuotaEntities(resultAsJava, requestThrottleMs)
-          )
+        case RaftSupport(_, metadataCache) =>
+          val result = metadataCache.describeClientQuotas(describeClientQuotasRequest.data())
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+            result.setThrottleTimeMs(requestThrottleMs)
+            new DescribeClientQuotasResponse(result)
+          })
       }
     }
   }
