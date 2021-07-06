@@ -427,11 +427,11 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         }
 
 
-        public static class Key extends AbstractKeyValueTransformation {
+        public static class Key<R extends ConnectRecord<R>> extends AbstractKeyValueTransformation<R> {
 
 
         }
-        public static class Value extends AbstractKeyValueTransformation {
+        public static class Value<R extends ConnectRecord<R>> extends AbstractKeyValueTransformation<R> {
 
         }
     }
