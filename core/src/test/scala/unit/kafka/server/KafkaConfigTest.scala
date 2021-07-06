@@ -604,6 +604,9 @@ class KafkaConfigTest {
         case KafkaConfig.NodeIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.MetadataLogDirProp => // ignore string
         case KafkaConfig.ControllerListenerNamesProp => // ignore string
+        case KafkaConfig.MetadataLogSegmentMillisProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.MetadataMaxRetentionBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.MetadataMaxRetentionMillisProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
         case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
