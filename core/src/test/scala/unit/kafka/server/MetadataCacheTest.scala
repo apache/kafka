@@ -41,18 +41,16 @@ import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
 object MetadataCacheTest {
-  def zkCacheProvider(): util.stream.Stream[MetadataCache] = {
-    util.stream.Stream.of(
+  def zkCacheProvider(): util.stream.Stream[MetadataCache] =
+    util.stream.Stream.of[MetadataCache](
       MetadataCache.zkMetadataCache(1)
     )
-  }
 
-  def cacheProvider(): util.stream.Stream[MetadataCache] = {
-    util.stream.Stream.of(
+  def cacheProvider(): util.stream.Stream[MetadataCache] =
+    util.stream.Stream.of[MetadataCache](
       MetadataCache.zkMetadataCache(1),
       MetadataCache.kRaftMetadataCache(1)
     )
-  }
 
   def updateCache(cache: MetadataCache, request: UpdateMetadataRequest): Unit = {
     cache match {
