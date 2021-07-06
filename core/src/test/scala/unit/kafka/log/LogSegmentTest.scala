@@ -586,4 +586,18 @@ class LogSegmentTest {
     Utils.delete(tempDir)
   }
 
+  @Test
+  def testIndexObserveLogIndexIntervalBytes(): Unit = {
+    val seg = createSegment(0)
+    seg.append(100, RecordBatch.NO_TIMESTAMP, -1L, records(100, "100"))
+    assertEquals(0, seg.offsetIndex.entries)
+    seg.append(200, RecordBatch.NO_TIMESTAMP, -1L, records(200, "200"))
+    assertEquals(1, seg.offsetIndex.entries)
+
+    seg.offsetIndex.reset()
+    assertEquals(0, seg.offsetIndex.entries)
+
+    seg.append(300, RecordBatch.NO_TIMESTAMP, -1L, records(300, "300"))
+    assertEquals(2, seg.offsetIndex.entries)
+  }
 }
