@@ -506,14 +506,14 @@ public abstract class TransactionsCommand {
                 .required(false);
 
             subparser.addArgument("--max-transaction-timeout")
-                .help("maximum transaction timeout in minutes to limit the scope of the search")
+                .help("maximum transaction timeout in minutes to limit the scope of the search (15 minutes by default)")
                 .action(store())
                 .type(Integer.class)
                 .setDefault(15)
                 .required(false);
 
             subparser.addArgument("--topic")
-                .help("topic name to limit search to")
+                .help("topic name to limit search to (required if --partition is specified)")
                 .action(store())
                 .type(String.class)
                 .required(false);
@@ -795,11 +795,6 @@ public abstract class TransactionsCommand {
             return candidateTransactions;
         }
 
-        @FunctionalInterface
-        private interface ThrowableConsumer<T> {
-            void accept(T t) throws Exception;
-        }
-
         private static class OpenTransaction {
             private final TopicPartition topicPartition;
             private final ProducerState producerState;
@@ -881,6 +876,10 @@ public abstract class TransactionsCommand {
             }
         }
 
+        @FunctionalInterface
+        private interface ThrowableConsumer<T> {
+            void accept(T t) throws Exception;
+        }
 
         private <T> void consumeInBatches(
             List<T> list,

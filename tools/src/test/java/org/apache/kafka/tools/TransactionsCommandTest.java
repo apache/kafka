@@ -593,12 +593,59 @@ public class TransactionsCommandTest {
 
         execute(args);
         assertNormalExit();
+        assertNoHangingTransactions();
+    }
 
-        List<List<String>> table = readOutputAsTable();
-        assertEquals(1, table.size());
+    @Test
+    public void testFindHangingLookupTopicAndBrokerId() throws Exception {
+        int brokerId = 5;
+        String topic = "foo";
 
-        List<String> expectedHeaders = asList(TransactionsCommand.FindHangingTransactionsCommand.HEADERS);
-        assertEquals(expectedHeaders, table.get(0));
+        String[] args = new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "find-hanging",
+            "--broker-id",
+            String.valueOf(brokerId),
+            "--topic",
+            topic
+        };
+
+        Node node0 = new Node(0, "localhost", 9092);
+        Node node1 = new Node(1, "localhost", 9093);
+        Node node5 = new Node(5, "localhost", 9097);
+
+        TopicPartitionInfo partition0 = new TopicPartitionInfo(
+            0,
+            node0,
+            Arrays.asList(node0, node1),
+            Arrays.asList(node0, node1)
+        );
+        TopicPartitionInfo partition1 = new TopicPartitionInfo(
+            1,
+            node1,
+            Arrays.asList(node1, node5),
+            Arrays.asList(node1, node5)
+        );
+
+        TopicDescription description = new TopicDescription(
+            topic,
+            false,
+            Arrays.asList(partition0, partition1)
+        );
+        expectDescribeTopics(singletonMap(topic, description));
+
+        DescribeProducersResult result = Mockito.mock(DescribeProducersResult.class);
+        Mockito.when(result.all()).thenReturn(completedFuture(emptyMap()));
+
+        Mockito.when(admin.describeProducers(
+            Collections.singletonList(new TopicPartition(topic, 1)),
+            new DescribeProducersOptions().brokerId(brokerId)
+        )).thenReturn(result);
+
+        execute(args);
+        assertNormalExit();
+        assertNoHangingTransactions();
     }
 
     @Test
@@ -647,7 +694,10 @@ public class TransactionsCommandTest {
 
         execute(args);
         assertNormalExit();
+        assertNoHangingTransactions();
+    }
 
+    private void assertNoHangingTransactions() throws Exception {
         List<List<String>> table = readOutputAsTable();
         assertEquals(1, table.size());
 
@@ -733,23 +783,14 @@ public class TransactionsCommandTest {
         execute(args);
         assertNormalExit();
 
-        List<List<String>> table = readOutputAsTable();
-        assertEquals(2, table.size());
-
-        List<String> expectedHeaders = asList(TransactionsCommand.FindHangingTransactionsCommand.HEADERS);
-        assertEquals(expectedHeaders, table.get(0));
-
-        List<String> expectedRow = asList(
-            topicPartition.topic(),
-            String.valueOf(topicPartition.partition()),
-            String.valueOf(producerId),
-            String.valueOf(producerEpoch),
-            String.valueOf(coordinatorEpoch),
-            String.valueOf(txnStartOffset),
-            String.valueOf(lastTimestamp),
-            "60"
+        assertHangingTransaction(
+            topicPartition,
+            producerId,
+            producerEpoch,
+            coordinatorEpoch,
+            txnStartOffset,
+            lastTimestamp
         );
-        assertEquals(expectedRow, table.get(1));
     }
 
     @Test
@@ -801,23 +842,14 @@ public class TransactionsCommandTest {
         execute(args);
         assertNormalExit();
 
-        List<List<String>> table = readOutputAsTable();
-        assertEquals(2, table.size());
-
-        List<String> expectedHeaders = asList(TransactionsCommand.FindHangingTransactionsCommand.HEADERS);
-        assertEquals(expectedHeaders, table.get(0));
-
-        List<String> expectedRow = asList(
-            topicPartition.topic(),
-            String.valueOf(topicPartition.partition()),
-            String.valueOf(producerId),
-            String.valueOf(producerEpoch),
-            String.valueOf(coordinatorEpoch),
-            String.valueOf(txnStartOffset),
-            String.valueOf(lastTimestamp),
-            "60"
+        assertHangingTransaction(
+            topicPartition,
+            producerId,
+            producerEpoch,
+            coordinatorEpoch,
+            txnStartOffset,
+            lastTimestamp
         );
-        assertEquals(expectedRow, table.get(1));
     }
 
     private <T> KafkaFuture<T> failedFuture(Exception e) {
@@ -885,11 +917,31 @@ public class TransactionsCommandTest {
         execute(args);
         assertNormalExit();
 
+        assertHangingTransaction(
+            topicPartition,
+            producerId,
+            producerEpoch,
+            coordinatorEpoch,
+            txnStartOffset,
+            lastTimestamp
+        );
+    }
+
+    private void assertHangingTransaction(
+        TopicPartition topicPartition,
+        long producerId,
+        short producerEpoch,
+        int coordinatorEpoch,
+        long txnStartOffset,
+        long lastTimestamp
+    ) throws Exception {
         List<List<String>> table = readOutputAsTable();
         assertEquals(2, table.size());
 
         List<String> expectedHeaders = asList(TransactionsCommand.FindHangingTransactionsCommand.HEADERS);
         assertEquals(expectedHeaders, table.get(0));
+
+        long durationMinutes = TimeUnit.MILLISECONDS.toMinutes(time.milliseconds() - lastTimestamp);
 
         List<String> expectedRow = asList(
             topicPartition.topic(),
@@ -899,7 +951,7 @@ public class TransactionsCommandTest {
             String.valueOf(coordinatorEpoch),
             String.valueOf(txnStartOffset),
             String.valueOf(lastTimestamp),
-            "60"
+            String.valueOf(durationMinutes)
         );
         assertEquals(expectedRow, table.get(1));
     }
@@ -962,12 +1014,7 @@ public class TransactionsCommandTest {
 
         execute(args);
         assertNormalExit();
-
-        List<List<String>> table = readOutputAsTable();
-        assertEquals(1, table.size());
-
-        List<String> expectedHeaders = asList(TransactionsCommand.FindHangingTransactionsCommand.HEADERS);
-        assertEquals(expectedHeaders, table.get(0));
+        assertNoHangingTransactions();
     }
 
     private void execute(String[] args) throws Exception {
