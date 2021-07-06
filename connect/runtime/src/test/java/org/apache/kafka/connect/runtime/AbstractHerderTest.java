@@ -455,13 +455,14 @@ public class AbstractHerderTest {
         verifyAll();
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test()
     public void testConfigValidationTransformsExtendResults() throws Throwable {
         AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
 
         // 2 transform aliases defined -> 2 plugin lookups
-        Set<PluginDesc<Transformation>> transformations = new HashSet<>();
-        transformations.add(new PluginDesc<>(SampleTransformation.class, "1.0", classLoader));
+        Set<PluginDesc<Transformation<?>>> transformations = new HashSet<>();
+        transformations.add(new PluginDesc(SampleTransformation.class, "1.0", classLoader));
         EasyMock.expect(plugins.transformations()).andReturn(transformations).times(2);
 
         replayAll();
@@ -507,17 +508,18 @@ public class AbstractHerderTest {
         verifyAll();
     }
 
+    @SuppressWarnings("rawtypes")
     @Test()
     public void testConfigValidationPredicatesExtendResults() {
         AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
 
         // 2 transform aliases defined -> 2 plugin lookups
-        Set<PluginDesc<Transformation>> transformations = new HashSet<>();
-        transformations.add(new PluginDesc<>(SampleTransformation.class, "1.0", classLoader));
+        Set<PluginDesc<Transformation<?>>> transformations = new HashSet<>();
+        transformations.add(new PluginDesc(SampleTransformation.class, "1.0", classLoader));
         EasyMock.expect(plugins.transformations()).andReturn(transformations).times(1);
 
-        Set<PluginDesc<Predicate>> predicates = new HashSet<>();
-        predicates.add(new PluginDesc<>(SamplePredicate.class, "1.0", classLoader));
+        Set<PluginDesc<Predicate<?>>> predicates = new HashSet<>();
+        predicates.add(new PluginDesc(SamplePredicate.class, "1.0", classLoader));
         EasyMock.expect(plugins.predicates()).andReturn(predicates).times(2);
 
         replayAll();
