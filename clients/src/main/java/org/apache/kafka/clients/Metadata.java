@@ -217,12 +217,12 @@ public class Metadata implements Closeable {
         }
     }
 
-    public synchronized Map<String, Uuid> topicIds() {
-        return cache.topicIds();
+    public synchronized Uuid topicId(String topicName) {
+        return cache.topicId(topicName);
     }
 
-    public synchronized Map<Uuid, String> topicNames() {
-        return cache.topicNames();
+    public synchronized  String topicName(Uuid topicId) {
+        return cache.topicName(topicId);
     }
 
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {
@@ -327,20 +327,22 @@ public class Metadata implements Closeable {
         List<MetadataResponse.PartitionMetadata> partitions = new ArrayList<>();
         Map<String, Uuid> topicIds = new HashMap<>();
         for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
-            topics.add(metadata.topic());
+            String topicName = metadata.topic();
+            Uuid topicId = metadata.topicId();
+            topics.add(topicName);
             boolean changedTopicId = false;
-            if (!metadata.topicId().equals(Uuid.ZERO_UUID)) {
-                topicIds.put(metadata.topic(), metadata.topicId());
-                Uuid oldTopicId = cache.topicIds().get(metadata.topic());
-                if (oldTopicId != null && !oldTopicId.equals(metadata.topicId()))
+            if (!topicId.equals(Uuid.ZERO_UUID)) {
+                topicIds.put(topicName, topicId);
+                Uuid oldTopicId = cache.topicId(topicName);
+                if (oldTopicId != null && !oldTopicId.equals(topicId))
                     changedTopicId = true;
             }
 
-            if (!retainTopic(metadata.topic(), metadata.isInternal(), nowMs))
+            if (!retainTopic(topicName, metadata.isInternal(), nowMs))
                 continue;
 
             if (metadata.isInternal())
-                internalTopics.add(metadata.topic());
+                internalTopics.add(topicName);
 
             if (metadata.error() == Errors.NONE) {
                 for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
@@ -357,14 +359,14 @@ public class Metadata implements Closeable {
                 }
             } else {
                 if (metadata.error().exception() instanceof InvalidMetadataException) {
-                    log.debug("Requesting metadata update for topic {} due to error {}", metadata.topic(), metadata.error());
+                    log.debug("Requesting metadata update for topic {} due to error {}", topicName, metadata.error());
                     requestUpdate();
                 }
 
                 if (metadata.error() == Errors.INVALID_TOPIC_EXCEPTION)
-                    invalidTopics.add(metadata.topic());
+                    invalidTopics.add(topicName);
                 else if (metadata.error() == Errors.TOPIC_AUTHORIZATION_FAILED)
-                    unauthorizedTopics.add(metadata.topic());
+                    unauthorizedTopics.add(topicName);
             }
         }
 
@@ -391,8 +393,13 @@ public class Metadata implements Closeable {
             int newEpoch = partitionMetadata.leaderEpoch.get();
             // If the received leader epoch is at least the same as the previous one, update the metadata
             Integer currentEpoch = lastSeenLeaderEpochs.get(tp);
-            if (currentEpoch == null || newEpoch >= currentEpoch || changedTopicId) {
+            if (currentEpoch == null || newEpoch >= currentEpoch) {
                 log.debug("Updating last seen epoch for partition {} from {} to epoch {} from new metadata", tp, currentEpoch, newEpoch);
+                lastSeenLeaderEpochs.put(tp, newEpoch);
+                return Optional.of(partitionMetadata);
+            } else if (changedTopicId) {
+                log.debug("Topic ID changed, so this topic must have been recreated. " +
+                        "Removing last seen epoch {} for the old partition {} and adding epoch {} from new metadata", currentEpoch, tp, newEpoch);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
                 return Optional.of(partitionMetadata);
             } else {

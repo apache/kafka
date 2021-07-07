@@ -104,12 +104,11 @@ public class MetadataCache {
         return Optional.ofNullable(metadataByPartition.get(topicPartition));
     }
 
-    Map<String, Uuid> topicIds() {
-        return topicIds;
+    Uuid topicId(String topicName) {
+        return topicIds.get(topicName);
     }
-
-    Map<Uuid, String> topicNames() {
-        return topicNames;
+    String topicName(Uuid topicId) {
+        return topicNames.get(topicId);
     }
 
     Optional<Node> nodeById(int id) {
@@ -160,11 +159,11 @@ public class MetadataCache {
 
         // We want the most recent topic ID. We add the old one here for retained topics and then update with newest information in the MetadataResponse
         // we add if a new topic ID is added or remove if the request did not support topic IDs for this topic.
-        for (Map.Entry<String, Uuid> entry : this.topicIds.entrySet()) {
-            if (shouldRetainTopic.test(entry.getKey())) {
-                newTopicIds.put(entry.getKey(), entry.getValue());
+        this.topicIds.forEach((topicName, topicId) -> {
+            if (shouldRetainTopic.test(topicName)) {
+                newTopicIds.put(topicName, topicId);
             }
-        }
+        });
 
         for (PartitionMetadata partition : addPartitions) {
             newMetadataByPartition.put(partition.topicPartition, partition);
