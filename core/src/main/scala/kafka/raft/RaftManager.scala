@@ -254,8 +254,7 @@ class KafkaRaftManager[T](
       dataDir,
       time,
       scheduler,
-      maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-      maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+      config = MetadataLogConfig(config, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)
     )
   }
 

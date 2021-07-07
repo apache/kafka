@@ -3166,8 +3166,6 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Arrays.asList(findCoordinatorV3, describeGroups)));
 
-            // dummy response for MockCLient to handle the UnsupportedVersionException correctly
-            env.kafkaClient().prepareResponse(null);
             //Retriable FindCoordinatorResponse errors should be retried
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
 
@@ -3187,15 +3185,13 @@ public class KafkaAdminClientTest {
             final KafkaFuture<Void> results = result.deletedGroups().get("groupId");
             assertNull(results.get());
 
-            // dummy response for MockCLient to handle the UnsupportedVersionException correctly
-            env.kafkaClient().prepareResponse(null);
             //should throw error for non-retriable errors
             env.kafkaClient().prepareResponse(
                 prepareOldFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
 
             DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
             TestUtils.assertFutureError(errorResult.deletedGroups().get("groupId"), GroupAuthorizationException.class);
-
+            
             // dummy response for MockCLient to handle the UnsupportedVersionException correctly
             env.kafkaClient().prepareResponse(null);
             // Retriable errors should be retried
@@ -3249,6 +3245,54 @@ public class KafkaAdminClientTest {
 
             final KafkaFuture<Void> errorResults = errorResult.deletedGroups().get("groupId");
             assertNull(errorResults.get());
+        }
+    }
+
+    @Test
+    public void testDeleteMultipleConsumerGroupsWithOlderBroker() throws Exception {
+        final List<String> groupIds = asList("group1", "group2");
+        ApiVersion findCoordinatorV3 = new ApiVersion()
+                .setApiKey(ApiKeys.FIND_COORDINATOR.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 3);
+        ApiVersion describeGroups = new ApiVersion()
+                .setApiKey(ApiKeys.DESCRIBE_GROUPS.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion(ApiKeys.DELETE_GROUPS.latestVersion());
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(Arrays.asList(findCoordinatorV3, describeGroups)));
+
+            // Dummy response for MockClient to handle the UnsupportedVersionException correctly to switch from batched to un-batched
+            env.kafkaClient().prepareResponse(null);
+            // Retriable FindCoordinatorResponse errors should be retried
+            for (int i = 0; i < groupIds.size(); i++) {
+                env.kafkaClient().prepareResponse(
+                        prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
+            }
+            for (int i = 0; i < groupIds.size(); i++) {
+                env.kafkaClient().prepareResponse(
+                        prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            }
+
+            final DeletableGroupResultCollection validResponse = new DeletableGroupResultCollection();
+            validResponse.add(new DeletableGroupResult()
+                    .setGroupId("group1")
+                    .setErrorCode(Errors.NONE.code()));
+            validResponse.add(new DeletableGroupResult()
+                    .setGroupId("group2")
+                    .setErrorCode(Errors.NONE.code()));
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                    new DeleteGroupsResponseData()
+                            .setResults(validResponse)
+            ));
+
+            final DeleteConsumerGroupsResult result = env.adminClient()
+                    .deleteConsumerGroups(groupIds);
+
+            final KafkaFuture<Void> results = result.deletedGroups().get("group1");
+            assertNull(results.get(5, TimeUnit.SECONDS));
         }
     }
 
