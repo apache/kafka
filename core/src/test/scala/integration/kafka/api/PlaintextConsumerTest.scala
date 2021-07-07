@@ -851,7 +851,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
-  def testMultiConsumerRoundRobinAssignment(): Unit = {
+  def testMultiConsumerRoundRobinAssignor(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
 
@@ -888,7 +888,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    *    will move to consumer #10, leading to a total of (#par mod 9) partition movement
    */
   @Test
-  def testMultiConsumerStickyAssignment(): Unit = {
+  def testMultiConsumerStickyAssignor(): Unit = {
 
     def reverse(m: Map[Long, Set[TopicPartition]]) =
       m.values.toSet.flatten.map(v => (v, m.keys.filter(m(_).contains(v)).head)).toMap
@@ -934,7 +934,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * As a result, it is testing the default assignment strategy set by BaseConsumerTest
    */
   @Test
-  def testMultiConsumerDefaultAssignment(): Unit = {
+  def testMultiConsumerDefaultAssignor(): Unit = {
     // use consumers and topics defined in this class + one more topic
     val producer = createProducer()
     sendRecords(producer, numRecords = 100, tp)
@@ -963,6 +963,43 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       // remove the topic we just added and validate re-assignment
       changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers, List(topic, topic1), subscriptions)
 
+    } finally {
+      consumerPollers.foreach(_.shutdown())
+    }
+  }
+
+  /**
+   * This test re-uses BaseConsumerTest's consumers.
+   * As a result, it is testing the default assignment strategy set by BaseConsumerTest
+   * It tests the assignment results is expected using default assignor (i.e. Range assignor)
+   */
+  @Test
+  def testMultiConsumerDefaultAssignorAndVerifyAssignment(): Unit = {
+    // create two new topics, each having 3 partitions
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+
+    createTopic(topic1, 3)
+    createTopic(topic2, 3)
+
+    val consumersInGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    consumersInGroup += createConsumer()
+    consumersInGroup += createConsumer()
+
+    val tp1_0 = new TopicPartition(topic1, 0)
+    val tp1_1 = new TopicPartition(topic1, 1)
+    val tp1_2 = new TopicPartition(topic1, 2)
+    val tp2_0 = new TopicPartition(topic2, 0)
+    val tp2_1 = new TopicPartition(topic2, 1)
+    val tp2_2 = new TopicPartition(topic2, 2)
+
+    val subscriptions = Set(tp1_0, tp1_1, tp1_2, tp2_0, tp2_1, tp2_2)
+    val consumerPollers = subscribeConsumers(consumersInGroup, List(topic1, topic2))
+
+    val expectedAssignment = Buffer(Set(tp1_0, tp1_1, tp2_0, tp2_1), Set(tp1_2, tp2_2))
+
+    try {
+      validateGroupAssignment(consumerPollers, subscriptions, expectedAssignment = expectedAssignment)
     } finally {
       consumerPollers.foreach(_.shutdown())
     }
