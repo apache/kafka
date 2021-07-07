@@ -230,8 +230,8 @@ public abstract class AbstractStickyAssignorTest {
             buildSubscription(subscribedTopics, partitions(tp(topic1, 1), tp(topic2, 2))));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp(topic1, 0), tp(topic2, 1), tp(topic2, 0)), assignment.get(consumer1));
-        assertEquals(partitions(tp(topic1, 1), tp(topic2, 2)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic1, 0), tp(topic2, 1)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, 1), tp(topic2, 2), tp(topic2, 0)), assignment.get(consumer2));
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -284,9 +284,9 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
-        assertEquals(partitions(tp(topic1, 0), tp(topic2, 0)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, 0), tp(topic2, 2)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic1, 1), tp(topic2, 1)), assignment.get(consumer2));
-        assertEquals(partitions(tp(topic2, 2)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic2, 0)), assignment.get(consumer3));
 
         assertTrue(isFullyBalanced(assignment));
     }
@@ -359,8 +359,8 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer3, buildSubscription(allTopics, assignment.get(consumer3)));
         subscriptions.put(consumer4, buildSubscription(allTopics, assignment.get(consumer4)));
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp(topic2, 1), tp(topic2, 3), tp(topic1, 0), tp(topic1, 2)), assignment.get(consumer3));
-        assertEquals(partitions(tp(topic2, 2), tp(topic1, 1), tp(topic2, 0)), assignment.get(consumer4));
+        assertEquals(partitions(tp(topic2, 1), tp(topic2, 3), tp(topic1, 0), tp(topic2, 0)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic2, 2), tp(topic1, 1), tp(topic1, 2)), assignment.get(consumer4));
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));

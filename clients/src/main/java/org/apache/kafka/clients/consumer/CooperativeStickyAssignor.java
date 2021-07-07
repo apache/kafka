@@ -76,10 +76,9 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
     @Override
     protected MemberData memberData(Subscription subscription) {
         ByteBuffer buffer = subscription.userData();
-        buffer.rewind();
 
         Optional<Integer> encodedGeneration;
-        if (buffer.hasRemaining()) {
+        if (buffer != null && buffer.rewind().hasRemaining()) {
             encodedGeneration = Optional.of(buffer.getInt());
         } else {
             encodedGeneration = Optional.empty();
