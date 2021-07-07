@@ -234,7 +234,24 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>partitioner.class</code> */
     public static final String PARTITIONER_CLASS_CONFIG = "partitioner.class";
-    private static final String PARTITIONER_CLASS_DOC = "Partitioner class that implements the <code>org.apache.kafka.clients.producer.Partitioner</code> interface.";
+    private static final String PARTITIONER_CLASS_DOC = "A class to use to determine which partition to be send to when produce the records. Available options are:" +
+        "<ul>" +
+            "<li><code>org.apache.kafka.clients.producer.internals.DefaultPartitioner</code>: The default partitioner. Works with the strategy:" +
+                "<ul>" +
+                    "<li>If a partition is specified in the record, use it</li>" +
+                    "<li>If no partition is specified but a key is present choose a partition based on a hash of the key</li>" +
+                    "<li>If no partition or key is present choose the sticky partition that changes when the batch is full.</li>" +
+                "</ul>" +
+            "</li>" +
+            "<li><code>org.apache.kafka.clients.producer.RoundRobinPartitioner</code>: This partitioning strategy can be used when user wants to distribute the writes to all partitions equally.</li>" +
+            "<li><code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code>: This partitioning works with the strategy:" +
+                "<ul>" +
+                    "<li>If a partition is specified in the record, use it</li>" +
+                    "<li>Otherwise choose the sticky partition that changes when the batch is full.</li>" +
+                "</ul>" +
+            "</li>" +
+        "</ul>" +
+        "<p>Implementing the  <code>org.apache.kafka.clients.producer.Partitioner</code> interface allows you to plug in a custom partitioner.";
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
