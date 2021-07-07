@@ -105,7 +105,7 @@ public class KerberosLogin extends AbstractLogin {
         isKrbTicket = !subject.getPrivateCredentials(KerberosTicket.class).isEmpty();
 
         AppConfigurationEntry[] entries = configuration().getAppConfigurationEntry(contextName());
-        if (entries.length == 0) {
+        if (entries == null || entries.length == 0) {
             isUsingTicketCache = false;
             principal = null;
         } else {
