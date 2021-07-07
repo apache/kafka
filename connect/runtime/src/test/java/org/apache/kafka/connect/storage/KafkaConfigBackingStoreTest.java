@@ -978,7 +978,7 @@ public class KafkaConfigBackingStoreTest {
 
     @Test
     public void testRecordToRestartRequest() throws Exception {
-        ConsumerRecord record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
+        ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
                 CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
         Struct struct = RESTART_REQUEST_STRUCTS.get(0);
         SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
@@ -990,7 +990,7 @@ public class KafkaConfigBackingStoreTest {
 
     @Test
     public void testRecordToRestartRequestOnlyFailedInconsistent() throws Exception {
-        ConsumerRecord record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
+        ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
                 CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
         Struct struct = ONLY_FAILED_MISSING_STRUCT;
         SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
@@ -1002,7 +1002,7 @@ public class KafkaConfigBackingStoreTest {
 
     @Test
     public void testRecordToRestartRequestIncludeTasksInconsistent() throws Exception {
-        ConsumerRecord record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
+        ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
                 CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
         Struct struct = INLUDE_TASKS_MISSING_STRUCT;
         SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
