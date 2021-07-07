@@ -119,7 +119,7 @@
               files="ConfigKeyInfo.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(RestServer|AbstractHerder|DistributedHerder).java"/>
+              files="(RestServer|AbstractHerder|DistributedHerder|Worker).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
               files="JsonConverter.java"/>

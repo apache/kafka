@@ -230,7 +230,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
             transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
             offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
-            RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore, Runnable::run);
+            RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore, Runnable::run, Collections.emptyList());
     }
 
     @Test

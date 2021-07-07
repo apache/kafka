@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.connector.RateLimiter;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
@@ -36,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -67,6 +69,7 @@ public class ConnectorConfig extends AbstractConfig {
     protected static final String TRANSFORMS_GROUP = "Transforms";
     protected static final String PREDICATES_GROUP = "Predicates";
     protected static final String ERROR_GROUP = "Error Handling";
+    protected static final String RATE_LIMITS_GROUP = "Rate Limits";
 
     public static final String NAME_CONFIG = "name";
     private static final String NAME_DOC = "Globally unique name to use for this connector.";
@@ -108,6 +111,13 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String PREDICATES_CONFIG = "predicates";
     private static final String PREDICATES_DOC = "Aliases for the predicates used by transformations.";
     private static final String PREDICATES_DISPLAY = "Predicates";
+
+    public static final String RATE_LIMITERS_CONFIG = "rate.limiters";
+    public static final String RATE_LIMITERS_DEFAULT = String.join(", ",
+            RecordRateLimiter.class.getName(),
+            RecordBatchRateLimiter.class.getName());
+    private static final String RATE_LIMITERS_DISPLAY = "Rate Limiter";
+    private static final String RATE_LIMITERS_DOC = "List of rate limiters to apply to each task.";
 
     public static final String CONFIG_RELOAD_ACTION_CONFIG = "config.action.reload";
     private static final String CONFIG_RELOAD_ACTION_DOC =
@@ -184,6 +194,7 @@ public class ConnectorConfig extends AbstractConfig {
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS, HEADER_CONVERTER_CLASS_DEFAULT, Importance.LOW, HEADER_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, HEADER_CONVERTER_CLASS_DISPLAY)
                 .define(TRANSFORMS_CONFIG, Type.LIST, Collections.emptyList(), aliasValidator("transformation"), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY)
                 .define(PREDICATES_CONFIG, Type.LIST, Collections.emptyList(), aliasValidator("predicate"), Importance.LOW, PREDICATES_DOC, PREDICATES_GROUP, ++orderInGroup, Width.LONG, PREDICATES_DISPLAY)
+                .define(RATE_LIMITERS_CONFIG, Type.LIST, RATE_LIMITERS_DEFAULT, Importance.LOW, RATE_LIMITERS_DOC, RATE_LIMITS_GROUP, ++orderInGroup, Width.LONG, RATE_LIMITERS_DISPLAY)
                 .define(CONFIG_RELOAD_ACTION_CONFIG, Type.STRING, CONFIG_RELOAD_ACTION_RESTART,
                         in(CONFIG_RELOAD_ACTION_NONE, CONFIG_RELOAD_ACTION_RESTART), Importance.LOW,
                         CONFIG_RELOAD_ACTION_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, CONFIG_RELOAD_ACTION_DISPLAY)
@@ -198,6 +209,7 @@ public class ConnectorConfig extends AbstractConfig {
                         ERRORS_LOG_ENABLE_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.SHORT, ERRORS_LOG_ENABLE_DISPLAY)
                 .define(ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, Type.BOOLEAN, ERRORS_LOG_INCLUDE_MESSAGES_DEFAULT, Importance.MEDIUM,
                         ERRORS_LOG_INCLUDE_MESSAGES_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.SHORT, ERRORS_LOG_INCLUDE_MESSAGES_DISPLAY);
+
     }
 
     private static ConfigDef.CompositeValidator aliasValidator(String kind) {
@@ -297,6 +309,16 @@ public class ConnectorConfig extends AbstractConfig {
         }
 
         return transformations;
+    }
+
+    /**
+     * Returns the initialized list of {@link RateLimiter}s which are specified in {@link #RATE_LIMITERS_CONFIG}.
+     */
+    @SuppressWarnings({"unchecked"})
+    public <R extends ConnectRecord> Collection<RateLimiter<R>> rateLimiters() {
+        return getConfiguredInstances(RATE_LIMITERS_CONFIG, RateLimiter.class).stream()
+            .map(x -> (RateLimiter<R>) x)
+            .collect(Collectors.toList());
     }
 
     /**

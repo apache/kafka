@@ -563,7 +563,7 @@ public class ErrorHandlingTaskTest {
             taskId, sinkTask, statusListener, initialState, workerConfig,
             ClusterConfigState.EMPTY, metrics, converter, converter,
             headerConverter, sinkTransforms, consumer, pluginLoader, time,
-            retryWithToleranceOperator, workerErrantRecordReporter, statusBackingStore);
+            retryWithToleranceOperator, workerErrantRecordReporter, statusBackingStore, Collections.emptyList());
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
@@ -594,7 +594,7 @@ public class ErrorHandlingTaskTest {
             producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
             offsetReader, offsetWriter, workerConfig,
             ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,
-            statusBackingStore, (Executor) Runnable::run);
+            statusBackingStore, (Executor) Runnable::run, Collections.emptyList());
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {

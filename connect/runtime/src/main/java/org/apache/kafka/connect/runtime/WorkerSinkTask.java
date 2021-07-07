@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.connector.RateLimiter;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
@@ -96,6 +97,8 @@ class WorkerSinkTask extends WorkerTask {
     private boolean committing;
     private boolean taskStopped;
     private final WorkerErrantRecordReporter workerErrantRecordReporter;
+    private final Collection<RateLimiter<SinkRecord>> rateLimiters;
+    private final Time time;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -113,7 +116,8 @@ class WorkerSinkTask extends WorkerTask {
                           Time time,
                           RetryWithToleranceOperator retryWithToleranceOperator,
                           WorkerErrantRecordReporter workerErrantRecordReporter,
-                          StatusBackingStore statusBackingStore) {
+                          StatusBackingStore statusBackingStore,
+                          Collection<RateLimiter<SinkRecord>> rateLimiters) {
         super(id, statusListener, initialState, loader, connectMetrics,
                 retryWithToleranceOperator, time, statusBackingStore);
 
@@ -141,11 +145,16 @@ class WorkerSinkTask extends WorkerTask {
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
+        this.rateLimiters = rateLimiters;
+        this.time = time;
     }
 
     @Override
     public void initialize(TaskConfig taskConfig) {
         try {
+            for (RateLimiter<SinkRecord> rateLimiter : rateLimiters) {
+                rateLimiter.start(time);
+            }
             this.taskConfig = taskConfig.originalsStrings();
             this.context = new WorkerSinkTaskContext(consumer, this, configState);
         } catch (Throwable t) {
@@ -174,6 +183,9 @@ class WorkerSinkTask extends WorkerTask {
         Utils.closeQuietly(consumer, "consumer");
         Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
+        for (RateLimiter<SinkRecord> rateLimiter : rateLimiters) {
+            Utils.closeQuietly(rateLimiter, "rate limiters");
+        }
     }
 
     @Override
@@ -586,6 +598,7 @@ class WorkerSinkTask extends WorkerTask {
                     retryWithToleranceOperator.error());
             }
             recordBatch(messageBatch.size());
+            throttle(messageBatch, rateLimiters);
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
             currentOffsets.putAll(origOffsets);
             messageBatch.clear();

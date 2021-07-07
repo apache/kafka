@@ -393,12 +393,13 @@ public class AbstractHerderTest {
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
         assertEquals(TestSourceConnector.class.getName(), result.name());
         assertEquals(Arrays.asList(ConnectorConfig.COMMON_GROUP, ConnectorConfig.TRANSFORMS_GROUP,
-                ConnectorConfig.PREDICATES_GROUP, ConnectorConfig.ERROR_GROUP, SourceConnectorConfig.TOPIC_CREATION_GROUP), result.groups());
+                ConnectorConfig.PREDICATES_GROUP, ConnectorConfig.RATE_LIMITS_GROUP,
+                ConnectorConfig.ERROR_GROUP, SourceConnectorConfig.TOPIC_CREATION_GROUP), result.groups());
         assertEquals(2, result.errorCount());
         Map<String, ConfigInfo> infos = result.values().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
-        // Base connector config has 14 fields, connector's configs add 2
-        assertEquals(17, infos.size());
+        // Base connector config has 15 fields, connector's configs add 2
+        assertEquals(18, infos.size());
         // Missing name should generate an error
         assertEquals(ConnectorConfig.NAME_CONFIG,
                 infos.get(ConnectorConfig.NAME_CONFIG).configValue().name());
@@ -485,6 +486,7 @@ public class AbstractHerderTest {
                 ConnectorConfig.COMMON_GROUP,
                 ConnectorConfig.TRANSFORMS_GROUP,
                 ConnectorConfig.PREDICATES_GROUP,
+                ConnectorConfig.RATE_LIMITS_GROUP,
                 ConnectorConfig.ERROR_GROUP,
                 SourceConnectorConfig.TOPIC_CREATION_GROUP,
                 "Transforms: xformA",
@@ -494,7 +496,7 @@ public class AbstractHerderTest {
         assertEquals(2, result.errorCount());
         Map<String, ConfigInfo> infos = result.values().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
-        assertEquals(22, infos.size());
+        assertEquals(23, infos.size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
         assertEquals("transforms.xformA.type",
                 infos.get("transforms.xformA.type").configValue().name());
@@ -544,6 +546,7 @@ public class AbstractHerderTest {
                 ConnectorConfig.COMMON_GROUP,
                 ConnectorConfig.TRANSFORMS_GROUP,
                 ConnectorConfig.PREDICATES_GROUP,
+                ConnectorConfig.RATE_LIMITS_GROUP,
                 ConnectorConfig.ERROR_GROUP,
                 SourceConnectorConfig.TOPIC_CREATION_GROUP,
                 "Transforms: xformA",
@@ -554,7 +557,7 @@ public class AbstractHerderTest {
         assertEquals(2, result.errorCount());
         Map<String, ConfigInfo> infos = result.values().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
-        assertEquals(24, infos.size());
+        assertEquals(25, infos.size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
         assertEquals("transforms.xformA.type",
                 infos.get("transforms.xformA.type").configValue().name());
@@ -604,13 +607,14 @@ public class AbstractHerderTest {
             ConnectorConfig.COMMON_GROUP,
             ConnectorConfig.TRANSFORMS_GROUP,
             ConnectorConfig.PREDICATES_GROUP,
+            ConnectorConfig.RATE_LIMITS_GROUP,
             ConnectorConfig.ERROR_GROUP,
             SourceConnectorConfig.TOPIC_CREATION_GROUP
         );
         assertEquals(expectedGroups, result.groups());
         assertEquals(1, result.errorCount());
-        // Base connector config has 14 fields, connector's configs add 2, and 2 producer overrides
-        assertEquals(19, result.values().size());
+        // Base connector config has 15 fields, connector's configs add 2, and 2 producer overrides
+        assertEquals(20, result.values().size());
         assertTrue(result.values().stream().anyMatch(
             configInfo -> ackConfigKey.equals(configInfo.configValue().name()) && !configInfo.configValue().errors().isEmpty()));
         assertTrue(result.values().stream().anyMatch(

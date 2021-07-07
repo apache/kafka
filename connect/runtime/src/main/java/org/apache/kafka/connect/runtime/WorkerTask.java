@@ -23,6 +23,8 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.connector.RateLimiter;
+import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.runtime.AbstractStatus.State;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
@@ -34,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Locale;
+import java.util.Collection;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -282,6 +285,23 @@ abstract class WorkerTask implements Runnable {
 
             this.targetState = state;
             this.notifyAll();
+        }
+    }
+
+    protected <R extends ConnectRecord> void throttle(Collection<R> records, Collection<RateLimiter<R>> rateLimiters) {
+        long maxThrottleTime = 0L;
+        for (RateLimiter<R> rateLimiter : rateLimiters) {
+            try {
+                rateLimiter.accumulate(records);
+                maxThrottleTime = Math.max(maxThrottleTime, rateLimiter.throttleTime());
+            } catch (Throwable e) {
+                log.error("Caught exception in RateLimiter ({}). Ignoring.", rateLimiter.getClass().getName(), e);
+            }
+        }
+        // Throttling is not addative. We sleep for the max time, not the combined time.
+        if (maxThrottleTime > 0L) {
+            log.error("Throttling {} records for {} ms.", records.size(), maxThrottleTime);
+            time.sleep(maxThrottleTime);
         }
     }
 

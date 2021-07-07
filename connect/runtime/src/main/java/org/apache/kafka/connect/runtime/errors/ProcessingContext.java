@@ -164,7 +164,11 @@ class ProcessingContext implements AutoCloseable {
     public String toString(boolean includeMessage) {
         StringBuilder builder = new StringBuilder();
         builder.append("Executing stage '");
-        builder.append(stage().name());
+        if (stage() == null) {
+            builder.append("(null stage)");
+        } else {
+            builder.append(stage().name());
+        }
         builder.append("' with class '");
         builder.append(executingClass() == null ? "null" : executingClass().getName());
         builder.append('\'');

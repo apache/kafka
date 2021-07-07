@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.connector.RateLimiter;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.storage.Converter;
@@ -35,6 +36,7 @@ public class PluginScanResult {
     private final Collection<PluginDesc<HeaderConverter>> headerConverters;
     private final Collection<PluginDesc<Transformation>> transformations;
     private final Collection<PluginDesc<Predicate>> predicates;
+    private final Collection<PluginDesc<RateLimiter>> rateLimiters;
     private final Collection<PluginDesc<ConfigProvider>> configProviders;
     private final Collection<PluginDesc<ConnectRestExtension>> restExtensions;
     private final Collection<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies;
@@ -47,6 +49,7 @@ public class PluginScanResult {
             Collection<PluginDesc<HeaderConverter>> headerConverters,
             Collection<PluginDesc<Transformation>> transformations,
             Collection<PluginDesc<Predicate>> predicates,
+            Collection<PluginDesc<RateLimiter>> rateLimiters,
             Collection<PluginDesc<ConfigProvider>> configProviders,
             Collection<PluginDesc<ConnectRestExtension>> restExtensions,
             Collection<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies
@@ -56,6 +59,7 @@ public class PluginScanResult {
         this.headerConverters = headerConverters;
         this.transformations = transformations;
         this.predicates = predicates;
+        this.rateLimiters = rateLimiters;
         this.configProviders = configProviders;
         this.restExtensions = restExtensions;
         this.connectorClientConfigPolicies = connectorClientConfigPolicies;
@@ -82,6 +86,10 @@ public class PluginScanResult {
 
     public Collection<PluginDesc<Predicate>> predicates() {
         return predicates;
+    }
+
+    public Collection<PluginDesc<RateLimiter>> rateLimiters() {
+        return rateLimiters;
     }
 
     public Collection<PluginDesc<ConfigProvider>> configProviders() {

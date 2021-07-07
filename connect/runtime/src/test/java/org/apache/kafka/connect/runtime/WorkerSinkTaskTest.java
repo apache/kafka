@@ -179,7 +179,7 @@ public class WorkerSinkTaskTest {
             taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
             keyConverter, valueConverter, headerConverter,
             transformationChain, consumer, pluginLoader, time,
-            RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore);
+            RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore, Collections.emptyList());
     }
 
     @After
