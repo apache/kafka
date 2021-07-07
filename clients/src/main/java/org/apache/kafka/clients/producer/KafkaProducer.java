@@ -1280,7 +1280,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         int customPartition = partitioner.partition(
                 record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
         if (customPartition < 0) {
-            throw new InvalidPartitionException(String.format("Invalid partition: %d. Partition number should always be non-negative.", customPartition));
+            throw new IllegalArgumentException(String.format("Invalid partition: %d. Partition number should always be non-negative.", customPartition));
         }
         return customPartition;
     }

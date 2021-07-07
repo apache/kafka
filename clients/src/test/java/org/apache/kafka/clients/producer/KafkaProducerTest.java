@@ -1324,7 +1324,7 @@ public class KafkaProducerTest {
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time)) {
-            assertThrows(InvalidPartitionException.class, () -> producer.send(new ProducerRecord<>("topic", "key", "value")));
+            assertThrows(IllegalArgumentException.class, () -> producer.send(new ProducerRecord<>("topic", "key", "value")));
         }
     }
 
