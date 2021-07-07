@@ -750,7 +750,7 @@ public abstract class TransactionsCommand {
             List<TopicPartition> topicPartitions
         ) throws Exception {
             try {
-                Map<String, TopicDescription> topicDescriptions = admin.describeTopics(topics).all().get();
+                Map<String, TopicDescription> topicDescriptions = admin.describeTopics(topics).allTopicNames().get();
                 topicDescriptions.forEach((topic, description) -> {
                     description.partitions().forEach(partitionInfo -> {
                         if (!brokerId.isPresent() || hasReplica(brokerId.get(), partitionInfo)) {

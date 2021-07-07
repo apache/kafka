@@ -2294,7 +2294,7 @@ class KafkaApisTest {
 
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
       0, 0, partitionStates.asJava, Seq(broker).asJava, topicIds).build()
-    metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
+    metadataCache.asInstanceOf[ZkMetadataCache].updateMetadata(correlationId = 0, updateMetadataRequest)
 
     // 4. Send TopicMetadataReq using topicId
     val metadataReqByTopicId = new MetadataRequest.Builder(util.Arrays.asList(authorizedTopicId, unauthorizedTopicId)).build()
