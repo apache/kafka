@@ -414,6 +414,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     node.config = KafkaConfig(**kraft_broker_plus_zk_configs)
                 else:
                     node.config = KafkaConfig(**kraft_broker_configs)
+        self.colocated_nodes_started = 0
 
     def num_kraft_controllers(self, num_nodes_broker_role, controller_num_nodes_override):
         if controller_num_nodes_override < 0:
@@ -750,9 +751,23 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
             node.account.ssh(cmd)
-            # Kafka 1.0.0 and higher don't have a space between "Kafka" and "Server"
-            monitor.wait_until("Kafka\s*Server.*started", timeout_sec=timeout_sec, backoff_sec=.25,
-                               err_msg="Kafka server didn't finish startup in %d seconds" % timeout_sec)
+            # Kafka will not start node-by-node for the co-located case with >1 controller
+            # because a single node won't be a majority and cannot form a Raft quorum; there will be no Raft quorum leader
+            # for that first Kafka node to connect to.  We therefore skip the startup log message check until we know
+            # we have started a majority of the controller nodes.
+            skip_startup_log_message_check = False
+            if self.node_quorum_info.has_controller_role and self.node_quorum_info.has_broker_role:
+                self.colocated_nodes_started += 1
+                skip_startup_log_message_check = self.colocated_nodes_started < round(self.num_nodes_controller_role / 2)
+            if skip_startup_log_message_check:
+                self.logger.info("Skipping successful startup log message check due to too few co-located KRaft controllers: %i/%i" %\
+                                 (self.colocated_nodes_started, self.num_nodes_controller_role))
+                # sleep for a few seconds to make sure we can identify the pid down below
+                time.sleep(5)
+            else:
+                # Kafka 1.0.0 and higher don't have a space between "Kafka" and "Server"
+                monitor.wait_until("Kafka\s*Server.*started", timeout_sec=timeout_sec, backoff_sec=.25,
+                                   err_msg="Kafka server didn't finish startup in %d seconds" % timeout_sec)
 
         if self.quorum_info.using_zk or self.quorum_info.has_brokers: # TODO: SCRAM currently unsupported for controller quorum
             # Credentials for inter-broker communication are created before starting Kafka.
@@ -786,15 +801,29 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def stop_node(self, node, clean_shutdown=True, timeout_sec=60):
         pids = self.pids(node)
-        sig = signal.SIGTERM if clean_shutdown else signal.SIGKILL
+        force_sigkill_due_to_too_few_colocated_controllers =\
+            clean_shutdown and self.quorum_info.has_brokers and self.quorum_info.has_controllers\
+            and self.colocated_nodes_started > 0\
+            and self.colocated_nodes_started < round(self.num_nodes_controller_role / 2)
+        if force_sigkill_due_to_too_few_colocated_controllers:
+            self.logger.info("Forcing node to stop via SIGKILL due to too few co-located KRaft controllers: %i/%i" %\
+                             (self.colocated_nodes_started, self.num_nodes_controller_role))
+
+        sig = signal.SIGTERM if clean_shutdown and not force_sigkill_due_to_too_few_colocated_controllers else signal.SIGKILL
 
         for pid in pids:
             node.account.signal(pid, sig, allow_fail=False)
+        node_has_colocated_controllers = self.node_quorum_info.has_controller_role and self.node_quorum_info.has_broker_role
+        if pids and node_has_colocated_controllers:
+            self.colocated_nodes_started -= 1
 
         try:
             wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=timeout_sec,
                        err_msg="Kafka node failed to stop in %d seconds" % timeout_sec)
         except Exception:
+            if node_has_colocated_controllers:
+                # it didn't stop
+                self.colocated_nodes_started += 1
             self.thread_dump(node)
             raise
 
