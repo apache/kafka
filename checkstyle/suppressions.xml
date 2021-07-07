@@ -85,7 +85,7 @@
             files="clients[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 
     <suppress checks="NPathComplexity"
-            files="MessageTest.java"/>
+            files="MessageTest.java|OffsetFetchRequest.java"/>
 
     <!-- Clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
