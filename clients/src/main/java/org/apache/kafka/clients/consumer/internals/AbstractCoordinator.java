@@ -972,6 +972,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private synchronized void resetStateAndRejoin(final String reason) {
         resetStateAndGeneration(reason);
         requestRejoin(reason);
+        needsJoinPrepare = true;
     }
 
     synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
