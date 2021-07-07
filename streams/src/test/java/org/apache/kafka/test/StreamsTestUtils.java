@@ -20,7 +20,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -66,6 +65,19 @@ public final class StreamsTestUtils {
         return props;
     }
 
+    public static Properties getStreamsConfig(final String applicationId,
+                                              final String bootstrapServers,
+                                              final Properties additional) {
+
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name);
+        props.putAll(additional);
+        return props;
+    }
+
     public static Properties getStreamsConfig(final Serde<?> keyDeserializer,
                                               final Serde<?> valueDeserializer) {
         return getStreamsConfig(
@@ -84,8 +96,6 @@ public final class StreamsTestUtils {
         return getStreamsConfig(
             applicationId,
             "localhost:9091",
-            Serdes.ByteArraySerde.class.getName(),
-            Serdes.ByteArraySerde.class.getName(),
             additional);
     }
 

@@ -69,5 +69,10 @@ public class ConnectorStatus extends AbstractStatus<String> {
          */
         void onDeletion(String connector);
 
+        /**
+         * Invoked when the connector is restarted asynchronously by the herder on processing a restart request.
+         * @param connector The connector name
+         */
+        void onRestart(String connector);
     }
 }

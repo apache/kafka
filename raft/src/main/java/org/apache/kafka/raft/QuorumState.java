@@ -514,6 +514,16 @@ public class QuorumState {
         throw new IllegalStateException("Expected to be Leader, but current state is " + state);
     }
 
+    @SuppressWarnings("unchecked")
+    public <T> Optional<LeaderState<T>> maybeLeaderState() {
+        EpochState state = this.state;
+        if (state instanceof  LeaderState) {
+            return Optional.of((LeaderState<T>) state);
+        } else {
+            return Optional.empty();
+        }
+    }
+
     public ResignedState resignedStateOrThrow() {
         if (isResigned())
             return (ResignedState) state;

@@ -21,10 +21,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -37,10 +34,12 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
-class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V1> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
     private final String otherWindowName;
@@ -54,7 +53,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     private final Optional<String> outerJoinWindowName;
     private final boolean isLeftSide;
 
-    private final KStreamImplJoin.MaxObservedStreamTime maxObservedStreamTime;
+    private final TimeTracker sharedTimeTracker;
 
     KStreamKStreamJoin(final boolean isLeftSide,
                        final String otherWindowName,
@@ -62,7 +61,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                        final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner,
                        final boolean outer,
                        final Optional<String> outerJoinWindowName,
-                       final KStreamImplJoin.MaxObservedStreamTime maxObservedStreamTime) {
+                       final TimeTracker sharedTimeTracker) {
         this.isLeftSide = isLeftSide;
         this.otherWindowName = otherWindowName;
         if (isLeftSide) {
@@ -77,21 +76,21 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         this.joiner = joiner;
         this.outer = outer;
         this.outerJoinWindowName = outerJoinWindowName;
-        this.maxObservedStreamTime = maxObservedStreamTime;
+        this.sharedTimeTracker = sharedTimeTracker;
     }
 
     @Override
-    public Processor<K, V1> get() {
+    public org.apache.kafka.streams.processor.Processor<K, V1> get() {
         return new KStreamKStreamJoinProcessor();
     }
 
-    private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {
+    private class KStreamKStreamJoinProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, V1> {
         private WindowStore<K, V2> otherWindowStore;
         private Sensor droppedRecordsSensor;
         private Optional<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue>> outerJoinWindowStore = Optional.empty();
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
             final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
             droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
@@ -99,11 +98,20 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
             if (enableSpuriousResultFix
                 && StreamsConfig.InternalConfig.getBoolean(
-                    context().appConfigs(),
+                    context.appConfigs(),
                     ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
                     true
                 )) {
                 outerJoinWindowStore = outerJoinWindowName.map(context::getStateStore);
+                sharedTimeTracker.nextTimeToEmit = context.currentSystemTimeMs();
+
+                sharedTimeTracker.setEmitInterval(
+                    StreamsConfig.InternalConfig.getLong(
+                        context.appConfigs(),
+                        EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
+                        1000L
+                    )
+                );
             }
         }
 
@@ -130,10 +138,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
 
-            maxObservedStreamTime.advance(inputRecordTimestamp);
+            sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
 
             // Emit all non-joined records which window has closed
-            if (inputRecordTimestamp == maxObservedStreamTime.get()) {
+            if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
                 outerJoinWindowStore.ifPresent(this::emitNonJoinedOuterRecords);
             }
 
@@ -172,9 +180,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                     //
                     // This condition below allows us to process the out-of-order records without the need
                     // to hold it in the temporary outer store
-                    if (!outerJoinWindowStore.isPresent() || timeTo < maxObservedStreamTime.get()) {
+                    if (!outerJoinWindowStore.isPresent() || timeTo < sharedTimeTracker.streamTime) {
                         context().forward(key, joiner.apply(key, value, null));
                     } else {
+                        sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
                         outerJoinWindowStore.ifPresent(store -> store.put(
                             KeyAndJoinSide.make(isLeftSide, key),
                             LeftOrRightValue.make(isLeftSide, value),
@@ -186,15 +195,34 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
         @SuppressWarnings("unchecked")
         private void emitNonJoinedOuterRecords(final WindowStore<KeyAndJoinSide<K>, LeftOrRightValue> store) {
+            // calling `store.all()` creates an iterator what is an expensive operation on RocksDB;
+            // to reduce runtime cost, we try to avoid paying those cost
+
+            // only try to emit left/outer join results if there _might_ be any result records
+            if (sharedTimeTracker.minTime >= sharedTimeTracker.streamTime - joinAfterMs - joinGraceMs) {
+                return;
+            }
+            // throttle the emit frequency to a (configurable) interval;
+            // we use processing time to decouple from data properties,
+            // as throttling is a non-functional performance optimization
+            if (context.currentSystemTimeMs() < sharedTimeTracker.nextTimeToEmit) {
+                return;
+            }
+            sharedTimeTracker.advanceNextTimeToEmit();
+
+            // reset to MAX_VALUE in case the store is empty
+            sharedTimeTracker.minTime = Long.MAX_VALUE;
+
             try (final KeyValueIterator<Windowed<KeyAndJoinSide<K>>, LeftOrRightValue> it = store.all()) {
                 while (it.hasNext()) {
                     final KeyValue<Windowed<KeyAndJoinSide<K>>, LeftOrRightValue> record = it.next();
 
                     final Windowed<KeyAndJoinSide<K>> windowedKey = record.key;
                     final LeftOrRightValue value = record.value;
+                    sharedTimeTracker.minTime = windowedKey.window().start();
 
                     // Skip next records if window has not closed
-                    if (windowedKey.window().start() + joinAfterMs + joinGraceMs >= maxObservedStreamTime.get()) {
+                    if (windowedKey.window().start() + joinAfterMs + joinGraceMs >= sharedTimeTracker.streamTime) {
                         break;
                     }
 

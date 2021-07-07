@@ -18,9 +18,9 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
 import java.util.Map;
-import java.util.Objects;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableDeserializer;
 
@@ -31,13 +31,14 @@ public class KeyAndJoinSideDeserializer<K> implements WrappingNullableDeserializ
         this.keyDeserializer = keyDeserializer;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void setIfUnset(final Deserializer<K> defaultKeyDeserializer, final Deserializer<Void> defaultValueDeserializer) {
+    public void setIfUnset(final SerdeGetter getter) {
         if (keyDeserializer == null) {
-            keyDeserializer = Objects.requireNonNull(defaultKeyDeserializer, "defaultKeyDeserializer cannot be null");
+            keyDeserializer = (Deserializer<K>) getter.keySerde().deserializer();
         }
 
-        initNullableDeserializer(keyDeserializer, defaultKeyDeserializer, defaultValueDeserializer);
+        initNullableDeserializer(keyDeserializer, getter);
     }
 
     @Override

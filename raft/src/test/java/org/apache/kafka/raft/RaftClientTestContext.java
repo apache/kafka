@@ -21,15 +21,15 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -88,6 +88,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public final class RaftClientTestContext {
     public final RecordSerde<String> serde = Builder.SERDE;
     final TopicPartition metadataPartition = Builder.METADATA_PARTITION;
+    final Uuid metadataTopicId = Uuid.METADATA_TOPIC_ID;
     final int electionBackoffMaxMs = Builder.ELECTION_BACKOFF_MAX_MS;
     final int fetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
@@ -670,14 +671,14 @@ public final class RaftClientTestContext {
         return response.responses().get(0).partitions().get(0);
     }
 
-    void assertSentFetchPartitionResponse(Errors error) {
+    void assertSentFetchPartitionResponse(Errors topLevelError) {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
         assertEquals(
             1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
         RaftResponse.Outbound raftMessage = sentMessages.get(0);
         assertEquals(ApiKeys.FETCH.id, raftMessage.data.apiKey());
         FetchResponseData response = (FetchResponseData) raftMessage.data();
-        assertEquals(error, Errors.forCode(response.errorCode()));
+        assertEquals(topLevelError, Errors.forCode(response.errorCode()));
     }
 
 
@@ -997,7 +998,7 @@ public final class RaftClientTestContext {
         int lastFetchedEpoch,
         int maxWaitTimeMs
     ) {
-        FetchRequestData request = RaftUtil.singletonFetchRequest(metadataPartition, fetchPartition -> {
+        FetchRequestData request = RaftUtil.singletonFetchRequest(metadataPartition, metadataTopicId, fetchPartition -> {
             fetchPartition
                 .setCurrentLeaderEpoch(epoch)
                 .setLastFetchedEpoch(lastFetchedEpoch)
@@ -1016,7 +1017,7 @@ public final class RaftClientTestContext {
         long highWatermark,
         Errors error
     ) {
-        return RaftUtil.singletonFetchResponse(metadataPartition, Errors.NONE, partitionData -> {
+        return RaftUtil.singletonFetchResponse(metadataPartition, metadataTopicId, Errors.NONE, partitionData -> {
             partitionData
                 .setRecords(records)
                 .setErrorCode(error.code())
@@ -1035,7 +1036,7 @@ public final class RaftClientTestContext {
         int divergingEpoch,
         long highWatermark
     ) {
-        return RaftUtil.singletonFetchResponse(metadataPartition, Errors.NONE, partitionData -> {
+        return RaftUtil.singletonFetchResponse(metadataPartition, metadataTopicId, Errors.NONE, partitionData -> {
             partitionData.setHighWatermark(highWatermark);
 
             partitionData.currentLeader()
@@ -1069,7 +1070,7 @@ public final class RaftClientTestContext {
         private final List<Batch<String>> commits = new ArrayList<>();
         private final List<BatchReader<String>> savedBatches = new ArrayList<>();
         private final Map<Integer, Long> claimedEpochStartOffsets = new HashMap<>();
-        private OptionalInt currentClaimedEpoch = OptionalInt.empty();
+        private LeaderAndEpoch currentLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), 0);
         private final OptionalInt localId;
         private Optional<SnapshotReader<String>> snapshot = Optional.empty();
         private boolean readCommit = true;
@@ -1084,6 +1085,10 @@ public final class RaftClientTestContext {
 
         Long claimedEpochStartOffset(int epoch) {
             return claimedEpochStartOffsets.get(epoch);
+        }
+
+        LeaderAndEpoch currentLeaderAndEpoch() {
+            return currentLeaderAndEpoch;
         }
 
         Batch<String> lastCommit() {
@@ -1103,7 +1108,11 @@ public final class RaftClientTestContext {
         }
 
         OptionalInt currentClaimedEpoch() {
-            return currentClaimedEpoch;
+            if (localId.isPresent() && currentLeaderAndEpoch.isLeader(localId.getAsInt())) {
+                return OptionalInt.of(currentLeaderAndEpoch.epoch());
+            } else {
+                return OptionalInt.empty();
+            }
         }
 
         List<String> commitWithBaseOffset(long baseOffset) {
@@ -1159,18 +1168,19 @@ public final class RaftClientTestContext {
         }
 
         @Override
-        public void handleLeaderChange(LeaderAndEpoch leader) {
+        public void handleLeaderChange(LeaderAndEpoch leaderAndEpoch) {
             // We record the next expected offset as the claimed epoch's start
-            // offset. This is useful to verify that the `handleClaim` callback
+            // offset. This is useful to verify that the `handleLeaderChange` callback
             // was not received early.
-            if (localId.isPresent() && leader.isLeader(localId.getAsInt())) {
-                long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
-                    lastCommitOffset().getAsLong() + 1 : 0L;
-                this.currentClaimedEpoch = OptionalInt.of(leader.epoch());
-                this.claimedEpochStartOffsets.put(leader.epoch(), claimedEpochStartOffset);
-            } else {
-                this.currentClaimedEpoch = OptionalInt.empty();
-            }
+            this.currentLeaderAndEpoch = leaderAndEpoch;
+
+            currentClaimedEpoch().ifPresent(claimedEpoch -> {
+                if (claimedEpoch == leaderAndEpoch.epoch()) {
+                    long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
+                        lastCommitOffset().getAsLong() + 1 : 0L;
+                    this.claimedEpochStartOffsets.put(leaderAndEpoch.epoch(), claimedEpochStartOffset);
+                }
+            });
         }
 
         @Override
@@ -1184,8 +1194,7 @@ public final class RaftClientTestContext {
 
         @Override
         public void handleSnapshot(SnapshotReader<String> reader) {
-            snapshot.ifPresent(snapshot -> assertDoesNotThrow(() -> snapshot.close()));
-
+            snapshot.ifPresent(snapshot -> assertDoesNotThrow(snapshot::close));
             commits.clear();
             savedBatches.clear();
             snapshot = Optional.of(reader);

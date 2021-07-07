@@ -27,10 +27,12 @@ import java.util.Set;
 
 /**
  * Represents the state of a single task running within a {@link KafkaStreams} application.
+ * @deprecated since 3.0, use {@link org.apache.kafka.streams.TaskMetadata} instead.
  */
+@Deprecated
 public class TaskMetadata {
 
-    private final TaskId taskId;
+    private final String taskId;
 
     private final Set<TopicPartition> topicPartitions;
 
@@ -40,20 +42,7 @@ public class TaskMetadata {
 
     private final Optional<Long> timeCurrentIdlingStarted;
 
-    /**
-     * @deprecated since 3.0, not intended for public use
-     */
-    @Deprecated
     public TaskMetadata(final String taskId,
-                        final Set<TopicPartition> topicPartitions,
-                        final Map<TopicPartition, Long> committedOffsets,
-                        final Map<TopicPartition, Long> endOffsets,
-                        final Optional<Long> timeCurrentIdlingStarted) {
-        this(TaskId.parse(taskId), topicPartitions, committedOffsets, endOffsets, timeCurrentIdlingStarted);
-    }
-
-    // For internal use -- not a public API
-    public TaskMetadata(final TaskId taskId,
                         final Set<TopicPartition> topicPartitions,
                         final Map<TopicPartition, Long> committedOffsets,
                         final Map<TopicPartition, Long> endOffsets,
@@ -68,17 +57,8 @@ public class TaskMetadata {
     /**
      * @return the basic task metadata such as subtopology and partition id
      */
-    public TaskId getTaskId() {
-        return taskId;
-    }
-
-    /**
-     * @return the basic task metadata such as subtopology and partition id
-     * @deprecated please use {@link #getTaskId()} instead.
-     */
-    @Deprecated
     public String taskId() {
-        return taskId.toString();
+        return taskId;
     }
 
     public Set<TopicPartition> topicPartitions() {
