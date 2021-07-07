@@ -1451,7 +1451,7 @@ class LogCleanerTest {
     cleanedKeys = LogTestUtils.keysInLog(log)
     log.close()
 
-    // 2) Simulate recovery just after .cleaned file is created, and a subset of them are rename to .swap
+    // 2) Simulate recovery just after .cleaned file is created, and a subset of them are renamed to .swap
     //    On recovery, clean operation is aborted. All messages should be present in the log
     log.logSegments.head.changeFileSuffixes("", Log.CleanedFileSuffix)
     log.logSegments.head.log.renameTo(new File(CoreUtils.replaceSuffix(log.logSegments.head.log.file.getPath, Log.CleanedFileSuffix, Log.SwapFileSuffix)))

@@ -160,6 +160,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final KafkaRaftMetrics kafkaRaftMetrics;
     private final QuorumState quorum;
     private final RequestManager requestManager;
+    private final RaftMetadataLogCleanerManager snapshotCleaner;
 
     private final List<ListenerContext> listenerContexts = new ArrayList<>();
     private final ConcurrentLinkedQueue<Listener<T>> pendingListeners = new ConcurrentLinkedQueue<>();
@@ -230,7 +231,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
         this.raftConfig = raftConfig;
-
+        this.snapshotCleaner = new RaftMetadataLogCleanerManager(logger, time, 60000, log::maybeClean);
         Set<Integer> quorumVoterIds = raftConfig.quorumVoterIds();
         this.requestManager = new RequestManager(quorumVoterIds, raftConfig.retryBackoffMs(),
             raftConfig.requestTimeoutMs(), random);
@@ -2095,8 +2096,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollCurrentState(long currentTimeMs) {
-        maybeDeleteBeforeSnapshot();
-
         if (quorum.isLeader()) {
             return pollLeader(currentTimeMs);
         } else if (quorum.isCandidate()) {
@@ -2159,14 +2158,34 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return false;
     }
 
-    private void maybeDeleteBeforeSnapshot() {
-        log.latestSnapshotId().ifPresent(snapshotId -> {
-            quorum.highWatermark().ifPresent(highWatermark -> {
-                if (highWatermark.offset >= snapshotId.offset) {
-                    log.deleteBeforeSnapshot(snapshotId);
+    /**
+     * A simple timer based log cleaner
+     */
+    private static class RaftMetadataLogCleanerManager {
+        private final Logger logger;
+        private final Timer timer;
+        private final long delayMs;
+        private final Runnable cleaner;
+
+        RaftMetadataLogCleanerManager(Logger logger, Time time, long delayMs, Runnable cleaner) {
+            this.logger = logger;
+            this.timer = time.timer(delayMs);
+            this.delayMs = delayMs;
+            this.cleaner = cleaner;
+        }
+
+        public long maybeClean(long currentTimeMs) {
+            timer.update(currentTimeMs);
+            if (timer.isExpired()) {
+                try {
+                    cleaner.run();
+                } catch (Throwable t) {
+                    logger.error("Had an error during log cleaning", t);
                 }
-            });
-        });
+                timer.reset(delayMs);
+            }
+            return timer.remainingMs();
+        }
     }
 
     private void wakeup() {
@@ -2195,7 +2214,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return;
         }
 
-        long pollTimeoutMs = pollCurrentState(currentTimeMs);
+        long pollStateTimeoutMs = pollCurrentState(currentTimeMs);
+        long cleaningTimeoutMs = snapshotCleaner.maybeClean(currentTimeMs);
+        long pollTimeoutMs = Math.min(pollStateTimeoutMs, cleaningTimeoutMs);
+
         kafkaRaftMetrics.updatePollStart(currentTimeMs);
 
         RaftMessage message = messageQueue.poll(pollTimeoutMs);
