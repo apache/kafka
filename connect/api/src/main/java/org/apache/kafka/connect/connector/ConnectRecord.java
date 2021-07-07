@@ -155,7 +155,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         if (o == null || getClass() != o.getClass())
             return false;
 
-        ConnectRecord that = (ConnectRecord) o;
+        ConnectRecord<?> that = (ConnectRecord<?>) o;
 
         return Objects.equals(kafkaPartition, that.kafkaPartition)
                && Objects.equals(topic, that.topic)

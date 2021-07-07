@@ -302,7 +302,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         });
     }
 
-    private <V extends AbstractStatus> void send(final String key,
+    private <V extends AbstractStatus<?>> void send(final String key,
                                                  final V status,
                                                  final CacheEntry<V> entry,
                                                  final boolean safeWrite) {
@@ -492,7 +492,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         }
     }
 
-    private byte[] serialize(AbstractStatus status) {
+    private byte[] serialize(AbstractStatus<?> status) {
         Struct struct = new Struct(STATUS_SCHEMA_V0);
         struct.put(STATE_KEY_NAME, status.state().name());
         if (status.trace() != null)
@@ -645,7 +645,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         }
     }
 
-    private static class CacheEntry<T extends AbstractStatus> {
+    private static class CacheEntry<T extends AbstractStatus<?>> {
         private T value = null;
         private int sequence = 0;
         private boolean deleted = false;

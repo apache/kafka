@@ -455,13 +455,14 @@ public class AbstractHerderTest {
         verifyAll();
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test()
     public void testConfigValidationTransformsExtendResults() throws Throwable {
         AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
 
         // 2 transform aliases defined -> 2 plugin lookups
-        Set<PluginDesc<Transformation>> transformations = new HashSet<>();
-        transformations.add(new PluginDesc<>(SampleTransformation.class, "1.0", classLoader));
+        Set<PluginDesc<Transformation<?>>> transformations = new HashSet<>();
+        transformations.add(transformationPluginDesc());
         EasyMock.expect(plugins.transformations()).andReturn(transformations).times(2);
 
         replayAll();
@@ -512,12 +513,12 @@ public class AbstractHerderTest {
         AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
 
         // 2 transform aliases defined -> 2 plugin lookups
-        Set<PluginDesc<Transformation>> transformations = new HashSet<>();
-        transformations.add(new PluginDesc<>(SampleTransformation.class, "1.0", classLoader));
+        Set<PluginDesc<Transformation<?>>> transformations = new HashSet<>();
+        transformations.add(transformationPluginDesc());
         EasyMock.expect(plugins.transformations()).andReturn(transformations).times(1);
 
-        Set<PluginDesc<Predicate>> predicates = new HashSet<>();
-        predicates.add(new PluginDesc<>(SamplePredicate.class, "1.0", classLoader));
+        Set<PluginDesc<Predicate<?>>> predicates = new HashSet<>();
+        predicates.add(predicatePluginDesc());
         EasyMock.expect(plugins.predicates()).andReturn(predicates).times(2);
 
         replayAll();
@@ -577,6 +578,16 @@ public class AbstractHerderTest {
                 infos.get("predicates.predY.type").configValue().errors().isEmpty());
 
         verifyAll();
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private PluginDesc<Predicate<?>> predicatePluginDesc() {
+        return new PluginDesc(SamplePredicate.class, "1.0", classLoader);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private PluginDesc<Transformation<?>> transformationPluginDesc() {
+        return new PluginDesc(SampleTransformation.class, "1.0", classLoader);
     }
 
     @Test()

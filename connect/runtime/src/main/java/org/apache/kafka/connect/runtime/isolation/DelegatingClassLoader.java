@@ -72,15 +72,15 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final SortedSet<PluginDesc<Connector>> connectors;
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
-    private final SortedSet<PluginDesc<Transformation>> transformations;
-    private final SortedSet<PluginDesc<Predicate>> predicates;
+    private final SortedSet<PluginDesc<Transformation<?>>> transformations;
+    private final SortedSet<PluginDesc<Predicate<?>>> predicates;
     private final SortedSet<PluginDesc<ConfigProvider>> configProviders;
     private final SortedSet<PluginDesc<ConnectRestExtension>> restExtensions;
     private final SortedSet<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies;
     private final List<String> pluginPaths;
 
     private static final String MANIFEST_PREFIX = "META-INF/services/";
-    private static final Class[] SERVICE_LOADER_PLUGINS = new Class[] {ConnectRestExtension.class, ConfigProvider.class};
+    private static final Class<?>[] SERVICE_LOADER_PLUGINS = new Class<?>[] {ConnectRestExtension.class, ConfigProvider.class};
     private static final Set<String> PLUGIN_MANIFEST_FILES =
         Arrays.stream(SERVICE_LOADER_PLUGINS).map(serviceLoaderPlugin -> MANIFEST_PREFIX + serviceLoaderPlugin.getName())
             .collect(Collectors.toSet());
@@ -120,11 +120,11 @@ public class DelegatingClassLoader extends URLClassLoader {
         return headerConverters;
     }
 
-    public Set<PluginDesc<Transformation>> transformations() {
+    public Set<PluginDesc<Transformation<?>>> transformations() {
         return transformations;
     }
 
-    public Set<PluginDesc<Predicate>> predicates() {
+    public Set<PluginDesc<Predicate<?>>> predicates() {
         return predicates;
     }
 
@@ -334,12 +334,22 @@ public class DelegatingClassLoader extends URLClassLoader {
                 getPluginDesc(reflections, Connector.class, loader),
                 getPluginDesc(reflections, Converter.class, loader),
                 getPluginDesc(reflections, HeaderConverter.class, loader),
-                getPluginDesc(reflections, Transformation.class, loader),
-                getPluginDesc(reflections, Predicate.class, loader),
+                getTransformationPluginDesc(loader, reflections),
+                getPredicatePluginDesc(loader, reflections),
                 getServiceLoaderPluginDesc(ConfigProvider.class, loader),
                 getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
                 getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
         );
+    }
+
+    @SuppressWarnings({"unchecked"})
+    private Collection<PluginDesc<Predicate<?>>> getPredicatePluginDesc(ClassLoader loader, Reflections reflections) throws ReflectiveOperationException {
+        return (Collection<PluginDesc<Predicate<?>>>) (Collection<?>) getPluginDesc(reflections, Predicate.class, loader);
+    }
+
+    @SuppressWarnings({"unchecked"})
+    private Collection<PluginDesc<Transformation<?>>> getTransformationPluginDesc(ClassLoader loader, Reflections reflections) throws ReflectiveOperationException {
+        return (Collection<PluginDesc<Transformation<?>>>) (Collection<?>) getPluginDesc(reflections, Transformation.class, loader);
     }
 
     private <T> Collection<PluginDesc<T>> getPluginDesc(
@@ -359,12 +369,17 @@ public class DelegatingClassLoader extends URLClassLoader {
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {
             if (PluginUtils.isConcrete(plugin)) {
-                result.add(new PluginDesc<>(plugin, versionFor(plugin), loader));
+                result.add(pluginDesc(plugin, versionFor(plugin), loader));
             } else {
                 log.debug("Skipping {} as it is not concrete implementation", plugin);
             }
         }
         return result;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private <T> PluginDesc<T> pluginDesc(Class<? extends T> plugin, String version, ClassLoader loader) {
+        return new PluginDesc(plugin, version, loader);
     }
 
     @SuppressWarnings("unchecked")
@@ -374,7 +389,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         try {
             ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
             for (T pluginImpl : serviceLoader) {
-                result.add(new PluginDesc<>((Class<? extends T>) pluginImpl.getClass(),
+                result.add(pluginDesc((Class<? extends T>) pluginImpl.getClass(),
                     versionFor(pluginImpl), loader));
             }
         } finally {

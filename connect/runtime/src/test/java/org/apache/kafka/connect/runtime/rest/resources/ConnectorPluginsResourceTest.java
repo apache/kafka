@@ -67,7 +67,6 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import javax.ws.rs.BadRequestException;
 import java.net.URL;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -77,6 +76,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
@@ -125,7 +125,7 @@ public class ConnectorPluginsResourceTest {
         partialConfigs.add(configInfo);
 
         configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", true, null, "MEDIUM", "Test configuration for integer type.", "Test", 1, "MEDIUM", "test.int.config", Collections.emptyList());
-        configValueInfo = new ConfigValueInfo("test.int.config", "1", Arrays.asList("1", "2", "3"), Collections.emptyList(), true);
+        configValueInfo = new ConfigValueInfo("test.int.config", "1", asList("1", "2", "3"), Collections.emptyList(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
@@ -137,7 +137,7 @@ public class ConnectorPluginsResourceTest {
         partialConfigs.add(configInfo);
 
         configKeyInfo = new ConfigKeyInfo("test.list.config", "LIST", true, null, "HIGH", "Test configuration for list type.", "Test", 2, "LONG", "test.list.config", Collections.emptyList());
-        configValueInfo = new ConfigValueInfo("test.list.config", "a,b", Arrays.asList("a", "b", "c"), Collections.emptyList(), true);
+        configValueInfo = new ConfigValueInfo("test.list.config", "a,b", asList("a", "b", "c"), Collections.emptyList(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
@@ -145,13 +145,13 @@ public class ConnectorPluginsResourceTest {
         CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), ERROR_COUNT, Collections.singletonList("Test"), configs);
         PARTIAL_CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), PARTIAL_CONFIG_ERROR_COUNT, Collections.singletonList("Test"), partialConfigs);
 
-        Class<?>[] abstractConnectorClasses = {
+        List<Class<? extends Connector>> abstractConnectorClasses = asList(
             Connector.class,
             SourceConnector.class,
             SinkConnector.class
-        };
+        );
 
-        Class<?>[] connectorClasses = {
+        List<Class<? extends Connector>> connectorClasses = asList(
             VerifiableSourceConnector.class,
             VerifiableSinkConnector.class,
             MockSourceConnector.class,
@@ -159,17 +159,17 @@ public class ConnectorPluginsResourceTest {
             MockConnector.class,
             SchemaSourceConnector.class,
             ConnectorPluginsResourceTestConnector.class
-        };
+        );
 
         try {
-            for (Class<?> klass : abstractConnectorClasses) {
+            for (Class<? extends Connector> klass : abstractConnectorClasses) {
                 @SuppressWarnings("unchecked")
-                MockConnectorPluginDesc pluginDesc = new MockConnectorPluginDesc((Class<? extends Connector>) klass, "0.0.0");
+                MockConnectorPluginDesc pluginDesc = new MockConnectorPluginDesc(klass, "0.0.0");
                 CONNECTOR_PLUGINS.add(pluginDesc);
             }
-            for (Class<?> klass : connectorClasses) {
+            for (Class<? extends Connector> klass : connectorClasses) {
                 @SuppressWarnings("unchecked")
-                MockConnectorPluginDesc pluginDesc = new MockConnectorPluginDesc((Class<? extends Connector>) klass);
+                MockConnectorPluginDesc pluginDesc = new MockConnectorPluginDesc(klass);
                 CONNECTOR_PLUGINS.add(pluginDesc);
             }
         } catch (Exception e) {
@@ -490,7 +490,7 @@ public class ConnectorPluginsResourceTest {
 
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            return Arrays.asList(1, 2, 3);
+            return asList(1, 2, 3);
         }
 
         @Override
@@ -502,7 +502,7 @@ public class ConnectorPluginsResourceTest {
     private static class ListRecommender implements Recommender {
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            return Arrays.asList("a", "b", "c");
+            return asList("a", "b", "c");
         }
 
         @Override
