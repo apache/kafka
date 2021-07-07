@@ -44,11 +44,11 @@ object DynamicConfig {
     val DefaultReplicationThrottledRate = ReplicationQuotaManagerConfig.QuotaBytesPerSecondDefault
 
     // Documentation
-    val LeaderReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
-      s"property ${LogConfig.LeaderReplicationThrottledReplicasProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
+    val LeaderReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on total replication traffic for leaders enumerated in the " +
+      s"property ${LogConfig.LeaderReplicationThrottledReplicasProp} on the broker. This property can be only set dynamically. It is suggested that the " +
       s"limit be kept above 1MB/s for accurate behaviour."
-    val FollowerReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for followers enumerated in the " +
-      s"property ${LogConfig.FollowerReplicationThrottledReplicasProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
+    val FollowerReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on total replication traffic for followers enumerated in the " +
+      s"property ${LogConfig.FollowerReplicationThrottledReplicasProp} on the broker. This property can be only set dynamically. It is suggested that the " +
       s"limit be kept above 1MB/s for accurate behaviour."
     val ReplicaAlterLogDirsIoMaxBytesPerSecondDoc = "A long representing the upper bound (bytes/sec) on disk IO used for moving replica between log directories on the same broker. " +
       s"This property can be only set dynamically. It is suggested that the limit be kept above 1MB/s for accurate behaviour."
