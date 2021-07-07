@@ -25,10 +25,12 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
-
 import java.util
 import java.util.Optional
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
+
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+
 import scala.collection.{mutable, _}
 import scala.math.Ordered.orderingToOrdered
 
@@ -360,7 +362,9 @@ class FullFetchContext(private val time: Time,
                        private val cache: FetchSessionCache,
                        private val reqMetadata: JFetchMetadata,
                        private val fetchData: util.Map[TopicPartition, FetchRequest.PartitionData],
-                       private val isFromFollower: Boolean) extends FetchContext {
+                       private val isFromFollower: Boolean,
+                       private val clientId: String,
+                       private val principal: KafkaPrincipal) extends FetchContext {
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
@@ -382,7 +386,7 @@ class FullFetchContext(private val time: Time,
       cachedPartitions
     }
     val responseSessionId = cache.maybeCreateSession(time.milliseconds(), isFromFollower,
-        updates.size, () => createNewSession)
+        clientId, principal, updates.size, () => createNewSession)
     debug(s"Full fetch context with session id $responseSessionId returning " +
       s"${partitionsToLogString(updates.keySet)}")
     FetchResponse.of(Errors.NONE, 0, responseSessionId, updates)
@@ -598,21 +602,23 @@ class FetchSessionCache(private val maxEntries: Int,
     */
   def maybeCreateSession(now: Long,
                          privileged: Boolean,
+                         clientId: String,
+                         principal: KafkaPrincipal,
                          size: Int,
                          createPartitions: () => FetchSession.CACHE_MAP): Int =
   synchronized {
     // If there is room, create a new session entry.
     if ((sessions.size < maxEntries) ||
-        tryEvict(privileged, EvictableKey(privileged, size, 0), now)) {
+        tryEvict(privileged, EvictableKey(privileged, size, 0), now, clientId, principal)) {
       val partitionMap = createPartitions()
       val session = new FetchSession(newSessionId(), privileged, partitionMap,
           now, now, JFetchMetadata.nextEpoch(INITIAL_EPOCH))
-      debug(s"Created fetch session ${session.toString}")
+      debug(s"Created fetch session ${session.toString} for clientId=$clientId, principal=$principal")
       sessions.put(session.id, session)
       touch(session, now)
       session.id
     } else {
-      debug(s"No fetch session created for privileged=$privileged, size=$size.")
+      debug(s"No fetch session created for clientId=$clientId, principal=$principal privileged=$privileged, size=$size.")
       INVALID_SESSION_ID
     }
   }
@@ -630,7 +636,8 @@ class FetchSessionCache(private val maxEntries: Int,
     * @param now        The current time in milliseconds.
     * @return           True if an entry was evicted; false otherwise.
     */
-  def tryEvict(privileged: Boolean, key: EvictableKey, now: Long): Boolean = synchronized {
+  def tryEvict(privileged: Boolean, key: EvictableKey, now: Long,
+               clientId: String, principal: KafkaPrincipal): Boolean = synchronized {
     // Try to evict an entry which is stale.
     val lastUsedEntry = lastUsed.firstEntry
     if (lastUsedEntry == null) {
@@ -638,7 +645,7 @@ class FetchSessionCache(private val maxEntries: Int,
       false
     } else if (now - lastUsedEntry.getKey.lastUsedMs > evictionMs) {
       val session = lastUsedEntry.getValue
-      trace(s"Evicting stale FetchSession ${session.id}.")
+      trace(s"Evicting stale FetchSession ${session.id} for clientId=$clientId, principal=$principal")
       remove(session)
       evictionsMeter.mark()
       true
@@ -654,7 +661,7 @@ class FetchSessionCache(private val maxEntries: Int,
         trace(s"Can't evict ${evictableEntry.getKey} with ${key.toString}")
         false
       } else {
-        trace(s"Evicting ${evictableEntry.getKey} with ${key.toString}.")
+        trace(s"Evicting ${evictableEntry.getKey} with ${key.toString} for clientId=$clientId, principal=$principal")
         remove(evictableEntry.getValue)
         evictionsMeter.mark()
         true
@@ -728,7 +735,9 @@ class FetchManager(private val time: Time,
   def newContext(reqMetadata: JFetchMetadata,
                  fetchData: FetchSession.REQ_MAP,
                  toForget: util.List[TopicPartition],
-                 isFollower: Boolean): FetchContext = {
+                 isFollower: Boolean,
+                 clientId: String,
+                 principal: KafkaPrincipal): FetchContext = {
     val context = if (reqMetadata.isFull) {
       var removedFetchSessionStr = ""
       if (reqMetadata.sessionId != INVALID_SESSION_ID) {
@@ -743,7 +752,7 @@ class FetchManager(private val time: Time,
         suffix = " Will not try to create a new session."
         new SessionlessFetchContext(fetchData)
       } else {
-        new FullFetchContext(time, cache, reqMetadata, fetchData, isFollower)
+        new FullFetchContext(time, cache, reqMetadata, fetchData, isFollower, clientId, principal)
       }
       debug(s"Created a new full FetchContext with ${partitionsToLogString(fetchData.keySet)}."+
         s"${removedFetchSessionStr}${suffix}")

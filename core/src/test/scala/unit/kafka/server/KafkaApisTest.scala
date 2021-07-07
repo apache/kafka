@@ -2260,11 +2260,11 @@ class KafkaApisTest {
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, false)
+      fetchMetadata, fetchData, false, "clientId", KafkaPrincipal.ANONYMOUS)
     expect(fetchManager.newContext(anyObject[JFetchMetadata],
       anyObject[util.Map[TopicPartition, FetchRequest.PartitionData]],
       anyObject[util.List[TopicPartition]],
-      anyBoolean)).andReturn(fetchContext)
+      anyBoolean, anyString, anyObject[KafkaPrincipal])).andReturn(fetchContext)
 
     EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       anyObject[RequestChannel.Request](), anyDouble, anyLong)).andReturn(0)
@@ -2822,11 +2822,11 @@ class KafkaApisTest {
 
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, true)
+      fetchMetadata, fetchData, true, "clientId", KafkaPrincipal.ANONYMOUS)
     expect(fetchManager.newContext(anyObject[JFetchMetadata],
       anyObject[util.Map[TopicPartition, FetchRequest.PartitionData]],
       anyObject[util.List[TopicPartition]],
-      anyBoolean)).andReturn(fetchContext)
+      anyBoolean, anyString, anyObject[KafkaPrincipal])).andReturn(fetchContext)
 
     expect(replicaQuotaManager.record(anyLong()))
     expect(replicaManager.getLogConfig(EasyMock.eq(tp0))).andReturn(None)

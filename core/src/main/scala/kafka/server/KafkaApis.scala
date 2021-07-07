@@ -676,7 +676,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       fetchRequest.metadata,
       fetchRequest.fetchData,
       fetchRequest.toForget,
-      fetchRequest.isFromFollower)
+      fetchRequest.isFromFollower,
+      request.context.clientId,
+      request.context.principal)
 
     val clientMetadata: Option[ClientMetadata] = if (versionId >= 11) {
       // Fetch API version 11 added preferred replica logic
