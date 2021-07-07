@@ -47,11 +47,11 @@ public class PartitionRegistrationTest {
     @Test
     public void testPartitionControlInfoMergeAndDiff() {
         PartitionRegistration a = new PartitionRegistration(
-            new int[]{1, 2, 3}, new int[]{1, 2}, new int[]{}, new int[]{}, 1, 0, 0);
+            new int[]{1, 2, 3}, new int[]{1, 2}, Replicas.NONE, Replicas.NONE, 1, 0, 0);
         PartitionRegistration b = new PartitionRegistration(
-            new int[]{1, 2, 3}, new int[]{3}, new int[]{}, new int[]{}, 3, 1, 1);
+            new int[]{1, 2, 3}, new int[]{3}, Replicas.NONE, Replicas.NONE, 3, 1, 1);
         PartitionRegistration c = new PartitionRegistration(
-            new int[]{1, 2, 3}, new int[]{1}, new int[]{}, new int[]{}, 1, 0, 1);
+            new int[]{1, 2, 3}, new int[]{1}, Replicas.NONE, Replicas.NONE, 1, 0, 1);
         assertEquals(b, a.merge(new PartitionChangeRecord().
             setLeader(3).setIsr(Arrays.asList(3))));
         assertEquals("isr: [1, 2] -> [3], leader: 1 -> 3, leaderEpoch: 0 -> 1, partitionEpoch: 0 -> 1",
@@ -63,7 +63,7 @@ public class PartitionRegistrationTest {
     @Test
     public void testRecordRoundTrip() {
         PartitionRegistration registrationA = new PartitionRegistration(
-            new int[]{1, 2, 3}, new int[]{1, 2}, new int[]{1}, new int[]{}, 1, 0, 0);
+            new int[]{1, 2, 3}, new int[]{1, 2}, new int[]{1}, Replicas.NONE, 1, 0, 0);
         Uuid topicId = Uuid.fromString("OGdAI5nxT_m-ds3rJMqPLA");
         int partitionId = 4;
         ApiMessageAndVersion record = registrationA.toRecord(topicId, partitionId);
@@ -75,9 +75,9 @@ public class PartitionRegistrationTest {
     @Test
     public void testToLeaderAndIsrPartitionState() {
         PartitionRegistration a = new PartitionRegistration(
-            new int[]{1, 2, 3}, new int[]{1, 2}, new int[]{}, new int[]{}, 1, 123, 456);
+            new int[]{1, 2, 3}, new int[]{1, 2}, Replicas.NONE, Replicas.NONE, 1, 123, 456);
         PartitionRegistration b = new PartitionRegistration(
-            new int[]{2, 3, 4}, new int[]{2, 3, 4}, new int[]{}, new int[]{}, 2, 234, 567);
+            new int[]{2, 3, 4}, new int[]{2, 3, 4}, Replicas.NONE, Replicas.NONE, 2, 234, 567);
         assertEquals(new LeaderAndIsrPartitionState().
                 setTopicName("foo").
                 setPartitionIndex(1).

@@ -24,6 +24,7 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -82,9 +83,9 @@ public class TopicsImageTest {
         List<TopicImage> topics1 = Arrays.asList(
             newTopicImage("foo", Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA"),
             new PartitionRegistration(new int[] {2, 3, 4},
-                new int[] {2, 3}, new int[0], new int[0], 2, 1, 345),
+                new int[] {2, 3}, Replicas.NONE, Replicas.NONE, 2, 1, 345),
             new PartitionRegistration(new int[] {3, 4, 5},
-                new int[] {3, 4, 5}, new int[0], new int[0], 3, 4, 684)),
+                new int[] {3, 4, 5}, Replicas.NONE, Replicas.NONE, 3, 4, 684)),
             newTopicImage("bar", Uuid.fromString("f62ptyETTjet8SL5ZeREiw"),
                 new PartitionRegistration(new int[] {0, 1, 2, 3, 4},
                     new int[] {0, 1, 2, 3}, new int[] {1}, new int[] {3, 4}, 0, 1, 345)));

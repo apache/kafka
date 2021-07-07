@@ -45,6 +45,7 @@ import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentMatchers, Mockito}
+
 import java.io.File
 import java.net.InetAddress
 import java.nio.file.Files
@@ -52,11 +53,10 @@ import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.{Collections, Optional, Properties}
-
 import org.apache.kafka.common.metadata.{PartitionRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.image.{TopicImage, TopicsDelta, TopicsImage}
-import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 
@@ -2543,13 +2543,13 @@ class ReplicaManagerTest {
     val topicsByName = new util.HashMap[String, TopicImage]()
     val fooPartitions = new util.HashMap[Integer, PartitionRegistration]()
     fooPartitions.put(0, new PartitionRegistration(Array(1, 2, 3),
-      Array(1, 2, 3), Array.empty[Int], Array.empty[Int], 1, 100, 200))
+      Array(1, 2, 3), Replicas.NONE, Replicas.NONE, 1, 100, 200))
     fooPartitions.put(1, new PartitionRegistration(Array(4, 5, 6),
-      Array(4, 5), Array.empty[Int], Array.empty[Int], 5, 300, 400))
+      Array(4, 5), Replicas.NONE, Replicas.NONE, 5, 300, 400))
     val foo = new TopicImage("foo", FOO_UUID, fooPartitions)
     val barPartitions = new util.HashMap[Integer, PartitionRegistration]()
     barPartitions.put(0, new PartitionRegistration(Array(2, 3, 4),
-      Array(2, 3, 4), Array.empty[Int], Array.empty[Int], 3, 100, 200))
+      Array(2, 3, 4), Replicas.NONE, Replicas.NONE, 3, 100, 200))
     val bar = new TopicImage("bar", BAR_UUID, barPartitions)
     topicsById.put(FOO_UUID, foo)
     topicsByName.put("foo", foo)
@@ -2601,10 +2601,10 @@ class ReplicaManagerTest {
         new TopicPartition("foo", 1) -> true),
       Map(new TopicPartition("baz", 0) -> LocalLeaderInfo(BAZ_UUID,
         new PartitionRegistration(Array(1, 2, 4), Array(1, 2, 4),
-          Array.empty[Int], Array.empty[Int], 1, 123, 456))),
+          Replicas.NONE, Replicas.NONE, 1, 123, 456))),
       Map(new TopicPartition("baz", 1) -> LocalLeaderInfo(BAZ_UUID,
         new PartitionRegistration(Array(2, 4, 1), Array(2, 4, 1),
-          Array.empty[Int], Array.empty[Int], 2, 123, 456)))),
+          Replicas.NONE, Replicas.NONE, 2, 123, 456)))),
     replicaManager.calculateDeltaChanges(TEST_DELTA))
   }
 }
