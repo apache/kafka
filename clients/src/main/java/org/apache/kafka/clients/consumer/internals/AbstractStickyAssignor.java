@@ -71,14 +71,16 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
-        if (allSubscriptionsEqual(partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions)) {
+        Set<TopicPartition> partitionsWithMultiplePreviousOwners = new HashSet<>();
+        if (allSubscriptionsEqual(partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions, partitionsWithMultiplePreviousOwners)) {
             log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
                           + "optimized assignment algorithm");
             partitionsTransferringOwnership = new HashMap<>();
-            return constrainedAssign(partitionsPerTopic, consumerToOwnedPartitions);
+            return constrainedAssign(partitionsPerTopic, consumerToOwnedPartitions, partitionsWithMultiplePreviousOwners);
         } else {
             log.debug("Detected that not all consumers were subscribed to same set of topics, falling back to the "
                           + "general case assignment algorithm");
+            // we must set this to null for the general case so the cooperative assignor knows to compute it from scratch
             partitionsTransferringOwnership = null;
             return generalAssign(partitionsPerTopic, subscriptions, consumerToOwnedPartitions);
         }
@@ -86,16 +88,22 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
     /**
      * Returns true iff all consumers have an identical subscription. Also fills out the passed in
-     * {@code consumerToOwnedPartitions} with each consumer's previously owned and still-subscribed partitions
+     * {@code consumerToOwnedPartitions} with each consumer's previously owned and still-subscribed partitions,
+     * and the {@code partitionsWithMultiplePreviousOwners} with any partitions claimed by multiple previous owners
      */
     private boolean allSubscriptionsEqual(Set<String> allTopics,
                                           Map<String, Subscription> subscriptions,
-                                          Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
+                                          Map<String, List<TopicPartition>> consumerToOwnedPartitions,
+                                          Set<TopicPartition> partitionsWithMultiplePreviousOwners) {
         Set<String> membersWithOldGeneration = new HashSet<>();
         Set<String> membersOfCurrentHighestGeneration = new HashSet<>();
         boolean isAllSubscriptionsEqual = true;
 
         Set<String> subscribedTopics = new HashSet<>();
+
+        // keep track of all previously owned partitions so we can invalidate them if invalid input is
+        // detected, eg two consumers somehow claiming the same partition in the same/current generation
+        Map<TopicPartition, String> allPreviousPartitionsToOwner = new HashMap<>();
 
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             String consumer = subscriptionEntry.getKey();
@@ -122,6 +130,13 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 // If the current member's generation is higher, all the previously owned partitions are invalid
                 if (memberData.generation.isPresent() && memberData.generation.get() > maxGeneration) {
                     membersWithOldGeneration.addAll(membersOfCurrentHighestGeneration);
+
+                    allPreviousPartitionsToOwner.clear();
+                    partitionsWithMultiplePreviousOwners.clear();
+                    for (String droppedOutConsumer : membersWithOldGeneration) {
+                        consumerToOwnedPartitions.get(droppedOutConsumer).clear();
+                    }
+
                     membersOfCurrentHighestGeneration.clear();
                     maxGeneration = memberData.generation.get();
                 }
@@ -130,18 +145,25 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 for (final TopicPartition tp : memberData.partitions) {
                     // filter out any topics that no longer exist or aren't part of the current subscription
                     if (allTopics.contains(tp.topic())) {
-                        ownedPartitions.add(tp);
+
+                        if (!allPreviousPartitionsToOwner.containsKey(tp)) {
+                            allPreviousPartitionsToOwner.put(tp, consumer);
+                            ownedPartitions.add(tp);
+                        } else {
+                            String otherConsumer = allPreviousPartitionsToOwner.get(tp);
+                            log.warn("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
+                            + "same generation, this will be invalidated and removed from their previous assignment.",
+                                     consumer, otherConsumer, tp);
+                            consumerToOwnedPartitions.get(otherConsumer).remove(tp);
+                            partitionsWithMultiplePreviousOwners.add(tp);
+                        }
                     }
                 }
             }
         }
 
-        for (String consumer : membersWithOldGeneration) {
-            consumerToOwnedPartitions.get(consumer).clear();
-        }
         return isAllSubscriptionsEqual;
     }
-
 
     /**
      * This constrainedAssign optimizes the assignment algorithm when all consumers were subscribed to same set of topics.
@@ -154,13 +176,15 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      *     we're still under the number of expected max capacity members
      * 2. Fill remaining members up to the expected numbers of maxQuota partitions, otherwise, to minQuota partitions
      *
-     * @param partitionsPerTopic          The number of partitions for each subscribed topic
-     * @param consumerToOwnedPartitions   Each consumer's previously owned and still-subscribed partitions
+     * @param partitionsPerTopic                   The number of partitions for each subscribed topic
+     * @param consumerToOwnedPartitions            Each consumer's previously owned and still-subscribed partitions
+     * @param partitionsWithMultiplePreviousOwners The partitions being claimed in the previous assignment of multiple consumers
      *
      * @return                            Map from each member to the list of partitions assigned to them.
      */
     private Map<String, List<TopicPartition>> constrainedAssign(Map<String, Integer> partitionsPerTopic,
-                                                                Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
+                                                                Map<String, List<TopicPartition>> consumerToOwnedPartitions,
+                                                                Set<TopicPartition> partitionsWithMultiplePreviousOwners) {
         if (log.isDebugEnabled()) {
             log.debug("performing constrained assign. partitionsPerTopic: {}, consumerToOwnedPartitions: {}",
                 partitionsPerTopic, consumerToOwnedPartitions);
@@ -169,7 +193,9 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         Set<TopicPartition> allRevokedPartitions = new HashSet<>();
 
         // the consumers not yet at expected capacity
-        List<String> unfilledMembers = new LinkedList<>();
+        Set<String> unfilledMembers = new HashSet<>();
+        // the consumers with exactly minQuota, who may be assigned more until we reach the expected number with maxQuota
+        Set<String> unfilledMembersWithMinQuota = new HashSet<>();
 
         int numberOfConsumers = consumerToOwnedPartitions.size();
         int totalPartitionsCount = partitionsPerTopic.values().stream().reduce(0, Integer::sum);
@@ -186,16 +212,25 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             consumerToOwnedPartitions.keySet().stream().collect(Collectors.toMap(c -> c, c -> new ArrayList<>(maxQuota))));
 
         List<TopicPartition> assignedPartitions = new ArrayList<>();
-        // Reassign previously owned partitions to the expected number
+        // Reassign previously owned partitions, up to the expected number of partitions per consumer
         for (Map.Entry<String, List<TopicPartition>> consumerEntry : consumerToOwnedPartitions.entrySet()) {
             String consumer = consumerEntry.getKey();
             List<TopicPartition> ownedPartitions = consumerEntry.getValue();
 
             List<TopicPartition> consumerAssignment = assignment.get(consumer);
 
+            for (TopicPartition doublyClaimedPartition : partitionsWithMultiplePreviousOwners) {
+                if (ownedPartitions.contains(doublyClaimedPartition)) {
+                    log.warn("Found partition {} still claimed as owned by consumer {}, despite being claimed by multiple"
+                                 + "consumers already in the same generation. Removing it from the ownedPartitions",
+                             doublyClaimedPartition, consumer);
+                    ownedPartitions.remove(doublyClaimedPartition);
+                }
+            }
+
             if (ownedPartitions.size() < minQuota) {
-                // the expected assignment size is more than consumer have now, so keep all the owned partitions
-                // and put this member into unfilled member list
+                // the expected assignment size is more than this consumer has now, so keep all the owned partitions
+                // and put this member into the unfilled member list
                 if (ownedPartitions.size() > 0) {
                     consumerAssignment.addAll(ownedPartitions);
                     assignedPartitions.addAll(ownedPartitions);
@@ -205,6 +240,10 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 // consumer owned the "maxQuota" of partitions or more, and we're still under the number of expected members
                 // with more than the minQuota partitions, so keep "maxQuota" of the owned partitions, and revoke the rest of the partitions
                 numMembersAssignedOverMinQuota++;
+                if (numMembersAssignedOverMinQuota == expectedNumMembersAssignedOverMinQuota) {
+                    unfilledMembers.removeAll(unfilledMembersWithMinQuota);
+                    unfilledMembersWithMinQuota.clear();
+                }
                 List<TopicPartition> maxQuotaPartitions = ownedPartitions.subList(0, maxQuota);
                 consumerAssignment.addAll(maxQuotaPartitions);
                 assignedPartitions.addAll(maxQuotaPartitions);
@@ -218,43 +257,58 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 allRevokedPartitions.addAll(ownedPartitions.subList(minQuota, ownedPartitions.size()));
                 // this consumer is potential maxQuota candidate since we're still under the number of expected members
                 // with more than the minQuota partitions. Note, if the number of expected members with more than
-                // the minQuota partitions is 0, it means minQuota == maxQuota, so they won't be put into unfilledMembers
+                // the minQuota partitions is 0, it means minQuota == maxQuota, and these members are definitely filled
                 if (numMembersAssignedOverMinQuota < expectedNumMembersAssignedOverMinQuota) {
                     unfilledMembers.add(consumer);
+                    unfilledMembersWithMinQuota.add(consumer);
                 }
             }
         }
 
         List<TopicPartition> unassignedPartitions = getUnassignedPartitions(totalPartitionsCount, partitionsPerTopic, assignedPartitions);
-        assignedPartitions = null;
 
         if (log.isDebugEnabled()) {
             log.debug("After reassigning previously owned partitions, unfilled members: {}, unassigned partitions: {}, " +
                 "current assignment: {}", unfilledMembers, unassignedPartitions, assignment);
         }
 
-        Collections.sort(unfilledMembers);
-
         Iterator<String> unfilledConsumerIter = unfilledMembers.iterator();
+        // flag to inform that we need to remove all members with minQuota partitions from the unfilledMembers, after
+        // just reaching the expected number of members allowed to go up to maxQuota
+        boolean filterMinQuotaMembers = false;
         // Round-Robin filling remaining members up to the expected numbers of maxQuota, otherwise, to minQuota
         for (TopicPartition unassignedPartition : unassignedPartitions) {
             if (!unfilledConsumerIter.hasNext()) {
                 if (unfilledMembers.isEmpty()) {
-                    // Should not enter here since we have calculated the exact number to assign to each consumer
-                    // There might be issues in the assigning algorithm, or maybe assigning the same partition to two owners.
+                    // Should not enter here since we have calculated the exact number to assign to each consumer.
+                    // This indicates issues in the assignment algorithm
                     int currentPartitionIndex = unassignedPartitions.indexOf(unassignedPartition);
                     log.error("No more unfilled consumers to be assigned. The remaining unassigned partitions are: {}",
-                        unassignedPartitions.subList(currentPartitionIndex, unassignedPartitions.size()));
+                              unassignedPartitions.subList(currentPartitionIndex, unassignedPartitions.size()));
                     throw new IllegalStateException("No more unfilled consumers to be assigned.");
+                }
+                if (filterMinQuotaMembers) {
+                    unfilledMembers.removeAll(unfilledMembersWithMinQuota);
+                    unfilledMembersWithMinQuota.clear();
+                    filterMinQuotaMembers = false;
                 }
                 unfilledConsumerIter = unfilledMembers.iterator();
             }
+
             String consumer = unfilledConsumerIter.next();
+            if (filterMinQuotaMembers && unfilledMembersWithMinQuota.contains(consumer)) {
+                unfilledConsumerIter.remove();
+                unfilledMembersWithMinQuota.remove(consumer);
+                continue;
+            }
+
             List<TopicPartition> consumerAssignment = assignment.get(consumer);
             consumerAssignment.add(unassignedPartition);
 
             // We already assigned all possible ownedPartitions, so we know this must be newly assigned to this consumer
-            if (allRevokedPartitions.contains(unassignedPartition))
+            // or else the partition was actually claimed by multiple previous owners and had to be invalidated from all
+            // members claimed ownedPartitions
+            if (allRevokedPartitions.contains(unassignedPartition) || partitionsWithMultiplePreviousOwners.contains(unassignedPartition))
                 partitionsTransferringOwnership.put(unassignedPartition, consumer);
 
             int currentAssignedCount = consumerAssignment.size();
@@ -262,6 +316,9 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             if (currentAssignedCount == expectedAssignedCount) {
                 if (currentAssignedCount == maxQuota) {
                     numMembersAssignedOverMinQuota++;
+                    if (numMembersAssignedOverMinQuota == expectedNumMembersAssignedOverMinQuota) {
+                        filterMinQuotaMembers = true;
+                    }
                 }
                 unfilledConsumerIter.remove();
             }

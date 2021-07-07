@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -43,6 +44,8 @@ import org.apache.kafka.common.TopicPartition;
  */
 public class CooperativeStickyAssignor extends AbstractStickyAssignor {
 
+    private int generation = DEFAULT_GENERATION; // consumer group generation
+
     @Override
     public String name() {
         return "cooperative-sticky";
@@ -54,8 +57,34 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
     }
 
     @Override
+    public void onAssignment(Assignment assignment, ConsumerGroupMetadata metadata) {
+        this.generation = metadata.generationId();
+    }
+
+    @Override
+    public ByteBuffer subscriptionUserData(Set<String> topics) {
+        if (generation == DEFAULT_GENERATION) {
+            return ByteBuffer.allocate(0);
+        } else {
+            ByteBuffer buffer = ByteBuffer.allocate(4);
+            buffer.putInt(generation);
+            buffer.flip();
+            return buffer;
+        }
+    }
+
+    @Override
     protected MemberData memberData(Subscription subscription) {
-        return new MemberData(subscription.ownedPartitions(), Optional.empty());
+        ByteBuffer buffer = subscription.userData();
+        buffer.rewind();
+
+        Optional<Integer> encodedGeneration;
+        if (buffer.hasRemaining()) {
+            encodedGeneration = Optional.of(buffer.getInt());
+        } else {
+            encodedGeneration = Optional.empty();
+        }
+        return new MemberData(subscription.ownedPartitions(), encodedGeneration);
     }
 
     @Override
