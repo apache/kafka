@@ -260,12 +260,13 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   def validateGroupAssignment(consumerPollers: mutable.Buffer[ConsumerAssignmentPoller],
                               subscriptions: Set[TopicPartition],
                               msg: Option[String] = None,
-                              waitTime: Long = 10000L): Unit = {
+                              waitTime: Long = 10000L,
+                              expectedAssignment: Buffer[Set[TopicPartition]] = Buffer()): Unit = {
     val assignments = mutable.Buffer[Set[TopicPartition]]()
     TestUtils.waitUntilTrue(() => {
       assignments.clear()
       consumerPollers.foreach(assignments += _.consumerAssignment())
-      isPartitionAssignmentValid(assignments, subscriptions)
+      isPartitionAssignmentValid(assignments, subscriptions, expectedAssignment)
     }, msg.getOrElse(s"Did not get valid assignment for partitions $subscriptions. Instead, got $assignments"), waitTime)
   }
 
@@ -412,13 +413,15 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
    * 1. Every consumer got assigned at least one partition
    * 2. Each partition is assigned to only one consumer
    * 3. Every partition is assigned to one of the consumers
+   * 4. The assignment is the same as expected assignment (if provided)
    *
    * @param assignments set of consumer assignments; one per each consumer
    * @param partitions set of partitions that consumers subscribed to
    * @return true if partition assignment is valid
    */
   def isPartitionAssignmentValid(assignments: Buffer[Set[TopicPartition]],
-                                 partitions: Set[TopicPartition]): Boolean = {
+                                 partitions: Set[TopicPartition],
+                                 expectedAssignment: Buffer[Set[TopicPartition]]): Boolean = {
     val allNonEmptyAssignments = assignments.forall(assignment => assignment.nonEmpty)
     if (!allNonEmptyAssignments) {
       // at least one consumer got empty assignment
@@ -437,7 +440,22 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     // than one consumer and the same number of partitions were missing from assignments.
     // Make sure that all unique assignments are the same as 'partitions'
     val uniqueAssignedPartitions = assignments.foldLeft(Set.empty[TopicPartition])(_ ++ _)
-    uniqueAssignedPartitions == partitions
+    if (uniqueAssignedPartitions != partitions) {
+      return false
+    }
+
+    // check the assignment is the same as the expected assignment if provided
+    // Note: since we've checked that each partition is assigned to only one consumer,
+    // we just need to check the assignment is included in the expected assignment
+    if (expectedAssignment.nonEmpty) {
+      for (assignment <- assignments) {
+        if (!expectedAssignment.contains(assignment)) {
+          return false
+        }
+      }
+    }
+
+    true
   }
 
 }
