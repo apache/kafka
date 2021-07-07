@@ -1071,7 +1071,7 @@ public class RequestResponseTest {
                 .toString();
 
             assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=null,"
-                + " groupIds=[], requireStable=" + requireStable));
+                + " groups=[], requireStable=" + requireStable));
             String string = new OffsetFetchRequest.Builder("group1",
                 requireStable,
                 Collections.singletonList(
@@ -1093,7 +1093,7 @@ public class RequestResponseTest {
                 requireStable,
                 false)
                 .toString();
-            assertTrue(allTopicPartitionsString.contains("groupIds=[OffsetFetchRequestGroup"
+            assertTrue(allTopicPartitionsString.contains("groups=[OffsetFetchRequestGroup"
                 + "(groupId='someGroup', topics=null)], requireStable=" + requireStable));
 
             String subsetTopicPartitionsString = new OffsetFetchRequest.Builder(
