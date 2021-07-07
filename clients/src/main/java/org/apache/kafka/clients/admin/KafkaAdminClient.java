@@ -3677,9 +3677,10 @@ public class KafkaAdminClient extends AdminClient {
         return new ListOffsetsResult(new HashMap<>(futures));
     }
 
-    private List<Call> getListOffsetsCalls(MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context,
-                                           Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
-                                           Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
+    // visible for benchmark
+    List<Call> getListOffsetsCalls(MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context,
+                                   Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
+                                   Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
 
         MetadataResponse mr = context.response().orElseThrow(() -> new IllegalStateException("No Metadata response"));
         Cluster clusterSnapshot = mr.buildCluster();
