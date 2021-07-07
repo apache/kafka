@@ -40,7 +40,8 @@
   // Version 12 adds support for flexible versions, epoch detection through the `TruncationOffset` field,
   // and leader discovery through the `CurrentLeader` field
   //
-  "validVersions": "0-12",
+  // Version 13 replaces the topic name field with topic ID (KIP-516).
+  "validVersions": "0-13",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
@@ -51,8 +52,9 @@
       "about": "The fetch session ID, or 0 if this is not part of a fetch session." },
     { "name": "Responses", "type": "[]FetchableTopicResponse", "versions": "0+",
       "about": "The response topics.", "fields": [
-      { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "Topic", "type": "string", "versions": "0-12", "ignorable": true, "entityType": "topicName",
         "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "13+", "ignorable": true, "about": "The unique topic ID"},
       { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
         "about": "The topic partitions.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
