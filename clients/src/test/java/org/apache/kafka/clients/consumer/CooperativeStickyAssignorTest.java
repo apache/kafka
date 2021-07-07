@@ -29,6 +29,8 @@ import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -56,15 +58,24 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
     public void testEncodeAndDecodeGeneration() {
         Subscription subscription = new Subscription(topics(topic), assignor.subscriptionUserData(new HashSet<>(topics(topic))));
 
-        // initially the generation defaults to NO_GENERATION, which gets encoded as Optional.empty()
-        assertFalse(((CooperativeStickyAssignor) assignor).memberData(subscription).generation.isPresent());
+        Optional<Integer> encodedGeneration = ((CooperativeStickyAssignor) assignor).memberData(subscription).generation;
+        assertTrue(encodedGeneration.isPresent());
+        assertEquals(encodedGeneration.get(), DEFAULT_GENERATION);
 
         int generation = 10;
         assignor.onAssignment(null, new ConsumerGroupMetadata("dummy-group-id", generation, "dummy-member-id", Optional.empty()));
 
         subscription = new Subscription(topics(topic), assignor.subscriptionUserData(new HashSet<>(topics(topic))));
-        assertTrue(((CooperativeStickyAssignor) assignor).memberData(subscription).generation.isPresent());
-        assertEquals(((CooperativeStickyAssignor) assignor).memberData(subscription).generation.get(), generation);
+        encodedGeneration = ((CooperativeStickyAssignor) assignor).memberData(subscription).generation;
+
+        assertTrue(encodedGeneration.isPresent());
+        assertEquals(encodedGeneration.get(), generation);
+    }
+
+    @Test
+    public void testDecodeGeneration() {
+        Subscription subscription = new Subscription(topics(topic));
+        assertFalse(((CooperativeStickyAssignor) assignor).memberData(subscription).generation.isPresent());
     }
 
     @Test

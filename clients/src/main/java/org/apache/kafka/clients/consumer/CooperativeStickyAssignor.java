@@ -17,7 +17,9 @@
 package org.apache.kafka.clients.consumer;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -26,6 +28,11 @@ import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.utils.CollectionUtils;
 
 /**
  * A cooperative version of the {@link AbstractStickyAssignor AbstractStickyAssignor}. This follows the same (sticky)
@@ -43,6 +50,11 @@ import org.apache.kafka.common.TopicPartition;
  * cooperative rebalancing. See the <a href="https://kafka.apache.org/documentation/#upgrade_240_notable">upgrade guide</a> for details.
  */
 public class CooperativeStickyAssignor extends AbstractStickyAssignor {
+
+    // these schemas are used for preserving useful metadata for the assignment, such as the last stable generation
+    private static final String GENERATION_KEY_NAME = "generation";
+    private static final Schema COOPERATIVE_STICKY_ASSIGNOR_USER_DATA_V0 = new Schema(
+        new Field(GENERATION_KEY_NAME, Type.INT32));
 
     private int generation = DEFAULT_GENERATION; // consumer group generation
 
@@ -63,25 +75,28 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
 
     @Override
     public ByteBuffer subscriptionUserData(Set<String> topics) {
-        if (generation == DEFAULT_GENERATION) {
-            return ByteBuffer.allocate(0);
-        } else {
-            ByteBuffer buffer = ByteBuffer.allocate(4);
-            buffer.putInt(generation);
-            buffer.flip();
-            return buffer;
-        }
+        Struct struct = new Struct(COOPERATIVE_STICKY_ASSIGNOR_USER_DATA_V0);
+
+        struct.set(GENERATION_KEY_NAME, generation);
+        ByteBuffer buffer = ByteBuffer.allocate(COOPERATIVE_STICKY_ASSIGNOR_USER_DATA_V0.sizeOf(struct));
+        COOPERATIVE_STICKY_ASSIGNOR_USER_DATA_V0.write(buffer, struct);
+        buffer.flip();
+        return buffer;
     }
 
     @Override
     protected MemberData memberData(Subscription subscription) {
         ByteBuffer buffer = subscription.userData();
-
         Optional<Integer> encodedGeneration;
-        if (buffer != null && buffer.rewind().hasRemaining()) {
-            encodedGeneration = Optional.of(buffer.getInt());
-        } else {
+        if (buffer == null) {
             encodedGeneration = Optional.empty();
+        } else {
+            try {
+                Struct struct = COOPERATIVE_STICKY_ASSIGNOR_USER_DATA_V0.read(buffer);
+                encodedGeneration = Optional.of(struct.getInt(GENERATION_KEY_NAME));
+            } catch (Exception e) {
+                encodedGeneration = Optional.of(DEFAULT_GENERATION);
+            }
         }
         return new MemberData(subscription.ownedPartitions(), encodedGeneration);
     }
