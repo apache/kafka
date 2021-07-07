@@ -34,7 +34,7 @@
   <div class="section" id="data-types-and-serialization">
     <span id="streams-developer-guide-serdes"></span><h1>Data Types and Serialization<a class="headerlink" href="#data-types-and-serialization" title="Permalink to this headline"></a></h1>
     <p>Every Kafka Streams application must provide SerDes (Serializer/Deserializer) for the data types of record keys and record values (e.g. <code class="docutils literal"><span class="pre">java.lang.String</span></code>) to materialize the data when necessary.  Operations that require such SerDes information include: <code class="docutils literal"><span class="pre">stream()</span></code>, <code class="docutils literal"><span class="pre">table()</span></code>, <code class="docutils literal"><span class="pre">to()</span></code>, <code class="docutils literal"><span class="pre">repartition()</span></code>, <code class="docutils literal"><span class="pre">groupByKey()</span></code>, <code class="docutils literal"><span class="pre">groupBy()</span></code>.</p>
-    <p>You can provide SerDes by using either of these methods:</p>
+    <p>You can provide SerDes by using either of these methods, but you must use at least one of these methods:</p>
     <ul class="simple">
       <li>By setting default SerDes in the <code class="docutils literal"><span class="pre">java.util.Properties</span></code> config instance.</li>
       <li>By specifying explicit SerDes when calling the appropriate API methods, thus overriding the defaults.</li>
@@ -54,7 +54,9 @@
       </ul>
     <div class="section" id="configuring-serdes">
       <h2>Configuring SerDes<a class="headerlink" href="#configuring-serdes" title="Permalink to this headline"></a></h2>
-      <p>SerDes specified in the Streams configuration are used as the default in your Kafka Streams application.</p>
+      <p>SerDes specified in the Streams configuration are used as the default in your Kafka Streams application.
+          Because this config's default is null, you must either set a default SerDe by using this
+          configuration or pass in SerDes explicitly, as described below.</p>
       <pre class="line-numbers"><code class="language-java">import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 
