@@ -96,7 +96,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                           Map<String, Subscription> subscriptions,
                                           Map<String, List<TopicPartition>> consumerToOwnedPartitions,
                                           Set<TopicPartition> partitionsWithMultiplePreviousOwners) {
-        Set<String> membersWithOldGeneration = new HashSet<>();
         Set<String> membersOfCurrentHighestGeneration = new HashSet<>();
         boolean isAllSubscriptionsEqual = true;
 
@@ -130,11 +129,9 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
                 // If the current member's generation is higher, all the previously owned partitions are invalid
                 if (memberData.generation.isPresent() && memberData.generation.get() > maxGeneration) {
-                    membersWithOldGeneration.addAll(membersOfCurrentHighestGeneration);
-
                     allPreviousPartitionsToOwner.clear();
                     partitionsWithMultiplePreviousOwners.clear();
-                    for (String droppedOutConsumer : membersWithOldGeneration) {
+                    for (String droppedOutConsumer : membersOfCurrentHighestGeneration) {
                         consumerToOwnedPartitions.get(droppedOutConsumer).clear();
                     }
 
@@ -153,8 +150,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                         } else {
                             String otherConsumer = allPreviousPartitionsToOwner.get(tp);
                             log.warn("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
-                                + "same generation, this will be invalidated and removed from their previous assignment.",
-                                     consumer, otherConsumer, tp);
+                                + "same generation {}, this will be invalidated and removed from their previous assignment.",
+                                     consumer, otherConsumer, tp, maxGeneration);
                             consumerToOwnedPartitions.get(otherConsumer).remove(tp);
                             partitionsWithMultiplePreviousOwners.add(tp);
                         }
@@ -221,7 +218,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
             for (TopicPartition doublyClaimedPartition : partitionsWithMultiplePreviousOwners) {
                 if (ownedPartitions.contains(doublyClaimedPartition)) {
-                    log.warn("Found partition {} still claimed as owned by consumer {}, despite being claimed by multiple"
+                    log.warn("Found partition {} still claimed as owned by consumer {}, despite being claimed by multiple "
                                  + "consumers already in the same generation. Removing it from the ownedPartitions",
                              doublyClaimedPartition, consumer);
                     ownedPartitions.remove(doublyClaimedPartition);
@@ -304,7 +301,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 partitionsTransferringOwnership.put(unassignedPartition, consumer);
 
             int currentAssignedCount = consumerAssignment.size();
-            int expectedAssignedCount = numMembersAssignedOverMinQuota < expectedNumMembersAssignedOverMinQuota ? maxQuota : minQuota;
             if (currentAssignedCount == minQuota) {
                 unfilledConsumerIter.remove();
                 potentiallyUnfilledMembersAtMinQuota.add(consumer);
