@@ -30,6 +30,7 @@ import java.util.Objects;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
+import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
 
 public class PartitionRegistration {
@@ -68,20 +69,26 @@ public class PartitionRegistration {
     }
 
     public PartitionRegistration merge(PartitionChangeRecord record) {
+        int[] newReplicas = (record.replicas() == null) ?
+            replicas : Replicas.toArray(record.replicas());
         int[] newIsr = (record.isr() == null) ? isr : Replicas.toArray(record.isr());
+        int[] newRemovingReplicas = (record.removingReplicas() == null) ?
+            removingReplicas : Replicas.toArray(record.removingReplicas());
+        int[] newAddingReplicas = (record.addingReplicas() == null) ?
+            addingReplicas : Replicas.toArray(record.addingReplicas());
         int newLeader;
         int newLeaderEpoch;
-        if (record.leader() == LeaderConstants.NO_LEADER_CHANGE) {
+        if (record.leader() == NO_LEADER_CHANGE) {
             newLeader = leader;
             newLeaderEpoch = leaderEpoch;
         } else {
             newLeader = record.leader();
             newLeaderEpoch = leaderEpoch + 1;
         }
-        return new PartitionRegistration(replicas,
+        return new PartitionRegistration(newReplicas,
             newIsr,
-            removingReplicas,
-            addingReplicas,
+            newRemovingReplicas,
+            newAddingReplicas,
             newLeader,
             newLeaderEpoch,
             partitionEpoch + 1);
@@ -178,6 +185,44 @@ public class PartitionRegistration {
             setAddingReplicas(Replicas.toList(addingReplicas)).
             setRemovingReplicas(Replicas.toList(removingReplicas)).
             setIsNew(isNew);
+    }
+
+    /**
+     * Returns true if this partition is reassigning.
+     */
+    public boolean isReassigning() {
+        return removingReplicas.length > 0 | addingReplicas.length > 0;
+    }
+
+    /**
+     * Check if an ISR change completes this partition's reassignment.
+     *
+     * @param newIsr    The new ISR.
+     * @return          True if the reassignment is complete.
+     */
+    public boolean isrChangeCompletesReassignment(int[] newIsr) {
+        // Check if there is any reassignment in progress.
+        if (!isReassigning()) return false;
+
+        if (removingReplicas.length > 0) {
+            // Check that we would still have at least one replica in the ISR after
+            // removing all removingReplicas.
+            boolean foundNode = false;
+            for (int replica : newIsr) {
+                if (!Replicas.contains(removingReplicas, replica)) {
+                    foundNode = true;
+                    break;
+                }
+            }
+            if (!foundNode) return false;
+        }
+        if (addingReplicas.length > 0) {
+            // Check that the new ISR includes all addingReplicas.
+            for (int replica : addingReplicas) {
+                if (!Replicas.contains(newIsr, replica)) return false;
+            }
+        }
+        return true;
     }
 
     @Override

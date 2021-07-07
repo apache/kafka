@@ -105,4 +105,42 @@ public class PartitionRegistrationTest {
                 setIsNew(false).toString(),
             b.toLeaderAndIsrPartitionState(new TopicPartition("bar", 0), false).toString());
     }
+
+    @Test
+    public void testMergePartitionChangeRecordWithReassignmentData() {
+        PartitionRegistration partition0 = new PartitionRegistration(new int[] {1, 2, 3},
+            new int[] {1, 2, 3}, Replicas.NONE, Replicas.NONE, 1, 100, 200);
+        PartitionRegistration partition1 = partition0.merge(new PartitionChangeRecord().
+            setRemovingReplicas(Collections.singletonList(3)).
+            setAddingReplicas(Collections.singletonList(4)).
+            setReplicas(Arrays.asList(1, 2, 3, 4)));
+        assertEquals(new PartitionRegistration(new int[] {1, 2, 3, 4},
+            new int[] {1, 2, 3}, new int[] {3}, new int[] {4}, 1, 100, 201), partition1);
+        PartitionRegistration partition2 = partition1.merge(new PartitionChangeRecord().
+            setIsr(Arrays.asList(1, 2, 4)).
+            setRemovingReplicas(Collections.emptyList()).
+            setAddingReplicas(Collections.emptyList()).
+            setReplicas(Arrays.asList(1, 2, 4)));
+        assertEquals(new PartitionRegistration(new int[] {1, 2, 4},
+            new int[] {1, 2, 4}, Replicas.NONE, Replicas.NONE, 1, 100, 202), partition2);
+        assertFalse(partition2.isReassigning());
+    }
+
+    @Test
+    public void testPartitionControlInfoIsrChangeCompletesReassignment() {
+        PartitionRegistration partition0 = new PartitionRegistration(
+            new int[]{1, 2, 3, 4}, new int[]{3}, new int[]{3}, new int[] {}, 1, 0, 0);
+        assertTrue(partition0.hasLeader());
+        assertTrue(partition0.isReassigning());
+        assertFalse(partition0.isrChangeCompletesReassignment(partition0.isr));
+        assertTrue(partition0.isrChangeCompletesReassignment(new int[]{1, 3}));
+
+        PartitionRegistration partition1 = new PartitionRegistration(
+            new int[]{1, 2, 3, 4, 5, 6}, new int[]{1, 2, 3, 4},
+            new int[]{3}, new int[] {5, 6}, 1, 0, 0);
+        assertTrue(partition1.hasLeader());
+        assertTrue(partition1.isReassigning());
+        assertFalse(partition1.isrChangeCompletesReassignment(partition1.isr));
+        assertTrue(partition1.isrChangeCompletesReassignment(new int[]{5, 6}));
+    }
 }
