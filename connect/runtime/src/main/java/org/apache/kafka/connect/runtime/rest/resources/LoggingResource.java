@@ -139,10 +139,10 @@ public class LoggingResource {
         } else {
             childLoggers = new ArrayList<>();
             Logger ancestorLogger = lookupLogger(namedLogger);
-            Enumeration en = currentLoggers();
+            Enumeration<Logger> en = currentLoggers();
             boolean present = false;
             while (en.hasMoreElements()) {
-                Logger current = (Logger) en.nextElement();
+                Logger current = en.nextElement();
                 if (current.getName().startsWith(namedLogger)) {
                     childLoggers.add(current);
                 }
