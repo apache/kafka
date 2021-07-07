@@ -131,24 +131,28 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
             case GROUP_AUTHORIZATION_FAILED:
             case GROUP_ID_NOT_FOUND:
             case INVALID_GROUP_ID:
-                log.error("Received non retriable error for group {} in `DeleteConsumerGroupOffsets` response", groupId,
-                        error.exception());
+                log.error("Received non retriable error for group {} in `{}` response", groupId,
+                        apiName(), error.exception());
                 failed.put(groupId, error.exception());
                 return true;
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("DeleteConsumerGroupOffsets request for group {} failed because the coordinator" +
-                    " is still in the process of loading state. Will retry. Will retry", groupId);
+                log.debug("`{}` request for group {} failed because the coordinator" +
+                    " is still in the process of loading state. Will retry.", apiName(), groupId);
                 return true;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
-                log.debug("DeleteConsumerGroupOffsets request for group {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry.", groupId, error);
+                log.debug("`{}` request for group {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry.", apiName(), groupId, error);
                 unmapped.add(groupId);
                 return true;
             default:
+                final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
+                    groupId, apiName());
+                log.error(unexpectedErrorMsg, error.exception());
+                failed.put(groupId, error.exception(unexpectedErrorMsg));
                 return false;
         }
     }

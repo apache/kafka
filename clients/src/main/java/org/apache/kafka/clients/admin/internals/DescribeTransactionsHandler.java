@@ -159,21 +159,21 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
         switch (error) {
             case TRANSACTIONAL_ID_AUTHORIZATION_FAILED:
                 failed.put(transactionalIdKey, new TransactionalIdAuthorizationException(
-                    "DescribeTransactions request for transactionalId `" + transactionalIdKey.idValue + "` " +
+                    apiName() + " request for transactionalId `" + transactionalIdKey.idValue + "` " +
                         "failed due to authorization failure"));
                 break;
 
             case TRANSACTIONAL_ID_NOT_FOUND:
                 failed.put(transactionalIdKey, new TransactionalIdNotFoundException(
-                    "DescribeTransactions request for transactionalId `" + transactionalIdKey.idValue + "` " +
+                    apiName() + " request for transactionalId `" + transactionalIdKey.idValue + "` " +
                         "failed because the ID could not be found"));
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("DescribeTransactions request for transactionalId `{}` failed because the " +
+                log.debug("{} request for transactionalId `{}` failed because the " +
                         "coordinator is still in the process of loading state. Will retry",
-                    transactionalIdKey.idValue);
+                    apiName(), transactionalIdKey.idValue);
                 break;
 
             case NOT_COORDINATOR:
@@ -181,12 +181,12 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
                 unmapped.add(transactionalIdKey);
-                log.debug("DescribeTransactions request for transactionalId `{}` returned error {}. Will attempt " +
-                        "to find the coordinator again and retry", transactionalIdKey.idValue, error);
+                log.debug("{} request for transactionalId `{}` returned error {}. Will attempt " +
+                        "to find the coordinator again and retry", apiName(), transactionalIdKey.idValue, error);
                 break;
 
             default:
-                failed.put(transactionalIdKey, error.exception("DescribeTransactions request for " +
+                failed.put(transactionalIdKey, error.exception(apiName() + " request for " +
                     "transactionalId `" + transactionalIdKey.idValue + "` failed due to unexpected error"));
         }
     }
