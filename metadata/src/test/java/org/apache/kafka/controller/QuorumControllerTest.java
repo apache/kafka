@@ -427,13 +427,13 @@ public class QuorumControllerTest {
                 setName("foo").setTopicId(fooId), (short) 1),
             new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
                 setTopicId(fooId).setReplicas(Arrays.asList(0, 1, 2)).
-                setIsr(Arrays.asList(0, 1, 2)).setRemovingReplicas(null).
-                setAddingReplicas(null).setLeader(0).setLeaderEpoch(0).
+                setIsr(Arrays.asList(0, 1, 2)).setRemovingReplicas(Collections.emptyList()).
+                setAddingReplicas(Collections.emptyList()).setLeader(0).setLeaderEpoch(0).
                 setPartitionEpoch(0), (short) 1),
             new ApiMessageAndVersion(new PartitionRecord().setPartitionId(1).
                 setTopicId(fooId).setReplicas(Arrays.asList(1, 2, 0)).
-                setIsr(Arrays.asList(1, 2, 0)).setRemovingReplicas(null).
-                setAddingReplicas(null).setLeader(1).setLeaderEpoch(0).
+                setIsr(Arrays.asList(1, 2, 0)).setRemovingReplicas(Collections.emptyList()).
+                setAddingReplicas(Collections.emptyList()).setLeader(1).setLeaderEpoch(0).
                 setPartitionEpoch(0), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0)).
