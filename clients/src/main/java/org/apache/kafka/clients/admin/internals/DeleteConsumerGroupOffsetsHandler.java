@@ -149,10 +149,6 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
                 unmapped.add(groupId);
                 return true;
             default:
-                final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
-                    groupId, apiName());
-                log.error(unexpectedErrorMsg, error.exception());
-                failed.put(groupId, error.exception(unexpectedErrorMsg));
                 return false;
         }
     }

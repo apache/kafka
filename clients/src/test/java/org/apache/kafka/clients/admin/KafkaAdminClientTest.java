@@ -3192,8 +3192,6 @@ public class KafkaAdminClientTest {
             DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
             TestUtils.assertFutureError(errorResult.deletedGroups().get("groupId"), GroupAuthorizationException.class);
             
-            // dummy response for MockCLient to handle the UnsupportedVersionException correctly
-            env.kafkaClient().prepareResponse(null);
             // Retriable errors should be retried
             env.kafkaClient().prepareResponse(
                 prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));

@@ -89,18 +89,18 @@ public class ListTransactionsHandler implements AdminApiHandler<AllBrokersStrate
         Errors error = Errors.forCode(response.data().errorCode());
 
         if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-            log.debug("The `ListTransactions` request sent to broker {} failed because the " +
-                "coordinator is still loading state. Will try again after backing off", brokerId);
+            log.debug("The `{}` request sent to broker {} failed because the " +
+                "coordinator is still loading state. Will try again after backing off", apiName(), brokerId);
             return ApiResult.empty();
         } else if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
-            log.debug("The `ListTransactions` request sent to broker {} failed because the " +
-                "coordinator is shutting down", brokerId);
-            return ApiResult.failed(key, new CoordinatorNotAvailableException("ListTransactions " +
-                "request sent to broker " + brokerId + " failed because the coordinator is shutting down"));
+            log.debug("The `{}` request sent to broker {} failed because the " +
+                "coordinator is shutting down", apiName(), brokerId);
+            return ApiResult.failed(key, new CoordinatorNotAvailableException(apiName() +
+                " request sent to broker " + brokerId + " failed because the coordinator is shutting down"));
         } else if (error != Errors.NONE) {
-            log.error("The `ListTransactions` request sent to broker {} failed because of an " +
-                "unexpected error {}", brokerId, error);
-            return ApiResult.failed(key, error.exception("ListTransactions request " +
+            log.error("The `{}` request sent to broker {} failed because of an " +
+                "unexpected error {}", apiName(), brokerId, error);
+            return ApiResult.failed(key, error.exception(apiName() + " request " +
                 "sent to broker " + brokerId + " failed with an unexpected exception"));
         } else {
             List<TransactionListing> listings = response.data().transactionStates().stream()

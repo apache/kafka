@@ -133,7 +133,7 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
                 final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
                     groupId, apiName());
                 log.error(unexpectedErrorMsg, error.exception());
-                failed.put(groupId, error.exception(unexpectedErrorMsg));
+                failed.put(groupId, error.exception());
         }
     }
 

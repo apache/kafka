@@ -162,7 +162,7 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
             default:
                 final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
                     groupId, apiName());
-                log.error(unexpectedErrorMsg, groupId, apiName(), error.exception());
+                log.error(unexpectedErrorMsg, error.exception());
                 failed.put(groupId, error.exception(unexpectedErrorMsg));
         }
     }
