@@ -181,6 +181,22 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
     }
   }
 
+  def topicNamesToIds(): util.Map[String, Uuid] = {
+    new util.HashMap(metadataSnapshot.topicIds.asJava)
+  }
+
+  def topicIdsToNames(): util.Map[Uuid, String] = {
+    new util.HashMap(metadataSnapshot.topicNames.asJava)
+  }
+
+  /**
+   * This method returns a map from topic names to IDs and a map from topic IDs to names
+   */
+  def topicIdInfo(): (util.Map[String, Uuid], util.Map[Uuid, String]) = {
+    val snapshot = metadataSnapshot
+    (new util.HashMap(snapshot.topicIds.asJava), new util.HashMap(snapshot.topicNames.asJava))
+  }
+
   override def getAllTopics(): Set[String] = {
     getAllTopics(metadataSnapshot)
   }
@@ -196,7 +212,7 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
 
   private def getAllPartitions(snapshot: MetadataSnapshot): Map[TopicPartition, UpdateMetadataPartitionState] = {
     snapshot.partitionStates.flatMap { case (topic, partitionStates) =>
-      partitionStates.map { case (partition, state ) => (new TopicPartition(topic, partition.toInt), state) }
+      partitionStates.map { case (partition, state) => (new TopicPartition(topic, partition.toInt), state) }
     }.toMap
   }
 
@@ -262,7 +278,8 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
               broker.getNode(listenerName).getOrElse(Node.noNode())
             case None =>
               Node.noNode()
-          }}).toMap
+          }
+        }).toMap
         .filter(pair => pair match {
           case (_, node) => !node.isEmpty
         })
@@ -330,12 +347,13 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
           error(s"Listeners are not identical across brokers: $aliveNodes")
       }
 
-      val newTopicIds = updateMetadataRequest.topicStates().asScala
-        .map(topicState => (topicState.topicName(), topicState.topicId()))
-        .filter(_._2 != Uuid.ZERO_UUID).toMap
       val topicIds = mutable.Map.empty[String, Uuid]
       topicIds ++= metadataSnapshot.topicIds
-      topicIds ++= newTopicIds
+      val (newTopicIds, newZeroIds) = updateMetadataRequest.topicStates().asScala
+        .map(topicState => (topicState.topicName(), topicState.topicId()))
+        .partition { case (_, topicId) => topicId != Uuid.ZERO_UUID }
+      newZeroIds.foreach { case (zeroIdTopic, _) => topicIds.remove(zeroIdTopic) }
+      topicIds ++= newTopicIds.toMap
 
       val deletedPartitions = new mutable.ArrayBuffer[TopicPartition]
       if (!updateMetadataRequest.partitionStates.iterator.hasNext) {
@@ -401,6 +419,7 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
                               topicIds: Map[String, Uuid],
                               controllerId: Option[Int],
                               aliveBrokers: mutable.LongMap[Broker],
-                              aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]])
-
+                              aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]]) {
+    val topicNames: Map[Uuid, String] = topicIds.map { case (topicName, topicId) => (topicId, topicName) }
+  }
 }

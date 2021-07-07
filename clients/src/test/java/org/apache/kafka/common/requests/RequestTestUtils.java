@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -78,6 +79,7 @@ public class RequestTestUtils {
             metadataResponseTopic
                     .setErrorCode(topicMetadata.error().code())
                     .setName(topicMetadata.topic())
+                    .setTopicId(topicMetadata.topicId())
                     .setIsInternal(topicMetadata.isInternal())
                     .setTopicAuthorizedOperations(topicMetadata.authorizedOperations());
 
@@ -105,14 +107,14 @@ public class RequestTestUtils {
                                                       final Map<String, Integer> topicPartitionCounts,
                                                       final Function<TopicPartition, Integer> epochSupplier) {
         return metadataUpdateWith("kafka-cluster", numNodes, Collections.emptyMap(),
-                topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+                topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(), Collections.emptyMap());
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
                                                       final int numNodes,
                                                       final Map<String, Integer> topicPartitionCounts) {
         return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(),
-                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(), Collections.emptyMap());
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
@@ -120,7 +122,7 @@ public class RequestTestUtils {
                                                       final Map<String, Errors> topicErrors,
                                                       final Map<String, Integer> topicPartitionCounts) {
         return metadataUpdateWith(clusterId, numNodes, topicErrors,
-                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(), Collections.emptyMap());
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
@@ -129,7 +131,7 @@ public class RequestTestUtils {
                                                       final Map<String, Integer> topicPartitionCounts,
                                                       final short responseVersion) {
         return metadataUpdateWith(clusterId, numNodes, topicErrors,
-                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, responseVersion);
+                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, responseVersion, Collections.emptyMap());
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
@@ -138,7 +140,60 @@ public class RequestTestUtils {
                                                       final Map<String, Integer> topicPartitionCounts,
                                                       final Function<TopicPartition, Integer> epochSupplier) {
         return metadataUpdateWith(clusterId, numNodes, topicErrors,
-                topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+                topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(), Collections.emptyMap());
+    }
+
+    public static MetadataResponse metadataUpdateWithIds(final int numNodes,
+                                                         final Map<String, Integer> topicPartitionCounts,
+                                                         final Map<String, Uuid> topicIds) {
+        return metadataUpdateWithIds("kafka-cluster", numNodes, topicPartitionCounts, topicIds);
+    }
+
+    public static MetadataResponse metadataUpdateWithIds(final int numNodes,
+                                                         final Map<String, Integer> topicPartitionCounts,
+                                                         final Function<TopicPartition, Integer> epochSupplier,
+                                                         final Map<String, Uuid> topicIds) {
+        return metadataUpdateWith("kafka-cluster", numNodes, Collections.emptyMap(),
+                topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(),
+                topicIds);
+    }
+
+    public static MetadataResponse metadataUpdateWithIds(final String clusterId,
+                                                         final int numNodes,
+                                                         final Map<String, Integer> topicPartitionCounts,
+                                                         final Map<String, Uuid> topicIds) {
+        return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(),
+                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(),
+                topicIds);
+    }
+
+    public static MetadataResponse metadataUpdateWithIds(final String clusterId,
+                                                         final int numNodes,
+                                                         final Map<String, Errors> topicErrors,
+                                                         final Map<String, Integer> topicPartitionCounts,
+                                                         final Map<String, Uuid> topicIds) {
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(), topicIds);
+    }
+
+    public static MetadataResponse metadataUpdateWithIds(final String clusterId,
+                                                         final int numNodes,
+                                                         final Map<String, Errors> topicErrors,
+                                                         final Map<String, Integer> topicPartitionCounts,
+                                                         final short responseVersion,
+                                                         final Map<String, Uuid> topicIds) {
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, responseVersion, topicIds);
+    }
+
+    public static MetadataResponse metadataUpdateWithIds(final String clusterId,
+                                                         final int numNodes,
+                                                         final Map<String, Errors> topicErrors,
+                                                         final Map<String, Integer> topicPartitionCounts,
+                                                         final Function<TopicPartition, Integer> epochSupplier,
+                                                         final Map<String, Uuid> topicIds) {
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+                topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(), topicIds);
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
@@ -147,7 +202,8 @@ public class RequestTestUtils {
                                                       final Map<String, Integer> topicPartitionCounts,
                                                       final Function<TopicPartition, Integer> epochSupplier,
                                                       final PartitionMetadataSupplier partitionSupplier,
-                                                      final short responseVersion) {
+                                                      final short responseVersion,
+                                                      final Map<String, Uuid> topicIds) {
         final List<Node> nodes = new ArrayList<>(numNodes);
         for (int i = 0; i < numNodes; i++)
             nodes.add(new Node(i, "localhost", 1969 + i));
@@ -167,8 +223,8 @@ public class RequestTestUtils {
                         replicaIds, replicaIds, replicaIds));
             }
 
-            topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic,
-                    Topic.isInternal(topic), partitionMetadata));
+            topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic, topicIds.getOrDefault(topic, Uuid.ZERO_UUID),
+                    Topic.isInternal(topic), partitionMetadata, MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED));
         }
 
         for (Map.Entry<String, Errors> topicErrorEntry : topicErrors.entrySet()) {
