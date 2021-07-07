@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.time.Duration;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * This class is responsible for publishing messages into the remote log metadata topic partitions.
@@ -43,9 +42,6 @@ public class ProducerManager implements Closeable {
     private final KafkaProducer<byte[], byte[]> producer;
     private final RemoteLogMetadataTopicPartitioner topicPartitioner;
     private final TopicBasedRemoteLogMetadataManagerConfig rlmmConfig;
-
-    // It indicates whether closing process has been started or not.
-    private final AtomicBoolean closing = new AtomicBoolean();
 
     public ProducerManager(TopicBasedRemoteLogMetadataManagerConfig rlmmConfig,
                            RemoteLogMetadataTopicPartitioner rlmmTopicPartitioner) {
@@ -88,11 +84,6 @@ public class ProducerManager implements Closeable {
     }
 
     public void close() {
-        // If it is already closed, return from here.
-        if (closing.compareAndSet(false, true)) {
-            return;
-        }
-
         try {
             producer.close(Duration.ofSeconds(30));
         } catch (Exception e) {

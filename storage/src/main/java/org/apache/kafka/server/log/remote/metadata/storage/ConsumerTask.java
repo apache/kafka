@@ -60,7 +60,7 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 class ConsumerTask implements Runnable, Closeable {
     private static final Logger log = LoggerFactory.getLogger(ConsumerTask.class);
 
-    private static final long POLL_INTERVAL_MS = 100;
+    private static final long POLL_INTERVAL_MS = 100L;
 
     private final RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
     private final KafkaConsumer<byte[], byte[]> consumer;
@@ -138,14 +138,19 @@ class ConsumerTask implements Runnable, Closeable {
                 return;
             }
 
-            while (assignedMetaPartitions.isEmpty() && !closing) {
+            while (assignedMetaPartitions.isEmpty()) {
                 // If no partitions are assigned, wait until they are assigned.
                 log.debug("Waiting for assigned remote log metadata partitions..");
                 try {
                     // No timeout is set here, as it is always notified. Even when it is closed, the race can happen
-                    // between the thread calling this method and the thread calling close() but closing check earlier
-                    // will guard against not coming here after closing is set and notify is invoked.
+                    // between the thread calling this method and the thread calling close(). We should have a check
+                    // for closing as that might have been set and notified with assignPartitionsLock by `close`
+                    // method.
                     assignPartitionsLock.wait();
+
+                    if (closing) {
+                        return;
+                    }
                 } catch (InterruptedException e) {
                     throw new KafkaException(e);
                 }
