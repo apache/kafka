@@ -101,12 +101,20 @@ object Partition extends KafkaMetricsGroup {
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
     val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString)
-    removeMetric("UnderReplicated", tags)
-    removeMetric("UnderMinIsr", tags)
-    removeMetric("InSyncReplicasCount", tags)
-    removeMetric("ReplicasCount", tags)
-    removeMetric("LastStableOffsetLag", tags)
-    removeMetric("AtMinIsr", tags)
+    PartitionMetricNames.allMetricNames.foreach(removeMetric(_, tags))
+  }
+}
+
+object PartitionMetricNames {
+  val UnderReplicated: String = "UnderReplicated"
+  val UnderMinIsr: String = "UnderMinIsr"
+  val InSyncReplicasCount: String = "InSyncReplicasCount"
+  val ReplicasCount: String = "ReplicasCount"
+  val LastStableOffsetLag: String = "LastStableOffsetLag"
+  val AtMinIsr: String = "AtMinIsr"
+
+  def allMetricNames: List[String] = {
+    List(UnderReplicated, UnderMinIsr, InSyncReplicasCount, ReplicasCount, LastStableOffsetLag, AtMinIsr)
   }
 }
 
@@ -257,12 +265,12 @@ class Partition(val topicPartition: TopicPartition,
 
   private val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
 
-  newGauge("UnderReplicated", () => if (isUnderReplicated) 1 else 0, tags)
-  newGauge("InSyncReplicasCount", () => if (isLeader) isrState.isr.size else 0, tags)
-  newGauge("UnderMinIsr", () => if (isUnderMinIsr) 1 else 0, tags)
-  newGauge("AtMinIsr", () => if (isAtMinIsr) 1 else 0, tags)
-  newGauge("ReplicasCount", () => if (isLeader) assignmentState.replicationFactor else 0, tags)
-  newGauge("LastStableOffsetLag", () => log.map(_.lastStableOffsetLag).getOrElse(0), tags)
+  newGauge(PartitionMetricNames.UnderReplicated, () => if (isUnderReplicated) 1 else 0, tags)
+  newGauge(PartitionMetricNames.InSyncReplicasCount, () => if (isLeader) isrState.isr.size else 0, tags)
+  newGauge(PartitionMetricNames.UnderMinIsr, () => if (isUnderMinIsr) 1 else 0, tags)
+  newGauge(PartitionMetricNames.AtMinIsr, () => if (isAtMinIsr) 1 else 0, tags)
+  newGauge(PartitionMetricNames.ReplicasCount, () => if (isLeader) assignmentState.replicationFactor else 0, tags)
+  newGauge(PartitionMetricNames.LastStableOffsetLag, () => log.map(_.lastStableOffsetLag).getOrElse(0), tags)
 
   def isUnderReplicated: Boolean = isLeader && (assignmentState.replicationFactor - isrState.isr.size) > 0
 
