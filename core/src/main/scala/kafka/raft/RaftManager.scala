@@ -36,7 +36,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest}
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import scala.jdk.CollectionConverters._
 
@@ -104,6 +104,8 @@ trait RaftManager[T] {
   def leaderAndEpoch: LeaderAndEpoch
 
   def client: RaftClient[T]
+
+  def replicatedLog: ReplicatedLog
 }
 
 class KafkaRaftManager[T](
@@ -127,9 +129,9 @@ class KafkaRaftManager[T](
   scheduler.startup()
 
   private val dataDir = createDataDir()
-  private val metadataLog = buildMetadataLog()
+  override val replicatedLog = buildMetadataLog()
   private val netChannel = buildNetworkChannel()
-  val client: KafkaRaftClient[T] = buildRaftClient()
+  override val client: KafkaRaftClient[T] = buildRaftClient()
   private val raftIoThread = new RaftIoThread(client, threadNamePrefix)
 
   def kafkaRaftClient: KafkaRaftClient[T] = client
@@ -158,7 +160,7 @@ class KafkaRaftManager[T](
     client.close()
     scheduler.shutdown()
     netChannel.close()
-    metadataLog.close()
+    replicatedLog.close()
   }
 
   override def register(
@@ -221,7 +223,7 @@ class KafkaRaftManager[T](
     val client = new KafkaRaftClient(
       recordSerde,
       netChannel,
-      metadataLog,
+      replicatedLog,
       quorumStateStore,
       time,
       metrics,
@@ -252,8 +254,7 @@ class KafkaRaftManager[T](
       dataDir,
       time,
       scheduler,
-      maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-      maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+      config = MetadataLogConfig(config, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)
     )
   }
 

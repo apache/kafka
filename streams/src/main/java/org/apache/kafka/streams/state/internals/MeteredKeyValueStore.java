@@ -26,6 +26,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -138,8 +139,8 @@ public class MeteredKeyValueStore<K, V>
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
     }
 
-    protected Serde<V> prepareValueSerdeForStore(final Serde<V> valueSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde) {
-        return WrappingNullableUtils.prepareValueSerde(valueSerde, contextKeySerde, contextValueSerde);
+    protected Serde<V> prepareValueSerdeForStore(final Serde<V> valueSerde, final SerdeGetter getter) {
+        return WrappingNullableUtils.prepareValueSerde(valueSerde, getter);
     }
 
 
@@ -151,8 +152,8 @@ public class MeteredKeyValueStore<K, V>
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
-            prepareValueSerdeForStore(valueSerde, context.keySerde(), context.valueSerde())
+            prepareKeySerde(keySerde, new SerdeGetter(context)),
+            prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
         );
     }
 
@@ -163,8 +164,8 @@ public class MeteredKeyValueStore<K, V>
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
-            prepareValueSerdeForStore(valueSerde, context.keySerde(), context.valueSerde())
+            prepareKeySerde(keySerde, new SerdeGetter(context)),
+            prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
         );
     }
 

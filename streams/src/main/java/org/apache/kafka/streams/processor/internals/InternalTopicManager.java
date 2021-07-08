@@ -694,7 +694,7 @@ public class InternalTopicManager {
         while (!topicsStillToCleanup.isEmpty()) {
             log.info("Going to cleanup internal topics: " + topicsStillToCleanup);
             final DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(topicsStillToCleanup);
-            final Map<String, KafkaFuture<Void>> deleteResultForTopic = deleteTopicsResult.values();
+            final Map<String, KafkaFuture<Void>> deleteResultForTopic = deleteTopicsResult.topicNameValues();
             while (!deleteResultForTopic.isEmpty()) {
                 for (final String topicName : new HashSet<>(topicsStillToCleanup)) {
                     if (!deleteResultForTopic.containsKey(topicName)) {

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.easymock.EasyMockRunner;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -27,7 +26,6 @@ import org.rocksdb.AbstractWalFilter;
 import org.rocksdb.AccessHint;
 import org.rocksdb.BuiltinComparator;
 import org.rocksdb.ColumnFamilyOptions;
-import org.rocksdb.CompactionOptionsFIFO;
 import org.rocksdb.CompactionPriority;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.ComparatorOptions;
@@ -62,7 +60,6 @@ import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
-import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.matchesPattern;
@@ -308,45 +305,5 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         }
 
         return parameters;
-    }
-
-    @Test
-    public void shouldWarnThanMethodCompactionOptionsFIFOSetTtlWillBeRemoved() {
-        final DBOptions mockedDbOptions = mock(DBOptions.class);
-        final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeDbOptions
-            = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(mockedDbOptions, new ColumnFamilyOptions());
-
-        try (final LogCaptureAppender appender =
-            LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
-            optionsFacadeDbOptions.setCompactionOptionsFIFO(new CompactionOptionsFIFO());
-
-            assertThat(
-                appender.getMessages(),
-                hasItem("RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release." +
-                    " If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite" +
-                    " your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options`" +
-                    " (or `org.rocksdb.ColumnFamilyOptions`).")
-            );
-        }
-    }
-
-    @Test
-    public void shouldWarnThanMethodCompactionOptionsFIFOTtlWillBeRemoved() {
-        final DBOptions mockedDbOptions = mock(DBOptions.class);
-        final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeDbOptions
-            = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(mockedDbOptions, new ColumnFamilyOptions());
-
-        try (final LogCaptureAppender appender =
-            LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
-            optionsFacadeDbOptions.compactionOptionsFIFO();
-
-            assertThat(
-                appender.getMessages(),
-                hasItem("RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release." +
-                    " If you use `org.rocksdb.CompactionOptionsFIFO#setTtl(long)` or `#ttl()` you will need to rewrite" +
-                    " your code after KAFKA-8897 is resolved and set TTL via `org.rocksdb.Options`" +
-                    " (or `org.rocksdb.ColumnFamilyOptions`).")
-            );
-        }
     }
 }

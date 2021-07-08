@@ -40,7 +40,7 @@ public class KStreamBranchTest {
     private final String topicName = "topic";
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    @SuppressWarnings({"unchecked", "deprecation"})
+    @SuppressWarnings({"unchecked", "deprecation"}) // Old PAPI. Needs to be migrated.
     @Test
     public void testKStreamBranch() {
         final StreamsBuilder builder = new StreamsBuilder();
