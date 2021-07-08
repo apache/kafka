@@ -36,7 +36,6 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.metrics.stats.WindowedCount
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics => kMetrics}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
@@ -1246,10 +1245,6 @@ class GroupMetadataManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
 
-    val sensor = groupMetadataManager.offsetCommitsSensor
-    val offsetCommitCount = new WindowedCount()
-    sensor.add(metrics.metricName("commit-count", "unit-test", "offset commit count"), offsetCommitCount)
-
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
@@ -1265,7 +1260,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    assertEquals(0, offsetCommitCount.current(time.milliseconds()).eventCount)
+    assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
     assertTrue(group.hasOffsets)
 
@@ -1284,7 +1279,7 @@ class GroupMetadataManagerTest {
 
     EasyMock.verify(replicaManager)
     // Will update sensor after commit
-    assertEquals(1, offsetCommitCount.current(time.milliseconds()).eventCount)
+    assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
   }
 
   @Test
@@ -1455,10 +1450,6 @@ class GroupMetadataManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
 
-    val sensor = groupMetadataManager.offsetCommitsSensor
-    val offsetCommitCount = new WindowedCount()
-    sensor.add(metrics.metricName("commit-count", "unit-test", "offset commit count"), offsetCommitCount)
-
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
@@ -1474,7 +1465,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    assertEquals(0, offsetCommitCount.current(time.milliseconds()).eventCount)
+    assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
     assertTrue(group.hasOffsets)
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
@@ -1490,7 +1481,7 @@ class GroupMetadataManagerTest {
 
     EasyMock.verify(replicaManager)
     // Will not update sensor if failed
-    assertEquals(0, offsetCommitCount.current(time.milliseconds()).eventCount)
+    assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
   }
 
   @Test
@@ -1501,10 +1492,6 @@ class GroupMetadataManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val topicPartitionFailed = new TopicPartition("foo", 1)
     val offset = 37
-
-    val sensor = groupMetadataManager.offsetCommitsSensor
-    val offsetCommitCount = new WindowedCount()
-    sensor.add(metrics.metricName("commit-count", "unit-test", "offset commit count"), offsetCommitCount)
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
@@ -1525,7 +1512,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    assertEquals(0, offsetCommitCount.current(time.milliseconds()).eventCount)
+    assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
     assertTrue(group.hasOffsets)
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
@@ -1541,7 +1528,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartitionFailed).map(_.offset))
 
     EasyMock.verify(replicaManager)
-    assertEquals(1, offsetCommitCount.current(time.milliseconds()).eventCount)
+    assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
   }
 
   @Test
@@ -1549,10 +1536,6 @@ class GroupMetadataManagerTest {
     val memberId = ""
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
-
-    val sensor = groupMetadataManager.offsetCommitsSensor
-    val offsetCommitCount = new WindowedCount()
-    sensor.add(metrics.metricName("commit-count", "unit-test", "offset commit count"), offsetCommitCount)
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
     val group = new GroupMetadata(groupId, Empty, time)
@@ -1567,7 +1550,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    assertEquals(0, offsetCommitCount.current(time.milliseconds()).eventCount)
+    assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
     assertFalse(group.hasOffsets)
 
@@ -1579,7 +1562,7 @@ class GroupMetadataManagerTest {
     val cachedOffsets = groupMetadataManager.getOffsets(groupId, defaultRequireStable, Some(Seq(topicPartition)))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition).map(_.offset))
 
-    assertEquals(0, offsetCommitCount.current(time.milliseconds()).eventCount)
+    assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
   }
 
   @Test
