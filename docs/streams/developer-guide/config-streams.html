@@ -551,7 +551,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
         <div class="section" id="default-key-serde">
           <h4><a class="toc-backref" href="#id8">default.key.serde</a><a class="headerlink" href="#default-key-serde" title="Permalink to this headline"></a></h4>
           <blockquote>
-            <div><p>The default Serializer/Deserializer class for record keys, null until set by user. Serialization and deserialization in Kafka Streams happens
+            <div><p>The default Serializer/Deserializer class for record keys, null unless set by user. Serialization and deserialization in Kafka Streams happens
               whenever data needs to be materialized, for example:</p>
                 <div><ul class="simple">
                   <li>Whenever data is read from or written to a <em>Kafka topic</em> (e.g., via the <code class="docutils literal"><span class="pre">StreamsBuilder#stream()</span></code> and <code class="docutils literal"><span class="pre">KStream#to()</span></code> methods).</li>
@@ -564,7 +564,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
         <div class="section" id="default-value-serde">
           <h4><a class="toc-backref" href="#id9">default.value.serde</a><a class="headerlink" href="#default-value-serde" title="Permalink to this headline"></a></h4>
           <blockquote>
-            <div><p>The default Serializer/Deserializer class for record values, null until set by user. Serialization and deserialization in Kafka Streams
+            <div><p>The default Serializer/Deserializer class for record values, null unless set by user. Serialization and deserialization in Kafka Streams
               happens whenever data needs to be materialized, for example:</p>
               <ul class="simple">
                 <li>Whenever data is read from or written to a <em>Kafka topic</em> (e.g., via the <code class="docutils literal"><span class="pre">StreamsBuilder#stream()</span></code> and <code class="docutils literal"><span class="pre">KStream#to()</span></code> methods).</li>
