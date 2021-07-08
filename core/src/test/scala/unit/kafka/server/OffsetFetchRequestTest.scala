@@ -20,6 +20,7 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, OffsetAndMetadata}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.OffsetFetchRequestData.{OffsetFetchRequestGroup, OffsetFetchRequestTopics}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.{AbstractResponse, OffsetFetchRequest, OffsetFetchResponse}
@@ -42,6 +43,7 @@ class OffsetFetchRequestTest extends BaseRequestTest {
   val topic = "topic"
   val groupId = "groupId"
   val groups: Seq[String] = (1 to 5).map(i => s"group$i")
+  val topics: Seq[String] = (1 to 3).map(i => s"topic$i")
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
@@ -113,21 +115,18 @@ class OffsetFetchRequestTest extends BaseRequestTest {
   @Test
   def testOffsetFetchRequestWithMultipleGroups(): Unit = {
 
-    val topic1 = "topic1"
-    val topic1List = singletonList(new TopicPartition(topic1, 0))
-    val topic2 = "topic2"
+    val topic1List = singletonList(new TopicPartition(topics(0), 0))
     val topic1And2List = util.Arrays.asList(
-      new TopicPartition(topic1, 0),
-      new TopicPartition(topic2, 0),
-      new TopicPartition(topic2, 1))
-    val topic3 = "topic3"
+      new TopicPartition(topics(0), 0),
+      new TopicPartition(topics(1), 0),
+      new TopicPartition(topics(1), 1))
     val allTopicsList = util.Arrays.asList(
-      new TopicPartition(topic1, 0),
-      new TopicPartition(topic2, 0),
-      new TopicPartition(topic2, 1),
-      new TopicPartition(topic3, 0),
-      new TopicPartition(topic3, 1),
-      new TopicPartition(topic3, 2))
+      new TopicPartition(topics(0), 0),
+      new TopicPartition(topics(1), 0),
+      new TopicPartition(topics(1), 1),
+      new TopicPartition(topics(2), 0),
+      new TopicPartition(topics(2), 1),
+      new TopicPartition(topics(2), 2))
 
     // create group to partition map to build batched offsetFetch request
     val groupToPartitionMap: util.Map[String, util.List[TopicPartition]] =
@@ -138,9 +137,9 @@ class OffsetFetchRequestTest extends BaseRequestTest {
     groupToPartitionMap.put(groups(3), null)
     groupToPartitionMap.put(groups(4), null)
 
-    createTopic(topic1)
-    createTopic(topic2, numPartitions = 2)
-    createTopic(topic3, numPartitions = 3)
+    createTopic(topics(0))
+    createTopic(topics(1), numPartitions = 2)
+    createTopic(topics(2), numPartitions = 3)
 
     val topicOneOffsets = topic1List.asScala.map{
       tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
@@ -183,6 +182,96 @@ class OffsetFetchRequestTest extends BaseRequestTest {
           case "group3" =>
             verifyResponse(response.groupLevelError(groups(2)),
               response.partitionDataMap(groups(2)), allTopicsList)
+          case "group4" =>
+            verifyResponse(response.groupLevelError(groups(3)),
+              response.partitionDataMap(groups(3)), allTopicsList)
+          case "group5" =>
+            verifyResponse(response.groupLevelError(groups(4)),
+              response.partitionDataMap(groups(4)), allTopicsList)
+        })
+    }
+  }
+
+  @Test
+  def testOffsetFetchRequestWithMultipleGroupsWithOneGroupRepeating(): Unit = {
+    val topic1List = singletonList(new TopicPartition(topics(0), 0))
+    val topic1And2List = util.Arrays.asList(
+      new TopicPartition(topics(0), 0),
+      new TopicPartition(topics(1), 0),
+      new TopicPartition(topics(1), 1))
+    val allTopicsList = util.Arrays.asList(
+      new TopicPartition(topics(0), 0),
+      new TopicPartition(topics(1), 0),
+      new TopicPartition(topics(1), 1),
+      new TopicPartition(topics(2), 0),
+      new TopicPartition(topics(2), 1),
+      new TopicPartition(topics(2), 2))
+
+    // create group to partition map to build batched offsetFetch request
+    val groupToPartitionMap: util.Map[String, util.List[TopicPartition]] =
+      new util.HashMap[String, util.List[TopicPartition]]()
+    groupToPartitionMap.put(groups(0), topic1List)
+    groupToPartitionMap.put(groups(1), topic1And2List)
+    groupToPartitionMap.put(groups(2), allTopicsList)
+    groupToPartitionMap.put(groups(3), null)
+    groupToPartitionMap.put(groups(4), null)
+
+    createTopic(topics(0))
+    createTopic(topics(1), numPartitions = 2)
+    createTopic(topics(2), numPartitions = 3)
+
+    val topicOneOffsets = topic1List.asScala.map{
+      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
+    }.toMap.asJava
+    val topicOneAndTwoOffsets = topic1And2List.asScala.map{
+      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
+    }.toMap.asJava
+    val allTopicOffsets = allTopicsList.asScala.map{
+      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
+    }.toMap.asJava
+
+    // create 5 consumers to commit offsets so we can fetch them later
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(0))
+    commitOffsets(topic1List, topicOneOffsets)
+
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(1))
+    commitOffsets(topic1And2List, topicOneAndTwoOffsets)
+
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(2))
+    commitOffsets(allTopicsList, allTopicOffsets)
+
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(3))
+    commitOffsets(allTopicsList, allTopicOffsets)
+
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(4))
+    commitOffsets(allTopicsList, allTopicOffsets)
+
+    for (version <- 8 to ApiKeys.OFFSET_FETCH.latestVersion()) {
+      val request = new OffsetFetchRequest.Builder(groupToPartitionMap, false, false)
+        .build(version.asInstanceOf[Short])
+      val requestGroups = request.data().groups()
+      requestGroups.add(
+        // add the same group as before with different topic partitions
+        new OffsetFetchRequestGroup()
+          .setGroupId(groups(2))
+          .setTopics(singletonList(
+            new OffsetFetchRequestTopics()
+              .setName(topics(0))
+              .setPartitionIndexes(singletonList(0)))))
+      request.data().setGroups(requestGroups)
+      val response = connectAndReceive[OffsetFetchResponse](request)
+      response.data().groups().forEach(g =>
+        g.groupId() match {
+          case "group1" =>
+            verifyResponse(response.groupLevelError(groups(0)),
+              response.partitionDataMap(groups(0)), topic1List)
+          case "group2" =>
+            verifyResponse(response.groupLevelError(groups(1)),
+              response.partitionDataMap(groups(1)), topic1And2List)
+          case "group3" =>
+            // verify that the response gives back the latest changed topic partition list
+            verifyResponse(response.groupLevelError(groups(2)),
+              response.partitionDataMap(groups(2)), topic1List)
           case "group4" =>
             verifyResponse(response.groupLevelError(groups(3)),
               response.partitionDataMap(groups(3)), allTopicsList)
