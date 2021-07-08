@@ -326,9 +326,9 @@
 
     <!-- Storage -->
     <suppress checks="(ImportOrder|AvoidStarImport)"
-              files="storage[\\/]src[\\/](main|test)[\\/].+.java$"/>
+              files="storage[\\/]api[\\/]src[\\/](main|test)[\\/].+.java$"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|ImportOrder|AvoidStarImport)"
-              files="storage[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+              files="storage[\\/]api[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
     <suppress checks="(CyclomaticComplexity|ParameterNumber)"
               files="(RemoteLogManagerConfig).java"/>
 
