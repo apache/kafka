@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Objects;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Encapsulates an error code (via the Errors enum) and an optional message. Generally, the optional message is only
@@ -38,8 +39,13 @@ public class ApiError {
 
     public static ApiError fromThrowable(Throwable t) {
         Throwable throwableToBeEncode = t;
-        // Future will wrap the original exception with completionException, which will return unexpected UNKNOWN_SERVER_ERROR.
-        if (t instanceof CompletionException) {
+        // Get the original cause from `CompletionException` and `ExecutionException`, otherwise, it will return unexpected UNKNOWN_SERVER_ERROR.
+        // CompletableFuture  will wrap the original cause within `CompletionException` when it completes exceptionally
+        // Future#get might also wrap the original cause inside `ExecutionException` when the async call throws exception
+        // ex: In KRaft mode, we'll forward the API request to active controller with Envelope request, when the Envelope request
+        // has exception thrown (ex: Not_Controller exception), we'll get `CompletableFuture` with real cause inside.
+        // To get the correct ApiError, we should unwrap the `CompletableFuture`, so that the requester can handle the error accordingly.
+        if (t instanceof CompletionException || t instanceof ExecutionException) {
             throwableToBeEncode = t.getCause();
         }
         // Avoid populating the error message if it's a generic one. Also don't populate error

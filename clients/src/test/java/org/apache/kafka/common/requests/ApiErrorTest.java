@@ -20,6 +20,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
@@ -32,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -62,10 +64,15 @@ public class ApiErrorTest {
         arguments.add(Arguments.of(
             new NotCoordinatorException(notCoordinatorErrorMsg), Errors.NOT_COORDINATOR, notCoordinatorErrorMsg));
 
-        String notControllerErrorMsg = "Not coordinator";
+        String notControllerErrorMsg = "Not controller";
         // test the NotControllerException is wrapped in the CompletionException, should return correct error
         arguments.add(Arguments.of(
             new CompletionException(new NotControllerException(notControllerErrorMsg)), Errors.NOT_CONTROLLER, notControllerErrorMsg));
+
+        String requestTimeoutErrorMsg = "request time out";
+        // test the TimeoutException is wrapped in the ExecutionException, should return correct error
+        arguments.add(Arguments.of(
+            new ExecutionException(new TimeoutException(requestTimeoutErrorMsg)), Errors.REQUEST_TIMED_OUT, requestTimeoutErrorMsg));
 
         // test the exception not in the Errors list, should return UNKNOWN_SERVER_ERROR
         arguments.add(Arguments.of(new IOException(), Errors.UNKNOWN_SERVER_ERROR, null));
