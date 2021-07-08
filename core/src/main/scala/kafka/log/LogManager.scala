@@ -312,7 +312,15 @@ class LogManager(logDirs: Seq[File],
       val logDirAbsolutePath = dir.getAbsolutePath
       var hadCleanShutdown: Boolean = false
       try {
-        val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
+        val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir, new ThreadFactory {
+          private val factory = Executors.defaultThreadFactory()
+          private val threadNumber = new AtomicInteger(1)
+          override def newThread(r: Runnable): Thread = {
+            val thread = factory.newThread(r)
+            thread.setName(s"log-recovery(${dir.getAbsolutePath}, ${threadNumber.getAndIncrement()})")
+            thread
+          }
+        })
         threadPools.append(pool)
 
         val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
