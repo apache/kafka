@@ -36,8 +36,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.condition.DisabledOnJre;
-import org.junit.jupiter.api.condition.JRE;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -625,22 +623,6 @@ public class SslTransportLayerTest {
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
 
         selector.close();
-    }
-
-    /**
-     * Tests that connections cannot be made with unsupported TLS versions
-     */
-    @ParameterizedTest
-    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
-    @DisabledOnJre(JRE.JAVA_16)
-    public void testUnsupportedTlsVersion(Args args) throws Exception {
-        server = createEchoServer(args, SecurityProtocol.SSL);
-
-        checkAuthenticationFailed(args, "0", "TLSv1.1");
-        server.verifyAuthenticationMetrics(0, 1);
-
-        checkAuthenticationFailed(args, "0", "TLSv1");
-        server.verifyAuthenticationMetrics(0, 2);
     }
 
     /**

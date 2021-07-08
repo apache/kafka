@@ -123,7 +123,7 @@ public class MetadataResponse extends AbstractResponse {
      * Get a snapshot of the cluster metadata from this response
      * @return the cluster snapshot
      */
-    public Cluster cluster() {
+    public Cluster buildCluster() {
         Set<String> internalTopics = new HashSet<>();
         List<PartitionInfo> partitions = new ArrayList<>();
         Map<String, Uuid> topicIds = new HashMap<>();

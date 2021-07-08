@@ -284,7 +284,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(RETRIES_CONFIG, Type.INT, Integer.MAX_VALUE, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
                                 .define(ACKS_CONFIG,
                                         Type.STRING,
-                                        "1",
+                                        "all",
                                         in("all", "-1", "0", "1"),
                                         Importance.HIGH,
                                         ACKS_DOC)
@@ -396,7 +396,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .withClientSaslSupport()
                                 .define(ENABLE_IDEMPOTENCE_CONFIG,
                                         Type.BOOLEAN,
-                                        false,
+                                        true,
                                         Importance.LOW,
                                         ENABLE_IDEMPOTENCE_DOC)
                                 .define(TRANSACTION_TIMEOUT_CONFIG,
