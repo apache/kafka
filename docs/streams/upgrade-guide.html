@@ -96,6 +96,23 @@
 
     <h3><a id="streams_api_changes_300" href="#streams_api_changes_300">Streams API changes in 3.0.0</a></h3>
     <p>
+      We improved the semantics of
+      <a href="/documentation/streams/developer-guide/config-streams.html#max-task-idle-ms">task idling (<code>max.task.idle.ms</code>)</a>.
+      Now Streams provides stronger in-order join and merge processing semantics.
+      Streams's new default pauses processing on tasks with multiple input partitions
+      when one of the partitions has no data buffered locally but has a non-zero lag. In other
+      words, Streams will wait to fetch records that are already available on the broker. This
+      results in improved join semantics, since it allows Streams to interleave the two input
+      partitions in timestamp order instead of just processing whichever partition happens to be
+      buffered. There is an option to disable this new behavior, and there is also an option to
+      make Streams wait even longer for new records to be <em>produced</em> to the input partitions,
+      which you can use to get stronger time semantics when you know some of your producers may be
+      slow. See the
+      <a href="/documentation/streams/developer-guide/config-streams.html#max-task-idle-ms">config reference</a>
+      for more information, and <a href="https://cwiki.apache.org/confluence/x/JSXZCQ">KIP-695</a>
+      for the larger context of this change.
+    </p>
+    <p>
         Interactive Queries may throw new exceptions for different errors:
     </p>
     <ul>
