@@ -404,13 +404,12 @@ final class KafkaMetadataLog private (
       return false
 
     var didClean = false
-    snapshots.keys.toSeq.sliding(2).toSeq.takeWhile {
+    snapshots.keys.toSeq.sliding(2).foreach {
       case Seq(snapshot: OffsetAndEpoch, nextSnapshot: OffsetAndEpoch) =>
         if (predicate(snapshot) && deleteBeforeSnapshot(nextSnapshot)) {
           didClean = true
-          true
         } else {
-          false
+          return didClean
         }
       case _ => false // Shouldn't get here with the sliding window
     }
