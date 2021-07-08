@@ -178,13 +178,13 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      * @param consumerToOwnedPartitions            Each consumer's previously owned and still-subscribed partitions
      * @param partitionsWithMultiplePreviousOwners The partitions being claimed in the previous assignment of multiple consumers
      *
-     * @return                            Map from each member to the list of partitions assigned to them.
+     * @return                                     Map from each member to the list of partitions assigned to them.
      */
     private Map<String, List<TopicPartition>> constrainedAssign(Map<String, Integer> partitionsPerTopic,
                                                                 Map<String, List<TopicPartition>> consumerToOwnedPartitions,
                                                                 Set<TopicPartition> partitionsWithMultiplePreviousOwners) {
         if (log.isDebugEnabled()) {
-            log.debug("performing constrained assign. partitionsPerTopic: {}, consumerToOwnedPartitions: {}",
+            log.debug("Performing constrained assign with partitionsPerTopic: {}, consumerToOwnedPartitions: {}.",
                 partitionsPerTopic, consumerToOwnedPartitions);
         }
 
@@ -344,9 +344,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             }
         }
 
-        if (log.isDebugEnabled()) {
-            log.debug("Final assignment of partitions to consumers: \n{}", assignment);
-        }
+        log.info("Final assignment of partitions to consumers: \n{}", assignment);
 
         return assignment;
     }
@@ -464,7 +462,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
         // all partitions that needed to be assigned
         List<TopicPartition> unassignedPartitions = getUnassignedPartitions(sortedAllPartitions, assignedPartitions, topic2AllPotentialConsumers);
-        assignedPartitions = null;
 
         if (log.isDebugEnabled()) {
             log.debug("unassigned Partitions: {}", unassignedPartitions);
@@ -482,9 +479,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             consumer2AllPotentialTopics, topic2AllPotentialConsumers, currentPartitionConsumer, revocationRequired,
             partitionsPerTopic, totalPartitionsCount);
 
-        if (log.isDebugEnabled()) {
-            log.debug("final assignment: {}", currentAssignment);
-        }
+        log.info("Final assignment of partitions to consumers: \n{}", currentAssignment);
 
         return currentAssignment;
     }
