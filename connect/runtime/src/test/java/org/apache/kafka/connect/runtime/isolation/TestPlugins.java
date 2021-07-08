@@ -27,7 +27,6 @@ import java.io.StringWriter;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -64,56 +63,95 @@ import org.slf4j.LoggerFactory;
  * the names of the different plugins directly via the exposed constants.
  */
 public class TestPlugins {
+    public enum TestPlugin {
+        /**
+         * Resource dir and class name of a plugin which will always throw an exception during loading
+         */
+        ALWAYS_THROW_EXCEPTION("always-throw-exception", "test.plugins.AlwaysThrowException"),
+        /**
+         * Resource dir and class name of a plugin which samples information about its initialization.
+         */
+        ALIASED_STATIC_FIELD("aliased-static-field", "test.plugins.AliasedStaticField"),
+        /**
+         * Resource dir and class name of a {@link org.apache.kafka.connect.storage.Converter}
+         * which samples information about its method calls.
+         */
+        SAMPLING_CONVERTER("sampling-converter", "test.plugins.SamplingConverter"),
+        /**
+         * Resource dir and class name of a {@link org.apache.kafka.common.Configurable}
+         * which samples information about its method calls.
+         */
+        SAMPLING_CONFIGURABLE("sampling-configurable", "test.plugins.SamplingConfigurable"),
+        /**
+         * Resource dir and class name of a {@link org.apache.kafka.connect.storage.HeaderConverter}
+         * which samples information about its method calls.
+         */
+        SAMPLING_HEADER_CONVERTER("sampling-header-converter", "test.plugins.SamplingHeaderConverter"),
+        /**
+         * Resource dir and class name of a {@link org.apache.kafka.common.config.provider.ConfigProvider}
+         * which samples information about its method calls.
+         */
+        SAMPLING_CONFIG_PROVIDER("sampling-config-provider", "test.plugins.SamplingConfigProvider"),
+        /**
+         * Resource dir and class name of a plugin which uses a {@link java.util.ServiceLoader}
+         * to load internal classes, and samples information about their initialization.
+         */
+        SERVICE_LOADER("service-loader", "test.plugins.ServiceLoaderPlugin"),
+        /**
+         * Resource dir and class name of plugins which reads a version string from resource.
+         */
+        READ_VERSION_FROM_RESOURCE_V1("read-version-from-resource-v1", "test.plugins.ReadVersionFromResource"),
+        // The behavior of DelegatingClassLoader when two jars providing the same plugin are both
+        // on the plugin path is undeterministic. So, hide the v2 jar from the plugin path. This jar
+        // is only used in certain testcases that verify resources are read correctly when provided
+        // in both the PluginClassLoader and its parent class loader.
+        READ_VERSION_FROM_RESOURCE_V2("read-version-from-resource-v2",
+                "test.plugins.ReadVersionFromResource", true),
 
-    /**
-     * Class name of a plugin which will always throw an exception during loading
-     */
-    public static final String ALWAYS_THROW_EXCEPTION = "test.plugins.AlwaysThrowException";
-    /**
-     * Class name of a plugin which samples information about its initialization.
-     */
-    public static final String ALIASED_STATIC_FIELD = "test.plugins.AliasedStaticField";
-    /**
-     * Class name of a {@link org.apache.kafka.connect.storage.Converter}
-     * which samples information about its method calls.
-     */
-    public static final String SAMPLING_CONVERTER = "test.plugins.SamplingConverter";
-    /**
-     * Class name of a {@link org.apache.kafka.common.Configurable}
-     * which samples information about its method calls.
-     */
-    public static final String SAMPLING_CONFIGURABLE = "test.plugins.SamplingConfigurable";
-    /**
-     * Class name of a {@link org.apache.kafka.connect.storage.HeaderConverter}
-     * which samples information about its method calls.
-     */
-    public static final String SAMPLING_HEADER_CONVERTER = "test.plugins.SamplingHeaderConverter";
-    /**
-     * Class name of a {@link org.apache.kafka.common.config.provider.ConfigProvider}
-     * which samples information about its method calls.
-     */
-    public static final String SAMPLING_CONFIG_PROVIDER = "test.plugins.SamplingConfigProvider";
-    /**
-     * Class name of a plugin which uses a {@link java.util.ServiceLoader}
-     * to load internal classes, and samples information about their initialization.
-     */
-    public static final String SERVICE_LOADER = "test.plugins.ServiceLoaderPlugin";
+        /**
+         * Resource dir and class names of plugins that are included in a single jar.
+         */
+        MULTIPLE_PLUGINS_IN_JAR_THING_ONE("multiple-plugins-in-jar", "test.plugins.ThingOne"),
+        MULTIPLE_PLUGINS_IN_JAR_THING_TWO("multiple-plugins-in-jar", "test.plugins.ThingTwo");
+
+        private final String resourceDir;
+        private final String className;
+        private final boolean hideFromPluginPath;
+
+        TestPlugin(String resourceDir, String className) {
+            this(resourceDir, className, false);
+        }
+
+        TestPlugin(String resourceDir, String className, boolean hideFromPluginPath) {
+            this.resourceDir = resourceDir;
+            this.className = className;
+            this.hideFromPluginPath = hideFromPluginPath;
+        }
+
+        public String getResourceDir() {
+            return resourceDir;
+        }
+
+        public String getClassName() {
+            return className;
+        }
+
+        public boolean hideFromPluginPath() {
+            return hideFromPluginPath;
+        }
+    }
 
     private static final Logger log = LoggerFactory.getLogger(TestPlugins.class);
-    private static final Map<String, File> PLUGIN_JARS;
+    private static final Map<TestPlugin, File> PLUGIN_JARS;
     private static final Throwable INITIALIZATION_EXCEPTION;
 
     static {
         Throwable err = null;
-        HashMap<String, File> pluginJars = new HashMap<>();
+        Map<TestPlugin, File> pluginJars = new HashMap<>();
         try {
-            pluginJars.put(ALWAYS_THROW_EXCEPTION, createPluginJar("always-throw-exception"));
-            pluginJars.put(ALIASED_STATIC_FIELD, createPluginJar("aliased-static-field"));
-            pluginJars.put(SAMPLING_CONVERTER, createPluginJar("sampling-converter"));
-            pluginJars.put(SAMPLING_CONFIGURABLE, createPluginJar("sampling-configurable"));
-            pluginJars.put(SAMPLING_HEADER_CONVERTER, createPluginJar("sampling-header-converter"));
-            pluginJars.put(SAMPLING_CONFIG_PROVIDER, createPluginJar("sampling-config-provider"));
-            pluginJars.put(SERVICE_LOADER, createPluginJar("service-loader"));
+            for (TestPlugin testPlugin : TestPlugin.values()) {
+                pluginJars.put(testPlugin, createPluginJar(testPlugin.resourceDir));
+            }
         } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);
             err = e;
@@ -141,10 +179,25 @@ public class TestPlugins {
      * @return A list of plugin jar filenames
      */
     public static List<String> pluginPath() {
-        return PLUGIN_JARS.values()
+        return PLUGIN_JARS.entrySet()
             .stream()
-            .map(File::getPath)
+            .filter(e -> !e.getKey().hideFromPluginPath())
+            .map(e -> e.getValue().getPath())
             .collect(Collectors.toList());
+    }
+
+    /**
+     * Gets the path to a single jar containing the test plugin.
+     * @param testPlugin the unique {@link TestPlugin} enum representing the plugin
+     * @return a string representing the plugin jar filename, or null if a plugin for the
+     *   resourceDir could not be found.
+     */
+    public static String pluginPath(TestPlugin testPlugin) {
+        File jarFile = PLUGIN_JARS.get(testPlugin);
+        if (jarFile == null) {
+            return null;
+        }
+        return jarFile.getPath();
     }
 
     /**
@@ -152,7 +205,11 @@ public class TestPlugins {
      * @return A list of plugin class names
      */
     public static List<String> pluginClasses() {
-        return new ArrayList<>(PLUGIN_JARS.keySet());
+        return PLUGIN_JARS.keySet()
+                .stream()
+                .map(TestPlugin::getClassName)
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     private static File createPluginJar(String resourceDir) throws IOException {

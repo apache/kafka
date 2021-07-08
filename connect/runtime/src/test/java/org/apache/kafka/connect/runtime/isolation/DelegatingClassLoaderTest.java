@@ -24,6 +24,7 @@ import org.junit.rules.TemporaryFolder;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 
 import static org.junit.Assert.assertFalse;
@@ -118,7 +119,8 @@ public class DelegatingClassLoaderTest {
 
         for (String sourceJar : TestPlugins.pluginPath()) {
             Path source = new File(sourceJar).toPath();
-            Files.copy(source, pluginPath.resolve(source.getFileName()));
+            Files.copy(source, pluginPath.resolve(source.getFileName()),
+                    StandardCopyOption.REPLACE_EXISTING);
         }
 
         DelegatingClassLoader classLoader = new DelegatingClassLoader(

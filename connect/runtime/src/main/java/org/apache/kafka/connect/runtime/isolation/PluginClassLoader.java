@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.Objects;
 
 /**
  * A custom classloader dedicated to loading Connect plugin classes in classloading isolation.
@@ -79,6 +80,17 @@ public class PluginClassLoader extends URLClassLoader {
     @Override
     public String toString() {
         return "PluginClassLoader{pluginLocation=" + pluginLocation + "}";
+    }
+
+    @Override
+    public URL getResource(String name) {
+        Objects.requireNonNull(name);
+
+        URL url = findResource(name);
+        if (url == null) {
+            url = super.getResource(name);
+        }
+        return url;
     }
 
     // This method needs to be thread-safe because it is supposed to be called by multiple
