@@ -185,6 +185,12 @@ must_popd() {
     popd &> /dev/null || die "failed to popd"
 }
 
+echo_and_do() {
+    local cmd="${@}"
+    echo "${cmd}"
+    ${cmd}
+}
+
 # Run a command and die if it fails.
 #
 # Optional flags:
@@ -237,7 +243,7 @@ ducker_build() {
     must_pushd "${ducker_dir}"
     # Tip: if you are scratching your head for some dependency problems that are referring to an old code version
     # (for example java.lang.NoClassDefFoundError), add --no-cache flag to the build shall give you a clean start.
-    must_do -v -o docker build --memory="${docker_build_memory_limit}" \
+    echo_and_do docker build --memory="${docker_build_memory_limit}" \
         --build-arg "ducker_creator=${user_name}" \
         --build-arg "jdk_version=${jdk_version}" \
         --build-arg "UID=${UID}" \
@@ -247,10 +253,13 @@ ducker_build() {
     must_popd
     duration="${SECONDS}"
     if [[ ${docker_status} -ne 0 ]]; then
-        die "** ERROR: Failed to build ${what} image after $((${duration} / 60))m \
-$((${duration} % 60))s.  See ${build_log} for details."
+        echo "ERROR: Failed to build ${what} image after $((${duration} / 60))m \
+$((${duration} % 60))s."
+        echo "If this error is unexpected, consider running 'docker system prune -a' \
+to clear old images from your local cache."
+        exit 1
     fi
-    echo "** Successfully built ${what} image in $((${duration} / 60))m \
+    echo "Successfully built ${what} image in $((${duration} / 60))m \
 $((${duration} % 60))s.  See ${build_log} for details."
 }
 
