@@ -33,7 +33,6 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -73,6 +72,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 @RunWith(EasyMockRunner.class)
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KTableTransformValuesTest {
     private static final String QUERYABLE_NAME = "queryable-store";
     private static final String INPUT_TOPIC = "inputTopic";
@@ -145,7 +145,7 @@ public class KTableTransformValuesTest {
         final NoOpValueTransformerWithKeySupplier<String, String> transformer = new NoOpValueTransformerWithKeySupplier<>();
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, transformer, null);
-        final Processor<String, Change<String>> processor = transformValues.get();
+        final org.apache.kafka.streams.processor.Processor<String, Change<String>> processor = transformValues.get();
 
         processor.init(context);
 
@@ -157,7 +157,7 @@ public class KTableTransformValuesTest {
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
-        final Processor<String, Change<String>> processor = transformValues.get();
+        final org.apache.kafka.streams.processor.Processor<String, Change<String>> processor = transformValues.get();
         processor.init(context);
 
         context.forward("Key", new Change<>("Key->newValue!", null));
@@ -178,7 +178,7 @@ public class KTableTransformValuesTest {
         replay(parent);
 
         transformValues.enableSendingOldValues(true);
-        final Processor<String, Change<String>> processor = transformValues.get();
+        final org.apache.kafka.streams.processor.Processor<String, Change<String>> processor = transformValues.get();
         processor.init(context);
 
         context.forward("Key", new Change<>("Key->newValue!", "Key->oldValue!"));
@@ -301,7 +301,7 @@ public class KTableTransformValuesTest {
         expectLastCall();
         replay(mockSupplier, transformer);
 
-        final Processor<String, Change<String>> processor = transformValues.get();
+        final org.apache.kafka.streams.processor.Processor<String, Change<String>> processor = transformValues.get();
         processor.close();
 
         verify(transformer);

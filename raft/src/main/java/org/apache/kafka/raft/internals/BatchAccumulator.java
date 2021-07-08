@@ -25,14 +25,18 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.function.Function;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -204,33 +208,109 @@ public class BatchAccumulator<T> implements Closeable {
         currentBatch = null;
     }
 
-    public void appendLeaderChangeMessage(LeaderChangeMessage leaderChangeMessage, long currentTimeMs) {
+    /**
+     * Append a control batch from a supplied memory record.
+     *
+     * See the {@code valueCreator} parameter description for requirements on this function.
+     *
+     * @param valueCreator a function that uses the passed buffer to create the control
+     *        batch that will be appended. The memory records returned must contain one
+     *        control batch and that control batch have one record.
+     */
+    private void appendControlMessage(Function<ByteBuffer, MemoryRecords> valueCreator) {
         appendLock.lock();
         try {
-            forceDrain();
             ByteBuffer buffer = memoryPool.tryAllocate(256);
             if (buffer != null) {
-                MemoryRecords data = MemoryRecords.withLeaderChangeMessage(
-                    this.nextOffset, 
-                    currentTimeMs, 
-                    this.epoch, 
-                    buffer, 
-                    leaderChangeMessage
-                );
-                completed.add(new CompletedBatch<>(
-                    nextOffset,
-                    1,
-                    data,
-                    memoryPool,
-                    buffer
-                ));
-                nextOffset += 1;
+                try {
+                    forceDrain();
+                    completed.add(
+                        new CompletedBatch<>(
+                            nextOffset,
+                            1,
+                            valueCreator.apply(buffer),
+                            memoryPool,
+                            buffer
+                        )
+                    );
+                    nextOffset += 1;
+                } catch (Exception e) {
+                    // Release the buffer now since the buffer was not stored in completed for a delayed release
+                    memoryPool.release(buffer);
+                    throw e;
+                }
             } else {
-                throw new IllegalStateException("Could not allocate buffer for the leader change record.");
+                throw new IllegalStateException("Could not allocate buffer for the control record");
             }
         } finally {
             appendLock.unlock();
         }
+    }
+
+    /**
+     * Append a {@link LeaderChangeMessage} record to the batch
+     *
+     * @param @LeaderChangeMessage The message to append
+     * @param @currentTimeMs The timestamp of message generation
+     * @throws IllegalStateException on failure to allocate a buffer for the record
+     */
+    public void appendLeaderChangeMessage(
+        LeaderChangeMessage leaderChangeMessage,
+        long currentTimeMs
+    ) {
+        appendControlMessage(buffer -> {
+            return MemoryRecords.withLeaderChangeMessage(
+                this.nextOffset,
+                currentTimeMs,
+                this.epoch,
+                buffer,
+                leaderChangeMessage
+            );
+        });
+    }
+
+
+    /**
+     * Append a {@link SnapshotHeaderRecord} record to the batch
+     *
+     * @param snapshotHeaderRecord The message to append
+     * @throws IllegalStateException on failure to allocate a buffer for the record
+     */
+    public void appendSnapshotHeaderMessage(
+        SnapshotHeaderRecord snapshotHeaderRecord,
+        long currentTimeMs
+    ) {
+        appendControlMessage(buffer -> {
+            return MemoryRecords.withSnapshotHeaderRecord(
+                this.nextOffset,
+                currentTimeMs,
+                this.epoch,
+                buffer,
+                snapshotHeaderRecord
+            );
+        });
+    }
+
+    /**
+     * Append a {@link SnapshotFooterRecord} record to the batch
+     *
+     * @param snapshotFooterRecord The message to append
+     * @param currentTimeMs
+     * @throws IllegalStateException on failure to allocate a buffer for the record
+     */
+    public void appendSnapshotFooterMessage(
+        SnapshotFooterRecord snapshotFooterRecord,
+        long currentTimeMs
+    ) {
+        appendControlMessage(buffer -> {
+            return MemoryRecords.withSnapshotFooterRecord(
+                this.nextOffset,
+                currentTimeMs,
+                this.epoch,
+                buffer,
+                snapshotFooterRecord
+            );
+        });
     }
 
     public void forceDrain() {
@@ -395,6 +475,8 @@ public class BatchAccumulator<T> implements Closeable {
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
+            Objects.requireNonNull(data.firstBatch(), "Exptected memory records to contain one batch");
+
             this.baseOffset = baseOffset;
             this.records = Optional.of(records);
             this.numRecords = records.size();
@@ -410,6 +492,8 @@ public class BatchAccumulator<T> implements Closeable {
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
+            Objects.requireNonNull(data.firstBatch(), "Exptected memory records to contain one batch");
+
             this.baseOffset = baseOffset;
             this.records = Optional.empty();
             this.numRecords = numRecords;
@@ -424,6 +508,13 @@ public class BatchAccumulator<T> implements Closeable {
 
         public void release() {
             pool.release(initialBuffer);
+        }
+
+        public long appendTimestamp() {
+            // 1. firstBatch is not null because data has one and only one batch
+            // 2. maxTimestamp is the append time of the batch. This needs to be changed
+            //    to return the LastContainedLogTimestamp of the SnapshotHeaderRecord
+            return data.firstBatch().maxTimestamp();
         }
     }
 

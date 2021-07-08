@@ -22,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -87,5 +88,19 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
             ", filteredProducerIds=" + filteredProducerIds +
             ", timeoutMs=" + timeoutMs +
             ')';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ListTransactionsOptions that = (ListTransactionsOptions) o;
+        return Objects.equals(filteredStates, that.filteredStates) &&
+            Objects.equals(filteredProducerIds, that.filteredProducerIds);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(filteredStates, filteredProducerIds);
     }
 }
