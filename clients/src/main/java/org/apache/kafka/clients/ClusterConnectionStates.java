@@ -98,7 +98,7 @@ final class ClusterConnectionStates {
     /**
      * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
      * disconnected, this respects the reconnect backoff time. When connecting, return a delay based on the connection timeout.
-     * When connected, this handles slow/stalled connections.
+     * When connected, wait indefinitely (i.e. until a wakeup).
      * @param id the connection to check
      * @param now the current time in ms
      */
@@ -276,7 +276,6 @@ final class ClusterConnectionStates {
         nodeState.state = ConnectionState.AUTHENTICATION_FAILED;
         nodeState.lastConnectAttemptMs = now;
         updateReconnectBackoff(nodeState);
-        connectingNodes.remove(id);
     }
 
     /**
