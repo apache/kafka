@@ -187,6 +187,7 @@ subprojects {
   apply plugin: 'checkstyle'
   apply plugin: "com.github.spotbugs"
   apply plugin: 'org.gradle.test-retry'
+  apply plugin: 'com.diffplug.spotless'
 
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
@@ -611,6 +612,26 @@ subprojects {
     }
   }
 
+  spotless {
+    java {
+      importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
+
+      // auto-format specified modules only; the list of auto-format modules will be updated incrementally.
+      if ([].contains(project.name)) {
+        target 'src/**/*.java'
+      } else {
+        target = project.files([])
+      }
+
+      eclipse('4.13.0').configFile("$rootDir/eclipse-formatter.xml")
+      indentWithSpaces()
+      trimTrailingWhitespace()
+      removeUnusedImports()
+
+      licenseHeaderFile file("$rootDir/checkstyle/java.header")
+    }
+  }
+
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = checkstyleConfigProperties("import-control.xml")
@@ -621,6 +642,9 @@ subprojects {
     group = 'Verification'
     description = 'Run checkstyle on all main Java sources'
   }
+
+  checkstyleMain.dependsOn('spotlessApply')
+  checkstyleTest.dependsOn('spotlessApply')
 
   configure(checkstyleTest) {
     group = 'Verification'
