@@ -33,7 +33,9 @@ import javax.net.ssl.SSLException;
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.WatchService;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.security.GeneralSecurityException;
@@ -59,9 +61,10 @@ public class SslFactory implements Reconfigurable, Closeable {
     private String endpointIdentification;
     private SslEngineFactory sslEngineFactory;
     private Map<String, Object> sslEngineFactoryConfig;
+    private final WatchService watchService;
 
-    public SslFactory(Mode mode) {
-        this(mode, null, false);
+    public SslFactory(Mode mode, final WatchService watchService) throws IOException {
+        this(mode, null, false, watchService);
     }
 
     /**
@@ -72,13 +75,17 @@ public class SslFactory implements Reconfigurable, Closeable {
      *                                              if we don't want to override it.
      * @param keystoreVerifiableUsingTruststore     True if we should require the keystore to be verifiable
      *                                              using the truststore.
+     * @param watchService                          File watch service to track security file changes.
+     *
      */
     public SslFactory(Mode mode,
                       String clientAuthConfigOverride,
-                      boolean keystoreVerifiableUsingTruststore) {
+                      boolean keystoreVerifiableUsingTruststore,
+                      final WatchService watchService) {
         this.mode = mode;
         this.clientAuthConfigOverride = clientAuthConfigOverride;
         this.keystoreVerifiableUsingTruststore = keystoreVerifiableUsingTruststore;
+        this.watchService = watchService;
     }
 
     @SuppressWarnings("unchecked")
@@ -132,8 +139,8 @@ public class SslFactory implements Reconfigurable, Closeable {
         Class<? extends SslEngineFactory> sslEngineFactoryClass =
                 (Class<? extends SslEngineFactory>) configs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
         SslEngineFactory sslEngineFactory;
-        if (sslEngineFactoryClass == null) {
-            sslEngineFactory = new DefaultSslEngineFactory();
+        if (sslEngineFactoryClass == null || sslEngineFactoryClass.equals(DefaultSslEngineFactory.class)) {
+            sslEngineFactory = new DefaultSslEngineFactory(watchService);
         } else {
             sslEngineFactory = Utils.newInstance(sslEngineFactoryClass);
         }

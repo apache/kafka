@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -51,6 +52,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -80,6 +83,13 @@ public class SslTransportLayerTest {
 
     private static final int BUFFER_SIZE = 4 * 1024;
     private static Time time = Time.SYSTEM;
+    private WatchService watchService;
+
+    @BeforeEach
+    public void setup() throws IOException {
+        if (watchService == null)
+            watchService = FileSystems.getDefault().newWatchService();
+    }
 
     private static class Args {
         private final String tlsProtocol;
@@ -145,6 +155,8 @@ public class SslTransportLayerTest {
             this.selector.close();
         if (server != null)
             this.server.close();
+        watchService.close();
+        watchService = null;
     }
 
     /**
@@ -247,7 +259,7 @@ public class SslTransportLayerTest {
         args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
 
         // Create a server with endpoint validation enabled on the server SSL engine
-        SslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER) {
+        SslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER, watchService) {
             @Override
             protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine) throws IOException {
                 SSLParameters sslParams = sslEngine.getSSLParameters();
@@ -349,14 +361,14 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
 
         // Connect with client auth should work fine
-        createSelector(args.sslClientConfigs);
+        createSelectorWithNewWatch(args.sslClientConfigs);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
         selector.close();
 
         // Remove client auth, so connection should fail
         CertStores.KEYSTORE_PROPS.forEach(args.sslClientConfigs::remove);
-        createSelector(args.sslClientConfigs);
+        createSelectorWithNewWatch(args.sslClientConfigs);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
         selector.close();
@@ -367,7 +379,7 @@ public class SslTransportLayerTest {
         addr = new InetSocketAddress("localhost", server.port());
 
         // Connect without client auth should work fine now
-        createSelector(args.sslClientConfigs);
+        createSelectorWithNewWatch(args.sslClientConfigs);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -616,7 +628,7 @@ public class SslTransportLayerTest {
     /** Checks connection failed using the specified {@code tlsVersion}. */
     private void checkAuthenticationFailed(Args args, String node, String tlsVersion) throws IOException {
         args.sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(tlsVersion));
-        createSelector(args.sslClientConfigs);
+        createSelectorWithNewWatch(args.sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -758,7 +770,7 @@ public class SslTransportLayerTest {
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testNetworkThreadTimeRecorded(Args args) throws Exception {
         LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext, watchService);
         channelBuilder.configure(args.sslClientConfigs);
         try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
                 "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, logContext)) {
@@ -868,9 +880,11 @@ public class SslTransportLayerTest {
     private void testIOExceptionsDuringHandshake(Args args,
                                                  FailureAction readFailureAction,
                                                  FailureAction flushFailureAction) throws Exception {
-        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         boolean done = false;
         for (int i = 1; i <= 100; i++) {
+            final WatchService watchService = FileSystems.getDefault().newWatchService();
+            TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, watchService);
+
             String node = String.valueOf(i);
 
             channelBuilder.readFailureAction = readFailureAction;
@@ -918,14 +932,15 @@ public class SslTransportLayerTest {
         // Test without delay and a couple of delay counts to ensure delay applies to handshake failure
         for (int i = 0; i < 3; i++) {
             String node = "0";
-            TestSslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER);
+            final WatchService watchService = FileSystems.getDefault().newWatchService();
+            TestSslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER, watchService);
             serverChannelBuilder.configure(args.sslServerConfigs);
             serverChannelBuilder.flushDelayCount = i;
             server = new NioEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL),
                     SecurityProtocol.SSL, new TestSecurityConfig(args.sslServerConfigs),
                     "localhost", serverChannelBuilder, null, time);
             server.start();
-            createSelector(args.sslClientConfigs);
+            createSelectorWithNewWatch(args.sslClientConfigs);
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -949,7 +964,7 @@ public class SslTransportLayerTest {
     }
 
     private SslChannelBuilder newClientChannelBuilder() {
-        return new SslChannelBuilder(Mode.CLIENT, null, false, new LogContext());
+        return new SslChannelBuilder(Mode.CLIENT, null, false, new LogContext(), watchService);
     }
 
     private void testClose(Args args, SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
@@ -1133,7 +1148,7 @@ public class SslTransportLayerTest {
         for (String propName : CertStores.TRUSTSTORE_PROPS) {
             args.sslClientConfigs.put(propName, newConfigs.get(propName));
         }
-        selector = createSelector(args.sslClientConfigs);
+        selector = createSelectorWithNewWatch(args.sslClientConfigs);
         String node2 = "2";
         selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
@@ -1261,12 +1276,21 @@ public class SslTransportLayerTest {
     }
 
     private Selector createSelector(Map<String, Object> sslClientConfigs) {
-        return createSelector(sslClientConfigs, null, null, null);
+        return createSelector(sslClientConfigs, null, null, null, watchService);
+    }
+
+    private Selector createSelectorWithNewWatch(Map<String, Object> sslClientConfigs) throws IOException {
+        return createSelector(sslClientConfigs, null, null, null, FileSystems.getDefault().newWatchService());
     }
 
     private Selector createSelector(Map<String, Object> sslClientConfigs, final Integer netReadBufSize,
-                                final Integer netWriteBufSize, final Integer appBufSize) {
-        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+                                    final Integer netWriteBufSize, final Integer appBufSize) {
+        return createSelector(sslClientConfigs, netReadBufSize, netWriteBufSize, appBufSize, watchService);
+    }
+
+    private Selector createSelector(Map<String, Object> sslClientConfigs, final Integer netReadBufSize,
+                                final Integer netWriteBufSize, final Integer appBufSize,  WatchService watchService) {
+        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, watchService);
         channelBuilder.configureBufferSizes(netReadBufSize, netWriteBufSize, appBufSize);
         channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(100 * 5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
@@ -1283,7 +1307,7 @@ public class SslTransportLayerTest {
 
     private Selector createSelector(Args args) {
         LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext, watchService);
         channelBuilder.configure(args.sslClientConfigs);
         selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, logContext);
         return selector;
@@ -1337,8 +1361,8 @@ public class SslTransportLayerTest {
         FailureAction flushFailureAction = FailureAction.NO_OP;
         int flushDelayCount = 0;
 
-        public TestSslChannelBuilder(Mode mode) {
-            super(mode, null, false, new LogContext());
+        public TestSslChannelBuilder(Mode mode, WatchService watchService) {
+            super(mode, null, false, new LogContext(), watchService);
         }
 
         public void configureBufferSizes(Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) {

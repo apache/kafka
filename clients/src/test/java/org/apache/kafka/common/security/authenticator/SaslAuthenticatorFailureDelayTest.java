@@ -62,7 +62,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
     private long startTimeMs;
     private final int failedAuthenticationDelayMs;
 
-    public SaslAuthenticatorFailureDelayTest(int failedAuthenticationDelayMs) {
+    public SaslAuthenticatorFailureDelayTest(int failedAuthenticationDelayMs) throws IOException {
         this.failedAuthenticationDelayMs = failedAuthenticationDelayMs;
     }
 
@@ -195,7 +195,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
         return TestJaasConfig.createConfiguration(clientMechanism, serverMechanisms);
     }
 
-    private void createSelector(SecurityProtocol securityProtocol, Map<String, Object> clientConfigs) {
+    private void createSelector(SecurityProtocol securityProtocol, Map<String, Object> clientConfigs) throws IOException {
         if (selector != null) {
             selector.close();
             selector = null;

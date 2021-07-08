@@ -18,6 +18,8 @@ package org.apache.kafka.common.network;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchService;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -41,6 +43,7 @@ public class SslTransportTls12Tls13Test {
     private Selector selector;
     private Map<String, Object> sslClientConfigs;
     private Map<String, Object> sslServerConfigs;
+    private WatchService watchService;
 
     @BeforeEach
     public void setup() throws Exception {
@@ -51,7 +54,8 @@ public class SslTransportTls12Tls13Test {
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
 
         LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        this.watchService = FileSystems.getDefault().newWatchService();
+        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext, watchService);
         channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, logContext);
     }
@@ -62,6 +66,8 @@ public class SslTransportTls12Tls13Test {
             this.selector.close();
         if (server != null)
             this.server.close();
+        if (this.watchService != null)
+            this.watchService.close();
     }
 
     /**
@@ -157,7 +163,7 @@ public class SslTransportTls12Tls13Test {
     }
 
     private void createSelector(Map<String, Object> sslClientConfigs) {
-        SslTransportLayerTest.TestSslChannelBuilder channelBuilder = new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT);
+        SslTransportLayerTest.TestSslChannelBuilder channelBuilder = new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT, watchService);
         channelBuilder.configureBufferSizes(null, null, null);
         channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(100 * 5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());

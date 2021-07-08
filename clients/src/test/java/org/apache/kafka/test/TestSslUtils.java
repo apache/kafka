@@ -60,8 +60,10 @@ import java.io.OutputStreamWriter;
 import java.math.BigInteger;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.WatchService;
 import java.security.GeneralSecurityException;
 import java.security.Key;
 import java.security.KeyPair;
@@ -171,6 +173,9 @@ public class TestSslUtils {
         sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol); // protocol to create SSLContext
 
         sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, keyManagerAlgorithm);
+        sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
+
+        sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
         sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
 
         List<String> enabledProtocols  = new ArrayList<>();
@@ -536,6 +541,7 @@ public class TestSslUtils {
             }
 
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
+            sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 5000L);
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
             sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
@@ -576,8 +582,12 @@ public class TestSslUtils {
     public static final class TestSslEngineFactory implements SslEngineFactory {
 
         public boolean closed = false;
+        private final WatchService watchService = FileSystems.getDefault().newWatchService();
 
-        DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory();
+        DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory(watchService);
+
+        public TestSslEngineFactory() throws IOException {
+        }
 
         @Override
         public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
@@ -613,6 +623,7 @@ public class TestSslUtils {
         public void close() throws IOException {
             defaultSslEngineFactory.close();
             closed = true;
+            watchService.close();
         }
 
         @Override

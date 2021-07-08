@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.common.network;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,6 +37,8 @@ import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -48,6 +53,17 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 public class SslVersionsTransportLayerTest {
     private static final int BUFFER_SIZE = 4 * 1024;
     private static final Time TIME = Time.SYSTEM;
+    private WatchService watchService;
+
+    @BeforeEach
+    public void setup() throws IOException {
+        watchService = FileSystems.getDefault().newWatchService();
+    }
+
+    @AfterEach
+    public void tearDown() throws IOException {
+        watchService.close();
+    }
 
     public static Stream<Arguments> parameters() {
         List<Arguments> parameters = new ArrayList<>();
@@ -164,7 +180,7 @@ public class SslVersionsTransportLayerTest {
 
     private Selector createClientSelector(Map<String, Object> sslClientConfigs) {
         SslTransportLayerTest.TestSslChannelBuilder channelBuilder =
-            new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT);
+            new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT, watchService);
         channelBuilder.configureBufferSizes(null, null, null);
         channelBuilder.configure(sslClientConfigs);
         return new Selector(100 * 5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());

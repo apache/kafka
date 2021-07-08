@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import java.io.IOException;
+
 public class SaslAuthenticatorFailurePositiveDelayTest extends SaslAuthenticatorFailureDelayTest {
-    public SaslAuthenticatorFailurePositiveDelayTest() {
+    public SaslAuthenticatorFailurePositiveDelayTest() throws IOException {
         super(200);
     }
 }

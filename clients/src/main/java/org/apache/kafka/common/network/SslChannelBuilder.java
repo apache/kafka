@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.nio.file.WatchService;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -47,6 +48,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     private Mode mode;
     private Map<String, ?> configs;
     private SslPrincipalMapper sslPrincipalMapper;
+    private final WatchService watchService;
     private final Logger log;
 
     /**
@@ -56,11 +58,13 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     public SslChannelBuilder(Mode mode,
                              ListenerName listenerName,
                              boolean isInterBrokerListener,
-                             LogContext logContext) {
+                             LogContext logContext,
+                             final WatchService watchService) {
         this.mode = mode;
         this.listenerName = listenerName;
         this.isInterBrokerListener = isInterBrokerListener;
         this.log = logContext.logger(getClass());
+        this.watchService = watchService;
     }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
@@ -69,7 +73,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
             String sslPrincipalMappingRules = (String) configs.get(BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG);
             if (sslPrincipalMappingRules != null)
                 sslPrincipalMapper = SslPrincipalMapper.fromRules(sslPrincipalMappingRules);
-            this.sslFactory = new SslFactory(mode, null, isInterBrokerListener);
+            this.sslFactory = new SslFactory(mode, null, isInterBrokerListener, watchService);
             this.sslFactory.configure(this.configs);
         } catch (KafkaException e) {
             throw e;
@@ -116,6 +120,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     @Override
     public void close() {
         if (sslFactory != null) sslFactory.close();
+        Utils.closeQuietly(watchService, "Watch service");
     }
 
     protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, ChannelMetadataRegistry metadataRegistry) throws IOException {
