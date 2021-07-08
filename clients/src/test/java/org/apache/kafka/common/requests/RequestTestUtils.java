@@ -151,6 +151,15 @@ public class RequestTestUtils {
                 topicIds);
     }
 
+    public static MetadataResponse metadataUpdateWithIds(final int numNodes,
+                                                         final Map<String, Integer> topicPartitionCounts,
+                                                         final Function<TopicPartition, Integer> epochSupplier,
+                                                         final Map<String, Uuid> topicIds) {
+        return metadataUpdateWith("kafka-cluster", numNodes, Collections.emptyMap(),
+                topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(),
+                topicIds);
+    }
+
     public static MetadataResponse metadataUpdateWithIds(final String clusterId,
                                                          final int numNodes,
                                                          final Map<String, Errors> topicErrors,

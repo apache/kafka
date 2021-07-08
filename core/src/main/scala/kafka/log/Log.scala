@@ -1345,8 +1345,9 @@ class Log(@volatile private var _dir: File,
         val latestTimestampSegment = segmentsCopy.maxBy(_.maxTimestampSoFar)
         val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
         val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
-        Some(new TimestampAndOffset(latestTimestampSegment.maxTimestampSoFar,
-          latestTimestampSegment.offsetOfMaxTimestampSoFar,
+        val latestTimestampAndOffset = latestTimestampSegment.maxTimestampAndOffsetSoFar
+        Some(new TimestampAndOffset(latestTimestampAndOffset.timestamp,
+          latestTimestampAndOffset.offset,
           epochOptional))
       } else {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
@@ -2416,6 +2417,11 @@ object Log extends Logging {
                                       producerStateManager: ProducerStateManager,
                                       logPrefix: String): Unit = {
     segmentsToDelete.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
+    val snapshotsToDelete = if (deleteProducerStateSnapshots)
+      segmentsToDelete.flatMap { segment =>
+        producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset)}
+    else
+      Seq()
 
     def deleteSegments(): Unit = {
       info(s"${logPrefix}Deleting segment files ${segmentsToDelete.mkString(",")}")
@@ -2423,8 +2429,9 @@ object Log extends Logging {
       maybeHandleIOException(logDirFailureChannel, parentDir, s"Error while deleting segments for $topicPartition in dir $parentDir") {
         segmentsToDelete.foreach { segment =>
           segment.deleteIfExists()
-          if (deleteProducerStateSnapshots)
-            producerStateManager.removeAndDeleteSnapshot(segment.baseOffset)
+        }
+        snapshotsToDelete.foreach { snapshot =>
+          snapshot.deleteIfExists()
         }
       }
     }

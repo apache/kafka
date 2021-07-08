@@ -25,8 +25,6 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.json.JsonConverter;
-import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
@@ -121,12 +119,6 @@ public class Plugins {
         );
     }
 
-    @SuppressWarnings("deprecation")
-    protected static boolean isInternalConverter(String classPropertyName) {
-        return classPropertyName.equals(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG)
-            || classPropertyName.equals(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG);
-    }
-
     public static ClassLoader compareAndSwapLoaders(ClassLoader loader) {
         ClassLoader current = Thread.currentThread().getContextClassLoader();
         if (!current.equals(loader)) {
@@ -164,11 +156,11 @@ public class Plugins {
         return delegatingLoader.converters();
     }
 
-    public Set<PluginDesc<Transformation>> transformations() {
+    public Set<PluginDesc<Transformation<?>>> transformations() {
         return delegatingLoader.transformations();
     }
 
-    public Set<PluginDesc<Predicate>> predicates() {
+    public Set<PluginDesc<Predicate<?>>> predicates() {
         return delegatingLoader.predicates();
     }
 
@@ -238,11 +230,11 @@ public class Plugins {
      * @throws ConnectException if the {@link Converter} implementation class could not be found
      */
     public Converter newConverter(AbstractConfig config, String classPropertyName, ClassLoaderUsage classLoaderUsage) {
-        if (!config.originals().containsKey(classPropertyName) && !isInternalConverter(classPropertyName)) {
-            // This configuration does not define the converter via the specified property name, and
-            // it does not represent an internal converter (which has a default available)
+        if (!config.originals().containsKey(classPropertyName)) {
+            // This configuration does not define the converter via the specified property name
             return null;
         }
+
         Class<? extends Converter> klass = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
@@ -270,9 +262,7 @@ public class Plugins {
         }
 
         // Determine whether this is a key or value converter based upon the supplied property name ...
-        @SuppressWarnings("deprecation")
-        final boolean isKeyConverter = WorkerConfig.KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName)
-                                     || WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName);
+        final boolean isKeyConverter = WorkerConfig.KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName);
 
         // Configure the Converter using only the old configuration mechanism ...
         String configPrefix = classPropertyName + ".";
@@ -280,22 +270,39 @@ public class Plugins {
         log.debug("Configuring the {} converter with configuration keys:{}{}",
                   isKeyConverter ? "key" : "value", System.lineSeparator(), converterConfig.keySet());
 
-        // Have to override schemas.enable from true to false for internal JSON converters
-        // Don't have to warn the user about anything since all deprecation warnings take place in the
-        // WorkerConfig class
-        if (JsonConverter.class.isAssignableFrom(klass) && isInternalConverter(classPropertyName)) {
-            // If they haven't explicitly specified values for internal.key.converter.schemas.enable
-            // or internal.value.converter.schemas.enable, we can safely default them to false
-            if (!converterConfig.containsKey(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG)) {
-                converterConfig.put(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, false);
-            }
+        Converter plugin;
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
+        try {
+            plugin = newPlugin(klass);
+            plugin.configure(converterConfig, isKeyConverter);
+        } finally {
+            compareAndSwapLoaders(savedLoader);
+        }
+        return plugin;
+    }
+
+    /**
+     * Load an internal converter, used by the worker for (de)serializing data in internal topics.
+     *
+     * @param isKey           whether the converter is a key converter
+     * @param className       the class name of the converter
+     * @param converterConfig the properties to configure the converter with
+     * @return the instantiated and configured {@link Converter}; never null
+     * @throws ConnectException if the {@link Converter} implementation class could not be found
+     */
+    public Converter newInternalConverter(boolean isKey, String className, Map<String, String> converterConfig) {
+        Class<? extends Converter> klass;
+        try {
+            klass = pluginClass(delegatingLoader, className, Converter.class);
+        } catch (ClassNotFoundException e) {
+            throw new ConnectException("Failed to load internal converter class " + className);
         }
 
         Converter plugin;
         ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
         try {
             plugin = newPlugin(klass);
-            plugin.configure(converterConfig, isKeyConverter);
+            plugin.configure(converterConfig, isKey);
         } finally {
             compareAndSwapLoaders(savedLoader);
         }

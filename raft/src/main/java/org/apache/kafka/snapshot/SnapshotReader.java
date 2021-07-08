@@ -18,8 +18,9 @@
 package org.apache.kafka.snapshot;
 
 import java.util.Iterator;
-import java.util.Optional;
 import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.OptionalLong;
 
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.Batch;
@@ -47,6 +48,7 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
     private final RecordsIterator<T> iterator;
 
     private Optional<Batch<T>> nextBatch = Optional.empty();
+    private OptionalLong lastContainedLogTimestamp = OptionalLong.empty();
 
     private SnapshotReader(
         OffsetAndEpoch snapshotId,
@@ -75,6 +77,18 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
      */
     public int lastContainedLogEpoch() {
         return snapshotId.epoch;
+    }
+
+    /**
+     * Returns the timestamp of the last log offset which is represented in the snapshot.
+     */
+    public long lastContainedLogTimestamp() {
+        if (!lastContainedLogTimestamp.isPresent()) {
+            // nextBatch is expected to be empty
+            nextBatch = nextBatch();
+        }
+
+        return lastContainedLogTimestamp.getAsLong();
     }
 
     @Override
@@ -123,6 +137,12 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
     private Optional<Batch<T>> nextBatch() {
         while (iterator.hasNext()) {
             Batch<T> batch = iterator.next();
+
+            if (!lastContainedLogTimestamp.isPresent()) {
+                // The Batch type doesn't support returning control batches. For now lets just use
+                // the append time of the first batch
+                lastContainedLogTimestamp = OptionalLong.of(batch.appendTimestamp());
+            }
 
             if (!batch.records().isEmpty()) {
                 return Optional.of(batch);

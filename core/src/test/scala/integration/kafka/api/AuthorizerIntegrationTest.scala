@@ -49,6 +49,7 @@ import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartiti
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourceType._
@@ -62,6 +63,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.util.Collections.singletonList
 import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
@@ -154,7 +156,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       classOf[PrincipalBuilder].getName)
   }
 
-  val requestKeyToError = (topicNames: Map[Uuid, String]) => Map[ApiKeys, Nothing => Errors](
+  val requestKeyToError = (topicNames: Map[Uuid, String], version: Short) => Map[ApiKeys, Nothing => Errors](
     ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
     ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => {
       Errors.forCode(
@@ -162,9 +164,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           .responses.find(topic)
           .partitionResponses.asScala.find(_.index == part).get
           .errorCode
-      )      
+      )
     }),
-    ApiKeys.FETCH -> ((resp: requests.FetchResponse) => Errors.forCode(resp.responseData.asScala.find(_._1 == tp).get._2.errorCode)),
+    // We may need to get the top level error if the topic does not exist in the response
+    ApiKeys.FETCH -> ((resp: requests.FetchResponse) => Errors.forCode(resp.responseData(topicNames.asJava, version).asScala.find {
+      case (topicPartition, _) => topicPartition == tp}.map { case (_, data) => data.errorCode }.getOrElse(resp.error.code()))),
     ApiKeys.LIST_OFFSETS -> ((resp: ListOffsetsResponse) => {
       Errors.forCode(
         resp.data
@@ -175,8 +179,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }),
     ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => Errors.forCode(
       resp.data.topics().get(0).partitions().get(0).errorCode)),
-    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error),
-    ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => resp.error),
+    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.groupLevelError(group)),
+    ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => {
+      Errors.forCode(resp.data.coordinators.asScala.find(g => group == g.key).head.errorCode)
+    }),
     ApiKeys.UPDATE_METADATA -> ((resp: requests.UpdateMetadataResponse) => resp.error),
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.error),
     ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => Errors.forCode(resp.data.errorCode)),
@@ -343,14 +349,20 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def createFetchRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
-    requests.FetchRequest.Builder.forConsumer(100, Int.MaxValue, partitionMap).build()
+    requests.FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 100, Int.MaxValue, partitionMap, getTopicIds().asJava).build()
+  }
+
+  private def createFetchRequestWithUnknownTopic(id: Uuid, version: Short) = {
+    val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
+    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
+    requests.FetchRequest.Builder.forConsumer(version, 100, Int.MaxValue, partitionMap, Collections.singletonMap(topic, id)).build()
   }
 
   private def createFetchFollowerRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
     val version = ApiKeys.FETCH.latestVersion
-    requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap).build()
+    requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap, getTopicIds().asJava).build()
   }
 
   private def createListOffsetsRequest = {
@@ -376,15 +388,23 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs).build()
   }
 
-  private def createOffsetFetchRequest = {
+  private def createOffsetFetchRequest: OffsetFetchRequest = {
     new requests.OffsetFetchRequest.Builder(group, false, List(tp).asJava, false).build()
+  }
+
+  private def createOffsetFetchRequestAllPartitions: OffsetFetchRequest = {
+    new requests.OffsetFetchRequest.Builder(group, false, null, false).build()
+  }
+
+  private def createOffsetFetchRequest(groupToPartitionMap: util.Map[String, util.List[TopicPartition]]): OffsetFetchRequest = {
+    new requests.OffsetFetchRequest.Builder(groupToPartitionMap, false, false).build()
   }
 
   private def createFindCoordinatorRequest = {
     new FindCoordinatorRequest.Builder(
         new FindCoordinatorRequestData()
           .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
-          .setKey(group)).build()
+          .setCoordinatorKeys(Collections.singletonList(group))).build()
   }
 
   private def createUpdateMetadataRequest = {
@@ -678,24 +698,25 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     )
   ).build()
 
-  private def sendRequests(requestKeyToRequest: mutable.Map[ApiKeys, AbstractRequest], topicExists: Boolean = true) = {
+  private def sendRequests(requestKeyToRequest: mutable.Map[ApiKeys, AbstractRequest], topicExists: Boolean = true,
+                           topicNames: Map[Uuid, String] = getTopicNames()) = {
     for ((key, request) <- requestKeyToRequest) {
       removeAllClientAcls()
       val resources = requestKeysToAcls(key).map(_._1.resourceType).toSet
-      sendRequestAndVerifyResponseError(request, resources, isAuthorized = false, topicExists = topicExists)
+      sendRequestAndVerifyResponseError(request, resources, isAuthorized = false, topicExists = topicExists, topicNames = topicNames)
 
       val resourceToAcls = requestKeysToAcls(key)
       resourceToAcls.get(topicResource).foreach { acls =>
         val describeAcls = topicDescribeAcl(topicResource)
         val isAuthorized = describeAcls == acls
         addAndVerifyAcls(describeAcls, topicResource)
-        sendRequestAndVerifyResponseError(request, resources, isAuthorized = isAuthorized,  topicExists = topicExists)
+        sendRequestAndVerifyResponseError(request, resources, isAuthorized = isAuthorized,  topicExists = topicExists, topicNames = topicNames)
         removeAllClientAcls()
       }
 
       for ((resource, acls) <- resourceToAcls)
         addAndVerifyAcls(acls, resource)
-      sendRequestAndVerifyResponseError(request, resources, isAuthorized = true,  topicExists = topicExists)
+      sendRequestAndVerifyResponseError(request, resources, isAuthorized = true,  topicExists = topicExists, topicNames = topicNames)
     }
   }
 
@@ -746,7 +767,34 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
     )
 
-    sendRequests(requestKeyToRequest)
+    sendRequests(requestKeyToRequest, true)
+  }
+
+  /*
+   * even if the topic doesn't exist, request APIs should not leak the topic name
+   */
+  @Test
+  def testAuthorizationWithTopicNotExisting(): Unit = {
+    val id = Uuid.randomUuid()
+    val topicNames = Map(id -> "topic")
+    val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
+      ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = false),
+      ApiKeys.PRODUCE -> createProduceRequest,
+      ApiKeys.FETCH -> createFetchRequestWithUnknownTopic(id, ApiKeys.FETCH.latestVersion()),
+      ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
+      ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
+      ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
+      ApiKeys.DELETE_TOPICS -> deleteTopicsRequest,
+      ApiKeys.DELETE_RECORDS -> deleteRecordsRequest,
+      ApiKeys.ADD_PARTITIONS_TO_TXN -> addPartitionsToTxnRequest,
+      ApiKeys.ADD_OFFSETS_TO_TXN -> addOffsetsToTxnRequest,
+      ApiKeys.CREATE_PARTITIONS -> createPartitionsRequest,
+      ApiKeys.DELETE_GROUPS -> deleteGroupsRequest,
+      ApiKeys.OFFSET_FOR_LEADER_EPOCH -> offsetsForLeaderEpochRequest,
+      ApiKeys.ELECT_LEADERS -> electLeadersRequest
+    )
+
+    sendRequests(requestKeyToRequest, false, topicNames)
   }
 
   @ParameterizedTest
@@ -803,26 +851,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
    * even if the topic doesn't exist, request APIs should not leak the topic name
    */
   @Test
-  def testAuthorizationWithTopicNotExisting(): Unit = {
+  def testAuthorizationFetchV12WithTopicNotExisting(): Unit = {
+    val id = Uuid.ZERO_UUID
+    val topicNames = Map(id -> "topic")
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
-      ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = false),
-      ApiKeys.PRODUCE -> createProduceRequest,
-      ApiKeys.FETCH -> createFetchRequest,
-      ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
-      ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
-      ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
-      ApiKeys.DELETE_TOPICS -> deleteTopicsRequest,
-      ApiKeys.DELETE_RECORDS -> deleteRecordsRequest,
-      ApiKeys.ADD_PARTITIONS_TO_TXN -> addPartitionsToTxnRequest,
-      ApiKeys.ADD_OFFSETS_TO_TXN -> addOffsetsToTxnRequest,
-      ApiKeys.CREATE_PARTITIONS -> createPartitionsRequest,
-      ApiKeys.DELETE_GROUPS -> deleteGroupsRequest,
-      ApiKeys.OFFSET_FOR_LEADER_EPOCH -> offsetsForLeaderEpochRequest,
-      ApiKeys.ELECT_LEADERS -> electLeadersRequest,
-      ApiKeys.DESCRIBE_PRODUCERS -> describeProducersRequest
+      ApiKeys.FETCH -> createFetchRequestWithUnknownTopic(id, 12),
     )
 
-    sendRequests(requestKeyToRequest, false)
+    sendRequests(requestKeyToRequest, false, topicNames)
   }
 
   @Test
@@ -1339,7 +1375,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testFetchAllOffsetsTopicAuthorization(): Unit = {
+  def testOffsetFetchAllTopicPartitionsAuthorization(): Unit = {
     createTopic(topic)
 
     val offset = 15L
@@ -1356,17 +1392,204 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     // note there's only one broker, so no need to lookup the group coordinator
 
     // without describe permission on the topic, we shouldn't be able to fetch offsets
-    val offsetFetchRequest = new requests.OffsetFetchRequest.Builder(group, false, null, false).build()
+    val offsetFetchRequest = createOffsetFetchRequestAllPartitions
     var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    assertEquals(Errors.NONE, offsetFetchResponse.error)
-    assertTrue(offsetFetchResponse.responseData.isEmpty)
+    assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(group))
+    assertTrue(offsetFetchResponse.partitionDataMap(group).isEmpty)
 
     // now add describe permission on the topic and verify that the offset can be fetched
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    assertEquals(Errors.NONE, offsetFetchResponse.error)
-    assertTrue(offsetFetchResponse.responseData.containsKey(tp))
-    assertEquals(offset, offsetFetchResponse.responseData.get(tp).offset)
+    assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(group))
+    assertTrue(offsetFetchResponse.partitionDataMap(group).containsKey(tp))
+    assertEquals(offset, offsetFetchResponse.partitionDataMap(group).get(tp).offset)
+  }
+
+  @Test
+  def testOffsetFetchMultipleGroupsAuthorization(): Unit = {
+    val groups: Seq[String] = (1 to 5).map(i => s"group$i")
+    val groupResources = groups.map(group => new ResourcePattern(GROUP, group, LITERAL))
+    val topics: Seq[String] = (1 to 3).map(i => s"topic$i")
+    val topicResources = topics.map(topic => new ResourcePattern(TOPIC, topic, LITERAL))
+
+    val topic1List = singletonList(new TopicPartition(topics(0), 0))
+    val topic1And2List = util.Arrays.asList(
+      new TopicPartition(topics(0), 0),
+      new TopicPartition(topics(1), 0),
+      new TopicPartition(topics(1), 1))
+    val allTopicsList = util.Arrays.asList(
+      new TopicPartition(topics(0), 0),
+      new TopicPartition(topics(1), 0),
+      new TopicPartition(topics(1), 1),
+      new TopicPartition(topics(2), 0),
+      new TopicPartition(topics(2), 1),
+      new TopicPartition(topics(2), 2))
+
+    // create group to partition map to build batched offsetFetch request
+    val groupToPartitionMap = new util.HashMap[String, util.List[TopicPartition]]()
+    groupToPartitionMap.put(groups(0), topic1List)
+    groupToPartitionMap.put(groups(1), topic1And2List)
+    groupToPartitionMap.put(groups(2), allTopicsList)
+    groupToPartitionMap.put(groups(3), null)
+    groupToPartitionMap.put(groups(4), null)
+
+    createTopic(topics(0))
+    createTopic(topics(1), numPartitions = 2)
+    createTopic(topics(2), numPartitions = 3)
+    groupResources.foreach(r => {
+      addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), r)
+    })
+    topicResources.foreach(t => {
+      addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), t)
+    })
+
+    val offset = 15L
+    val leaderEpoch: Optional[Integer] = Optional.of(1)
+    val metadata = "metadata"
+    val topicOneOffsets = topic1List.asScala.map {
+      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
+    }.toMap.asJava
+    val topicOneAndTwoOffsets = topic1And2List.asScala.map {
+      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
+    }.toMap.asJava
+    val allTopicOffsets = allTopicsList.asScala.map {
+      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
+    }.toMap.asJava
+
+    // create 5 consumers to commit offsets so we can fetch them later
+
+    def commitOffsets(tpList: util.List[TopicPartition],
+                      offsets: util.Map[TopicPartition, OffsetAndMetadata]): Unit = {
+      val consumer = createConsumer()
+      consumer.assign(tpList)
+      consumer.commitSync(offsets)
+      consumer.close()
+    }
+
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(0))
+    commitOffsets(topic1List, topicOneOffsets)
+
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(1))
+    commitOffsets(topic1And2List, topicOneAndTwoOffsets)
+
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(2))
+    commitOffsets(allTopicsList, allTopicOffsets)
+
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(3))
+    commitOffsets(allTopicsList, allTopicOffsets)
+
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(4))
+    commitOffsets(allTopicsList, allTopicOffsets)
+
+    removeAllClientAcls()
+
+    def verifyPartitionData(partitionData: OffsetFetchResponse.PartitionData): Unit = {
+      assertTrue(!partitionData.hasError)
+      assertEquals(offset, partitionData.offset)
+      assertEquals(metadata, partitionData.metadata)
+      assertEquals(leaderEpoch.get(), partitionData.leaderEpoch.get())
+    }
+
+    def verifyResponse(groupLevelResponse: Errors,
+                       partitionData: util.Map[TopicPartition, PartitionData],
+                       topicList: util.List[TopicPartition]): Unit = {
+      assertEquals(Errors.NONE, groupLevelResponse)
+      assertTrue(partitionData.size() == topicList.size())
+      topicList.forEach(t => verifyPartitionData(partitionData.get(t)))
+    }
+
+    // test handling partial errors, where one group is fully authorized, some groups don't have
+    // the right topic authorizations, and some groups have no authorization
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResources(0))
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResources(1))
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResources(3))
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResources(0))
+    val offsetFetchRequest = createOffsetFetchRequest(groupToPartitionMap)
+    var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
+    offsetFetchResponse.data().groups().forEach(g =>
+      g.groupId() match {
+        case "group1" =>
+          verifyResponse(offsetFetchResponse.groupLevelError(groups(0)), offsetFetchResponse
+            .partitionDataMap(groups(0)), topic1List)
+        case "group2" =>
+          assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groups(1)))
+          val group2Response = offsetFetchResponse.partitionDataMap(groups(1))
+          assertTrue(group2Response.size() == 3)
+          assertTrue(group2Response.keySet().containsAll(topic1And2List))
+          verifyPartitionData(group2Response.get(topic1And2List.get(0)))
+          assertTrue(group2Response.get(topic1And2List.get(1)).hasError)
+          assertTrue(group2Response.get(topic1And2List.get(2)).hasError)
+          assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group2Response.get(topic1And2List.get(1)))
+          assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group2Response.get(topic1And2List.get(2)))
+        case "group3" =>
+          assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, offsetFetchResponse.groupLevelError(groups(2)))
+          assertTrue(offsetFetchResponse.partitionDataMap(groups(2)).size() == 0)
+        case "group4" =>
+          verifyResponse(offsetFetchResponse.groupLevelError(groups(3)), offsetFetchResponse
+            .partitionDataMap(groups(3)), topic1List)
+        case "group5" =>
+          assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, offsetFetchResponse.groupLevelError(groups(4)))
+          assertTrue(offsetFetchResponse.partitionDataMap(groups(4)).size() == 0)
+      })
+
+    // test that after adding some of the ACLs, we get no group level authorization errors, but
+    // still get topic level authorization errors for topics we don't have ACLs for
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResources(2))
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResources(4))
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResources(1))
+    offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
+    offsetFetchResponse.data().groups().forEach(g =>
+      g.groupId() match {
+        case "group1" =>
+          verifyResponse(offsetFetchResponse.groupLevelError(groups(0)), offsetFetchResponse
+            .partitionDataMap(groups(0)), topic1List)
+        case "group2" =>
+          verifyResponse(offsetFetchResponse.groupLevelError(groups(1)), offsetFetchResponse
+            .partitionDataMap(groups(1)), topic1And2List)
+        case "group3" =>
+          assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groups(2)))
+          val group3Response = offsetFetchResponse.partitionDataMap(groups(2))
+          assertTrue(group3Response.size() == 6)
+          assertTrue(group3Response.keySet().containsAll(allTopicsList))
+          verifyPartitionData(group3Response.get(allTopicsList.get(0)))
+          verifyPartitionData(group3Response.get(allTopicsList.get(1)))
+          verifyPartitionData(group3Response.get(allTopicsList.get(2)))
+          assertTrue(group3Response.get(allTopicsList.get(3)).hasError)
+          assertTrue(group3Response.get(allTopicsList.get(4)).hasError)
+          assertTrue(group3Response.get(allTopicsList.get(5)).hasError)
+          assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group3Response.get(allTopicsList.get(3)))
+          assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group3Response.get(allTopicsList.get(4)))
+          assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group3Response.get(allTopicsList.get(5)))
+        case "group4" =>
+          verifyResponse(offsetFetchResponse.groupLevelError(groups(3)), offsetFetchResponse
+            .partitionDataMap(groups(3)), topic1And2List)
+        case "group5" =>
+          verifyResponse(offsetFetchResponse.groupLevelError(groups(4)), offsetFetchResponse
+            .partitionDataMap(groups(4)), topic1And2List)
+      })
+
+    // test that after adding all necessary ACLs, we get no partition level or group level errors
+    // from the offsetFetch response
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResources(2))
+    offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
+    offsetFetchResponse.data().groups().forEach(g =>
+      g.groupId() match {
+        case "group1" =>
+          verifyResponse(offsetFetchResponse.groupLevelError(groups(0)), offsetFetchResponse
+            .partitionDataMap(groups(0)), topic1List)
+        case "group2" =>
+          verifyResponse(offsetFetchResponse.groupLevelError(groups(1)), offsetFetchResponse
+            .partitionDataMap(groups(1)), topic1And2List)
+        case "group3" =>
+          verifyResponse(offsetFetchResponse.groupLevelError(groups(2)), offsetFetchResponse
+            .partitionDataMap(groups(2)), allTopicsList)
+        case "group4" =>
+          verifyResponse(offsetFetchResponse.groupLevelError(groups(3)), offsetFetchResponse
+            .partitionDataMap(groups(3)), allTopicsList)
+        case "group5" =>
+          verifyResponse(offsetFetchResponse.groupLevelError(groups(4)), offsetFetchResponse
+            .partitionDataMap(groups(4)), allTopicsList)
+      })
   }
 
   @Test
@@ -2107,7 +2330,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                                                 topicNames: Map[Uuid, String] = getTopicNames()): AbstractResponse = {
     val apiKey = request.apiKey
     val response = connectAndReceive[AbstractResponse](request)
-    val error = requestKeyToError(topicNames)(apiKey).asInstanceOf[AbstractResponse => Errors](response)
+    val error = requestKeyToError(topicNames, request.version())(apiKey).asInstanceOf[AbstractResponse => Errors](response)
 
     val authorizationErrors = resources.flatMap { resourceType =>
       if (resourceType == TOPIC) {
@@ -2127,9 +2350,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         assertTrue(authorizationErrors.contains(error), s"$apiKey should be forbidden. Found error $error but expected one of $authorizationErrors")
     else if (resources == Set(TOPIC))
       if (isAuthorized)
-        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, error, s"$apiKey had an unexpected error")
-      else
-        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, error, s"$apiKey had an unexpected error")
+        if (apiKey.equals(ApiKeys.FETCH) && request.version() >= 13)
+          assertEquals(Errors.UNKNOWN_TOPIC_ID, error, s"$apiKey had an unexpected error")
+        else
+          assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, error, s"$apiKey had an unexpected error")
+      else {
+        if (apiKey.equals(ApiKeys.FETCH) && request.version() >= 13)
+          assertEquals(Errors.UNKNOWN_TOPIC_ID, error, s"$apiKey had an unexpected error")
+        else
+          assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, error, s"$apiKey had an unexpected error")
+      }
 
     response
   }
@@ -2190,5 +2420,4 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     adminClients += adminClient
     adminClient
   }
-
 }

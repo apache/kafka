@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.BeforeEach
 
+@deprecated(message = "Use the Connect-based MirrorMaker instead (aka MM2).", since = "3.0")
 class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
 
   override def generateConfigs: Seq[KafkaConfig] =
@@ -66,7 +67,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerProps.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "1")
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
-    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, whitelistOpt = Some("any"))
+    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, includeOpt = Some("any"))
     mirrorMakerConsumer.offsets.put(new TopicPartition("test", 0), 0L)
     assertThrows(classOf[TimeoutException], () => mirrorMakerConsumer.commit())
   }
@@ -79,7 +80,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerProps.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "2000")
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
-    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, whitelistOpt = Some("any"))
+    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, includeOpt = Some("any"))
     mirrorMakerConsumer.offsets.put(new TopicPartition("nonexistent-topic1", 0), 0L)
     mirrorMakerConsumer.offsets.put(new TopicPartition("nonexistent-topic2", 0), 0L)
     MirrorMaker.commitOffsets(mirrorMakerConsumer)
@@ -107,7 +108,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
 
-    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, whitelistOpt = Some("another_topic,new.*,foo"))
+    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, includeOpt = Some("another_topic,new.*,foo"))
     mirrorMakerConsumer.init()
     try {
       TestUtils.waitUntilTrue(() => {
