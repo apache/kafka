@@ -246,7 +246,8 @@ subprojects {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
     // temporary exclusions until all the warnings are fixed
-    options.compilerArgs << "-Xlint:-rawtypes"
+    if (!project.path.startsWith(":connect"))
+      options.compilerArgs << "-Xlint:-rawtypes"
     options.compilerArgs << "-Xlint:-serial"
     options.compilerArgs << "-Xlint:-try"
     options.compilerArgs << "-Werror"
@@ -860,6 +861,7 @@ project(':core') {
     compileOnly libs.log4j
 
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':metadata').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation libs.easymock

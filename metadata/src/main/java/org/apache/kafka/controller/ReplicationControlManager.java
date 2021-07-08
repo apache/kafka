@@ -378,7 +378,7 @@ public class ReplicationControlManager {
                 replicationFactor = OptionalInt.of(assignment.brokerIds().size());
                 int[] replicas = Replicas.toArray(assignment.brokerIds());
                 newParts.put(assignment.partitionIndex(), new PartitionRegistration(
-                    replicas, replicas, null, null, replicas[0], 0, 0));
+                    replicas, replicas, Replicas.NONE, Replicas.NONE, replicas[0], 0, 0));
             }
         } else if (topic.replicationFactor() < -1 || topic.replicationFactor() == 0) {
             return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
@@ -401,7 +401,7 @@ public class ReplicationControlManager {
                 for (int partitionId = 0; partitionId < replicas.size(); partitionId++) {
                     int[] r = Replicas.toArray(replicas.get(partitionId));
                     newParts.put(partitionId,
-                        new PartitionRegistration(r, r, null, null, r[0], 0, 0));
+                        new PartitionRegistration(r, r, Replicas.NONE, Replicas.NONE, r[0], 0, 0));
                 }
             } catch (InvalidReplicationFactorException e) {
                 return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
@@ -928,8 +928,8 @@ public class ReplicationControlManager {
                 setTopicId(topicId).
                 setReplicas(placement).
                 setIsr(placement).
-                setRemovingReplicas(null).
-                setAddingReplicas(null).
+                setRemovingReplicas(Collections.emptyList()).
+                setAddingReplicas(Collections.emptyList()).
                 setLeader(placement.get(0)).
                 setLeaderEpoch(0).
                 setPartitionEpoch(0), PARTITION_RECORD.highestSupportedVersion()));
