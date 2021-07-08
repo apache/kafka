@@ -21,7 +21,7 @@ IF [%1] EQU [] (
 
 SetLocal
 IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
-    set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%~dp0../../config/log4j.properties
+    set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:///%~dp0../../config/log4j.properties
 )
 IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
     set KAFKA_HEAP_OPTS=-Xmx512M -Xms512M
