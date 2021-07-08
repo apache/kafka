@@ -252,7 +252,7 @@ settings.put(... , ...);</code></pre>
                 but it does wait to fetch data that is already present on the brokers.
                 This default means that for records that are already present on the brokers,
                 Streams will process them in timestamp order.
-                The setting of -1 disables idling entirely and processes any locally available data,
+                Set to -1 to disable idling entirely and process any locally available data,
                 even though doing so may produce out-of-order processing.
               </p>
             </td>
