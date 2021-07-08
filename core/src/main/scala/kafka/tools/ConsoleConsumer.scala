@@ -21,6 +21,7 @@ import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicReference
 import java.util.regex.Pattern
 import java.util.{Collections, Locale, Map, Optional, Properties, Random}
 import com.typesafe.scalalogging.LazyLogging
@@ -492,7 +493,7 @@ class DefaultMessageFormatter extends MessageFormatter {
     headersDeserializer = getPropertyIfExists(configs, "headers.deserializer", getDeserializerProperty(false))
   }
 
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
+  override def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
 
     def writeSeparator(columnSeparator: Boolean): Unit = {
       if (columnSeparator)
@@ -592,6 +593,15 @@ class DefaultMessageFormatter extends MessageFormatter {
     else
       None
   }
+
+  override def close(): Unit = {
+    val firstException = new AtomicReference[Throwable]()
+    Utils.closeAllQuietly(firstException, "close key/value deserializer",
+      () => keyDeserializer.foreach(_.close()),
+      () => valueDeserializer.foreach(_.close()),
+      () => headersDeserializer.foreach(_.close()))
+    if (firstException.get() != null) throw firstException.get()
+  }
 }
 
 class LoggingMessageFormatter extends MessageFormatter with LazyLogging {
@@ -599,13 +609,15 @@ class LoggingMessageFormatter extends MessageFormatter with LazyLogging {
 
   override def configure(configs: Map[String, _]): Unit = defaultWriter.configure(configs)
 
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
+  override def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
     import consumerRecord._
     defaultWriter.writeTo(consumerRecord, output)
     logger.info({if (timestampType != TimestampType.NO_TIMESTAMP_TYPE) s"$timestampType:$timestamp, " else ""} +
                   s"key:${if (key == null) "null" else new String(key, StandardCharsets.UTF_8)}, " +
                   s"value:${if (value == null) "null" else new String(value, StandardCharsets.UTF_8)}")
   }
+
+  override def close(): Unit = defaultWriter.close()
 }
 
 class NoOpMessageFormatter extends MessageFormatter {

@@ -394,7 +394,8 @@ class ConsoleConsumerTest {
       "--topic", "test",
       "--property", "print.key=true",
       "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
-      "--property", "key.deserializer.my-props=abc"
+      "--property", "key.deserializer.my-props=abc",
+      "--property", "value.deserializer=org.apache.kafka.test.MockDeserializer",
     )
     val config = new ConsoleConsumer.ConsumerConfig(args)
     assertTrue(config.formatter.isInstanceOf[DefaultMessageFormatter])
@@ -404,6 +405,32 @@ class ConsoleConsumerTest {
     assertEquals(1, formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.size)
     assertEquals("abc", formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.get("my-props"))
     assertTrue(formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].isKey)
+
+    val initialCount = MockDeserializer.closeCount.get()
+    formatter.close()
+    // 1 (key deserializer) + 1 (value deserializer)
+    assertEquals(2 + initialCount, MockDeserializer.closeCount.get())
+  }
+
+  @Test
+  def testCloseLoggingMessageFormatter(): Unit = {
+    val args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--formatter", classOf[LoggingMessageFormatter].getName,
+      "--property", "print.key=true",
+      "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
+      "--property", "key.deserializer.my-props=abc",
+      "--property", "value.deserializer=org.apache.kafka.test.MockDeserializer",
+    )
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    assertTrue(config.formatter.isInstanceOf[LoggingMessageFormatter])
+    val formatter = config.formatter.asInstanceOf[LoggingMessageFormatter]
+
+    val initialCount = MockDeserializer.closeCount.get()
+    formatter.close()
+    // 1 (key deserializer) + 1 (value deserializer)
+    assertEquals(2 + initialCount, MockDeserializer.closeCount.get())
   }
 
   @Test
