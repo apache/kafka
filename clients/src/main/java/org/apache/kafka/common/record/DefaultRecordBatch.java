@@ -91,7 +91,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * the previous value prior to becoming empty.
  *
  * The delete horizon flag for the sixth bit is used to determine if the first timestamp of the batch had been set to
- * the time for which tombstones / transaction markers needs to be removed. If it is true, then the first timestamp is
+ * the time for which tombstones / transaction markers need to be removed. If it is true, then the first timestamp is
  * the delete horizon, otherwise, it is merely the first timestamp of the record batch.
  *
  * The current attributes are given below:
@@ -167,21 +167,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
      *         {@link RecordBatch#NO_TIMESTAMP} if the batch is empty
      */
     public long baseTimestamp() {
-        return buffer.getLong(FIRST_TIMESTAMP_OFFSET);
-    }
-
-    /**
-     * Get the timestamp of the first record in this batch. It is usually the create time of the record even if the
-     * timestamp type of the batch is log append time.
-     * 
-     * @return The first timestamp if a record has been appended, unless the delete horizon has been set
-     *         {@link RecordBatch#NO_TIMESTAMP} if the batch is empty or if the delete horizon is set
-     */
-    public long firstTimestamp() {
-        final long baseTimestamp = baseTimestamp();
         if (hasDeleteHorizonMs())
             return RecordBatch.NO_TIMESTAMP;
-        return baseTimestamp;
+        return buffer.getLong(FIRST_TIMESTAMP_OFFSET);
     }
 
     @Override
@@ -272,9 +260,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     @Override
     public long deleteHorizonMs() {
-        final long baseTimestamp = baseTimestamp();
         if (hasDeleteHorizonMs())
-            return baseTimestamp;
+            return buffer.getLong(FIRST_TIMESTAMP_OFFSET);
         return RecordBatch.NO_TIMESTAMP;
     }
 
@@ -322,9 +309,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         buffer.position(RECORDS_OFFSET);
         return new RecordIterator() {
             @Override
-            protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
+            protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
                 try {
-                    return DefaultRecord.readFrom(buffer, baseOffset, firstTimestamp, baseSequence, logAppendTime);
+                    return DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, logAppendTime);
                 } catch (BufferUnderflowException e) {
                     throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
                 }
@@ -590,7 +577,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     private abstract class RecordIterator implements CloseableIterator<Record> {
         private final Long logAppendTime;
         private final long baseOffset;
-        private final long firstTimestamp;
+        private final long baseTimestamp;
         private final int baseSequence;
         private final int numRecords;
         private int readRecords = 0;
@@ -598,7 +585,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         RecordIterator() {
             this.logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
             this.baseOffset = baseOffset();
-            this.firstTimestamp = firstTimestamp();
+            this.baseTimestamp = baseTimestamp();
             this.baseSequence = baseSequence();
             int numRecords = count();
             if (numRecords < 0)
@@ -618,7 +605,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                 throw new NoSuchElementException();
 
             readRecords++;
-            Record rec = readNext(baseOffset, firstTimestamp, baseSequence, logAppendTime);
+            Record rec = readNext(baseOffset, baseTimestamp, baseSequence, logAppendTime);
             if (readRecords == numRecords) {
                 // Validate that the actual size of the batch is equal to declared size
                 // by checking that after reading declared number of items, there no items left
@@ -629,7 +616,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             return rec;
         }
 
-        protected abstract Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime);
+        protected abstract Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime);
 
         protected abstract boolean ensureNoneRemaining();
 
@@ -651,9 +638,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         abstract Record doReadRecord(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) throws IOException;
 
         @Override
-        protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
+        protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
             try {
-                return doReadRecord(baseOffset, firstTimestamp, baseSequence, logAppendTime);
+                return doReadRecord(baseOffset, baseTimestamp, baseSequence, logAppendTime);
             } catch (EOFException e) {
                 throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
             } catch (IOException e) {
