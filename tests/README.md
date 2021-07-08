@@ -51,6 +51,40 @@ bash tests/docker/ducker-ak up -j 'openjdk:11'; tests/docker/run_tests.sh
 ```
 REBUILD="t" bash tests/docker/run_tests.sh
 ```
+* Debug tests in VS Code:
+  - Run test with `--debug` flag (can be before or after file name):
+    ```
+    tests/docker/ducker-ak up; tests/docker/ducker-ak test tests/kafkatest/tests/core/security_test.py --debug
+    ```
+  - Test will run in debug mode and wait for a debugger to attach. 
+  - Launch VS Code debugger with `"attach"` request - here's an example:
+    ```json
+    {
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Attach to Ducker",
+            "type": "python",
+            "request": "attach",
+            "connect": {
+                "host": "localhost",
+                "port": 5678
+            },
+            "justMyCode": false,
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}",
+                    "remoteRoot": "."
+                }
+            ]
+        }
+      ]
+    }
+    ```
+  - To pass `--debug` flag to ducktape itself, use `--`:
+    ```
+    tests/docker/ducker-ak test tests/kafkatest/tests/core/security_test.py --debug -- --debug
+    ```
 
 * Notes
   - The scripts to run tests creates and destroys docker network named *knw*.
