@@ -21,7 +21,7 @@ import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
+import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1, KAFKA_3_0_IV0}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
@@ -88,10 +88,10 @@ object KafkaServer {
 class KafkaServer(
   val config: KafkaConfig,
   time: Time = Time.SYSTEM,
-  threadNamePrefix: Option[String] = None,
-  enableForwarding: Boolean = false
+  threadNamePrefix: Option[String] = None
 ) extends KafkaBroker with Server {
 
+  private val enableForwarding = config.usesSelfManagedQuorum || config.interBrokerProtocolVersion >= KAFKA_3_0_IV0
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)

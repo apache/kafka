@@ -16,7 +16,7 @@
 {
   "apiKey": 58,
   "type": "request",
-  "listeners": ["controller"],
+  "listeners": ["zkBroker", "controller"],
   "name": "EnvelopeRequest",
   // Request struct for forwarding.
   "validVersions": "0",

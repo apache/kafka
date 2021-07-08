@@ -69,8 +69,7 @@ object Kafka extends Logging {
       new KafkaServer(
         config,
         Time.SYSTEM,
-        threadNamePrefix = None,
-        enableForwarding = false
+        threadNamePrefix = None
       )
     } else {
       new KafkaRaftServer(
