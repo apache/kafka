@@ -38,7 +38,7 @@ import kafka.utils._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.{Metrics, Sensor}
 import org.apache.kafka.common.metrics.stats.{Avg, Max, Meter}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, Errors, MessageUtil}
 import org.apache.kafka.common.record._
@@ -99,7 +99,7 @@ class GroupMetadataManager(brokerId: Int,
     GroupMetadataManager.MetricsGroup,
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
 
-  val offsetCommitsSensor = metrics.sensor("OffsetCommits")
+  val offsetCommitsSensor: Sensor = metrics.sensor("OffsetCommits")
 
   offsetCommitsSensor.add(new Meter(
     metrics.metricName("offset-commit-rate",
@@ -109,7 +109,7 @@ class GroupMetadataManager(brokerId: Int,
       "group-coordinator-metrics",
       "The total number of committed offsets")))
 
-  val offsetExpiredSensor = metrics.sensor("OffsetExpired")
+  val offsetExpiredSensor: Sensor = metrics.sensor("OffsetExpired")
 
   offsetExpiredSensor.add(new Meter(
     metrics.metricName("offset-expiration-rate",
@@ -184,9 +184,9 @@ class GroupMetadataManager(brokerId: Int,
 
   def currentGroups: Iterable[GroupMetadata] = groupMetadataCache.values
 
-  def isPartitionOwned(partition: Int) = inLock(partitionLock) { ownedPartitions.contains(partition) }
+  def isPartitionOwned(partition: Int): Boolean = inLock(partitionLock) { ownedPartitions.contains(partition) }
 
-  def isPartitionLoading(partition: Int) = inLock(partitionLock) { loadingPartitions.contains(partition) }
+  def isPartitionLoading(partition: Int): Boolean = inLock(partitionLock) { loadingPartitions.contains(partition) }
 
   def partitionFor(groupId: String): Int = Utils.abs(groupId.hashCode) % groupMetadataTopicPartitionCount
 
@@ -197,7 +197,7 @@ class GroupMetadataManager(brokerId: Int,
   def isLoading: Boolean = inLock(partitionLock) { loadingPartitions.nonEmpty }
 
   // return true iff group is owned and the group doesn't exist
-  def groupNotExists(groupId: String) = inLock(partitionLock) {
+  def groupNotExists(groupId: String): Boolean = inLock(partitionLock) {
     isGroupLocal(groupId) && getGroup(groupId).forall { group =>
       group.inLock(group.is(Dead))
     }
@@ -397,9 +397,6 @@ class GroupMetadataManager(brokerId: Int,
               throw new IllegalStateException("Append status %s should only have one partition %s"
                 .format(responseStatus, offsetTopicPartition))
 
-            // record the number of offsets committed to the log
-            offsetCommitsSensor.record(records.size)
-
             // construct the commit response status and insert
             // the offset and metadata to cache if the append status has no error
             val status = responseStatus(offsetTopicPartition)
@@ -414,6 +411,10 @@ class GroupMetadataManager(brokerId: Int,
                       group.onOffsetCommitAppend(topicPartition, CommitRecordMetadataAndOffset(Some(status.baseOffset), offsetAndMetadata))
                   }
                 }
+
+                // Record the number of offsets committed to the log
+                offsetCommitsSensor.record(records.size)
+
                 Errors.NONE
               } else {
                 if (!group.is(Dead)) {
@@ -954,11 +955,11 @@ class GroupMetadataManager(brokerId: Int,
 
   private def groupsBelongingToPartitions(producerId: Long, partitions: Set[Int]) = openGroupsForProducer synchronized {
     val (ownedGroups, _) = openGroupsForProducer.getOrElse(producerId, mutable.Set.empty[String])
-      .partition { case (group) => partitions.contains(partitionFor(group)) }
+      .partition(group => partitions.contains(partitionFor(group)))
     ownedGroups
   }
 
-  private def removeGroupFromAllProducers(groupId: String) = openGroupsForProducer synchronized {
+  private def removeGroupFromAllProducers(groupId: String): Unit = openGroupsForProducer synchronized {
     openGroupsForProducer.forKeyValue { (_, groups) =>
       groups.remove(groupId)
     }

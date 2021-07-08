@@ -26,8 +26,8 @@ import java.time.Duration
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Properties}
-
 import com.yammer.metrics.core.Meter
+
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
@@ -51,6 +51,7 @@ import org.apache.kafka.common.errors.{KafkaStorageException, UnknownTopicOrPart
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
@@ -1710,7 +1711,11 @@ object TestUtils extends Logging {
   }
 
   def totalMetricValue(server: KafkaServer, metricName: String): Long = {
-    val allMetrics = server.metrics.metrics
+    totalMetricValue(server.metrics, metricName)
+  }
+
+  def totalMetricValue(metrics: Metrics, metricName: String): Long = {
+    val allMetrics = metrics.metrics
     val total = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
       .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     total.toLong
