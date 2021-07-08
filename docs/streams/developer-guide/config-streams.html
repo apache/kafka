@@ -614,19 +614,44 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
           <blockquote>
             <div>
               <p>
-                In a task with multiple input partitions (as in a join or merge), this is the amount
-                of time to block processing to wait for new data to be produced to a partition we
-                are caught up on.
+                This configuration controls how long Streams will wait to fetch data in order to
+                provide in-order processing semantics.
+              </p>
+              <p>
+                When processing a task has multiple input partitions (as in a join or merge),
+                Streams needs to choose which partition to process the next record from.
+                When all input partitions have locally buffered data, Streams picks the partition
+                whose next record has the lowest timestamp. This has the desirable effect of
+                collating the input partitions in timestamp order, which is generally what you
+                want in a streaming join or merge. However, when Streams does not have any data
+                buffered locally for one of the partitions, it does not know whether the next
+                record for that partition will have a lower or higher timestamp than the remaining
+                partitions' records.
+              </p>
+              <p>
+                There are two cases to consider: either there is data in that partition on the
+                broker that Streams has not fetched yet, or Streams is fully caught up with that
+                partition on the broker, and the producers simply haven't produced any new records
+                since Streams polled the last batch.
               </p>
               <p>
                 The default value of
                 <code class="docutils literal"><span class="pre">0</span></code>
-                indicates that Streams will block processing locally buffered data when some of the
-                partitions have no locally buffered data and non-zero lag, indicating that there is
-                data available to fetch from the brokers (to ensure in-order processing of data
-                in the topics), but Streams will not wait for any new data to be produced to those
-                partitions. This default is designed to sacrifice some throughput in exchange for
-                intuitively correct join semantics.
+                causes Streams to delay processing a task when it detects that it has no locally
+                buffered data for a partition, but there is data available on the brokers.
+                Specifically, when there is an empty partition in the local buffer, but Streams
+                has a non-zero lag for that partition. However, as soon as Streams catches up to
+                the broker, it will continue processing, even if there is no data in one of the
+                partitions. That is, it will not wait for new data to be <em>produced</em>.
+                This default is designed to sacrifice some throughput in exchange for intuitively
+                correct join semantics.
+              </p>
+              <p>
+                Any config value greater than zero indicates the number of <em>extra</em>
+                milliseconds that Streams will wait if it has a caught-up but empty partition.
+                In other words, this is the amount of time to wait for new data to be produced
+                to the input partitions to ensure in-order processing of data in the event
+                of a slow producer.
               </p>
               <p>
                 The config value of
@@ -635,12 +660,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                 the next record by timestamp, which achieves maximum throughput at the expense of
                 introducing out-of-order processing.
               </p>
-              <p>
-                Any config value greater than zero indicates the number of milliseconds that
-                Streams will wait if it has a caught-up but empty partition. In other words, this
-                is the amount of time to wait for new data to be produced to the input partitions
-                to ensure in-order processing of data in the event of a slow producer.
-              </p>
+
             </div>
           </blockquote>
         </div>
