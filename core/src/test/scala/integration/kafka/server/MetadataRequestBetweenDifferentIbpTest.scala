@@ -58,7 +58,7 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
     assertEquals(topicId, topicMetadata.topicId())
     assertEquals(topic, topicMetadata.topic())
 
-    // Make the broker whose version=KAFKA_3_0_IV0 controller
+    // Make the broker whose version=KAFKA_2_8_IV0 controller
     ensureControllerIn(Seq(0))
 
     // Restart the broker whose version=KAFKA_3_0_IV1, and the controller will send metadata request to it

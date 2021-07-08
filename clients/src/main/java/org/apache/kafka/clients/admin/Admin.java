@@ -311,9 +311,9 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for {@link #describeTopics(TopicCollection, DescribeTopicsOptions)}
      * with default options. See the overload for more details.
      * <p>
-     * When using topic IDs, this operation is supported by brokers with version 3.0.0 or higher.
+     * When using topic IDs, this operation is supported by brokers with version 3.1.0 or higher.
      *
-     * @param topics The topics to delete.
+     * @param topics The topics to describe.
      * @return The DescribeTopicsResult.
      */
     default DescribeTopicsResult describeTopics(TopicCollection topics) {
@@ -323,10 +323,10 @@ public interface Admin extends AutoCloseable {
     /**
      * describe a batch of topics.
      *
-     * When using topic IDs, this operation is supported by brokers with version 3.0.0 or higher.
+     * When using topic IDs, this operation is supported by brokers with version 3.1.0 or higher.
      *
-     * @param topics  The topics to delete.
-     * @param options The options to use when deleting the topics.
+     * @param topics  The topics to describe.
+     * @param options The options to use when describing the topics.
      * @return The DescribeTopicsResult.
      */
     DescribeTopicsResult describeTopics(TopicCollection topics, DescribeTopicsOptions options);

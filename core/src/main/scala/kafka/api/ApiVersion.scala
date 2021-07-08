@@ -120,7 +120,6 @@ object ApiVersion {
     KAFKA_3_0_IV1,
     // Adds topic IDs to Fetch requests/responses (KIP-516)
     KAFKA_3_1_IV0
-    KAFKA_3_0_IV1
   )
 
   // Map keys are the union of the short and full versions
