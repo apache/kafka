@@ -221,7 +221,7 @@ public class ConnectSchema implements Schema {
             return;
         }
 
-        List<Class> expectedClasses = expectedClassesFor(schema);
+        List<Class<?>> expectedClasses = expectedClassesFor(schema);
         boolean foundMatch = false;
         for (Class<?> expectedClass : expectedClasses) {
             if (expectedClass.isInstance(value)) {
