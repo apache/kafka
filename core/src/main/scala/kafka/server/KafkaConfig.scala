@@ -1975,8 +1975,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s" ${KafkaConfig.ConnectionsMaxIdleMsProp}=$connectionsMaxIdleMs to prevent failed" +
         s" authentication responses from timing out")
 
-    require(KafkaConfig.PrincipalBuilderClassProp != null, "principal.builder.class must be non-null")
-    require(classOf[KafkaPrincipalSerde].isAssignableFrom(getClass(KafkaConfig.PrincipalBuilderClassProp)), 
+    val principalBuilderClass = getClass(KafkaConfig.PrincipalBuilderClassProp)
+    require(principalBuilderClass != null, "principal.builder.class must be non-null")
+    require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass), 
       "principal.builder.class must implement KafkaPrincipalSerde")
   }
 }
