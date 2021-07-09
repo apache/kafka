@@ -125,7 +125,7 @@ object RequestChannel extends Logging {
       envelope match {
         case Some(request) =>
           val envelopeResponse = if (abstractResponse.errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
-            // Since it's a Not Controller error response, we need to make envelope response with Not Controller error
+            // Since it's a NOT_CONTROLLER error response, we need to make envelope response with NOT_CONTROLLER error
             // to notify the requester (i.e. BrokerToControllerRequestThread) to update active controller
             new EnvelopeResponse(new EnvelopeResponseData()
               .setErrorCode(Errors.NOT_CONTROLLER.code()))
