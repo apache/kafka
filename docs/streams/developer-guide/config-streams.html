@@ -618,7 +618,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                 provide in-order processing semantics.
               </p>
               <p>
-                When processing a task has multiple input partitions (as in a join or merge),
+                When processing a task that has multiple input partitions (as in a join or merge),
                 Streams needs to choose which partition to process the next record from.
                 When all input partitions have locally buffered data, Streams picks the partition
                 whose next record has the lowest timestamp. This has the desirable effect of
