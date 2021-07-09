@@ -44,6 +44,25 @@ class OffsetFetchRequestTest extends BaseRequestTest {
   val groupId = "groupId"
   val groups: Seq[String] = (1 to 5).map(i => s"group$i")
   val topics: Seq[String] = (1 to 3).map(i => s"topic$i")
+  val topic1List = singletonList(new TopicPartition(topics(0), 0))
+  val topic1And2List = util.Arrays.asList(
+    new TopicPartition(topics(0), 0),
+    new TopicPartition(topics(1), 0),
+    new TopicPartition(topics(1), 1))
+  val allTopicsList = util.Arrays.asList(
+    new TopicPartition(topics(0), 0),
+    new TopicPartition(topics(1), 0),
+    new TopicPartition(topics(1), 1),
+    new TopicPartition(topics(2), 0),
+    new TopicPartition(topics(2), 1),
+    new TopicPartition(topics(2), 2))
+  val groupToPartitionMap: util.Map[String, util.List[TopicPartition]] =
+    new util.HashMap[String, util.List[TopicPartition]]()
+  groupToPartitionMap.put(groups(0), topic1List)
+  groupToPartitionMap.put(groups(1), topic1And2List)
+  groupToPartitionMap.put(groups(2), allTopicsList)
+  groupToPartitionMap.put(groups(3), null)
+  groupToPartitionMap.put(groups(4), null)
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
@@ -66,12 +85,8 @@ class OffsetFetchRequestTest extends BaseRequestTest {
     createTopic(topic)
 
     val tpList = singletonList(new TopicPartition(topic, 0))
-    val topicOffsets = tpList.asScala.map{
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
-
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    commitOffsets(tpList, topicOffsets)
+    commitOffsets(tpList)
 
     // testing from version 1 onward since version 0 read offsets from ZK
     for (version <- 1 to ApiKeys.OFFSET_FETCH.latestVersion()) {
@@ -114,137 +129,39 @@ class OffsetFetchRequestTest extends BaseRequestTest {
 
   @Test
   def testOffsetFetchRequestWithMultipleGroups(): Unit = {
-
-    val topic1List = singletonList(new TopicPartition(topics(0), 0))
-    val topic1And2List = util.Arrays.asList(
-      new TopicPartition(topics(0), 0),
-      new TopicPartition(topics(1), 0),
-      new TopicPartition(topics(1), 1))
-    val allTopicsList = util.Arrays.asList(
-      new TopicPartition(topics(0), 0),
-      new TopicPartition(topics(1), 0),
-      new TopicPartition(topics(1), 1),
-      new TopicPartition(topics(2), 0),
-      new TopicPartition(topics(2), 1),
-      new TopicPartition(topics(2), 2))
-
-    // create group to partition map to build batched offsetFetch request
-    val groupToPartitionMap: util.Map[String, util.List[TopicPartition]] =
-      new util.HashMap[String, util.List[TopicPartition]]()
-    groupToPartitionMap.put(groups(0), topic1List)
-    groupToPartitionMap.put(groups(1), topic1And2List)
-    groupToPartitionMap.put(groups(2), allTopicsList)
-    groupToPartitionMap.put(groups(3), null)
-    groupToPartitionMap.put(groups(4), null)
-
     createTopic(topics(0))
     createTopic(topics(1), numPartitions = 2)
     createTopic(topics(2), numPartitions = 3)
 
-    val topicOneOffsets = topic1List.asScala.map{
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
-    val topicOneAndTwoOffsets = topic1And2List.asScala.map{
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
-    val allTopicOffsets = allTopicsList.asScala.map{
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
-
     // create 5 consumers to commit offsets so we can fetch them later
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(0))
-    commitOffsets(topic1List, topicOneOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(1))
-    commitOffsets(topic1And2List, topicOneAndTwoOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(2))
-    commitOffsets(allTopicsList, allTopicOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(3))
-    commitOffsets(allTopicsList, allTopicOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(4))
-    commitOffsets(allTopicsList, allTopicOffsets)
+    val partitionMap = groupToPartitionMap.asScala.map(e => (e._1, Option(e._2).getOrElse(allTopicsList)))
+    groups.foreach { groupId =>
+      consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+      commitOffsets(partitionMap(groupId))
+    }
 
     for (version <- 8 to ApiKeys.OFFSET_FETCH.latestVersion()) {
       val request =  new OffsetFetchRequest.Builder(groupToPartitionMap, false, false)
         .build(version.asInstanceOf[Short])
       val response = connectAndReceive[OffsetFetchResponse](request)
-      response.data().groups().forEach(g =>
-        g.groupId() match {
-          case "group1" =>
-            verifyResponse(response.groupLevelError(groups(0)),
-              response.partitionDataMap(groups(0)), topic1List)
-          case "group2" =>
-            verifyResponse(response.groupLevelError(groups(1)),
-              response.partitionDataMap(groups(1)), topic1And2List)
-          case "group3" =>
-            verifyResponse(response.groupLevelError(groups(2)),
-              response.partitionDataMap(groups(2)), allTopicsList)
-          case "group4" =>
-            verifyResponse(response.groupLevelError(groups(3)),
-              response.partitionDataMap(groups(3)), allTopicsList)
-          case "group5" =>
-            verifyResponse(response.groupLevelError(groups(4)),
-              response.partitionDataMap(groups(4)), allTopicsList)
-        })
+      response.data.groups.asScala.map(_.groupId).foreach( groupId =>
+        verifyResponse(response.groupLevelError(groupId), response.partitionDataMap(groupId), partitionMap(groupId))
+      )
     }
   }
 
   @Test
   def testOffsetFetchRequestWithMultipleGroupsWithOneGroupRepeating(): Unit = {
-    val topic1List = singletonList(new TopicPartition(topics(0), 0))
-    val topic1And2List = util.Arrays.asList(
-      new TopicPartition(topics(0), 0),
-      new TopicPartition(topics(1), 0),
-      new TopicPartition(topics(1), 1))
-    val allTopicsList = util.Arrays.asList(
-      new TopicPartition(topics(0), 0),
-      new TopicPartition(topics(1), 0),
-      new TopicPartition(topics(1), 1),
-      new TopicPartition(topics(2), 0),
-      new TopicPartition(topics(2), 1),
-      new TopicPartition(topics(2), 2))
-
-    // create group to partition map to build batched offsetFetch request
-    val groupToPartitionMap: util.Map[String, util.List[TopicPartition]] =
-      new util.HashMap[String, util.List[TopicPartition]]()
-    groupToPartitionMap.put(groups(0), topic1List)
-    groupToPartitionMap.put(groups(1), topic1And2List)
-    groupToPartitionMap.put(groups(2), allTopicsList)
-    groupToPartitionMap.put(groups(3), null)
-    groupToPartitionMap.put(groups(4), null)
-
     createTopic(topics(0))
     createTopic(topics(1), numPartitions = 2)
     createTopic(topics(2), numPartitions = 3)
 
-    val topicOneOffsets = topic1List.asScala.map{
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
-    val topicOneAndTwoOffsets = topic1And2List.asScala.map{
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
-    val allTopicOffsets = allTopicsList.asScala.map{
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
-
     // create 5 consumers to commit offsets so we can fetch them later
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(0))
-    commitOffsets(topic1List, topicOneOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(1))
-    commitOffsets(topic1And2List, topicOneAndTwoOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(2))
-    commitOffsets(allTopicsList, allTopicOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(3))
-    commitOffsets(allTopicsList, allTopicOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(4))
-    commitOffsets(allTopicsList, allTopicOffsets)
+    val partitionMap = groupToPartitionMap.asScala.map(e => (e._1, Option(e._2).getOrElse(allTopicsList)))
+    groups.foreach { groupId =>
+      consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+      commitOffsets(partitionMap(groupId))
+    }
 
     for (version <- 8 to ApiKeys.OFFSET_FETCH.latestVersion()) {
       val request = new OffsetFetchRequest.Builder(groupToPartitionMap, false, false)
@@ -260,25 +177,12 @@ class OffsetFetchRequestTest extends BaseRequestTest {
               .setPartitionIndexes(singletonList(0)))))
       request.data().setGroups(requestGroups)
       val response = connectAndReceive[OffsetFetchResponse](request)
-      response.data().groups().forEach(g =>
-        g.groupId() match {
-          case "group1" =>
-            verifyResponse(response.groupLevelError(groups(0)),
-              response.partitionDataMap(groups(0)), topic1List)
-          case "group2" =>
-            verifyResponse(response.groupLevelError(groups(1)),
-              response.partitionDataMap(groups(1)), topic1And2List)
-          case "group3" =>
-            // verify that the response gives back the latest changed topic partition list
-            verifyResponse(response.groupLevelError(groups(2)),
-              response.partitionDataMap(groups(2)), topic1List)
-          case "group4" =>
-            verifyResponse(response.groupLevelError(groups(3)),
-              response.partitionDataMap(groups(3)), allTopicsList)
-          case "group5" =>
-            verifyResponse(response.groupLevelError(groups(4)),
-              response.partitionDataMap(groups(4)), allTopicsList)
-        })
+      response.data.groups.asScala.map(_.groupId).foreach( groupId =>
+        if (groupId == "group3") // verify that the response gives back the latest changed topic partition list
+          verifyResponse(response.groupLevelError(groupId), response.partitionDataMap(groupId), topic1List)
+        else
+          verifyResponse(response.groupLevelError(groupId), response.partitionDataMap(groupId), partitionMap(groupId))
+      )
     }
   }
 
@@ -316,10 +220,12 @@ class OffsetFetchRequestTest extends BaseRequestTest {
     topicList.forEach(t => verifyPartitionData(partitionData.get(t)))
   }
 
-  private def commitOffsets(tpList: util.List[TopicPartition],
-                            offsets: util.Map[TopicPartition, OffsetAndMetadata]): Unit = {
+  private def commitOffsets(tpList: util.List[TopicPartition]): Unit = {
     val consumer = createConsumer()
     consumer.assign(tpList)
+    val offsets = tpList.asScala.map{
+      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
+    }.toMap.asJava
     consumer.commitSync(offsets)
     consumer.close()
   }
