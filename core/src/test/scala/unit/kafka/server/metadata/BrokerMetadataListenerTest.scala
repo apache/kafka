@@ -30,6 +30,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
+import scala.jdk.CollectionConverters._
 
 class BrokerMetadataListenerTest {
   @Test
@@ -50,7 +51,7 @@ class BrokerMetadataListenerTest {
           setBrokerEpoch(100L).
           setFenced(false).
           setRack(null).
-          setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CSg")), 1))));
+          setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CSg")), 0.toShort))))
       val imageRecords = listener.getImageRecords().get()
       assertEquals(0, imageRecords.size())
       assertEquals(100L, listener.highestMetadataOffset())
@@ -60,7 +61,7 @@ class BrokerMetadataListenerTest {
           setBrokerEpoch(200L).
           setFenced(true).
           setRack(null).
-          setIncarnationId(Uuid.fromString("QkOQtNKVTYatADcaJ28xDg")), 1))));
+          setIncarnationId(Uuid.fromString("QkOQtNKVTYatADcaJ28xDg")), 0.toShort))))
       listener.startPublishing(new MetadataPublisher {
         override def publish(newHighestMetadataOffset: Long,
                              delta: MetadataDelta,
@@ -142,37 +143,39 @@ class BrokerMetadataListenerTest {
   }
 
   @Test
+  def testHandleCommitsWithNoSnapshotterDefined(): Unit = {
+    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000L,
+      snapshotter = None)
+    try {
+      val brokerIds = 0 to 3
+
+      registerBrokers(listener, brokerIds, endOffset = 100L)
+      createTopicWithOnePartition(listener, replicas = brokerIds, endOffset = 200L)
+      listener.getImageRecords().get()
+      assertEquals(200L, listener.highestMetadataOffset())
+
+      generateManyRecords(listener, endOffset = 1000L)
+      assertEquals(1000L, listener.highestMetadataOffset())
+    } finally {
+      listener.close()
+    }
+  }
+
+  @Test
   def testCreateSnapshot(): Unit = {
     val snapshotter = new MockMetadataSnapshotter()
     val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000L, Some(snapshotter))
     try {
-      (0 to 3).foreach {
-        id => listener.handleCommit(RecordTestUtils.mockBatchReader(100L,
-            util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
-              setBrokerId(id).
-              setBrokerEpoch(100L).
-              setFenced(false).
-              setRack(null).
-              setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CS" + id)), 1))))
-      }
-      listener.handleCommit(RecordTestUtils.mockBatchReader(200L,
-        util.Arrays.asList(new ApiMessageAndVersion(new TopicRecord().
-            setName("foo").
-            setTopicId(FOO_ID), 1.toShort),
-          new ApiMessageAndVersion(new PartitionRecord().
-            setPartitionId(0).
-            setTopicId(FOO_ID).
-            setIsr(util.Arrays.asList(0, 1, 2)).
-            setLeader(0).
-            setReplicas(util.Arrays.asList(0, 1, 2)).
-            setRemovingReplicas(util.Arrays.asList(0, 1, 2)).
-            setAddingReplicas(util.Arrays.asList(0, 1, 2)), 1.toShort))))
+      val brokerIds = 0 to 3
+
+      registerBrokers(listener, brokerIds, endOffset = 100L)
+      createTopicWithOnePartition(listener, replicas = brokerIds, endOffset = 200L)
       listener.getImageRecords().get()
       assertEquals(200L, listener.highestMetadataOffset())
 
       // Check that we generate at least one snapshot once we see enough records.
       assertEquals(-1L, snapshotter.prevCommittedOffset)
-      generateManyRecords(listener, 1000L);
+      generateManyRecords(listener, 1000L)
       assertEquals(1000L, snapshotter.prevCommittedOffset)
       assertEquals(1000L, snapshotter.activeSnapshotOffset)
       snapshotter.activeSnapshotOffset = -1L
@@ -180,18 +183,18 @@ class BrokerMetadataListenerTest {
       // Test creating a new snapshot after publishing it.
       val publisher = new MockMetadataPublisher()
       listener.startPublishing(publisher).get()
-      generateManyRecords(listener, 2000L);
+      generateManyRecords(listener, 2000L)
       listener.getImageRecords().get()
       assertEquals(2000L, snapshotter.activeSnapshotOffset)
       assertEquals(2000L, snapshotter.prevCommittedOffset)
 
       // Test how we handle the snapshotter returning false.
-      generateManyRecords(listener, 3000L);
+      generateManyRecords(listener, 3000L)
       assertEquals(2000L, snapshotter.activeSnapshotOffset)
-      generateManyRecords(listener, 4000L);
+      generateManyRecords(listener, 4000L)
       assertEquals(2000L, snapshotter.activeSnapshotOffset)
       snapshotter.activeSnapshotOffset = -1L
-      generateManyRecords(listener, 5000L);
+      generateManyRecords(listener, 5000L)
       assertEquals(5000L, snapshotter.activeSnapshotOffset)
       assertEquals(null, snapshotter.failure.get())
     } finally {
@@ -199,5 +202,39 @@ class BrokerMetadataListenerTest {
     }
   }
 
-}
+  private def registerBrokers(
+    listener: BrokerMetadataListener,
+    brokerIds: Iterable[Int],
+    endOffset: Long
+  ): Unit = {
+    brokerIds.foreach { brokerId =>
+      listener.handleCommit(RecordTestUtils.mockBatchReader(endOffset,
+        util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+          setBrokerId(brokerId).
+          setBrokerEpoch(100L).
+          setFenced(false).
+          setRack(null).
+          setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CS" + brokerId)), 0.toShort))))
+    }
+  }
 
+  private def createTopicWithOnePartition(
+    listener: BrokerMetadataListener,
+    replicas: Seq[Int],
+    endOffset: Long
+  ): Unit = {
+    listener.handleCommit(RecordTestUtils.mockBatchReader(endOffset,
+      util.Arrays.asList(
+        new ApiMessageAndVersion(new TopicRecord().
+          setName("foo").
+          setTopicId(FOO_ID), 0.toShort),
+        new ApiMessageAndVersion(new PartitionRecord().
+          setPartitionId(0).
+          setTopicId(FOO_ID).
+          setIsr(replicas.map(Int.box).asJava).
+          setLeader(0).
+          setReplicas(replicas.map(Int.box).asJava), 0.toShort)))
+    )
+  }
+
+}
