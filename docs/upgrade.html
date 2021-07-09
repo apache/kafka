@@ -24,7 +24,7 @@
     <li>Custom principal builder implementations specified through <code>principal.builder.class</code> must now implement the 
         <code>KafkaPrincipalSerde</code> interface to allow for forwarding between brokers. Additionally, the default value for this configuration has 
         been changed to <code>org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder</code>, which was already the implicit behavior 
-        when no principal builder was defined. See <a href=https://cwiki.apache.org/confluence/display/KAFKA/KIP-590%3A+Redirect+Zookeeper+Mutation+Protocols+to+The+Controller>KIP-590</a> for more details about the usage of KafkaPrincipalSerde.</li>
+        when no principal builder was defined. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-590%3A+Redirect+Zookeeper+Mutation+Protocols+to+The+Controller">KIP-590</a> for more details about the usage of KafkaPrincipalSerde.</li>
     <li>ZooKeeper has been upgraded to version 3.6.3.</li>
     <li>The release tarball no longer includes test, sources, javadoc and test sources jars. These are still published to the Maven Central repository. </li>
     <li>A number of implementation dependency jars are <a href="https://github.com/apache/kafka/pull/10203">now available in the runtime classpath
