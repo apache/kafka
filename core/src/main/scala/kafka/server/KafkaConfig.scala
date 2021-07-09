@@ -1976,8 +1976,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s" authentication responses from timing out")
 
     val principalBuilderClass = getClass(KafkaConfig.PrincipalBuilderClassProp)
-    require(principalBuilderClass != null, "principal.builder.class must be non-null")
+    require(principalBuilderClass != null, s"${KafkaConfig.PrincipalBuilderClassProp} must be non-null")
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass), 
-      "principal.builder.class must implement KafkaPrincipalSerde")
+      s"${KafkaConfig.PrincipalBuilderClassProp} must implement KafkaPrincipalSerde")
   }
 }
