@@ -35,14 +35,14 @@ class BrokerMetadataListenerTest {
   @Test
   def testCreateAndClose(): Unit = {
     val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000000L,
-      (_, _, _, _) => throw new UnsupportedOperationException())
+      snapshotter = None)
     listener.close()
   }
 
   @Test
   def testPublish(): Unit = {
     val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000000L,
-      (_, _, _, _) => throw new UnsupportedOperationException())
+      snapshotter = None)
     try {
       listener.handleCommit(RecordTestUtils.mockBatchReader(100L,
         util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
@@ -144,7 +144,7 @@ class BrokerMetadataListenerTest {
   @Test
   def testCreateSnapshot(): Unit = {
     val snapshotter = new MockMetadataSnapshotter()
-    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000L, snapshotter)
+    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000L, Some(snapshotter))
     try {
       (0 to 3).foreach {
         id => listener.handleCommit(RecordTestUtils.mockBatchReader(100L,
