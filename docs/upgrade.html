@@ -21,7 +21,7 @@
 
 <h5><a id="upgrade_300_notable" href="#upgrade_300_notable">Notable changes in 3.0.0</a></h5>
 <ul>
-    <li>A Principal Serde defenition is now required. A default has been set for KafkaPrincipalBuilder which implements KafkaPrincipalSerde</li>
+    <li>Custom principal builder implementations specified through principal.builder.class must now implement the KafkaPrincipalSerde interface to allow for forwarding between brokers. Additionally, the default value for this configuration has been changed to org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder, which was already the implicit behavior when no principal builder was defined. See <a href=https://cwiki.apache.org/confluence/display/KAFKA/KIP-590%3A+Redirect+Zookeeper+Mutation+Protocols+to+The+Controller>KIP-590</a> for more details about the usage of KafkaPrincipalSerde.</li>
     <li>ZooKeeper has been upgraded to version 3.6.3.</li>
     <li>The release tarball no longer includes test, sources, javadoc and test sources jars. These are still published to the Maven Central repository. </li>
     <li>A number of implementation dependency jars are <a href="https://github.com/apache/kafka/pull/10203">now available in the runtime classpath
