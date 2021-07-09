@@ -1975,6 +1975,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s" ${KafkaConfig.ConnectionsMaxIdleMsProp}=$connectionsMaxIdleMs to prevent failed" +
         s" authentication responses from timing out")
 
-    require(classOf[KafkaPrincipalSerde].isAssignableFrom(getClass(KafkaConfig.PrincipalBuilderClassProp)), "A principal serde must be defined")
+    require(KafkaConfig.PrincipalBuilderClassProp != null, "principal.builder.class must be non-null")
+    require(classOf[KafkaPrincipalSerde].isAssignableFrom(getClass(KafkaConfig.PrincipalBuilderClassProp)), 
+      "principal.builder.class must implement KafkaPrincipalSerde")
   }
 }
