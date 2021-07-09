@@ -254,8 +254,7 @@ class KafkaRaftManager[T](
       dataDir,
       time,
       scheduler,
-      maxBatchSizeInBytes = raftConfig.replicaFetchResponseMaxBytes(),
-      maxFetchSizeInBytes = raftConfig.replicaFetchResponseMaxBytes()
+      config = MetadataLogConfig(config, RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES, RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES)
     )
   }
 

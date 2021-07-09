@@ -603,6 +603,10 @@ class KafkaConfigTest {
         case KafkaConfig.BrokerSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.NodeIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.MetadataLogDirProp => // ignore string
+        case KafkaConfig.MetadataLogSegmentBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.MetadataLogSegmentMillisProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.MetadataMaxRetentionBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.MetadataMaxRetentionMillisProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ControllerListenerNamesProp => // ignore string
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string

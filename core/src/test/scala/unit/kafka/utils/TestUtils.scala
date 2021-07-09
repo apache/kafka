@@ -26,8 +26,8 @@ import java.time.Duration
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Properties}
-
 import com.yammer.metrics.core.Meter
+
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
@@ -36,7 +36,7 @@ import kafka.log._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
-import kafka.server.metadata.{ConfigRepository, MetadataBroker, MockConfigRepository}
+import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -46,10 +46,12 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.ConfigResource.Type.TOPIC
 import org.apache.kafka.common.errors.{KafkaStorageException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
@@ -59,7 +61,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaFuture, Node, TopicPartition}
+import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -169,20 +171,6 @@ object TestUtils extends Logging {
 
   def boundPort(server: KafkaServer, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int =
     server.boundPort(ListenerName.forSecurityProtocol(securityProtocol))
-
-  def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): MetadataBroker = {
-    MetadataBroker(id, null, Map(securityProtocol.name -> new Node(id, host, port)), false)
-  }
-
-  def createMetadataBroker(id: Int,
-                           host: String = "localhost",
-                           port: Int = 9092,
-                           securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
-                           rack: Option[String] = None,
-                           fenced: Boolean = false): MetadataBroker = {
-    MetadataBroker(id, rack.getOrElse(null),
-      Map(securityProtocol.name -> new Node(id, host, port, rack.getOrElse(null))), fenced)
-  }
 
   def createBrokerAndEpoch(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                            epoch: Long = 0): (Broker, Long) = {
@@ -1723,7 +1711,11 @@ object TestUtils extends Logging {
   }
 
   def totalMetricValue(server: KafkaServer, metricName: String): Long = {
-    val allMetrics = server.metrics.metrics
+    totalMetricValue(server.metrics, metricName)
+  }
+
+  def totalMetricValue(metrics: Metrics, metricName: String): Long = {
+    val allMetrics = metrics.metrics
     val total = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
       .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     total.toLong
@@ -1805,7 +1797,7 @@ object TestUtils extends Logging {
   def assignThrottledPartitionReplicas(adminClient: Admin, allReplicasByPartition: Map[TopicPartition, Seq[Int]]): Unit = {
     val throttles = allReplicasByPartition.groupBy(_._1.topic()).map {
       case (topic, replicasByPartition) =>
-        new ConfigResource(ConfigResource.Type.TOPIC, topic) -> Seq(
+        new ConfigResource(TOPIC, topic) -> Seq(
           new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET),
           new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET)
         ).asJavaCollection
@@ -1816,7 +1808,7 @@ object TestUtils extends Logging {
   def removePartitionReplicaThrottles(adminClient: Admin, partitions: Set[TopicPartition]): Unit = {
     val throttles = partitions.map {
       tp =>
-        new ConfigResource(ConfigResource.Type.TOPIC, tp.topic()) -> Seq(
+        new ConfigResource(TOPIC, tp.topic()) -> Seq(
           new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE),
           new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE)
         ).asJavaCollection

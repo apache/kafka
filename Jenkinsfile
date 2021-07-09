@@ -142,26 +142,6 @@ pipeline {
           }
         }
 
-        // Remove this when all tests pass with JDK 16
-        stage('JDK 15 and Scala 2.13') {
-          agent { label 'ubuntu' }
-          tools {
-            jdk 'jdk_15_latest'
-          }
-          options {
-            timeout(time: 8, unit: 'HOURS') 
-            timestamps()
-          }
-          environment {
-            SCALA_VERSION=2.13
-          }
-          steps {
-            doValidation()
-            doTest(env)
-            echo 'Skipping Kafka Streams archetype test for Java 15'
-          }
-        }
-
         stage('JDK 16 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {

@@ -17,10 +17,11 @@
 
 package kafka.server
 
+import java.util
 import java.util.concurrent.TimeUnit
 
 import kafka.metrics.KafkaMetricsGroup
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.replica.ClientMetadata
@@ -48,6 +49,7 @@ case class FetchMetadata(fetchMinBytes: Int,
                          fetchIsolation: FetchIsolation,
                          isFromFollower: Boolean,
                          replicaId: Int,
+                         topicIds: util.Map[String, Uuid],
                          fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
 
   override def toString = "FetchMetadata(minBytes=" + fetchMinBytes + ", " +
@@ -179,6 +181,7 @@ class DelayedFetch(delayMs: Long,
       fetchMaxBytes = fetchMetadata.fetchMaxBytes,
       hardMaxBytesLimit = fetchMetadata.hardMaxBytesLimit,
       readPartitionInfo = fetchMetadata.fetchPartitionStatus.map { case (tp, status) => tp -> status.fetchInfo },
+      topicIds = fetchMetadata.topicIds,
       clientMetadata = clientMetadata,
       quota = quota)
 

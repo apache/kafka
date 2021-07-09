@@ -230,7 +230,7 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for {@link #deleteTopics(TopicCollection, DeleteTopicsOptions)}
      * with default options. See the overload for more details.
      * <p>
-     * When using topic IDs, this operation is supported by brokers with version 3.0.0 or higher.
+     * When using topic IDs, this operation is supported by brokers with inter-broker protocol 2.8 or higher.
      * When using topic names, this operation is supported by brokers with version 0.10.1.0 or higher.
      *
      * @param topics The topics to delete.
@@ -254,7 +254,7 @@ public interface Admin extends AutoCloseable {
      * the topics for deletion, but not actually delete them. The futures will
      * return successfully in this case.
      * <p>
-     * When using topic IDs, this operation is supported by brokers with version 3.0.0 or higher.
+     * When using topic IDs, this operation is supported by brokers with inter-broker protocol 2.8 or higher.
      * When using topic names, this operation is supported by brokers with version 0.10.1.0 or higher.
      *
      * @param topics  The topics to delete.
