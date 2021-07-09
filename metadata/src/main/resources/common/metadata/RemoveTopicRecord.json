@@ -17,8 +17,8 @@
   "apiKey": 9,
   "type": "metadata",
   "name": "RemoveTopicRecord",
-  "validVersions": "0-1",
-  "flexibleVersions": "1+",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
   "fields": [
     { "name": "TopicId", "type": "uuid", "versions": "0+",
       "about": "The topic to remove. All associated partitions will be removed as well." }
