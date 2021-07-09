@@ -35,6 +35,7 @@ import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.apache.kafka.test.MockWindowStoreBuilder;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
@@ -1172,5 +1173,18 @@ public class InternalTopologyBuilderTest {
         ))));
 
         assertThat(builder.buildGlobalStateTopology().storeToChangelogTopic().get(globalStoreName), is(globalTopic));
+    }
+
+    @Test
+    public void shouldAllowAddGlobalStoreWithNonKVStore() {
+        final StoreBuilder windowStoreBuilder = new MockWindowStoreBuilder("store", false);
+        builder.addGlobalStore(windowStoreBuilder.withLoggingDisabled(),
+                "name",
+                null,
+                null,
+                null,
+                "topicName",
+                "otherName",
+                new MockProcessorSupplier());
     }
 }
