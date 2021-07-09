@@ -176,17 +176,17 @@ public class KafkaProducerTest {
     @Test
     public void testAcksAndIdempotenceForIdempotentProducers() {
         Properties validProps = new Properties() {{
-            setProperty(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            setProperty(
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            setProperty(
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            setProperty(
-                ProducerConfig.ACKS_CONFIG, "0");
-            setProperty(
-                ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-        }};
+                setProperty(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+                setProperty(
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                setProperty(
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                setProperty(
+                    ProducerConfig.ACKS_CONFIG, "0");
+                setProperty(
+                    ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+            }};
         ProducerConfig config = new ProducerConfig(validProps);
         assertFalse(
             config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
@@ -197,15 +197,15 @@ public class KafkaProducerTest {
             "acks should be overwritten");
 
         Properties validProps2 = new Properties() {{
-            setProperty(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            setProperty(
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            setProperty(
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            setProperty(
-                ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-        }};
+                setProperty(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+                setProperty(
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                setProperty(
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                setProperty(
+                    ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
+            }};
         assertDoesNotThrow(
             () -> new ProducerConfig(validProps2),
             "Idempotence should be enable by default, " +
@@ -213,69 +213,69 @@ public class KafkaProducerTest {
                 "thus specifying a transaction id should be ok");
 
         Properties validProps3 = new Properties() {{
-            setProperty(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            setProperty(
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            setProperty(
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            setProperty(
-                ProducerConfig.ACKS_CONFIG, "all");
-            setProperty(
-                ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-        }};
+                setProperty(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+                setProperty(
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                setProperty(
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                setProperty(
+                    ProducerConfig.ACKS_CONFIG, "all");
+                setProperty(
+                    ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+            }};
         assertDoesNotThrow(
             () -> new ProducerConfig(validProps3),
             "Setting ack = all doesn't require enabling idempotence");
 
         Properties invalidProps = new Properties() {{
-            setProperty(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            setProperty(
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            setProperty(
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            setProperty(
-                ProducerConfig.ACKS_CONFIG, "0");
-            setProperty(
-                ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-            setProperty(
-                ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-        }};
+                setProperty(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+                setProperty(
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                setProperty(
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                setProperty(
+                    ProducerConfig.ACKS_CONFIG, "0");
+                setProperty(
+                    ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+                setProperty(
+                    ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
+            }};
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps),
             "Cannot set a transactional.id without also enabling idempotence");
 
         Properties invalidProps2 = new Properties() {{
-            setProperty(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            setProperty(
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            setProperty(
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            setProperty(
-                ProducerConfig.ACKS_CONFIG, "1");
-            setProperty(
-                ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
-        }};
+                setProperty(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+                setProperty(
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                setProperty(
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                setProperty(
+                    ProducerConfig.ACKS_CONFIG, "1");
+                setProperty(
+                    ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+            }};
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps2),
             "Must set acks to all in order to use the idempotent producer");
 
         Properties invalidProps3 = new Properties() {{
-            setProperty(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            setProperty(
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            setProperty(
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            setProperty(
-                ProducerConfig.ACKS_CONFIG, "0");
-            setProperty(
-                ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
-        }};
+                setProperty(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+                setProperty(
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                setProperty(
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                setProperty(
+                    ProducerConfig.ACKS_CONFIG, "0");
+                setProperty(
+                    ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+            }};
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps3),
