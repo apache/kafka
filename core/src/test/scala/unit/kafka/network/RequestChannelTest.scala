@@ -21,8 +21,7 @@ package kafka.network
 import java.io.IOException
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.Collections
-
+import java.util.{Collections, Optional}
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.network
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -31,17 +30,23 @@ import org.apache.kafka.common.config.{ConfigResource, SaslConfigs, SslConfigs, 
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
-import org.apache.kafka.common.network.{ClientInformation, ListenerName}
+import org.apache.kafka.common.network.{ByteBufferSend, ClientInformation, ListenerName}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{AbstractRequest, MetadataRequest, RequestTestUtils}
 import org.apache.kafka.common.requests.AlterConfigsRequest._
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
+import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.easymock.EasyMock._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
+import org.mockito.{ArgumentCaptor, Mockito}
 
+import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
 class RequestChannelTest {
+  private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
 
   @Test
   def testAlterRequests(): Unit = {
@@ -177,6 +182,108 @@ class RequestChannelTest {
       new Config(entries.asJavaCollection)), true).build())
 
     assertTrue(isValidJson(RequestConvertToJson.request(alterConfigs.loggableRequest).toString))
+  }
+
+  @Test
+  def testEnvelopeBuildResponseSendShouldReturnNoErrorIfInnerResponseHasNoError(): Unit = {
+    val channelRequest = buildRequestWithEnvelope()
+
+    val mockSend: ByteBufferSend = Mockito.mock(classOf[ByteBufferSend])
+    val envelopResponseArgumentCaptor = ArgumentCaptor.forClass(classOf[EnvelopeResponse])
+
+    Mockito.doReturn(mockSend).when(channelRequest.envelope.get.context).buildResponseSend(envelopResponseArgumentCaptor.capture())
+
+    // create an inner response without error
+    val ResponseWithoutError = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", 2))
+
+    // build an envelope response
+    channelRequest.buildResponseSend(ResponseWithoutError)
+
+    // expect the envelopeResponse result without error
+    val capturedValue: EnvelopeResponse = envelopResponseArgumentCaptor.getValue
+    assertTrue(capturedValue.error().equals(Errors.NONE))
+  }
+
+  @Test
+  def testEnvelopeBuildResponseSendShouldReturnNotControllerErrorIfInnerResponseHasOne(): Unit = {
+    val channelRequest = buildRequestWithEnvelope()
+
+    val mockSend: ByteBufferSend = Mockito.mock(classOf[ByteBufferSend])
+    val envelopResponseArgumentCaptor = ArgumentCaptor.forClass(classOf[EnvelopeResponse])
+
+    Mockito.doReturn(mockSend).when(channelRequest.envelope.get.context).buildResponseSend(envelopResponseArgumentCaptor.capture())
+
+    // create an inner response with Not_Controller error
+    val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
+      Collections.singletonMap("a", Errors.NOT_CONTROLLER),
+      Collections.singletonMap("a", 2))
+
+    // build an envelope response
+    channelRequest.buildResponseSend(responseWithNotControllerError)
+
+    // expect the envelopeResponse result has Not_Controller error
+    val capturedValue: EnvelopeResponse = envelopResponseArgumentCaptor.getValue
+    assertTrue(capturedValue.error().equals(Errors.NOT_CONTROLLER))
+  }
+
+  private def buildRequestWithEnvelope(): RequestChannel.Request = {
+    val resourceName = "topic-1"
+    val clientId = "id"
+    val header = new RequestHeader(ApiKeys.ALTER_CONFIGS, ApiKeys.ALTER_CONFIGS.latestVersion,
+      clientId, 0)
+
+    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
+
+    val configs = Map(
+      configResource -> new AlterConfigsRequest.Config(
+        Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava))
+    val request = new AlterConfigsRequest.Builder(configs.asJava, false).build(header.apiVersion)
+
+    val principalSerde = new KafkaPrincipalSerde() {
+      override def serialize(principal: KafkaPrincipal): Array[Byte] = Utils.utf8(principal.toString)
+      override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
+    }
+
+    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+
+    val requestHeader = new RequestHeader(request.apiKey, request.version, clientId, 0)
+    val requestBuffer = request.serializeWithHeader(requestHeader)
+
+    val envelopeHeader = new RequestHeader(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion(), clientId, 0)
+    val envelopeBuffer = new EnvelopeRequest.Builder(
+      requestBuffer,
+      principalSerde.serialize(KafkaPrincipal.ANONYMOUS),
+      InetAddress.getLocalHost.getAddress
+    ).build().serializeWithHeader(envelopeHeader)
+
+    val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
+      KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
+      false, Optional.of(principalSerde))
+
+    val requestContextSpy: RequestContext = Mockito.spy(envelopeContext)
+
+    RequestHeader.parse(envelopeBuffer)
+    val EnvelopeBuffer2 = envelopeBuffer.duplicate()
+
+    val envelopeRequest = new RequestChannel.Request(
+      processor = 1,
+      context = requestContextSpy,
+      startTimeNanos = System.nanoTime(),
+      memoryPool = MemoryPool.NONE,
+      buffer = envelopeBuffer,
+      metrics = requestChannelMetrics
+    )
+
+    new RequestChannel.Request(
+      processor = 1,
+      context = envelopeContext,
+      startTimeNanos = System.nanoTime(),
+      memoryPool = MemoryPool.NONE,
+      buffer = EnvelopeBuffer2,
+      metrics = requestChannelMetrics,
+      envelope = Option(envelopeRequest)
+    )
+
   }
 
   private def isValidJson(str: String): Boolean = {
