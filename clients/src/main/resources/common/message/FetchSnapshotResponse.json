@@ -37,8 +37,8 @@
         { "name": "SnapshotId", "type": "SnapshotId", "versions": "0+",
           "about": "The snapshot endOffset and epoch fetched",
           "fields": [
-          { "name": "EndOffset", "type": "int64", "versions": "0+" },
-          { "name": "Epoch", "type": "int32", "versions": "0+" }
+          { "name": "EndOffset", "type": "int64", "versions": "0+", "default": "-1" },
+          { "name": "Epoch", "type": "int32", "versions": "0+", "default": "-1" }
         ]},
         { "name": "CurrentLeader", "type": "LeaderIdAndEpoch",
           "versions": "0+", "taggedVersions": "0+", "tag": 0, "fields": [
