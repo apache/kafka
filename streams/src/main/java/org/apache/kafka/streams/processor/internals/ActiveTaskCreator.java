@@ -143,7 +143,7 @@ class ActiveTaskCreator {
 
             final LogContext logContext = getLogContext(taskId);
 
-            final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
+            final ProcessorTopology topology = builder.buildSubtopology(taskId.subtopology());
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
@@ -194,7 +194,7 @@ class ActiveTaskCreator {
             inputPartitions,
             consumer,
             logContext,
-            builder.buildSubtopology(standbyTask.id.topicGroupId),
+            builder.buildSubtopology(standbyTask.id.subtopology()),
             stateManager,
             context
         );

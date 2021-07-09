@@ -34,18 +34,17 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TaskMetadata;
+import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TaskMetadata;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
@@ -301,10 +300,10 @@ public class StreamThread extends Thread {
     private final java.util.function.Consumer<Long> cacheResizer;
 
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
-    private Runnable shutdownErrorHook;
-    private AtomicInteger assignmentErrorCode;
-    private AtomicLong cacheResizeSize;
-    private AtomicBoolean leaveGroupRequested;
+    private final Runnable shutdownErrorHook;
+    private final AtomicInteger assignmentErrorCode;
+    private final AtomicLong cacheResizeSize;
+    private final AtomicBoolean leaveGroupRequested;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -504,14 +503,10 @@ public class StreamThread extends Thread {
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
         // its metrics initialised. Otherwise, those sensors would have been created during processing, which could
-        // lead to missing metrics. For instance, if no task were created, the metrics for created and closed
+        // lead to missing metrics. If no task were created, the metrics for created and closed
         // tasks would never be added to the metrics.
         ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
         ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
-        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
-            ThreadMetrics.skipRecordSensor(threadId, streamsMetrics);
-            ThreadMetrics.commitOverTasksSensor(threadId, streamsMetrics);
-        }
 
         this.time = time;
         this.builder = builder;
@@ -1123,7 +1118,7 @@ public class StreamThread extends Thread {
     // package-private for testing only
     StreamThread updateThreadMetadata(final String adminClientId) {
 
-        threadMetadata = new ThreadMetadata(
+        threadMetadata = new ThreadMetadataImpl(
             getName(),
             state().name(),
             getConsumerClientId(getName()),
@@ -1140,8 +1135,8 @@ public class StreamThread extends Thread {
                                       final Map<TaskId, Task> standbyTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
-            activeTasksMetadata.add(new TaskMetadata(
-                task.getValue().id().toString(),
+            activeTasksMetadata.add(new TaskMetadataImpl(
+                task.getValue().id(),
                 task.getValue().inputPartitions(),
                 task.getValue().committedOffsets(),
                 task.getValue().highWaterMark(),
@@ -1150,8 +1145,8 @@ public class StreamThread extends Thread {
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
-            standbyTasksMetadata.add(new TaskMetadata(
-                task.getValue().id().toString(),
+            standbyTasksMetadata.add(new TaskMetadataImpl(
+                task.getValue().id(),
                 task.getValue().inputPartitions(),
                 task.getValue().committedOffsets(),
                 task.getValue().highWaterMark(),
@@ -1160,7 +1155,7 @@ public class StreamThread extends Thread {
         }
 
         final String adminClientId = threadMetadata.adminClientId();
-        threadMetadata = new ThreadMetadata(
+        threadMetadata = new ThreadMetadataImpl(
             getName(),
             state().name(),
             getConsumerClientId(getName()),

@@ -370,8 +370,8 @@ public class StoreQueryIntegrationTest {
 
         startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
-        assertTrue(kafkaStreams1.localThreadsMetadata().size() > 1);
-        assertTrue(kafkaStreams2.localThreadsMetadata().size() > 1);
+        assertTrue(kafkaStreams1.metadataForLocalThreads().size() > 1);
+        assertTrue(kafkaStreams2.metadataForLocalThreads().size() > 1);
 
         produceValueRange(key, 0, batch1NumMessages);
 
@@ -462,7 +462,7 @@ public class StoreQueryIntegrationTest {
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
         config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         return config;
     }
 }

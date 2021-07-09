@@ -71,6 +71,7 @@ import static org.junit.Assert.assertTrue;
 /**
  * Tests related to internal topics in streams
  */
+@SuppressWarnings("deprecation")
 @Category({IntegrationTest.class})
 public class InternalTopicIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
@@ -102,7 +103,7 @@ public class InternalTopicIntegrationTest {
         streamsProp.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsProp.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsProp.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsProp.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsProp.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsProp.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsProp.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
     }

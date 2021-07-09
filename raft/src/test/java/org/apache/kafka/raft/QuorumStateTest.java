@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -945,9 +946,10 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testInitializeWithCorruptedStore() throws IOException {
+    public void testInitializeWithCorruptedStore() {
         QuorumStateStore stateStore = Mockito.mock(QuorumStateStore.class);
-        Mockito.doThrow(IOException.class).when(stateStore).readElectionState();
+        Mockito.doThrow(UncheckedIOException.class).when(stateStore).readElectionState();
+
         QuorumState state = buildQuorumState(Utils.mkSet(localId));
 
         int epoch = 2;

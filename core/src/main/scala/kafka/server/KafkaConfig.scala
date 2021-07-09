@@ -43,6 +43,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.jdk.CollectionConverters._
@@ -73,6 +74,7 @@ object Defaults {
   val InitialBrokerRegistrationTimeoutMs = 60000
   val BrokerHeartbeatIntervalMs = 2000
   val BrokerSessionTimeoutMs = 9000
+  val MetadataSnapshotMaxNewRecordBytes = 20 * 1024 * 1024
 
   /** KRaft mode configs */
   val EmptyNodeId: Int = -1
@@ -81,9 +83,7 @@ object Defaults {
   val AuthorizerClassName = ""
 
   /** ********* Socket Server Configuration ***********/
-  val Port = 9092
-  val HostName: String = new String("")
-
+  val Listeners = "PLAINTEXT://:9092"
   val ListenerSecurityProtocolMap: String = EndPoint.DefaultSecurityProtocolMap.map { case (listenerName, securityProtocol) =>
     s"${listenerName.value}:${securityProtocol.name}"
   }.mkString(",")
@@ -375,17 +375,18 @@ object KafkaConfig {
   val BrokerSessionTimeoutMsProp = "broker.session.timeout.ms"
   val NodeIdProp = "node.id"
   val MetadataLogDirProp = "metadata.log.dir"
+  val MetadataSnapshotMaxNewRecordBytesProp = "metadata.log.max.record.bytes.between.snapshots"
   val ControllerListenerNamesProp = "controller.listener.names"
   val SaslMechanismControllerProtocolProp = "sasl.mechanism.controller.protocol"
+  val MetadataLogSegmentBytesProp = "metadata.log.segment.bytes"
+  val MetadataLogSegmentMillisProp = "metadata.log.segment.ms"
+  val MetadataMaxRetentionBytesProp = "metadata.max.retention.bytes"
+  val MetadataMaxRetentionMillisProp = "metadata.max.retention.ms"
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
   /** ********* Socket Server Configuration ***********/
-  val PortProp = "port"
-  val HostNameProp = "host.name"
   val ListenersProp = "listeners"
-  val AdvertisedHostNameProp: String = "advertised.host.name"
-  val AdvertisedPortProp = "advertised.port"
   val AdvertisedListenersProp = "advertised.listeners"
   val ListenerSecurityProtocolMapProp = "listener.security.protocol.map"
   val ControlPlaneListenerNameProp = "control.plane.listener.name"
@@ -669,20 +670,21 @@ object KafkaConfig {
     "This is required configuration when running in KRaft mode."
   val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
     "If it is not set, the metadata log is placed in the first log directory from log.dirs."
+  val MetadataSnapshotMaxNewRecordBytesDoc = "This is the maximum number of bytes in the log between the latest snapshot and the high-watermark needed before generating a new snapshot."
   val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the controller. This is required " +
     "if running in KRaft mode. The ZK-based controller will not use this configuration."
   val SaslMechanismControllerProtocolDoc = "SASL mechanism used for communication with controllers. Default is GSSAPI."
+  val MetadataLogSegmentBytesDoc = "The maximum size of a single metadata log file."
+  val MetadataLogSegmentMillisDoc = "The maximum time before a new metadata log file is rolled out (in milliseconds)."
+  val MetadataMaxRetentionBytesDoc = "The maximum combined size of the metadata log and snapshots before deleting old " +
+    "snapshots and log files. Since at least one snapshot must exist before any logs can be deleted, this is a soft limit."
+  val MetadataMaxRetentionMillisDoc = "The number of milliseconds to keep a metadata log file or snapshot before " +
+    "deleting it. Since at least one snapshot must exist before any logs can be deleted, this is a soft limit."
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements s${classOf[Authorizer].getName}" +
   " interface, which is used by the broker for authorization."
   /** ********* Socket Server Configuration ***********/
-  val PortDoc = "DEPRECATED: only used when <code>listeners</code> is not set. " +
-  "Use <code>listeners</code> instead. \n" +
-  "the port to listen and accept connections on"
-  val HostNameDoc = "DEPRECATED: only used when <code>listeners</code> is not set. " +
-  "Use <code>listeners</code> instead. \n" +
-  "hostname of broker. If this is set, it will only bind to this address. If this is not set, it will bind to all interfaces"
   val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
     s" If the listener name is not a security protocol, <code>$ListenerSecurityProtocolMapProp</code> must also be set.\n" +
     " Listener names and port numbers must be unique.\n" +
@@ -691,17 +693,6 @@ object KafkaConfig {
     " Examples of legal listener lists:\n" +
     " PLAINTEXT://myhost:9092,SSL://:9091\n" +
     " CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093\n"
-  val AdvertisedHostNameDoc = "DEPRECATED: only used when <code>advertised.listeners</code> or <code>listeners</code> are not set. " +
-  "Use <code>advertised.listeners</code> instead. \n" +
-  "Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
-  "need to be different from the interface to which the broker binds. If this is not set, " +
-  "it will use the value for <code>host.name</code> if configured. Otherwise " +
-  "it will use the value returned from java.net.InetAddress.getCanonicalHostName()."
-  val AdvertisedPortDoc = "DEPRECATED: only used when <code>advertised.listeners</code> or <code>listeners</code> are not set. " +
-  "Use <code>advertised.listeners</code> instead. \n" +
-  "The port to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
-  "need to be different from the port to which the broker binds. If this is not set, " +
-  "it will publish the same port that the broker binds to."
   val AdvertisedListenersDoc = s"Listeners to publish to ZooKeeper for clients to use, if different than the <code>$ListenersProp</code> config property." +
     " In IaaS environments, this may need to be different from the interface to which the broker binds." +
     s" If this is not set, the value for <code>$ListenersProp</code> will be used." +
@@ -1063,26 +1054,31 @@ object KafkaConfig {
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
 
       /*
-       * KRaft mode configs. Note that these configs are defined as internal. We will make them public in the 3.0.0 release.
+       * KRaft mode configs.
        */
-      .defineInternal(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
-      .defineInternal(NodeIdProp, INT, Defaults.EmptyNodeId, null, HIGH, NodeIdDoc)
-      .defineInternal(InitialBrokerRegistrationTimeoutMsProp, INT, Defaults.InitialBrokerRegistrationTimeoutMs, null, MEDIUM, InitialBrokerRegistrationTimeoutMsDoc)
-      .defineInternal(BrokerHeartbeatIntervalMsProp, INT, Defaults.BrokerHeartbeatIntervalMs, null, MEDIUM, BrokerHeartbeatIntervalMsDoc)
-      .defineInternal(BrokerSessionTimeoutMsProp, INT, Defaults.BrokerSessionTimeoutMs, null, MEDIUM, BrokerSessionTimeoutMsDoc)
-      .defineInternal(MetadataLogDirProp, STRING, null, null, HIGH, MetadataLogDirDoc)
-      .defineInternal(ControllerListenerNamesProp, STRING, null, null, HIGH, ControllerListenerNamesDoc)
-      .defineInternal(SaslMechanismControllerProtocolProp, STRING, SaslConfigs.DEFAULT_SASL_MECHANISM, null, HIGH, SaslMechanismControllerProtocolDoc)
+      .define(MetadataSnapshotMaxNewRecordBytesProp, LONG, Defaults.MetadataSnapshotMaxNewRecordBytes, atLeast(1), HIGH, MetadataSnapshotMaxNewRecordBytesDoc)
+
+      /*
+       * KRaft mode private configs. Note that these configs are defined as internal. We will make them public in the 3.0.0 release.
+       */
+      .define(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
+      .define(NodeIdProp, INT, Defaults.EmptyNodeId, null, HIGH, NodeIdDoc)
+      .define(InitialBrokerRegistrationTimeoutMsProp, INT, Defaults.InitialBrokerRegistrationTimeoutMs, null, MEDIUM, InitialBrokerRegistrationTimeoutMsDoc)
+      .define(BrokerHeartbeatIntervalMsProp, INT, Defaults.BrokerHeartbeatIntervalMs, null, MEDIUM, BrokerHeartbeatIntervalMsDoc)
+      .define(BrokerSessionTimeoutMsProp, INT, Defaults.BrokerSessionTimeoutMs, null, MEDIUM, BrokerSessionTimeoutMsDoc)
+      .define(ControllerListenerNamesProp, STRING, null, null, HIGH, ControllerListenerNamesDoc)
+      .define(SaslMechanismControllerProtocolProp, STRING, SaslConfigs.DEFAULT_SASL_MECHANISM, null, HIGH, SaslMechanismControllerProtocolDoc)
+      .define(MetadataLogDirProp, STRING, null, null, HIGH, MetadataLogDirDoc)
+      .define(MetadataLogSegmentBytesProp, INT, Defaults.LogSegmentBytes, atLeast(Records.LOG_OVERHEAD), HIGH, MetadataLogSegmentBytesDoc)
+      .define(MetadataLogSegmentMillisProp, LONG, Defaults.LogRollHours * 60 * 60 * 1000L, null, HIGH, MetadataLogSegmentMillisDoc)
+      .define(MetadataMaxRetentionBytesProp, LONG, Defaults.LogRetentionBytes, null, HIGH, MetadataMaxRetentionBytesDoc)
+      .define(MetadataMaxRetentionMillisProp, LONG, Defaults.LogRetentionHours * 60 * 60 * 1000L, null, HIGH, MetadataMaxRetentionMillisDoc)
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
 
       /** ********* Socket Server Configuration ***********/
-      .define(PortProp, INT, Defaults.Port, HIGH, PortDoc)
-      .define(HostNameProp, STRING, Defaults.HostName, HIGH, HostNameDoc)
-      .define(ListenersProp, STRING, null, HIGH, ListenersDoc)
-      .define(AdvertisedHostNameProp, STRING, null, HIGH, AdvertisedHostNameDoc)
-      .define(AdvertisedPortProp, INT, null, HIGH, AdvertisedPortDoc)
+      .define(ListenersProp, STRING, Defaults.Listeners, HIGH, ListenersDoc)
       .define(AdvertisedListenersProp, STRING, null, HIGH, AdvertisedListenersDoc)
       .define(ListenerSecurityProtocolMapProp, STRING, Defaults.ListenerSecurityProtocolMap, LOW, ListenerSecurityProtocolMapDoc)
       .define(ControlPlaneListenerNameProp, STRING, null, HIGH, controlPlaneListenerNameDoc)
@@ -1304,6 +1300,9 @@ object KafkaConfig {
       .defineInternal(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, Defaults.QuorumRequestTimeoutMs, null, MEDIUM, RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_DOC)
       .defineInternal(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
   }
+
+  /** ********* Remote Log Management Configuration *********/
+  RemoteLogManagerConfig.CONFIG_DEF.configKeys().values().forEach(key => configDef.define(key))
 
   def configNames: Seq[String] = configDef.names.asScala.toBuffer.sorted
   private[server] def defaultValues: Map[String, _] = configDef.defaultValues.asScala
@@ -1541,6 +1540,12 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
+  def metadataLogSegmentBytes = getInt(KafkaConfig.MetadataLogSegmentBytesProp)
+  def metadataLogSegmentMillis = getLong(KafkaConfig.MetadataLogSegmentMillisProp)
+  def metadataRetentionBytes = getLong(KafkaConfig.MetadataMaxRetentionBytesProp)
+  def metadataRetentionMillis = getLong(KafkaConfig.MetadataMaxRetentionMillisProp)
+
+
   def numNetworkThreads = getInt(KafkaConfig.NumNetworkThreadsProp)
   def backgroundThreads = getInt(KafkaConfig.BackgroundThreadsProp)
   val queuedMaxRequests = getInt(KafkaConfig.QueuedMaxRequestsProp)
@@ -1556,6 +1561,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     numThreads
   }
 
+  /************* Metadata Configuration ***********/
+  val metadataSnapshotMaxNewRecordBytes = getLong(KafkaConfig.MetadataSnapshotMaxNewRecordBytesProp)
+
   /************* Authorizer Configuration ***********/
   val authorizer: Option[Authorizer] = {
     val className = getString(KafkaConfig.AuthorizerClassNameProp)
@@ -1567,11 +1575,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   }
 
   /** ********* Socket Server Configuration ***********/
-  val hostName = getString(KafkaConfig.HostNameProp)
-  val port = getInt(KafkaConfig.PortProp)
-  val advertisedHostName = Option(getString(KafkaConfig.AdvertisedHostNameProp)).getOrElse(hostName)
-  val advertisedPort: java.lang.Integer = Option(getInt(KafkaConfig.AdvertisedPortProp)).getOrElse(port)
-
   val socketSendBufferBytes = getInt(KafkaConfig.SocketSendBufferBytesProp)
   val socketReceiveBufferBytes = getInt(KafkaConfig.SocketReceiveBufferBytesProp)
   val socketRequestMaxBytes = getInt(KafkaConfig.SocketRequestMaxBytesProp)
@@ -1788,13 +1791,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
-  // If the user did not define listeners but did define host or port, let's use them in backward compatible way
-  // If none of those are defined, we default to PLAINTEXT://:9092
-  def listeners: Seq[EndPoint] = {
-    Option(getString(KafkaConfig.ListenersProp)).map { listenerProp =>
-      CoreUtils.listenerListToEndPoints(listenerProp, listenerSecurityProtocolMap)
-    }.getOrElse(CoreUtils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port, listenerSecurityProtocolMap))
-  }
+  def listeners: Seq[EndPoint] =
+    CoreUtils.listenerListToEndPoints(getString(KafkaConfig.ListenersProp), listenerSecurityProtocolMap)
 
   def controllerListenerNames: Seq[String] =
     Option(getString(KafkaConfig.ControllerListenerNamesProp)).getOrElse("").split(",")
@@ -1818,15 +1816,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
-  // If the user defined advertised listeners, we use those
-  // If they didn't but did define advertised host or port, we'll use those and fill in the missing value from regular host / port or defaults
-  // If none of these are defined, we'll use the listeners
+  // Use advertised listeners if defined, fallback to listeners otherwise
   def advertisedListeners: Seq[EndPoint] = {
     val advertisedListenersProp = getString(KafkaConfig.AdvertisedListenersProp)
     if (advertisedListenersProp != null)
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, listenerSecurityProtocolMap, requireDistinctPorts=false)
-    else if (getString(KafkaConfig.AdvertisedHostNameProp) != null || getInt(KafkaConfig.AdvertisedPortProp) != null)
-      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort, listenerSecurityProtocolMap, requireDistinctPorts=false)
     else
       listeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
   }

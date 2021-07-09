@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
+import net.jqwik.api.Tag;
 import net.jqwik.api.constraints.IntRange;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -37,7 +38,6 @@ import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.SnapshotReader;
-import org.junit.jupiter.api.Tag;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -352,6 +352,7 @@ public class RaftEventSimulationTest {
         scheduler.addInvariant(new MajorityReachedHighWatermark(cluster));
         scheduler.addInvariant(new SingleLeader(cluster));
         scheduler.addInvariant(new SnapshotAtLogStart(cluster));
+        scheduler.addInvariant(new LeaderNeverLoadSnapshot(cluster));
         scheduler.addValidation(new ConsistentCommittedData(cluster));
         return scheduler;
     }
@@ -1010,6 +1011,23 @@ public class RaftEventSimulationTest {
                         );
                     }
                 });
+            }
+        }
+    }
+
+    private static class LeaderNeverLoadSnapshot implements Invariant {
+        final Cluster cluster;
+
+        private LeaderNeverLoadSnapshot(Cluster cluster) {
+            this.cluster = cluster;
+        }
+
+        @Override
+        public void verify() {
+            for (RaftNode raftNode : cluster.running()) {
+                if (raftNode.counter.isWritable()) {
+                    assertEquals(0, raftNode.counter.handleSnapshotCalls());
+                }
             }
         }
     }

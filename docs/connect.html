@@ -310,7 +310,12 @@
         <li><code>GET /connectors/{name}/tasks/{taskid}/status</code> - get current status of the task, including if it is running, failed, paused, etc., which worker it is assigned to, and error information if it has failed</li>
         <li><code>PUT /connectors/{name}/pause</code> - pause the connector and its tasks, which stops message processing until the connector is resumed</li>
         <li><code>PUT /connectors/{name}/resume</code> - resume a paused connector (or do nothing if the connector is not paused)</li>
-        <li><code>POST /connectors/{name}/restart</code> - restart a connector (typically because it has failed)</li>
+        <li><code>POST /connectors/{name}/restart?includeTasks=&lt;true|false&gt;&amp;onlyFailed=&lt;true|false&gt;</code> - restart a connector and its tasks instances.
+            <ul>
+                <li>the "includeTasks" parameter specifies whether to restart the connector instance and task instances ("includeTasks=true") or just the connector instance ("includeTasks=false"), with the default ("false") preserving the same behavior as earlier versions.</li>
+                <li>the "onlyFailed" parameter specifies whether to restart just the instances with a FAILED status ("onlyFailed=true") or all instances ("onlyFailed=false"), with the default ("false") preserving the same behavior as earlier versions.</li>
+            </ul>
+        </li>
         <li><code>POST /connectors/{name}/tasks/{taskId}/restart</code> - restart an individual task (typically because it has failed)</li>
         <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
         <li><code>GET /connectors/{name}/topics</code> - get the set of topics that a specific connector is using since the connector was created or since a request to reset its set of active topics was issued</li>

@@ -20,6 +20,8 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 
 public interface RaftClient<T> extends AutoCloseable {
@@ -56,24 +58,29 @@ public interface RaftClient<T> extends AutoCloseable {
         void handleSnapshot(SnapshotReader<T> reader);
 
         /**
-         * Invoked after this node has become a leader. This is only called after
-         * all commits up to the start of the leader's epoch have been sent to
-         * {@link #handleCommit(BatchReader)}.
+         * Called on any change to leadership. This includes both when a leader is elected and
+         * when a leader steps down or fails.
          *
-         * After becoming a leader, the client is eligible to write to the log
-         * using {@link #scheduleAppend(int, List)} or {@link #scheduleAtomicAppend(int, List)}.
+         * If this node is the leader, then the notification of leadership will be delayed until
+         * the implementation of this interface has caughup to the high-watermark through calls to
+         * {@link #handleSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
          *
-         * @param epoch the claimed leader epoch
+         * If this node is not the leader, then this method will be called as soon as possible. In
+         * this case the leader may or may not be known for the current epoch.
+         *
+         * Subsequent calls to this method will expose a monotonically increasing epoch. For a
+         * given epoch the leader may be unknown, {@code leader.leaderId} is {@code OptionalInt#empty},
+         * or known {@code leader.leaderId} is {@code OptionalInt#of}. Once a leader is known for
+         * a given epoch it will remain the leader for that epoch. In other words, the implementation of
+         * method should expect this method will be called at most twice for each epoch. Once if the
+         * epoch changed but the leader is not known and once when the leader is known for the current
+         * epoch.
+         *
+         * @param leader the current leader and epoch
          */
-        default void handleClaim(int epoch) {}
+        default void handleLeaderChange(LeaderAndEpoch leader) {}
 
-        /**
-         * Invoked after a leader has stepped down. This callback may or may not
-         * fire before the next leader has been elected.
-         *
-         * @param epoch the epoch that the leader is resigning from
-         */
-        default void handleResign(int epoch) {}
+        default void beginShutdown() {}
     }
 
     /**
@@ -95,6 +102,14 @@ public interface RaftClient<T> extends AutoCloseable {
     LeaderAndEpoch leaderAndEpoch();
 
     /**
+     * Get local nodeId if one is defined. This may be absent when the client is used
+     * as an anonymous observer, as in the case of the metadata shell.
+     *
+     * @return optional node id
+     */
+    OptionalInt nodeId();
+
+    /**
      * Append a list of records to the log. The write will be scheduled for some time
      * in the future. There is no guarantee that appended records will be written to
      * the log and eventually committed. While the order of the records is preserve, they can
@@ -112,7 +127,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * @param records the list of records to append
      * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
      *         be committed; null if no memory could be allocated for the batch at this time
-     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
      */
@@ -134,7 +149,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * @param records the list of records to append
      * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
      *         be committed; null if no memory could be allocated for the batch at this time
-     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
      */
@@ -156,14 +171,32 @@ public interface RaftClient<T> extends AutoCloseable {
     CompletableFuture<Void> shutdown(int timeoutMs);
 
     /**
-     * Create a writable snapshot file for a given offset and epoch.
+     * Resign the leadership. The leader will give up its leadership in the passed epoch
+     * (if it matches the current epoch), and a new election will be held. Note that nothing
+     * prevents this node from being reelected as the leader.
      *
-     * The RaftClient assumes that the snapshot return will contain the records up to but
-     * not including the end offset in the snapshot id. See {@link SnapshotWriter} for
-     * details on how to use this object.
+     * Notification of successful resignation can be observed through
+     * {@link Listener#handleLeaderChange(LeaderAndEpoch)}.
      *
-     * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot
+     * @param epoch the epoch to resign from. If this does not match the current epoch, this
+     *              call will be ignored.
      */
-    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId);
+    void resign(int epoch);
+
+    /**
+     * Create a writable snapshot file for a committed offset and epoch.
+     *
+     * The RaftClient assumes that the snapshot returned will contain the records up to and
+     * including the committed offset and epoch. See {@link SnapshotWriter} for details on
+     * how to use this object. If a snapshot already exists then returns an
+     * {@link Optional#empty()}.
+     *
+     * @param committedEpoch the epoch of the committed offset
+     * @param committedOffset the last committed offset that will be included in the snapshot
+     * @param lastContainedLogTime The append time of the highest record contained in this snapshot
+     * @return a writable snapshot if it doesn't already exists
+     * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
+     *         or less than the log start offset.
+     */
+    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime);
 }

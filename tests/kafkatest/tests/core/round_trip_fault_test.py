@@ -38,7 +38,7 @@ class RoundTripFaultTest(Test):
         self.workload_service = RoundTripWorkloadService(test_context, self.kafka)
         if quorum.for_test(test_context) == quorum.zk:
             trogdor_client_services = [self.zk, self.kafka, self.workload_service]
-        elif quorum.for_test(test_context) == quorum.remote_raft:
+        elif quorum.for_test(test_context) == quorum.remote_kraft:
             trogdor_client_services = [self.kafka.controller_quorum, self.kafka, self.workload_service]
         else: #co-located case, which we currently don't test but handle here for completeness in case we do test it
             trogdor_client_services = [self.kafka, self.workload_service]
@@ -46,7 +46,8 @@ class RoundTripFaultTest(Test):
                                       client_services=trogdor_client_services)
         topic_name = "round_trip_topic%d" % RoundTripFaultTest.topic_name_index
         RoundTripFaultTest.topic_name_index = RoundTripFaultTest.topic_name_index + 1
-        active_topics={topic_name : {"partitionAssignments":{"0": [0,1,2]}}}
+        # note that the broker.id values will be 1..num_nodes
+        active_topics={topic_name : {"partitionAssignments":{"0": [1,2,3]}}}
         self.round_trip_spec = RoundTripWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                      self.workload_service.client_node,
                                      self.workload_service.bootstrap_servers,
@@ -69,7 +70,7 @@ class RoundTripFaultTest(Test):
     def remote_quorum_nodes(self):
         if quorum.for_test(self.test_context) == quorum.zk:
             return self.zk.nodes
-        elif quorum.for_test(self.test_context) == quorum.remote_raft:
+        elif quorum.for_test(self.test_context) == quorum.remote_kraft:
             return self.kafka.controller_quorum.nodes
         else: # co-located case, which we currently don't test but handle here for completeness in case we do test it
             return []

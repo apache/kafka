@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -90,7 +91,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     private Sensor bufferSizeSensor;
     private Sensor bufferCountSensor;
     private StreamsMetricsImpl streamsMetrics;
-    private String threadId;
     private String taskId;
 
     private volatile boolean open;
@@ -189,10 +189,11 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         return false;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void setSerdesIfNull(final Serde<K> keySerde, final Serde<V> valueSerde) {
-        this.keySerde = this.keySerde == null ? keySerde : this.keySerde;
-        this.valueSerde = this.valueSerde == null ? FullChangeSerde.wrap(valueSerde) : this.valueSerde;
+    public void setSerdesIfNull(final SerdeGetter getter) {
+        keySerde = keySerde == null ? (Serde<K>) getter.keySerde() : keySerde;
+        valueSerde = valueSerde == null ? FullChangeSerde.wrap((Serde<V>) getter.valueSerde()) : valueSerde;
     }
 
     @Deprecated
@@ -212,16 +213,13 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         taskId = context.taskId().toString();
         streamsMetrics = context.metrics();
 
-        threadId = Thread.currentThread().getName();
         bufferSizeSensor = StateStoreMetrics.suppressionBufferSizeSensor(
-            threadId,
             taskId,
             METRIC_SCOPE,
             storeName,
             streamsMetrics
         );
         bufferCountSensor = StateStoreMetrics.suppressionBufferCountSensor(
-            threadId,
             taskId,
             METRIC_SCOPE,
             storeName,
@@ -232,7 +230,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         changelogTopic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
         updateBufferMetrics();
         open = true;
-        partition = context.taskId().partition;
+        partition = context.taskId().partition();
     }
 
     @Override

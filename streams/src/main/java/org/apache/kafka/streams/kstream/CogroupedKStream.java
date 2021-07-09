@@ -90,7 +90,7 @@ public interface CogroupedKStream<K, VOut> {
      * K key = "some-key";
      * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore}) will be backed by
@@ -140,7 +140,7 @@ public interface CogroupedKStream<K, VOut> {
      * K key = "some-key";
      * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore}) will be backed by
@@ -191,7 +191,7 @@ public interface CogroupedKStream<K, VOut> {
      * K key = "some-key";
      * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore} -- regardless of what
@@ -244,7 +244,7 @@ public interface CogroupedKStream<K, VOut> {
      * K key = "some-key";
      * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore} -- regardless of what

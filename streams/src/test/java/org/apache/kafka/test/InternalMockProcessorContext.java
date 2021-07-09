@@ -59,8 +59,8 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
-public class InternalMockProcessorContext
-    extends AbstractProcessorContext
+public class InternalMockProcessorContext<KOut, VOut>
+    extends AbstractProcessorContext<KOut, VOut>
     implements RecordCollector.Supplier {
 
     private StateManager stateManager = new StateManagerStub();
@@ -280,12 +280,6 @@ public class InternalMockProcessorContext
     }
 
     @Override
-    @Deprecated
-    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
-        throw new UnsupportedOperationException("schedule() not supported.");
-    }
-
-    @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
@@ -296,13 +290,13 @@ public class InternalMockProcessorContext
     public void commit() {}
 
     @Override
-    public <K, V> void forward(final Record<K, V> record) {
+    public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {
         forward(record, null);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final Record<K, V> record, final String childName) {
+    public <K extends KOut, V extends VOut> void forward(final Record<K, V> record, final String childName) {
         if (recordContext != null && record.timestamp() != recordContext.timestamp()) {
             setTime(record.timestamp());
         }
@@ -425,7 +419,7 @@ public class InternalMockProcessorContext
             key,
             value,
             null,
-            taskId().partition,
+            taskId().partition(),
             timestamp,
             BYTES_KEY_SERIALIZER,
             BYTEARRAY_VALUE_SERIALIZER);

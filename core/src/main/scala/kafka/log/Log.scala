@@ -18,15 +18,12 @@
 package kafka.log
 
 import java.io.{File, IOException}
-import java.lang.{Long => JLong}
 import java.nio.file.Files
 import java.text.NumberFormat
-import java.util.Map.{Entry => JEntry}
 import java.util.Optional
 import java.util.concurrent.atomic._
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
-
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0}
 import kafka.common.{LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.AppendOrigin.RaftLeader
@@ -34,7 +31,7 @@ import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCod
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.LeaderEpochFileCache
-import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch, PartitionMetadataFile}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch, PartitionMetadataFile, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
@@ -48,7 +45,7 @@ import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPar
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import scala.collection.{Seq, mutable}
+import scala.collection.{Seq, immutable, mutable}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
@@ -240,19 +237,18 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  * @param scheduler The thread pool scheduler used for background actions
  * @param brokerTopicStats Container for Broker Topic Yammer Metrics
  * @param time The time instance used for checking the clock
- * @param maxProducerIdExpirationMs The maximum amount of time to wait before a producer id is considered expired
  * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
  * @param topicPartition The topic partition associated with this Log instance
  * @param leaderEpochCache The LeaderEpochFileCache instance (if any) containing state associated
  *                         with the provided logStartOffset and nextOffsetMetadata
  * @param producerStateManager The ProducerStateManager instance containing state associated with the provided segments
  * @param logDirFailureChannel The LogDirFailureChannel instance to asynchronously handle log directory failure
- * @param topicId optional Uuid to specify the topic ID for the topic if it exists. Should only be specified when
+ * @param _topicId optional Uuid to specify the topic ID for the topic if it exists. Should only be specified when
  *                first creating the log through Partition.makeLeader or Partition.makeFollower. When reloading a log,
  *                this field will be populated by reading the topic ID value from partition.metadata if it exists.
  * @param keepPartitionMetadataFile boolean flag to indicate whether the partition.metadata file should be kept in the
  *                                  log directory. A partition.metadata file is only created when the raft controller is used
- *                                  or the ZK controller's inter-broker protocol version is at least 2.8.
+ *                                  or the ZK controller and this broker's inter-broker protocol version is at least 2.8.
  *                                  This file will persist the topic ID on the broker. If inter-broker protocol for a ZK controller
  *                                  is downgraded below 2.8, a topic ID may be lost and a new ID generated upon re-upgrade.
  *                                  If the inter-broker protocol version on a ZK cluster is below 2.8, partition.metadata
@@ -268,13 +264,12 @@ class Log(@volatile private var _dir: File,
           scheduler: Scheduler,
           brokerTopicStats: BrokerTopicStats,
           val time: Time,
-          val maxProducerIdExpirationMs: Int,
           val producerIdExpirationCheckIntervalMs: Int,
           val topicPartition: TopicPartition,
           @volatile var leaderEpochCache: Option[LeaderEpochFileCache],
           val producerStateManager: ProducerStateManager,
           logDirFailureChannel: LogDirFailureChannel,
-          @volatile var topicId: Option[Uuid],
+          @volatile private var _topicId: Option[Uuid],
           val keepPartitionMetadataFile: Boolean) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
@@ -320,25 +315,45 @@ class Log(@volatile private var _dir: File,
     initializePartitionMetadata()
     updateLogStartOffset(logStartOffset)
     maybeIncrementFirstUnstableOffset()
-    // Delete partition metadata file if the version does not support topic IDs.
-    // Recover topic ID if present and topic IDs are supported
-    // If we were provided a topic ID when creating the log, partition metadata files are supported, and one does not yet exist
-    // write to the partition metadata file.
-    // Ensure we do not try to assign a provided topicId that is inconsistent with the ID on file.
+    initializeTopicId()
+  }
+
+  /**
+   * Initialize topic ID information for the log by maintaining the partition metadata file and setting the in-memory _topicId.
+   * Delete partition metadata file if the version does not support topic IDs.
+   * Set _topicId based on a few scenarios:
+   *   - Recover topic ID if present and topic IDs are supported. Ensure we do not try to assign a provided topicId that is inconsistent
+   *     with the ID on file.
+   *   - If we were provided a topic ID when creating the log, partition metadata files are supported, and one does not yet exist
+   *     set _topicId and write to the partition metadata file.
+   *   - Otherwise set _topicId to None
+   */
+  def initializeTopicId(): Unit =  {
     if (partitionMetadataFile.exists()) {
-        if (!keepPartitionMetadataFile)
-          partitionMetadataFile.delete()
-        else {
-          val fileTopicId = partitionMetadataFile.read().topicId
-          if (topicId.isDefined && !topicId.contains(fileTopicId))
-            throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
-              s"but log already contained topic ID $fileTopicId")
-          topicId = Some(fileTopicId)
+      if (keepPartitionMetadataFile) {
+        val fileTopicId = partitionMetadataFile.read().topicId
+        if (_topicId.isDefined && !_topicId.contains(fileTopicId))
+          throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+            s"but log already contained topic ID $fileTopicId")
+
+        _topicId = Some(fileTopicId)
+
+      } else {
+        try partitionMetadataFile.delete()
+        catch {
+          case e: IOException =>
+            error(s"Error while trying to delete partition metadata file ${partitionMetadataFile}", e)
         }
+      }
     } else if (keepPartitionMetadataFile) {
-      topicId.foreach(partitionMetadataFile.write)
+      _topicId.foreach(partitionMetadataFile.write)
+    } else {
+      // We want to keep the file and the in-memory topic ID in sync.
+      _topicId = None
     }
   }
+
+  def topicId: Option[Uuid] = _topicId
 
   def dir: File = _dir
 
@@ -554,12 +569,14 @@ class Log(@volatile private var _dir: File,
 
   /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
   def assignTopicId(topicId: Uuid): Unit = {
-    partitionMetadataFile.write(topicId)
-    this.topicId = Some(topicId)
+    if (keepPartitionMetadataFile) {
+      partitionMetadataFile.write(topicId)
+      _topicId = Some(topicId)
+    }
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
-    leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, recordVersion)
+    leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, recordVersion, logIdent)
   }
 
   private def updateLogEndOffset(offset: Long): Unit = {
@@ -594,7 +611,7 @@ class Log(@volatile private var _dir: File,
                                    producerStateManager: ProducerStateManager): Unit = lock synchronized {
     checkIfMemoryMappedBufferClosed()
     Log.rebuildProducerState(producerStateManager, segments, logStartOffset, lastOffset, recordVersion, time,
-      reloadFromCleanShutdown = false)
+      reloadFromCleanShutdown = false, logIdent)
   }
 
   def activeProducers: Seq[DescribeProducersResponseData.ProducerState] = {
@@ -691,15 +708,17 @@ class Log(@volatile private var _dir: File,
    * @param records The records to append
    * @param origin Declares the origin of the append which affects required validations
    * @param interBrokerProtocolVersion Inter-broker message protocol version
+   * @param requestLocal request local instance
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
    */
   def appendAsLeader(records: MemoryRecords,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.Client,
-                     interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): LogAppendInfo = {
+                     interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
+                     requestLocal: RequestLocal = RequestLocal.NoCaching): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RaftLeader
-    append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, ignoreRecordSize = false)
+    append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), ignoreRecordSize = false)
   }
 
   /**
@@ -715,6 +734,7 @@ class Log(@volatile private var _dir: File,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       validateAndAssignOffsets = false,
       leaderEpoch = -1,
+      None,
       // disable to check the validation of record size since the record is already accepted by leader.
       ignoreRecordSize = true)
   }
@@ -730,6 +750,7 @@ class Log(@volatile private var _dir: File,
    * @param interBrokerProtocolVersion Inter-broker message protocol version
    * @param validateAndAssignOffsets Should the log assign offsets to this message set or blindly apply what it is given
    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
+   * @param requestLocal The request local instance if assignOffsets is true
    * @param ignoreRecordSize true to skip validation of record size.
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
@@ -741,6 +762,7 @@ class Log(@volatile private var _dir: File,
                      interBrokerProtocolVersion: ApiVersion,
                      validateAndAssignOffsets: Boolean,
                      leaderEpoch: Int,
+                     requestLocal: Option[RequestLocal],
                      ignoreRecordSize: Boolean): LogAppendInfo = {
 
     val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, leaderEpoch)
@@ -776,7 +798,9 @@ class Log(@volatile private var _dir: File,
                 leaderEpoch,
                 origin,
                 interBrokerProtocolVersion,
-                brokerTopicStats)
+                brokerTopicStats,
+                requestLocal.getOrElse(throw new IllegalArgumentException(
+                  "requestLocal should be defined if assignOffsets is true")))
             } catch {
               case e: IOException =>
                 throw new KafkaException(s"Error validating messages while appending to log $name", e)
@@ -1183,10 +1207,10 @@ class Log(@volatile private var _dir: File,
       // We create the local variables to avoid race conditions with updates to the log.
       val endOffsetMetadata = nextOffsetMetadata
       val endOffset = endOffsetMetadata.messageOffset
-      var segmentEntryOpt = segments.floorEntry(startOffset)
+      var segmentOpt = segments.floorSegment(startOffset)
 
       // return error on attempt to read beyond the log end offset or read below log start offset
-      if (startOffset > endOffset || segmentEntryOpt.isEmpty || startOffset < logStartOffset)
+      if (startOffset > endOffset || segmentOpt.isEmpty || startOffset < logStartOffset)
         throw new OffsetOutOfRangeException(s"Received request for offset $startOffset for partition $topicPartition, " +
           s"but we only have log segments in the range $logStartOffset to $endOffset.")
 
@@ -1204,12 +1228,10 @@ class Log(@volatile private var _dir: File,
         // Do the read on the segment with a base offset less than the target offset
         // but if that segment doesn't contain any messages with an offset greater than that
         // continue to read from successive segments until we get some messages or we reach the end of the log
-        var done = segmentEntryOpt.isEmpty
         var fetchDataInfo: FetchDataInfo = null
-        while (!done) {
-          val segmentEntry = segmentEntryOpt.get
-          val baseOffset = segmentEntry.getKey
-          val segment = segmentEntry.getValue
+        while (fetchDataInfo == null && segmentOpt.isDefined) {
+          val segment = segmentOpt.get
+          val baseOffset = segment.baseOffset
 
           val maxPosition =
             // Use the max offset position if it is on this segment; otherwise, the segment size is the limit.
@@ -1219,10 +1241,8 @@ class Log(@volatile private var _dir: File,
           fetchDataInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
           if (fetchDataInfo != null) {
             if (includeAbortedTxns)
-              fetchDataInfo = addAbortedTransactions(startOffset, segmentEntry, fetchDataInfo)
-          } else segmentEntryOpt = segments.higherEntry(baseOffset)
-
-          done = fetchDataInfo != null || segmentEntryOpt.isEmpty
+              fetchDataInfo = addAbortedTransactions(startOffset, segment, fetchDataInfo)
+          } else segmentOpt = segments.higherSegment(baseOffset)
         }
 
         if (fetchDataInfo != null) fetchDataInfo
@@ -1237,25 +1257,25 @@ class Log(@volatile private var _dir: File,
   }
 
   private[log] def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long): List[AbortedTxn] = {
-    val segmentEntryOpt = segments.floorEntry(startOffset)
+    val segmentEntry = segments.floorSegment(startOffset)
     val allAbortedTxns = ListBuffer.empty[AbortedTxn]
     def accumulator(abortedTxns: List[AbortedTxn]): Unit = allAbortedTxns ++= abortedTxns
-    collectAbortedTransactions(logStartOffset, upperBoundOffset, segmentEntryOpt.get, accumulator)
+    segmentEntry.foreach(segment => collectAbortedTransactions(logStartOffset, upperBoundOffset, segment, accumulator))
     allAbortedTxns.toList
   }
 
-  private def addAbortedTransactions(startOffset: Long, segmentEntry: JEntry[JLong, LogSegment],
+  private def addAbortedTransactions(startOffset: Long, segment: LogSegment,
                                      fetchInfo: FetchDataInfo): FetchDataInfo = {
     val fetchSize = fetchInfo.records.sizeInBytes
     val startOffsetPosition = OffsetPosition(fetchInfo.fetchOffsetMetadata.messageOffset,
       fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
-    val upperBoundOffset = segmentEntry.getValue.fetchUpperBoundOffset(startOffsetPosition, fetchSize).getOrElse {
-      segments.higherSegment(segmentEntry.getKey).map(_.baseOffset).getOrElse(logEndOffset)
+    val upperBoundOffset = segment.fetchUpperBoundOffset(startOffsetPosition, fetchSize).getOrElse {
+      segments.higherSegment(segment.baseOffset).map(_.baseOffset).getOrElse(logEndOffset)
     }
 
     val abortedTransactions = ListBuffer.empty[FetchResponseData.AbortedTransaction]
     def accumulator(abortedTxns: List[AbortedTxn]): Unit = abortedTransactions ++= abortedTxns.map(_.asAbortedTransaction)
-    collectAbortedTransactions(startOffset, upperBoundOffset, segmentEntry, accumulator)
+    collectAbortedTransactions(startOffset, upperBoundOffset, segment, accumulator)
 
     FetchDataInfo(fetchOffsetMetadata = fetchInfo.fetchOffsetMetadata,
       records = fetchInfo.records,
@@ -1264,17 +1284,17 @@ class Log(@volatile private var _dir: File,
   }
 
   private def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long,
-                                         startingSegmentEntry: JEntry[JLong, LogSegment],
+                                         startingSegment: LogSegment,
                                          accumulator: List[AbortedTxn] => Unit): Unit = {
-    var segmentEntryOpt = Option(startingSegmentEntry)
+    val higherSegments = segments.higherSegments(startingSegment.baseOffset).iterator
+    var segmentEntryOpt = Option(startingSegment)
     while (segmentEntryOpt.isDefined) {
-      val baseOffset = segmentEntryOpt.get.getKey
-      val segment = segmentEntryOpt.get.getValue
+      val segment = segmentEntryOpt.get
       val searchResult = segment.collectAbortedTxns(startOffset, upperBoundOffset)
       accumulator(searchResult.abortedTransactions)
       if (searchResult.isComplete)
         return
-      segmentEntryOpt = segments.higherEntry(baseOffset)
+      segmentEntryOpt = nextOption(higherSegments)
     }
   }
 
@@ -1318,6 +1338,17 @@ class Log(@volatile private var _dir: File,
         val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
         val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epochOptional))
+      } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
+        // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
+        // constant time access while being safe to use with concurrent collections unlike `toArray`.
+        val segmentsCopy = logSegments.toBuffer
+        val latestTimestampSegment = segmentsCopy.maxBy(_.maxTimestampSoFar)
+        val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
+        val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
+        val latestTimestampAndOffset = latestTimestampSegment.maxTimestampAndOffsetSoFar
+        Some(new TimestampAndOffset(latestTimestampAndOffset.timestamp,
+          latestTimestampAndOffset.offset,
+          epochOptional))
       } else {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
         // constant time access while being safe to use with concurrent collections unlike `toArray`.
@@ -1440,23 +1471,23 @@ class Log(@volatile private var _dir: File,
       Seq.empty
     } else {
       val deletable = ArrayBuffer.empty[LogSegment]
-      var segmentEntryOpt = segments.firstEntry
-      while (segmentEntryOpt.isDefined) {
-        val segmentEntry = segmentEntryOpt.get
-        val segment = segmentEntry.getValue
-        val nextSegmentEntryOpt = segments.higherEntry(segmentEntry.getKey)
-        val (nextSegment, upperBoundOffset, isLastSegmentAndEmpty) =
-          nextSegmentEntryOpt.map {
-            entry => (entry.getValue, entry.getValue.baseOffset, false)
+      val segmentsIterator = segments.values.iterator
+      var segmentOpt = nextOption(segmentsIterator)
+      while (segmentOpt.isDefined) {
+        val segment = segmentOpt.get
+        val nextSegmentOpt = nextOption(segmentsIterator)
+        val (upperBoundOffset: Long, isLastSegmentAndEmpty: Boolean) =
+          nextSegmentOpt.map {
+            nextSegment => (nextSegment.baseOffset, false)
           }.getOrElse {
-            (null, logEndOffset, segment.size == 0)
+            (logEndOffset, segment.size == 0)
           }
 
-        if (highWatermark >= upperBoundOffset && predicate(segment, Option(nextSegment)) && !isLastSegmentAndEmpty) {
+        if (highWatermark >= upperBoundOffset && predicate(segment, nextSegmentOpt) && !isLastSegmentAndEmpty) {
           deletable += segment
-          segmentEntryOpt = nextSegmentEntryOpt
+          segmentOpt = nextSegmentOpt
         } else {
-          segmentEntryOpt = Option.empty
+          segmentOpt = Option.empty
         }
       }
       deletable
@@ -1875,9 +1906,10 @@ class Log(@volatile private var _dir: File,
                                       reason: SegmentDeletionReason): Unit = {
     if (segments.nonEmpty) {
       lock synchronized {
-        // As most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
+        // Most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
         // removing the deleted segment, we should force materialization of the iterator here, so that results of the
-        // iteration remain valid and deterministic.
+        // iteration remain valid and deterministic. We should also pass only the materialized view of the
+        // iterator to the logic that actually deletes the segments.
         val toDelete = segments.toList
         reason.logReason(this, toDelete)
         toDelete.foreach { segment =>
@@ -1888,16 +1920,16 @@ class Log(@volatile private var _dir: File,
     }
   }
 
-  private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean, deleteProducerStateSnapshots: Boolean = true): Unit = {
+  private def deleteSegmentFiles(segments: immutable.Iterable[LogSegment], asyncDelete: Boolean, deleteProducerStateSnapshots: Boolean = true): Unit = {
     Log.deleteSegmentFiles(segments, asyncDelete, deleteProducerStateSnapshots, dir, topicPartition,
-      config, scheduler, logDirFailureChannel, producerStateManager)
+      config, scheduler, logDirFailureChannel, producerStateManager, this.logIdent)
   }
 
   private[log] def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
     lock synchronized {
       checkIfMemoryMappedBufferClosed()
       Log.replaceSegments(segments, newSegments, oldSegments, isRecoveredSwapFile, dir, topicPartition,
-        config, scheduler, logDirFailureChannel, producerStateManager)
+        config, scheduler, logDirFailureChannel, producerStateManager, this.logIdent)
     }
   }
 
@@ -1939,7 +1971,7 @@ class Log(@volatile private var _dir: File,
   }
 
   private[log] def splitOverflowedSegment(segment: LogSegment): List[LogSegment] = lock synchronized {
-    Log.splitOverflowedSegment(segment, segments, dir, topicPartition, config, scheduler, logDirFailureChannel, producerStateManager)
+    Log.splitOverflowedSegment(segment, segments, dir, topicPartition, config, scheduler, logDirFailureChannel, producerStateManager, this.logIdent)
   }
 
 }
@@ -2007,8 +2039,13 @@ object Log extends Logging {
     Files.createDirectories(dir.toPath)
     val topicPartition = Log.parseTopicPartitionName(dir)
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion)
-    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(
+      dir,
+      topicPartition,
+      logDirFailureChannel,
+      config.messageFormatVersion.recordVersion,
+      s"[Log partition=$topicPartition, dir=${dir.getParent}] ")
+    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs, time)
     val offsets = LogLoader.load(LoadLogParams(
       dir,
       topicPartition,
@@ -2024,8 +2061,8 @@ object Log extends Logging {
       leaderEpochCache,
       producerStateManager))
     new Log(dir, config, segments, offsets.logStartOffset, offsets.recoveryPoint, offsets.nextOffsetMetadata, scheduler,
-      brokerTopicStats, time, maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, topicPartition,
-      leaderEpochCache, producerStateManager, logDirFailureChannel, topicId, keepPartitionMetadataFile)
+      brokerTopicStats, time, producerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
+      producerStateManager, logDirFailureChannel, topicId, keepPartitionMetadataFile)
   }
 
   /**
@@ -2228,12 +2265,14 @@ object Log extends Logging {
    * @param topicPartition The topic partition
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
    * @param recordVersion The record version
+   * @param logPrefix The logging prefix
    * @return The new LeaderEpochFileCache instance (if created), none otherwise
    */
   def maybeCreateLeaderEpochCache(dir: File,
                                   topicPartition: TopicPartition,
                                   logDirFailureChannel: LogDirFailureChannel,
-                                  recordVersion: RecordVersion): Option[LeaderEpochFileCache] = {
+                                  recordVersion: RecordVersion,
+                                  logPrefix: String): Option[LeaderEpochFileCache] = {
     val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)
 
     def newLeaderEpochFileCache(): LeaderEpochFileCache = {
@@ -2248,7 +2287,7 @@ object Log extends Logging {
         None
 
       if (currentCache.exists(_.nonEmpty))
-        warn(s"Deleting non-empty leader epoch cache due to incompatible message format $recordVersion")
+        warn(s"${logPrefix}Deleting non-empty leader epoch cache due to incompatible message format $recordVersion")
 
       Files.deleteIfExists(leaderEpochFile.toPath)
       None
@@ -2295,6 +2334,7 @@ object Log extends Logging {
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
    * @param producerStateManager The ProducerStateManager instance (if any) containing state associated
    *                             with the existingSegments
+   * @param logPrefix The logging prefix
    */
     private[log] def replaceSegments(existingSegments: LogSegments,
                                      newSegments: Seq[LogSegment],
@@ -2305,7 +2345,8 @@ object Log extends Logging {
                                      config: LogConfig,
                                      scheduler: Scheduler,
                                      logDirFailureChannel: LogDirFailureChannel,
-                                     producerStateManager: ProducerStateManager): Unit = {
+                                     producerStateManager: ProducerStateManager,
+                                     logPrefix: String): Unit = {
       val sortedNewSegments = newSegments.sortBy(_.baseOffset)
       // Some old segments may have been removed from index and scheduled for async deletion after the caller reads segments
       // but before this method is executed. We want to filter out those segments to avoid calling asyncDeleteSegment()
@@ -2334,7 +2375,8 @@ object Log extends Logging {
           config,
           scheduler,
           logDirFailureChannel,
-          producerStateManager)
+          producerStateManager,
+          logPrefix)
       }
       // okay we are safe now, remove the swap suffix
       sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
@@ -2361,10 +2403,10 @@ object Log extends Logging {
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
    * @param producerStateManager The ProducerStateManager instance (if any) containing state associated
    *                             with the existingSegments
-   *
+   * @param logPrefix The logging prefix
    * @throws IOException if the file can't be renamed and still exists
    */
-  private[log] def deleteSegmentFiles(segmentsToDelete: Iterable[LogSegment],
+  private[log] def deleteSegmentFiles(segmentsToDelete: immutable.Iterable[LogSegment],
                                       asyncDelete: Boolean,
                                       deleteProducerStateSnapshots: Boolean = true,
                                       dir: File,
@@ -2372,17 +2414,24 @@ object Log extends Logging {
                                       config: LogConfig,
                                       scheduler: Scheduler,
                                       logDirFailureChannel: LogDirFailureChannel,
-                                      producerStateManager: ProducerStateManager): Unit = {
+                                      producerStateManager: ProducerStateManager,
+                                      logPrefix: String): Unit = {
     segmentsToDelete.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
+    val snapshotsToDelete = if (deleteProducerStateSnapshots)
+      segmentsToDelete.flatMap { segment =>
+        producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset)}
+    else
+      Seq()
 
     def deleteSegments(): Unit = {
-      info(s"Deleting segment files ${segmentsToDelete.mkString(",")}")
+      info(s"${logPrefix}Deleting segment files ${segmentsToDelete.mkString(",")}")
       val parentDir = dir.getParent
       maybeHandleIOException(logDirFailureChannel, parentDir, s"Error while deleting segments for $topicPartition in dir $parentDir") {
         segmentsToDelete.foreach { segment =>
           segment.deleteIfExists()
-          if (deleteProducerStateSnapshots)
-            producerStateManager.removeAndDeleteSnapshot(segment.baseOffset)
+        }
+        snapshotsToDelete.foreach { snapshot =>
+          snapshot.deleteIfExists()
         }
       }
     }
@@ -2431,6 +2480,7 @@ object Log extends Logging {
    * @param time The time instance used for checking the clock
    * @param reloadFromCleanShutdown True if the producer state is being built after a clean shutdown,
    *                                false otherwise.
+   * @param logPrefix The logging prefix
    */
   private[log] def rebuildProducerState(producerStateManager: ProducerStateManager,
                                         segments: LogSegments,
@@ -2438,16 +2488,17 @@ object Log extends Logging {
                                         lastOffset: Long,
                                         recordVersion: RecordVersion,
                                         time: Time,
-                                        reloadFromCleanShutdown: Boolean): Unit = {
-    val allSegments = segments.values
+                                        reloadFromCleanShutdown: Boolean,
+                                        logPrefix: String): Unit = {
     val offsetsToSnapshot =
-      if (allSegments.nonEmpty) {
-        val nextLatestSegmentBaseOffset = segments.lowerSegment(allSegments.last.baseOffset).map(_.baseOffset)
-        Seq(nextLatestSegmentBaseOffset, Some(allSegments.last.baseOffset), Some(lastOffset))
+      if (segments.nonEmpty) {
+        val lastSegmentBaseOffset = segments.lastSegment.get.baseOffset
+        val nextLatestSegmentBaseOffset = segments.lowerSegment(lastSegmentBaseOffset).map(_.baseOffset)
+        Seq(nextLatestSegmentBaseOffset, Some(lastSegmentBaseOffset), Some(lastOffset))
       } else {
         Seq(Some(lastOffset))
       }
-    info(s"Loading producer state till offset $lastOffset with message format version ${recordVersion.value}")
+    info(s"${logPrefix}Loading producer state till offset $lastOffset with message format version ${recordVersion.value}")
 
     // We want to avoid unnecessary scanning of the log to build the producer state when the broker is being
     // upgraded. The basic idea is to use the absence of producer snapshot files to detect the upgrade case,
@@ -2471,7 +2522,7 @@ object Log extends Logging {
         producerStateManager.takeSnapshot()
       }
     } else {
-      info(s"Reloading from producer snapshot and rebuilding producer state from offset $lastOffset")
+      info(s"${logPrefix}Reloading from producer snapshot and rebuilding producer state from offset $lastOffset")
       val isEmptyBeforeTruncation = producerStateManager.isEmpty && producerStateManager.mapEndOffset >= lastOffset
       val producerStateLoadStart = time.milliseconds()
       producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
@@ -2510,7 +2561,7 @@ object Log extends Logging {
       }
       producerStateManager.updateMapEndOffset(lastOffset)
       producerStateManager.takeSnapshot()
-      info(s"Producer state recovery took ${segmentRecoveryStart - producerStateLoadStart}ms for snapshot load " +
+      info(s"${logPrefix}Producer state recovery took ${segmentRecoveryStart - producerStateLoadStart}ms for snapshot load " +
         s"and ${time.milliseconds() - segmentRecoveryStart}ms for segment recovery from offset $lastOffset")
     }
   }
@@ -2537,6 +2588,7 @@ object Log extends Logging {
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
    * @param producerStateManager The ProducerStateManager instance (if any) containing state associated
    *                             with the existingSegments
+   * @param logPrefix The logging prefix
    * @return List of new segments that replace the input segment
    */
   private[log] def splitOverflowedSegment(segment: LogSegment,
@@ -2546,11 +2598,12 @@ object Log extends Logging {
                                           config: LogConfig,
                                           scheduler: Scheduler,
                                           logDirFailureChannel: LogDirFailureChannel,
-                                          producerStateManager: ProducerStateManager): List[LogSegment] = {
+                                          producerStateManager: ProducerStateManager,
+                                          logPrefix: String): List[LogSegment] = {
     require(Log.isLogFile(segment.log.file), s"Cannot split file ${segment.log.file.getAbsoluteFile}")
-    require(segment.hasOverflow, "Split operation is only permitted for segments with overflow")
+    require(segment.hasOverflow, s"Split operation is only permitted for segments with overflow, and the problem path is ${segment.log.file.getAbsoluteFile}")
 
-    info(s"Splitting overflowed segment $segment")
+    info(s"${logPrefix}Splitting overflowed segment $segment")
 
     val newSegments = ListBuffer[LogSegment]()
     try {
@@ -2583,9 +2636,9 @@ object Log extends Logging {
           s" before: ${segment.log.sizeInBytes} after: $totalSizeOfNewSegments")
 
       // replace old segment with new ones
-      info(s"Replacing overflowed segment $segment with split segments $newSegments")
+      info(s"${logPrefix}Replacing overflowed segment $segment with split segments $newSegments")
       replaceSegments(existingSegments, newSegments.toList, List(segment), isRecoveredSwapFile = false,
-        dir, topicPartition, config, scheduler, logDirFailureChannel, producerStateManager)
+        dir, topicPartition, config, scheduler, logDirFailureChannel, producerStateManager, logPrefix)
       newSegments.toList
     } catch {
       case e: Exception =>
@@ -2595,6 +2648,21 @@ object Log extends Logging {
         }
         throw e
     }
+  }
+
+  /**
+   * Wraps the value of iterator.next() in an option.
+   * Note: this facility is a part of the Iterator class starting from scala v2.13.
+   *
+   * @param iterator
+   * @tparam T the type of object held within the iterator
+   * @return Some(iterator.next) if a next element exists, None otherwise.
+   */
+  private def nextOption[T](iterator: Iterator[T]): Option[T] = {
+    if (iterator.hasNext)
+      Some(iterator.next())
+    else
+      None
   }
 }
 

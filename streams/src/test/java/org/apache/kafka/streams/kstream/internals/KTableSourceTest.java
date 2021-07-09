@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
@@ -35,6 +34,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender.Event;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
@@ -47,10 +47,10 @@ import org.junit.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
-import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -61,6 +61,7 @@ public class KTableSourceTest {
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -132,57 +133,11 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void kTableShouldLogAndMeterOnSkippedRecordsWithBuiltInMetrics0100To24() {
-        kTableShouldLogAndMeterOnSkippedRecords(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    @Test
-    public void kTableShouldLogAndMeterOnSkippedRecordsWithBuiltInMetricsLatest() {
-        kTableShouldLogAndMeterOnSkippedRecords(StreamsConfig.METRICS_LATEST);
-    }
-
-    private void kTableShouldLogAndMeterOnSkippedRecords(final String builtInMetricsVersion) {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final String topic = "topic";
-        builder.table(topic, stringConsumed);
-
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-
-            final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(
-                    topic,
-                    new StringSerializer(),
-                    new StringSerializer(),
-                    Instant.ofEpochMilli(0L),
-                    Duration.ZERO
-                );
-            inputTopic.pipeInput(null, "value");
-
-            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-                assertEquals(
-                    1.0,
-                    getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
-                );
-            }
-
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
-            );
-        }
-    }
-
-    @Test
     public void kTableShouldLogAndMeterOnSkippedRecords() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         builder.table(topic, stringConsumed);
 
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
-
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
@@ -197,12 +152,10 @@ public class KTableSourceTest {
             inputTopic.pipeInput(null, "value");
 
             assertThat(
-                getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue(),
-                equalTo(1.0)
-            );
-
-            assertThat(
-                appender.getMessages(),
+                appender.getEvents().stream()
+                    .filter(e -> e.getLevel().equals("WARN"))
+                    .map(Event::getMessage)
+                    .collect(Collectors.toList()),
                 hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
             );
         }

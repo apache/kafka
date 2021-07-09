@@ -376,7 +376,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized List<PartitionInfo> partitionsFor(String topic) {
         ensureNotClosed();
-        return this.partitions.get(topic);
+        return this.partitions.getOrDefault(topic, Collections.emptyList());
     }
 
     @Override

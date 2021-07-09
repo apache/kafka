@@ -72,7 +72,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(17L, log.logEndOffset)
 
     val leaderEpoch = 10
-    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
+    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true)
 
     def epochEndOffset(epoch: Int, endOffset: Long): FetchResponseData.EpochEndOffset = {
       new FetchResponseData.EpochEndOffset()
@@ -126,6 +126,11 @@ class PartitionTest extends AbstractPartitionTest {
     assertNoDivergence(read(lastFetchedEpoch = 3, fetchOffset = 5))
 
     assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 0, fetchOffset = 0))
+
+    // Fetch offset lower than start offset should throw OffsetOutOfRangeException
+    log.maybeIncrementLogStartOffset(newLogStartOffset = 10, ClientRecordDeletion)
+    assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 5, fetchOffset = 6)) // diverging
+    assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 3, fetchOffset = 6)) // not diverging
   }
 
   @Test
@@ -143,7 +148,7 @@ class PartitionTest extends AbstractPartitionTest {
     ), leaderEpoch = 5)
     assertEquals(4, log.logEndOffset)
 
-    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
+    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true)
     assertEquals(Some(4), partition.leaderLogIfLocal.map(_.logEndOffset))
 
     val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of[Integer](leaderEpoch),
@@ -155,8 +160,7 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testMakeLeaderDoesNotUpdateEpochCacheForOldFormats(): Unit = {
     val leaderEpoch = 8
-
-    configRepository.setTopicConfig(topicPartition.topic,
+    configRepository.setTopicConfig(topicPartition.topic(),
       LogConfig.MessageFormatVersionProp, kafka.api.KAFKA_0_10_2_IV0.shortVersion)
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     log.appendAsLeader(TestUtils.records(List(
@@ -171,7 +175,7 @@ class PartitionTest extends AbstractPartitionTest {
     ), leaderEpoch = 5)
     assertEquals(4, log.logEndOffset)
 
-    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
+    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true)
     assertEquals(Some(4), partition.leaderLogIfLocal.map(_.logEndOffset))
     assertEquals(None, log.latestEpoch)
 
@@ -236,8 +240,9 @@ class PartitionTest extends AbstractPartitionTest {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.messageFormatVersion.recordVersion)
-        val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, log.maxProducerIdExpirationMs)
+        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.messageFormatVersion.recordVersion, "")
+        val maxProducerIdExpirationMs = 60 * 60 * 1000
+        val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, maxProducerIdExpirationMs)
         val offsets = LogLoader.load(LoadLogParams(
           log.dir,
           log.topicPartition,
@@ -249,7 +254,7 @@ class PartitionTest extends AbstractPartitionTest {
           segments,
           0L,
           0L,
-          log.maxProducerIdExpirationMs,
+          maxProducerIdExpirationMs,
           leaderEpochCache,
           producerStateManager))
         new SlowLog(log, segments, offsets, leaderEpochCache, producerStateManager, mockTime, logDirFailureChannel, appendSemaphore)
@@ -594,10 +599,11 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(leaderEpoch, partition.getLeaderEpoch, "Current leader epoch")
     assertEquals(Set[Integer](leader, follower2), partition.isrState.isr, "ISR")
 
+    val requestLocal = RequestLocal.withThreadConfinedCaching
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
-    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client, requiredAcks = 0)
-    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0)
+    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
     assertEquals(partition.localLogOrException.logStartOffset, partition.localLogOrException.highWatermark,
       "Expected leader's HW not move")
 
@@ -736,8 +742,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   private def setupPartitionWithMocks(leaderEpoch: Int,
-                                      isLeader: Boolean,
-                                      log: Log = logManager.getOrCreateLog(topicPartition, topicId = None)): Partition = {
+                                      isLeader: Boolean): Partition = {
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
     val controllerEpoch = 0
@@ -843,7 +848,7 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L)
-    partition.appendRecordsToLeader(records, origin = AppendOrigin.Client, requiredAcks = 0)
+    partition.appendRecordsToLeader(records, origin = AppendOrigin.Client, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
 
     def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
       val res = partition.fetchOffsetForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP,
@@ -960,11 +965,13 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(leaderEpoch, partition.getLeaderEpoch, "Current leader epoch")
     assertEquals(Set[Integer](leader, follower2), partition.isrState.isr, "ISR")
 
+    val requestLocal = RequestLocal.withThreadConfinedCaching
+
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
     val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client,
-      requiredAcks = 0).lastOffset
-    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0)
+      requiredAcks = 0, requestLocal).lastOffset
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
     assertEquals(partition.localLogOrException.logStartOffset, partition.log.get.highWatermark, "Expected leader's HW not move")
 
     // let the follower in ISR move leader's HW to move further but below LEO
@@ -1005,7 +1012,7 @@ class PartitionTest extends AbstractPartitionTest {
     val currentLeaderEpochStartOffset = partition.localLogOrException.logEndOffset
 
     // append records with the latest leader epoch
-    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.Client, requiredAcks = 0)
+    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
 
     // fetch from follower not in ISR from log start offset should not add this follower to ISR
     updateFollowerFetchState(follower1, LogOffsetMetadata(0))
@@ -2046,13 +2053,12 @@ class PartitionTest extends AbstractPartitionTest {
     mockTime.scheduler,
     new BrokerTopicStats,
     mockTime,
-    log.maxProducerIdExpirationMs,
     log.producerIdExpirationCheckIntervalMs,
     log.topicPartition,
     leaderEpochCache,
     producerStateManager,
     logDirFailureChannel,
-    topicId = None,
+    _topicId = None,
     keepPartitionMetadataFile = true) {
 
     override def appendAsFollower(records: MemoryRecords): LogAppendInfo = {

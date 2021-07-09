@@ -217,6 +217,9 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def restart_connector(self, name, node=None, **kwargs):
         return self._rest_with_retry('/connectors/' + name + '/restart', node=node, method="POST", **kwargs)
 
+    def restart_connector_and_tasks(self, name, only_failed, include_tasks, node=None, **kwargs):
+        return self._rest_with_retry('/connectors/' + name + '/restart?onlyFailed=' + only_failed + '&includeTasks=' + include_tasks, node=node, method="POST", **kwargs)
+
     def restart_task(self, connector_name, task_id, node=None):
         return self._rest('/connectors/' + connector_name + '/tasks/' + str(task_id) + '/restart', node=node, method="POST")
 

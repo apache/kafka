@@ -236,10 +236,12 @@ public class EosIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), MAX_POLL_INTERVAL_MS - 1);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
 
         for (int i = 0; i < numberOfRestarts; ++i) {
             final Properties config = StreamsTestUtils.getStreamsConfig(
@@ -325,7 +327,7 @@ public class EosIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
@@ -694,13 +696,13 @@ public class EosIntegrationTest {
             // the assignment is. We only really care that the remaining instance only sees one host
             // that owns both partitions.
             waitForCondition(
-                () -> stallingInstance.allMetadata().size() == 2
-                    && remainingInstance.allMetadata().size() == 1
-                    && remainingInstance.allMetadata().iterator().next().topicPartitions().size() == 2,
+                () -> stallingInstance.metadataForAllStreamsClients().size() == 2
+                    && remainingInstance.metadataForAllStreamsClients().size() == 1
+                    && remainingInstance.metadataForAllStreamsClients().iterator().next().topicPartitions().size() == 2,
                 MAX_WAIT_TIME_MS,
                 () -> "Should have rebalanced.\n" +
-                    "Streams1[" + streams1.allMetadata() + "]\n" +
-                    "Streams2[" + streams2.allMetadata() + "]");
+                    "Streams1[" + streams1.metadataForAllStreamsClients() + "]\n" +
+                    "Streams2[" + streams2.metadataForAllStreamsClients() + "]");
 
             // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
             //
@@ -727,14 +729,14 @@ public class EosIntegrationTest {
             // It doesn't really matter what the assignment is, but we might as well also assert that they
             // both see both partitions assigned exactly once
             waitForCondition(
-                () -> streams1.allMetadata().size() == 2
-                    && streams2.allMetadata().size() == 2
-                    && streams1.allMetadata().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2
-                    && streams2.allMetadata().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2,
+                () -> streams1.metadataForAllStreamsClients().size() == 2
+                    && streams2.metadataForAllStreamsClients().size() == 2
+                    && streams1.metadataForAllStreamsClients().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2
+                    && streams2.metadataForAllStreamsClients().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2,
                 MAX_WAIT_TIME_MS,
                 () -> "Should have rebalanced.\n" +
-                    "Streams1[" + streams1.allMetadata() + "]\n" +
-                    "Streams2[" + streams2.allMetadata() + "]");
+                    "Streams1[" + streams1.metadataForAllStreamsClients() + "]\n" +
+                    "Streams2[" + streams2.metadataForAllStreamsClients() + "]");
 
             writeInputData(dataAfterSecondRebalance);
 
@@ -874,13 +876,18 @@ public class EosIntegrationTest {
             .to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
         final Properties properties = new Properties();
+        // Set commit interval to a larger value to avoid affection of controlled stream commit,
+        // but not too large as we need to have a relatively low transaction timeout such
+        // that it should help trigger the timed out transaction in time.
+        final long commitIntervalMs = 20_000L;
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numberOfStreamsThreads);
-        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.MAX_VALUE);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
+        properties.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), (int) commitIntervalMs);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
-        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), 5 * 1000);
-        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 5 * 1000 - 1);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), maxPollIntervalMs);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), maxPollIntervalMs - 1);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), maxPollIntervalMs);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);

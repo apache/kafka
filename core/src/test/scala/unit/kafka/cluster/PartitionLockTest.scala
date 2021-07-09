@@ -26,6 +26,7 @@ import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.epoch.LeaderEpochFileCache
+import kafka.server.metadata.MockConfigRepository
 import kafka.utils._
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -69,7 +70,7 @@ class PartitionLockTest extends Logging {
   @BeforeEach
   def setUp(): Unit = {
     val logConfig = new LogConfig(new Properties)
-    val configRepository = TestUtils.createConfigRepository(topicPartition.topic, createLogProperties(Map.empty))
+    val configRepository = MockConfigRepository.forTopic(topicPartition.topic, createLogProperties(Map.empty))
     logManager = TestUtils.createLogManager(Seq(logDir), logConfig, configRepository,
       CleanerConfig(enableCleaner = false), mockTime)
     partition = setupPartitionWithMocks(logManager)
@@ -283,8 +284,9 @@ class PartitionLockTest extends Logging {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.messageFormatVersion.recordVersion)
-        val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, log.maxProducerIdExpirationMs)
+        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.messageFormatVersion.recordVersion, "")
+        val maxProducerIdExpirationMs = 60 * 60 * 1000
+        val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, maxProducerIdExpirationMs)
         val offsets = LogLoader.load(LoadLogParams(
           log.dir,
           log.topicPartition,
@@ -296,7 +298,7 @@ class PartitionLockTest extends Logging {
           segments,
           0L,
           0L,
-          log.maxProducerIdExpirationMs,
+          maxProducerIdExpirationMs,
           leaderEpochCache,
           producerStateManager))
         new SlowLog(log, segments, offsets, leaderEpochCache, producerStateManager, mockTime, logDirFailureChannel, appendSemaphore)
@@ -335,10 +337,11 @@ class PartitionLockTest extends Logging {
   }
 
   private def append(partition: Partition, numRecords: Int, followerQueues: Seq[ArrayBlockingQueue[MemoryRecords]]): Unit = {
+    val requestLocal = RequestLocal.withThreadConfinedCaching
     (0 until numRecords).foreach { _ =>
       val batch = TestUtils.records(records = List(new SimpleRecord("k1".getBytes, "v1".getBytes),
         new SimpleRecord("k2".getBytes, "v2".getBytes)))
-      partition.appendRecordsToLeader(batch, origin = AppendOrigin.Client, requiredAcks = 0)
+      partition.appendRecordsToLeader(batch, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
       followerQueues.foreach(_.put(batch))
     }
   }
@@ -379,17 +382,17 @@ class PartitionLockTest extends Logging {
     mockTime.scheduler,
     new BrokerTopicStats,
     mockTime,
-    log.maxProducerIdExpirationMs,
     log.producerIdExpirationCheckIntervalMs,
     log.topicPartition,
     leaderEpochCache,
     producerStateManager,
     logDirFailureChannel,
-    topicId = None,
+    _topicId = None,
     keepPartitionMetadataFile = true) {
 
-    override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin, interBrokerProtocolVersion: ApiVersion): LogAppendInfo = {
-      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion)
+    override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin,
+                                interBrokerProtocolVersion: ApiVersion, requestLocal: RequestLocal): LogAppendInfo = {
+      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion, requestLocal)
       appendSemaphore.acquire()
       appendInfo
     }

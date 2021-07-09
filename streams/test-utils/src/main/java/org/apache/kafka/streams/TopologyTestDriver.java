@@ -195,7 +195,7 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  * trigger manually via {@link #advanceWallClockTime(Duration)}.
  * <p>
  * Finally, when completed, make sure your tests {@link #close()} the driver to release all resources and
- * {@link org.apache.kafka.streams.processor.Processor processors}.
+ * {@link org.apache.kafka.streams.processor.api.Processor processors}.
  *
  * <h2>Processor state</h2>
  * <p>
@@ -398,7 +398,7 @@ public class TopologyTestDriver implements Closeable {
             streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
             mockWallClockTime
         );
-        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, TASK_ID.toString(), streamsMetrics);
+        TaskMetrics.droppedRecordsSensor(threadId, TASK_ID.toString(), streamsMetrics);
 
         return streamsMetrics;
     }
@@ -419,7 +419,7 @@ public class TopologyTestDriver implements Closeable {
 
         final boolean createStateDirectory = processorTopology.hasPersistentLocalStore() ||
             (globalTopology != null && globalTopology.hasPersistentGlobalStore());
-        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, createStateDirectory);
+        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, createStateDirectory, builder.hasNamedTopologies());
     }
 
     private void setupGlobalTask(final Time mockWallClockTime,

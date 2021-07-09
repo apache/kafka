@@ -137,6 +137,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(value = Parameterized.class)
+@SuppressWarnings("deprecation")
 public class StreamsPartitionAssignorTest {
     private static final String CONSUMER_1 = "consumer1";
     private static final String CONSUMER_2 = "consumer2";
@@ -830,7 +831,7 @@ public class StreamsPartitionAssignorTest {
 
             if (stateChangelogTopics.contains(changelogTopic)) {
                 for (final TaskId id : tasks) {
-                    if (id.topicGroupId == entry.getKey().nodeGroupId) {
+                    if (id.subtopology() == entry.getKey().nodeGroupId) {
                         ids.add(id);
                     }
                 }
@@ -2109,7 +2110,7 @@ public class StreamsPartitionAssignorTest {
             final Set<TopicPartition> partitions = entry.getValue();
             for (final TopicPartition partition : partitions) {
                 // since default grouper, taskid.partition == partition.partition()
-                assertEquals(id.partition, partition.partition());
+                assertEquals(id.partition(), partition.partition());
 
                 standbyTopics.add(partition.topic());
             }

@@ -22,10 +22,13 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -86,7 +89,7 @@ public class MeteredWindowStore<K, V>
 
         registerMetrics();
         final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+            StateStoreMetrics.restoreSensor(taskId, metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
@@ -102,19 +105,19 @@ public class MeteredWindowStore<K, V>
 
         registerMetrics();
         final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+            StateStoreMetrics.restoreSensor(taskId, metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
     }
-    protected Serde<V> prepareValueSerde(final Serde<V> valueSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde) {
-        return WrappingNullableUtils.prepareValueSerde(valueSerde, contextKeySerde, contextValueSerde);
+    protected Serde<V> prepareValueSerde(final Serde<V> valueSerde, final SerdeGetter getter) {
+        return WrappingNullableUtils.prepareValueSerde(valueSerde, getter);
     }
 
     private void registerMetrics() {
-        putSensor = StateStoreMetrics.putSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
-        fetchSensor = StateStoreMetrics.fetchSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
-        flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        putSensor = StateStoreMetrics.putSensor(taskId, metricsScope, name(), streamsMetrics);
+        fetchSensor = StateStoreMetrics.fetchSensor(taskId, metricsScope, name(), streamsMetrics);
+        flushSensor = StateStoreMetrics.flushSensor(taskId, metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
     }
 
@@ -126,8 +129,8 @@ public class MeteredWindowStore<K, V>
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
-            prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde()));
+            prepareKeySerde(keySerde, new SerdeGetter(context)),
+            prepareValueSerde(valueSerde, new SerdeGetter(context)));
     }
 
     private void initStoreSerde(final StateStoreContext context) {
@@ -137,8 +140,8 @@ public class MeteredWindowStore<K, V>
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
-            prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde()));
+            prepareKeySerde(keySerde, new SerdeGetter(context)),
+            prepareValueSerde(valueSerde, new SerdeGetter(context)));
     }
 
     @SuppressWarnings("unchecked")
@@ -148,12 +151,28 @@ public class MeteredWindowStore<K, V>
         final WindowStore<Bytes, byte[]> wrapped = wrapped();
         if (wrapped instanceof CachedStateStore) {
             return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
-                (key, newValue, oldValue, timestamp) -> listener.apply(
-                    WindowKeySchema.fromStoreKey(key, windowSizeMs, serdes.keyDeserializer(), serdes.topic()),
-                    newValue != null ? serdes.valueFrom(newValue) : null,
-                    oldValue != null ? serdes.valueFrom(oldValue) : null,
-                    timestamp
-                ),
+                new CacheFlushListener<byte[], byte[]>() {
+                    @Override
+                    public void apply(final byte[] key, final byte[] newValue, final byte[] oldValue, final long timestamp) {
+                        listener.apply(
+                            WindowKeySchema.fromStoreKey(key, windowSizeMs, serdes.keyDeserializer(), serdes.topic()),
+                            newValue != null ? serdes.valueFrom(newValue) : null,
+                            oldValue != null ? serdes.valueFrom(oldValue) : null,
+                            timestamp
+                        );
+                    }
+
+                    @Override
+                    public void apply(final Record<byte[], Change<byte[]>> record) {
+                        listener.apply(
+                            record.withKey(WindowKeySchema.fromStoreKey(record.key(), windowSizeMs, serdes.keyDeserializer(), serdes.topic()))
+                                  .withValue(new Change<>(
+                                      record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
+                                      record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null
+                                  ))
+                        );
+                    }
+                },
                 sendOldValues);
         }
         return false;

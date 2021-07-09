@@ -77,8 +77,30 @@ public class MirrorSourceConnectorTest {
         assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("source.target.topic1"), "should not allow cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.target.topic1"), "should not allow cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.source.topic1"), "should not allow cycles");
         assertTrue(connector.shouldReplicateTopic("topic1"), "should allow anything else");
         assertTrue(connector.shouldReplicateTopic("source.topic1"), "should allow anything else");
+    }
+
+    @Test
+    public void testIdentityReplication() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new IdentityReplicationPolicy(), x -> true, x -> true);
+        assertTrue(connector.shouldReplicateTopic("target.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("target.source.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("source.target.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("target.source.target.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("source.target.source.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("topic1"), "should allow normal topics");
+        assertTrue(connector.shouldReplicateTopic("othersource.topic1"), "should allow normal topics");
+        assertFalse(connector.shouldReplicateTopic("target.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.target.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.source.heartbeats"), "should not allow heartbeat cycles");
+        assertTrue(connector.shouldReplicateTopic("heartbeats"), "should allow heartbeat topics");
+        assertTrue(connector.shouldReplicateTopic("othersource.heartbeats"), "should allow heartbeat topics");
     }
 
     @Test
@@ -167,13 +189,13 @@ public class MirrorSourceConnectorTest {
         // t3 -> [t0p2, t0p5, t1p0, t2p1]
 
         Map<String, String> t1 = output.get(0);
-        assertEquals("t0-0,t0-3,t0-6,t1-1", t1.get(TASK_TOPIC_PARTITIONS));
+        assertEquals("t0-0,t0-3,t0-6,t1-1", t1.get(TASK_TOPIC_PARTITIONS), "Config for t1 is incorrect");
 
         Map<String, String> t2 = output.get(1);
-        assertEquals("t0-1,t0-4,t0-7,t2-0", t2.get(TASK_TOPIC_PARTITIONS));
+        assertEquals("t0-1,t0-4,t0-7,t2-0", t2.get(TASK_TOPIC_PARTITIONS), "Config for t2 is incorrect");
 
         Map<String, String> t3 = output.get(2);
-        assertEquals("t0-2,t0-5,t1-0,t2-1", t3.get(TASK_TOPIC_PARTITIONS));
+        assertEquals("t0-2,t0-5,t1-0,t2-1", t3.get(TASK_TOPIC_PARTITIONS), "Config for t3 is incorrect");
     }
 
     @Test
@@ -201,7 +223,7 @@ public class MirrorSourceConnectorTest {
         Map<String, Long> expectedPartitionCounts = new HashMap<>();
         expectedPartitionCounts.put("source.topic", 1L);
         Map<String, String> configMap = MirrorSourceConnector.configToMap(topicConfig);
-        assertEquals(2, configMap.size());
+        assertEquals(2, configMap.size(), "configMap has incorrect size");
 
         Map<String, NewTopic> expectedNewTopics = new HashMap<>();
         expectedNewTopics.put("source.topic", new NewTopic("source.topic", 1, (short) 0).configs(configMap));
