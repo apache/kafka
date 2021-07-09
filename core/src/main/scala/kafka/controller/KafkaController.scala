@@ -2302,7 +2302,7 @@ class KafkaController(val config: KafkaConfig,
     }
 
     if (!brokerEpochOpt.contains(brokerEpoch)) {
-      info(s"Ignoring AlterIsr due to stale broker epoch $brokerEpoch for broker $brokerId")
+      info(s"Ignoring AlterIsr due to stale broker epoch $brokerEpoch and local broker epoch $brokerEpochOpt for broker $brokerId")
       callback.apply(Right(Errors.STALE_BROKER_EPOCH))
       return
     }
