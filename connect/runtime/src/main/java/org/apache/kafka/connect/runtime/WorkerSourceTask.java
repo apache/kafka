@@ -219,18 +219,23 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     @Override
+    protected void initializeAndStart() {
+        // If we try to start the task at all by invoking initialize, then count this as
+        // "started" and expect a subsequent call to the task's stop() method
+        // to properly clean up any resources allocated by its initialize() or
+        // start() methods. If the task throws an exception during stop(),
+        // the worst thing that happens is another exception gets logged for an already-
+        // failed task
+        started = true;
+        task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
+        task.start(taskConfig);
+        log.info("{} Source task finished initialization and start", this);
+    }
+
+    @Override
     public void execute() {
         try {
-            // If we try to start the task at all by invoking initialize, then count this as
-            // "started" and expect a subsequent call to the task's stop() method
-            // to properly clean up any resources allocated by its initialize() or 
-            // start() methods. If the task throws an exception during stop(),
-            // the worst thing that happens is another exception gets logged for an already-
-            // failed task
-            started = true;
-            task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
-            task.start(taskConfig);
-            log.info("{} Source task finished initialization and start", this);
+            log.info("{} Executing source task", this);
             while (!isStopping()) {
                 if (shouldPause()) {
                     onPause();

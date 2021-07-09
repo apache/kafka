@@ -193,7 +193,7 @@ class WorkerSinkTask extends WorkerTask {
 
     @Override
     public void execute() {
-        initializeAndStart();
+        log.info("{} Executing sink task", this);
         // Make sure any uncommitted data has been committed and the task has
         // a chance to clean up its state
         try (UncheckedCloseable suppressible = this::closePartitions) {
@@ -290,6 +290,7 @@ class WorkerSinkTask extends WorkerTask {
     /**
      * Initializes and starts the SinkTask.
      */
+    @Override
     protected void initializeAndStart() {
         SinkConnectorConfig.validate(taskConfig);
 
