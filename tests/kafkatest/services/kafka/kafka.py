@@ -801,9 +801,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def stop_node(self, node, clean_shutdown=True, timeout_sec=60):
         pids = self.pids(node)
+        cluster_has_colocated_controllers = self.quorum_info.has_brokers and self.quorum_info.has_controllers
         force_sigkill_due_to_too_few_colocated_controllers =\
-            clean_shutdown and self.quorum_info.has_brokers and self.quorum_info.has_controllers\
-            and self.colocated_nodes_started > 0\
+            clean_shutdown and cluster_has_colocated_controllers\
             and self.colocated_nodes_started < round(self.num_nodes_controller_role / 2)
         if force_sigkill_due_to_too_few_colocated_controllers:
             self.logger.info("Forcing node to stop via SIGKILL due to too few co-located KRaft controllers: %i/%i" %\
@@ -813,7 +813,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         for pid in pids:
             node.account.signal(pid, sig, allow_fail=False)
-        node_has_colocated_controllers = self.node_quorum_info.has_controller_role and self.node_quorum_info.has_broker_role
+
+        node_quorum_info = quorum.NodeQuorumInfo(self.quorum_info, node)
+        node_has_colocated_controllers = node_quorum_info.has_controller_role and node_quorum_info.has_broker_role
         if pids and node_has_colocated_controllers:
             self.colocated_nodes_started -= 1
 
