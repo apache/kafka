@@ -38,7 +38,7 @@ public class ApiError {
     private final String message;
 
     public static ApiError fromThrowable(Throwable t) {
-        Throwable throwableToBeEncode = t;
+        Throwable throwableToBeEncoded = t;
         // Get the original cause from `CompletionException` and `ExecutionException`, otherwise, it will return unexpected UNKNOWN_SERVER_ERROR.
         // CompletableFuture  will wrap the original cause within `CompletionException` when it completes exceptionally
         // Future#get might also wrap the original cause inside `ExecutionException` when the async call throws exception
@@ -46,13 +46,13 @@ public class ApiError {
         // has exception thrown (ex: Not_Controller exception), we'll get `CompletableFuture` with real cause inside.
         // To get the correct ApiError, we should unwrap the `CompletableFuture`, so that the requester can handle the error accordingly.
         if (t instanceof CompletionException || t instanceof ExecutionException) {
-            throwableToBeEncode = t.getCause();
+            throwableToBeEncoded = t.getCause();
         }
         // Avoid populating the error message if it's a generic one. Also don't populate error
         // message for UNKNOWN_SERVER_ERROR to ensure we don't leak sensitive information.
-        Errors error = Errors.forException(throwableToBeEncode);
+        Errors error = Errors.forException(throwableToBeEncoded);
         String message = error == Errors.UNKNOWN_SERVER_ERROR ||
-            error.message().equals(throwableToBeEncode.getMessage()) ? null : throwableToBeEncode.getMessage();
+            error.message().equals(throwableToBeEncoded.getMessage()) ? null : throwableToBeEncoded.getMessage();
         return new ApiError(error, message);
     }
 
