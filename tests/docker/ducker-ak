@@ -336,7 +336,7 @@ use only ${num_nodes}."
 
     ducker_build "${image_name}"
 
-    docker inspect --format='{{.Config.Labels}}' --type=image "${image_name}" | grep -q 'ducker.type'
+    docker inspect --format='{{.Config.Labels}}' --type=image "${image_name}" | grep -q 'ducker.creator'
     local docker_status=${PIPESTATUS[0]}
     local grep_status=${PIPESTATUS[1]}
     [[ "${docker_status}" -eq 0 ]] || die "ducker_up: failed to inspect image ${image_name}.  \
@@ -344,7 +344,7 @@ Please check that it exists."
     if [[ "${grep_status}" -ne 0 ]]; then
         if [[ "${force}" -ne 1 ]]; then
             echo "ducker_up: ${image_name} does not appear to be a ducker image.  It lacks the \
-ducker.type label.  If you think this is a mistake, you can use --force to attempt to bring \
+ducker.creator label.  If you think this is a mistake, you can use --force to attempt to bring \
 it up anyway."
             exit 1
         fi
