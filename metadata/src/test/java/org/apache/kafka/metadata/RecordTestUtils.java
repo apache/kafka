@@ -178,13 +178,12 @@ public class RecordTestUtils {
         return MemoryBatchReader.of(batches, __ -> { });
     }
 
-    private static final MetadataRecordSerde RECORD_SERDE = new MetadataRecordSerde();
 
     private static int sizeInBytes(List<ApiMessageAndVersion> records) {
         int size = 0;
         for (ApiMessageAndVersion record : records) {
             ObjectSerializationCache cache = new ObjectSerializationCache();
-            size += RECORD_SERDE.recordSize(record, cache);
+            size += MetadataRecordSerde.INSTANCE.recordSize(record, cache);
         }
         return size;
     }

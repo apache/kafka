@@ -39,7 +39,6 @@ class BrokerMetadataSnapshotter(
   writerBuilder: SnapshotWriterBuilder
 ) extends Logging with MetadataSnapshotter {
   private val logContext = new LogContext(s"[BrokerMetadataSnapshotter id=${brokerId}] ")
-  private val log = logContext.logger(classOf[BrokerMetadataSnapshotter])
   logIdent = logContext.logPrefix()
 
   /**
@@ -89,10 +88,10 @@ class BrokerMetadataSnapshotter(
     }
 
     override def handleException(e: Throwable): Unit = {
-      if (e.isInstanceOf[RejectedExecutionException]) {
-        log.info("Not processing CreateSnapshotEvent because the event queue is closed.")
-      } else {
-        log.error("Unexpected error handling CreateSnapshotEvent", e);
+      e match {
+        case _: RejectedExecutionException => 
+          info("Not processing CreateSnapshotEvent because the event queue is closed.")
+        case _ => error("Unexpected error handling CreateSnapshotEvent", e)
       }
       writer.close()
     }
@@ -102,7 +101,7 @@ class BrokerMetadataSnapshotter(
     eventQueue.beginShutdown("beginShutdown", new ShutdownEvent())
   }
 
-  class ShutdownEvent() extends EventQueue.FailureLoggingEvent(log) {
+  class ShutdownEvent() extends EventQueue.Event {
     override def run(): Unit = {
     }
   }

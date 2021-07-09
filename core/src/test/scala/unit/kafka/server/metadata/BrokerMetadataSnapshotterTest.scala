@@ -36,8 +36,6 @@ import org.junit.jupiter.api.Test
 
 
 class BrokerMetadataSnapshotterTest {
-  val SERDE = new MetadataRecordSerde()
-
   @Test
   def testCreateAndClose(): Unit = {
     val snapshotter = new BrokerMetadataSnapshotter(0, Time.SYSTEM, None,
@@ -59,7 +57,7 @@ class BrokerMetadataSnapshotterTest {
         Time.SYSTEM,
         lastContainedLogTime,
         CompressionType.NONE,
-        SERDE
+        MetadataRecordSerde.INSTANCE
       ).get();
     }
 
@@ -72,7 +70,7 @@ class BrokerMetadataSnapshotterTest {
         if (!batch.isControlBatch()) {
           batch.forEach(record => {
             val recordBuffer = record.value().duplicate()
-            val messageAndVersion = SERDE.read(
+            val messageAndVersion = MetadataRecordSerde.INSTANCE.read(
               new ByteBufferAccessor(recordBuffer), recordBuffer.remaining())
             delta.replay(messageAndVersion.message())
           })

@@ -142,7 +142,7 @@ class BrokerMetadataListener(
    * Handle metadata snapshots
    */
   override def handleSnapshot(reader: SnapshotReader[ApiMessageAndVersion]): Unit =
-      eventQueue.append(new HandleSnapshotEvent(reader))
+    eventQueue.append(new HandleSnapshotEvent(reader))
 
   class HandleSnapshotEvent(reader: SnapshotReader[ApiMessageAndVersion])
     extends EventQueue.FailureLoggingEvent(log) {
