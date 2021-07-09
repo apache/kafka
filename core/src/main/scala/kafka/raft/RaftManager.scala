@@ -120,7 +120,7 @@ class KafkaRaftManager[T](
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
 ) extends RaftManager[T] with Logging {
 
-  private val raftConfig = new RaftConfig(config, config.replicaFetchResponseMaxBytes)
+  private val raftConfig = new RaftConfig(config)
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
   private val logContext = new LogContext(s"[RaftManager nodeId=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix()

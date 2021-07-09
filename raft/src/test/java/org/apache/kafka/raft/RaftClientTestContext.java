@@ -124,7 +124,7 @@ public final class RaftClientTestContext {
         private static final int DEFAULT_REQUEST_TIMEOUT_MS = 5000;
         private static final int RETRY_BACKOFF_MS = 50;
         private static final int DEFAULT_APPEND_LINGER_MS = 0;
-        private static final int DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES = 8 * 1024 * 1024;
+        private static final int DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES = 10 * 1024 * 1024;
 
         private final MockMessageQueue messageQueue = new MockMessageQueue();
         private final MockTime time = new MockTime();

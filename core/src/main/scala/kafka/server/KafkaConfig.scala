@@ -1285,6 +1285,7 @@ object KafkaConfig {
       .defineInternal(RaftConfig.QUORUM_LINGER_MS_CONFIG, INT, Defaults.QuorumLingerMs, null, MEDIUM, RaftConfig.QUORUM_LINGER_MS_DOC)
       .defineInternal(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, Defaults.QuorumRequestTimeoutMs, null, MEDIUM, RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_DOC)
       .defineInternal(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
+      .defineInternal(RaftConfig.QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG, INT, Defaults.ReplicaFetchResponseMaxBytes, null, LOW, RaftConfig.QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES_DOC)
   }
 
   /** ********* Remote Log Management Configuration *********/
