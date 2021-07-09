@@ -19,6 +19,7 @@ package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /**
@@ -161,9 +163,10 @@ public class RecordTestUtils {
         long offset = lastOffset - records.size() + 1;
         Iterator<ApiMessageAndVersion> iterator = records.iterator();
         List<ApiMessageAndVersion> curRecords = new ArrayList<>();
+        assertTrue(iterator.hasNext()); // At least one record is required
         while (true) {
             if (!iterator.hasNext() || curRecords.size() >= 2) {
-                batches.add(Batch.data(offset, 0, 0, 0, curRecords));
+                batches.add(Batch.data(offset, 0, 0, sizeInBytes(curRecords), curRecords));
                 if (!iterator.hasNext()) {
                     break;
                 }
@@ -173,5 +176,15 @@ public class RecordTestUtils {
             curRecords.add(iterator.next());
         }
         return MemoryBatchReader.of(batches, __ -> { });
+    }
+
+
+    private static int sizeInBytes(List<ApiMessageAndVersion> records) {
+        int size = 0;
+        for (ApiMessageAndVersion record : records) {
+            ObjectSerializationCache cache = new ObjectSerializationCache();
+            size += MetadataRecordSerde.INSTANCE.recordSize(record, cache);
+        }
+        return size;
     }
 }

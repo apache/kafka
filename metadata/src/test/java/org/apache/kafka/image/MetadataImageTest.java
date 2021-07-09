@@ -26,11 +26,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class MetadataImageTest {
-    private final static MetadataImage IMAGE1;
+    public final static MetadataImage IMAGE1;
 
-    private final static MetadataDelta DELTA1;
+    public final static MetadataDelta DELTA1;
 
-    private final static MetadataImage IMAGE2;
+    public final static MetadataImage IMAGE2;
 
     static {
         IMAGE1 = new MetadataImage(FeaturesImageTest.IMAGE1,
