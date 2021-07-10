@@ -53,6 +53,7 @@ class RequestChannelTest {
     override def serialize(principal: KafkaPrincipal): Array[Byte] = Utils.utf8(principal.toString)
     override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
   }
+  private val mockSend: ByteBufferSend = Mockito.mock(classOf[ByteBufferSend])
 
   @Test
   def testAlterRequests(): Unit = {
@@ -194,10 +195,10 @@ class RequestChannelTest {
   def testEnvelopeBuildResponseSendShouldReturnNoErrorIfInnerResponseHasNoError(): Unit = {
     val channelRequest = buildForwardRequestWithEnvelopeRequestAttached(buildMetadataRequest())
 
-    val mockSend: ByteBufferSend = Mockito.mock(classOf[ByteBufferSend])
     val envelopeResponseArgumentCaptor = ArgumentCaptor.forClass(classOf[EnvelopeResponse])
 
-    Mockito.doReturn(mockSend).when(channelRequest.envelope.get.context).buildResponseSend(envelopeResponseArgumentCaptor.capture())
+    Mockito.doAnswer(_ => mockSend)
+      .when(channelRequest.envelope.get.context).buildResponseSend(envelopeResponseArgumentCaptor.capture())
 
     // create an inner response without error
     val responseWithoutError = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", 2))
@@ -214,10 +215,10 @@ class RequestChannelTest {
   def testEnvelopeBuildResponseSendShouldReturnNoErrorIfInnerResponseHasNoNotControllerError(): Unit = {
     val channelRequest = buildForwardRequestWithEnvelopeRequestAttached(buildMetadataRequest())
 
-    val mockSend: ByteBufferSend = Mockito.mock(classOf[ByteBufferSend])
     val envelopeResponseArgumentCaptor = ArgumentCaptor.forClass(classOf[EnvelopeResponse])
 
-    Mockito.doReturn(mockSend).when(channelRequest.envelope.get.context).buildResponseSend(envelopeResponseArgumentCaptor.capture())
+    Mockito.doAnswer(_ => mockSend)
+      .when(channelRequest.envelope.get.context).buildResponseSend(envelopeResponseArgumentCaptor.capture())
 
     // create an inner response with REQUEST_TIMED_OUT error
     val responseWithTimeoutError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
@@ -236,10 +237,10 @@ class RequestChannelTest {
   def testEnvelopeBuildResponseSendShouldReturnNotControllerErrorIfInnerResponseHasOne(): Unit = {
     val channelRequest = buildForwardRequestWithEnvelopeRequestAttached(buildMetadataRequest())
 
-    val mockSend: ByteBufferSend = Mockito.mock(classOf[ByteBufferSend])
     val envelopeResponseArgumentCaptor = ArgumentCaptor.forClass(classOf[EnvelopeResponse])
 
-    Mockito.doReturn(mockSend).when(channelRequest.envelope.get.context).buildResponseSend(envelopeResponseArgumentCaptor.capture())
+    Mockito.doAnswer(_ => mockSend)
+      .when(channelRequest.envelope.get.context).buildResponseSend(envelopeResponseArgumentCaptor.capture())
 
     // create an inner response with NOT_CONTROLLER error
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
