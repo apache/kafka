@@ -16,7 +16,7 @@
 {
   "apiKey": 64,
   "type": "request",
-  "listeners": ["broker", "controller"],
+  "listeners": ["controller"],
   "name": "UnregisterBrokerRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
