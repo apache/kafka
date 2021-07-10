@@ -54,7 +54,7 @@
 
     <p>
         Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2. This can be configured
-        by setting <code>"processing.guarantee"</code> to <code>"exactly_once"</code> for
+        by setting <code>"processing.guarantee"</code> to <code>"exactly_once_v2"</code> for
         application versions 3.0+, or setting it to <code>"exactly_once_beta"</code> for versions between 2.6 and 2.8.
         To use this new feature, your brokers must be on version 2.5.x or newer.
         If you want to upgrade your EOS application from an older version and enable this feature in version 3.0+,
@@ -231,6 +231,11 @@
         If a task does not make progress within the specified task timeout, which is tracked on a per-task basis,
         Kafka Streams throws a <code>TimeoutException</code>
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-572%3A+Improve+timeouts+and+retries+in+Kafka+Streams">KIP-572</a>).
+    </p>
+    <p>
+        We changed the default value of <code>default.key.serde</code> and <code>default.value.serde</code> to be <code>null</code> instead of <code>ByteArraySerde</code>.
+        Users will now see a <code>ConfigException</code> if their serdes are not correctly configured through those configs or passed in explicitly.
+        See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-741%3A+Change+default+serde+to+be+null">KIP-741</a> for more details.
     </p>
 
     <h3><a id="streams_api_changes_270" href="#streams_api_changes_270">Streams API changes in 2.7.0</a></h3>

@@ -48,8 +48,8 @@ trait ConfigHandler {
 }
 
 /**
-  * The TopicConfigHandler will process topic config changes in ZK.
-  * The callback provides the topic name and the full properties set read from ZK
+  * The TopicConfigHandler will process topic config changes from ZooKeeper or the metadata log.
+  * The callback provides the topic name and the full properties set.
   */
 class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig,
                          val quotas: QuotaManagers, kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
