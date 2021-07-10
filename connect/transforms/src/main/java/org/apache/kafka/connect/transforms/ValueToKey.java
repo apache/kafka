@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import java.util.Collections;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -41,14 +42,18 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
     public static final String OVERVIEW_DOC = "Replace the record key with a new key formed from a subset of fields in the record value.";
 
     public static final String FIELDS_CONFIG = "fields";
+    public static final String TOPICS_CONFIG = "topics";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new NonEmptyListValidator(), ConfigDef.Importance.HIGH,
-                    "Field names on the record value to extract as the record key.");
+                    "Field names on the record value to extract as the record key.")
+            .define(TOPICS_CONFIG, ConfigDef.Type.LIST, Collections.emptyList(), ConfigDef.Importance.HIGH,
+                    "Topic names for which this transformation will be applied.");
 
     private static final String PURPOSE = "copying fields from value to key";
 
     private List<String> fields;
+    private List<String> topics;
 
     private Cache<Schema, Schema> valueToKeySchemaCache;
 
@@ -56,11 +61,16 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
     public void configure(Map<String, ?> configs) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
         fields = config.getList(FIELDS_CONFIG);
+        topics = config.getList(TOPICS_CONFIG);
         valueToKeySchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
     @Override
     public R apply(R record) {
+        if (!topics.isEmpty() && !topics.contains(record.topic())) {
+            return record;
+        }
+
         if (record.valueSchema() == null) {
             return applySchemaless(record);
         } else {
