@@ -30,8 +30,8 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.server.authorizer._
-
 import java.util
+
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable
 import scala.compat.java8.OptionConverters._
