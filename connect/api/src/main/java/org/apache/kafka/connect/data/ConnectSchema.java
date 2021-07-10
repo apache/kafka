@@ -222,12 +222,6 @@ public class ConnectSchema implements Schema {
         }
 
         List<Class> expectedClasses = expectedClassesFor(schema);
-
-        if (expectedClasses == null)
-            throw new DataException("Invalid Java object for schema type " + schema.type()
-                    + ": " + value.getClass()
-                    + " for field: \"" + name + "\"");
-
         boolean foundMatch = false;
         for (Class<?> expectedClass : expectedClasses) {
             if (expectedClass.isInstance(value)) {
@@ -236,10 +230,17 @@ public class ConnectSchema implements Schema {
             }
         }
 
-        if (!foundMatch)
-            throw new DataException("Invalid Java object for schema type " + schema.type()
-                    + ": " + value.getClass()
-                    + " for field: \"" + name + "\"");
+        if (!foundMatch) {
+            StringBuilder exceptionMessage = new StringBuilder("Invalid Java object for schema");
+            if (schema.name() != null) {
+                exceptionMessage.append(" \"").append(schema.name()).append("\"");
+            }
+            exceptionMessage.append(" with type ").append(schema.type()).append(": ").append(value.getClass());
+            if (name != null) {
+                exceptionMessage.append(" for field: \"").append(name).append("\"");
+            }
+            throw new DataException(exceptionMessage.toString());
+        }
 
         switch (schema.type()) {
             case STRUCT:
@@ -266,7 +267,7 @@ public class ConnectSchema implements Schema {
     private static List<Class> expectedClassesFor(Schema schema) {
         List<Class> expectedClasses = LOGICAL_TYPE_CLASSES.get(schema.name());
         if (expectedClasses == null)
-            expectedClasses = SCHEMA_TYPE_CLASSES.get(schema.type());
+            expectedClasses = SCHEMA_TYPE_CLASSES.getOrDefault(schema.type(), Collections.emptyList());
         return expectedClasses;
     }
 
