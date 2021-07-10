@@ -246,8 +246,13 @@ public class StreamThread extends Thread {
 
     public boolean isRunning() {
         synchronized (stateLock) {
-            return state.isAlive();
+            return getIsAlive();
         }
+    }
+
+    //For KafkaStreamTest
+    public boolean getIsAlive() {
+        return state.isAlive();
     }
 
     private final Time time;

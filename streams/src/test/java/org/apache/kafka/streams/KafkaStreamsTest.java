@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
@@ -47,7 +46,6 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
@@ -61,18 +59,18 @@ import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.Capture;
-import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.After;
 import org.junit.rules.TestName;
-import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
+import org.mockito.Captor;
+import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
+import org.mockito.invocation.InvocationOnMock;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -96,13 +94,7 @@ import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 
-import static org.easymock.EasyMock.anyBoolean;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.easymock.EasyMock.anyInt;
-import static org.easymock.EasyMock.anyLong;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.anyString;
-import static org.easymock.EasyMock.capture;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -112,9 +104,24 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.atMostOnce;
+import static org.mockito.Mockito.isA;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.withSettings;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.MockitoAnnotations.openMocks;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({KafkaStreams.class, StreamThread.class, ClientMetrics.class})
 public class KafkaStreamsTest {
 
     private static final int NUM_THREADS = 2;
@@ -129,21 +136,26 @@ public class KafkaStreamsTest {
     private MockTime time;
 
     private Properties props;
-
-    @Mock
-    private StateDirectory stateDirectory;
+    
     @Mock
     private StreamThread streamThreadOne;
     @Mock
     private StreamThread streamThreadTwo;
     @Mock
-    private GlobalStreamThread globalStreamThread;
-    @Mock
     private Metrics metrics;
+    @Captor
+    private ArgumentCaptor<List<MetricsReporter>> metricsReportersCapture;
+    @Captor
+    private ArgumentCaptor<StreamThread.StateListener> threadStateListenerCapture;
 
     private StateListenerStub streamsStateListener;
-    private Capture<List<MetricsReporter>> metricsReportersCapture;
-    private Capture<StreamThread.StateListener> threadStatelistenerCapture;
+
+    MockedStatic<KafkaStreams> kafkaStreamsMockedStatic;
+    MockedStatic<ClientMetrics> clientMetricsMockedStatic;
+    MockedStatic<StreamThread> streamThreadMockedStatic;
+
+    MockedConstruction<GlobalStreamThread> globalStreamThreadMockedConstruction;
+    MockedConstruction<StateDirectory> stateDirectoryMockedConstruction;
 
     public static class StateListenerStub implements KafkaStreams.StateListener {
         int numChanges = 0;
@@ -168,9 +180,7 @@ public class KafkaStreamsTest {
         supplier = new MockClientSupplier();
         supplier.setCluster(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
         streamsStateListener = new StateListenerStub();
-        threadStatelistenerCapture = EasyMock.newCapture();
-        metricsReportersCapture = EasyMock.newCapture();
-
+        openMocks(this);
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
         props.put(StreamsConfig.CLIENT_ID_CONFIG, CLIENT_ID);
@@ -182,152 +192,138 @@ public class KafkaStreamsTest {
         prepareStreams();
     }
 
+    @After
+    public void tearDown() {
+        kafkaStreamsMockedStatic.close();
+        clientMetricsMockedStatic.close();
+        streamThreadMockedStatic.close();
+        globalStreamThreadMockedConstruction.close();
+    }
+
     private void prepareStreams() throws Exception {
         // setup metrics
-        PowerMock.expectNew(Metrics.class,
-            anyObject(MetricConfig.class),
-            capture(metricsReportersCapture),
-            anyObject(Time.class),
-            anyObject(MetricsContext.class)
-        ).andAnswer(() -> {
+        kafkaStreamsMockedStatic = mockStatic(KafkaStreams.class, withSettings()
+                .defaultAnswer(InvocationOnMock::callRealMethod));
+        kafkaStreamsMockedStatic.when(() -> KafkaStreams.createThisMetrics(
+                any(MetricConfig.class),
+                metricsReportersCapture.capture(),
+                any(Time.class),
+                any(MetricsContext.class)
+        )).thenAnswer(invocation -> {
             for (final MetricsReporter reporter : metricsReportersCapture.getValue()) {
                 reporter.init(Collections.emptyList());
             }
             return metrics;
-        }).anyTimes();
-        metrics.close();
-        EasyMock.expectLastCall().andAnswer(() -> {
+        });
+
+        doAnswer(invocation -> {
             for (final MetricsReporter reporter : metricsReportersCapture.getValue()) {
                 reporter.close();
             }
             return null;
-        }).anyTimes();
+        }).when(metrics).close();
 
-        PowerMock.mockStatic(ClientMetrics.class);
-        EasyMock.expect(ClientMetrics.version()).andReturn("1.56");
-        EasyMock.expect(ClientMetrics.commitId()).andReturn("1a2b3c4d5e");
-        ClientMetrics.addVersionMetric(anyObject(StreamsMetricsImpl.class));
-        ClientMetrics.addCommitIdMetric(anyObject(StreamsMetricsImpl.class));
-        ClientMetrics.addApplicationIdMetric(anyObject(StreamsMetricsImpl.class), EasyMock.eq(APPLICATION_ID));
-        ClientMetrics.addTopologyDescriptionMetric(anyObject(StreamsMetricsImpl.class), anyString());
-        ClientMetrics.addStateMetric(anyObject(StreamsMetricsImpl.class), anyObject());
-        ClientMetrics.addNumAliveStreamThreadMetric(anyObject(StreamsMetricsImpl.class), anyObject());
+        clientMetricsMockedStatic = mockStatic(ClientMetrics.class);
+        clientMetricsMockedStatic.when(ClientMetrics::version).thenReturn("1.56");
+        clientMetricsMockedStatic.when(ClientMetrics::commitId).thenReturn("1a2b3c4d5e");
+        ClientMetrics.addVersionMetric(any(StreamsMetricsImpl.class));
+        ClientMetrics.addCommitIdMetric(any(StreamsMetricsImpl.class));
+        ClientMetrics.addApplicationIdMetric(any(StreamsMetricsImpl.class), eq(APPLICATION_ID));
+        ClientMetrics.addTopologyDescriptionMetric(any(StreamsMetricsImpl.class), any());
+        ClientMetrics.addStateMetric(any(StreamsMetricsImpl.class), any());
+        ClientMetrics.addNumAliveStreamThreadMetric(any(StreamsMetricsImpl.class), any());
 
         // setup stream threads
-        PowerMock.mockStatic(StreamThread.class);
-        EasyMock.expect(StreamThread.create(
-            anyObject(InternalTopologyBuilder.class),
-            anyObject(StreamsConfig.class),
-            anyObject(KafkaClientSupplier.class),
-            anyObject(Admin.class),
-            anyObject(UUID.class),
-            anyObject(String.class),
-            anyObject(StreamsMetricsImpl.class),
-            anyObject(Time.class),
-            anyObject(StreamsMetadataState.class),
-            anyLong(),
-            anyObject(StateDirectory.class),
-            anyObject(StateRestoreListener.class),
-            anyInt(),
-            anyObject(Runnable.class),
-            anyObject()
-        )).andReturn(streamThreadOne).andReturn(streamThreadTwo);
+        streamThreadMockedStatic = mockStatic(StreamThread.class);
+        streamThreadMockedStatic.when(() -> StreamThread.create(
+                any(InternalTopologyBuilder.class),
+                any(StreamsConfig.class),
+                any(KafkaClientSupplier.class),
+                any(Admin.class),
+                any(UUID.class),
+                any(String.class),
+                any(StreamsMetricsImpl.class),
+                any(Time.class),
+                any(StreamsMetadataState.class),
+                anyLong(),
+                any(StateDirectory.class),
+                any(StateRestoreListener.class),
+                anyInt(),
+                any(Runnable.class),
+                any()
+        )).thenReturn(streamThreadOne).thenReturn(streamThreadTwo);
 
-        EasyMock.expect(StreamThread.eosEnabled(anyObject(StreamsConfig.class))).andReturn(false).anyTimes();
-        EasyMock.expect(StreamThread.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamThread.ProcessingMode.AT_LEAST_ONCE).anyTimes();
-        EasyMock.expect(streamThreadOne.getId()).andReturn(1L).anyTimes();
-        EasyMock.expect(streamThreadTwo.getId()).andReturn(2L).anyTimes();
+        streamThreadMockedStatic.when(() -> StreamThread.eosEnabled(any(StreamsConfig.class))).thenReturn(false);
+        streamThreadMockedStatic.when(() -> StreamThread.processingMode(any(StreamsConfig.class))).thenReturn(StreamThread.ProcessingMode.AT_LEAST_ONCE);
+        when(streamThreadOne.getId()).thenReturn(1L);
+        when(streamThreadTwo.getId()).thenReturn(2L);
+
         prepareStreamThread(streamThreadOne, 1, true);
         prepareStreamThread(streamThreadTwo, 2, false);
 
         // setup global threads
         final AtomicReference<GlobalStreamThread.State> globalThreadState = new AtomicReference<>(GlobalStreamThread.State.CREATED);
-        PowerMock.expectNew(GlobalStreamThread.class,
-            anyObject(ProcessorTopology.class),
-            anyObject(StreamsConfig.class),
-            anyObject(Consumer.class),
-            anyObject(StateDirectory.class),
-            anyLong(),
-            anyObject(StreamsMetricsImpl.class),
-            anyObject(Time.class),
-            anyString(),
-            anyObject(StateRestoreListener.class),
-            anyObject(StreamsUncaughtExceptionHandler.class)
-        ).andReturn(globalStreamThread).anyTimes();
-        EasyMock.expect(globalStreamThread.state()).andAnswer(globalThreadState::get).anyTimes();
-        globalStreamThread.setStateListener(capture(threadStatelistenerCapture));
-        EasyMock.expectLastCall().anyTimes();
 
-        globalStreamThread.start();
-        EasyMock.expectLastCall().andAnswer(() -> {
-            globalThreadState.set(GlobalStreamThread.State.RUNNING);
-            threadStatelistenerCapture.getValue().onChange(globalStreamThread,
-                GlobalStreamThread.State.RUNNING,
-                GlobalStreamThread.State.CREATED);
-            return null;
-        }).anyTimes();
-        globalStreamThread.shutdown();
-        EasyMock.expectLastCall().andAnswer(() -> {
-            supplier.restoreConsumer.close();
+        globalStreamThreadMockedConstruction = mockConstruction(GlobalStreamThread.class,
+                (mock, context) -> {
+                    when(mock.state()).thenAnswer(invocation -> globalThreadState.get());
+                    doNothing().when(mock).setStateListener(threadStateListenerCapture.capture());
+                    doAnswer(invocation -> {
+                        globalThreadState.set(GlobalStreamThread.State.RUNNING);
+                        threadStateListenerCapture.getValue().onChange(mock,
+                                GlobalStreamThread.State.RUNNING,
+                                GlobalStreamThread.State.CREATED);
+                        return null;
+                    }).when(mock).start();
+                    doAnswer(invocation -> {
+                        supplier.restoreConsumer.close();
 
-            for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
-                producer.close();
-            }
-            globalThreadState.set(GlobalStreamThread.State.DEAD);
-            threadStatelistenerCapture.getValue().onChange(globalStreamThread,
-                GlobalStreamThread.State.PENDING_SHUTDOWN,
-                GlobalStreamThread.State.RUNNING);
-            threadStatelistenerCapture.getValue().onChange(globalStreamThread,
-                GlobalStreamThread.State.DEAD,
-                GlobalStreamThread.State.PENDING_SHUTDOWN);
-            return null;
-        }).anyTimes();
-        EasyMock.expect(globalStreamThread.stillRunning()).andReturn(globalThreadState.get() == GlobalStreamThread.State.RUNNING).anyTimes();
-        globalStreamThread.join();
-        EasyMock.expectLastCall().anyTimes();
+                        for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
+                            producer.close();
+                        }
+                        globalThreadState.set(GlobalStreamThread.State.DEAD);
+                        threadStateListenerCapture.getValue().onChange(mock,
+                                GlobalStreamThread.State.PENDING_SHUTDOWN,
+                                GlobalStreamThread.State.RUNNING);
+                        threadStateListenerCapture.getValue().onChange(mock,
+                                GlobalStreamThread.State.DEAD,
+                                GlobalStreamThread.State.PENDING_SHUTDOWN);
+                        return null;
+                    }).when(mock).shutdown();
+                    when(mock.stillRunning()).thenReturn(globalThreadState.get() == GlobalStreamThread.State.RUNNING);
+                });
 
-        PowerMock.replay(
-            StreamThread.class,
-            Metrics.class,
-            metrics,
-            ClientMetrics.class,
-            streamThreadOne,
-            streamThreadTwo,
-            GlobalStreamThread.class,
-            globalStreamThread
-        );
     }
 
     private void prepareStreamThread(final StreamThread thread,
                                      final int threadId,
                                      final boolean terminable) throws Exception {
         final AtomicReference<StreamThread.State> state = new AtomicReference<>(StreamThread.State.CREATED);
-        EasyMock.expect(thread.state()).andAnswer(state::get).anyTimes();
+        when(thread.state()).thenAnswer(invocation -> state.get());
 
-        thread.setStateListener(capture(threadStatelistenerCapture));
-        EasyMock.expectLastCall().anyTimes();
+        doNothing().when(thread).setStateListener(threadStateListenerCapture.capture());
 
-        EasyMock.expect(thread.getStateLock()).andReturn(new Object()).anyTimes();
+        when(thread.getStateLock()).thenReturn(new Object());
 
-        thread.start();
-        EasyMock.expectLastCall().andAnswer(() -> {
+        doAnswer(invocation -> {
             state.set(StreamThread.State.STARTING);
-            threadStatelistenerCapture.getValue().onChange(thread,
-                StreamThread.State.STARTING,
-                StreamThread.State.CREATED);
-            threadStatelistenerCapture.getValue().onChange(thread,
-                StreamThread.State.PARTITIONS_REVOKED,
-                StreamThread.State.STARTING);
-            threadStatelistenerCapture.getValue().onChange(thread,
-                StreamThread.State.PARTITIONS_ASSIGNED,
-                StreamThread.State.PARTITIONS_REVOKED);
-            threadStatelistenerCapture.getValue().onChange(thread,
-                StreamThread.State.RUNNING,
-                StreamThread.State.PARTITIONS_ASSIGNED);
+            threadStateListenerCapture.getValue().onChange(thread,
+                    StreamThread.State.STARTING,
+                    StreamThread.State.CREATED);
+            threadStateListenerCapture.getValue().onChange(thread,
+                    StreamThread.State.PARTITIONS_REVOKED,
+                    StreamThread.State.STARTING);
+            threadStateListenerCapture.getValue().onChange(thread,
+                    StreamThread.State.PARTITIONS_ASSIGNED,
+                    StreamThread.State.PARTITIONS_REVOKED);
+            threadStateListenerCapture.getValue().onChange(thread,
+                    StreamThread.State.RUNNING,
+                    StreamThread.State.PARTITIONS_ASSIGNED);
             return null;
-        }).anyTimes();
-        EasyMock.expect(thread.getGroupInstanceID()).andStubReturn(Optional.empty());
-        EasyMock.expect(thread.threadMetadata()).andReturn(new ThreadMetadataImpl(
+        }).when(thread).start();
+
+        when(thread.getGroupInstanceID()).thenReturn(Optional.empty());
+        when(thread.threadMetadata()).thenReturn(new ThreadMetadataImpl(
                 "processId-StreamThread-" + threadId,
                 "DEAD",
                 "",
@@ -336,17 +332,13 @@ public class KafkaStreamsTest {
                 "",
                 Collections.emptySet(),
                 Collections.emptySet()
-            )
-        ).anyTimes();
-        EasyMock.expect(thread.waitOnThreadState(EasyMock.isA(StreamThread.State.class), anyLong())).andStubReturn(true);
-        EasyMock.expect(thread.isAlive()).andReturn(true).times(0, 1);
-        thread.resizeCache(EasyMock.anyLong());
-        EasyMock.expectLastCall().anyTimes();
-        thread.requestLeaveGroupDuringShutdown();
-        EasyMock.expectLastCall().anyTimes();
-        EasyMock.expect(thread.getName()).andStubReturn("processId-StreamThread-" + threadId);
-        thread.shutdown();
-        EasyMock.expectLastCall().andAnswer(() -> {
+        ));
+        when(thread.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
+        when(thread.getIsAlive()).thenReturn(true);
+        verify(thread, atMostOnce()).getIsAlive();
+        when(thread.getName()).thenReturn("processId-StreamThread-" + threadId);
+
+        doAnswer(invocation -> {
             supplier.consumer.close();
             supplier.restoreConsumer.close();
             for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
@@ -354,23 +346,23 @@ public class KafkaStreamsTest {
             }
             state.set(StreamThread.State.DEAD);
 
-            threadStatelistenerCapture.getValue().onChange(thread, StreamThread.State.PENDING_SHUTDOWN, StreamThread.State.RUNNING);
-            threadStatelistenerCapture.getValue().onChange(thread, StreamThread.State.DEAD, StreamThread.State.PENDING_SHUTDOWN);
+            threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.PENDING_SHUTDOWN, StreamThread.State.RUNNING);
+            threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.DEAD, StreamThread.State.PENDING_SHUTDOWN);
             return null;
-        }).anyTimes();
-        EasyMock.expect(thread.isRunning()).andReturn(state.get() == StreamThread.State.RUNNING).anyTimes();
-        thread.join();
+        }).when(thread).shutdown();
+
+        when(thread.isRunning()).thenReturn(state.get() == StreamThread.State.RUNNING);
+
         if (terminable) {
-            EasyMock.expectLastCall().anyTimes();
         } else {
-            EasyMock.expectLastCall().andAnswer(() -> {
+            doAnswer(invocation -> {
                 Thread.sleep(2000L);
                 return null;
-            }).anyTimes();
+            }).when(thread).join();
         }
 
-        EasyMock.expect(thread.activeTasks()).andStubReturn(emptyList());
-        EasyMock.expect(thread.allTasks()).andStubReturn(Collections.emptyMap());
+        when(thread.activeTasks()).thenReturn(emptyList());
+        when(thread.allTasks()).thenReturn(Collections.emptyMap());
     }
 
     @Test
@@ -402,7 +394,7 @@ public class KafkaStreamsTest {
             Assert.assertEquals(KafkaStreams.State.RUNNING, streams.state());
 
             for (final StreamThread thread : streams.threads) {
-                threadStatelistenerCapture.getValue().onChange(
+                threadStateListenerCapture.getValue().onChange(
                     thread,
                     StreamThread.State.PARTITIONS_REVOKED,
                     StreamThread.State.RUNNING);
@@ -412,7 +404,7 @@ public class KafkaStreamsTest {
             Assert.assertEquals(KafkaStreams.State.REBALANCING, streams.state());
 
             for (final StreamThread thread : streams.threads) {
-                threadStatelistenerCapture.getValue().onChange(
+                threadStateListenerCapture.getValue().onChange(
                     thread,
                     StreamThread.State.PARTITIONS_ASSIGNED,
                     StreamThread.State.PARTITIONS_REVOKED);
@@ -421,12 +413,12 @@ public class KafkaStreamsTest {
             Assert.assertEquals(3, streamsStateListener.numChanges);
             Assert.assertEquals(KafkaStreams.State.REBALANCING, streams.state());
 
-            threadStatelistenerCapture.getValue().onChange(
+            threadStateListenerCapture.getValue().onChange(
                 streams.threads.get(NUM_THREADS - 1),
                 StreamThread.State.PENDING_SHUTDOWN,
                 StreamThread.State.PARTITIONS_ASSIGNED);
 
-            threadStatelistenerCapture.getValue().onChange(
+            threadStateListenerCapture.getValue().onChange(
                 streams.threads.get(NUM_THREADS - 1),
                 StreamThread.State.DEAD,
                 StreamThread.State.PENDING_SHUTDOWN);
@@ -436,7 +428,7 @@ public class KafkaStreamsTest {
 
             for (final StreamThread thread : streams.threads) {
                 if (thread != streams.threads.get(NUM_THREADS - 1)) {
-                    threadStatelistenerCapture.getValue().onChange(
+                    threadStateListenerCapture.getValue().onChange(
                         thread,
                         StreamThread.State.RUNNING,
                         StreamThread.State.PARTITIONS_ASSIGNED);
@@ -603,10 +595,13 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldNotAddThreadWhenError() {
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        // make sure we have the global state thread running too
+        final StreamsBuilder builder = getBuilderWithSource();
+        builder.globalTable("anyTopic");
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             final int oldSize = streams.threads.size();
             streams.start();
-            globalStreamThread.shutdown();
+            streams.globalStreamThread.shutdown();
             assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
             assertThat(streams.threads.size(), equalTo(oldSize));
         }
@@ -639,7 +634,8 @@ public class KafkaStreamsTest {
     @Test
     public void shouldNotRemoveThreadWhenNotRunning() {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams =
+                     new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             assertThat(streams.removeStreamThread(), equalTo(Optional.empty()));
             assertThat(streams.threads.size(), equalTo(1));
         }
@@ -831,18 +827,15 @@ public class KafkaStreamsTest {
     @Test
     public void shouldReturnEmptyLocalStorePartitionLags() {
         // Mock all calls made to compute the offset lags,
-        final ListOffsetsResult result = EasyMock.mock(ListOffsetsResult.class);
+        final ListOffsetsResult result = mock(ListOffsetsResult.class);
         final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
         allFuture.complete(Collections.emptyMap());
 
-        EasyMock.expect(result.all()).andReturn(allFuture);
-        final MockAdminClient mockAdminClient = EasyMock.partialMockBuilder(MockAdminClient.class)
-            .addMockedMethod("listOffsets", Map.class).createMock();
-        EasyMock.expect(mockAdminClient.listOffsets(anyObject())).andStubReturn(result);
-        final MockClientSupplier mockClientSupplier = EasyMock.partialMockBuilder(MockClientSupplier.class)
-            .addMockedMethod("getAdmin").createMock();
-        EasyMock.expect(mockClientSupplier.getAdmin(anyObject())).andReturn(mockAdminClient);
-        EasyMock.replay(result, mockAdminClient, mockClientSupplier);
+        when(result.all()).thenReturn(allFuture);
+        final MockAdminClient mockAdminClient = spy(MockAdminClient.class);
+        when(mockAdminClient.listOffsets(anyMap())).thenReturn(result);
+        final MockClientSupplier mockClientSupplier = spy(MockClientSupplier.class);
+        when(mockClientSupplier.getAdmin(any())).thenReturn(mockAdminClient);
 
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier, time)) {
             streams.start();
@@ -875,26 +868,26 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldTriggerRecordingOfRocksDBMetricsIfRecordingLevelIsDebug() {
-        PowerMock.mockStatic(Executors.class);
-        final ScheduledExecutorService cleanupSchedule = EasyMock.niceMock(ScheduledExecutorService.class);
+        final MockedStatic<Executors> executorsMockedStatic = mockStatic(Executors.class);
+        final ScheduledExecutorService cleanupSchedule = mock(ScheduledExecutorService.class, withSettings().lenient());
         final ScheduledExecutorService rocksDBMetricsRecordingTriggerThread =
-            EasyMock.mock(ScheduledExecutorService.class);
-        EasyMock.expect(Executors.newSingleThreadScheduledExecutor(
-            anyObject(ThreadFactory.class)
-        )).andReturn(cleanupSchedule);
-        EasyMock.expect(Executors.newSingleThreadScheduledExecutor(
-            anyObject(ThreadFactory.class)
-        )).andReturn(rocksDBMetricsRecordingTriggerThread);
-        EasyMock.expect(rocksDBMetricsRecordingTriggerThread.scheduleAtFixedRate(
-            EasyMock.anyObject(RocksDBMetricsRecordingTrigger.class),
-            EasyMock.eq(0L),
-            EasyMock.eq(1L),
-            EasyMock.eq(TimeUnit.MINUTES)
-        )).andReturn(null);
-        EasyMock.expect(rocksDBMetricsRecordingTriggerThread.shutdownNow()).andReturn(null);
-        PowerMock.replay(Executors.class);
-        PowerMock.replay(rocksDBMetricsRecordingTriggerThread);
-        PowerMock.replay(cleanupSchedule);
+            mock(ScheduledExecutorService.class);
+
+        executorsMockedStatic.when(() -> Executors.newSingleThreadScheduledExecutor(
+            any(ThreadFactory.class)
+        )).thenReturn(cleanupSchedule);
+        executorsMockedStatic.when(() -> Executors.newSingleThreadScheduledExecutor(
+            any(ThreadFactory.class)
+        )).thenReturn(rocksDBMetricsRecordingTriggerThread);
+
+        when(rocksDBMetricsRecordingTriggerThread.scheduleAtFixedRate(
+            any(RocksDBMetricsRecordingTrigger.class),
+            eq(0L),
+            eq(1L),
+            eq(TimeUnit.MINUTES)
+        )).thenReturn(null);
+
+        when(rocksDBMetricsRecordingTriggerThread.shutdownNow()).thenReturn(null);
 
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table("topic", Materialized.as("store"));
@@ -904,20 +897,15 @@ public class KafkaStreamsTest {
             streams.start();
         }
 
-        PowerMock.verify(Executors.class);
-        PowerMock.verify(rocksDBMetricsRecordingTriggerThread);
     }
 
     @Test
     public void shouldNotTriggerRecordingOfRocksDBMetricsIfRecordingLevelIsInfo() {
-        PowerMock.mockStatic(Executors.class);
-        final ScheduledExecutorService cleanupSchedule = EasyMock.niceMock(ScheduledExecutorService.class);
-        final ScheduledExecutorService rocksDBMetricsRecordingTriggerThread =
-            EasyMock.mock(ScheduledExecutorService.class);
-        EasyMock.expect(Executors.newSingleThreadScheduledExecutor(
-            anyObject(ThreadFactory.class)
-        )).andReturn(cleanupSchedule);
-        PowerMock.replay(Executors.class, rocksDBMetricsRecordingTriggerThread, cleanupSchedule);
+        final MockedStatic<Executors> executorsMockedStatic = mockStatic(Executors.class);
+        final ScheduledExecutorService cleanupSchedule = mock(ScheduledExecutorService.class, withSettings().lenient());
+        final ScheduledExecutorService rocksDBMetricsRecordingTriggerThread = mock(ScheduledExecutorService.class);
+        executorsMockedStatic.when(() ->
+                Executors.newSingleThreadScheduledExecutor(any(ThreadFactory.class))).thenReturn(cleanupSchedule);
 
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table("topic", Materialized.as("store"));
@@ -927,32 +915,25 @@ public class KafkaStreamsTest {
             streams.start();
         }
 
-        PowerMock.verify(Executors.class, rocksDBMetricsRecordingTriggerThread);
+        executorsMockedStatic.close();
     }
 
     @Test
     public void shouldCleanupOldStateDirs() throws Exception {
-        PowerMock.mockStatic(Executors.class);
-        final ScheduledExecutorService cleanupSchedule = EasyMock.mock(ScheduledExecutorService.class);
-        EasyMock.expect(Executors.newSingleThreadScheduledExecutor(
-            anyObject(ThreadFactory.class)
-        )).andReturn(cleanupSchedule).anyTimes();
-        EasyMock.expect(cleanupSchedule.scheduleAtFixedRate(
-            EasyMock.anyObject(Runnable.class),
-            EasyMock.eq(1L),
-            EasyMock.eq(1L),
-            EasyMock.eq(TimeUnit.MILLISECONDS)
-        )).andReturn(null);
-        EasyMock.expect(cleanupSchedule.shutdownNow()).andReturn(null);
-        PowerMock.expectNew(StateDirectory.class,
-            anyObject(StreamsConfig.class),
-            anyObject(Time.class),
-            EasyMock.eq(true),
-            anyBoolean()
-        ).andReturn(stateDirectory);
-        EasyMock.expect(stateDirectory.initializeProcessId()).andReturn(UUID.randomUUID());
-        stateDirectory.close();
-        PowerMock.replayAll(Executors.class, cleanupSchedule, stateDirectory);
+        final MockedStatic<Executors> executorsMockedStatic = mockStatic(Executors.class);
+        final ScheduledExecutorService cleanupSchedule = mock(ScheduledExecutorService.class);
+        executorsMockedStatic.when(() -> Executors.newSingleThreadScheduledExecutor(
+            any(ThreadFactory.class)
+        )).thenReturn(cleanupSchedule);
+        when(cleanupSchedule.scheduleAtFixedRate(
+            any(Runnable.class),
+            eq(1L),
+            eq(1L),
+            eq(TimeUnit.MILLISECONDS)
+        )).thenReturn(null);
+        when(cleanupSchedule.shutdownNow()).thenReturn(null);
+        final MockedConstruction<StateDirectory> stateDirectoryMockedConstruction = mockConstruction(StateDirectory.class,
+                (mock, context) -> when(mock.initializeProcessId()).thenReturn(UUID.randomUUID()));
 
         props.setProperty(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG, "1");
         final StreamsBuilder builder = new StreamsBuilder();
@@ -961,8 +942,8 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.start();
         }
-
-        PowerMock.verify(Executors.class, cleanupSchedule);
+        executorsMockedStatic.close();
+        stateDirectoryMockedConstruction.close();
     }
 
     @Test
@@ -988,7 +969,8 @@ public class KafkaStreamsTest {
                     }
                 }, "source")
                 .addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "process");
-        startStreamsAndCheckDirExists(topology, false);
+        startStreamsAndCheckDirExists(topology);
+        stateDirectoryMockedConstruction.close();
     }
 
     @Test
@@ -1000,7 +982,8 @@ public class KafkaStreamsTest {
         final String storeName = safeTestName + "-counts";
         final String globalStoreName = safeTestName + "-globalStore";
         final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, false);
-        startStreamsAndCheckDirExists(topology, false);
+        startStreamsAndCheckDirExists(topology);
+        stateDirectoryMockedConstruction.close();
     }
 
     @Test
@@ -1012,7 +995,8 @@ public class KafkaStreamsTest {
         final String storeName = safeTestName + "-counts";
         final String globalStoreName = safeTestName + "-globalStore";
         final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, true);
-        startStreamsAndCheckDirExists(topology, true);
+        startStreamsAndCheckDirExists(topology);
+        stateDirectoryMockedConstruction.close();
     }
 
     @Test
@@ -1115,20 +1099,10 @@ public class KafkaStreamsTest {
         return builder;
     }
 
-    private void startStreamsAndCheckDirExists(final Topology topology,
-                                               final boolean shouldFilesExist) throws Exception {
-        PowerMock.expectNew(StateDirectory.class,
-            anyObject(StreamsConfig.class),
-            anyObject(Time.class),
-            EasyMock.eq(shouldFilesExist),
-            anyBoolean()
-        ).andReturn(stateDirectory);
-        EasyMock.expect(stateDirectory.initializeProcessId()).andReturn(UUID.randomUUID());
-
-        PowerMock.replayAll();
+    private void startStreamsAndCheckDirExists(final Topology topology) {
+        stateDirectoryMockedConstruction = mockConstruction(StateDirectory.class,
+                (mock, context) -> when(mock.initializeProcessId()).thenReturn(UUID.randomUUID()));
 
         new KafkaStreams(topology, props, supplier, time);
-
-        PowerMock.verifyAll();
     }
 }

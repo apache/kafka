@@ -939,6 +939,11 @@ public class KafkaStreams implements AutoCloseable {
         return streamThread;
     }
 
+    //For KafkaStreamsTest
+    public static Metrics createThisMetrics(final MetricConfig metricConfig, final List<MetricsReporter> reporters, final Time time, final MetricsContext metricsContext) {
+        return new Metrics(metricConfig, reporters, time, metricsContext);
+    }
+
     private static Metrics getMetrics(final StreamsConfig config, final Time time, final String clientId) {
         final MetricConfig metricConfig = new MetricConfig()
             .samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -952,7 +957,7 @@ public class KafkaStreams implements AutoCloseable {
         reporters.add(jmxReporter);
         final MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                                                                       config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
-        return new Metrics(metricConfig, reporters, time, metricsContext);
+        return createThisMetrics(metricConfig, reporters, time, metricsContext);
     }
 
     private int getNumStreamThreads(final boolean hasGlobalTopology) {
@@ -1066,7 +1071,7 @@ public class KafkaStreams implements AutoCloseable {
                 // make a copy of threads to avoid holding lock
                 for (final StreamThread streamThread : new ArrayList<>(threads)) {
                     final boolean callingThreadIsNotCurrentStreamThread = !streamThread.getName().equals(Thread.currentThread().getName());
-                    if (streamThread.isAlive() && (callingThreadIsNotCurrentStreamThread || getNumLiveStreamThreads() == 1)) {
+                    if (streamThread.getIsAlive() && (callingThreadIsNotCurrentStreamThread || getNumLiveStreamThreads() == 1)) {
                         log.info("Removing StreamThread " + streamThread.getName());
                         final Optional<String> groupInstanceID = streamThread.getGroupInstanceID();
                         streamThread.requestLeaveGroupDuringShutdown();
