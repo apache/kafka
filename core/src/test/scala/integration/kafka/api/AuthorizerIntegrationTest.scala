@@ -1446,40 +1446,23 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val offset = 15L
     val leaderEpoch: Optional[Integer] = Optional.of(1)
     val metadata = "metadata"
-    val topicOneOffsets = topic1List.asScala.map {
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
-    val topicOneAndTwoOffsets = topic1And2List.asScala.map {
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
-    val allTopicOffsets = allTopicsList.asScala.map {
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
 
-    // create 5 consumers to commit offsets so we can fetch them later
-
-    def commitOffsets(tpList: util.List[TopicPartition],
-                      offsets: util.Map[TopicPartition, OffsetAndMetadata]): Unit = {
+    def commitOffsets(tpList: util.List[TopicPartition]): Unit = {
       val consumer = createConsumer()
       consumer.assign(tpList)
+      val offsets = tpList.asScala.map{
+        tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
+      }.toMap.asJava
       consumer.commitSync(offsets)
       consumer.close()
     }
 
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(0))
-    commitOffsets(topic1List, topicOneOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(1))
-    commitOffsets(topic1And2List, topicOneAndTwoOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(2))
-    commitOffsets(allTopicsList, allTopicOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(3))
-    commitOffsets(allTopicsList, allTopicOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(4))
-    commitOffsets(allTopicsList, allTopicOffsets)
+    // create 5 consumers to commit offsets so we can fetch them later
+    val partitionMap = groupToPartitionMap.asScala.map(e => (e._1, Option(e._2).getOrElse(allTopicsList)))
+    groups.foreach { groupId =>
+      consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+      commitOffsets(partitionMap(groupId))
+    }
 
     removeAllClientAcls()
 
@@ -1572,24 +1555,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     // from the offsetFetch response
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResources(2))
     offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    offsetFetchResponse.data().groups().forEach(g =>
-      g.groupId() match {
-        case "group1" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(0)), offsetFetchResponse
-            .partitionDataMap(groups(0)), topic1List)
-        case "group2" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(1)), offsetFetchResponse
-            .partitionDataMap(groups(1)), topic1And2List)
-        case "group3" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(2)), offsetFetchResponse
-            .partitionDataMap(groups(2)), allTopicsList)
-        case "group4" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(3)), offsetFetchResponse
-            .partitionDataMap(groups(3)), allTopicsList)
-        case "group5" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(4)), offsetFetchResponse
-            .partitionDataMap(groups(4)), allTopicsList)
-      })
+    offsetFetchResponse.data.groups.asScala.map(_.groupId).foreach( groupId =>
+      verifyResponse(offsetFetchResponse.groupLevelError(groupId), offsetFetchResponse.partitionDataMap(groupId), partitionMap(groupId))
+    )
   }
 
   @Test
