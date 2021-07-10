@@ -31,6 +31,7 @@ import kafka.metrics.KafkaYammerMetrics
 import kafka.network.SocketServer
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
+import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, SnapshotWriterBuilder}
 import kafka.utils.{CoreUtils, KafkaScheduler}
 import org.apache.kafka.snapshot.SnapshotWriter
@@ -145,7 +146,7 @@ class BrokerServer(
 
   val clusterId: String = metaProps.clusterId
 
-  var metadataSnapshotter: BrokerMetadataSnapshotter = null
+  var metadataSnapshotter: Option[BrokerMetadataSnapshotter] = None
 
   var metadataListener: BrokerMetadataListener = null
 
@@ -289,10 +290,16 @@ class BrokerServer(
         ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
 
-      metadataSnapshotter = new BrokerMetadataSnapshotter(config.nodeId,
-                                                          time,
-                                                          threadNamePrefix,
-                                                          new BrokerSnapshotWriterBuilder(raftManager.client))
+      if (!config.processRoles.contains(ControllerRole)) {
+        // If no controller is defined, we rely on the broker to generate snapshots.
+        metadataSnapshotter = Some(new BrokerMetadataSnapshotter(
+          config.nodeId,
+          time,
+          threadNamePrefix,
+          new BrokerSnapshotWriterBuilder(raftManager.client)
+        ))
+      }
+
       metadataListener = new BrokerMetadataListener(config.nodeId,
                                                     time,
                                                     threadNamePrefix,
@@ -437,9 +444,8 @@ class BrokerServer(
       if (metadataListener !=  null) {
         CoreUtils.swallow(metadataListener.close(), this)
       }
-      if (metadataSnapshotter !=  null) {
-        CoreUtils.swallow(metadataSnapshotter.close(), this)
-      }
+      metadataSnapshotter.foreach(snapshotter => CoreUtils.swallow(snapshotter.close(), this))
+
       if (transactionCoordinator != null)
         CoreUtils.swallow(transactionCoordinator.shutdown(), this)
       if (groupCoordinator != null)

@@ -39,7 +39,7 @@ class BrokerMetadataListener(
   time: Time,
   threadNamePrefix: Option[String],
   val maxBytesBetweenSnapshots: Long,
-  val snapshotter: MetadataSnapshotter
+  val snapshotter: Option[MetadataSnapshotter]
 ) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
   private val logContext = new LogContext(s"[BrokerMetadataListener id=${brokerId}] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])
@@ -121,14 +121,17 @@ class BrokerMetadataListener(
       } finally {
         reader.close()
       }
-      _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
       _publisher.foreach(publish(_, results.highestMetadataOffset))
-      if (shouldSnapshot()) {
-        if (snapshotter.maybeStartSnapshot(results.highestMetadataOffset,
-                                           _highestEpoch,
-                                           _highestTimestamp,
-                                           _delta.apply())) {
-          _bytesSinceLastSnapshot = 0L
+
+      snapshotter.foreach { snapshotter =>
+        _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
+        if (shouldSnapshot()) {
+          if (snapshotter.maybeStartSnapshot(results.highestMetadataOffset,
+            _highestEpoch,
+            _highestTimestamp,
+            _delta.apply())) {
+            _bytesSinceLastSnapshot = 0L
+          }
         }
       }
     }
