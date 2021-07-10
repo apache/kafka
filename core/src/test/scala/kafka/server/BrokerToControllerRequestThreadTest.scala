@@ -232,11 +232,11 @@ class BrokerToControllerRequestThreadTest {
 
     when(controllerNodeProvider.get()).thenReturn(Some(oldController), Some(newController))
 
-    // create an envelopeResponse with Not Controller error
+    // create an envelopeResponse with NOT_CONTROLLER error
     val envelopeResponseWithNotControllerError = new EnvelopeResponse(
       new EnvelopeResponseData().setErrorCode(Errors.NOT_CONTROLLER.code()))
 
-    // response for retry request after receiving Not_Controller error
+    // response for retry request after receiving NOT_CONTROLLER error
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
 
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
@@ -269,7 +269,7 @@ class BrokerToControllerRequestThreadTest {
       body.isInstanceOf[EnvelopeRequest]
     }, envelopeResponseWithNotControllerError)
     testRequestThread.doWork()
-    // expect to reset the activeControllerAddress after finding the NotControllerError
+    // expect to reset the activeControllerAddress after finding the NOT_CONTROLLER error
     assertEquals(None, testRequestThread.activeControllerAddress())
     // reinitialize the controller to a different node
     testRequestThread.doWork()

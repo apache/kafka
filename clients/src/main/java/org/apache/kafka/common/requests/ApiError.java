@@ -39,12 +39,9 @@ public class ApiError {
 
     public static ApiError fromThrowable(Throwable t) {
         Throwable throwableToBeEncoded = t;
-        // Get the original cause from `CompletionException` and `ExecutionException`, otherwise, it will return unexpected UNKNOWN_SERVER_ERROR.
-        // CompletableFuture  will wrap the original cause within `CompletionException` when it completes exceptionally
-        // Future#get might also wrap the original cause inside `ExecutionException` when the async call throws exception
-        // ex: In KRaft mode, we'll forward the API request to active controller with Envelope request, when the Envelope request
-        // has exception thrown (ex: Not_Controller exception), we'll get `CompletableFuture` with real cause inside.
-        // To get the correct ApiError, we should unwrap the `CompletableFuture`, so that the requester can handle the error accordingly.
+        // Get the underlying cause for common exception types from the concurrent library.
+        // This is useful to handle cases where exceptions may be raised from a future or a
+        // completion stage (as might be the case for requests sent to the controller in `ControllerApis`)
         if (t instanceof CompletionException || t instanceof ExecutionException) {
             throwableToBeEncoded = t.getCause();
         }
