@@ -392,6 +392,44 @@ public class KafkaProducerTest {
         };
     }
 
+    @Test(timeout = 10000)
+    public void testFlushInCallbackNotCauseDeadlock() {
+        Cluster oneLeaderCluster = new Cluster(
+                "dummy",
+                nodes,
+                Collections.singletonList(new PartitionInfo(topic, 0, host1, null, null)),
+                Collections.emptySet(),
+                Collections.emptySet());
+
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+
+        when(metadata.fetch()).thenReturn(emptyCluster, oneLeaderCluster);
+
+        Time time = new MockTime();
+        MockClient mockClient = new MockClient(time, metadata);
+        mockClient.prepareResponse(null);
+
+        AtomicReference<Exception> exceptionThrow = new AtomicReference<>();
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs,
+                new StringSerializer(), new StringSerializer(), metadata, mockClient, null, time)) {
+
+            ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
+            producer.send(record, (metadata1, exception) -> {
+                try {
+                    producer.flush();
+                } catch (Exception e) {
+                    exceptionThrow.set(e);
+                }
+            });
+        }
+
+        Assert.assertNotNull(exceptionThrow.get());
+        Assert.assertEquals(IllegalStateException.class, exceptionThrow.get().getClass());
+
+    }
+
     @Test
     public void testMetadataFetch() throws InterruptedException {
         Map<String, Object> configs = new HashMap<>();
