@@ -86,7 +86,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def shouldExitWithNonZeroStatusOnZkCommandAlterUserQuota(): Unit = {
     assertNonZeroStatusExit(Array(
-      "--bootstrap-server", "localhost:9092",
+      "--zookeeper", zkConnect,
       "--entity-type", "users",
       "--entity-name", "admin",
       "--alter", "--add-config", "consumer_byte_rate=20000"))
@@ -340,39 +340,51 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     assertEquals("[[1, 2], [3, 4]]", addedProps.getProperty("nested"))
   }
 
-  def doTestOptionEntityTypeNames(): Unit = {
+  def doTestOptionEntityTypeNames(zkConfig: Boolean): Unit = {
+    val connectOpts = if (zkConfig)
+      ("--zookeeper", zkConnect)
+    else
+      ("--bootstrap-server", "localhost:9092")
+
     def testExpectedEntityTypeNames(expectedTypes: List[String], expectedNames: List[String], args: String*): Unit = {
-      val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092", "--describe") ++ args)
+      val createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2, "--describe") ++ args)
       createOpts.checkArgs()
       assertEquals(createOpts.entityTypes, expectedTypes)
       assertEquals(createOpts.entityNames, expectedNames)
     }
 
-    testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--entity-type", "topics", "--entity-name", "A")
+    // zookeeper config only supports "users" and "brokers" entity type
+    if (!zkConfig) {
+      testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--entity-type", "topics", "--entity-name", "A")
+      testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--entity-name", "1.2.3.4", "--entity-type", "ips")
+      testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("A", ""),
+        "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default")
+      testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("", "B"),
+        "--entity-default", "--entity-name", "B", "--entity-type", "users", "--entity-type", "clients")
+      testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--topic", "A")
+      testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--ip", "1.2.3.4")
+      testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", "A"), "--client", "B", "--user", "A")
+      testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", ""), "--client", "B", "--user-defaults")
+      testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("A"),
+        "--entity-type", "clients", "--entity-type", "users", "--entity-name", "A")
+      testExpectedEntityTypeNames(List(ConfigType.Topic), List.empty, "--entity-type", "topics")
+      testExpectedEntityTypeNames(List(ConfigType.Ip), List.empty, "--entity-type", "ips")
+    }
+
     testExpectedEntityTypeNames(List(ConfigType.Broker), List("0"), "--entity-name", "0", "--entity-type", "brokers")
-    testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--entity-name", "1.2.3.4", "--entity-type", "ips")
-    testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("A", ""),
-      "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default")
-    testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("", "B"),
-      "--entity-default", "--entity-name", "B", "--entity-type", "users", "--entity-type", "clients")
-
-    testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--topic", "A")
     testExpectedEntityTypeNames(List(ConfigType.Broker), List("0"), "--broker", "0")
-    testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--ip", "1.2.3.4")
-    testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", "A"), "--client", "B", "--user", "A")
-    testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", ""), "--client", "B", "--user-defaults")
-    testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("A"),
-      "--entity-type", "clients", "--entity-type", "users", "--entity-name", "A")
-
-    testExpectedEntityTypeNames(List(ConfigType.Topic), List.empty, "--entity-type", "topics")
     testExpectedEntityTypeNames(List(ConfigType.User), List.empty, "--entity-type", "users")
     testExpectedEntityTypeNames(List(ConfigType.Broker), List.empty, "--entity-type", "brokers")
-    testExpectedEntityTypeNames(List(ConfigType.Ip), List.empty, "--entity-type", "ips")
+  }
+
+  @Test
+  def testOptionEntityTypeNamesUsingZookeeper(): Unit = {
+    doTestOptionEntityTypeNames(zkConfig = true)
   }
 
   @Test
   def testOptionEntityTypeNames(): Unit = {
-    doTestOptionEntityTypeNames()
+    doTestOptionEntityTypeNames(zkConfig = false)
   }
 
   @Test
@@ -1017,7 +1029,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", "brokers",
       "--alter",
-      "--add-config", "message.max.bytes=10") ++ resourceOpts
+      "--add-config", "message.max.bytes=10,leader.replication.throttled.rate=10") ++ resourceOpts
     val alterOpts = new ConfigCommandOptions(optsList.toArray)
     val brokerConfigs = mutable.Map[String, String]("num.io.threads" -> "5")
 
@@ -1055,7 +1067,8 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     }
     EasyMock.replay(alterResult, describeResult)
     ConfigCommand.alterConfig(mockAdminClient, alterOpts)
-    assertEquals(Map("message.max.bytes" -> "10", "num.io.threads" -> "5"), brokerConfigs.toMap)
+    assertEquals(Map("message.max.bytes" -> "10", "num.io.threads" -> "5", "leader.replication.throttled.rate" -> "10"),
+      brokerConfigs.toMap)
     EasyMock.reset(alterResult, describeResult)
   }
 

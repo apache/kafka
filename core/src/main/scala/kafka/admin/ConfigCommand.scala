@@ -874,7 +874,8 @@ object ConfigCommand extends Config {
 
       if (options.has(zkTlsConfigFile) && options.has(bootstrapServerOpt)) {
         throw new IllegalArgumentException("--bootstrap-server doesn't support --zk-tls-config-file option. " +
-          "Please use --zookeeper option instead")
+          "If you are trying to update the ZooKeeper TLS configuration, please use --zookeeper option instead. " +
+          "Otherwise, Please remove --zk-tls-config-file option.")
       }
 
       if (hasEntityName && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
