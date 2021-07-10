@@ -74,15 +74,14 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   val authHelper = new AuthHelper(authorizer)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
-  private[server] val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
-  private var _isClosed = false
+  private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
 
-  def isClosed: Boolean = _isClosed
+  def isClosed: Boolean = aclApis.isClosed
 
-  def close(): Unit = try {
+  def close(): Unit = {
     aclApis.close()
     info("Shutdown complete.")
-  } finally _isClosed = true
+  }
 
   override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     try {

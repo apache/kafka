@@ -268,7 +268,6 @@ class ControllerApisTest {
     val apis = createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller]))
     apis.close()
     assertTrue(apis.isClosed)
-    assertTrue(apis.aclApis.isClosed)
   }
 
   @Test
