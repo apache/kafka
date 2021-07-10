@@ -116,7 +116,13 @@ public final class Snapshots {
         Path immutablePath = snapshotPath(logDir, snapshotId);
         Path deletedPath = deleteRename(immutablePath, snapshotId);
         try {
-            return Files.deleteIfExists(immutablePath) | Files.deleteIfExists(deletedPath);
+            boolean deleted = Files.deleteIfExists(immutablePath) | Files.deleteIfExists(deletedPath);
+            if (deleted) {
+                log.info("Deleted snapshot files for snapshot {}.", snapshotId);
+            } else {
+                log.info("Did not delete snapshot files for snapshot {} since they did not exist.", snapshotId);
+            }
+            return deleted;
         } catch (IOException e) {
             log.error("Error deleting snapshot files {} and {}", immutablePath, deletedPath, e);
             return false;

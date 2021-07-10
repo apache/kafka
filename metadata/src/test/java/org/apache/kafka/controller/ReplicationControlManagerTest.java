@@ -185,7 +185,7 @@ public class ReplicationControlManagerTest {
         assertEquals(expectedResponse2, result2.response());
         ctx.replay(result2.records());
         assertEquals(new PartitionRegistration(new int[] {1, 2, 0},
-            new int[] {1, 2, 0}, null, null, 1, 0, 0),
+            new int[] {1, 2, 0}, Replicas.NONE, Replicas.NONE, 1, 0, 0),
             replicationControl.getPartition(
                 ((TopicRecord) result2.records().get(0).message()).topicId(), 0));
         ControllerResult<CreateTopicsResponseData> result3 =
@@ -200,10 +200,10 @@ public class ReplicationControlManagerTest {
             Arrays.asList(new ApiMessageAndVersion(new PartitionRecord().
                     setPartitionId(0).setTopicId(fooId).
                     setReplicas(Arrays.asList(1, 2, 0)).setIsr(Arrays.asList(1, 2, 0)).
-                    setRemovingReplicas(null).setAddingReplicas(null).setLeader(1).
-                    setLeaderEpoch(0).setPartitionEpoch(0), (short) 1),
+                    setRemovingReplicas(Collections.emptyList()).setAddingReplicas(Collections.emptyList()).setLeader(1).
+                    setLeaderEpoch(0).setPartitionEpoch(0), (short) 0),
                 new ApiMessageAndVersion(new TopicRecord().
-                    setTopicId(fooId).setName("foo"), (short) 1))),
+                    setTopicId(fooId).setName("foo"), (short) 0))),
             ctx.replicationControl.iterator(Long.MAX_VALUE));
     }
 

@@ -66,7 +66,7 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        TransformationChain that = (TransformationChain) o;
+        TransformationChain<?> that = (TransformationChain<?>) o;
         return Objects.equals(transformations, that.transformations);
     }
 

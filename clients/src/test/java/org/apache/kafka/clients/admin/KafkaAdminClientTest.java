@@ -22,7 +22,6 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -32,6 +31,7 @@ import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
@@ -127,14 +127,12 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.record.RecordVersion;
-import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
@@ -254,6 +252,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Timeout(120)
 public class KafkaAdminClientTest {
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClientTest.class);
+    private static final String GROUP_ID = "group-0";
 
     @Test
     public void testDefaultApiTimeoutAndRequestTimeoutConflicts() {
@@ -478,7 +477,15 @@ public class KafkaAdminClientTest {
     }
 
     private static FindCoordinatorResponse prepareFindCoordinatorResponse(Errors error, Node node) {
-        return FindCoordinatorResponse.prepareResponse(error, node);
+        return prepareFindCoordinatorResponse(error, GROUP_ID, node);
+    }
+
+    private static FindCoordinatorResponse prepareFindCoordinatorResponse(Errors error, String key, Node node) {
+        return FindCoordinatorResponse.prepareResponse(error, key, node);
+    }
+
+    private static FindCoordinatorResponse prepareOldFindCoordinatorResponse(Errors error, Node node) {
+        return FindCoordinatorResponse.prepareOldResponse(error, node);
     }
 
     private static MetadataResponse prepareMetadataResponse(Cluster cluster, Errors error) {
@@ -921,21 +928,21 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId),
                     prepareDeleteTopicsResponseWithTopicId(topicId, Errors.NONE));
-            future = env.adminClient().deleteTopicsWithIds(singletonList(topicId),
+            future = env.adminClient().deleteTopics(TopicCollection.ofTopicIds(singletonList(topicId)),
                     new DeleteTopicsOptions()).all();
             assertNull(future.get());
 
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId),
                     prepareDeleteTopicsResponseWithTopicId(topicId, Errors.TOPIC_DELETION_DISABLED));
-            future = env.adminClient().deleteTopicsWithIds(singletonList(topicId),
+            future = env.adminClient().deleteTopics(TopicCollection.ofTopicIds(singletonList(topicId)),
                     new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, TopicDeletionDisabledException.class);
 
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId),
                     prepareDeleteTopicsResponseWithTopicId(topicId, Errors.UNKNOWN_TOPIC_ID));
-            future = env.adminClient().deleteTopicsWithIds(singletonList(topicId),
+            future = env.adminClient().deleteTopics(TopicCollection.ofTopicIds(singletonList(topicId)),
                     new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, UnknownTopicIdException.class);
         }
@@ -955,8 +962,8 @@ public class KafkaAdminClientTest {
             DeleteTopicsResult result = env.adminClient().deleteTopics(
                 asList("myTopic", "myOtherTopic"), new DeleteTopicsOptions());
 
-            result.values().get("myTopic").get();
-            TestUtils.assertFutureThrows(result.values().get("myOtherTopic"), ApiException.class);
+            result.topicNameValues().get("myTopic").get();
+            TestUtils.assertFutureThrows(result.topicNameValues().get("myOtherTopic"), ApiException.class);
             
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
@@ -966,11 +973,11 @@ public class KafkaAdminClientTest {
                     prepareDeleteTopicsResponse(1000,
                             deletableTopicResultWithId(topicId1, Errors.NONE)));
 
-            DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
-                    asList(topicId1, topicId2), new DeleteTopicsOptions());
+            DeleteTopicsResult resultIds = env.adminClient().deleteTopics(
+                    TopicCollection.ofTopicIds(asList(topicId1, topicId2)), new DeleteTopicsOptions());
 
-            resultIds.values().get(topicId1).get();
-            TestUtils.assertFutureThrows(resultIds.values().get(topicId2), ApiException.class);
+            resultIds.topicIdValues().get(topicId1).get();
+            TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId2), ApiException.class);
         }
     }
 
@@ -1000,9 +1007,9 @@ public class KafkaAdminClientTest {
                 asList("topic1", "topic2", "topic3"),
                 new DeleteTopicsOptions().retryOnQuotaViolation(true));
 
-            assertNull(result.values().get("topic1").get());
-            assertNull(result.values().get("topic2").get());
-            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+            assertNull(result.topicNameValues().get("topic1").get());
+            assertNull(result.topicNameValues().get("topic2").get());
+            TestUtils.assertFutureThrows(result.topicNameValues().get("topic3"), TopicExistsException.class);
             
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
@@ -1026,13 +1033,13 @@ public class KafkaAdminClientTest {
                     prepareDeleteTopicsResponse(0,
                             deletableTopicResultWithId(topicId2, Errors.NONE)));
 
-            DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
-                    asList(topicId1, topicId2, topicId3),
+            DeleteTopicsResult resultIds = env.adminClient().deleteTopics(
+                    TopicCollection.ofTopicIds(asList(topicId1, topicId2, topicId3)),
                     new DeleteTopicsOptions().retryOnQuotaViolation(true));
 
-            assertNull(resultIds.values().get(topicId1).get());
-            assertNull(resultIds.values().get(topicId2).get());
-            TestUtils.assertFutureThrows(resultIds.values().get(topicId3), UnknownTopicIdException.class);
+            assertNull(resultIds.topicIdValues().get(topicId1).get());
+            assertNull(resultIds.topicIdValues().get(topicId2).get());
+            TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId3), UnknownTopicIdException.class);
         }
     }
 
@@ -1073,11 +1080,11 @@ public class KafkaAdminClientTest {
             // Advance time past the default api timeout to time out the inflight request
             time.sleep(defaultApiTimeout + 1);
 
-            assertNull(result.values().get("topic1").get());
-            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.values().get("topic2"),
+            assertNull(result.topicNameValues().get("topic1").get());
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.topicNameValues().get("topic2"),
                 ThrottlingQuotaExceededException.class);
             assertEquals(0, e.throttleTimeMs());
-            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+            TestUtils.assertFutureThrows(result.topicNameValues().get("topic3"), TopicExistsException.class);
             
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
@@ -1095,8 +1102,8 @@ public class KafkaAdminClientTest {
                     prepareDeleteTopicsResponse(1000,
                             deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED)));
 
-            DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
-                    asList(topicId1, topicId2, topicId3),
+            DeleteTopicsResult resultIds = env.adminClient().deleteTopics(
+                    TopicCollection.ofTopicIds(asList(topicId1, topicId2, topicId3)),
                     new DeleteTopicsOptions().retryOnQuotaViolation(true));
 
             // Wait until the prepared attempts have consumed
@@ -1110,11 +1117,11 @@ public class KafkaAdminClientTest {
             // Advance time past the default api timeout to time out the inflight request
             time.sleep(defaultApiTimeout + 1);
 
-            assertNull(resultIds.values().get(topicId1).get());
-            e = TestUtils.assertFutureThrows(resultIds.values().get(topicId2),
+            assertNull(resultIds.topicIdValues().get(topicId1).get());
+            e = TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId2),
                     ThrottlingQuotaExceededException.class);
             assertEquals(0, e.throttleTimeMs());
-            TestUtils.assertFutureThrows(resultIds.values().get(topicId3), UnknownTopicIdException.class);
+            TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId3), UnknownTopicIdException.class);
         }
     }
 
@@ -1134,11 +1141,11 @@ public class KafkaAdminClientTest {
                 asList("topic1", "topic2", "topic3"),
                 new DeleteTopicsOptions().retryOnQuotaViolation(false));
 
-            assertNull(result.values().get("topic1").get());
-            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.values().get("topic2"),
+            assertNull(result.topicNameValues().get("topic1").get());
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.topicNameValues().get("topic2"),
                 ThrottlingQuotaExceededException.class);
             assertEquals(1000, e.throttleTimeMs());
-            TestUtils.assertFutureError(result.values().get("topic3"), TopicExistsException.class);
+            TestUtils.assertFutureError(result.topicNameValues().get("topic3"), TopicExistsException.class);
 
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
@@ -1151,15 +1158,15 @@ public class KafkaAdminClientTest {
                             deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED),
                             deletableTopicResultWithId(topicId3, Errors.UNKNOWN_TOPIC_ID)));
 
-            DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
-                    asList(topicId1, topicId2, topicId3),
+            DeleteTopicsResult resultIds = env.adminClient().deleteTopics(
+                    TopicCollection.ofTopicIds(asList(topicId1, topicId2, topicId3)),
                     new DeleteTopicsOptions().retryOnQuotaViolation(false));
 
-            assertNull(resultIds.values().get(topicId1).get());
-            e = TestUtils.assertFutureThrows(resultIds.values().get(topicId2),
+            assertNull(resultIds.topicIdValues().get(topicId1).get());
+            e = TestUtils.assertFutureThrows(resultIds.topicIdValues().get(topicId2),
                     ThrottlingQuotaExceededException.class);
             assertEquals(1000, e.throttleTimeMs());
-            TestUtils.assertFutureError(resultIds.values().get(topicId3), UnknownTopicIdException.class);
+            TestUtils.assertFutureError(resultIds.topicIdValues().get(topicId3), UnknownTopicIdException.class);
         }
     }
 
@@ -1189,7 +1196,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             List<String> sillyTopicNames = asList("", null);
-            Map<String, KafkaFuture<Void>> deleteFutures = env.adminClient().deleteTopics(sillyTopicNames).values();
+            Map<String, KafkaFuture<Void>> deleteFutures = env.adminClient().deleteTopics(sillyTopicNames).topicNameValues();
             for (String sillyTopicName : sillyTopicNames) {
                 TestUtils.assertFutureError(deleteFutures.get(sillyTopicName), InvalidTopicException.class);
             }
@@ -2522,7 +2529,6 @@ public class KafkaAdminClientTest {
             AdminClientConfig.RETRIES_CONFIG, "0")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            final String groupId = "group-0";
             final TopicPartition tp1 = new TopicPartition("foo", 0);
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
@@ -2531,7 +2537,7 @@ public class KafkaAdminClientTest {
 
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
             offsets.put(tp1, new OffsetAndMetadata(123L));
-            final AlterConsumerGroupOffsetsResult result = env.adminClient().alterConsumerGroupOffsets(groupId, offsets);
+            final AlterConsumerGroupOffsetsResult result = env.adminClient().alterConsumerGroupOffsets(GROUP_ID, offsets);
 
             TestUtils.assertFutureError(result.all(), TimeoutException.class);
         }
@@ -2552,7 +2558,6 @@ public class KafkaAdminClientTest {
             AtomicLong firstAttemptTime = new AtomicLong(0);
             AtomicLong secondAttemptTime = new AtomicLong(0);
 
-            final String groupId = "group-0";
             final TopicPartition tp1 = new TopicPartition("foo", 0);
 
             mockClient.prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
@@ -2571,7 +2576,7 @@ public class KafkaAdminClientTest {
 
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
             offsets.put(tp1, new OffsetAndMetadata(123L));
-            final KafkaFuture<Void> future = env.adminClient().alterConsumerGroupOffsets(groupId, offsets).all();
+            final KafkaFuture<Void> future = env.adminClient().alterConsumerGroupOffsets(GROUP_ID, offsets).all();
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting CommitOffsets first request failure");
             TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry CommitOffsets call on first failure");
@@ -2598,7 +2603,7 @@ public class KafkaAdminClientTest {
             DescribeGroupsResponseData data = new DescribeGroupsResponseData();
 
             data.groups().add(DescribeGroupsResponse.groupMetadata(
-                "group-0",
+                GROUP_ID,
                 Errors.NOT_COORDINATOR,
                 "",
                 "",
@@ -2608,7 +2613,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
+            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList(GROUP_ID));
 
             TestUtils.assertFutureError(result.all(), TimeoutException.class);
         }
@@ -2633,7 +2638,7 @@ public class KafkaAdminClientTest {
 
             DescribeGroupsResponseData data = new DescribeGroupsResponseData();
             data.groups().add(DescribeGroupsResponse.groupMetadata(
-                "group-0",
+                GROUP_ID,
                 Errors.NOT_COORDINATOR,
                 "",
                 "",
@@ -2650,7 +2655,7 @@ public class KafkaAdminClientTest {
 
             data = new DescribeGroupsResponseData();
             data.groups().add(DescribeGroupsResponse.groupMetadata(
-                "group-0",
+                GROUP_ID,
                 Errors.NONE,
                 "",
                 ConsumerProtocol.PROTOCOL_TYPE,
@@ -2664,7 +2669,7 @@ public class KafkaAdminClientTest {
             }, new DescribeGroupsResponse(data));
 
             final KafkaFuture<Map<String, ConsumerGroupDescription>> future =
-                env.adminClient().describeConsumerGroups(singletonList("group-0")).all();
+                env.adminClient().describeConsumerGroups(singletonList(GROUP_ID)).all();
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting DescribeConsumerGroup first request failure");
             TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry DescribeConsumerGroup call on first failure");
@@ -2693,7 +2698,7 @@ public class KafkaAdminClientTest {
 
             //Retriable errors should be retried
             data.groups().add(DescribeGroupsResponse.groupMetadata(
-                "group-0",
+                GROUP_ID,
                 Errors.COORDINATOR_LOAD_IN_PROGRESS,
                 "",
                 "",
@@ -2704,7 +2709,7 @@ public class KafkaAdminClientTest {
 
             data = new DescribeGroupsResponseData();
             data.groups().add(DescribeGroupsResponse.groupMetadata(
-                "group-0",
+                GROUP_ID,
                 Errors.COORDINATOR_NOT_AVAILABLE,
                 "",
                 "",
@@ -2720,7 +2725,7 @@ public class KafkaAdminClientTest {
              */
             data = new DescribeGroupsResponseData();
             data.groups().add(DescribeGroupsResponse.groupMetadata(
-                    "group-0",
+                    GROUP_ID,
                     Errors.NOT_COORDINATOR,
                     "",
                     "",
@@ -2753,7 +2758,7 @@ public class KafkaAdminClientTest {
             expectedMemberDescriptions.add(convertToMemberDescriptions(memberTwo,
                                                                        new MemberAssignment(new HashSet<>(topicPartitions))));
             data.groups().add(DescribeGroupsResponse.groupMetadata(
-                    "group-0",
+                    GROUP_ID,
                     Errors.NONE,
                     "",
                     ConsumerProtocol.PROTOCOL_TYPE,
@@ -2763,11 +2768,11 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
 
-            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
-            final ConsumerGroupDescription groupDescription = result.describedGroups().get("group-0").get();
+            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList(GROUP_ID));
+            final ConsumerGroupDescription groupDescription = result.describedGroups().get(GROUP_ID).get();
 
             assertEquals(1, result.describedGroups().size());
-            assertEquals("group-0", groupDescription.groupId());
+            assertEquals(GROUP_ID, groupDescription.groupId());
             assertEquals(2, groupDescription.members().size());
             assertEquals(expectedMemberDescriptions, groupDescription.members());
         }
@@ -2795,7 +2800,7 @@ public class KafkaAdminClientTest {
 
             DescribeGroupsResponseData group0Data = new DescribeGroupsResponseData();
             group0Data.groups().add(DescribeGroupsResponse.groupMetadata(
-                    "group-0",
+                    GROUP_ID,
                     Errors.NONE,
                     "",
                     ConsumerProtocol.PROTOCOL_TYPE,
@@ -2823,7 +2828,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(groupConnectData));
 
             Collection<String> groups = new HashSet<>();
-            groups.add("group-0");
+            groups.add(GROUP_ID);
             groups.add("group-connect-0");
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(groups);
             assertEquals(2, result.describedGroups().size());
@@ -2841,7 +2846,7 @@ public class KafkaAdminClientTest {
 
             DescribeGroupsResponseData data = new DescribeGroupsResponseData();
             data.groups().add(DescribeGroupsResponse.groupMetadata(
-                "group-0",
+                GROUP_ID,
                 Errors.NONE,
                 "",
                 ConsumerProtocol.PROTOCOL_TYPE,
@@ -2851,8 +2856,8 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
 
-            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
-            final ConsumerGroupDescription groupDescription = result.describedGroups().get("group-0").get();
+            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList(GROUP_ID));
+            final ConsumerGroupDescription groupDescription = result.describedGroups().get(GROUP_ID).get();
 
             assertNull(groupDescription.authorizedOperations());
         }
@@ -2868,7 +2873,7 @@ public class KafkaAdminClientTest {
             DescribeGroupsResponseData data = new DescribeGroupsResponseData();
 
             data.groups().add(DescribeGroupsResponse.groupMetadata(
-                "group-0",
+                GROUP_ID,
                 Errors.NONE,
                 "",
                 "non-consumer",
@@ -2878,9 +2883,9 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
 
-            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
+            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList(GROUP_ID));
 
-            TestUtils.assertFutureError(result.describedGroups().get("group-0"), IllegalArgumentException.class);
+            TestUtils.assertFutureError(result.describedGroups().get(GROUP_ID), IllegalArgumentException.class);
         }
     }
 
@@ -2897,7 +2902,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets("group-0");
+            final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(GROUP_ID);
 
 
             TestUtils.assertFutureError(result.partitionsToOffsetAndMetadata(), TimeoutException.class);
@@ -2946,12 +2951,71 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testListConsumerGroupOffsetsRetriableErrors() throws Exception {
+        // Retriable errors should be retried
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(
+                new OffsetFetchResponse(Errors.COORDINATOR_NOT_AVAILABLE, Collections.emptyMap()));
+
+            env.kafkaClient().prepareResponse(
+                new OffsetFetchResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Collections.emptyMap()));
+
+            /*
+             * We need to return two responses here, one for NOT_COORDINATOR call when calling list consumer offsets
+             * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
+             * FindCoordinatorResponse.
+             */
+            env.kafkaClient().prepareResponse(
+                new OffsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(
+                new OffsetFetchResponse(Errors.NONE, Collections.emptyMap()));
+
+            final ListConsumerGroupOffsetsResult errorResult1 = env.adminClient().listConsumerGroupOffsets(GROUP_ID);
+
+            assertEquals(Collections.emptyMap(), errorResult1.partitionsToOffsetAndMetadata().get());
+        }
+    }
+
+    @Test
+    public void testListConsumerGroupOffsetsNonRetriableErrors() throws Exception {
+        // Non-retriable errors throw an exception
+        final List<Errors> nonRetriableErrors = Arrays.asList(
+            Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            for (Errors error : nonRetriableErrors) {
+                env.kafkaClient().prepareResponse(
+                    prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+                env.kafkaClient().prepareResponse(
+                    new OffsetFetchResponse(error, Collections.emptyMap()));
+
+                ListConsumerGroupOffsetsResult errorResult = env.adminClient().listConsumerGroupOffsets(GROUP_ID);
+
+                TestUtils.assertFutureError(errorResult.partitionsToOffsetAndMetadata(), error.exception().getClass());
+            }
+        }
+    }
+
+    @Test
     public void testListConsumerGroupOffsets() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Retriable FindCoordinatorResponse errors should be retried
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
@@ -2983,7 +3047,7 @@ public class KafkaAdminClientTest {
                     Optional.empty(), "", Errors.NONE));
             env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NONE, responseData));
 
-            final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets("group-0");
+            final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(GROUP_ID);
             final Map<TopicPartition, OffsetAndMetadata> partitionToOffsetAndMetadata = result.partitionsToOffsetAndMetadata().get();
 
             assertEquals(4, partitionToOffsetAndMetadata.size());
@@ -2999,7 +3063,7 @@ public class KafkaAdminClientTest {
     public void testDeleteConsumerGroupsNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
         final Time time = new MockTime();
-        final List<String> groupIds = singletonList("group-0");
+        final List<String> groupIds = singletonList("groupId");
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
             AdminClientConfig.RETRIES_CONFIG, "0")) {
@@ -3008,7 +3072,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             final DeletableGroupResultCollection validResponse = new DeletableGroupResultCollection();
             validResponse.add(new DeletableGroupResult()
-                .setGroupId("group-0")
+                .setGroupId("groupId")
                 .setErrorCode(Errors.NOT_COORDINATOR.code()));
             env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
                 new DeleteGroupsResponseData()
@@ -3026,7 +3090,7 @@ public class KafkaAdminClientTest {
     public void testDeleteConsumerGroupsRetryBackoff() throws Exception {
         MockTime time = new MockTime();
         int retryBackoff = 100;
-        final List<String> groupIds = singletonList("group-0");
+        final List<String> groupIds = singletonList(GROUP_ID);
 
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
             mockCluster(3, 0),
@@ -3042,7 +3106,7 @@ public class KafkaAdminClientTest {
 
             DeletableGroupResultCollection validResponse = new DeletableGroupResultCollection();
             validResponse.add(new DeletableGroupResult()
-                .setGroupId("group-0")
+                .setGroupId(GROUP_ID)
                 .setErrorCode(Errors.NOT_COORDINATOR.code()));
 
 
@@ -3055,7 +3119,7 @@ public class KafkaAdminClientTest {
 
             validResponse = new DeletableGroupResultCollection();
             validResponse.add(new DeletableGroupResult()
-                .setGroupId("group-0")
+                .setGroupId(GROUP_ID)
                 .setErrorCode(Errors.NONE.code()));
 
             mockClient.prepareResponse(body -> {
@@ -3077,21 +3141,29 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDeleteConsumerGroups() throws Exception {
-        final List<String> groupIds = singletonList("group-0");
+    public void testDeleteConsumerGroupsWithOlderBroker() throws Exception {
+        final List<String> groupIds = singletonList("groupId");
+        ApiVersion findCoordinatorV3 = new ApiVersion()
+                .setApiKey(ApiKeys.FIND_COORDINATOR.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 3);
+        ApiVersion describeGroups = new ApiVersion()
+                .setApiKey(ApiKeys.DESCRIBE_GROUPS.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion(ApiKeys.DELETE_GROUPS.latestVersion());
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Arrays.asList(findCoordinatorV3, describeGroups)));
 
             //Retriable FindCoordinatorResponse errors should be retried
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
 
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             final DeletableGroupResultCollection validResponse = new DeletableGroupResultCollection();
             validResponse.add(new DeletableGroupResult()
-                                  .setGroupId("group-0")
+                                  .setGroupId("groupId")
                                   .setErrorCode(Errors.NONE.code()));
             env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
                 new DeleteGroupsResponseData()
@@ -3100,23 +3172,23 @@ public class KafkaAdminClientTest {
 
             final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
 
-            final KafkaFuture<Void> results = result.deletedGroups().get("group-0");
+            final KafkaFuture<Void> results = result.deletedGroups().get("groupId");
             assertNull(results.get());
 
             //should throw error for non-retriable errors
             env.kafkaClient().prepareResponse(
-                prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
+                prepareOldFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
 
             final DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
-            TestUtils.assertFutureError(errorResult.deletedGroups().get("group-0"), GroupAuthorizationException.class);
+            TestUtils.assertFutureError(errorResult.deletedGroups().get("groupId"), GroupAuthorizationException.class);
 
             //Retriable errors should be retried
             env.kafkaClient().prepareResponse(
-                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+                prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             final DeletableGroupResultCollection errorResponse1 = new DeletableGroupResultCollection();
             errorResponse1.add(new DeletableGroupResult()
-                                   .setGroupId("group-0")
+                                   .setGroupId("groupId")
                                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
             );
             env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
@@ -3125,7 +3197,7 @@ public class KafkaAdminClientTest {
 
             final DeletableGroupResultCollection errorResponse2 = new DeletableGroupResultCollection();
             errorResponse2.add(new DeletableGroupResult()
-                                   .setGroupId("group-0")
+                                   .setGroupId("groupId")
                                    .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
             );
             env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
@@ -3139,13 +3211,13 @@ public class KafkaAdminClientTest {
              */
             final DeletableGroupResultCollection coordinatorMoved = new DeletableGroupResultCollection();
             coordinatorMoved.add(new DeletableGroupResult()
-                                     .setGroupId("UnitTestError")
+                                     .setGroupId("groupId")
                                      .setErrorCode(Errors.NOT_COORDINATOR.code())
             );
             env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
                 new DeleteGroupsResponseData()
                     .setResults(coordinatorMoved)));
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
                 new DeleteGroupsResponseData()
@@ -3153,8 +3225,56 @@ public class KafkaAdminClientTest {
 
             final DeleteConsumerGroupsResult errorResult1 = env.adminClient().deleteConsumerGroups(groupIds);
 
-            final KafkaFuture<Void> errorResults = errorResult1.deletedGroups().get("group-0");
+            final KafkaFuture<Void> errorResults = errorResult1.deletedGroups().get("groupId");
             assertNull(errorResults.get());
+        }
+    }
+
+    @Test
+    public void testDeleteMultipleConsumerGroupsWithOlderBroker() throws Exception {
+        final List<String> groupIds = asList("group1", "group2");
+        ApiVersion findCoordinatorV3 = new ApiVersion()
+                .setApiKey(ApiKeys.FIND_COORDINATOR.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 3);
+        ApiVersion describeGroups = new ApiVersion()
+                .setApiKey(ApiKeys.DESCRIBE_GROUPS.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion(ApiKeys.DELETE_GROUPS.latestVersion());
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(Arrays.asList(findCoordinatorV3, describeGroups)));
+
+            // Dummy response for MockClient to handle the UnsupportedVersionException correctly to switch from batched to un-batched
+            env.kafkaClient().prepareResponse(null);
+            // Retriable FindCoordinatorResponse errors should be retried
+            for (int i = 0; i < groupIds.size(); i++) {
+                env.kafkaClient().prepareResponse(
+                        prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
+            }
+            for (int i = 0; i < groupIds.size(); i++) {
+                env.kafkaClient().prepareResponse(
+                        prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            }
+
+            final DeletableGroupResultCollection validResponse = new DeletableGroupResultCollection();
+            validResponse.add(new DeletableGroupResult()
+                    .setGroupId("group1")
+                    .setErrorCode(Errors.NONE.code()));
+            validResponse.add(new DeletableGroupResult()
+                    .setGroupId("group2")
+                    .setErrorCode(Errors.NONE.code()));
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                    new DeleteGroupsResponseData()
+                            .setResults(validResponse)
+            ));
+
+            final DeleteConsumerGroupsResult result = env.adminClient()
+                    .deleteConsumerGroups(groupIds);
+
+            final KafkaFuture<Void> results = result.deletedGroups().get("group1");
+            assertNull(results.get(5, TimeUnit.SECONDS));
         }
     }
 
@@ -3174,7 +3294,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             final DeleteConsumerGroupOffsetsResult result = env.adminClient()
-                .deleteConsumerGroupOffsets("group-0", Stream.of(tp1).collect(Collectors.toSet()));
+                .deleteConsumerGroupOffsets("groupId", Stream.of(tp1).collect(Collectors.toSet()));
 
             TestUtils.assertFutureError(result.all(), TimeoutException.class);
         }
@@ -3211,7 +3331,7 @@ public class KafkaAdminClientTest {
                 return true;
             }, prepareOffsetDeleteResponse("foo", 0, Errors.NONE));
 
-            final KafkaFuture<Void> future = env.adminClient().deleteConsumerGroupOffsets("group-0", Stream.of(tp1).collect(Collectors.toSet())).all();
+            final KafkaFuture<Void> future = env.adminClient().deleteConsumerGroupOffsets(GROUP_ID, Stream.of(tp1).collect(Collectors.toSet())).all();
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting DeleteConsumerGroupOffsets first request failure");
             TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry DeleteConsumerGroupOffsets call on first failure");
@@ -3228,7 +3348,6 @@ public class KafkaAdminClientTest {
     public void testDeleteConsumerGroupOffsets() throws Exception {
         // Happy path
 
-        final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
         final TopicPartition tp2 = new TopicPartition("bar", 0);
         final TopicPartition tp3 = new TopicPartition("foobar", 0);
@@ -3261,7 +3380,7 @@ public class KafkaAdminClientTest {
             );
 
             final DeleteConsumerGroupOffsetsResult errorResult = env.adminClient().deleteConsumerGroupOffsets(
-                groupId, Stream.of(tp1, tp2).collect(Collectors.toSet()));
+                GROUP_ID, Stream.of(tp1, tp2).collect(Collectors.toSet()));
 
             assertNull(errorResult.partitionResult(tp1).get());
             TestUtils.assertFutureError(errorResult.all(), GroupSubscribedToTopicException.class);
@@ -3274,7 +3393,6 @@ public class KafkaAdminClientTest {
     public void testDeleteConsumerGroupOffsetsRetriableErrors() throws Exception {
         // Retriable errors should be retried
 
-        final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
@@ -3304,7 +3422,7 @@ public class KafkaAdminClientTest {
                 prepareOffsetDeleteResponse("foo", 0, Errors.NONE));
 
             final DeleteConsumerGroupOffsetsResult errorResult1 = env.adminClient()
-                .deleteConsumerGroupOffsets(groupId, Stream.of(tp1).collect(Collectors.toSet()));
+                .deleteConsumerGroupOffsets(GROUP_ID, Stream.of(tp1).collect(Collectors.toSet()));
 
             assertNull(errorResult1.all().get());
             assertNull(errorResult1.partitionResult(tp1).get());
@@ -3315,7 +3433,6 @@ public class KafkaAdminClientTest {
     public void testDeleteConsumerGroupOffsetsNonRetriableErrors() throws Exception {
         // Non-retriable errors throw an exception
 
-        final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
         final List<Errors> nonRetriableErrors = Arrays.asList(
             Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
@@ -3331,7 +3448,7 @@ public class KafkaAdminClientTest {
                     prepareOffsetDeleteResponse(error));
 
                 DeleteConsumerGroupOffsetsResult errorResult = env.adminClient()
-                    .deleteConsumerGroupOffsets(groupId, Stream.of(tp1).collect(Collectors.toSet()));
+                    .deleteConsumerGroupOffsets(GROUP_ID, Stream.of(tp1).collect(Collectors.toSet()));
 
                 TestUtils.assertFutureError(errorResult.all(), error.exception().getClass());
                 TestUtils.assertFutureError(errorResult.partitionResult(tp1), error.exception().getClass());
@@ -3343,14 +3460,13 @@ public class KafkaAdminClientTest {
     public void testDeleteConsumerGroupOffsetsFindCoordinatorRetriableErrors() throws Exception {
         // Retriable FindCoordinatorResponse errors should be retried
 
-        final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             env.kafkaClient().prepareResponse(
-                prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+                prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
             env.kafkaClient().prepareResponse(
                 prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
 
@@ -3361,7 +3477,7 @@ public class KafkaAdminClientTest {
                 prepareOffsetDeleteResponse("foo", 0, Errors.NONE));
 
             final DeleteConsumerGroupOffsetsResult result = env.adminClient()
-                .deleteConsumerGroupOffsets(groupId, Stream.of(tp1).collect(Collectors.toSet()));
+                .deleteConsumerGroupOffsets(GROUP_ID, Stream.of(tp1).collect(Collectors.toSet()));
 
             assertNull(result.all().get());
             assertNull(result.partitionResult(tp1).get());
@@ -3372,7 +3488,6 @@ public class KafkaAdminClientTest {
     public void testDeleteConsumerGroupOffsetsFindCoordinatorNonRetriableErrors() throws Exception {
         // Non-retriable FindCoordinatorResponse errors throw an exception
 
-        final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
@@ -3382,7 +3497,7 @@ public class KafkaAdminClientTest {
                 prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
 
             final DeleteConsumerGroupOffsetsResult errorResult = env.adminClient()
-                .deleteConsumerGroupOffsets(groupId, Stream.of(tp1).collect(Collectors.toSet()));
+                .deleteConsumerGroupOffsets(GROUP_ID, Stream.of(tp1).collect(Collectors.toSet()));
 
             TestUtils.assertFutureError(errorResult.all(), GroupAuthorizationException.class);
             TestUtils.assertFutureError(errorResult.partitionResult(tp1), GroupAuthorizationException.class);
@@ -3502,7 +3617,7 @@ public class KafkaAdminClientTest {
             Collection<MemberToRemove> membersToRemove = singletonList(new MemberToRemove("instance-1"));
 
             final KafkaFuture<Void> future = env.adminClient().removeMembersFromConsumerGroup(
-                "groupId", new RemoveMembersFromConsumerGroupOptions(membersToRemove)).all();
+                GROUP_ID, new RemoveMembersFromConsumerGroupOptions(membersToRemove)).all();
 
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting RemoveMembersFromGroup first request failure");
@@ -3517,19 +3632,98 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testRemoveMembersFromGroupRetriableErrors() throws Exception {
+        // Retriable errors should be retried
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(
+                new LeaveGroupResponse(new LeaveGroupResponseData()
+                        .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())));
+
+            env.kafkaClient().prepareResponse(
+                    new LeaveGroupResponse(new LeaveGroupResponseData()
+                        .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())));
+
+            /*
+             * We need to return two responses here, one for NOT_COORDINATOR call when calling remove member
+             * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
+             * FindCoordinatorResponse.
+             */
+            env.kafkaClient().prepareResponse(
+                    new LeaveGroupResponse(new LeaveGroupResponseData()
+                            .setErrorCode(Errors.NOT_COORDINATOR.code())));
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            MemberResponse memberResponse = new MemberResponse()
+                    .setGroupInstanceId("instance-1")
+                    .setErrorCode(Errors.NONE.code());
+            env.kafkaClient().prepareResponse(
+                    new LeaveGroupResponse(new LeaveGroupResponseData()
+                            .setErrorCode(Errors.NONE.code())
+                            .setMembers(Collections.singletonList(memberResponse))));
+
+            MemberToRemove memberToRemove = new MemberToRemove("instance-1");
+            Collection<MemberToRemove> membersToRemove = singletonList(memberToRemove);
+
+            final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
+                GROUP_ID, new RemoveMembersFromConsumerGroupOptions(membersToRemove));
+
+            assertNull(result.all().get());
+            assertNull(result.memberResult(memberToRemove).get());
+        }
+    }
+
+    @Test
+    public void testRemoveMembersFromGroupNonRetriableErrors() throws Exception {
+        // Non-retriable errors throw an exception
+
+        final List<Errors> nonRetriableErrors = Arrays.asList(
+            Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            for (Errors error : nonRetriableErrors) {
+                env.kafkaClient().prepareResponse(
+                    prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+                env.kafkaClient().prepareResponse(
+                        new LeaveGroupResponse(new LeaveGroupResponseData()
+                                .setErrorCode(error.code())));
+
+                MemberToRemove memberToRemove = new MemberToRemove("instance-1");
+                Collection<MemberToRemove> membersToRemove = singletonList(memberToRemove);
+
+                final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
+                    GROUP_ID, new RemoveMembersFromConsumerGroupOptions(membersToRemove));
+
+                TestUtils.assertFutureError(result.all(), error.exception().getClass());
+                TestUtils.assertFutureError(result.memberResult(memberToRemove), error.exception().getClass());
+            }
+        }
+    }
+
+    @Test
     public void testRemoveMembersFromGroup() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             final String instanceOne = "instance-1";
             final String instanceTwo = "instance-2";
+
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Retriable FindCoordinatorResponse errors should be retried
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             // Retriable errors should be retried
-            env.kafkaClient().prepareResponse(null, true);
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                                                                          .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())));
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
@@ -3539,18 +3733,16 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                                                                          .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())));
 
-            String groupId = "groupId";
             Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove(instanceOne),
                                                                        new MemberToRemove(instanceTwo));
             final RemoveMembersFromConsumerGroupResult unknownErrorResult = env.adminClient().removeMembersFromConsumerGroup(
-                groupId,
+                GROUP_ID,
                 new RemoveMembersFromConsumerGroupOptions(membersToRemove)
             );
 
             MemberToRemove memberOne = new MemberToRemove(instanceOne);
             MemberToRemove memberTwo = new MemberToRemove(instanceTwo);
 
-            TestUtils.assertFutureError(unknownErrorResult.all(), UnknownServerException.class);
             TestUtils.assertFutureError(unknownErrorResult.memberResult(memberOne), UnknownServerException.class);
             TestUtils.assertFutureError(unknownErrorResult.memberResult(memberTwo), UnknownServerException.class);
 
@@ -3569,7 +3761,7 @@ public class KafkaAdminClientTest {
                                                                          .setMembers(Arrays.asList(responseOne, responseTwo))));
 
             final RemoveMembersFromConsumerGroupResult memberLevelErrorResult = env.adminClient().removeMembersFromConsumerGroup(
-                groupId,
+                GROUP_ID,
                 new RemoveMembersFromConsumerGroupOptions(membersToRemove)
             );
 
@@ -3584,7 +3776,7 @@ public class KafkaAdminClientTest {
                                                                          .setMembers(Collections.singletonList(responseTwo))));
 
             final RemoveMembersFromConsumerGroupResult missingMemberResult = env.adminClient().removeMembersFromConsumerGroup(
-                groupId,
+                GROUP_ID,
                 new RemoveMembersFromConsumerGroupOptions(membersToRemove)
             );
 
@@ -3604,7 +3796,7 @@ public class KafkaAdminClientTest {
             ));
 
             final RemoveMembersFromConsumerGroupResult noErrorResult = env.adminClient().removeMembersFromConsumerGroup(
-                groupId,
+                GROUP_ID,
                 new RemoveMembersFromConsumerGroupOptions(membersToRemove)
             );
             assertNull(noErrorResult.all().get());
@@ -3615,7 +3807,7 @@ public class KafkaAdminClientTest {
             final List<TopicPartition> topicPartitions = Arrays.asList(1, 2, 3).stream().map(partition -> new TopicPartition("my_topic", partition))
                     .collect(Collectors.toList());
             // construct the DescribeGroupsResponse
-            DescribeGroupsResponseData data = prepareDescribeGroupsResponseData(groupId, Arrays.asList(instanceOne, instanceTwo), topicPartitions);
+            DescribeGroupsResponseData data = prepareDescribeGroupsResponseData(GROUP_ID, Arrays.asList(instanceOne, instanceTwo), topicPartitions);
 
             // Return with partial failure for "removeAll" scenario
             // 1 prepare response for AdminClient.describeConsumerGroups
@@ -3629,7 +3821,7 @@ public class KafkaAdminClientTest {
                             Arrays.asList(responseOne, responseTwo))
             ));
             final RemoveMembersFromConsumerGroupResult partialFailureResults = env.adminClient().removeMembersFromConsumerGroup(
-                    groupId,
+                    GROUP_ID,
                     new RemoveMembersFromConsumerGroupOptions()
             );
             ExecutionException exception = assertThrows(ExecutionException.class, () -> partialFailureResults.all().get());
@@ -3650,7 +3842,7 @@ public class KafkaAdminClientTest {
                             ))
             ));
             final RemoveMembersFromConsumerGroupResult successResult = env.adminClient().removeMembersFromConsumerGroup(
-                    groupId,
+                    GROUP_ID,
                     new RemoveMembersFromConsumerGroupOptions()
             );
             assertNull(successResult.all().get());
@@ -3868,7 +4060,6 @@ public class KafkaAdminClientTest {
     public void testAlterConsumerGroupOffsets() throws Exception {
         // Happy path
 
-        final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
         final TopicPartition tp2 = new TopicPartition("bar", 0);
         final TopicPartition tp3 = new TopicPartition("foobar", 0);
@@ -3888,7 +4079,7 @@ public class KafkaAdminClientTest {
             offsets.put(tp1, new OffsetAndMetadata(123L));
             offsets.put(tp2, new OffsetAndMetadata(456L));
             final AlterConsumerGroupOffsetsResult result = env.adminClient().alterConsumerGroupOffsets(
-                groupId, offsets);
+                GROUP_ID, offsets);
 
             assertNull(result.all().get());
             assertNull(result.partitionResult(tp1).get());
@@ -3901,7 +4092,6 @@ public class KafkaAdminClientTest {
     public void testAlterConsumerGroupOffsetsRetriableErrors() throws Exception {
         // Retriable errors should be retried
 
-        final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
@@ -3934,7 +4124,7 @@ public class KafkaAdminClientTest {
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
             offsets.put(tp1, new OffsetAndMetadata(123L));
             final AlterConsumerGroupOffsetsResult result1 = env.adminClient()
-                .alterConsumerGroupOffsets(groupId, offsets);
+                .alterConsumerGroupOffsets(GROUP_ID, offsets);
 
             assertNull(result1.all().get());
             assertNull(result1.partitionResult(tp1).get());
@@ -3945,7 +4135,6 @@ public class KafkaAdminClientTest {
     public void testAlterConsumerGroupOffsetsNonRetriableErrors() throws Exception {
         // Non-retriable errors throw an exception
 
-        final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
         final List<Errors> nonRetriableErrors = Arrays.asList(
             Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
@@ -3962,7 +4151,7 @@ public class KafkaAdminClientTest {
                 Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
                 offsets.put(tp1,  new OffsetAndMetadata(123L));
                 AlterConsumerGroupOffsetsResult errorResult = env.adminClient()
-                    .alterConsumerGroupOffsets(groupId, offsets);
+                    .alterConsumerGroupOffsets(GROUP_ID, offsets);
 
                 TestUtils.assertFutureError(errorResult.all(), error.exception().getClass());
                 TestUtils.assertFutureError(errorResult.partitionResult(tp1), error.exception().getClass());
@@ -3974,14 +4163,13 @@ public class KafkaAdminClientTest {
     public void testAlterConsumerGroupOffsetsFindCoordinatorRetriableErrors() throws Exception {
         // Retriable FindCoordinatorResponse errors should be retried
 
-        final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             env.kafkaClient().prepareResponse(
-                prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+                prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
             env.kafkaClient().prepareResponse(
                 prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
 
@@ -3994,7 +4182,7 @@ public class KafkaAdminClientTest {
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
             offsets.put(tp1,  new OffsetAndMetadata(123L));
             final AlterConsumerGroupOffsetsResult result = env.adminClient()
-                .alterConsumerGroupOffsets(groupId, offsets);
+                .alterConsumerGroupOffsets(GROUP_ID, offsets);
 
             assertNull(result.all().get());
             assertNull(result.partitionResult(tp1).get());
@@ -4005,7 +4193,6 @@ public class KafkaAdminClientTest {
     public void testAlterConsumerGroupOffsetsFindCoordinatorNonRetriableErrors() throws Exception {
         // Non-retriable FindCoordinatorResponse errors throw an exception
 
-        final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
@@ -4017,7 +4204,7 @@ public class KafkaAdminClientTest {
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
             offsets.put(tp1,  new OffsetAndMetadata(123L));
             final AlterConsumerGroupOffsetsResult errorResult = env.adminClient()
-                .alterConsumerGroupOffsets(groupId, offsets);
+                .alterConsumerGroupOffsets(GROUP_ID, offsets);
 
             TestUtils.assertFutureError(errorResult.all(), GroupAuthorizationException.class);
             TestUtils.assertFutureError(errorResult.partitionResult(tp1), GroupAuthorizationException.class);
@@ -4249,7 +4436,8 @@ public class KafkaAdminClientTest {
         final TopicPartition tp0 = new TopicPartition("foo", 0);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster, AdminClientConfig.RETRIES_CONFIG, "2")) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
+                    ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 6));
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
             // listoffsets response from broker 0
@@ -4282,7 +4470,8 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster,
             AdminClientConfig.RETRIES_CONFIG, "2")) {
 
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
+                    ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 6));
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
             // listoffsets response from broker 0
@@ -4332,7 +4521,8 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster,
             AdminClientConfig.RETRIES_CONFIG, "2")) {
 
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
+                    ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 0));
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
             // listoffsets response from broker 0
@@ -4343,6 +4533,49 @@ public class KafkaAdminClientTest {
                 Collections.singletonMap(tp0, OffsetSpec.latest()));
 
             TestUtils.assertFutureThrows(result.partitionResult(tp0), UnsupportedVersionException.class);
+        }
+    }
+
+    @Test
+    public void testListOffsetsNonMaxTimestampDowngradedImmediately() throws Exception {
+        Node node = new Node(0, "localhost", 8120);
+        List<Node> nodes = Collections.singletonList(node);
+        List<PartitionInfo> pInfos = new ArrayList<>();
+        pInfos.add(new PartitionInfo("foo", 0, node, new Node[]{node}, new Node[]{node}));
+        final Cluster cluster = new Cluster(
+                "mockClusterId",
+                nodes,
+                pInfos,
+                Collections.emptySet(),
+                Collections.emptySet(),
+                node);
+        final TopicPartition tp0 = new TopicPartition("foo", 0);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster,
+                AdminClientConfig.RETRIES_CONFIG, "2")) {
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
+                    ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 6));
+
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+
+            ListOffsetsTopicResponse t0 = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp0, Errors.NONE, -1L, 123L, 321);
+            ListOffsetsResponseData responseData = new ListOffsetsResponseData()
+                    .setThrottleTimeMs(0)
+                    .setTopics(Arrays.asList(t0));
+
+            // listoffsets response from broker 0
+            env.kafkaClient().prepareResponse(
+                    request -> request instanceof ListOffsetsRequest,
+                    new ListOffsetsResponse(responseData));
+
+            ListOffsetsResult result = env.adminClient().listOffsets(
+                    Collections.singletonMap(tp0, OffsetSpec.latest()));
+
+            ListOffsetsResultInfo tp0Offset = result.partitionResult(tp0).get();
+            assertEquals(123L, tp0Offset.offset());
+            assertEquals(321, tp0Offset.leaderEpoch().get().intValue());
+            assertEquals(-1L, tp0Offset.timestamp());
         }
     }
 
@@ -5313,46 +5546,6 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testHasCoordinatorMoved() {
-        Map<Errors, Integer> errors = new HashMap<>();
-        AbstractResponse response = new AbstractResponse(ApiKeys.OFFSET_COMMIT) {
-            @Override
-            public Map<Errors, Integer> errorCounts() {
-                return errors;
-            }
-
-            @Override
-            public ApiMessage data() {
-                return null;
-            }
-
-            @Override
-            public int throttleTimeMs() {
-                return DEFAULT_THROTTLE_TIME;
-            }
-        };
-
-        assertFalse(ConsumerGroupOperationContext.hasCoordinatorMoved(response));
-
-        errors.put(Errors.NOT_COORDINATOR, 1);
-        assertTrue(ConsumerGroupOperationContext.hasCoordinatorMoved(response));
-    }
-
-    @Test
-    public void testShouldRefreshCoordinator() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
-
-        assertFalse(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
-
-        errorCounts.put(Errors.COORDINATOR_LOAD_IN_PROGRESS, 1);
-        assertTrue(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
-
-        errorCounts.clear();
-        errorCounts.put(Errors.COORDINATOR_NOT_AVAILABLE, 1);
-        assertTrue(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
-    }
-
-    @Test
     public void testUnregisterBrokerSuccess() throws InterruptedException, ExecutionException {
         int nodeId = 1;
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
@@ -5574,11 +5767,7 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(
                 request -> request instanceof FindCoordinatorRequest,
-                new FindCoordinatorResponse(new FindCoordinatorResponseData()
-                    .setErrorCode(Errors.NONE.code())
-                    .setNodeId(coordinator.id())
-                    .setHost(coordinator.host())
-                    .setPort(coordinator.port()))
+                prepareFindCoordinatorResponse(Errors.NONE, transactionalId, coordinator)
             );
 
             env.kafkaClient().prepareResponseFrom(
@@ -5620,10 +5809,12 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                 request -> request instanceof FindCoordinatorRequest,
                 new FindCoordinatorResponse(new FindCoordinatorResponseData()
-                    .setErrorCode(Errors.NONE.code())
-                    .setNodeId(coordinator1.id())
-                    .setHost(coordinator1.host())
-                    .setPort(coordinator1.port()))
+                        .setCoordinators(Arrays.asList(new FindCoordinatorResponseData.Coordinator()
+                                .setKey(transactionalId)
+                                .setErrorCode(Errors.NONE.code())
+                                .setNodeId(coordinator1.id())
+                                .setHost(coordinator1.host())
+                                .setPort(coordinator1.port()))))
             );
 
             env.kafkaClient().prepareResponseFrom(
@@ -5648,10 +5839,12 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                 request -> request instanceof FindCoordinatorRequest,
                 new FindCoordinatorResponse(new FindCoordinatorResponseData()
-                    .setErrorCode(Errors.NONE.code())
-                    .setNodeId(coordinator2.id())
-                    .setHost(coordinator2.host())
-                    .setPort(coordinator2.port()))
+                        .setCoordinators(Arrays.asList(new FindCoordinatorResponseData.Coordinator()
+                                .setKey(transactionalId)
+                                .setErrorCode(Errors.NONE.code())
+                                .setNodeId(coordinator2.id())
+                                .setHost(coordinator2.host())
+                                .setPort(coordinator2.port()))))
             );
 
             TransactionDescription expected = new TransactionDescription(

@@ -52,6 +52,10 @@ public class TaskHandle {
         this.consumer = consumer;
     }
 
+    public String taskId() {
+        return taskId;
+    }
+
     public void record() {
         record(null);
     }
@@ -209,6 +213,15 @@ public class TaskHandle {
         }
         log.debug("Task {} saw {} records, expected {} records",
                   taskId, expectedCommits - recordsToCommitLatch.getCount(), expectedCommits);
+    }
+
+    /**
+     * Gets the start and stop counter corresponding to this handle.
+     *
+     * @return the start and stop counter
+     */
+    public StartAndStopCounter startAndStopCounter() {
+        return startAndStopCounter;
     }
 
     /**

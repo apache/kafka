@@ -105,7 +105,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndO
  * sends output to zero, one, or more output topics.
  * <p>
  * The computational logic can be specified either by using the {@link Topology} to define a DAG topology of
- * {@link Processor}s or by using the {@link StreamsBuilder} which provides the high-level DSL to define
+ * {@link org.apache.kafka.streams.processor.api.Processor}s or by using the {@link StreamsBuilder} which provides the high-level DSL to define
  * transformations.
  * <p>
  * One {@code KafkaStreams} instance can contain one or more threads specified in the configs for the processing work.

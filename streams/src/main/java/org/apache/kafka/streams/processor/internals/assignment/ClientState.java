@@ -360,6 +360,10 @@ public class ClientState {
         }
     }
 
+    public String consumers() {
+        return consumerToPreviousStatefulTaskIds.keySet().toString();
+    }
+
     public String currentAssignment() {
         return "[activeTasks: (" + assignedActiveTasks.taskIds() +
                ") standbyTasks: (" + assignedStandbyTasks.taskIds() + ")]";

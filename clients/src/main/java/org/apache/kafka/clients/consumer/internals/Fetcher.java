@@ -38,6 +38,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordDeserializationException;
@@ -255,8 +256,14 @@ public class Fetcher<K, V> implements Closeable {
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
             final Node fetchTarget = entry.getKey();
             final FetchSessionHandler.FetchRequestData data = entry.getValue();
+            final short maxVersion;
+            if (!data.canUseTopicIds()) {
+                maxVersion = (short) 12;
+            } else {
+                maxVersion = ApiKeys.FETCH.latestVersion();
+            }
             final FetchRequest.Builder request = FetchRequest.Builder
-                    .forConsumer(this.maxWaitMs, this.minBytes, data.toSend())
+                    .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, data.toSend(), data.topicIds())
                     .isolationLevel(isolationLevel)
                     .setMaxBytes(this.maxBytes)
                     .metadata(data.metadata())
@@ -284,14 +291,20 @@ public class Fetcher<K, V> implements Closeable {
                                         fetchTarget.id());
                                 return;
                             }
-                            if (!handler.handleResponse(response)) {
+                            if (!handler.handleResponse(response, resp.requestHeader().apiVersion())) {
+                                if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR
+                                        || response.error() == Errors.UNKNOWN_TOPIC_ID
+                                        || response.error() == Errors.INCONSISTENT_TOPIC_ID) {
+                                    metadata.requestUpdate();
+                                }
                                 return;
                             }
 
-                            Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
+                            Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(data.topicNames(), resp.requestHeader().apiVersion());
+                            Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
-                            for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : response.responseData().entrySet()) {
+                            for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
                                 TopicPartition partition = entry.getKey();
                                 FetchRequest.PartitionData requestData = data.sessionPartitions().get(partition);
                                 if (requestData == null) {
@@ -379,7 +392,7 @@ public class Fetcher<K, V> implements Closeable {
 
             if (future.succeeded()) {
                 MetadataResponse response = (MetadataResponse) future.value().responseBody();
-                Cluster cluster = response.cluster();
+                Cluster cluster = response.buildCluster();
 
                 Set<String> unauthorizedTopics = cluster.unauthorizedTopics();
                 if (!unauthorizedTopics.isEmpty())
@@ -1154,6 +1167,7 @@ public class Fetcher<K, V> implements Closeable {
         validatePositionsOnMetadataChange();
 
         long currentTimeMs = time.milliseconds();
+        Map<String, Uuid> topicIds = metadata.topicIds();
 
         for (TopicPartition partition : fetchablePartitions()) {
             FetchPosition position = this.subscriptions.position(partition);
@@ -1192,7 +1206,7 @@ public class Fetcher<K, V> implements Closeable {
                     fetchable.put(node, builder);
                 }
 
-                builder.add(partition, new FetchRequest.PartitionData(position.offset,
+                builder.add(partition, topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID), new FetchRequest.PartitionData(position.offset,
                     FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
                     position.currentLeader.epoch, Optional.empty()));
 

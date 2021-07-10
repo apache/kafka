@@ -53,6 +53,7 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
+
 @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KStreamKStreamLeftJoinTest {
     private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
@@ -97,6 +98,7 @@ public class KStreamKStreamLeftJoinTest {
             false
         );
     }
+
     @Test
     public void testLeftJoinWithSpuriousResultFixDisabledOldApi() {
         runLeftJoinWithoutSpuriousResultFix(
@@ -255,6 +257,8 @@ public class KStreamKStreamLeftJoinTest {
             inputTopic1.pipeInput(0, "A0", 0L);
             inputTopic1.pipeInput(0, "A0-0", 0L);
             inputTopic2.pipeInput(1, "a0", 111L);
+            // bump stream-time to trigger left-join results
+            inputTopic2.pipeInput(2, "dummy", 500L);
 
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(0, "A0+null", 0L),
@@ -262,13 +266,13 @@ public class KStreamKStreamLeftJoinTest {
             );
 
             // verifies joined duplicates are emitted
-            inputTopic1.pipeInput(2, "A2", 200L);
-            inputTopic1.pipeInput(2, "A2-0", 200L);
-            inputTopic2.pipeInput(2, "a2", 201L);
+            inputTopic1.pipeInput(2, "A2", 1000L);
+            inputTopic1.pipeInput(2, "A2-0", 1000L);
+            inputTopic2.pipeInput(2, "a2", 1001L);
 
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(2, "A2+a2", 201L),
-                new KeyValueTimestamp<>(2, "A2-0+a2", 201L)
+                new KeyValueTimestamp<>(2, "A2+a2", 1001L),
+                new KeyValueTimestamp<>(2, "A2-0+a2", 1001L)
             );
 
             // this record should expired non-joined records, but because A2 and A2-0 are joined and
@@ -660,7 +664,7 @@ public class KStreamKStreamLeftJoinTest {
             // push two items to the primary stream; the other window is empty; this should not produce any item yet
             // w1 = {}
             // w2 = {}
-            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
+            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100) }
             // --> w2 = {}
             inputTopic1.pipeInput(0, "A0", 0L);
             inputTopic1.pipeInput(1, "A1", 100L);
@@ -669,10 +673,10 @@ public class KStreamKStreamLeftJoinTest {
             // push one item to the other window that has a join; this should produce non-joined records with a closed window first, then
             // the joined records
             // by the time they were produced before
-            // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
+            // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100) }
             // w2 = { }
-            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
-            // --> w2 = { 0:a0 (ts: 100) }
+            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100) }
+            // --> w2 = { 1:a1 (ts: 110) }
             inputTopic2.pipeInput(1, "a1", 110L);
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(0, "A0+null", 0L),
