@@ -55,6 +55,7 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, Mode}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{AbstractRequest, EnvelopeRequest, RequestContext, RequestHeader}
@@ -1715,7 +1716,11 @@ object TestUtils extends Logging {
   }
 
   def totalMetricValue(server: KafkaServer, metricName: String): Long = {
-    val allMetrics = server.metrics.metrics
+    totalMetricValue(server.metrics, metricName)
+  }
+
+  def totalMetricValue(metrics: Metrics, metricName: String): Long = {
+    val allMetrics = metrics.metrics
     val total = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
       .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     total.toLong
