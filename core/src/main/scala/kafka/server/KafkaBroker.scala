@@ -19,9 +19,9 @@ package kafka.server
 
 import java.util
 import java.util.concurrent.atomic.AtomicReference
-
 import com.yammer.metrics.core.MetricName
 import kafka.log.LogManager
+import kafka.log.remote.RemoteLogManager
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
 import kafka.utils.KafkaScheduler
@@ -87,6 +87,7 @@ trait KafkaBroker extends KafkaMetricsGroup {
   def kafkaScheduler: KafkaScheduler
   def kafkaYammerMetrics: KafkaYammerMetrics
   def logManager: LogManager
+  def remoteLogManager: RemoteLogManager
   def metrics: Metrics
   def quotaManagers: QuotaFactory.QuotaManagers
   def replicaManager: ReplicaManager

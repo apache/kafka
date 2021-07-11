@@ -41,6 +41,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -83,6 +84,7 @@ class LogTest {
     val logDir: File = TestUtils.tempDir()
     val logProps = new Properties()
     val logConfig = LogConfig(logProps)
+    val remoteLogManagerConfig = new RemoteLogManagerConfig(new Properties())
     val logDirs = Seq(logDir)
     val topicPartition = new TopicPartition("foo", 0)
     var log: Log = null
@@ -97,7 +99,8 @@ class LogTest {
         initialDefaultConfig = logConfig, cleanerConfig = CleanerConfig(enableCleaner = false), recoveryThreadsPerDataDir = 4,
         flushCheckMs = 1000L, flushRecoveryOffsetCheckpointMs = 10000L, flushStartOffsetCheckpointMs = 10000L,
         retentionCheckMs = 1000L, maxPidExpirationMs = 60 * 60 * 1000, scheduler = time.scheduler, time = time,
-        brokerTopicStats = new BrokerTopicStats, logDirFailureChannel = new LogDirFailureChannel(logDirs.size), keepPartitionMetadataFile = config.usesTopicId) {
+        brokerTopicStats = new BrokerTopicStats, logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
+        keepPartitionMetadataFile = config.usesTopicId, remoteLogManagerConfig = remoteLogManagerConfig) {
 
          override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: Map[TopicPartition, Long],
                      logStartOffsets: Map[TopicPartition, Long], topicConfigs: Map[String, LogConfig]): Log = {
@@ -1513,6 +1516,49 @@ class LogTest {
     mockTime.sleep(1)
     assertEquals(1, ProducerStateManager.listSnapshotFiles(logDir).size,
       "expect a single producer state snapshot remaining")
+  }
+
+  @Test
+  def testSegmentDeletionDisabledBeforeUploadToRemoteTier(): Unit = {
+    val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, segmentIndexBytes = 12, retentionBytes = 1,
+      fileDeleteDelayMs = 0)
+    val log = createLog(logDir, logConfig, remoteLogEnable = true)
+    val pid = 1L
+    val epoch = 0.toShort
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 1), leaderEpoch = 0)
+    log.updateHighWatermark(log.logEndOffset)
+    assertEquals(2, log.logSegments.size)
+
+    log.deleteOldSegments()
+    mockTime.sleep(1)
+    assertEquals(2, log.logSegments.size)
+  }
+
+  @Test
+  def testSegmentDeletionEnabledAfterUploadToRemoteTier(): Unit = {
+    val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, segmentIndexBytes = 12,
+      retentionBytes = 1, fileDeleteDelayMs = 0)
+    val log = createLog(logDir, logConfig, remoteLogEnable = true)
+    val pid = 1L
+    val epoch = 0.toShort
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 1), leaderEpoch = 0)
+    log.updateHighWatermark(log.logEndOffset)
+    assertEquals(2, log.logSegments.size)
+
+    log.updateRemoteIndexHighestOffset(0L)
+    log.deleteOldSegments()
+    mockTime.sleep(1)
+    assertEquals(1, log.logSegments.size)
   }
 
   @Test
@@ -4846,9 +4892,11 @@ class LogTest {
                         maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                         producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                         lastShutdownClean: Boolean = true,
-                        keepPartitionMetadataFile: Boolean = true): Log = {
+                        keepPartitionMetadataFile: Boolean = true,
+                        remoteLogEnable: Boolean = false): Log = {
     LogTest.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
-      maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean, keepPartitionMetadataFile)
+      maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean,
+      keepPartitionMetadataFile = keepPartitionMetadataFile, remoteLogEnable = remoteLogEnable)
   }
 
   private def createLogWithOffsetOverflow(logConfig: LogConfig): (Log, LogSegment) = {
@@ -4915,7 +4963,8 @@ object LogTest {
                 maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                 producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                 lastShutdownClean: Boolean = true,
-                keepPartitionMetadataFile: Boolean = true): Log = {
+                keepPartitionMetadataFile: Boolean = true,
+                remoteLogEnable: Boolean = false): Log = {
     Log(dir = dir,
       config = config,
       logStartOffset = logStartOffset,
@@ -4927,7 +4976,8 @@ object LogTest {
       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
-      keepPartitionMetadataFile = keepPartitionMetadataFile)
+      keepPartitionMetadataFile = keepPartitionMetadataFile,
+      remoteLogEnable = remoteLogEnable)
   }
 
   /**

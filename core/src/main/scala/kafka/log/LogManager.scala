@@ -22,6 +22,7 @@ import java.nio.file.Files
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 
+import kafka.log.remote.RemoteIndexCache
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
@@ -30,6 +31,7 @@ import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -63,7 +65,8 @@ class LogManager(logDirs: Seq[File],
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time,
-                 val keepPartitionMetadataFile: Boolean) extends Logging with KafkaMetricsGroup {
+                 val keepPartitionMetadataFile: Boolean,
+                 remoteLogManagerConfig: RemoteLogManagerConfig) extends Logging with KafkaMetricsGroup {
 
   import LogManager._
 
@@ -270,7 +273,8 @@ class LogManager(logDirs: Seq[File],
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
       lastShutdownClean = hadCleanShutdown,
-      keepPartitionMetadataFile = keepPartitionMetadataFile)
+      keepPartitionMetadataFile = keepPartitionMetadataFile,
+      remoteLogEnable = remoteLogManagerConfig.enableRemoteStorageSystem())
 
     if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
       addLogToBeDeleted(log)
@@ -343,8 +347,11 @@ class LogManager(logDirs: Seq[File],
               s"$logDirAbsolutePath, resetting to the base offset of the first segment", e)
         }
 
-        val logsToLoad = Option(dir.listFiles).getOrElse(Array.empty).filter(logDir =>
-          logDir.isDirectory && Log.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
+        // ignore remote-log-index-cache directory as that is index cache but not any topic-partition dir
+        val logsToLoad = Option(dir.listFiles).getOrElse(Array.empty).filter(logDir => {
+          logDir.isDirectory && !logDir.getName.equals(RemoteIndexCache.DirName) &&
+            Log.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic
+        })
         val numLogsLoaded = new AtomicInteger(0)
         numTotalLogs += logsToLoad.length
 
@@ -659,7 +666,7 @@ class LogManager(logDirs: Seq[File],
     try {
       logStartOffsetCheckpoints.get(logDir).foreach { checkpoint =>
         val logStartOffsets = logsToCheckpoint.collect {
-          case (tp, log) if log.logStartOffset > log.logSegments.head.baseOffset => tp -> log.logStartOffset
+          case (tp, log) if (remoteLogManagerConfig.enableRemoteStorageSystem() || log.logStartOffset > log.logSegments.head.baseOffset) => tp -> log.logStartOffset
         }
         checkpoint.write(logStartOffsets)
       }
@@ -827,7 +834,8 @@ class LogManager(logDirs: Seq[File],
           time = time,
           brokerTopicStats = brokerTopicStats,
           logDirFailureChannel = logDirFailureChannel,
-          keepPartitionMetadataFile = keepPartitionMetadataFile)
+          keepPartitionMetadataFile = keepPartitionMetadataFile,
+          remoteLogEnable = remoteLogManagerConfig.enableRemoteStorageSystem())
 
         if (isFuture)
           futureLogs.put(topicPartition, log)
@@ -1212,7 +1220,8 @@ object LogManager {
             time: Time,
             brokerTopicStats: BrokerTopicStats,
             logDirFailureChannel: LogDirFailureChannel,
-            keepPartitionMetadataFile: Boolean): LogManager = {
+            keepPartitionMetadataFile: Boolean,
+            remoteLogManagerConfig: RemoteLogManagerConfig): LogManager = {
     val defaultProps = LogConfig.extractLogConfigMap(config)
 
     LogConfig.validateValues(defaultProps)
@@ -1235,7 +1244,8 @@ object LogManager {
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
       time = time,
-      keepPartitionMetadataFile = keepPartitionMetadataFile)
+      keepPartitionMetadataFile = keepPartitionMetadataFile,
+      remoteLogManagerConfig = remoteLogManagerConfig)
   }
 
 }

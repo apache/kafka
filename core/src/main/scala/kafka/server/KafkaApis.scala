@@ -23,7 +23,6 @@ import java.util
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
-
 import kafka.admin.AdminUtils
 import kafka.api.{ApiVersion, ElectLeadersRequestOps, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.common.OffsetAndMetadata
@@ -88,6 +87,7 @@ import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 import kafka.coordinator.group.GroupOverview
 import kafka.server.metadata.ConfigRepository
+import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 
 /**
  * Logic to handle the various Kafka requests
@@ -637,7 +637,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (authorizedRequestInfo.isEmpty)
       sendResponseCallback(Map.empty)
     else {
-      val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
+      val clientId = request.header.clientId
+      val internalTopicsAllowed = (clientId == AdminUtils.AdminClientId
+        || (clientId != null && clientId.startsWith(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CLIENT_PREFIX)))
 
       // call the replica manager to append messages to the replicas
       replicaManager.appendRecords(
@@ -1167,7 +1169,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (metadataRequest.allowAutoTopicCreation && config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
         if (!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false)) {
           val authorizedForCreateTopics = authHelper.filterByAuthorized(request.context, CREATE, TOPIC,
-            nonExistingTopics)(identity)
+            nonExistingTopics)(x => x)
           unauthorizedForCreateTopics = nonExistingTopics.diff(authorizedForCreateTopics)
           authorizedTopics = authorizedTopics.diff(unauthorizedForCreateTopics)
         }

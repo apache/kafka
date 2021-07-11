@@ -106,7 +106,7 @@ class RaftReplicaManagerTest {
 
   def createRaftReplicaManager(): RaftReplicaManager = {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
-    new RaftReplicaManager(config, metrics, time, new MockScheduler(time), mockLogMgr,
+    new RaftReplicaManager(config, metrics, time, new MockScheduler(time), mockLogMgr, None,
       new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
       metadataCache, new LogDirFailureChannel(config.logDirs.size), alterIsrManager,
       configRepository, None)
@@ -117,7 +117,7 @@ class RaftReplicaManagerTest {
     assertThrows(classOf[IllegalStateException], () => {
       val zkConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, ""))
       val mockLogMgr = TestUtils.createLogManager(zkConfig.logDirs.map(new File(_)))
-      new RaftReplicaManager(zkConfig, metrics, time, new MockScheduler(time), mockLogMgr,
+      new RaftReplicaManager(zkConfig, metrics, time, new MockScheduler(time), mockLogMgr, None,
         new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
         metadataCache, new LogDirFailureChannel(config.logDirs.size), alterIsrManager,
         configRepository)

@@ -57,13 +57,17 @@ class TransactionsTest extends KafkaServerTestHarness {
     TestUtils.createBrokerConfigs(numServers, zkConnect).map(KafkaConfig.fromProps(_, serverProps()))
   }
 
+  def topicConfig(): Properties = {
+    val topicConfig = new Properties()
+    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
+    topicConfig
+  }
+
   @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
-    val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    createTopic(topic1, numPartitions, numServers, topicConfig)
-    createTopic(topic2, numPartitions, numServers, topicConfig)
+    createTopic(topic1, numPartitions, numServers, topicConfig())
+    createTopic(topic2, numPartitions, numServers, topicConfig())
 
     for (_ <- 0 until transactionalProducerCount)
       createTransactionalProducer("transactional-producer")
@@ -565,10 +569,8 @@ class TransactionsTest extends KafkaServerTestHarness {
     val unCommittedConsumer = nonTransactionalConsumers.head
     val topicWith10Partitions = "largeTopic"
     val topicWith10PartitionsAndOneReplica = "largeTopicOneReplica"
-    val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
 
-    createTopic(topicWith10Partitions, 10, numServers, topicConfig)
+    createTopic(topicWith10Partitions, 10, numServers, topicConfig())
     createTopic(topicWith10PartitionsAndOneReplica, 10, 1, new Properties())
 
     firstProducer.initTransactions()
@@ -730,7 +732,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer.flush()
   }
 
-  private def serverProps() = {
+  def serverProps() = {
     val serverProps = new Properties()
     serverProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
     // Set a smaller value for the number of partitions for the __consumer_offsets topic

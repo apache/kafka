@@ -18,9 +18,9 @@
 package kafka.server
 
 import java.util.concurrent.atomic.AtomicBoolean
-
 import kafka.cluster.Partition
 import kafka.controller.StateChangeLogger
+import kafka.log.remote.RemoteLogManager
 import kafka.log.{Log, LogManager}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.LazyOffsetCheckpoints
@@ -38,6 +38,7 @@ class RaftReplicaManager(config: KafkaConfig,
                          time: Time,
                          scheduler: Scheduler,
                          logManager: LogManager,
+                         remoteLogManager: Option[RemoteLogManager],
                          isShuttingDown: AtomicBoolean,
                          quotaManagers: QuotaManagers,
                          brokerTopicStats: BrokerTopicStats,
@@ -47,18 +48,21 @@ class RaftReplicaManager(config: KafkaConfig,
                          delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                          delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
                          delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
+                         delayedRemoteFetchPurgatory: DelayedOperationPurgatory[DelayedRemoteFetch],
                          threadNamePrefix: Option[String],
                          configRepository: ConfigRepository,
                          alterIsrManager: AlterIsrManager) extends ReplicaManager(
-  config, metrics, time, None, scheduler, logManager, isShuttingDown, quotaManagers,
+  config, metrics, time, None, scheduler, logManager, remoteLogManager, isShuttingDown, quotaManagers,
   brokerTopicStats, metadataCache, logDirFailureChannel, delayedProducePurgatory, delayedFetchPurgatory,
-  delayedDeleteRecordsPurgatory, delayedElectLeaderPurgatory, threadNamePrefix, configRepository, alterIsrManager) {
+  delayedDeleteRecordsPurgatory, delayedElectLeaderPurgatory, delayedRemoteFetchPurgatory, threadNamePrefix,
+  configRepository, alterIsrManager) {
 
   def this(config: KafkaConfig,
            metrics: Metrics,
            time: Time,
            scheduler: Scheduler,
            logManager: LogManager,
+           remoteLogManager: Option[RemoteLogManager],
            isShuttingDown: AtomicBoolean,
            quotaManagers: QuotaManagers,
            brokerTopicStats: BrokerTopicStats,
@@ -67,7 +71,7 @@ class RaftReplicaManager(config: KafkaConfig,
            alterIsrManager: AlterIsrManager,
            configRepository: ConfigRepository,
            threadNamePrefix: Option[String] = None) = {
-    this(config, metrics, time, scheduler, logManager, isShuttingDown,
+    this(config, metrics, time, scheduler, logManager, remoteLogManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
       DelayedOperationPurgatory[DelayedProduce](
         purgatoryName = "Produce", brokerId = config.brokerId,
@@ -80,6 +84,8 @@ class RaftReplicaManager(config: KafkaConfig,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
       DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", brokerId = config.brokerId),
+      DelayedOperationPurgatory[DelayedRemoteFetch](
+        purgatoryName = "RemoteFetch", brokerId = config.brokerId),
       threadNamePrefix, configRepository, alterIsrManager)
   }
 
