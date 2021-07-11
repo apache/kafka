@@ -777,6 +777,7 @@ class KafkaConfigTest {
         case RaftConfig.QUORUM_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
         // Remote Log Manager Configs
         case RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
@@ -1058,7 +1059,8 @@ class KafkaConfigTest {
   private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, AddressSpec]): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
-    val raftConfig = new RaftConfig(KafkaConfig.fromProps(props))
+    val kafkaConfig = KafkaConfig.fromProps(props)
+    val raftConfig = new RaftConfig(kafkaConfig)
     assertEquals(expectedVoters, raftConfig.quorumVoterConnections())
   }
 

@@ -24,8 +24,9 @@ import org.apache.kafka.common.protocol
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.raft.{KafkaRaftClient, RaftConfig}
 import org.apache.kafka.raft.internals.BatchBuilder
-import org.apache.kafka.raft._
+import org.apache.kafka.raft.{LogAppendInfo, LogOffsetMetadata, OffsetAndEpoch, ReplicatedLog, ValidOffsetAndEpoch}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.snapshot.{RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.test.TestUtils.assertOptional
@@ -849,6 +850,7 @@ final class KafkaMetadataLogTest {
 }
 
 object KafkaMetadataLogTest {
+
   class ByteArraySerde extends RecordSerde[Array[Byte]] {
     override def recordSize(data: Array[Byte], serializationCache: ObjectSerializationCache): Int = {
       data.length
@@ -868,8 +870,8 @@ object KafkaMetadataLogTest {
     logSegmentMillis = 10 * 1000,
     retentionMaxBytes = 100 * 1024,
     retentionMillis = 60 * 1000,
-    maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-    maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+    maxBatchSizeInBytes = RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES,
+    maxFetchSizeInBytes = RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES,
     fileDeleteDelayMs = Defaults.FileDeleteDelayMs,
     nodeId = 1
   )
@@ -898,9 +900,9 @@ object KafkaMetadataLogTest {
   }
 
   def buildMetadataLog(
-    tempDir: File,
-    time: MockTime,
-    metadataLogConfig: MetadataLogConfig = DefaultMetadataLogConfig,
+                        tempDir: File,
+                        time: MockTime,
+                        metadataLogConfig: MetadataLogConfig = DefaultMetadataLogConfig
   ): KafkaMetadataLog = {
     val (_, log, _) = buildMetadataLogAndDir(tempDir, time, metadataLogConfig)
     log

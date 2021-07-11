@@ -92,6 +92,16 @@ public class RaftConfig {
     public static final String QUORUM_RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
     public static final int DEFAULT_QUORUM_RETRY_BACKOFF_MS = 20;
 
+    public static final String QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG = QUORUM_PREFIX +
+            "replica.fetch.response.max.bytes";
+    public static final String QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES_DOC =
+            "Maximum bytes expected for the entire fetch response from the leader. Records are fetched in batches, " +
+            "and if the first record batch in the first non-empty partition of the fetch is larger than this value, the record batch " +
+            "will still be returned to ensure that progress can be made. As such, this is not an absolute maximum. The maximum " +
+            "record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
+            "<code>max.message.bytes</code> (topic config).";
+    public static final int DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES = 10 * 1024 * 1024;
+
     private final int requestTimeoutMs;
     private final int retryBackoffMs;
     private final int electionTimeoutMs;
@@ -99,6 +109,7 @@ public class RaftConfig {
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
     private final Map<Integer, AddressSpec> voterConnections;
+    private final int replicaFetchResponseMaxBytes;
 
     public interface AddressSpec {
     }
@@ -145,7 +156,9 @@ public class RaftConfig {
             abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG),
             abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG),
             abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG));
+            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG),
+            abstractConfig.getInt(QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG)
+        );
     }
 
     public RaftConfig(
@@ -155,7 +168,8 @@ public class RaftConfig {
         int electionTimeoutMs,
         int electionBackoffMaxMs,
         int fetchTimeoutMs,
-        int appendLingerMs
+        int appendLingerMs,
+        int replicaFetchResponseMaxBytes
     ) {
         this.voterConnections = voterConnections;
         this.requestTimeoutMs = requestTimeoutMs;
@@ -164,6 +178,7 @@ public class RaftConfig {
         this.electionBackoffMaxMs = electionBackoffMaxMs;
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.appendLingerMs = appendLingerMs;
+        this.replicaFetchResponseMaxBytes = replicaFetchResponseMaxBytes;
     }
 
     public int requestTimeoutMs() {
@@ -188,6 +203,10 @@ public class RaftConfig {
 
     public int appendLingerMs() {
         return appendLingerMs;
+    }
+
+    public int replicaFetchResponseMaxBytes() {
+        return replicaFetchResponseMaxBytes;
     }
 
     public Set<Integer> quorumVoterIds() {

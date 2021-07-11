@@ -733,9 +733,9 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
-        ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
+        ByteBuffer buffer = ByteBuffer.allocate(RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES);
         ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
-        Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
+        Mockito.when(memoryPool.tryAllocate(RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES))
             .thenReturn(buffer);
         Mockito.when(memoryPool.tryAllocate(256))
             .thenReturn(leaderBuffer);
@@ -765,9 +765,9 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
-        ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
+        ByteBuffer buffer = ByteBuffer.allocate(RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES);
         ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
-        Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
+        Mockito.when(memoryPool.tryAllocate(RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES))
             .thenReturn(buffer);
         Mockito.when(memoryPool.tryAllocate(256))
             .thenReturn(leaderBuffer);
@@ -798,9 +798,9 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
-        ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
+        ByteBuffer buffer = ByteBuffer.allocate(RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES);
         ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
-        Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
+        Mockito.when(memoryPool.tryAllocate(RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES))
             .thenReturn(buffer);
         Mockito.when(memoryPool.tryAllocate(256))
             .thenReturn(leaderBuffer);

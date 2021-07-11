@@ -62,7 +62,8 @@ final public class FetchSnapshotRequest extends AbstractRequest {
     public static FetchSnapshotRequestData singleton(
         String clusterId,
         TopicPartition topicPartition,
-        UnaryOperator<FetchSnapshotRequestData.PartitionSnapshot> operator
+        UnaryOperator<FetchSnapshotRequestData.PartitionSnapshot> operator,
+        int replicaFetchResponseMaxBytes
     ) {
         FetchSnapshotRequestData.PartitionSnapshot partitionSnapshot = operator.apply(
             new FetchSnapshotRequestData.PartitionSnapshot().setPartition(topicPartition.partition())
@@ -70,6 +71,7 @@ final public class FetchSnapshotRequest extends AbstractRequest {
 
         return new FetchSnapshotRequestData()
             .setClusterId(clusterId)
+            .setMaxBytes(replicaFetchResponseMaxBytes)
             .setTopics(
                 Collections.singletonList(
                     new FetchSnapshotRequestData.TopicSnapshot()
