@@ -25,23 +25,20 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.util.Properties;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 
-public class Producer extends Thread {
+public class Producer implements Runnable {
     private final KafkaProducer<Integer, String> producer;
     private final String topic;
     private final Boolean isAsync;
     private int numRecords;
-    private final CountDownLatch latch;
 
     public Producer(final String topic,
                     final Boolean isAsync,
                     final String transactionalId,
                     final boolean enableIdempotency,
                     final int numRecords,
-                    final int transactionTimeoutMs,
-                    final CountDownLatch latch) {
+                    final int transactionTimeoutMs) {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "DemoProducer");
@@ -52,14 +49,15 @@ public class Producer extends Thread {
         }
         if (transactionalId != null) {
             props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+        } else {
+            // Transactions are always idempotent, but in other cases we need to explicitly set idempotence
+            props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotency);
         }
-        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotency);
 
         producer = new KafkaProducer<>(props);
         this.topic = topic;
         this.isAsync = isAsync;
         this.numRecords = numRecords;
-        this.latch = latch;
     }
 
     KafkaProducer<Integer, String> get() {
@@ -70,7 +68,7 @@ public class Producer extends Thread {
     public void run() {
         int messageKey = 0;
         int recordsSent = 0;
-        while (recordsSent < numRecords) {
+        while (!Thread.currentThread().isInterrupted() && recordsSent < numRecords) {
             String messageStr = "Message_" + messageKey;
             long startTime = System.currentTimeMillis();
             if (isAsync) { // Send asynchronously
@@ -83,15 +81,16 @@ public class Producer extends Thread {
                         messageKey,
                         messageStr)).get();
                     System.out.println("Sent message: (" + messageKey + ", " + messageStr + ")");
-                } catch (InterruptedException | ExecutionException e) {
+                } catch (ExecutionException e) {
                     e.printStackTrace();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 }
             }
             messageKey += 2;
             recordsSent += 1;
         }
         System.out.println("Producer sent " + numRecords + " records successfully");
-        latch.countDown();
     }
 }
 
