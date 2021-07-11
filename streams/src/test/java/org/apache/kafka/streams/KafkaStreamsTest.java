@@ -308,17 +308,17 @@ public class KafkaStreamsTest {
         doAnswer(invocation -> {
             state.set(StreamThread.State.STARTING);
             threadStateListenerCapture.getValue().onChange(thread,
-                    StreamThread.State.STARTING,
-                    StreamThread.State.CREATED);
+                StreamThread.State.STARTING,
+                StreamThread.State.CREATED);
             threadStateListenerCapture.getValue().onChange(thread,
-                    StreamThread.State.PARTITIONS_REVOKED,
-                    StreamThread.State.STARTING);
+                StreamThread.State.PARTITIONS_REVOKED,
+                StreamThread.State.STARTING);
             threadStateListenerCapture.getValue().onChange(thread,
-                    StreamThread.State.PARTITIONS_ASSIGNED,
-                    StreamThread.State.PARTITIONS_REVOKED);
+                StreamThread.State.PARTITIONS_ASSIGNED,
+                StreamThread.State.PARTITIONS_REVOKED);
             threadStateListenerCapture.getValue().onChange(thread,
-                    StreamThread.State.RUNNING,
-                    StreamThread.State.PARTITIONS_ASSIGNED);
+                StreamThread.State.RUNNING,
+                StreamThread.State.PARTITIONS_ASSIGNED);
             return null;
         }).when(thread).start();
 
