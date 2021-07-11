@@ -104,15 +104,18 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
 
         final Errors error = Errors.forCode(response.data().errorCode());
         if (error != Errors.NONE) {
-            handleError(groupId, error, failed, unmapped);
+            handleGroupLevelError(groupId, error, failed, unmapped);
         } else {
             final Map<TopicPartition, Errors> partitions = new HashMap<>();
             response.data().topics().forEach(topic -> 
-                topic.partitions().forEach(partition -> {
-                    Errors partitionError = Errors.forCode(partition.errorCode());
-                    if (!handleError(groupId, partitionError, failed, unmapped)) {
-                        partitions.put(new TopicPartition(topic.name(), partition.partitionIndex()), partitionError);
+                topic.partitions().forEach(partitionOffsetDeleteResponse -> {
+                    Errors partitionError = Errors.forCode(partitionOffsetDeleteResponse.errorCode());
+                    TopicPartition tp = new TopicPartition(topic.name(), partitionOffsetDeleteResponse.partitionIndex());
+                    if (log.isDebugEnabled() && partitionError != Errors.NONE) {
+                        log.debug("`{}` request for group {} returned error {} in the partition {}.",
+                            apiName(), groupId, partitionError, tp);
                     }
+                    partitions.put(tp, partitionError);
                 })
             );
             if (!partitions.isEmpty())
@@ -121,7 +124,7 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         return new ApiResult<>(completed, failed, unmapped);
     }
 
-    private boolean handleError(
+    private void handleGroupLevelError(
         CoordinatorKey groupId,
         Errors error,
         Map<CoordinatorKey, Throwable> failed,
@@ -131,15 +134,16 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
             case GROUP_AUTHORIZATION_FAILED:
             case GROUP_ID_NOT_FOUND:
             case INVALID_GROUP_ID:
+            case NON_EMPTY_GROUP:
                 log.error("Received non retriable error for group {} in `{}` response", groupId,
-                        apiName(), error.exception());
+                    apiName(), error.exception());
                 failed.put(groupId, error.exception());
-                return true;
+                break;
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("`{}` request for group {} failed because the coordinator" +
                     " is still in the process of loading state. Will retry.", apiName(), groupId);
-                return true;
+                break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
@@ -147,9 +151,12 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
                 log.debug("`{}` request for group {} returned error {}. " +
                     "Will attempt to find the coordinator again and retry.", apiName(), groupId, error);
                 unmapped.add(groupId);
-                return true;
+                break;
             default:
-                return false;
+                final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
+                    groupId, apiName());
+                log.error(unexpectedErrorMsg, error.exception());
+                failed.put(groupId, error.exception());
         }
     }
 

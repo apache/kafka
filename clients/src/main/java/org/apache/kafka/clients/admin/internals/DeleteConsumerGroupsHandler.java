@@ -116,6 +116,13 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
                         apiName(), error.exception());
                 failed.put(groupId, error.exception());
                 break;
+            case INVALID_GROUP_ID:
+            case NON_EMPTY_GROUP:
+            case GROUP_ID_NOT_FOUND:
+                log.error("Received non retriable failure for group {} in `{}` response", groupId,
+                    apiName(), error.exception());
+                failed.put(groupId, error.exception());
+                break;
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("`{}` request for group {} failed because the coordinator " +
