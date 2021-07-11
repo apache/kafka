@@ -48,7 +48,7 @@ public class StreamThreadStateStoreProvider {
             return Collections.emptyList();
         }
         final StreamThread.State state = streamThread.state();
-        if (storeQueryParams.staleStoresEnabled() ? streamThread.getIsAlive() : state == StreamThread.State.RUNNING) {
+        if (storeQueryParams.staleStoresEnabled() ? streamThread.isStateAlive() : state == StreamThread.State.RUNNING) {
             final Collection<Task> tasks = storeQueryParams.staleStoresEnabled() ?
                     streamThread.allTasks().values() : streamThread.activeTasks();
 

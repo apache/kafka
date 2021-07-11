@@ -939,7 +939,7 @@ public class KafkaStreams implements AutoCloseable {
         return streamThread;
     }
 
-    //For KafkaStreamsTest
+    //Ensure Mockito stub construct with capture argument for KafkaStreamsTest.
     public static Metrics createThisMetrics(final MetricConfig metricConfig, final List<MetricsReporter> reporters, final Time time, final MetricsContext metricsContext) {
         return new Metrics(metricConfig, reporters, time, metricsContext);
     }
@@ -1071,7 +1071,7 @@ public class KafkaStreams implements AutoCloseable {
                 // make a copy of threads to avoid holding lock
                 for (final StreamThread streamThread : new ArrayList<>(threads)) {
                     final boolean callingThreadIsNotCurrentStreamThread = !streamThread.getName().equals(Thread.currentThread().getName());
-                    if (streamThread.getIsAlive() && (callingThreadIsNotCurrentStreamThread || getNumLiveStreamThreads() == 1)) {
+                    if (streamThread.isStateAlive() && (callingThreadIsNotCurrentStreamThread || getNumLiveStreamThreads() == 1)) {
                         log.info("Removing StreamThread " + streamThread.getName());
                         final Optional<String> groupInstanceID = streamThread.getGroupInstanceID();
                         streamThread.requestLeaveGroupDuringShutdown();

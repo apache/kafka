@@ -246,12 +246,12 @@ public class StreamThread extends Thread {
 
     public boolean isRunning() {
         synchronized (stateLock) {
-            return getIsAlive();
+            return isStateAlive();
         }
     }
 
-    //For KafkaStreamTest
-    public boolean getIsAlive() {
+    //Ensure Mockito can stub method for KafkaStreamTest.
+    public boolean isStateAlive() {
         return state.isAlive();
     }
 
