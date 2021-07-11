@@ -122,31 +122,24 @@ object ConfigCommand extends Config {
     val entity = parseEntity(opts)
     val entityType = entity.root.entityType
     val entityName = entity.fullSanitizedName
-    val errorMessage = s"--bootstrap-server option must be specified to update $entityType configs $configsToBeAdded $configsToBeDeleted."
+    val errorMessage = s"--bootstrap-server option must be specified to update $entityType configs: {add: $configsToBeAdded, delete: $configsToBeDeleted}"
 
     if (entityType == ConfigType.User) {
       if (!configsToBeAdded.isEmpty || !configsToBeDeleted.isEmpty) {
         val info = "User configuration updates using ZooKeeper are only supported for SCRAM credential updates."
         // make sure every added/deleted configs are SCRAM related, other configs are not supported using zookeeper
         require(configsToBeAdded.keys().asScala.forall(propertyKey => ScramMechanism.values().map(_.mechanismName()).contains(propertyKey.toString)),
-          s"$errorMessage $info")
+          s"$errorMessage. $info")
         require(configsToBeDeleted.forall(propertyKey => ScramMechanism.values().map(_.mechanismName()).contains(propertyKey)),
-          s"$errorMessage $info")
+          s"$errorMessage. $info")
       }
       preProcessScramCredentials(configsToBeAdded)
     } else if (entityType == ConfigType.Broker) {
-      // Dynamic broker configs may be updated using ZooKeeper only if the corresponding broker is not running.
+      // Dynamic broker configs can be updated using ZooKeeper only if the corresponding broker is not running.
       if (!configsToBeAdded.isEmpty || !configsToBeDeleted.isEmpty) {
+        validateBrokersNotRunning(entityName, adminZkClient, zkClient, errorMessage)
+
         val perBrokerConfig = entityName != ConfigEntityName.Default
-        val info = "Broker configuration updates using ZooKeeper are supported for bootstrapping before brokers" +
-          " are started to enable encrypted password configs to be stored in ZooKeeper."
-        if (perBrokerConfig) {
-          adminZkClient.parseBroker(entityName).foreach { brokerId =>
-            require(zkClient.getBroker(brokerId).isEmpty, s"$errorMessage when broker $entityName is running. $info")
-          }
-        } else {
-          require(zkClient.getAllBrokersInCluster.isEmpty, s"$errorMessage for default cluster if any broker is running. $info")
-        }
         preProcessBrokerConfigs(configsToBeAdded, perBrokerConfig)
       }
     }
@@ -165,6 +158,22 @@ object ConfigCommand extends Config {
     adminZkClient.changeConfigs(entityType, entityName, configs)
 
     println(s"Completed updating config for entity: $entity.")
+  }
+
+  private def validateBrokersNotRunning(entityName: String,
+                                        adminZkClient: AdminZkClient,
+                                        zkClient: KafkaZkClient,
+                                        errorMessage: String): Unit = {
+    val perBrokerConfig = entityName != ConfigEntityName.Default
+    val info = "Broker configuration updates/describes using ZooKeeper are supported for bootstrapping before brokers" +
+      " are started to enable encrypted password configs to be stored in ZooKeeper."
+    if (perBrokerConfig) {
+      adminZkClient.parseBroker(entityName).foreach { brokerId =>
+        require(zkClient.getBroker(brokerId).isEmpty, s"$errorMessage when broker $entityName is running. $info")
+      }
+    } else {
+      require(zkClient.getAllBrokersInCluster.isEmpty, s"$errorMessage for default cluster if any broker is running. $info")
+    }
   }
 
   private def preProcessScramCredentials(configsToBeAdded: Properties): Unit = {
@@ -231,9 +240,17 @@ object ConfigCommand extends Config {
     }
   }
 
-  private def describeConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
+  private[admin] def describeConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configEntity = parseEntity(opts)
-    val describeAllUsers = configEntity.root.entityType == ConfigType.User && !configEntity.root.sanitizedName.isDefined && !configEntity.child.isDefined
+    val entityType = configEntity.root.entityType
+    val describeAllUsers = entityType == ConfigType.User && !configEntity.root.sanitizedName.isDefined && !configEntity.child.isDefined
+    val entityName = configEntity.fullSanitizedName
+    val errorMessage = s"--bootstrap-server option must be specified to describe $entityType"
+    if (entityType == ConfigType.Broker) {
+      // Dynamic broker configs can be described using ZooKeeper only if the corresponding broker is not running.
+      validateBrokersNotRunning(entityName, adminZkClient, zkClient, errorMessage)
+    }
+
     val entities = configEntity.getAllEntities(zkClient)
     for (entity <- entities) {
       val configs = adminZkClient.fetchEntityConfig(entity.root.entityType, entity.fullSanitizedName)

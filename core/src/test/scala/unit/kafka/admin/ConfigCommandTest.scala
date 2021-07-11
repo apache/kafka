@@ -902,7 +902,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldNotAllowAddBrokerQuotaConfigUsingZookeeper(): Unit = {
+  def shouldNotAllowAddBrokerQuotaConfigWhileBrokerUpUsingZookeeper(): Unit = {
     val alterOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
       "--entity-type", "brokers",
@@ -914,7 +914,47 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     EasyMock.expect(mockZkClient.getBroker(1)).andReturn(Option(mockBroker))
     EasyMock.replay(mockZkClient)
 
-    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(mockZkClient, alterOpts, new DummyAdminZkClient(zkClient)))
+    assertThrows(classOf[IllegalArgumentException],
+      () => ConfigCommand.alterConfigWithZk(mockZkClient, alterOpts, new DummyAdminZkClient(zkClient)))
+  }
+
+  @Test
+  def shouldNotAllowDescribeBrokerWhileBrokerUpUsingZookeeper(): Unit = {
+    val describeOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--describe"))
+
+    val mockZkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    val mockBroker: Broker = EasyMock.createNiceMock(classOf[Broker])
+    EasyMock.expect(mockZkClient.getBroker(1)).andReturn(Option(mockBroker))
+    EasyMock.replay(mockZkClient)
+
+    assertThrows(classOf[IllegalArgumentException],
+      () => ConfigCommand.describeConfigWithZk(mockZkClient, describeOpts, new DummyAdminZkClient(zkClient)))
+  }
+
+  @Test
+  def shouldSupportDescribeBrokerBeforeBrokerUpUsingZookeeper(): Unit = {
+    val describeOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--describe"))
+
+    class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
+      override def fetchEntityConfig(rootEntityType: String, sanitizedEntityName: String): Properties = {
+        assertEquals("brokers", rootEntityType)
+        assertEquals("1", sanitizedEntityName)
+
+        new Properties()
+      }
+    }
+
+    val mockZkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    EasyMock.expect(mockZkClient.getBroker(1)).andReturn(None)
+    EasyMock.replay(mockZkClient)
+
+    ConfigCommand.describeConfigWithZk(mockZkClient, describeOpts, new TestAdminZkClient(zkClient))
   }
 
   @Test
