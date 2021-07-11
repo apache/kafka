@@ -82,7 +82,6 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import javax.management.MBeanServer;
-import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.Arrays;
@@ -91,7 +90,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -276,16 +274,8 @@ public class WorkerTest extends ThreadedTest {
         // Wait for the connector to actually start
         assertEquals(TargetState.STARTED, onFirstStart.get(1000, TimeUnit.MILLISECONDS));
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
-
-        FutureCallback<TargetState> onSecondStart = new FutureCallback<>();
-        worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onSecondStart);
-        try {
-            onSecondStart.get(0, TimeUnit.MILLISECONDS);
-            fail("Should have failed while trying to start second connector with same name");
-        } catch (ExecutionException e) {
-            assertThat(e.getCause(), instanceOf(ConnectException.class));
-        }
-
+        assertSecondConnectorWithSameName(worker);                            
+    
         assertStatistics(worker, 1, 0);
         assertStartupStatistics(worker, 1, 0, 0, 0);
         worker.stopAndAwaitConnector(CONNECTOR_ID);
@@ -594,15 +584,7 @@ public class WorkerTest extends ThreadedTest {
         assertEquals(TargetState.STARTED, onFirstStart.get(1000, TimeUnit.MILLISECONDS));
         assertStatistics(worker, 1, 0);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
-
-        FutureCallback<TargetState> onSecondStart = new FutureCallback<>();
-        worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onSecondStart);
-        try {
-            onSecondStart.get(0, TimeUnit.MILLISECONDS);
-            fail("Should have failed while trying to start second connector with same name");
-        } catch (ExecutionException e) {
-            assertThat(e.getCause(), instanceOf(ConnectException.class));
-        }
+        assertSecondConnectorWithSameName(worker);           
 
         Map<String, String> connProps = new HashMap<>(connectorProps);
         connProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "2");
@@ -1320,7 +1302,7 @@ public class WorkerTest extends ThreadedTest {
         MetricName name = worker.metrics().metrics().metricName("test.avg", "grp1");
         worker.metrics().metrics().addMetric(name, new Avg());
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        Set<ObjectInstance> ret = server.queryMBeans(null, null);
+        server.queryMBeans(null, null);
 
         List<MetricsReporter> list = worker.metrics().metrics().reporters();
         for (MetricsReporter reporter : list) {
@@ -1379,6 +1361,15 @@ public class WorkerTest extends ThreadedTest {
         assertEquals(taskStartupFailurePct, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "task-startup-failure-percentage"), 0.0001d);
     }
 
+    private void assertSecondConnectorWithSameName(Worker worker) {
+        FutureCallback<TargetState> onSecondStart = new FutureCallback<>();
+        worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onSecondStart);
+        Exception e = assertThrows("Should have failed while trying to start second connector with same name", 
+                                    ExecutionException.class, 
+                                    () -> onSecondStart.get(0, TimeUnit.MILLISECONDS));
+        assertThat(e.getCause(), instanceOf(ConnectException.class));            
+    }
+
     private void expectStartStorage() {
         offsetBackingStore.configure(anyObject(WorkerConfig.class));
         EasyMock.expectLastCall();
@@ -1395,10 +1386,6 @@ public class WorkerTest extends ThreadedTest {
 
     private void expectConverters() {
         expectConverters(JsonConverter.class, false);
-    }
-
-    private void expectConverters(Boolean expectDefaultConverters) {
-        expectConverters(JsonConverter.class, expectDefaultConverters);
     }
 
     @SuppressWarnings("deprecation")
@@ -1541,8 +1528,6 @@ public class WorkerTest extends ThreadedTest {
     }
 
     private static class TestSourceTask extends SourceTask {
-        public TestSourceTask() {
-        }
 
         @Override
         public String version() {
