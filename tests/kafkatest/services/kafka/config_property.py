@@ -62,7 +62,31 @@ DELEGATION_TOKEN_MAX_LIFETIME_MS="delegation.token.max.lifetime.ms"
 DELEGATION_TOKEN_EXPIRY_TIME_MS="delegation.token.expiry.time.ms"
 DELEGATION_TOKEN_SECRET_KEY="delegation.token.secret.key"
 SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
+SASL_MECHANISM="sasl.mechanism"
 
+REMOTE_LOG_STORAGE_SYSTEM_ENABLE="remote.log.storage.system.enable"
+REMOTE_LOG_STORAGE_MANAGER_CLASS_NAME="remote.log.storage.manager.class.name"
+REMOTE_LOG_STORAGE_MANAGER_CLASS_PATH="remote.log.storage.manager.class.path"
+REMOTE_LOG_METADATA_MANAGER_CLASS_NAME="remote.log.metadata.manager.class.name"
+REMOTE_LOG_METADATA_MANAGER_CLASS_PATH="remote.log.metadata.manager.class.path"
+REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME="remote.log.metadata.manager.listener.name"
+REMOTE_LOG_MANAGER_TASK_INTERVAL_MS="remote.log.manager.task.interval.ms"
+REMOTE_LOG_MANAGER_THREAD_POOL_SIZE="remote.log.manager.thread.pool.size"
+REMOTE_LOG_READER_MAX_PENDING_TASKS="remote.log.reader.max.pending.tasks"
+REMOTE_LOG_READER_THREADS="remote.log.reader.threads"
+
+REMOTE_LOG_METADATA_CONFIG_PREFIX="remote.log.metadata." # configurable prefix
+REMOTE_LOG_METADATA_TOPIC_NUM_PARTITIONS=REMOTE_LOG_METADATA_CONFIG_PREFIX + "topic.num.partitions"
+REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR=REMOTE_LOG_METADATA_CONFIG_PREFIX + "topic.replication.factor"
+REMOTE_LOG_METADATA_TOPIC_RETENTION_MS=REMOTE_LOG_METADATA_CONFIG_PREFIX + "topic.retention.ms"
+
+REMOTE_STORAGE_MANAGER_CONFIG_PREFIX="remote.log.storage." # configurable prefix
+REMOTE_LOG_STORAGE_HDFS_FS_URI=REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.fs.uri"
+REMOTE_LOG_STORAGE_HDFS_BASE_DIR=REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.base.dir"
+REMOTE_LOG_STORAGE_HDFS_REMOTE_READ_BYTES=REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.remote.read.bytes"
+REMOTE_LOG_STORAGE_HDFS_REMOTE_READ_CACHE_BYTES=REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.remote.read.cache.bytes"
+REMOTE_LOG_STORAGE_HDFS_USER=REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.user"
+REMOTE_LOG_STORAGE_HDFS_KEYTAB_PATH=REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.keytab.path"
 
 """
 From KafkaConfig.scala
