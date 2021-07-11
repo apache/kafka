@@ -158,7 +158,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldParseArgumentsForTopicsEntityTypeUsingZookeeper(): Unit = {
+  def shouldFailParseArgumentsForTopicsEntityTypeUsingZookeeper(): Unit = {
     assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("topics", zkConfig = true))
   }
 
@@ -168,7 +168,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldFailParseArgumentsForBrokersEntityTypeUsingZookeeper(): Unit = {
+  def shouldParseArgumentsForBrokersEntityTypeUsingZookeeper(): Unit = {
     testArgumentParse("brokers", zkConfig = true)
   }
 
@@ -183,7 +183,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldParseArgumentsForIpEntityTypeUsingZookeeper(): Unit = {
+  def shouldFailParseArgumentsForIpEntityTypeUsingZookeeper(): Unit = {
     assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("ips", zkConfig = true))
   }
 
@@ -1455,7 +1455,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def testQuotaConfigEntityUsingZookeeper(): Unit = {
+  def testQuotaConfigEntityUsingZookeeperNotAllowed(): Unit = {
     assertThrows(classOf[IllegalArgumentException], () => doTestQuotaConfigEntity(zkConfig = true))
   }
 
@@ -1539,7 +1539,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def testUserClientQuotaOptsUsingZookeeper(): Unit = {
+  def testUserClientQuotaOptsUsingZookeeperNotAllowed(): Unit = {
     assertThrows(classOf[IllegalArgumentException], () => doTestUserClientQuotaOpts(zkConfig = true))
   }
 

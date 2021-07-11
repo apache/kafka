@@ -726,8 +726,8 @@ object ConfigCommand extends Config {
   class ConfigCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
 
     val zkConnectOpt = parser.accepts("zookeeper", "DEPRECATED. The connection string for the zookeeper connection in the form host:port. " +
-      "Multiple URLS can be given to allow fail-over. Replaced by --bootstrap-server except configuring SCRAM credentials for user or " +
-      "password configs before starting brokers. REQUIRED unless --bootstrap-server is given.")
+      "Multiple URLS can be given to allow fail-over. Replaced by --bootstrap-server except for when configuring SCRAM credentials for users or " +
+      "dynamic broker configs before starting brokers. REQUIRED unless --bootstrap-server is given.")
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
