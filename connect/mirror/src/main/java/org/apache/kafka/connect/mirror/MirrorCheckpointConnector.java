@@ -71,9 +71,10 @@ public class MirrorCheckpointConnector extends SourceConnector {
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
         groupFilter = config.groupFilter();
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
-        scheduler = new Scheduler(MirrorCheckpointConnector.class, config.adminTimeout());
+        // Number of threads is 2, because there is 1 task affecting the source cluster, which can block longer, and 1 thread is given for the other tasks
+        scheduler = new Scheduler(MirrorCheckpointConnector.class, config.adminTimeout(), 2);
         scheduler.execute(this::createInternalTopics, "creating internal topics");
-        scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
+        scheduler.executeWithTimeout(this::loadInitialConsumerGroups, "loading initial consumer groups", config.sourceClusterTaskStartTimeout());
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
                 "refreshing consumer groups");
         log.info("Started {} with {} consumer groups.", connectorName, knownConsumerGroups.size());
