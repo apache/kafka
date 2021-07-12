@@ -83,7 +83,7 @@ allprojects {
           libs.javassist,
           // ensure we have a single version in the classpath despite transitive dependencies
           libs.scalaLibrary,
-          libs.scalaReflect,
+          libs.scalaCompiler,
           libs.jacksonAnnotations,
           // be explicit about the Netty dependency version instead of relying on the version set by
           // ZooKeeper (potentially older and containing CVEs)
@@ -604,6 +604,10 @@ subprojects {
       scalaCompileOptions.additionalParameters += ["-Xfatal-warnings"]
     }
 
+    if (versions.baseScala == '3') {
+      scalaCompileOptions.additionalParameters += ["-Ytasty-reader"]
+    }
+
     // these options are valid for Scala versions < 2.13 only
     // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
     if (versions.baseScala == '2.12') {
@@ -817,6 +821,7 @@ project(':core') {
     // even though the `core` module doesn't expose any public API
     api project(':clients')
     api libs.scalaLibrary
+    api libs.scalaCompiler
 
     implementation project(':server-common')
     implementation project(':metadata')
@@ -833,7 +838,6 @@ project(':core') {
     implementation libs.scalaCollectionCompat
     implementation libs.scalaJava8Compat
     // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
-    implementation libs.scalaReflect
     implementation libs.scalaLogging
     implementation libs.slf4jApi
     implementation(libs.zookeeper) {
@@ -1868,6 +1872,7 @@ project(':streams:streams-scala') {
     api project(':streams')
 
     api libs.scalaLibrary
+    api libs.scalaCompiler
     api libs.scalaCollectionCompat
 
     testImplementation project(':core')
@@ -2197,6 +2202,7 @@ project(':jmh-benchmarks') {
     implementation libs.slf4jlog4j
     implementation libs.scalaLibrary
     implementation libs.scalaJava8Compat
+    implementation libs.scalaCompiler
   }
 
   tasks.withType(JavaCompile) {
