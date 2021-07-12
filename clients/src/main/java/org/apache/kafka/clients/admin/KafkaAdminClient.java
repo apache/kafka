@@ -1078,6 +1078,7 @@ public class KafkaAdminClient extends AdminClient {
         private long maybeDrainPendingCalls(long now) {
             long pollTimeout = Long.MAX_VALUE;
             log.trace("Trying to choose nodes for {} at {}", pendingCalls, now);
+            System.out.println("!!! pendingCalls:" + pendingCalls);
 
             Iterator<Call> pendingIter = pendingCalls.iterator();
             while (pendingIter.hasNext()) {
@@ -1099,6 +1100,7 @@ public class KafkaAdminClient extends AdminClient {
          * should remain pending.
          */
         private boolean maybeDrainPendingCall(Call call, long now) {
+            System.out.println("!!! maybeDrainPendingCall:" + call);
             try {
                 Node node = call.nodeProvider.provide();
                 if (node != null) {
@@ -1129,6 +1131,7 @@ public class KafkaAdminClient extends AdminClient {
             for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator(); iter.hasNext(); ) {
                 Map.Entry<Node, List<Call>> entry = iter.next();
                 List<Call> calls = entry.getValue();
+                System.out.println("!!! sendEligibleCalls:" + calls);
                 if (calls.isEmpty()) {
                     iter.remove();
                     continue;

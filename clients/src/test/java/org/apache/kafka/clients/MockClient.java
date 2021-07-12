@@ -206,6 +206,12 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void send(ClientRequest request, long now) {
+        System.out.println("!!! send request:" + request);
+        final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+        for (int i = 1; i < elements.length; i++) {
+            final StackTraceElement s = elements[i];
+            System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+        }
         if (!connectionState(request.destination()).isReady(now))
             throw new IllegalStateException("Cannot send " + request + " since the destination is not ready");
 
@@ -459,6 +465,7 @@ public class MockClient implements KafkaClient {
                                      Node node,
                                      boolean disconnected,
                                      boolean isUnsupportedVersion) {
+
         futureResponses.add(new FutureResponse(node, matcher, response, disconnected, isUnsupportedVersion));
     }
 
