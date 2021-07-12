@@ -221,7 +221,7 @@ public class Metadata implements Closeable {
         return cache.topicId(topicName);
     }
 
-    public synchronized  String topicName(Uuid topicId) {
+    public synchronized String topicName(Uuid topicId) {
         return cache.topicName(topicId);
     }
 
@@ -382,7 +382,7 @@ public class Metadata implements Closeable {
 
     /**
      * Compute the latest partition metadata to cache given ordering by leader epochs (if both
-     * available and reliable).
+     * available and reliable) and whether the topic ID changed.
      */
     private Optional<MetadataResponse.PartitionMetadata> updateLatestMetadata(
             MetadataResponse.PartitionMetadata partitionMetadata,
@@ -397,6 +397,7 @@ public class Metadata implements Closeable {
                 log.debug("Updating last seen epoch for partition {} from {} to epoch {} from new metadata", tp, currentEpoch, newEpoch);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
                 return Optional.of(partitionMetadata);
+            // If the topic ID changed, updated the metadata
             } else if (changedTopicId) {
                 log.debug("Topic ID changed, so this topic must have been recreated. " +
                         "Removing last seen epoch {} for the old partition {} and adding epoch {} from new metadata", currentEpoch, tp, newEpoch);

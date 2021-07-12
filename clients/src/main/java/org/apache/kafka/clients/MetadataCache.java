@@ -157,8 +157,14 @@ public class MetadataCache {
         Map<TopicPartition, PartitionMetadata> newMetadataByPartition = new HashMap<>(addPartitions.size());
         Map<String, Uuid> newTopicIds = new HashMap<>(topicIds.size());
 
-        // We want the most recent topic ID. We add the old one here for retained topics and then update with newest information in the MetadataResponse
-        // we add if a new topic ID is added or remove if the request did not support topic IDs for this topic.
+        // We want the most recent topic ID. We start with the previous ID stored for retained topics and then
+        // update with newest information in the MetadataResponse.
+        // If the newest MetadataResponse:
+        //    - contains a new topic with no ID, add no IDs to newTopicIds
+        //    - contains a new topic and ID, we add it to newTopicIds
+        //    - contains the same ID for an existing topic, we keep it the same in newTopicIds
+        //    - contains a new topic ID for an existing topic, we change it to the new one in newTopicIds
+        //    - has no topic ID for an existing topic, we remove any previous ID from newTopicIds
         this.topicIds.forEach((topicName, topicId) -> {
             if (shouldRetainTopic.test(topicName)) {
                 newTopicIds.put(topicName, topicId);
