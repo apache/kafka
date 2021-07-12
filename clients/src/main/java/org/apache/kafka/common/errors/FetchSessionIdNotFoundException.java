@@ -17,6 +17,10 @@
 
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the fetched session identifier was not found
+ *
+ */
 public class FetchSessionIdNotFoundException extends RetriableException {
     private static final long serialVersionUID = 1L;
 

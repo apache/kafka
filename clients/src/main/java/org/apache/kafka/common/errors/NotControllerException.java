@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This error condition indicates this is not the correct controller for this cluster
+ */
 public class NotControllerException extends RetriableException {
 
     private static final long serialVersionUID = 1L;

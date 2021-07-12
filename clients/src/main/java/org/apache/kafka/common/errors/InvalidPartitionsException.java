@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * Indicates that the specified number of partitions is less than one
+ */
 public class InvalidPartitionsException extends ApiException {
 
     private static final long serialVersionUID = 1L;

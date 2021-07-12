@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception represents an error condition where
+ * the producer attempted a transactional operation in an invalid state
+ */
 public class InvalidTxnStateException extends ApiException {
     public InvalidTxnStateException(String message) {
         super(message);

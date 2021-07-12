@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates an error condition where the Delegation Token authorization has failed
+ *
+ */
 public class DelegationTokenAuthorizationException extends AuthorizationException {
 
     private static final long serialVersionUID = 1L;

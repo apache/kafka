@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * Indicates an error condition where the specified configuration is not valid
+ */
 public class InvalidConfigurationException extends ApiException {
 
     private static final long serialVersionUID = 1L;

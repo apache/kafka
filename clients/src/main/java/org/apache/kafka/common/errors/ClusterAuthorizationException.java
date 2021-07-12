@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the cluster authorization has failed
+ */
 public class ClusterAuthorizationException extends AuthorizationException {
 
     private static final long serialVersionUID = 1L;

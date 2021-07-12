@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the broker is not available at the moment
+ */
 public class BrokerNotAvailableException extends ApiException {
 
     private static final long serialVersionUID = 1L;
