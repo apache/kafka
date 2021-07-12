@@ -90,4 +90,23 @@ public final class CollectionUtils {
         }
         return dataByTopic;
     }
+
+    /**
+     * Group a collection of partitions by topic
+     *
+     * @return The map used to group the partitions
+     */
+    public static <T> Map<String, T> groupTopicPartitionsByTopic(
+            Collection<TopicPartition> partitions,
+            Function<String, T> buildGroup,
+            BiConsumer<T, TopicPartition> addToGroup
+    ) {
+        Map<String, T> dataByTopic = new HashMap<>();
+        for (TopicPartition tp : partitions) {
+            String topic = tp.topic();
+            T topicData = dataByTopic.computeIfAbsent(topic, buildGroup);
+            addToGroup.accept(topicData, tp);
+        }
+        return dataByTopic;
+    }
 }
