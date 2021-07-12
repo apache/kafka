@@ -250,7 +250,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    //Ensure Mockito can stub method for KafkaStreamTest.
+    // Ensure Mockito can stub method for KafkaStreamTest.
     public boolean isStateAlive() {
         return state.isAlive();
     }
