@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
@@ -57,12 +58,12 @@ public class DeleteConsumerGroupsHandlerTest {
     @Test
     public void testUnmappedHandleResponse() {
         assertUnmapped(handleWithError(Errors.NOT_COORDINATOR));
+        assertUnmapped(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE));
     }
 
     @Test
     public void testRetriableHandleResponse() {
         assertRetriable(handleWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
-        assertRetriable(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE));
     }
 
     @Test
@@ -70,6 +71,7 @@ public class DeleteConsumerGroupsHandlerTest {
         assertFailed(GroupAuthorizationException.class, handleWithError(Errors.GROUP_AUTHORIZATION_FAILED));
         assertFailed(GroupIdNotFoundException.class, handleWithError(Errors.GROUP_ID_NOT_FOUND));
         assertFailed(InvalidGroupIdException.class, handleWithError(Errors.INVALID_GROUP_ID));
+        assertFailed(GroupNotEmptyException.class, handleWithError(Errors.NON_EMPTY_GROUP));
     }
 
     private DeleteGroupsResponse buildResponse(Errors error) {
