@@ -19,11 +19,14 @@ package org.apache.kafka.connect.rest.basic.auth.extension;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
-import org.easymock.Capture;
-import org.easymock.EasyMock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
+import org.mockito.Mock;
 
 import javax.security.auth.login.Configuration;
 import javax.ws.rs.core.Configurable;
@@ -38,7 +41,11 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@ExtendWith(MockitoExtension.class)
 public class BasicAuthSecurityRestExtensionTest {
+
+    @Mock
+    Configurable<? extends Configurable<?>> configurable;
 
     Configuration priorConfiguration;
 
@@ -52,20 +59,16 @@ public class BasicAuthSecurityRestExtensionTest {
         Configuration.setConfiguration(priorConfiguration);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testJaasConfigurationNotOverwritten() {
-        Capture<JaasBasicAuthFilter> jaasFilter = EasyMock.newCapture();
-        Configurable<? extends Configurable<?>> configurable = EasyMock.mock(Configurable.class);
-        EasyMock.expect(configurable.register(EasyMock.capture(jaasFilter))).andReturn(null);
-  
-        ConnectRestExtensionContext context = EasyMock.mock(ConnectRestExtensionContext.class);
-        EasyMock.expect(context.configurable()).andReturn((Configurable) configurable);
+        ArgumentCaptor<JaasBasicAuthFilter> jaasFilter = ArgumentCaptor.forClass(JaasBasicAuthFilter.class);
+        Mockito.doReturn(null).when(configurable).register(jaasFilter.capture());
 
-        EasyMock.replay(configurable, context);
+        ConnectRestExtensionContext context = Mockito.mock(ConnectRestExtensionContext.class);
+        Mockito.doReturn(configurable).when(context).configurable();
   
         BasicAuthSecurityRestExtension extension = new BasicAuthSecurityRestExtension();
-        Configuration overwrittenConfiguration = EasyMock.mock(Configuration.class);
+        Configuration overwrittenConfiguration = Mockito.mock(Configuration.class);
         Configuration.setConfiguration(overwrittenConfiguration);
         extension.register(context);
   
@@ -87,7 +90,7 @@ public class BasicAuthSecurityRestExtensionTest {
     @Test
     public void testGoodJaasConfigInitialization() {
         AtomicBoolean configurationInitializerEvaluated = new AtomicBoolean(false);
-        Configuration mockConfiguration = EasyMock.mock(Configuration.class);
+        Configuration mockConfiguration = Mockito.mock(Configuration.class);
         Supplier<Configuration> configuration = BasicAuthSecurityRestExtension.initializeConfiguration(() -> {
             configurationInitializerEvaluated.set(true);
             return mockConfiguration;
@@ -109,7 +112,7 @@ public class BasicAuthSecurityRestExtensionTest {
         Exception thrownException = assertThrows(Exception.class, () -> extension.configure(Collections.emptyMap()));
         assertEquals(jaasConfigurationException, thrownException);
 
-        thrownException = assertThrows(Exception.class, () -> extension.register(EasyMock.mock(ConnectRestExtensionContext.class)));
+        thrownException = assertThrows(Exception.class, () -> extension.register(Mockito.mock(ConnectRestExtensionContext.class)));
         assertEquals(jaasConfigurationException, thrownException);
     }
 }
