@@ -206,6 +206,7 @@ You can run checkstyle using:
 
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
+For experiments (or regression testing purposes) add -PcheckstyleVersion=8.xy (to override project-defined checkstyle version).
 
 #### Spotbugs ####
 Spotbugs uses static analysis to look for bugs in the code.
@@ -245,7 +246,7 @@ includes inlining of methods within the scala library (which avoids lambda alloc
 only safe if the Scala library version is the same at compile time and runtime. Since we cannot guarantee this for all cases (for example, users
 may depend on the kafka jar for integration tests where they may include a scala library with a different version), we don't enable it by
 default. See https://www.lightbend.com/blog/scala-inliner-optimizer for more details.
-
+* `checkstyleVersion` overrides project-defined checkstyle dependency version. See "Checkstyle" manual section for example how to use it.
 ### Dependency Analysis ###
 
 The gradle [dependency debugging documentation](https://docs.gradle.org/current/userguide/viewing_debugging_dependencies.html) mentions using the `dependencies` or `dependencyInsight` tasks to debug dependencies for the root project or individual subprojects.
