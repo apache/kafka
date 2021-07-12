@@ -25,6 +25,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static java.util.Collections.emptyMap;
+
 public class BrokerNode implements TestKitNode {
     public static class Builder {
         private int id = -1;
@@ -76,11 +78,19 @@ public class BrokerNode implements TestKitNode {
                Uuid incarnationId,
                String metadataDirectory,
                List<String> logDataDirectories) {
+        this(id, incarnationId, metadataDirectory, logDataDirectories, emptyMap());
+    }
+
+    BrokerNode(int id,
+               Uuid incarnationId,
+               String metadataDirectory,
+               List<String> logDataDirectories,
+               Map<String, String> propertyOverrides) {
         this.id = id;
         this.incarnationId = incarnationId;
         this.metadataDirectory = metadataDirectory;
         this.logDataDirectories = new ArrayList<>(logDataDirectories);
-        this.propertyOverrides = new HashMap<>();
+        this.propertyOverrides = new HashMap<>(propertyOverrides);
     }
 
     @Override
