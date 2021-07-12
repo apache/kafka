@@ -610,7 +610,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                     else
                         throw new DataException("Invalid type for bytes type: " + value.getClass());
                 case ARRAY: {
-                    Collection collection = (Collection) value;
+                    Collection<?> collection = (Collection<?>) value;
                     ArrayNode list = JSON_NODE_FACTORY.arrayNode();
                     for (Object elem : collection) {
                         Schema valueSchema = schema == null ? null : schema.valueSchema();

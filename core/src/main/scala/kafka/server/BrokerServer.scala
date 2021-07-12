@@ -31,9 +31,10 @@ import kafka.metrics.KafkaYammerMetrics
 import kafka.network.SocketServer
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
-import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, ClientQuotaMetadataManager, KRaftMetadataCache}
+import kafka.server.KafkaRaftServer.ControllerRole
+import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, SnapshotWriterBuilder}
 import kafka.utils.{CoreUtils, KafkaScheduler}
-//import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
+import org.apache.kafka.snapshot.SnapshotWriter
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.metrics.Metrics
@@ -44,13 +45,29 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.{RaftClient, RaftConfig}
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
+import scala.compat.java8.OptionConverters._
+
+
+class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
+    extends SnapshotWriterBuilder {
+  override def build(committedOffset: Long,
+                     committedEpoch: Int,
+                     lastContainedLogTime: Long): SnapshotWriter[ApiMessageAndVersion] = {
+    raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime).
+        asScala.getOrElse(
+      throw new RuntimeException("A snapshot already exists with " +
+        s"committedOffset=${committedOffset}, committedEpoch=${committedEpoch}, " +
+        s"lastContainedLogTime=${lastContainedLogTime}")
+    )
+  }
+}
 
 /**
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
@@ -129,6 +146,8 @@ class BrokerServer(
 
   val clusterId: String = metaProps.clusterId
 
+  var metadataSnapshotter: Option[BrokerMetadataSnapshotter] = None
+
   var metadataListener: BrokerMetadataListener = null
 
   var metadataPublisher: BrokerMetadataPublisher = null
@@ -170,12 +189,13 @@ class BrokerServer(
 
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
+      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
+
       // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
       logManager = LogManager(config, initialOfflineDirs, metadataCache, kafkaScheduler, time,
         brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
 
-      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
@@ -270,7 +290,21 @@ class BrokerServer(
         ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
 
-      metadataListener = new BrokerMetadataListener(config.nodeId, time, threadNamePrefix)
+      if (!config.processRoles.contains(ControllerRole)) {
+        // If no controller is defined, we rely on the broker to generate snapshots.
+        metadataSnapshotter = Some(new BrokerMetadataSnapshotter(
+          config.nodeId,
+          time,
+          threadNamePrefix,
+          new BrokerSnapshotWriterBuilder(raftManager.client)
+        ))
+      }
+
+      metadataListener = new BrokerMetadataListener(config.nodeId,
+                                                    time,
+                                                    threadNamePrefix,
+                                                    config.metadataSnapshotMaxNewRecordBytes,
+                                                    metadataSnapshotter)
 
       val networkListeners = new ListenerCollection()
       config.advertisedListeners.foreach { ep =>
@@ -407,10 +441,11 @@ class BrokerServer(
       if (controlPlaneRequestProcessor != null)
         CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
       CoreUtils.swallow(authorizer.foreach(_.close()), this)
-
       if (metadataListener !=  null) {
         CoreUtils.swallow(metadataListener.close(), this)
       }
+      metadataSnapshotter.foreach(snapshotter => CoreUtils.swallow(snapshotter.close(), this))
+
       if (transactionCoordinator != null)
         CoreUtils.swallow(transactionCoordinator.shutdown(), this)
       if (groupCoordinator != null)

@@ -18,10 +18,13 @@
 package kafka.server
 
 import kafka.admin.BrokerMetadata
+
 import kafka.server.metadata.KRaftMetadataCache
-import org.apache.kafka.common.{Cluster, Node, TopicPartition}
+import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
 import org.apache.kafka.common.message.{MetadataResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.network.ListenerName
+
+import java.util
 
 trait MetadataCache {
 
@@ -61,6 +64,12 @@ trait MetadataCache {
    * Return the number of partitions in the given topic, or None if the given topic does not exist.
    */
   def numPartitions(topic: String): Option[Int]
+
+  def topicNamesToIds(): util.Map[String, Uuid]
+
+  def topicIdsToNames(): util.Map[Uuid, String]
+
+  def topicIdInfo(): (util.Map[String, Uuid], util.Map[Uuid, String])
 
   /**
    * Get a partition leader's endpoint
