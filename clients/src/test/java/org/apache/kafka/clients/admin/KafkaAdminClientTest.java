@@ -3179,41 +3179,47 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                 prepareOldFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
 
-            final DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
+            DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
             TestUtils.assertFutureError(errorResult.deletedGroups().get("groupId"), GroupAuthorizationException.class);
 
-            //Retriable errors should be retried
+            // Retriable errors should be retried
             env.kafkaClient().prepareResponse(
                 prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            final DeletableGroupResultCollection errorResponse1 = new DeletableGroupResultCollection();
-            errorResponse1.add(new DeletableGroupResult()
-                                   .setGroupId("groupId")
-                                   .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-            );
-            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
-                new DeleteGroupsResponseData()
-                    .setResults(errorResponse1)));
-
-            final DeletableGroupResultCollection errorResponse2 = new DeletableGroupResultCollection();
-            errorResponse2.add(new DeletableGroupResult()
+            final DeletableGroupResultCollection errorResponse = new DeletableGroupResultCollection();
+            errorResponse.add(new DeletableGroupResult()
                                    .setGroupId("groupId")
                                    .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
             );
             env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
                 new DeleteGroupsResponseData()
-                    .setResults(errorResponse2)));
+                    .setResults(errorResponse)));
 
             /*
              * We need to return two responses here, one for NOT_COORDINATOR call when calling delete a consumer group
              * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
              * FindCoordinatorResponse.
+             *
+             * And the same reason for the following COORDINATOR_NOT_AVAILABLE error response
              */
-            final DeletableGroupResultCollection coordinatorMoved = new DeletableGroupResultCollection();
+
+            DeletableGroupResultCollection coordinatorMoved = new DeletableGroupResultCollection();
             coordinatorMoved.add(new DeletableGroupResult()
                                      .setGroupId("groupId")
                                      .setErrorCode(Errors.NOT_COORDINATOR.code())
             );
+
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(coordinatorMoved)));
+            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            coordinatorMoved = new DeletableGroupResultCollection();
+            coordinatorMoved.add(new DeletableGroupResult()
+                .setGroupId("groupId")
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+
             env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
                 new DeleteGroupsResponseData()
                     .setResults(coordinatorMoved)));
@@ -3223,9 +3229,9 @@ public class KafkaAdminClientTest {
                 new DeleteGroupsResponseData()
                     .setResults(validResponse)));
 
-            final DeleteConsumerGroupsResult errorResult1 = env.adminClient().deleteConsumerGroups(groupIds);
+            errorResult = env.adminClient().deleteConsumerGroups(groupIds);
 
-            final KafkaFuture<Void> errorResults = errorResult1.deletedGroups().get("groupId");
+            final KafkaFuture<Void> errorResults = errorResult.deletedGroups().get("groupId");
             assertNull(errorResults.get());
         }
     }
