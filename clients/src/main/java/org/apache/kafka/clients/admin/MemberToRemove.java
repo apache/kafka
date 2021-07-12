@@ -55,4 +55,11 @@ public class MemberToRemove {
     public String groupInstanceId() {
         return groupInstanceId;
     }
+
+    @Override
+    public String toString() {
+        return "MemberToRemove{" +
+                "groupInstanceId='" + groupInstanceId + '\'' +
+                '}';
+    }
 }
