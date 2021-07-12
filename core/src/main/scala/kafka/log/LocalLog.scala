@@ -214,7 +214,7 @@ class LocalLog(@volatile private var _dir: File,
    * Closes the segments of the log.
    */
   private[log] def close(): Unit = {
-    maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
+    maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
       checkIfMemoryMappedBufferClosed()
       segments.close()
     }
@@ -224,7 +224,7 @@ class LocalLog(@volatile private var _dir: File,
    * Completely delete this log directory with no delay.
    */
   private[log] def deleteEmptyDir(): Unit = {
-    maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
+    maybeHandleIOException(s"Error while deleting dir for $topicPartition in dir ${dir.getParent}") {
       if (segments.nonEmpty) {
         throw new IllegalStateException(s"Can not delete directory when ${segments.numberOfSegments} segments are still present")
       }
@@ -240,7 +240,7 @@ class LocalLog(@volatile private var _dir: File,
    * @return the deleted segments
    */
   private[log] def deleteAllSegments(): Iterable[LogSegment] = {
-    maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
+    maybeHandleIOException(s"Error while deleting all segments for $topicPartition in dir ${dir.getParent}") {
       val deletableSegments = List[LogSegment]() ++ segments.values
       removeAndDeleteSegments(segments.values, asyncDelete = false, LogDeletion(this))
       isMemoryMappedBufferClosed = true
