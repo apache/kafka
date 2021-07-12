@@ -28,7 +28,7 @@ public final class StreamsAssignmentProtocolVersions {
      * Last version bump: May 2021, before 3.0
      *
      * When changing the version:
-     * 1) Update the version_probing_message and end_of_upgrade_message in streams_upgrade_test.py::StreamsUpgradeTest.test_version_probing_upgrade
+     * 1) Update variable highest_version in streams_upgrade_test.py::StreamsUpgradeTest.test_version_probing_upgrade
      * 2) Add a unit test in SubscriptionInfoTest and/or AssignmentInfoTest
      * 3) Note the date & corresponding Kafka version of this bump
      */
