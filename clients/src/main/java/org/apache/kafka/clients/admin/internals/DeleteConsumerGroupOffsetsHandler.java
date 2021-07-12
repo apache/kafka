@@ -19,7 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -100,51 +100,115 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
         Map<CoordinatorKey, Map<TopicPartition, Errors>> completed = new HashMap<>();
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
-        List<CoordinatorKey> unmapped = new ArrayList<>();
+        final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
+        final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
 
         final Errors error = Errors.forCode(response.data().errorCode());
         if (error != Errors.NONE) {
-            handleError(groupId, error, failed, unmapped);
+            handleGroupError(groupId, error, failed, groupsToUnmap, groupsToRetry);
         } else {
-            final Map<TopicPartition, Errors> partitions = new HashMap<>();
-            response.data().topics().forEach(topic -> 
-                topic.partitions().forEach(partition -> {
-                    Errors partitionError = Errors.forCode(partition.errorCode());
-                    if (!handleError(groupId, partitionError, failed, unmapped)) {
-                        partitions.put(new TopicPartition(topic.name(), partition.partitionIndex()), partitionError);
+            final Map<TopicPartition, Errors> partitionResults = new HashMap<>();
+            response.data().topics().forEach(topic ->
+                topic.partitions().forEach(partitionoffsetDeleteResponse -> {
+                    Errors partitionError = Errors.forCode(partitionoffsetDeleteResponse.errorCode());
+                    TopicPartition topicPartition = new TopicPartition(topic.name(), partitionoffsetDeleteResponse.partitionIndex());
+                    if (partitionError != Errors.NONE) {
+                        handlePartitionError(groupId, partitionError, topicPartition, groupsToUnmap, groupsToRetry);
                     }
+
+                    partitionResults.put(new TopicPartition(topic.name(), partitionoffsetDeleteResponse.partitionIndex()), partitionError);
                 })
             );
-            if (!partitions.isEmpty())
-                completed.put(groupId, partitions);
+
+            completed.put(groupId, partitionResults);
         }
-        return new ApiResult<>(completed, failed, unmapped);
+
+        if (groupsToUnmap.isEmpty() && groupsToRetry.isEmpty()) {
+            return new ApiResult<>(
+                completed,
+                failed,
+                Collections.emptyList()
+            );
+        } else {
+            // retry the request, so don't send completed/failed results back
+            return new ApiResult<>(
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new ArrayList<>(groupsToUnmap)
+            );
+        }
     }
 
-    private boolean handleError(
+    private void handleGroupError(
         CoordinatorKey groupId,
         Errors error,
         Map<CoordinatorKey, Throwable> failed,
-        List<CoordinatorKey> unmapped
+        Set<CoordinatorKey> groupsToUnmap,
+        Set<CoordinatorKey> groupsToRetry
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
             case GROUP_ID_NOT_FOUND:
             case INVALID_GROUP_ID:
-                log.error("Received non retriable error for group {} in `DeleteConsumerGroupOffsets` response", groupId,
-                        error.exception());
+            case NON_EMPTY_GROUP:
+                log.error("Received non retriable error for group {} in `{}` response", groupId,
+                    apiName(), error.exception());
                 failed.put(groupId, error.exception());
-                return true;
+                break;
             case COORDINATOR_LOAD_IN_PROGRESS:
+                // If the coordinator is in the middle of loading, then we just need to retry
+                log.debug("`{}` request for group {} failed because the coordinator" +
+                    " is still in the process of loading state. Will retry.", apiName(), groupId);
+                groupsToRetry.add(groupId);
+                break;
             case COORDINATOR_NOT_AVAILABLE:
-                return true;
             case NOT_COORDINATOR:
-                log.debug("DeleteConsumerGroupOffsets request for group {} returned error {}. Will retry",
-                        groupId, error);
-                unmapped.add(groupId);
-                return true;
+                // If the coordinator is unavailable or there was a coordinator change, then we unmap
+                // the key so that we retry the `FindCoordinator` request
+                log.debug("`{}` request for group {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry.", apiName(), groupId, error);
+                groupsToUnmap.add(groupId);
+                break;
             default:
-                return false;
+                final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
+                    groupId, apiName());
+                log.error(unexpectedErrorMsg, error.exception());
+                failed.put(groupId, error.exception());
+                break;
+        }
+    }
+
+    private void handlePartitionError(
+        CoordinatorKey groupId,
+        Errors error,
+        TopicPartition topicPartition,
+        Set<CoordinatorKey> groupsToUnmap,
+        Set<CoordinatorKey> groupsToRetry
+    ) {
+        switch (error) {
+            case COORDINATOR_LOAD_IN_PROGRESS:
+                // If the coordinator is in the middle of loading, then we just need to retry
+                log.debug("`{}` request for group {} in partition {} failed because the coordinator" +
+                    " is still in the process of loading state. Will retry.", apiName(), groupId, topicPartition);
+                groupsToRetry.add(groupId);
+                break;
+            case COORDINATOR_NOT_AVAILABLE:
+            case NOT_COORDINATOR:
+                // If the coordinator is unavailable or there was a coordinator change, then we unmap
+                // the key so that we retry the `FindCoordinator` request
+                log.debug("`{}` request for group {} in partition {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry.", apiName(), groupId, topicPartition, error);
+                groupsToUnmap.add(groupId);
+                break;
+            case GROUP_SUBSCRIBED_TO_TOPIC:
+            case TOPIC_AUTHORIZATION_FAILED:
+            case UNKNOWN_TOPIC_OR_PARTITION:
+                log.debug("`{}` request for group {} in partition {} returned error {}.", apiName(), groupId, topicPartition, error);
+                break;
+            default:
+                log.error("`{}` request for group {} in partition {} returned unexpected error {}.",
+                    apiName(), groupId, topicPartition, error);
+                break;
         }
     }
 
