@@ -212,12 +212,6 @@ public interface RecordBatch extends Iterable<Record> {
      */
     boolean isTransactional();
 
-//    /**
-//     * Whether or not the base timestamp has been set to the delete horizon
-//     * @return true if it is, false otherwise
-//     */
-//    boolean hasDeleteHorizonMs();
-
     /**
      * Get the delete horizon, returns None if the first timestamp is not the delete horizon
      * @return timestamp of the delete horizon

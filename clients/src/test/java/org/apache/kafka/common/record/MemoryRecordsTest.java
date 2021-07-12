@@ -25,6 +25,7 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetentionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
@@ -486,12 +487,13 @@ public class MemoryRecordsTest {
     }
 
     /**
-     * This test is used to see if the first timestamp of the batch has been successfully
+     * This test is used to see if the base timestamp of the batch has been successfully
      * converted to a delete horizon for the tombstones / transaction markers of the batch.
+     * It also verifies that the record timestamps remain correct as a delta relative to the delete horizon.
      */
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
-    public void testFirstTimestampToDeleteHorizonConversion(Args args) {
+    public void testBaseTimestampToDeleteHorizonConversion(Args args) {
         int partitionLeaderEpoch = 998;
         if (args.magic >= RecordBatch.MAGIC_VALUE_V2) {
             ByteBuffer buffer = ByteBuffer.allocate(2048);
@@ -519,6 +521,11 @@ public class MemoryRecordsTest {
             List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
             assertEquals(1, batches.size());
             assertEquals(deleteHorizon, batches.get(0).deleteHorizonMs().getAsLong());
+
+            CloseableIterator<Record> recordIterator = batches.get(0).streamingIterator(BufferSupplier.create());
+            Record record = recordIterator.next();
+            assertEquals(10L, record.timestamp());
+            recordIterator.close();
         }
     }
 
