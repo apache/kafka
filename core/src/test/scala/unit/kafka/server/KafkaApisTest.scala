@@ -1039,7 +1039,7 @@ class KafkaApisTest {
       topicName, AuthorizationResult.ALLOWED)
 
     if (enableAutoTopicCreation)
-      authorizeResource(authorizer, AclOperation.CREATE, ResourceType.CLUSTER,
+      authorizeResource(authorizer, AclOperation.AUTO_CREATE, ResourceType.CLUSTER,
         Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED, logIfDenied = false)
 
     val topicConfigOverride = mutable.Map.empty[String, String]

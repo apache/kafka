@@ -484,9 +484,9 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
   @Test
   def testAclInheritance(): Unit = {
     testImplicationsOfAllow(AclOperation.ALL, Set(READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE,
-      CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE))
+      CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, AUTO_CREATE))
     testImplicationsOfDeny(AclOperation.ALL, Set(READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE,
-      CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE))
+      CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, AUTO_CREATE))
     testImplicationsOfAllow(READ, Set(DESCRIBE))
     testImplicationsOfAllow(WRITE, Set(DESCRIBE))
     testImplicationsOfAllow(DELETE, Set(DESCRIBE))
@@ -494,6 +494,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
     testImplicationsOfDeny(DESCRIBE, Set())
     testImplicationsOfAllow(ALTER_CONFIGS, Set(DESCRIBE_CONFIGS))
     testImplicationsOfDeny(DESCRIBE_CONFIGS, Set())
+    testImplicationsOfAllow(CREATE, Set(AUTO_CREATE))
+    testImplicationsOfAllow(AUTO_CREATE, Set())
   }
 
   private def testImplicationsOfAllow(parentOp: AclOperation, allowedOps: Set[AclOperation]): Unit = {
