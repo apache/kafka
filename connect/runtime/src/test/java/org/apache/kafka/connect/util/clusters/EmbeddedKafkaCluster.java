@@ -383,6 +383,19 @@ public class EmbeddedKafkaCluster {
         }
     }
 
+    /**
+     * Delete a Kafka topic.
+     *
+     * @param topic the topic to delete; may not be null
+     */
+    public void deleteTopic(String topic) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.deleteTopics(Collections.singleton(topic)).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public void produce(String topic, String value) {
         produce(topic, null, null, value);
     }

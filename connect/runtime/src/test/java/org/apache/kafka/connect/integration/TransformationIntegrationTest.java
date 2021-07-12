@@ -236,7 +236,7 @@ public class TransformationIntegrationTest {
         props.put(PREDICATES_CONFIG + ".barPredicate.type", RecordIsTombstone.class.getSimpleName());
 
         // expect only half the records to be consumed by the connector
-        connectorHandle.expectedCommits(numRecords);
+        connectorHandle.expectedCommits(numRecords / 2);
         connectorHandle.expectedRecords(numRecords / 2);
 
         // start a sink connector
