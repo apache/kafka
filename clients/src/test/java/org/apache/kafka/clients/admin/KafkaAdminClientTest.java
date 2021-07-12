@@ -2961,18 +2961,84 @@ public class KafkaAdminClientTest {
                 prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             env.kafkaClient().prepareResponse(
+                new OffsetFetchResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Collections.emptyMap()));
+            /*
+             * We need to return two responses here, one for NOT_COORDINATOR call when calling list consumer offsets
+             * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
+             * FindCoordinatorResponse.
+             *
+             * And the same reason for the following COORDINATOR_NOT_AVAILABLE error response
+             */
+            env.kafkaClient().prepareResponse(
+                new OffsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(
                 new OffsetFetchResponse(Errors.COORDINATOR_NOT_AVAILABLE, Collections.emptyMap()));
 
             env.kafkaClient().prepareResponse(
-                new OffsetFetchResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Collections.emptyMap()));
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(
+                new OffsetFetchResponse(Errors.NONE, Collections.emptyMap()));
+
+            final ListConsumerGroupOffsetsResult errorResult1 = env.adminClient().listConsumerGroupOffsets(GROUP_ID);
+
+            assertEquals(Collections.emptyMap(), errorResult1.partitionsToOffsetAndMetadata().get());
+        }
+    }
+
+    @Test
+    public void testListConsumerGroupOffsetsRetriableErrorsInPartition() throws Exception {
+        // Retriable errors should be retried
+
+        TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
+        TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
+        final Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            responseData.put(myTopicPartition0, new OffsetFetchResponse.PartitionData(10,
+                Optional.empty(), "", Errors.NONE));
+            responseData.put(myTopicPartition1, new OffsetFetchResponse.PartitionData(0,
+                Optional.empty(), "", Errors.COORDINATOR_LOAD_IN_PROGRESS));
+
+            env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NONE, responseData));
 
             /*
              * We need to return two responses here, one for NOT_COORDINATOR call when calling list consumer offsets
              * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
              * FindCoordinatorResponse.
+             *
+             * And the same reason for the following COORDINATOR_NOT_AVAILABLE error response
              */
+
+            responseData.clear();
+
+            responseData.put(myTopicPartition0, new OffsetFetchResponse.PartitionData(10,
+                Optional.empty(), "", Errors.NONE));
+            responseData.put(myTopicPartition1, new OffsetFetchResponse.PartitionData(0,
+                Optional.empty(), "", Errors.NOT_COORDINATOR));
+
+            env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NONE, responseData));
+
             env.kafkaClient().prepareResponse(
-                new OffsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            responseData.clear();
+
+            responseData.put(myTopicPartition0, new OffsetFetchResponse.PartitionData(10,
+                Optional.empty(), "", Errors.NONE));
+            responseData.put(myTopicPartition1, new OffsetFetchResponse.PartitionData(0,
+                Optional.empty(), "", Errors.COORDINATOR_NOT_AVAILABLE));
+
+            env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NONE, responseData));
 
             env.kafkaClient().prepareResponse(
                 prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
@@ -3015,20 +3081,24 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Retriable FindCoordinatorResponse errors should be retried
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             // Retriable errors should be retried
-            env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.COORDINATOR_NOT_AVAILABLE, Collections.emptyMap()));
             env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Collections.emptyMap()));
 
             /*
              * We need to return two responses here, one for NOT_COORDINATOR error when calling list consumer group offsets
              * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
              * FindCoordinatorResponse.
+             *
+             * And the same reason for the following COORDINATOR_NOT_AVAILABLE error response
              */
             env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.COORDINATOR_NOT_AVAILABLE, Collections.emptyMap()));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
