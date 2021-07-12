@@ -62,7 +62,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   )
 
   var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = _
-  var joinPurgatory: DelayedOperationPurgatory[DelayedJoin] = _
+  var rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance] = _
   var groupCoordinator: GroupCoordinator = _
 
   @BeforeEach
@@ -81,9 +81,9 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     val config = KafkaConfig.fromProps(serverProps)
 
     heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
-    joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
+    rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, new Metrics())
     groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
       false)
   }
@@ -150,7 +150,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     if (groupCoordinator != null)
       groupCoordinator.shutdown()
     groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory,
-      joinPurgatory, timer.time, new Metrics())
+      rebalancePurgatory, timer.time, new Metrics())
     groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
       false)
 
