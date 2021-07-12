@@ -37,6 +37,7 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
@@ -103,6 +104,12 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         return new DescribeGroupsRequest.Builder(data);
     }
 
+    private void validateGroupsNotEmpty(List<DescribedGroup> describedGroups) {
+        if (describedGroups.isEmpty()) {
+            throw new InvalidGroupIdException("No consumer group found");
+        }
+    }
+
     @Override
     public ApiResult<CoordinatorKey, ConsumerGroupDescription> handleResponse(
         Node coordinator,
@@ -112,13 +119,17 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
         Map<CoordinatorKey, ConsumerGroupDescription> completed = new HashMap<>();
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
-        List<CoordinatorKey> unmapped = new ArrayList<>();
+        final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
+        final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
 
-        for (DescribedGroup describedGroup : response.data().groups()) {
+        List<DescribedGroup> describedGroups = response.data().groups();
+        validateGroupsNotEmpty(describedGroups);
+
+        for (DescribedGroup describedGroup : describedGroups) {
             CoordinatorKey groupIdKey = CoordinatorKey.byGroupId(describedGroup.groupId());
             Errors error = Errors.forCode(describedGroup.errorCode());
             if (error != Errors.NONE) {
-                handleError(groupIdKey, error, failed, unmapped);
+                handleError(groupIdKey, error, failed, groupsToUnmap, groupsToRetry);
                 continue;
             }
             final String protocolType = describedGroup.protocolType();
@@ -151,38 +162,59 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 completed.put(groupIdKey, consumerGroupDescription);
             } else {
                 failed.put(groupIdKey, new IllegalArgumentException(
-                        String.format("GroupId %s is not a consumer group (%s).",
-                                groupIdKey.idValue, protocolType)));
+                    String.format("GroupId %s is not a consumer group (%s).",
+                        groupIdKey.idValue, protocolType)));
             }
         }
-        return new ApiResult<>(completed, failed, unmapped);
+
+        if (groupsToUnmap.isEmpty() && groupsToRetry.isEmpty()) {
+            return new ApiResult<>(
+                completed,
+                failed,
+                Collections.emptyList()
+            );
+        } else {
+            // retry the request, so don't send completed/failed results back
+            return new ApiResult<>(
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new ArrayList<>(groupsToUnmap)
+            );
+        }
     }
 
     private void handleError(
         CoordinatorKey groupId,
         Errors error,
         Map<CoordinatorKey, Throwable> failed,
-        List<CoordinatorKey> unmapped
+        Set<CoordinatorKey> groupsToUnmap,
+        Set<CoordinatorKey> groupsToRetry
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `DescribeGroups` response", groupId,
-                        error.exception());
+                log.error("Received authorization failure for group {} in `{}` response", groupId,
+                    apiName(), error.exception());
                 failed.put(groupId, error.exception());
                 break;
             case COORDINATOR_LOAD_IN_PROGRESS:
-            case COORDINATOR_NOT_AVAILABLE:
+                // If the coordinator is in the middle of loading, then we just need to retry
+                log.debug("`{}` request for group {} failed because the coordinator " +
+                    "is still in the process of loading state. Will retry", apiName(), groupId);
+                groupsToRetry.add(groupId);
                 break;
+            case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
-                log.debug("DescribeGroups request for group {} returned error {}. Will retry",
-                        groupId, error);
-                unmapped.add(groupId);
+                // If the coordinator is unavailable or there was a coordinator change, then we unmap
+                // the key so that we retry the `FindCoordinator` request
+                log.debug("`{}` request for group {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry", apiName(), groupId, error);
+                groupsToUnmap.add(groupId);
                 break;
             default:
-                log.error("Received unexpected error for group {} in `DescribeGroups` response", 
-                        groupId, error.exception());
-                failed.put(groupId, error.exception(
-                        "Received unexpected error for group " + groupId + " in `DescribeGroups` response"));
+                final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
+                    groupId, apiName());
+                log.error(unexpectedErrorMsg, error.exception());
+                failed.put(groupId, error.exception(unexpectedErrorMsg));
         }
     }
 
