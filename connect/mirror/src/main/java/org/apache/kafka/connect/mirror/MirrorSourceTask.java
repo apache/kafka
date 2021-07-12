@@ -24,6 +24,7 @@ import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -98,7 +99,22 @@ public class MirrorSourceTask extends SourceTask {
         log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.entrySet().stream()
             .filter(x -> x.getValue() == 0L).count());
         log.trace("Seeking offsets: {}", topicPartitionOffsets);
-        topicPartitionOffsets.forEach(consumer::seek);
+
+        // when partition offset is 0L(uncommitted partitions), use auto.offset.reset config to decide the offset
+        String autoOffsetResetConfig = props.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+        if (autoOffsetResetConfig != null) {
+            List<TopicPartition> topicPartitions = topicPartitionOffsets.entrySet().stream().filter(x -> x.getValue() == 0L).map(Map.Entry::getKey).collect(Collectors.toList());
+            if (autoOffsetResetConfig.equals("latest")) {
+                consumer.seekToEnd(topicPartitions);
+            } else if (autoOffsetResetConfig.equals("earliest")) {
+                consumer.seekToBeginning(topicPartitions);
+            }
+        }
+
+        // seek to the specified offset when offset > 0
+        topicPartitionOffsets.entrySet().stream().filter(x -> x.getValue() > 0L).forEach(entry -> {
+            consumer.seek(entry.getKey(), entry.getValue());
+        });
         log.info("{} replicating {} topic-partitions {}->{}: {}.", Thread.currentThread().getName(),
             taskTopicPartitions.size(), sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
     }
