@@ -20,7 +20,6 @@ package kafka.network
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent._
-
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
@@ -32,6 +31,7 @@ import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.message.EnvelopeResponseData
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, ObjectSerializationCache}
 import org.apache.kafka.common.requests._
@@ -124,8 +124,15 @@ object RequestChannel extends Logging {
     def buildResponseSend(abstractResponse: AbstractResponse): Send = {
       envelope match {
         case Some(request) =>
-          val responseBytes = context.buildResponseEnvelopePayload(abstractResponse)
-          val envelopeResponse = new EnvelopeResponse(responseBytes, Errors.NONE)
+          val envelopeResponse = if (abstractResponse.errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
+            // Since it's a NOT_CONTROLLER error response, we need to make envelope response with NOT_CONTROLLER error
+            // to notify the requester (i.e. BrokerToControllerRequestThread) to update active controller
+            new EnvelopeResponse(new EnvelopeResponseData()
+              .setErrorCode(Errors.NOT_CONTROLLER.code()))
+          } else {
+            val responseBytes = context.buildResponseEnvelopePayload(abstractResponse)
+            new EnvelopeResponse(responseBytes, Errors.NONE)
+          }
           request.context.buildResponseSend(envelopeResponse)
         case None =>
           context.buildResponseSend(abstractResponse)

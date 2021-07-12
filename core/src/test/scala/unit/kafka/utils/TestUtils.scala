@@ -25,7 +25,7 @@ import java.security.cert.X509Certificate
 import java.time.Duration
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
-import java.util.{Arrays, Collections, Properties}
+import java.util.{Arrays, Collections, Optional, Properties}
 import com.yammer.metrics.core.Meter
 
 import javax.net.ssl.X509TrustManager
@@ -34,6 +34,7 @@ import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log._
 import kafka.metrics.KafkaYammerMetrics
+import kafka.network.RequestChannel
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
@@ -50,14 +51,16 @@ import org.apache.kafka.common.config.ConfigResource.Type.TOPIC
 import org.apache.kafka.common.errors.{KafkaStorageException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
+import org.apache.kafka.common.network.{ClientInformation, ListenerName, Mode}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ListenerName, Mode}
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.{AbstractRequest, EnvelopeRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.resource.ResourcePattern
-import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -68,7 +71,9 @@ import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
+import org.mockito.Mockito
 
+import java.net.InetAddress
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, mutable}
 import scala.concurrent.duration.FiniteDuration
@@ -1852,6 +1857,48 @@ object TestUtils extends Logging {
     waitAndVerifyAcls(
       authorizer.acls(aclFilter).asScala.map(_.entry).toSet -- acls,
       authorizer, resource)
+  }
+
+  def buildRequestWithEnvelope(request: AbstractRequest,
+                               principalSerde: KafkaPrincipalSerde,
+                               requestChannelMetrics: RequestChannel.Metrics,
+                               startTimeNanos: Long,
+                               fromPrivilegedListener: Boolean = true,
+                               shouldSpyRequestContext: Boolean = false,
+                               envelope: Option[RequestChannel.Request] = None
+                              ): RequestChannel.Request = {
+    val clientId = "id"
+    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+
+    val requestHeader = new RequestHeader(request.apiKey, request.version, clientId, 0)
+    val requestBuffer = request.serializeWithHeader(requestHeader)
+
+    val envelopeHeader = new RequestHeader(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion(), clientId, 0)
+    val envelopeBuffer = new EnvelopeRequest.Builder(
+      requestBuffer,
+      principalSerde.serialize(KafkaPrincipal.ANONYMOUS),
+      InetAddress.getLocalHost.getAddress
+    ).build().serializeWithHeader(envelopeHeader)
+
+    RequestHeader.parse(envelopeBuffer)
+
+    var requestContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
+      KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
+      fromPrivilegedListener, Optional.of(principalSerde))
+
+    if (shouldSpyRequestContext) {
+      requestContext = Mockito.spy(requestContext)
+    }
+
+    new RequestChannel.Request(
+      processor = 1,
+      context = requestContext,
+      startTimeNanos = startTimeNanos,
+      memoryPool = MemoryPool.NONE,
+      buffer = envelopeBuffer,
+      metrics = requestChannelMetrics,
+      envelope = envelope
+    )
   }
 
 }

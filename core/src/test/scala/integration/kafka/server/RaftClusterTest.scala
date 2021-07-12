@@ -29,7 +29,7 @@ import java.util
 import java.util.Collections
 import scala.jdk.CollectionConverters._
 
-@Timeout(120000)
+@Timeout(120)
 class RaftClusterTest {
 
   @Test
