@@ -181,6 +181,25 @@ pipeline {
           }
         }
 
+        stage('JDK 11 and Scala 3.0') {
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_11_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS')
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=3.0
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 16'
+          }
+        }
+
         stage('ARM') {
           agent { label 'arm4' }
           options {
@@ -220,6 +239,76 @@ pipeline {
           }
           environment {
             SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            tryStreamsArchetype()
+          }
+        }
+
+        stage('JDK 8 and Scala 3.0') {
+          when {
+            not { changeRequest() }
+            beforeAgent true
+          }
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_1.8_latest'
+            maven 'maven_3_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS')
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=3.0
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            tryStreamsArchetype()
+          }
+        }
+
+        stage('JDK 15 and Scala 3.0') {
+          when {
+            not { changeRequest() }
+            beforeAgent true
+          }
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_15_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS')
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=3.0
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            tryStreamsArchetype()
+          }
+        }
+
+        stage('JDK 16 and Scala 3.0') {
+          when {
+            not { changeRequest() }
+            beforeAgent true
+          }
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_16_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS')
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=3.0
           }
           steps {
             doValidation()

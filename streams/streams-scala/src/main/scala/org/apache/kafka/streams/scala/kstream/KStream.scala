@@ -790,7 +790,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  @deprecated(since = "3.0", message = "Use process(ProcessorSupplier, String*) instead.")
+  @deprecated("Use process(ProcessorSupplier, String*) instead.", "3.0")
   def process(processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V],
               stateStoreNames: String*): Unit = {
     val processorSupplierJ: org.apache.kafka.streams.processor.ProcessorSupplier[K, V] = () => processorSupplier()
@@ -828,7 +828,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  @deprecated(since = "3.0", message = "Use process(ProcessorSupplier, String*) instead.")
+  @deprecated("Use process(ProcessorSupplier, String*) instead.", "3.0")
   def process(processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V],
               named: Named,
               stateStoreNames: String*): Unit = {

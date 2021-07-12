@@ -23,18 +23,25 @@ ext {
 
   // Available if -PscalaVersion is used. This is useful when we want to support a Scala version that has
   // a higher minimum Java requirement than Kafka. This was previously the case for Scala 2.12 and Java 7.
-  availableScalaVersions = [ '2.12', '2.13' ]
+  availableScalaVersions = [ '2.12', '2.13', '3.0' ]
 }
 
 // Add Scala version
 def defaultScala212Version = '2.12.14'
+def defaultScala30Version = '3.0.0'
 def defaultScala213Version = '2.13.6'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
   } else if (scalaVersion == '2.13') {
     versions["scala"] = defaultScala213Version
-  }  else {
+  } else if (scalaVersion == '3.0') {
+    versions["scala"] = defaultScala30Version
+    versions["baseScala"] = '3'
+    versions["baseScalaForSpecialLibs"] = '2.13'
+    versions["postfixScala"] = '3'
+    versions["postfixScalaOptionalVersion"] = '_3'
+  } else {
     versions["scala"] = scalaVersion
   }
 } else {
@@ -47,10 +54,16 @@ if (hasProperty('scalaVersion')) {
     rationale: pre-release Scala versions are not binary compatible with each other and that's the reason why libraries include the full
     Scala release string in their name for pre-releases (see dependencies below with an artifact name suffix '_$versions.baseScala')
 */
-if ( !versions.scala.contains('-') ) {
-  versions["baseScala"] = versions.scala.substring(0, versions.scala.lastIndexOf("."))
-} else {
-  versions["baseScala"] = versions.scala
+if (versions.baseScala != '3') {
+  if ( !versions.scala.contains('-') ) {
+    versions["baseScala"] = versions.scala.substring(0, versions.scala.lastIndexOf("."))
+    versions["baseScalaForSpecialLibs"] = versions.baseScala
+  } else {
+    versions["baseScala"] = versions.scala
+    versions["baseScalaForSpecialLibs"] = versions.scala
+  }
+  versions["postfixScala"] = ''
+  versions["postfixScalaOptionalVersion"] = ''
 }
 
 versions += [
@@ -74,7 +87,7 @@ versions += [
   jmh: "1.32",
   hamcrest: "2.2",
   log4j: "1.2.17",
-  scalaLogging: "3.9.3",
+  scalaLogging: "3.9.4",
   jaxb: "2.3.0",
   jaxrs: "2.1.1",
   jfreechart: "1.0.0",
@@ -132,7 +145,7 @@ libs += [
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
-  jacksonModuleScala: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScala:$versions.jackson",
+  jacksonModuleScala: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScalaForSpecialLibs:$versions.jackson",
   jacksonJDK8Datatypes: "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$versions.jackson",
   jacksonJaxrsJsonProvider: "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$versions.jackson",
   jaxbApi: "javax.xml.bind:jaxb-api:$versions.jaxb",
@@ -180,10 +193,11 @@ libs += [
   powermockEasymock: "org.powermock:powermock-api-easymock:$versions.powermock",
   reflections: "org.reflections:reflections:$versions.reflections",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
-  scalaCollectionCompat: "org.scala-lang.modules:scala-collection-compat_$versions.baseScala:$versions.scalaCollectionCompat",
-  scalaJava8Compat: "org.scala-lang.modules:scala-java8-compat_$versions.baseScala:$versions.scalaJava8Compat",
-  scalaLibrary: "org.scala-lang:scala-library:$versions.scala",
-  scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
+  scalaCollectionCompat: "org.scala-lang.modules:scala-collection-compat_$versions.baseScalaForSpecialLibs:$versions.scalaCollectionCompat",
+  scalaJava8Compat: "org.scala-lang.modules:scala-java8-compat_$versions.baseScalaForSpecialLibs:$versions.scalaJava8Compat",
+  scalaLibrary: "org.scala-lang:scala$versions.postfixScala-library$versions.postfixScalaOptionalVersion:$versions.scala",
+  scalaCompiler: "org.scala-lang:scala$versions.postfixScala-compiler$versions.postfixScalaOptionalVersion:$versions.scala",
+  scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScalaForSpecialLibs:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
   slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
