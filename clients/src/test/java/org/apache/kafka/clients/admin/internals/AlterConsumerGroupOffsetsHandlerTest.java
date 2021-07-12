@@ -81,10 +81,14 @@ public class AlterConsumerGroupOffsetsHandlerTest {
     }
 
     @Test
-    public void testRetriableHandleResponse() {
+    public void testUnmappedHandleResponse() {
         assertUnmapped(handleWithError(Errors.NOT_COORDINATOR));
-        assertUnmapped(handleWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
         assertUnmapped(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE));
+    }
+
+    @Test
+    public void testRetriableHandleResponse() {
+        assertRetriable(handleWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
     }
 
     @Test
@@ -100,6 +104,14 @@ public class AlterConsumerGroupOffsetsHandlerTest {
         Map<TopicPartition, Errors> responseData = Collections.singletonMap(t0p0, error);
         OffsetCommitResponse response = new OffsetCommitResponse(0, responseData);
         return handler.handleResponse(node, singleton(CoordinatorKey.byGroupId(groupId)), response);
+    }
+
+    private void assertRetriable(
+        AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> result
+    ) {
+        assertEquals(emptySet(), result.completedKeys.keySet());
+        assertEquals(emptySet(), result.failedKeys.keySet());
+        assertEquals(emptyList(), result.unmappedKeys);
     }
 
     private void assertUnmapped(

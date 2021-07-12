@@ -111,6 +111,7 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
         List<CoordinatorKey> unmapped = new ArrayList<>();
 
         Map<TopicPartition, Errors> partitions = new HashMap<>();
+        int totalPartitionCount = 0;
         for (OffsetCommitResponseTopic topic : response.data().topics()) {
             for (OffsetCommitResponsePartition partition : topic.partitions()) {
                 TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
@@ -120,9 +121,14 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
                 } else {
                     partitions.put(tp, error);
                 }
+                totalPartitionCount++;
             }
         }
-        if (failed.isEmpty() && unmapped.isEmpty())
+        // only complete this request when:
+        // 1. no fail
+        // 2. no unmapped
+        // 3. all partitions are handled (i.e. no need to retry)
+        if (failed.isEmpty() && unmapped.isEmpty() && partitions.size() == totalPartitionCount)
             completed.put(groupId, partitions);
 
         return new ApiResult<>(completed, failed, unmapped);
@@ -136,21 +142,28 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `OffsetCommit` response", groupId,
-                        error.exception());
+                log.error("Received authorization failure for group {} in `{}` response", groupId,
+                        apiName(), error.exception());
                 failed.put(groupId, error.exception());
                 break;
             case COORDINATOR_LOAD_IN_PROGRESS:
+                // If the coordinator is in the middle of loading, then we just need to retry
+                log.debug("`{}` request for group {} failed because the coordinator" +
+                    " is still in the process of loading state. Will retry.", apiName(), groupId);
+                break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
-                log.debug("OffsetCommit request for group {} returned error {}. Will retry", groupId, error);
+                // If the coordinator is unavailable or there was a coordinator change, then we unmap
+                // the key so that we retry the `FindCoordinator` request
+                log.debug("`{}` request for group {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry.", apiName(), groupId, error);
                 unmapped.add(groupId);
                 break;
             default:
-                log.error("Received unexpected error for group {} in `OffsetCommit` response",
-                        groupId, error.exception());
-                failed.put(groupId, error.exception(
-                        "Received unexpected error for group " + groupId + " in `OffsetCommit` response"));
+                final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
+                    groupId, apiName());
+                log.error(unexpectedErrorMsg, error.exception());
+                failed.put(groupId, error.exception(unexpectedErrorMsg));
         }
     }
 
