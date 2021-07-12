@@ -450,7 +450,7 @@ class LocalLog(@volatile private var _dir: File,
       val start = time.hiResClockMs()
       checkIfMemoryMappedBufferClosed()
       val newOffset = math.max(expectedNextOffset.getOrElse(0L), logEndOffset)
-      val logFile = Log.logFile(dir, newOffset)
+      val logFile = LocalLog.logFile(dir, newOffset)
       val activeSegment = segments.activeSegment
       if (segments.contains(newOffset)) {
         // segment with the same base offset already exists and loaded
