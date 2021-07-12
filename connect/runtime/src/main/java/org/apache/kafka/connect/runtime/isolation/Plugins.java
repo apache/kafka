@@ -59,7 +59,7 @@ public class Plugins {
         delegatingLoader.initLoaders();
     }
 
-    private static DelegatingClassLoader newDelegatingClassLoader(final List<String> paths) {
+    protected DelegatingClassLoader newDelegatingClassLoader(final List<String> paths) {
         return AccessController.doPrivileged(
                 (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(paths)
         );

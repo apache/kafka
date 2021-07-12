@@ -50,7 +50,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -60,8 +59,20 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+/**
+ * A custom classloader dedicated to loading Connect plugin classes in classloading isolation.
+ *
+ * <p>
+ * Under the current scheme for classloading isolation in Connect, the delegating classloader loads
+ * plugin classes that it finds in its child plugin classloaders. For classes that are not plugins,
+ * this delegating classloader delegates its loading to its parent. This makes this classloader a
+ * child-first classloader.
+ * <p>
+ * This class is thread-safe but not parallel capable.
+ */
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
     private static final String CLASSPATH_NAME = "classpath";
@@ -88,8 +99,8 @@ public class DelegatingClassLoader extends URLClassLoader {
     public DelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
         super(new URL[0], parent);
         this.pluginPaths = pluginPaths;
-        this.pluginLoaders = new HashMap<>();
-        this.aliases = new HashMap<>();
+        this.pluginLoaders = new ConcurrentHashMap<>();
+        this.aliases = new ConcurrentHashMap<>();
         this.connectors = new TreeSet<>();
         this.converters = new TreeSet<>();
         this.headerConverters = new TreeSet<>();
@@ -177,7 +188,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         return classLoader;
     }
 
-    private static PluginClassLoader newPluginClassLoader(
+    protected PluginClassLoader newPluginClassLoader(
             final URL pluginLocation,
             final URL[] urls,
             final ClassLoader parent
