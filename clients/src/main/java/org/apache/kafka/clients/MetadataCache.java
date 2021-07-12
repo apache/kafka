@@ -21,6 +21,7 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 
@@ -49,6 +50,8 @@ public class MetadataCache {
     private final Set<String> internalTopics;
     private final Node controller;
     private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
+    private final Map<String, Uuid> topicIds;
+    private final Map<Uuid, String> topicNames;
 
     private Cluster clusterInstance;
 
@@ -58,8 +61,9 @@ public class MetadataCache {
                   Set<String> unauthorizedTopics,
                   Set<String> invalidTopics,
                   Set<String> internalTopics,
-                  Node controller) {
-        this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, null);
+                  Node controller,
+                  Map<String, Uuid> topicIds) {
+        this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds, null);
     }
 
     private MetadataCache(String clusterId,
@@ -69,6 +73,7 @@ public class MetadataCache {
                           Set<String> invalidTopics,
                           Set<String> internalTopics,
                           Node controller,
+                          Map<String, Uuid> topicIds,
                           Cluster clusterInstance) {
         this.clusterId = clusterId;
         this.nodes = nodes;
@@ -76,6 +81,12 @@ public class MetadataCache {
         this.invalidTopics = invalidTopics;
         this.internalTopics = internalTopics;
         this.controller = controller;
+        this.topicIds = topicIds;
+
+        this.topicNames = new HashMap<>(topicIds.size());
+        for (Map.Entry<String, Uuid> entry : topicIds.entrySet()) {
+            this.topicNames.put(entry.getValue(), entry.getKey());
+        }
 
         this.metadataByPartition = new HashMap<>(partitions.size());
         for (PartitionMetadata p : partitions) {
@@ -91,6 +102,13 @@ public class MetadataCache {
 
     Optional<PartitionMetadata> partitionMetadata(TopicPartition topicPartition) {
         return Optional.ofNullable(metadataByPartition.get(topicPartition));
+    }
+
+    Uuid topicId(String topicName) {
+        return topicIds.get(topicName);
+    }
+    String topicName(Uuid topicId) {
+        return topicNames.get(topicId);
     }
 
     Optional<Node> nodeById(int id) {
@@ -120,6 +138,7 @@ public class MetadataCache {
      * @param addUnauthorizedTopics unauthorized topics to add
      * @param addInternalTopics internal topics to add
      * @param newController the new controller node
+     * @param topicIds the mapping from topic name to topic ID from the MetadataResponse
      * @param retainTopic returns whether a topic's metadata should be retained
      * @return the merged metadata cache
      */
@@ -130,13 +149,36 @@ public class MetadataCache {
                             Set<String> addInvalidTopics,
                             Set<String> addInternalTopics,
                             Node newController,
+                            Map<String, Uuid> topicIds,
                             BiPredicate<String, Boolean> retainTopic) {
 
         Predicate<String> shouldRetainTopic = topic -> retainTopic.test(topic, internalTopics.contains(topic));
 
         Map<TopicPartition, PartitionMetadata> newMetadataByPartition = new HashMap<>(addPartitions.size());
+        Map<String, Uuid> newTopicIds = new HashMap<>(topicIds.size());
+
+        // We want the most recent topic ID. We start with the previous ID stored for retained topics and then
+        // update with newest information in the MetadataResponse.
+        // If the newest MetadataResponse:
+        //    - contains a new topic with no ID, add no IDs to newTopicIds
+        //    - contains a new topic and ID, we add it to newTopicIds
+        //    - contains the same ID for an existing topic, we keep it the same in newTopicIds
+        //    - contains a new topic ID for an existing topic, we change it to the new one in newTopicIds
+        //    - has no topic ID for an existing topic, we remove any previous ID from newTopicIds
+        this.topicIds.forEach((topicName, topicId) -> {
+            if (shouldRetainTopic.test(topicName)) {
+                newTopicIds.put(topicName, topicId);
+            }
+        });
+
         for (PartitionMetadata partition : addPartitions) {
             newMetadataByPartition.put(partition.topicPartition, partition);
+            Uuid id = topicIds.get(partition.topic());
+            if (id != null)
+                newTopicIds.put(partition.topic(), id);
+            else
+                // Remove if the latest metadata does not have a topic ID
+                newTopicIds.remove(partition.topic());
         }
         for (Map.Entry<TopicPartition, PartitionMetadata> entry : metadataByPartition.entrySet()) {
             if (shouldRetainTopic.test(entry.getKey().topic())) {
@@ -149,7 +191,7 @@ public class MetadataCache {
         Set<String> newInternalTopics = fillSet(addInternalTopics, internalTopics, shouldRetainTopic);
 
         return new MetadataCache(newClusterId, newNodes, newMetadataByPartition.values(), newUnauthorizedTopics,
-                newInvalidTopics, newInternalTopics, newController);
+                newInvalidTopics, newInternalTopics, newController, newTopicIds);
     }
 
     /**
@@ -177,7 +219,7 @@ public class MetadataCache {
                 .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
                 .collect(Collectors.toList());
         this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
-                invalidTopics, internalTopics, controller);
+                invalidTopics, internalTopics, controller, topicIds);
     }
 
     static MetadataCache bootstrap(List<InetSocketAddress> addresses) {
@@ -189,12 +231,12 @@ public class MetadataCache {
         }
         return new MetadataCache(null, nodes, Collections.emptyList(),
                 Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
-                null, Cluster.bootstrap(addresses));
+                null, Collections.emptyMap(), Cluster.bootstrap(addresses));
     }
 
     static MetadataCache empty() {
         return new MetadataCache(null, Collections.emptyMap(), Collections.emptyList(),
-                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Cluster.empty());
+                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap(), Cluster.empty());
     }
 
     @Override
