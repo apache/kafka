@@ -317,7 +317,7 @@ class LogManager(logDirs: Seq[File],
           private val threadNumber = new AtomicInteger(1)
           override def newThread(r: Runnable): Thread = {
             val thread = factory.newThread(r)
-            thread.setName(s"log-recovery(${dir.getAbsolutePath}, ${threadNumber.getAndIncrement()})")
+            thread.setName(s"log-recovery($logDirAbsolutePath, ${threadNumber.getAndIncrement()})")
             thread
           }
         })
