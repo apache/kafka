@@ -541,6 +541,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             return "_readable.readShort()";
         } else if (type instanceof FieldType.Uint16FieldType) {
             return "_readable.readUnsignedShort()";
+        } else if (type instanceof FieldType.Uint32FieldType) {
+            return "_readable.readUnsignedInt()";
         } else if (type instanceof FieldType.Int32FieldType) {
             return "_readable.readInt()";
         } else if (type instanceof FieldType.Int64FieldType) {
@@ -848,6 +850,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             return String.format("_writable.writeShort(%s)", name);
         } else if (type instanceof FieldType.Uint16FieldType) {
             return String.format("_writable.writeUnsignedShort(%s)", name);
+        } else if (type instanceof FieldType.Uint32FieldType) {
+            return String.format("_writable.writeUnsignedInt(%s)", name);
         } else if (type instanceof FieldType.Int32FieldType) {
             return String.format("_writable.writeInt(%s)", name);
         } else if (type instanceof FieldType.Int64FieldType) {
@@ -1371,7 +1375,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                     (field.type() instanceof FieldType.Int32FieldType)) {
             buffer.printf("hashCode = 31 * hashCode + %s;%n",
                 field.camelCaseName());
-        } else if (field.type() instanceof FieldType.Int64FieldType) {
+        } else if (field.type() instanceof FieldType.Int64FieldType ||
+                    (field.type() instanceof FieldType.Uint32FieldType)) {
             buffer.printf("hashCode = 31 * hashCode + ((int) (%s >> 32) ^ (int) %s);%n",
                 field.camelCaseName(), field.camelCaseName());
         } else if (field.type() instanceof FieldType.UUIDFieldType) {
@@ -1426,6 +1431,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 (field.type() instanceof FieldType.Int8FieldType) ||
                 (field.type() instanceof FieldType.Int16FieldType) ||
                 (field.type() instanceof FieldType.Uint16FieldType) ||
+                (field.type() instanceof FieldType.Uint32FieldType) ||
                 (field.type() instanceof FieldType.Int32FieldType) ||
                 (field.type() instanceof FieldType.Int64FieldType) ||
                 (field.type() instanceof FieldType.Float64FieldType) ||
@@ -1513,6 +1519,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         } else if ((field.type() instanceof FieldType.Int8FieldType) ||
                 (field.type() instanceof FieldType.Int16FieldType) ||
                 (field.type() instanceof FieldType.Uint16FieldType) ||
+                (field.type() instanceof FieldType.Uint32FieldType) ||
                 (field.type() instanceof FieldType.Int32FieldType) ||
                 (field.type() instanceof FieldType.Int64FieldType) ||
                 (field.type() instanceof FieldType.Float64FieldType)) {
@@ -1579,6 +1586,14 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             buffer.incrementIndent();
             buffer.printf("throw new RuntimeException(\"Invalid value \" + v + " +
                     "\" for unsigned short field.\");%n");
+            buffer.decrementIndent();
+            buffer.printf("}%n");
+        }
+        if (field.type() instanceof FieldType.Uint32FieldType) {
+            buffer.printf("if (v < 0 || v > 4294967293L) {%n");
+            buffer.incrementIndent();
+            buffer.printf("throw new RuntimeException(\"Invalid value \" + v + " +
+                    "\" for unsigned int field.\");%n");
             buffer.decrementIndent();
             buffer.printf("}%n");
         }
