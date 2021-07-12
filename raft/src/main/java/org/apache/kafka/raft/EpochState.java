@@ -32,9 +32,9 @@ public interface EpochState extends Closeable {
      * @param candidateId The ID of the voter who attempt to become leader
      * @param isLogUpToDate Whether the candidate’s log is at least as up-to-date as receiver’s log, it
      *                      is the responsibility of the caller to compare the log in advance
-     * @return true If grant vote.
+     * @return empty If grant vote or reject reason if reject vote.
      */
-    boolean canGrantVote(int candidateId, boolean isLogUpToDate);
+    Optional<String> validateGrantVote(int candidateId, boolean isLogUpToDate);
 
     /**
      * Get the current election state, which is guaranteed to be immutable.
