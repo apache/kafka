@@ -518,7 +518,7 @@ public class MemoryRecordsTest {
 
             List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
             assertEquals(1, batches.size());
-            assertEquals(deleteHorizon, batches.get(0).deleteHorizonMs());
+            assertEquals(deleteHorizon, batches.get(0).deleteHorizonMs().getAsLong());
         }
     }
 

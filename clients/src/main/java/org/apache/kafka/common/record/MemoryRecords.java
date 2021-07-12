@@ -193,10 +193,10 @@ public class MemoryRecords extends AbstractRecords {
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
                 boolean needToSetDeleteHorizon = batch.magic() >= 2 && (containsTombstones || containsMarkerForEmptyTxn)
-                    && !batch.hasDeleteHorizonMs();
+                    && !batch.deleteHorizonMs().isPresent();
                 if (writeOriginalBatch && !needToSetDeleteHorizon) {
-                    if (batch.deleteHorizonMs() > filterResult.latestDeleteHorizon()) 
-                        filterResult.updateLatestDeleteHorizon(batch.deleteHorizonMs());
+                    if (batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP) > filterResult.latestDeleteHorizon())
+                        filterResult.updateLatestDeleteHorizon(batch.deleteHorizonMs().getAsLong());
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
@@ -208,9 +208,9 @@ public class MemoryRecords extends AbstractRecords {
                             filterResult.updateLatestDeleteHorizon(deleteHorizonMs);
                         }
                     } else {
-                        builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, batch.deleteHorizonMs());
-                        if (batch.deleteHorizonMs() > filterResult.latestDeleteHorizon())
-                            filterResult.updateLatestDeleteHorizon(batch.deleteHorizonMs());
+                        builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP));
+                        if (batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP) > filterResult.latestDeleteHorizon())
+                            filterResult.updateLatestDeleteHorizon(batch.deleteHorizonMs().getAsLong());
                     }
 
                     MemoryRecords records = builder.build();
@@ -250,13 +250,13 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     private static BatchFilterResult filterBatch(RecordBatch batch,
-                                                         BufferSupplier decompressionBufferSupplier,
-                                                         FilterResult filterResult,
-                                                         RecordFilter filter,
-                                                         byte batchMagic,
-                                                         boolean writeOriginalBatch,
-                                                         long maxOffset,
-                                                         List<Record> retainedRecords) {
+                                                 BufferSupplier decompressionBufferSupplier,
+                                                 FilterResult filterResult,
+                                                 RecordFilter filter,
+                                                 byte batchMagic,
+                                                 boolean writeOriginalBatch,
+                                                 long maxOffset,
+                                                 List<Record> retainedRecords) {
         boolean containsTombstones = false;
         try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
             while (iterator.hasNext()) {

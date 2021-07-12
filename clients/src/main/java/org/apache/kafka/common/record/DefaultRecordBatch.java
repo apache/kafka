@@ -37,6 +37,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.OptionalLong;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
@@ -115,9 +116,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     static final int ATTRIBUTE_LENGTH = 2;
     public static final int LAST_OFFSET_DELTA_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
     static final int LAST_OFFSET_DELTA_LENGTH = 4;
-    static final int FIRST_TIMESTAMP_OFFSET = LAST_OFFSET_DELTA_OFFSET + LAST_OFFSET_DELTA_LENGTH;
-    static final int FIRST_TIMESTAMP_LENGTH = 8;
-    static final int MAX_TIMESTAMP_OFFSET = FIRST_TIMESTAMP_OFFSET + FIRST_TIMESTAMP_LENGTH;
+    static final int BASE_TIMESTAMP_OFFSET = LAST_OFFSET_DELTA_OFFSET + LAST_OFFSET_DELTA_LENGTH;
+    static final int BASE_TIMESTAMP_LENGTH = 8;
+    static final int MAX_TIMESTAMP_OFFSET = BASE_TIMESTAMP_OFFSET + BASE_TIMESTAMP_LENGTH;
     static final int MAX_TIMESTAMP_LENGTH = 8;
     static final int PRODUCER_ID_OFFSET = MAX_TIMESTAMP_OFFSET + MAX_TIMESTAMP_LENGTH;
     static final int PRODUCER_ID_LENGTH = 8;
@@ -167,9 +168,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
      *         {@link RecordBatch#NO_TIMESTAMP} if the batch is empty
      */
     public long baseTimestamp() {
-        if (hasDeleteHorizonMs())
-            return RecordBatch.NO_TIMESTAMP;
-        return buffer.getLong(FIRST_TIMESTAMP_OFFSET);
+        return buffer.getLong(BASE_TIMESTAMP_OFFSET);
     }
 
     @Override
@@ -253,16 +252,16 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return (attributes() & TRANSACTIONAL_FLAG_MASK) > 0;
     }
 
-    @Override
-    public boolean hasDeleteHorizonMs() {
+    private boolean hasDeleteHorizonMs() {
         return (attributes() & DELETE_HORIZON_FLAG_MASK) > 0;
     }
 
     @Override
-    public long deleteHorizonMs() {
+    public OptionalLong deleteHorizonMs() {
         if (hasDeleteHorizonMs())
-            return buffer.getLong(FIRST_TIMESTAMP_OFFSET);
-        return RecordBatch.NO_TIMESTAMP;
+            return OptionalLong.of(buffer.getLong(BASE_TIMESTAMP_OFFSET));
+        else
+            return OptionalLong.empty();
     }
 
     @Override
@@ -495,7 +494,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         buffer.putInt(position + PARTITION_LEADER_EPOCH_OFFSET, partitionLeaderEpoch);
         buffer.put(position + MAGIC_OFFSET, magic);
         buffer.putShort(position + ATTRIBUTES_OFFSET, attributes);
-        buffer.putLong(position + FIRST_TIMESTAMP_OFFSET, firstTimestamp);
+        buffer.putLong(position + BASE_TIMESTAMP_OFFSET, firstTimestamp);
         buffer.putLong(position + MAX_TIMESTAMP_OFFSET, maxTimestamp);
         buffer.putInt(position + LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta);
         buffer.putLong(position + PRODUCER_ID_OFFSET, producerId);
@@ -728,15 +727,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         }
 
         @Override
-        public boolean hasDeleteHorizonMs() {
-            return loadBatchHeader().hasDeleteHorizonMs();
-        }
-
-        @Override
-        public long deleteHorizonMs() {
-            if (hasDeleteHorizonMs())
-                return super.loadBatchHeader().deleteHorizonMs();
-            return RecordBatch.NO_TIMESTAMP;
+        public OptionalLong deleteHorizonMs() {
+            return loadBatchHeader().deleteHorizonMs();
         }
 
         @Override

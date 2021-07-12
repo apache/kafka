@@ -666,7 +666,7 @@ private[log] class Cleaner(val id: Int,
             discardBatchRecords = canDiscardBatch && !retainLegacyDeletesAndTxnMarkers
           } else {
             discardBatchRecords = canDiscardBatch && 
-              batch.hasDeleteHorizonMs() && batch.deleteHorizonMs() <= currentTime
+              batch.deleteHorizonMs().isPresent && batch.deleteHorizonMs().getAsLong <= currentTime
           }
         } else {
           discardBatchRecords = canDiscardBatch
@@ -814,7 +814,7 @@ private[log] class Cleaner(val id: Int,
       val supportDeleteHorizon = batch.magic() >= RecordBatch.MAGIC_VALUE_V2
       val shouldRetainDeletes =
         if (supportDeleteHorizon)
-          !batch.hasDeleteHorizonMs() || currentTime < batch.deleteHorizonMs()
+          !batch.deleteHorizonMs().isPresent || currentTime < batch.deleteHorizonMs().getAsLong
         else
           retainDeletesForLegacyRecords
       val isRetainedValue = record.hasValue || shouldRetainDeletes

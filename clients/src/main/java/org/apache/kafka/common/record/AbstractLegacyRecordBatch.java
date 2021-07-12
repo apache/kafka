@@ -35,6 +35,7 @@ import java.util.ArrayDeque;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.OptionalLong;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
@@ -214,13 +215,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public long deleteHorizonMs() {
-        return RecordBatch.NO_TIMESTAMP;
-    }
-
-    @Override
-    public boolean hasDeleteHorizonMs() {
-        return false;
+    public OptionalLong deleteHorizonMs() {
+        return OptionalLong.empty();
     }
 
     /**
@@ -475,13 +471,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        public long deleteHorizonMs() {
-            return RecordBatch.NO_TIMESTAMP;
-        }
-
-        @Override
-        public boolean hasDeleteHorizonMs() {
-            return false;
+        public OptionalLong deleteHorizonMs() {
+            return OptionalLong.empty();
         }
 
         @Override
@@ -574,13 +565,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        public long deleteHorizonMs() {
-            return RecordBatch.NO_TIMESTAMP;
-        }
-
-        @Override
-        public boolean hasDeleteHorizonMs() {
-            return false;
+        public OptionalLong deleteHorizonMs() {
+            return OptionalLong.empty();
         }
 
         @Override
