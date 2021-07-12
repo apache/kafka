@@ -939,7 +939,7 @@ public class KafkaStreams implements AutoCloseable {
         return streamThread;
     }
 
-    //Ensure Mockito stub construct with capture argument for KafkaStreamsTest.
+    // Ensure Mockito stub construct with capture argument for KafkaStreamsTest.
     public static Metrics createThisMetrics(final MetricConfig metricConfig, final List<MetricsReporter> reporters, final Time time, final MetricsContext metricsContext) {
         return new Metrics(metricConfig, reporters, time, metricsContext);
     }
