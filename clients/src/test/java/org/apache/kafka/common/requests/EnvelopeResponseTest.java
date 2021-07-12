@@ -22,31 +22,36 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.ByteBuffer;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class EnvelopeResponseTest {
 
-    @Test
-    public void testToSend() {
-        for (short version : ApiKeys.ENVELOPE.allVersions()) {
-            ByteBuffer responseData = ByteBuffer.wrap("foobar".getBytes());
-            EnvelopeResponse response = new EnvelopeResponse(responseData, Errors.NONE);
-            short headerVersion = ApiKeys.ENVELOPE.responseHeaderVersion(version);
-            ResponseHeader header = new ResponseHeader(15, headerVersion);
+    @ParameterizedTest(name = "testToSend(short) -> value: {0}")
+    @MethodSource("versionProvider")
+    public void testToSend(short version) {
+        ByteBuffer responseData = ByteBuffer.wrap("foobar".getBytes());
+        EnvelopeResponse response = new EnvelopeResponse(responseData, Errors.NONE);
+        short headerVersion = ApiKeys.ENVELOPE.responseHeaderVersion(version);
+        ResponseHeader header = new ResponseHeader(15, headerVersion);
 
-            Send send = response.toSend(header, version);
-            ByteBuffer buffer = TestUtils.toBuffer(send);
-            assertEquals(send.size() - 4, buffer.getInt());
-            assertEquals(header, ResponseHeader.parse(buffer, headerVersion));
+        Send send = response.toSend(header, version);
+        ByteBuffer buffer = TestUtils.toBuffer(send);
+        assertEquals(send.size() - 4, buffer.getInt());
+        assertEquals(header, ResponseHeader.parse(buffer, headerVersion));
 
-            EnvelopeResponseData parsedResponseData = new EnvelopeResponseData();
-            parsedResponseData.read(new ByteBufferAccessor(buffer), version);
-            assertEquals(response.data(), parsedResponseData);
-        }
+        EnvelopeResponseData parsedResponseData = new EnvelopeResponseData();
+        parsedResponseData.read(new ByteBufferAccessor(buffer), version);
+        assertEquals(response.data(), parsedResponseData);
+    }
+
+    static Stream<Short> versionProvider() {
+        return ApiKeys.ENVELOPE.allVersions().stream();
     }
 
 }
