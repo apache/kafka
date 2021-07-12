@@ -427,8 +427,18 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code max.task.idle.ms} */
     public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
-    private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time in milliseconds a stream task will stay idle when not all of its partition buffers contain records," +
-        " to avoid potential out-of-order record processing across multiple input streams.";
+    private static final String MAX_TASK_IDLE_MS_DOC = "This config controls whether joins and merges"
+        + " may produce out-of-order results."
+        + " The config value is the maximum amount of time in milliseconds a stream task will stay idle"
+        + " when it is fully caught up on some (but not all) input partitions"
+        + " to wait for producers to send additional records and avoid potential"
+        + " out-of-order record processing across multiple input streams."
+        + " The default (zero) does not wait for producers to send more records,"
+        + " but it does wait to fetch data that is already present on the brokers."
+        + " This default means that for records that are already present on the brokers,"
+        + " Streams will process them in timestamp order."
+        + " Set to -1 to disable idling entirely and process any locally available data,"
+        + " even though doing so may produce out-of-order processing.";
 
     /** {@code max.warmup.replicas} */
     public static final String MAX_WARMUP_REPLICAS_CONFIG = "max.warmup.replicas";

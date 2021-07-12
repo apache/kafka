@@ -243,8 +243,21 @@ settings.put(... , ...);</code></pre>
           </tr>
           <tr class="row-even"><td>max.task.idle.ms</td>
             <td>Medium</td>
-            <td colspan="2">Maximum amount of time in milliseconds a stream task will stay idle while waiting for all partitions to contain data
-              and avoid potential out-of-order record processing across multiple input streams.</td>
+            <td colspan="2">
+              <p>
+                This config controls whether joins and merges may produce out-of-order results.
+                The config value is the maximum amount of time in milliseconds a stream task will stay idle
+                when it is fully caught up on some (but not all) input partitions
+                to wait for producers to send additional records and avoid potential
+                out-of-order record processing across multiple input streams.
+                The default (zero) does not wait for producers to send more records,
+                but it does wait to fetch data that is already present on the brokers.
+                This default means that for records that are already present on the brokers,
+                Streams will process them in timestamp order.
+                Set to -1 to disable idling entirely and process any locally available data,
+                even though doing so may produce out-of-order processing.
+              </p>
+            </td>
             <td>0 milliseconds</td>
           </tr>
           <tr class="row-odd"><td>max.warmup.replicas</td>
@@ -602,8 +615,54 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
           <span id="streams-developer-guide-max-task-idle-ms"></span><h4><a class="toc-backref" href="#id28">max.task.idle.ms</a><a class="headerlink" href="#max-task-idle-ms" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div>
-              The maximum amount of time a task will idle without processing data when waiting for all of its input partition buffers to contain records. This can help avoid potential out-of-order
-              processing when the task has multiple input streams, as in a join, for example. Setting this to a nonzero value may increase latency but will improve time synchronization.
+              <p>
+                This configuration controls how long Streams will wait to fetch data in order to
+                provide in-order processing semantics.
+              </p>
+              <p>
+                When processing a task that has multiple input partitions (as in a join or merge),
+                Streams needs to choose which partition to process the next record from.
+                When all input partitions have locally buffered data, Streams picks the partition
+                whose next record has the lowest timestamp. This has the desirable effect of
+                collating the input partitions in timestamp order, which is generally what you
+                want in a streaming join or merge. However, when Streams does not have any data
+                buffered locally for one of the partitions, it does not know whether the next
+                record for that partition will have a lower or higher timestamp than the remaining
+                partitions' records.
+              </p>
+              <p>
+                There are two cases to consider: either there is data in that partition on the
+                broker that Streams has not fetched yet, or Streams is fully caught up with that
+                partition on the broker, and the producers simply haven't produced any new records
+                since Streams polled the last batch.
+              </p>
+              <p>
+                The default value of
+                <code class="docutils literal"><span class="pre">0</span></code>
+                causes Streams to delay processing a task when it detects that it has no locally
+                buffered data for a partition, but there is data available on the brokers.
+                Specifically, when there is an empty partition in the local buffer, but Streams
+                has a non-zero lag for that partition. However, as soon as Streams catches up to
+                the broker, it will continue processing, even if there is no data in one of the
+                partitions. That is, it will not wait for new data to be <em>produced</em>.
+                This default is designed to sacrifice some throughput in exchange for intuitively
+                correct join semantics.
+              </p>
+              <p>
+                Any config value greater than zero indicates the number of <em>extra</em>
+                milliseconds that Streams will wait if it has a caught-up but empty partition.
+                In other words, this is the amount of time to wait for new data to be produced
+                to the input partitions to ensure in-order processing of data in the event
+                of a slow producer.
+              </p>
+              <p>
+                The config value of
+                <code class="docutils literal"><span class="pre">-1</span></code>
+                indicates that Streams will never wait to buffer empty partitions before choosing
+                the next record by timestamp, which achieves maximum throughput at the expense of
+                introducing out-of-order processing.
+              </p>
+
             </div>
           </blockquote>
         </div>
