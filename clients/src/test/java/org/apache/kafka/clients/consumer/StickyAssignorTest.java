@@ -89,8 +89,8 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         subscriptions.put(consumer3, buildSubscription(topics(topic), emptyList()));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp(topic, 1)), assignment.get(consumer1));
-        assertEquals(partitions(tp(topic, 2), tp(topic, 3)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic, 1), tp(topic, 3)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic, 2)), assignment.get(consumer2));
         assertEquals(partitions(tp(topic, 0)), assignment.get(consumer3));
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);

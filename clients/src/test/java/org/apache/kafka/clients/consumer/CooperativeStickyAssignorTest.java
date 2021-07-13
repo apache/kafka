@@ -107,8 +107,8 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         subscriptions.put(consumer3, buildSubscription(topics(topic), emptyList()));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp(topic, 1)), assignment.get(consumer1));
-        assertEquals(partitions(tp(topic, 2), tp(topic, 3)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic, 1), tp(topic, 3)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic, 2)), assignment.get(consumer2));
         // In the cooperative assignor, topic-0 has to be considered "owned" and so it cant be assigned until both have "revoked" it
         assertTrue(assignment.get(consumer3).isEmpty());
 

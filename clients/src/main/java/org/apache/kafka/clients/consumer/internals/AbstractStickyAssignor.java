@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -192,7 +191,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
         // the consumers which may still be assigned one or more partitions to reach expected capacity
         List<String> unfilledMembersWithUnderMinQuotaPartitions = new LinkedList<>();
-        Queue<String> unfilledMembersWithExactlyMinQuotaPartitions = new LinkedList<>();
+        LinkedList<String> unfilledMembersWithExactlyMinQuotaPartitions = new LinkedList<>();
 
         int numberOfConsumers = consumerToOwnedPartitions.size();
         int totalPartitionsCount = partitionsPerTopic.values().stream().reduce(0, Integer::sum);
@@ -268,6 +267,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         }
 
         Collections.sort(unfilledMembersWithUnderMinQuotaPartitions);
+        Collections.sort(unfilledMembersWithExactlyMinQuotaPartitions);
 
         Iterator<String> unfilledConsumerIter = unfilledMembersWithUnderMinQuotaPartitions.iterator();
         // Round-Robin filling remaining members up to the expected numbers of maxQuota, otherwise, to minQuota
