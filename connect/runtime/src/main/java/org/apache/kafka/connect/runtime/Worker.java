@@ -115,6 +115,7 @@ public class Worker {
 
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
     private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ConnectorTaskId, ErrorHandlingMetrics> errorHandlingMetricsMap = new ConcurrentHashMap<>();
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
     private final WorkerConfigTransformer workerConfigTransformer;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
@@ -771,7 +772,9 @@ public class Worker {
     }
 
     ErrorHandlingMetrics errorHandlingMetrics(ConnectorTaskId id) {
-        return new ErrorHandlingMetrics(id, metrics);
+        ErrorHandlingMetrics errorHandlingMetrics = new ErrorHandlingMetrics(id, metrics);
+        errorHandlingMetricsMap.put(id, errorHandlingMetrics);
+        return errorHandlingMetrics;
     }
 
     private List<ErrorReporter> sinkTaskReporters(ConnectorTaskId id, SinkConnectorConfig connConfig,
@@ -864,6 +867,7 @@ public class Worker {
             }
 
             try {
+                errorHandlingMetricsMap.get(taskId).closeTaskErrorMetricGroup();
                 task.removeMetrics();
             } finally {
                 connectorStatusMetricsGroup.recordTaskRemoved(taskId);
