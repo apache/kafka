@@ -22,8 +22,12 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.log4j.Logger;
-import org.apache.log4j.PropertyConfigurator;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.config.Configuration;
+import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.logging.log4j.core.config.properties.PropertiesConfigurationBuilder;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -44,7 +48,7 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
  */
 
 public class VerifiableLog4jAppender {
-    Logger logger = Logger.getLogger(VerifiableLog4jAppender.class);
+    Logger logger = LogManager.getLogger(VerifiableLog4jAppender.class);
 
     // If maxMessages < 0, log until the process is killed externally
     private long maxMessages = -1;
@@ -182,31 +186,47 @@ public class VerifiableLog4jAppender {
             String configFile = res.getString("appender.config");
 
             Properties props = new Properties();
-            props.setProperty("log4j.rootLogger", "INFO, KAFKA");
-            props.setProperty("log4j.appender.KAFKA", "org.apache.kafka.log4jappender.KafkaLog4jAppender");
-            props.setProperty("log4j.appender.KAFKA.layout", "org.apache.log4j.PatternLayout");
-            props.setProperty("log4j.appender.KAFKA.layout.ConversionPattern", "%-5p: %c - %m%n");
-            props.setProperty("log4j.appender.KAFKA.BrokerList", res.getString("brokerList"));
-            props.setProperty("log4j.appender.KAFKA.Topic", topic);
-            props.setProperty("log4j.appender.KAFKA.RequiredNumAcks", res.getString("acks"));
-            props.setProperty("log4j.appender.KAFKA.SyncSend", "true");
+            props.setProperty("status", "OFF");
+            props.setProperty("name", "VerifiableLog4jAppenderConfig");
+            props.setProperty("packages", "org.apache.kafka.log4j2appender");
+
+            // appenders
+            props.setProperty("appenders", "kafkaAppender");
+
+            props.setProperty("appender.kafkaAppender.type", "KafkaAppender");
+            props.setProperty("appender.kafkaAppender.name", "KAFKA_APPENDER");
+            props.setProperty("appender.kafkaAppender.layout.type", "PatternLayout");
+            props.setProperty("appender.kafkaAppender.layout.pattern", "[%d] %p %m (%c)%n");
+            props.setProperty("appender.kafkaAppender.bootstrapServers", res.getString("brokerList"));
+            props.setProperty("appender.kafkaAppender.topic", topic);
+            props.setProperty("appender.kafkaAppender.acks", res.getString("acks"));
+            props.setProperty("appender.kafkaAppender.syncSend", Boolean.TRUE.toString());
+
             final String securityProtocol = res.getString("securityProtocol");
             if (securityProtocol != null && !securityProtocol.equals(SecurityProtocol.PLAINTEXT.toString())) {
-                props.setProperty("log4j.appender.KAFKA.SecurityProtocol", securityProtocol);
+                props.setProperty("appender.kafkaAppender.securityProtocol", securityProtocol);
             }
             if (securityProtocol != null && securityProtocol.contains("SSL")) {
-                props.setProperty("log4j.appender.KAFKA.SslTruststoreLocation", res.getString("sslTruststoreLocation"));
-                props.setProperty("log4j.appender.KAFKA.SslTruststorePassword", res.getString("sslTruststorePassword"));
+                props.setProperty("appender.kafkaAppender.sslTruststoreLocation", res.getString("sslTruststoreLocation"));
+                props.setProperty("appender.kafkaAppender.sslTruststorePassword", res.getString("sslTruststorePassword"));
             }
             if (securityProtocol != null && securityProtocol.contains("SASL")) {
-                props.setProperty("log4j.appender.KAFKA.SaslKerberosServiceName", res.getString("saslKerberosServiceName"));
-                props.setProperty("log4j.appender.KAFKA.clientJaasConfPath", res.getString("clientJaasConfPath"));
-                props.setProperty("log4j.appender.KAFKA.kerb5ConfPath", res.getString("kerb5ConfPath"));
+                props.setProperty("appender.kafkaAppender.saslKerberosServiceName", res.getString("saslKerberosServiceName"));
+                props.setProperty("appender.kafkaAppender.clientJaasConfPath", res.getString("clientJaasConfPath"));
+                props.setProperty("appender.kafkaAppender.kerb5ConfPath", res.getString("kerb5ConfPath"));
             }
-            props.setProperty("log4j.logger.kafka.log4j", "INFO, KAFKA");
+
+            // loggers
+            props.setProperty("rootLogger.level", "INFO");
+            props.setProperty("rootLogger.appenderRefs", "kafkaAppender");
+            props.setProperty("rootLogger.appenderRef.kafkaAppender.ref", "KAFKA_APPENDER");
+
+            props.setProperty("loggers", "org.apache.kafka.clients.Metadata");
+
             // Changing log level from INFO to WARN as a temporary workaround for KAFKA-6415. This is to
             // avoid deadlock in system tests when producer network thread appends to log while updating metadata.
-            props.setProperty("log4j.logger.org.apache.kafka.clients.Metadata", "WARN, KAFKA");
+            props.setProperty("logger.org.apache.kafka.clients.Metadata.name", "org.apache.kafka.clients.Metadata");
+            props.setProperty("logger.org.apache.kafka.clients.Metadata.level", "WARN");
 
             if (configFile != null) {
                 try {
@@ -233,7 +253,13 @@ public class VerifiableLog4jAppender {
 
     public VerifiableLog4jAppender(Properties props, int maxMessages) {
         this.maxMessages = maxMessages;
-        PropertyConfigurator.configure(props);
+        LoggerContext context = (LoggerContext)LogManager.getContext(false);
+        Configuration config = new PropertiesConfigurationBuilder()
+            .setRootProperties(props)
+            .setLoggerContext(context)
+            .build();
+        context.setConfiguration(config);
+        Configurator.initialize(config);
     }
 
     public static void main(String[] args) {

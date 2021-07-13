@@ -1575,12 +1575,14 @@ project(':tools') {
 
   dependencies {
     implementation project(':clients')
-    implementation project(':log4j-appender')
+    implementation project(':log4j2-appender')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
-    implementation libs.log4j
+    implementation libs.log4j2Api
+    implementation libs.log4j1_2Api
+    implementation libs.log4j2Core
 
     implementation libs.jacksonJaxrsJsonProvider
 
@@ -1618,12 +1620,14 @@ project(':trogdor') {
 
   dependencies {
     implementation project(':clients')
-    implementation project(':log4j-appender')
+    implementation project(':log4j2-appender')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
-    implementation libs.log4j
+    implementation libs.log4j2Api
+    implementation libs.log4j1_2Api
+    implementation libs.log4j2Core
 
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
@@ -1639,7 +1643,7 @@ project(':trogdor') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jlog4j2
   }
 
   javadoc {
@@ -1675,7 +1679,7 @@ project(':shell') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':core')
-    implementation project(':log4j-appender')
+    implementation project(':log4j2-appender')
     implementation project(':metadata')
     implementation project(':raft')
 
@@ -1684,7 +1688,7 @@ project(':shell') {
     testImplementation project(':clients')
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jlog4j2
   }
 
   javadoc {
@@ -2206,6 +2210,29 @@ project(':log4j-appender') {
     testImplementation libs.junitJupiter
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+}
+
+project(':log4j2-appender') {
+  archivesBaseName = "kafka-log4j2-appender"
+
+  dependencies {
+    implementation project(':clients')
+    implementation libs.log4j2Api
+    implementation libs.log4j1_2Api
+    implementation libs.log4j2Core
+    implementation libs.slf4jlog4j2
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.hamcrest
+    testImplementation libs.junitJupiterApi
+    testImplementation libs.junitVintageEngine
+    testImplementation libs.log4j2CoreTest
   }
 
   javadoc {

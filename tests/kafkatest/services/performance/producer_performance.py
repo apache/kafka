@@ -32,7 +32,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "producer_performance.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "producer_performance.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j2.properties")
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=DEV_BRANCH, settings=None,
                  intermediate_stats=False, client_id="producer-performance"):
@@ -93,7 +93,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
                 cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % jar
             cmd += "export CLASSPATH; "
 
-        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
+        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configurationFile=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
         cmd += "KAFKA_OPTS=%(kafka_opts)s KAFKA_HEAP_OPTS=\"-XX:+HeapDumpOnOutOfMemoryError\" %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
               "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s %(metrics_props)s" % args
 
@@ -122,7 +122,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
         node.account.ssh("mkdir -p %s" % ProducerPerformanceService.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
-        log_config = self.render('tools_log4j.properties', log_file=ProducerPerformanceService.LOG_FILE)
+        log_config = self.render('tools_log4j2.properties', log_file=ProducerPerformanceService.LOG_FILE)
         node.account.create_file(ProducerPerformanceService.LOG4J_CONFIG, log_config)
 
         cmd = self.start_cmd(node)

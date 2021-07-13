@@ -30,6 +30,8 @@ if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
   export KAFKA_HEAP_OPTS="-Xms256M -Xmx2G"
 fi
 
+export USE_LOG4J2_JAR=false
+
 EXTRA_ARGS=${EXTRA_ARGS-'-name connectDistributed'}
 
 COMMAND=$1

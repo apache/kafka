@@ -30,7 +30,7 @@ class EndToEndLatencyService(PerformanceService):
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "end_to_end_latency.stdout")
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "end_to_end_latency.stderr")
     LOG_FILE = os.path.join(LOG_DIR, "end_to_end_latency.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j2.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "client.properties")
 
     logs = {
@@ -84,7 +84,7 @@ class EndToEndLatencyService(PerformanceService):
                 'zk_connect': self.kafka.zk_connect_setting(),
             })
 
-        cmd = "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % EndToEndLatencyService.LOG4J_CONFIG
+        cmd = "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configurationFile=file:%s\"; " % EndToEndLatencyService.LOG4J_CONFIG
         if node.version.consumer_supports_bootstrap_server():
             cmd += "KAFKA_OPTS=%(kafka_opts)s %(kafka_run_class)s %(java_class_name)s " % args
             cmd += "%(bootstrap_servers)s %(topic)s %(num_records)d %(acks)d %(message_bytes)d %(config_file)s" % args
@@ -101,7 +101,7 @@ class EndToEndLatencyService(PerformanceService):
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % EndToEndLatencyService.PERSISTENT_ROOT, allow_fail=False)
 
-        log_config = self.render('tools_log4j.properties', log_file=EndToEndLatencyService.LOG_FILE)
+        log_config = self.render('tools_log4j2.properties', log_file=EndToEndLatencyService.LOG_FILE)
 
         node.account.create_file(EndToEndLatencyService.LOG4J_CONFIG, log_config)
         client_config = str(self.security_config)
