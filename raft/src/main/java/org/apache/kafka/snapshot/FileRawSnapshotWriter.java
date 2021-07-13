@@ -60,8 +60,12 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             return channel.size();
         } catch (IOException e) {
             throw new UncheckedIOException(
-                String.format("Error calculating snapshot size.temp path = %s, snapshotId = %s.",
-                    this.tempSnapshotPath, this.snapshotId), e);
+                String.format(
+                    "Error calculating snapshot size. temp path = %s, snapshotId = %s.",
+                    tempSnapshotPath,
+                    snapshotId),
+                e
+            );
         }
     }
 
@@ -177,14 +181,17 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
         try {
             return new FileRawSnapshotWriter(
                 path,
-                FileChannel.open(path, Utils.mkSet(StandardOpenOption.WRITE, StandardOpenOption.APPEND)),
+                FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.APPEND),
                 snapshotId,
                 replicatedLog
             );
         } catch (IOException e) {
             throw new UncheckedIOException(
-                String.format("Error creating snapshot writer, " +
-                    "temp path = %s, snapshotId %s.", path, snapshotId),
+                String.format(
+                    "Error creating snapshot writer. path = %s, snapshotId %s.",
+                    path,
+                    snapshotId
+                ),
                 e
             );
         }
