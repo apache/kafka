@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
@@ -53,4 +54,9 @@ public abstract class RemoteLogMetadata {
     public int brokerId() {
         return brokerId;
     }
+
+    /**
+     * @return TopicIdPartition for which this event is generated.
+     */
+    public abstract TopicIdPartition topicIdPartition();
 }
