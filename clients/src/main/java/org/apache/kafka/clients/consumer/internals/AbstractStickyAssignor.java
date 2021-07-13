@@ -149,7 +149,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             ownedPartitions.add(tp);
                         } else {
                             String otherConsumer = allPreviousPartitionsToOwner.get(tp);
-                            log.warn("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
+                            log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
                                 + "same generation {}, this will be invalidated and removed from their previous assignment.",
                                      consumer, otherConsumer, tp, maxGeneration);
                             consumerToOwnedPartitions.get(otherConsumer).remove(tp);
@@ -190,19 +190,19 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
         Set<TopicPartition> allRevokedPartitions = new HashSet<>();
 
-        // the consumers not yet at expected capacity
-        List<String> unfilledMembers = new LinkedList<>();
-        Queue<String> potentiallyUnfilledMembersAtMinQuota = new LinkedList<>();
+        // the consumers which may still be assigned one or more partitions to reach expected capacity
+        List<String> unfilledMembersWithUnderMinQuotaPartitions = new LinkedList<>();
+        Queue<String> unfilledMembersWithExactlyMinQuotaPartitions = new LinkedList<>();
 
         int numberOfConsumers = consumerToOwnedPartitions.size();
         int totalPartitionsCount = partitionsPerTopic.values().stream().reduce(0, Integer::sum);
 
         int minQuota = (int) Math.floor(((double) totalPartitionsCount) / numberOfConsumers);
         int maxQuota = (int) Math.ceil(((double) totalPartitionsCount) / numberOfConsumers);
-        // the expected number of members with over minQuota assignment
-        int expectedNumMembersAssignedOverMinQuota = totalPartitionsCount % numberOfConsumers;
-        // the number of members with over minQuota partitions assigned
-        int numMembersAssignedOverMinQuota = 0;
+        // the expected number of members receiving more than minQuota partitions (zero when minQuota == maxQuota)
+        int expectedNumMembersWithOverMinQuotaPartitions = totalPartitionsCount % numberOfConsumers;
+        // the current number of members receiving more than minQuota partitions (zero when minQuota == maxQuota)
+        int currentNumMembersWithOverMinQuotaPartitions = 0;
 
         // initialize the assignment map with an empty array of size maxQuota for all members
         Map<String, List<TopicPartition>> assignment = new HashMap<>(
@@ -218,7 +218,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
             for (TopicPartition doublyClaimedPartition : partitionsWithMultiplePreviousOwners) {
                 if (ownedPartitions.contains(doublyClaimedPartition)) {
-                    log.warn("Found partition {} still claimed as owned by consumer {}, despite being claimed by multiple "
+                    log.error("Found partition {} still claimed as owned by consumer {}, despite being claimed by multiple "
                                  + "consumers already in the same generation. Removing it from the ownedPartitions",
                              doublyClaimedPartition, consumer);
                     ownedPartitions.remove(doublyClaimedPartition);
@@ -232,13 +232,13 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     consumerAssignment.addAll(ownedPartitions);
                     assignedPartitions.addAll(ownedPartitions);
                 }
-                unfilledMembers.add(consumer);
-            } else if (ownedPartitions.size() >= maxQuota && numMembersAssignedOverMinQuota < expectedNumMembersAssignedOverMinQuota) {
+                unfilledMembersWithUnderMinQuotaPartitions.add(consumer);
+            } else if (ownedPartitions.size() >= maxQuota && currentNumMembersWithOverMinQuotaPartitions < expectedNumMembersWithOverMinQuotaPartitions) {
                 // consumer owned the "maxQuota" of partitions or more, and we're still under the number of expected members
                 // with more than the minQuota partitions, so keep "maxQuota" of the owned partitions, and revoke the rest of the partitions
-                numMembersAssignedOverMinQuota++;
-                if (numMembersAssignedOverMinQuota == expectedNumMembersAssignedOverMinQuota) {
-                    potentiallyUnfilledMembersAtMinQuota.clear();
+                currentNumMembersWithOverMinQuotaPartitions++;
+                if (currentNumMembersWithOverMinQuotaPartitions == expectedNumMembersWithOverMinQuotaPartitions) {
+                    unfilledMembersWithExactlyMinQuotaPartitions.clear();
                 }
                 List<TopicPartition> maxQuotaPartitions = ownedPartitions.subList(0, maxQuota);
                 consumerAssignment.addAll(maxQuotaPartitions);
@@ -254,8 +254,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 // this consumer is potential maxQuota candidate since we're still under the number of expected members
                 // with more than the minQuota partitions. Note, if the number of expected members with more than
                 // the minQuota partitions is 0, it means minQuota == maxQuota, and there are no potentially unfilled
-                if (numMembersAssignedOverMinQuota < expectedNumMembersAssignedOverMinQuota) {
-                    potentiallyUnfilledMembersAtMinQuota.add(consumer);
+                if (currentNumMembersWithOverMinQuotaPartitions < expectedNumMembersWithOverMinQuotaPartitions) {
+                    unfilledMembersWithExactlyMinQuotaPartitions.add(consumer);
                 }
             }
         }
@@ -264,29 +264,29 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
         if (log.isDebugEnabled()) {
             log.debug("After reassigning previously owned partitions, unfilled members: {}, unassigned partitions: {}, " +
-                "current assignment: {}", unfilledMembers, unassignedPartitions, assignment);
+                "current assignment: {}", unfilledMembersWithUnderMinQuotaPartitions, unassignedPartitions, assignment);
         }
 
-        Collections.sort(unfilledMembers);
+        Collections.sort(unfilledMembersWithUnderMinQuotaPartitions);
 
-        Iterator<String> unfilledConsumerIter = unfilledMembers.iterator();
+        Iterator<String> unfilledConsumerIter = unfilledMembersWithUnderMinQuotaPartitions.iterator();
         // Round-Robin filling remaining members up to the expected numbers of maxQuota, otherwise, to minQuota
         for (TopicPartition unassignedPartition : unassignedPartitions) {
             String consumer;
             if (unfilledConsumerIter.hasNext()) {
                 consumer = unfilledConsumerIter.next();
             } else {
-                if (unfilledMembers.isEmpty() && potentiallyUnfilledMembersAtMinQuota.isEmpty()) {
+                if (unfilledMembersWithUnderMinQuotaPartitions.isEmpty() && unfilledMembersWithExactlyMinQuotaPartitions.isEmpty()) {
                     // Should not enter here since we have calculated the exact number to assign to each consumer.
                     // This indicates issues in the assignment algorithm
                     int currentPartitionIndex = unassignedPartitions.indexOf(unassignedPartition);
                     log.error("No more unfilled consumers to be assigned. The remaining unassigned partitions are: {}",
                               unassignedPartitions.subList(currentPartitionIndex, unassignedPartitions.size()));
                     throw new IllegalStateException("No more unfilled consumers to be assigned.");
-                } else if (unfilledMembers.isEmpty()) {
-                    consumer = potentiallyUnfilledMembersAtMinQuota.poll();
+                } else if (unfilledMembersWithUnderMinQuotaPartitions.isEmpty()) {
+                    consumer = unfilledMembersWithExactlyMinQuotaPartitions.poll();
                 } else {
-                    unfilledConsumerIter = unfilledMembers.iterator();
+                    unfilledConsumerIter = unfilledMembersWithUnderMinQuotaPartitions.iterator();
                     consumer = unfilledConsumerIter.next();
                 }
             }
@@ -303,37 +303,37 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             int currentAssignedCount = consumerAssignment.size();
             if (currentAssignedCount == minQuota) {
                 unfilledConsumerIter.remove();
-                potentiallyUnfilledMembersAtMinQuota.add(consumer);
+                unfilledMembersWithExactlyMinQuotaPartitions.add(consumer);
             } else if (currentAssignedCount == maxQuota) {
-                numMembersAssignedOverMinQuota++;
-                if (numMembersAssignedOverMinQuota == expectedNumMembersAssignedOverMinQuota) {
+                currentNumMembersWithOverMinQuotaPartitions++;
+                if (currentNumMembersWithOverMinQuotaPartitions == expectedNumMembersWithOverMinQuotaPartitions) {
                     // We only start to iterate over the "potentially unfilled" members at minQuota after we've filled
                     // all members up to at least minQuota, so once the last minQuota member reaches maxQuota, we
                     // should be done. But in case of some algorithmic error, just log a warning and continue to
                     // assign any remaining partitions within the assignment constraints
                     if (unassignedPartitions.indexOf(unassignedPartition) != unassignedPartitions.size() - 1) {
-                        log.warn("Filled the last member up to maxQuota but still had partitions remaining to assign, "
+                        log.error("Filled the last member up to maxQuota but still had partitions remaining to assign, "
                                      + "will continue but this indicates a bug in the assignment.");
                     }
                 }
             }
         }
 
-        if (!unfilledMembers.isEmpty()) {
+        if (!unfilledMembersWithUnderMinQuotaPartitions.isEmpty()) {
             // we expected all the remaining unfilled members have minQuota partitions and we're already at the expected number
             // of members with more than the minQuota partitions. Otherwise, there must be error here.
-            if (numMembersAssignedOverMinQuota != expectedNumMembersAssignedOverMinQuota) {
+            if (currentNumMembersWithOverMinQuotaPartitions != expectedNumMembersWithOverMinQuotaPartitions) {
                 log.error("Current number of members with more than the minQuota partitions: {}, is less than the expected number " +
                     "of members with more than the minQuota partitions: {}, and no more partitions to be assigned to the remaining unfilled consumers: {}",
-                    numMembersAssignedOverMinQuota, expectedNumMembersAssignedOverMinQuota, unfilledMembers);
+                    currentNumMembersWithOverMinQuotaPartitions, expectedNumMembersWithOverMinQuotaPartitions, unfilledMembersWithUnderMinQuotaPartitions);
                 throw new IllegalStateException("We haven't reached the expected number of members with " +
                     "more than the minQuota partitions, but no more partitions to be assigned");
             } else {
-                for (String unfilledMember : unfilledMembers) {
+                for (String unfilledMember : unfilledMembersWithUnderMinQuotaPartitions) {
                     int assignedPartitionsCount = assignment.get(unfilledMember).size();
                     if (assignedPartitionsCount != minQuota) {
                         log.error("Consumer: [{}] should have {} partitions, but got {} partitions, and no more partitions " +
-                            "to be assigned. The remaining unfilled consumers are: {}", unfilledMember, minQuota, assignedPartitionsCount, unfilledMembers);
+                            "to be assigned. The remaining unfilled consumers are: {}", unfilledMember, minQuota, assignedPartitionsCount, unfilledMembersWithUnderMinQuotaPartitions);
                         throw new IllegalStateException(String.format("Consumer: [%s] doesn't reach minQuota partitions, " +
                             "and no more partitions to be assigned", unfilledMember));
                     } else {
