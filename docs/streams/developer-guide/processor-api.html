@@ -162,7 +162,7 @@
 
     @Override
     public void init(final ProcessorContext&lt;String, String> context) {
-        context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -> {
+        context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -&gt; {
             try (final KeyValueIterator&lt;String, Integer&gt; iter = kvStore.all()) {
                 while (iter.hasNext()) {
                     final KeyValue&lt;String, Integer&gt; entry = iter.next();
