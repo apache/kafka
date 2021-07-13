@@ -109,14 +109,14 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         } else {
             final Map<TopicPartition, Errors> partitionResults = new HashMap<>();
             response.data().topics().forEach(topic ->
-                topic.partitions().forEach(partitionoffsetDeleteResponse -> {
-                    Errors partitionError = Errors.forCode(partitionoffsetDeleteResponse.errorCode());
-                    TopicPartition topicPartition = new TopicPartition(topic.name(), partitionoffsetDeleteResponse.partitionIndex());
+                topic.partitions().forEach(partition -> {
+                    Errors partitionError = Errors.forCode(partition.errorCode());
+                    TopicPartition topicPartition = new TopicPartition(topic.name(), partition.partitionIndex());
                     if (partitionError != Errors.NONE) {
                         handlePartitionError(groupId, partitionError, topicPartition, groupsToUnmap, groupsToRetry);
                     }
 
-                    partitionResults.put(new TopicPartition(topic.name(), partitionoffsetDeleteResponse.partitionIndex()), partitionError);
+                    partitionResults.put(new TopicPartition(topic.name(), partition.partitionIndex()), partitionError);
                 })
             );
 
