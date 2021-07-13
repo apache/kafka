@@ -270,7 +270,7 @@ public class KafkaRaftClientTest {
         assertEquals(0L, context.log.endOffset().offset);
         context.assertElectedLeader(epoch, localId);
         context.client.poll();
-        assertEquals(Long.MAX_VALUE, context.client.scheduleAppend(epoch, Arrays.asList("a", "b")));
+        assertTrue(context.client.scheduleAppend(epoch, Arrays.asList("a", "b")).appendRejected());
 
         context.pollUntilRequest();
         int correlationId = context.assertSentEndQuorumEpochRequest(epoch, 1);
@@ -749,7 +749,7 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalInt.of(localId), context.currentLeader());
         int epoch = context.currentEpoch();
 
-        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
+        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")).offset());
         context.deliverRequest(context.beginEpochRequest(epoch + 1, otherNodeId));
         context.pollUntilResponse();
 
@@ -781,7 +781,7 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalInt.of(localId), context.currentLeader());
         int epoch = context.currentEpoch();
 
-        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
+        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")).offset());
         context.deliverRequest(context.voteRequest(epoch + 1, otherNodeId, epoch,
             context.log.endOffset().offset));
         context.pollUntilResponse();
@@ -814,7 +814,7 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalInt.of(localId), context.currentLeader());
         int epoch = context.currentEpoch();
 
-        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
+        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")).offset());
         context.deliverRequest(context.voteRequest(epoch + 1, otherNodeId, epoch, 0L));
         context.pollUntilResponse();
 
@@ -841,7 +841,7 @@ public class KafkaRaftClientTest {
         assertEquals(1L, context.log.endOffset().offset);
 
         int epoch = context.currentEpoch();
-        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
+        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")).offset());
         assertTrue(context.messageQueue.wakeupRequested());
 
         context.client.poll();
@@ -875,7 +875,7 @@ public class KafkaRaftClientTest {
         assertEquals(1L, context.log.endOffset().offset);
 
         int epoch = context.currentEpoch();
-        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
+        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")).offset());
         assertTrue(context.messageQueue.wakeupRequested());
 
         context.client.poll();
@@ -883,7 +883,7 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalLong.of(lingerMs), context.messageQueue.lastPollTimeoutMs());
 
         context.time.sleep(lingerMs);
-        assertEquals(2L, context.client.scheduleAppend(epoch, singletonList("b")));
+        assertEquals(2L, context.client.scheduleAppend(epoch, singletonList("b")).offset());
         assertTrue(context.messageQueue.wakeupRequested());
 
         context.client.poll();
@@ -1112,7 +1112,7 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalLong.of(1L), context.client.highWatermark());
 
         List<String> records = Arrays.asList("a", "b", "c");
-        long offset = context.client.scheduleAppend(epoch, records);
+        long offset = context.client.scheduleAppend(epoch, records).offset();
         context.client.poll();
         assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
 
@@ -1704,7 +1704,7 @@ public class KafkaRaftClientTest {
         context.assertUnknownLeader(epoch - 1);
 
         // Sleep a little to ensure that we become a candidate
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
 
         // Wait until the vote requests are inflight
         context.pollUntilRequest();
@@ -2618,7 +2618,7 @@ public class KafkaRaftClientTest {
 
         // Timeout the election and become candidate
         int candidateEpoch = epoch + 2;
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
         context.client.poll();
         context.assertVotedCandidate(candidateEpoch, localId);
 

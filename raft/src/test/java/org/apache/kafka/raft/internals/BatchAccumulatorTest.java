@@ -232,7 +232,7 @@ class BatchAccumulatorTest {
         );
 
         time.sleep(15);
-        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a")));
+        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a")).offset());
         assertEquals(lingerMs, acc.timeUntilDrain(time.milliseconds()));
         assertFalse(acc.isEmpty());
 
@@ -264,7 +264,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a")));
+        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a")).offset());
         time.sleep(lingerMs);
 
         List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
@@ -293,7 +293,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a")));
+        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a")).offset());
         acc.close();
         Mockito.verify(memoryPool).release(buffer);
     }
@@ -396,7 +396,7 @@ class BatchAccumulatorTest {
             .generate(() -> record)
             .limit(numberOfRecords)
             .collect(Collectors.toList());
-        assertEquals(baseOffset + numberOfRecords - 1, acc.append(leaderEpoch, records));
+        assertEquals(baseOffset + numberOfRecords - 1, acc.append(leaderEpoch, records).offset());
 
         time.sleep(lingerMs);
         assertTrue(acc.needsDrain(time.milliseconds()));
@@ -502,21 +502,11 @@ class BatchAccumulatorTest {
         return ByteUtils.sizeOfVarint(recordSizeInBytes) + recordSizeInBytes;
     }
 
-    static interface Appender {
+    interface Appender {
         Long call(BatchAccumulator<String> acc, int epoch, List<String> records);
     }
 
-    static final Appender APPEND_ATOMIC = new Appender() {
-        @Override
-        public Long call(BatchAccumulator<String> acc, int epoch, List<String> records) {
-            return acc.appendAtomic(epoch, records);
-        }
-    };
+    static final Appender APPEND_ATOMIC = (acc, epoch, records) -> acc.appendAtomic(epoch, records).offset();
 
-    static final Appender APPEND = new Appender() {
-        @Override
-        public Long call(BatchAccumulator<String> acc, int epoch, List<String> records) {
-            return acc.append(epoch, records);
-        }
-    };
+    static final Appender APPEND = (acc, epoch, records) -> acc.append(epoch, records).offset();
 }

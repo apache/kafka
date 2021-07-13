@@ -30,6 +30,7 @@ import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.raft.RaftAppendResult;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -207,27 +208,27 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             }
         }
 
-        synchronized long tryAppend(int nodeId, int epoch, List<ApiMessageAndVersion> batch) {
+        synchronized RaftAppendResult tryAppend(int nodeId, int epoch, List<ApiMessageAndVersion> batch) {
             // No easy access to the concept of time. Use the base offset as the append timestamp
             long appendTimestamp = (prevOffset + 1) * 10;
             return tryAppend(nodeId, epoch, new LocalRecordBatch(epoch, appendTimestamp, batch));
         }
 
-        synchronized long tryAppend(int nodeId, int epoch, LocalBatch batch) {
+        synchronized RaftAppendResult tryAppend(int nodeId, int epoch, LocalBatch batch) {
             if (epoch != leader.epoch()) {
                 log.trace("tryAppend(nodeId={}, epoch={}): the provided epoch does not " +
                     "match the current leader epoch of {}.", nodeId, epoch, leader.epoch());
-                return Long.MAX_VALUE;
+                return RaftAppendResult.rejected();
             }
             if (!leader.isLeader(nodeId)) {
                 log.trace("tryAppend(nodeId={}, epoch={}): the given node id does not " +
                     "match the current leader id of {}.", nodeId, epoch, leader.leaderId());
-                return Long.MAX_VALUE;
+                return RaftAppendResult.rejected();
             }
             log.trace("tryAppend(nodeId={}): appending {}.", nodeId, batch);
             long offset = append(batch);
             electLeaderIfNeeded();
-            return offset;
+            return RaftAppendResult.success(offset);
         }
 
         synchronized long append(LocalBatch batch) {
@@ -609,12 +610,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public Long scheduleAppend(int epoch, List<ApiMessageAndVersion> batch) {
+    public RaftAppendResult scheduleAppend(int epoch, List<ApiMessageAndVersion> batch) {
         return scheduleAtomicAppend(epoch, batch);
     }
 
     @Override
-    public Long scheduleAtomicAppend(int epoch, List<ApiMessageAndVersion> batch) {
+    public RaftAppendResult scheduleAtomicAppend(int epoch, List<ApiMessageAndVersion> batch) {
         return shared.tryAppend(nodeId, leader.epoch(), batch);
     }
 

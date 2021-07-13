@@ -2231,28 +2231,28 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public Long scheduleAppend(int epoch, List<T> records) {
+    public RaftAppendResult scheduleAppend(int epoch, List<T> records) {
         return append(epoch, records, false);
     }
 
     @Override
-    public Long scheduleAtomicAppend(int epoch, List<T> records) {
+    public RaftAppendResult scheduleAtomicAppend(int epoch, List<T> records) {
         return append(epoch, records, true);
     }
 
-    private Long append(int epoch, List<T> records, boolean isAtomic) {
+    private RaftAppendResult append(int epoch, List<T> records, boolean isAtomic) {
         Optional<LeaderState<T>> leaderStateOpt = quorum.maybeLeaderState();
         if (!leaderStateOpt.isPresent()) {
-            return Long.MAX_VALUE;
+            return RaftAppendResult.rejected();
         }
 
         BatchAccumulator<T> accumulator = leaderStateOpt.get().accumulator();
         boolean isFirstAppend = accumulator.isEmpty();
-        final Long offset;
+        final RaftAppendResult result;
         if (isAtomic) {
-            offset = accumulator.appendAtomic(epoch, records);
+            result = accumulator.appendAtomic(epoch, records);
         } else {
-            offset = accumulator.append(epoch, records);
+            result = accumulator.append(epoch, records);
         }
 
         // Wakeup the network channel if either this is the first append
@@ -2263,7 +2263,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (isFirstAppend || accumulator.needsDrain(time.milliseconds())) {
             wakeup();
         }
-        return offset;
+        return result;
     }
 
     @Override

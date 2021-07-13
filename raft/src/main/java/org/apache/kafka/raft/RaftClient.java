@@ -131,7 +131,7 @@ public interface RaftClient<T> extends AutoCloseable {
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
      */
-    Long scheduleAppend(int epoch, List<T> records);
+    RaftAppendResult scheduleAppend(int epoch, List<T> records);
 
     /**
      * Append a list of records to the log. The write will be scheduled for some time
@@ -153,7 +153,7 @@ public interface RaftClient<T> extends AutoCloseable {
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
      */
-    Long scheduleAtomicAppend(int epoch, List<T> records);
+    RaftAppendResult scheduleAtomicAppend(int epoch, List<T> records);
 
     /**
      * Attempt a graceful shutdown of the client. This allows the leader to proactively

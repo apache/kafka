@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.raft.RaftAppendResult;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -104,7 +105,7 @@ public class BatchAccumulator<T> implements Closeable {
      *         batch size; if this exception is throw some of the elements in records may have
      *         been committed
      */
-    public Long append(int epoch, List<T> records) {
+    public RaftAppendResult append(int epoch, List<T> records) {
         return append(epoch, records, false);
     }
 
@@ -122,13 +123,13 @@ public class BatchAccumulator<T> implements Closeable {
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
      */
-    public Long appendAtomic(int epoch, List<T> records) {
+    public RaftAppendResult appendAtomic(int epoch, List<T> records) {
         return append(epoch, records, true);
     }
 
-    private Long append(int epoch, List<T> records, boolean isAtomic) {
+    private RaftAppendResult append(int epoch, List<T> records, boolean isAtomic) {
         if (epoch != this.epoch) {
-            return Long.MAX_VALUE;
+            return RaftAppendResult.rejected();
         }
 
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
@@ -148,7 +149,7 @@ public class BatchAccumulator<T> implements Closeable {
                 }
 
                 if (batch == null) {
-                    return null;
+                    return RaftAppendResult.failed();
                 }
 
                 batch.appendRecord(record, serializationCache);
@@ -157,7 +158,7 @@ public class BatchAccumulator<T> implements Closeable {
 
             maybeResetLinger();
 
-            return nextOffset - 1;
+            return RaftAppendResult.success(nextOffset - 1);
         } finally {
             appendLock.unlock();
         }

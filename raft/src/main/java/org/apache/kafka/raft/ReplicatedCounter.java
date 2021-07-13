@@ -61,10 +61,10 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
 
         int epoch = claimedEpoch.getAsInt();
         uncommitted += 1;
-        Long offset = client.scheduleAppend(epoch, singletonList(uncommitted));
-        if (offset != null) {
+        RaftAppendResult result = client.scheduleAppend(epoch, singletonList(uncommitted));
+        if (result.appendSuccess()) {
             log.debug("Scheduled append of record {} with epoch {} at offset {}",
-                uncommitted, epoch, offset);
+                uncommitted, epoch, result.offset());
         }
     }
 
@@ -103,7 +103,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             }
             log.debug("Counter incremented from {} to {}", initialCommitted, committed);
 
-            if (lastOffsetSnapshotted + snapshotDelayInRecords  < lastCommittedOffset) {
+            if (lastOffsetSnapshotted + snapshotDelayInRecords < lastCommittedOffset) {
                 log.debug(
                     "Generating new snapshot with committed offset {} and epoch {} since the previoud snapshot includes {}",
                     lastCommittedOffset,

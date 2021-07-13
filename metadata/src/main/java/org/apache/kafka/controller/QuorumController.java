@@ -572,9 +572,9 @@ public final class QuorumController implements Controller {
                 // asynchronously.
                 final long offset;
                 if (result.isAtomic()) {
-                    offset = raftClient.scheduleAtomicAppend(controllerEpoch, result.records());
+                    offset = raftClient.scheduleAtomicAppend(controllerEpoch, result.records()).offset();
                 } else {
-                    offset = raftClient.scheduleAppend(controllerEpoch, result.records());
+                    offset = raftClient.scheduleAppend(controllerEpoch, result.records()).offset();
                 }
                 op.processBatchEndOffset(offset);
                 writeOffset = offset;
@@ -693,7 +693,7 @@ public final class QuorumController implements Controller {
                     if (isActiveController) {
                         throw new IllegalStateException(
                             String.format(
-                                "Asked to load snasphot (%s) when it is the active controller (%s)",
+                                "Asked to load snapshot (%s) when it is the active controller (%s)",
                                 reader.snapshotId(),
                                 curClaimEpoch
                             )

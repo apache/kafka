@@ -194,10 +194,12 @@ class TestRaftServer(
     ): Unit = {
       recordCount.incrementAndGet()
 
-      raftManager.scheduleAppend(leaderEpoch, Seq(payload)) match {
-        case Some(offset) => pendingAppends.offer(PendingAppend(offset, currentTimeMs))
-        case None => time.sleep(10)
-      }
+      val raftAppendResult = raftManager.scheduleAppend(leaderEpoch, Seq(payload))
+
+      if (raftAppendResult.appendSuccess())
+        pendingAppends.offer(PendingAppend(raftAppendResult.offset(), currentTimeMs))
+      else
+        time.sleep(10)
     }
 
     override def doWork(): Unit = {

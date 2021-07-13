@@ -36,8 +36,9 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, RaftAppendResult, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
 import org.apache.kafka.server.common.serialization.RecordSerde
+
 import scala.jdk.CollectionConverters._
 
 object KafkaRaftManager {
@@ -94,12 +95,12 @@ trait RaftManager[T] {
   def scheduleAtomicAppend(
     epoch: Int,
     records: Seq[T]
-  ): Option[Long]
+  ): RaftAppendResult
 
   def scheduleAppend(
     epoch: Int,
     records: Seq[T]
-  ): Option[Long]
+  ): RaftAppendResult
 
   def leaderAndEpoch: LeaderAndEpoch
 
@@ -172,14 +173,14 @@ class KafkaRaftManager[T](
   override def scheduleAtomicAppend(
     epoch: Int,
     records: Seq[T]
-  ): Option[Long] = {
+  ): RaftAppendResult = {
     append(epoch, records, true)
   }
 
   override def scheduleAppend(
     epoch: Int,
     records: Seq[T]
-  ): Option[Long] = {
+  ): RaftAppendResult = {
     append(epoch, records, false)
   }
 
@@ -187,14 +188,12 @@ class KafkaRaftManager[T](
     epoch: Int,
     records: Seq[T],
     isAtomic: Boolean
-  ): Option[Long] = {
-    val offset = if (isAtomic) {
+  ): RaftAppendResult = {
+    if (isAtomic) {
       client.scheduleAtomicAppend(epoch, records.asJava)
     } else {
       client.scheduleAppend(epoch, records.asJava)
     }
-
-    Option(offset).map(Long.unbox)
   }
 
   override def handleRequest(
@@ -229,7 +228,7 @@ class KafkaRaftManager[T](
       metrics,
       expirationService,
       logContext,
-      metaProperties.clusterId.toString,
+      metaProperties.clusterId,
       OptionalInt.of(config.nodeId),
       raftConfig
     )
