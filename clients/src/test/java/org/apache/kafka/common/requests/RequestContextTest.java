@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
@@ -102,6 +103,35 @@ public class RequestContextTest {
         assertEquals(buffer.capacity(), buffer.limit(), "Buffer limit and capacity should be the same");
         CreateTopicsResponse parsedResponse = (CreateTopicsResponse) AbstractResponse.parseResponse(buffer, header);
         assertEquals(expectedResponse, parsedResponse.data());
+    }
+
+    @Test
+    public void testEnvelopeRequestSerde() throws Exception {
+        CreateTopicsRequestData.CreatableTopicCollection collection =
+            new CreateTopicsRequestData.CreatableTopicCollection();
+        collection.add(new CreateTopicsRequestData.CreatableTopic()
+            .setName("test")
+            .setNumPartitions(5)
+            .setReplicationFactor((short) 1));
+        CreateTopicsRequestData expectedRequest = new CreateTopicsRequestData()
+            .setTopics(collection);
+
+        int correlationId = 15;
+        String clientId = "clientId";
+        short version = ApiKeys.CREATE_TOPICS.latestVersion();
+        RequestHeader expectedHeader = new RequestHeader(ApiKeys.CREATE_TOPICS, version, clientId, correlationId);
+
+        RequestContext context = new RequestContext(expectedHeader, "0", InetAddress.getLocalHost(),
+            KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
+            ClientInformation.EMPTY, true);
+
+        ByteBuffer buffer = context.buildRequestEnvelopePayload(new CreateTopicsRequest(expectedRequest, version));
+        assertEquals(buffer.capacity(), buffer.limit(), "Buffer limit and capacity should be the same");
+        RequestHeader header = RequestHeader.parse(buffer);
+        assertEquals(expectedHeader, header);
+        CreateTopicsRequest parsedResponse = (CreateTopicsRequest) AbstractRequest.parseRequest(
+            ApiKeys.CREATE_TOPICS, version, buffer).request;
+        assertEquals(expectedRequest, parsedResponse.data());
     }
 
 }
