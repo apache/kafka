@@ -18,6 +18,8 @@ package org.apache.kafka.common.security.auth;
 
 import javax.security.auth.x500.X500Principal;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
@@ -27,9 +29,12 @@ import org.junit.jupiter.api.Test;
 import javax.net.ssl.SSLSession;
 import javax.security.sasl.SaslServer;
 import java.net.InetAddress;
+import java.nio.ByteBuffer;
 import java.security.Principal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
@@ -176,6 +181,22 @@ public class DefaultKafkaPrincipalBuilderTest {
         verify(server, atLeastOnce()).getMechanismName();
         verify(server, atLeastOnce()).getAuthorizationID();
         verify(kerberosShortNamer, atLeastOnce()).shortName(any());
+    }
+
+    @Test
+    public void testPrincipalBuilderSerdeWithWrongMagicNumber() throws Exception {
+        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, null);
+        KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "foo");
+        byte[] serializedPrincipal = builder.serialize(principal);
+        KafkaPrincipal deserialized = builder.deserialize(serializedPrincipal); // should work
+        assertEquals(principal, deserialized);
+        new ByteBufferAccessor(ByteBuffer.wrap(serializedPrincipal)).writeInt(-12345); // change to bad magic number
+        try {
+            builder.deserialize(serializedPrincipal);
+            fail("Should not have been able to deserialize with wrong magic number");
+        } catch (SerializationException e) {
+            assertTrue(e.getMessage().contains("Unknown Principal Serde magic number"));
+        }
     }
 
     private static class DummyPrincipal implements Principal {
