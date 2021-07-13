@@ -494,6 +494,13 @@ class LogSegment private[log] (val log: FileRecords,
     txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, oldSuffix, newSuffix)))
   }
 
+  def hasSuffix(suffix: String): Boolean = {
+    log.file.getName.endsWith(suffix) &&
+    lazyOffsetIndex.file.getName.endsWith(suffix) &&
+    lazyTimeIndex.file.getName.endsWith(suffix) &&
+    txnIndex.file.getName.endsWith(suffix)
+  }
+
   /**
    * Append the largest time index entry to the time index and trim the log and indexes.
    *
@@ -622,6 +629,10 @@ class LogSegment private[log] (val log: FileRecords,
       () => delete(lazyTimeIndex.deleteIfExists _, "time index", lazyTimeIndex.file, logIfMissing = true),
       () => delete(txnIndex.deleteIfExists _, "transaction index", txnIndex.file, logIfMissing = false)
     ))
+  }
+
+  def deleted(): Boolean = {
+    !log.file.exists() && !lazyOffsetIndex.file.exists() && !lazyTimeIndex.file.exists() && !txnIndex.file.exists()
   }
 
   /**
