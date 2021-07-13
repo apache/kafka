@@ -336,7 +336,7 @@ class LogValidatorTest {
         (RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
           RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
-    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
+    val records = MemoryRecords.withRecords(magic, 0L, CompressionConfig.of(CompressionType.GZIP), TimestampType.CREATE_TIME, producerId,
       producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
       new SimpleRecord(timestampSeq(0), "hello".getBytes),
       new SimpleRecord(timestampSeq(1), "there".getBytes),
@@ -409,7 +409,7 @@ class LogValidatorTest {
         (RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
           RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
-    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
+    val records = MemoryRecords.withRecords(magic, 0L, CompressionConfig.of(CompressionType.GZIP), TimestampType.CREATE_TIME, producerId,
       producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
       new SimpleRecord(timestampSeq(0), "hello".getBytes),
       new SimpleRecord(timestampSeq(1), "there".getBytes),
@@ -570,7 +570,7 @@ class LogValidatorTest {
         (RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
           RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
-    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
+    val records = MemoryRecords.withRecords(magic, 0L, CompressionConfig.of(CompressionType.GZIP), TimestampType.CREATE_TIME, producerId,
       producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
       new SimpleRecord(timestampSeq(0), "hello".getBytes),
       new SimpleRecord(timestampSeq(1), "there".getBytes),
@@ -1379,7 +1379,7 @@ class LogValidatorTest {
     )
 
     val buffer = ByteBuffer.allocate(1024)
-    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP,
+    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionConfig.of(CompressionType.GZIP),
       TimestampType.CREATE_TIME, 0L)
     var offset = 0
 
@@ -1435,7 +1435,7 @@ class LogValidatorTest {
                             timestamp: Long = RecordBatch.NO_TIMESTAMP,
                             codec: CompressionType): MemoryRecords = {
     val buf = ByteBuffer.allocate(512)
-    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+    val builder = MemoryRecords.builder(buf, magicValue, CompressionConfig.of(codec), TimestampType.CREATE_TIME, 0L)
     builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
     builder.appendWithOffset(1, timestamp, null, "there".getBytes)
     builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes)
@@ -1446,7 +1446,7 @@ class LogValidatorTest {
                                                timestamp: Long = RecordBatch.NO_TIMESTAMP,
                                                codec: CompressionType = CompressionType.NONE): MemoryRecords = {
     val buf = ByteBuffer.allocate(512)
-    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+    val builder = MemoryRecords.builder(buf, magicValue, CompressionConfig.of(codec), TimestampType.CREATE_TIME, 0L)
     builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
     builder.appendWithOffset(2, timestamp, null, "there".getBytes)
     builder.appendWithOffset(3, timestamp, null, "beautiful".getBytes)
@@ -1457,10 +1457,10 @@ class LogValidatorTest {
                                       timestamp: Long,
                                       codec: CompressionType): MemoryRecords = {
     val buf = ByteBuffer.allocate(2048)
-    var builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+    var builder = MemoryRecords.builder(buf, magicValue, CompressionConfig.of(codec), TimestampType.CREATE_TIME, 0L)
     builder.append(10L, "1".getBytes(), "a".getBytes())
     builder.close()
-    builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 1L)
+    builder = MemoryRecords.builder(buf, magicValue, CompressionConfig.of(codec), TimestampType.CREATE_TIME, 1L)
     builder.append(11L, "2".getBytes(), "b".getBytes())
     builder.append(12L, "3".getBytes(), "c".getBytes())
     builder.close()
@@ -1487,7 +1487,7 @@ class LogValidatorTest {
     }
 
     val buffer = ByteBuffer.allocate(1024)
-    val builder = MemoryRecords.builder(buffer, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+    val builder = MemoryRecords.builder(buffer, magicValue, CompressionConfig.of(codec), TimestampType.CREATE_TIME, 0L)
 
     records.foreach { record =>
       builder.appendUncheckedWithOffset(0, record)
@@ -1506,7 +1506,7 @@ class LogValidatorTest {
         id.toString.getBytes))
 
     val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
-    val builder = MemoryRecords.builder(buffer, batchMagicValue, codec,
+    val builder = MemoryRecords.builder(buffer, batchMagicValue, CompressionConfig.of(codec),
       TimestampType.CREATE_TIME, 0L)
 
     var offset = 1234567

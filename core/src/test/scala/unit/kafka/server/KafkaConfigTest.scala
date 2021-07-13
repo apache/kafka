@@ -697,6 +697,8 @@ class KafkaConfigTest {
         case KafkaConfig.NumQuotaSamplesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.QuotaWindowSizeSecondsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.DeleteTopicEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
+        case KafkaConfig.CompressionTypeProp => // ignore string
+        case KafkaConfig.CompressionLevelProp => // ignore string
 
         case KafkaConfig.MetricNumSamplesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricSampleWindowMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
@@ -832,6 +834,8 @@ class KafkaConfigTest {
           assertDynamic(kafkaConfigProp, Defaults.Compact, () => config.logCleanupPolicy)
         case LogConfig.CompressionTypeProp =>
           assertDynamic(kafkaConfigProp, "lz4", () => config.compressionType)
+        case LogConfig.CompressionLevelProp =>
+          assertDynamic(kafkaConfigProp, 9, () => config.compressionLevel.getOrElse(null))
         case LogConfig.SegmentBytesProp =>
           assertDynamic(kafkaConfigProp, 10000, () => config.logSegmentBytes)
         case LogConfig.SegmentMsProp =>

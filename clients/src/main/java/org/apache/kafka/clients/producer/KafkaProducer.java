@@ -63,6 +63,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.AbstractRecords;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -248,7 +249,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final RecordAccumulator accumulator;
     private final Sender sender;
     private final Thread ioThread;
-    private final CompressionType compressionType;
+    private final CompressionConfig compressionConfig;
     private final Sensor errors;
     private final Time time;
     private final Serializer<K> keySerializer;
@@ -390,7 +391,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     valueSerializer, interceptorList, reporters);
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
-            this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+            CompressionType type = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+            Integer level = producerConfig.getInt(ProducerConfig.COMPRESSION_LEVEL_CONFIG);
+            this.compressionConfig = CompressionConfig.of(type, level);
 
             this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
             int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
@@ -399,7 +402,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.transactionManager = configureTransactionState(config, logContext);
             this.accumulator = new RecordAccumulator(logContext,
                     config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
-                    this.compressionType,
+                    compressionConfig,
                     lingerMs(config),
                     retryBackoffMs,
                     deliveryTimeoutMs,
@@ -939,7 +942,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Header[] headers = record.headers().toArray();
 
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
-                    compressionType, serializedKey, serializedValue, headers);
+                compressionConfig.getType(), serializedKey, serializedValue, headers);
             ensureValidRecordSize(serializedSize);
             long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
             if (log.isTraceEnabled()) {

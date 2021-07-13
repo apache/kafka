@@ -146,6 +146,14 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
     else segmentMs
   }
 
+  def compressionLevel: Integer = {
+    if (getString(LogConfig.CompressionLevelProp).isEmpty) {
+      null
+    } else {
+      Integer.valueOf(getString(LogConfig.CompressionLevelProp))
+    }
+  }
+
   def initFileSize: Int = {
     if (preallocate)
       segmentSize
@@ -191,6 +199,7 @@ object LogConfig {
   val UncleanLeaderElectionEnableProp = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG
   val MinInSyncReplicasProp = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG
   val CompressionTypeProp = TopicConfig.COMPRESSION_TYPE_CONFIG
+  val CompressionLevelProp = TopicConfig.COMPRESSION_LEVEL_CONFIG
   val PreAllocateEnableProp = TopicConfig.PREALLOCATE_CONFIG
   val MessageFormatVersionProp = TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG
   val MessageTimestampTypeProp = TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG
@@ -223,6 +232,7 @@ object LogConfig {
   val UncleanLeaderElectionEnableDoc = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC
   val MinInSyncReplicasDoc = TopicConfig.MIN_IN_SYNC_REPLICAS_DOC
   val CompressionTypeDoc = TopicConfig.COMPRESSION_TYPE_DOC
+  val CompressionLevelDoc = TopicConfig.COMPRESSION_LEVEL_DOC
   val PreAllocateEnableDoc = TopicConfig.PREALLOCATE_DOC
   val MessageFormatVersionDoc = TopicConfig.MESSAGE_FORMAT_VERSION_DOC
   val MessageTimestampTypeDoc = TopicConfig.MESSAGE_TIMESTAMP_TYPE_DOC
@@ -336,6 +346,7 @@ object LogConfig {
         KafkaConfig.MinInSyncReplicasProp)
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, in(BrokerCompressionCodec.brokerCompressionOptions:_*),
         MEDIUM, CompressionTypeDoc, KafkaConfig.CompressionTypeProp)
+      .define(CompressionLevelProp, INT, null, MEDIUM, CompressionLevelDoc, KafkaConfig.CompressionLevelProp)
       .define(PreAllocateEnableProp, BOOLEAN, Defaults.PreAllocateEnable, MEDIUM, PreAllocateEnableDoc,
         KafkaConfig.LogPreAllocateProp)
       .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, ApiVersionValidator, MEDIUM, MessageFormatVersionDoc,
@@ -437,6 +448,7 @@ object LogConfig {
     UncleanLeaderElectionEnableProp -> KafkaConfig.UncleanLeaderElectionEnableProp,
     MinInSyncReplicasProp -> KafkaConfig.MinInSyncReplicasProp,
     CompressionTypeProp -> KafkaConfig.CompressionTypeProp,
+    CompressionLevelProp -> KafkaConfig.CompressionLevelProp,
     PreAllocateEnableProp -> KafkaConfig.LogPreAllocateProp,
     MessageFormatVersionProp -> KafkaConfig.LogMessageFormatVersionProp,
     MessageTimestampTypeProp -> KafkaConfig.LogMessageTimestampTypeProp,

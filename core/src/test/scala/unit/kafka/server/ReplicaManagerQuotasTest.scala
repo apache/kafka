@@ -19,13 +19,12 @@ package kafka.server
 import java.io.File
 import java.util.{Collections, Optional, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
-
 import kafka.cluster.Partition
 import kafka.log.{Log, LogManager, LogOffsetSnapshot}
 import kafka.utils._
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionConfig, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import EasyMock._
@@ -223,7 +222,7 @@ class ReplicaManagerQuotasTest {
       minOneMessage = anyBoolean())).andReturn(
       FetchDataInfo(
         LogOffsetMetadata(0L, 0L, 0),
-        MemoryRecords.withRecords(CompressionType.NONE, record)
+        MemoryRecords.withRecords(CompressionConfig.none(), record)
       )).anyTimes()
 
     //if we ask for len = 0, return 0 messages

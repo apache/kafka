@@ -20,6 +20,7 @@ import kafka.server.BrokerTopicStats;
 import kafka.server.RequestLocal;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -130,7 +131,7 @@ public abstract class BaseRecordBatchBenchmark {
         );
 
         final MemoryRecordsBuilder builder =
-            MemoryRecords.builder(buf, messageVersion, compressionType(), TimestampType.CREATE_TIME, startingOffset);
+            MemoryRecords.builder(buf, messageVersion, CompressionConfig.of(compressionType()), TimestampType.CREATE_TIME, startingOffset);
 
         for (int i = 0; i < batchSize; ++i) {
             switch (bytes) {

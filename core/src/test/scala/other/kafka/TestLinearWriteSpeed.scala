@@ -83,6 +83,11 @@ object TestLinearWriteSpeed {
                             .describedAs("codec")
                             .ofType(classOf[java.lang.String])
                             .defaultsTo(NoCompressionCodec.name)
+    val compressionLevelOpt = parser.accepts("level", "The compression level to use")
+                            .withRequiredArg
+                            .describedAs("level")
+                            .ofType(classOf[java.lang.Integer])
+                            .defaultsTo(Integer.MAX_VALUE)
    val mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.")
    val channelOpt = parser.accepts("channel", "Do writes to file channels.")
    val logOpt = parser.accepts("log", "Do writes to kafka logs.")
@@ -101,14 +106,16 @@ object TestLinearWriteSpeed {
     val messageSize = options.valueOf(messageSizeOpt).intValue
     val flushInterval = options.valueOf(flushIntervalOpt).longValue
     val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOpt))
+    val compressionLevel = if (options.valueOf(compressionLevelOpt) == Integer.MAX_VALUE) null else options.valueOf(compressionLevelOpt)
     val rand = new Random
     rand.nextBytes(buffer.array)
     val numMessages = bufferSize / (messageSize + Records.LOG_OVERHEAD)
     val createTime = System.currentTimeMillis
     val messageSet = {
       val compressionType = CompressionType.forId(compressionCodec.codec)
+      val compressionConfig = CompressionConfig.of(compressionType, compressionLevel)
       val records = (0 until numMessages).map(_ => new SimpleRecord(createTime, null, new Array[Byte](messageSize)))
-      MemoryRecords.withRecords(compressionType, records: _*)
+      MemoryRecords.withRecords(compressionConfig, records: _*)
     }
 
     val writables = new Array[Writable](numFiles)

@@ -64,15 +64,16 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      * @param out The output stream to compress
      * @param blockSize Default: 4. The block size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other
      *            values will generate an exception
+     * @param compressionLevel Default: -1. The compression level to use. If -1, use the Fast compressor without any compression level
      * @param blockChecksum Default: false. When true, a XXHash32 checksum is computed and appended to the stream for
      *            every block of data
      * @param useBrokenFlagDescriptorChecksum Default: false. When true, writes an incorrect FrameDescriptor checksum
      *            compatible with older kafka clients.
      * @throws IOException
      */
-    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, boolean blockChecksum, boolean useBrokenFlagDescriptorChecksum) throws IOException {
+    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, Integer compressionLevel, boolean blockChecksum, boolean useBrokenFlagDescriptorChecksum) throws IOException {
         this.out = out;
-        compressor = LZ4Factory.fastestInstance().fastCompressor();
+        compressor = compressionLevel == null ? LZ4Factory.fastestInstance().fastCompressor() : LZ4Factory.fastestInstance().highCompressor(compressionLevel);
         checksum = XXHashFactory.fastestInstance().hash32();
         this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
         bd = new BD(blockSize);
@@ -96,7 +97,7 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      * @throws IOException
      */
     public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, boolean blockChecksum) throws IOException {
-        this(out, blockSize, blockChecksum, false);
+        this(out, blockSize, -1, blockChecksum, false);
     }
 
     /**
@@ -108,7 +109,7 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      * @throws IOException
      */
     public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize) throws IOException {
-        this(out, blockSize, false, false);
+        this(out, blockSize, -1, false, false);
     }
 
     /**
@@ -122,7 +123,11 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
     }
 
     public KafkaLZ4BlockOutputStream(OutputStream out, boolean useBrokenHC) throws IOException {
-        this(out, BLOCKSIZE_64KB, false, useBrokenHC);
+        this(out, BLOCKSIZE_64KB, null, false, useBrokenHC);
+    }
+
+    public KafkaLZ4BlockOutputStream(OutputStream out, Integer compressionLevel, boolean useBrokenHC) throws IOException {
+        this(out, BLOCKSIZE_64KB, compressionLevel, false, useBrokenHC);
     }
 
     /**

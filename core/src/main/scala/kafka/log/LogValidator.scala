@@ -23,7 +23,7 @@ import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec
 import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record.{AbstractRecords, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
+import org.apache.kafka.common.record.{AbstractRecords, CompressionConfig, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
 import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
@@ -237,7 +237,7 @@ private[log] object LogValidator extends Logging {
     // The current implementation of BufferSupplier is naive and works best when the buffer size
     // cardinality is low, so don't use it here
     val newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion)
-    val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
+    val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionConfig.none(), timestampType,
       offsetCounter.value, now, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
 
     val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
@@ -461,7 +461,7 @@ private[log] object LogValidator extends Logging {
         val first = records.batches.asScala.head
         (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
       }
-      buildRecordsAndAssignOffsets(toMagic, offsetCounter, time, timestampType, CompressionType.forId(targetCodec.codec),
+      buildRecordsAndAssignOffsets(toMagic, offsetCounter, time, timestampType, CompressionConfig.of(CompressionType.forId(targetCodec.codec)),
         now, validatedRecords, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch,
         uncompressedSizeInBytes)
     } else {
@@ -494,7 +494,7 @@ private[log] object LogValidator extends Logging {
                                            offsetCounter: LongRef,
                                            time: Time,
                                            timestampType: TimestampType,
-                                           compressionType: CompressionType,
+                                           compressionConfig: CompressionConfig,
                                            logAppendTime: Long,
                                            validatedRecords: Seq[Record],
                                            producerId: Long,
@@ -504,12 +504,12 @@ private[log] object LogValidator extends Logging {
                                            partitionLeaderEpoch: Int,
                                            uncompressedSizeInBytes: Int): ValidationAndOffsetAssignResult = {
     val startNanos = time.nanoseconds
-    val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
+    val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionConfig.getType,
       validatedRecords.asJava)
     // The current implementation of BufferSupplier is naive and works best when the buffer size
     // cardinality is low, so don't use it here
     val buffer = ByteBuffer.allocate(estimatedSize)
-    val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value,
+    val builder = MemoryRecords.builder(buffer, magic, compressionConfig, timestampType, offsetCounter.value,
       logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch)
 
     validatedRecords.foreach { record =>

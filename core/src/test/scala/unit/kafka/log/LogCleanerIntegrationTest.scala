@@ -22,7 +22,7 @@ import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, RecordBatch}
+import org.apache.kafka.common.record.{CompressionConfig, CompressionType, RecordBatch}
 import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test, Timeout}
@@ -36,7 +36,7 @@ import scala.jdk.CollectionConverters._
   */
 class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with KafkaMetricsGroup {
 
-  val codec: CompressionType = CompressionType.LZ4
+  val compressionConfig: CompressionConfig = CompressionConfig.of(CompressionType.LZ4)
 
   val time = new MockTime()
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
@@ -50,20 +50,20 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   @Test
   def testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics(): Unit = {
     val largeMessageKey = 20
-    val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
+    val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, compressionConfig = compressionConfig)
     val maxMessageSize = largeMessageSet.sizeInBytes
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, backOffMs = 100)
 
     def breakPartitionLog(tp: TopicPartition): Unit = {
       val log = cleaner.logs.get(tp)
-      writeDups(numKeys = 20, numDups = 3, log = log, codec = codec)
+      writeDups(numKeys = 20, numDups = 3, log = log, compressionConfig = compressionConfig)
 
       val partitionFile = log.logSegments.last.log.file()
       val writer = new PrintWriter(partitionFile)
       writer.write("jogeajgoea")
       writer.close()
 
-      writeDups(numKeys = 20, numDups = 3, log = log, codec = codec)
+      writeDups(numKeys = 20, numDups = 3, log = log, compressionConfig = compressionConfig)
     }
 
     breakPartitionLog(topicPartitions(0))

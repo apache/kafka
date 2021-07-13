@@ -52,7 +52,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     });
 
     private final TimestampType timestampType;
-    private final CompressionType compressionType;
+    private final CompressionConfig compressionConfig;
     // Used to hold a reference to the underlying ByteBuffer so that we can write the record batch header and access
     // the written bytes. ByteBufferOutputStream allocates a new ByteBuffer if the existing one is not large enough,
     // so it's not safe to hold a direct reference to the underlying ByteBuffer.
@@ -89,7 +89,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
                                 byte magic,
-                                CompressionType compressionType,
+                                CompressionConfig compressionConfig,
                                 TimestampType timestampType,
                                 long baseOffset,
                                 long logAppendTime,
@@ -107,13 +107,13 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                 throw new IllegalArgumentException("Transactional records are not supported for magic " + magic);
             if (isControlBatch)
                 throw new IllegalArgumentException("Control records are not supported for magic " + magic);
-            if (compressionType == CompressionType.ZSTD)
+            if (compressionConfig.getType() == CompressionType.ZSTD)
                 throw new IllegalArgumentException("ZStandard compression is not supported for magic " + magic);
         }
 
         this.magic = magic;
         this.timestampType = timestampType;
-        this.compressionType = compressionType;
+        this.compressionConfig = compressionConfig;
         this.baseOffset = baseOffset;
         this.logAppendTime = logAppendTime;
         this.numRecords = 0;
@@ -128,11 +128,11 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.writeLimit = writeLimit;
         this.initialPosition = bufferStream.position();
-        this.batchHeaderSizeInBytes = AbstractRecords.recordBatchHeaderSizeInBytes(magic, compressionType);
+        this.batchHeaderSizeInBytes = AbstractRecords.recordBatchHeaderSizeInBytes(magic, compressionConfig.getType());
 
         bufferStream.position(initialPosition + batchHeaderSizeInBytes);
         this.bufferStream = bufferStream;
-        this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic));
+        this.appendStream = new DataOutputStream(compressionConfig.wrapForOutput(this.bufferStream, magic));
     }
 
     /**
@@ -141,7 +141,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * @param buffer The underlying buffer to use (note that this class will allocate a new buffer if necessary
      *               to fit the records appended)
      * @param magic The magic value to use
-     * @param compressionType The compression codec to use
+     * @param compressionConfig The compression codec and level to use
      * @param timestampType The desired timestamp type. For magic > 0, this cannot be {@link TimestampType#NO_TIMESTAMP_TYPE}.
      * @param baseOffset The initial offset to use for
      * @param logAppendTime The log append time of this record set. Can be set to NO_TIMESTAMP if CREATE_TIME is used.
@@ -157,7 +157,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      */
     public MemoryRecordsBuilder(ByteBuffer buffer,
                                 byte magic,
-                                CompressionType compressionType,
+                                CompressionConfig compressionConfig,
                                 TimestampType timestampType,
                                 long baseOffset,
                                 long logAppendTime,
@@ -168,7 +168,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                                 boolean isControlBatch,
                                 int partitionLeaderEpoch,
                                 int writeLimit) {
-        this(new ByteBufferOutputStream(buffer), magic, compressionType, timestampType, baseOffset, logAppendTime,
+        this(new ByteBufferOutputStream(buffer), magic, compressionConfig, timestampType, baseOffset, logAppendTime,
                 producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch,
                 writeLimit);
     }
@@ -185,8 +185,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         return actualCompressionRatio;
     }
 
-    public CompressionType compressionType() {
-        return compressionType;
+    public CompressionConfig compressionConfig() {
+        return compressionConfig;
     }
 
     public boolean isControlBatch() {
@@ -224,7 +224,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
             long shallowOffsetOfMaxTimestamp;
             // Use the last offset when dealing with record batches
-            if (compressionType != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
+            if (compressionConfig.getType() != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
                 shallowOffsetOfMaxTimestamp = lastOffset;
             else
                 shallowOffsetOfMaxTimestamp = baseOffset;
@@ -234,7 +234,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         } else {
             long shallowOffsetOfMaxTimestamp;
             // Use the last offset when dealing with record batches
-            if (compressionType != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
+            if (compressionConfig.getType() != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
                 shallowOffsetOfMaxTimestamp = lastOffset;
             else
                 shallowOffsetOfMaxTimestamp = offsetOfMaxTimestamp;
@@ -323,7 +323,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         } else {
             if (magic > RecordBatch.MAGIC_VALUE_V1)
                 this.actualCompressionRatio = (float) writeDefaultBatchHeader() / this.uncompressedRecordsSizeInBytes;
-            else if (compressionType != CompressionType.NONE)
+            else if (compressionConfig.getType() != CompressionType.NONE)
                 this.actualCompressionRatio = (float) writeLegacyCompressedWrapperHeader() / this.uncompressedRecordsSizeInBytes;
 
             ByteBuffer buffer = buffer().duplicate();
@@ -368,7 +368,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         else
             maxTimestamp = this.maxTimestamp;
 
-        DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
+        DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionConfig.getType(), timestampType,
                 firstTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch,
                 partitionLeaderEpoch, numRecords);
 
@@ -391,7 +391,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         AbstractLegacyRecordBatch.writeHeader(buffer, lastOffset, wrapperSize);
 
         long timestamp = timestampType == TimestampType.LOG_APPEND_TIME ? logAppendTime : maxTimestamp;
-        LegacyRecord.writeCompressedRecordHeader(buffer, magic, wrapperSize, timestamp, compressionType, timestampType);
+        LegacyRecord.writeCompressedRecordHeader(buffer, magic, wrapperSize, timestamp, compressionConfig.getType(), timestampType);
 
         buffer.position(pos);
         return writtenCompressed;
@@ -690,7 +690,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     private long appendLegacyRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value, byte magic) throws IOException {
         ensureOpenForRecordAppend();
-        if (compressionType == CompressionType.NONE && timestampType == TimestampType.LOG_APPEND_TIME)
+        if (compressionConfig.getType() == CompressionType.NONE && timestampType == TimestampType.LOG_APPEND_TIME)
             timestamp = logAppendTime;
 
         int size = LegacyRecord.recordSize(magic, key, value);
@@ -705,7 +705,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     private long toInnerOffset(long offset) {
         // use relative offsets for compressed messages with magic v1
-        if (magic > 0 && compressionType != CompressionType.NONE)
+        if (magic > 0 && compressionConfig.getType() != CompressionType.NONE)
             return offset - baseOffset;
         return offset;
     }
@@ -744,7 +744,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * @return The estimated number of bytes written
      */
     private int estimatedBytesWritten() {
-        if (compressionType == CompressionType.NONE) {
+        if (compressionConfig.getType() == CompressionType.NONE) {
             return batchHeaderSizeInBytes + uncompressedRecordsSizeInBytes;
         } else {
             // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes

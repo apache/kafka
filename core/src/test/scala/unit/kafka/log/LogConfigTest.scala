@@ -82,7 +82,7 @@ class LogConfigTest {
       case LogConfig.RemoteLogStorageEnableProp => assertPropertyInvalid(name, "not_a_boolean")
       case LogConfig.LocalLogRetentionMsProp => assertPropertyInvalid(name, "not_a_number", "-3")
       case LogConfig.LocalLogRetentionBytesProp => assertPropertyInvalid(name, "not_a_number", "-3")
-
+      case LogConfig.CompressionLevelProp => // ignore string
       case _ => assertPropertyInvalid(name, "not_a_number", "-1")
     })
   }
