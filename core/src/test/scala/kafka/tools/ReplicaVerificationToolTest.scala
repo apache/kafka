@@ -17,13 +17,73 @@
 
 package kafka.tools
 
+import kafka.tools.ReplicaVerificationTool.ReplicaVerificationToolOptions
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
+import kafka.utils.Exit
 
 class ReplicaVerificationToolTest {
+
+  @Test
+  def testExitWithoutBootstrapServers(): Unit = {
+    Exit.setExitProcedure {
+      (exitCode: Int, _: Option[String]) =>
+        assertEquals(1, exitCode)
+        throw new RuntimeException
+    }
+
+    try assertThrows(classOf[RuntimeException], () => new ReplicaVerificationToolOptions(Array("--fetch-size", "1024")))
+    finally Exit.resetExitProcedure()
+  }
+
+  @Test
+  def testConfigOptWithBootstrapServers(): Unit = {
+    // with '--bootstrap-server'
+    val opts1 = new ReplicaVerificationToolOptions(Array("--bootstrap-server", "localhost-1:9092,localhost-2:9092"))
+    assertEquals("localhost-1:9092,localhost-2:9092", opts1.bootstrapServer)
+
+    // with '--broker-list'
+    val opts2 = new ReplicaVerificationToolOptions(Array("--broker-list", "127.0.0.1:9092,127.0.0.2:9092,127.0.0.3:9092"))
+    assertEquals("127.0.0.1:9092,127.0.0.2:9092,127.0.0.3:9092", opts2.bootstrapServer)
+
+    // with '--broker-list' and '--bootstrap-server': '--bootstrap-server' gets precedence
+    val opts3 = new ReplicaVerificationToolOptions(
+      Array("--broker-list", "127.0.0.1:9092,127.0.0.2:9092,127.0.0.3:9092",
+        "--bootstrap-server", "localhost-1:9092,localhost-2:9092"))
+    assertEquals("localhost-1:9092,localhost-2:9092", opts3.bootstrapServer)
+  }
+
+  @Test
+  def testExitWithMultipleBrokerLists(): Unit = {
+    Exit.setExitProcedure {
+      (exitCode: Int, _: Option[String]) =>
+        assertEquals(1, exitCode)
+        throw new RuntimeException
+    }
+
+    try assertThrows(classOf[RuntimeException], () => new ReplicaVerificationToolOptions(
+      Array("--broker-list", "127.0.0.1:9092,127.0.0.2:9092,127.0.0.3:9092",
+        "--broker-list", "127.0.0.4:9092,127.0.0.5:9092")))
+    finally Exit.resetExitProcedure()
+  }
+
+  @Test
+  def testExitWithMultipleBootstrapServers(): Unit = {
+    Exit.setExitProcedure {
+      (exitCode: Int, _: Option[String]) =>
+        assertEquals(1, exitCode)
+        throw new RuntimeException
+    }
+
+    try assertThrows(classOf[RuntimeException], () => new ReplicaVerificationToolOptions(
+      Array("--broker-list", "127.0.0.1:9092,127.0.0.2:9092,127.0.0.3:9092",
+        "--bootstrap-server", "localhost-1:9092,localhost-2:9092",
+        "--bootstrap-server", "localhost-3:9092,localhost-4:9092,localhost-5:9092")))
+    finally Exit.resetExitProcedure()
+  }
 
   @Test
   def testReplicaBufferVerifyChecksum(): Unit = {
