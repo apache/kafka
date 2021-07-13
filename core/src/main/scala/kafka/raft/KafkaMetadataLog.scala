@@ -588,8 +588,8 @@ object KafkaMetadataLog {
 
     // Print a warning if users have overridden the internal config
     if (config.logSegmentMinBytes != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
-      metadataLog.error(s"Overriding $MetadataLogSegmentMinBytesProp is unsupported! This may lead to an " +
-        s"inability to write batches of metadata records")
+      metadataLog.error(s"Overriding $MetadataLogSegmentMinBytesProp is only supported for testing. Setting " +
+        s"this value too low may lead to an inability to write batches of metadata records.")
     }
 
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower

@@ -798,6 +798,7 @@ final class KafkaMetadataLogTest {
     // Generate some logs and a few snapshots, set retention low and verify that cleaning occurs
     val config = DefaultMetadataLogConfig.copy(
       logSegmentBytes = 1024,
+      logSegmentMinBytes = 1024,
       logSegmentMillis = 10 * 1000,
       retentionMaxBytes = 1024,
       retentionMillis = 60 * 1000,
@@ -832,6 +833,7 @@ final class KafkaMetadataLogTest {
     // Set retention equal to the segment size and generate slightly more than one segment of logs
     val config = DefaultMetadataLogConfig.copy(
       logSegmentBytes = 10240,
+      logSegmentMinBytes = 10240,
       logSegmentMillis = 10 * 1000,
       retentionMaxBytes = 10240,
       retentionMillis = 60 * 1000,
