@@ -100,6 +100,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
@@ -1044,8 +1045,12 @@ public abstract class ConsumerCoordinatorTest {
         Collection<TopicPartition> revoked = getRevoked(partitions, partitions);
         assertEquals(revoked.isEmpty() ? 0 : 1, rebalanceListener.revokedCount);
         assertEquals(revoked.isEmpty() ? null : revoked, rebalanceListener.revoked);
+        Collection<TopicPartition> lost = getLost(partitions);
+        assertEquals(lost.isEmpty() ? 0 : 1, rebalanceListener.lostCount);
+        assertEquals(lost.isEmpty() ? null : lost, rebalanceListener.lost);
         assertEquals(2, rebalanceListener.assignedCount);
-        assertEquals(getAdded(partitions, partitions), rebalanceListener.assigned);
+        // Since onPartitionsLost is invoked when the JoinGroup failed, all owned partitions have to be re-added
+        assertEquals(toSet(partitions), rebalanceListener.assigned);
         assertEquals(toSet(partitions), subscriptions.assignedPartitions());
     }
 
@@ -3009,6 +3014,17 @@ public abstract class ConsumerCoordinatorTest {
                 final List<TopicPartition> revoked = new ArrayList<>(owned);
                 revoked.removeAll(assigned);
                 return toSet(revoked);
+            default:
+                throw new IllegalStateException("This should not happen");
+        }
+    }
+
+    private Collection<TopicPartition> getLost(final List<TopicPartition> owned) {
+        switch (protocol) {
+            case EAGER:
+                return emptySet();
+            case COOPERATIVE:
+                return toSet(owned);
             default:
                 throw new IllegalStateException("This should not happen");
         }
