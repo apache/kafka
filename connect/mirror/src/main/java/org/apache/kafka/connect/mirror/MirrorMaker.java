@@ -94,7 +94,7 @@ public class MirrorMaker {
             new AllConnectorClientConfigOverridePolicy();
 
     private static final List<Class<?>> CONNECTOR_CLASSES = Arrays.asList(
-        MirrorSourceConnector.class,
+        MirrorSinkConnector.class,
         MirrorHeartbeatConnector.class,
         MirrorCheckpointConnector.class);
  
