@@ -19,7 +19,9 @@ package org.apache.kafka.metadata;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 
 public class Replicas {
@@ -164,6 +166,32 @@ public class Replicas {
     }
 
     /**
+     * Copy a replica array without any occurrences of the given values.
+     *
+     * @param replicas      The replica array.
+     * @param values        The values to filter out.
+     *
+     * @return              A new array without the given value.
+     */
+    public static int[] copyWithout(int[] replicas, int[] values) {
+        int size = 0;
+        for (int i = 0; i < replicas.length; i++) {
+            if (!Replicas.contains(values, replicas[i])) {
+                size++;
+            }
+        }
+        int[] result = new int[size];
+        int j = 0;
+        for (int i = 0; i < replicas.length; i++) {
+            int replica = replicas[i];
+            if (!Replicas.contains(values, replica)) {
+                result[j++] = replica;
+            }
+        }
+        return result;
+    }
+
+    /**
      * Copy a replica array with the given value.
      *
      * @param replicas      The replica array.
@@ -176,5 +204,37 @@ public class Replicas {
         System.arraycopy(replicas, 0, newReplicas, 0, replicas.length);
         newReplicas[newReplicas.length - 1] = value;
         return newReplicas;
+    }
+
+    /**
+     * Convert a replica array to a set.
+     *
+     * @param replicas      The replica array.
+     *
+     * @return              A new array with the given value.
+     */
+    public static Set<Integer> toSet(int[] replicas) {
+        Set<Integer> result = new HashSet<>();
+        for (int replica : replicas) {
+            result.add(replica);
+        }
+        return result;
+    }
+
+    /**
+     * Check if two lists of integers are equal when considered as unordered sets.
+     *
+     * @param a             The first list
+     * @param b             The second list
+     *
+     * @return              A new array with the given value.
+     */
+    public static boolean areEqualAsSets(List<Integer> a, int[] b) {
+        if (a.size() != b.length) return false;
+        List<Integer> aSorted = new ArrayList<>(a);
+        aSorted.sort(Integer::compareTo);
+        List<Integer> bSorted = Replicas.toList(b);
+        bSorted.sort(Integer::compareTo);
+        return aSorted.equals(bSorted);
     }
 }
