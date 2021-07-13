@@ -321,7 +321,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   }
 
   private def checkAllErrorsAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult], expectedError: Errors, contextMsg: String) = {
-    println(s"here ${resultsToCheck.asScala.filterNot(_.errorCode == expectedError.code)}")
     assertEquals(0, resultsToCheck.asScala.filterNot(_.errorCode == expectedError.code).size,
       s"Expected all '${expectedError.name}' errors when altering credentials $contextMsg")
   }
