@@ -2105,6 +2105,7 @@ class KafkaApisTest {
       EasyMock.eq(ListOffsetsRequest.EARLIEST_TIMESTAMP),
       EasyMock.eq(Some(isolationLevel)),
       EasyMock.eq(currentLeaderEpoch),
+      EasyMock.eq(ListOffsetsRequest.UNLIMITED_TIMESTAMP),
       fetchOnlyFromLeader = EasyMock.eq(true))
     ).andThrow(error.exception)
 
@@ -3226,6 +3227,7 @@ class KafkaApisTest {
       EasyMock.eq(ListOffsetsRequest.LATEST_TIMESTAMP),
       EasyMock.eq(Some(isolationLevel)),
       EasyMock.eq(currentLeaderEpoch),
+      EasyMock.eq(ListOffsetsRequest.UNLIMITED_TIMESTAMP),
       fetchOnlyFromLeader = EasyMock.eq(true))
     ).andReturn(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, latestOffset, currentLeaderEpoch)))
 

@@ -38,6 +38,8 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 public class ListOffsetsRequest extends AbstractRequest {
+    public static final long UNLIMITED_TIMESTAMP = Long.MIN_VALUE;
+    public static final long NEAREST_TIMESTAMP = -3L;
     public static final long EARLIEST_TIMESTAMP = -2L;
     public static final long LATEST_TIMESTAMP = -1L;
     public static final long MAX_TIMESTAMP = -3L;
@@ -78,6 +80,11 @@ public class ListOffsetsRequest extends AbstractRequest {
 
         public Builder setTargetTimes(List<ListOffsetsTopic> topics) {
             data.setTopics(topics);
+            return this;
+        }
+
+        public Builder setLimitTimeStamp(long limitTimeStamp) {
+            data.setLimitTimeStamp(limitTimeStamp);
             return this;
         }
 
@@ -151,6 +158,10 @@ public class ListOffsetsRequest extends AbstractRequest {
 
     public IsolationLevel isolationLevel() {
         return IsolationLevel.forId(data.isolationLevel());
+    }
+
+    public long limitTimeStamp() {
+        return data.limitTimeStamp();
     }
 
     public List<ListOffsetsTopic> topics() {
