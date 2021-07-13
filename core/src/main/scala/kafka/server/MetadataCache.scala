@@ -54,6 +54,10 @@ trait MetadataCache {
 
   def getAliveBrokers(): Iterable[BrokerMetadata]
 
+  def getTopicId(topicName: String): Uuid
+
+  def getTopicName(topicId: Uuid): Option[String]
+
   def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node]
 
   def getAliveBrokerNodes(listenerName: ListenerName): Iterable[Node]

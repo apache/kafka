@@ -655,7 +655,7 @@ public class StreamsResetter {
                          final Admin adminClient) {
         boolean hasDeleteErrors = false;
         final DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
-        final Map<String, KafkaFuture<Void>> results = deleteTopicsResult.values();
+        final Map<String, KafkaFuture<Void>> results = deleteTopicsResult.topicNameValues();
 
         for (final Map.Entry<String, KafkaFuture<Void>> entry : results.entrySet()) {
             try {

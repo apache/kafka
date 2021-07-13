@@ -797,7 +797,7 @@ public class TopicAdminTest {
     protected TopicDescription topicDescription(MockAdminClient admin, String topicName)
             throws ExecutionException, InterruptedException {
         DescribeTopicsResult result = admin.describeTopics(Collections.singleton(topicName));
-        Map<String, KafkaFuture<TopicDescription>> byName = result.values();
+        Map<String, KafkaFuture<TopicDescription>> byName = result.topicNameValues();
         return byName.get(topicName).get();
     }
 

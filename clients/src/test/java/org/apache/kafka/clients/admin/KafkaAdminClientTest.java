@@ -1203,7 +1203,7 @@ public class KafkaAdminClientTest {
             assertEquals(0, env.kafkaClient().inFlightRequestCount());
 
             Map<String, KafkaFuture<TopicDescription>> describeFutures =
-                    env.adminClient().describeTopics(sillyTopicNames).values();
+                    env.adminClient().describeTopics(sillyTopicNames).topicNameValues();
             for (String sillyTopicName : sillyTopicNames) {
                 TestUtils.assertFutureError(describeFutures.get(sillyTopicName), InvalidTopicException.class);
             }
@@ -1255,7 +1255,7 @@ public class KafkaAdminClientTest {
                             singletonList(partitionMetadata), MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED))));
 
             DescribeTopicsResult result = env.adminClient().describeTopics(singleton(topic));
-            Map<String, TopicDescription> topicDescriptions = result.all().get();
+            Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
             assertEquals(leader, topicDescriptions.get(topic).partitions().get(0).leader());
             assertNull(topicDescriptions.get(topic).authorizedOperations());
         }

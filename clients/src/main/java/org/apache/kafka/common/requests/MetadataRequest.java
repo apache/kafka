@@ -65,6 +65,20 @@ public class MetadataRequest extends AbstractRequest {
             this(topics, allowAutoTopicCreation, ApiKeys.METADATA.oldestVersion(),  ApiKeys.METADATA.latestVersion());
         }
 
+        public Builder(List<Uuid> topicIds) {
+            super(ApiKeys.METADATA, ApiKeys.METADATA.oldestVersion(), ApiKeys.METADATA.latestVersion());
+            MetadataRequestData data = new MetadataRequestData();
+            if (topicIds == null)
+                data.setTopics(null);
+            else {
+                topicIds.forEach(topicId -> data.topics().add(new MetadataRequestTopic().setTopicId(topicId)));
+            }
+
+            // It's impossible to create topic with topicId
+            data.setAllowAutoTopicCreation(false);
+            this.data = data;
+        }
+
         public static Builder allTopics() {
             // This never causes auto-creation, but we set the boolean to true because that is the default value when
             // deserializing V2 and older. This way, the value is consistent after serialization and deserialization.
@@ -95,10 +109,10 @@ public class MetadataRequest extends AbstractRequest {
                         "allowAutoTopicCreation field");
             if (data.topics() != null) {
                 data.topics().forEach(topic -> {
-                    if (topic.name() == null)
+                    if (topic.name() == null && version < 12)
                         throw new UnsupportedVersionException("MetadataRequest version " + version +
                                 " does not support null topic names.");
-                    if (topic.topicId() != Uuid.ZERO_UUID)
+                    if (topic.topicId() != Uuid.ZERO_UUID && version < 12)
                         throw new UnsupportedVersionException("MetadataRequest version " + version +
                             " does not support non-zero topic IDs.");
                 });
@@ -147,18 +161,30 @@ public class MetadataRequest extends AbstractRequest {
 
     public boolean isAllTopics() {
         return (data.topics() == null) ||
-            (data.topics().isEmpty() && version() == 0); //In version 0, an empty topic list indicates
+            (data.topics().isEmpty() && version() == 0); // In version 0, an empty topic list indicates
                                                          // "request metadata for all topics."
     }
 
     public List<String> topics() {
-        if (isAllTopics()) //In version 0, we return null for empty topic list
+        if (isAllTopics()) // In version 0, we return null for empty topic list
             return null;
         else
             return data.topics()
                 .stream()
                 .map(MetadataRequestTopic::name)
                 .collect(Collectors.toList());
+    }
+
+    public List<Uuid> topicIds() {
+        if (isAllTopics())
+            return Collections.emptyList();
+        else if (version() < 10)
+            return Collections.emptyList();
+        else
+            return data.topics()
+                    .stream()
+                    .map(MetadataRequestTopic::topicId)
+                    .collect(Collectors.toList());
     }
 
     public boolean allowAutoTopicCreation() {
@@ -173,5 +199,11 @@ public class MetadataRequest extends AbstractRequest {
         return topics.stream().map(topic -> new MetadataRequestTopic()
             .setName(topic))
             .collect(Collectors.toList());
+    }
+
+    public static List<MetadataRequestTopic> convertTopicIdsToMetadataRequestTopic(final Collection<Uuid> topicIds) {
+        return topicIds.stream().map(topicId -> new MetadataRequestTopic()
+                .setTopicId(topicId))
+                .collect(Collectors.toList());
     }
 }

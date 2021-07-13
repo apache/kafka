@@ -234,6 +234,14 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
     metadataSnapshot.aliveBrokers.values.flatMap(_.getNode(listenerName))
   }
 
+  def getTopicId(topicName: String): Uuid = {
+    metadataSnapshot.topicIds.getOrElse(topicName, Uuid.ZERO_UUID)
+  }
+
+  def getTopicName(topicId: Uuid): Option[String] = {
+    metadataSnapshot.topicNames.get(topicId)
+  }
+
   private def addOrUpdatePartitionInfo(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
                                        topic: String,
                                        partitionId: Int,

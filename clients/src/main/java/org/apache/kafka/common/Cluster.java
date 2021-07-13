@@ -47,6 +47,7 @@ public final class Cluster {
     private final Map<Integer, Node> nodesById;
     private final ClusterResource clusterResource;
     private final Map<String, Uuid> topicIds;
+    private final Map<Uuid, String> topicNames;
 
     /**
      * Create a new cluster with the given id, nodes and partitions
@@ -184,6 +185,9 @@ public final class Cluster {
         this.availablePartitionsByTopic = Collections.unmodifiableMap(tmpAvailablePartitionsByTopic);
         this.partitionsByNode = Collections.unmodifiableMap(tmpPartitionsByNode);
         this.topicIds = Collections.unmodifiableMap(topicIds);
+        Map<Uuid, String> tmpTopicNames = new HashMap<>();
+        topicIds.forEach((key, value) -> tmpTopicNames.put(value, key));
+        this.topicNames = Collections.unmodifiableMap(tmpTopicNames);
 
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
         this.invalidTopics = Collections.unmodifiableSet(invalidTopics);
@@ -352,6 +356,10 @@ public final class Cluster {
 
     public Uuid topicId(String topic) {
         return topicIds.getOrDefault(topic, Uuid.ZERO_UUID);
+    }
+
+    public String topicName(Uuid topicId) {
+        return topicNames.get(topicId);
     }
 
     @Override

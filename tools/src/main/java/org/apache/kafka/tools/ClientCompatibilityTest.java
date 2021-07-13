@@ -338,7 +338,7 @@ public class ClientCompatibilityTest {
             throws InterruptedException, ExecutionException {
         while (true) {
             try {
-                client.describeTopics(topics).all().get();
+                client.describeTopics(topics).allTopicNames().get();
                 break;
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof UnknownTopicOrPartitionException)

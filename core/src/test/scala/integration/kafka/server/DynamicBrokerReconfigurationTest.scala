@@ -675,7 +675,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     consumer.commitSync()
 
     def partitionInfo: TopicPartitionInfo =
-      adminClients.head.describeTopics(Collections.singleton(topic)).values.get(topic).get().partitions().get(0)
+      adminClients.head.describeTopics(Collections.singleton(topic)).topicNameValues().get(topic).get().partitions().get(0)
 
     val partitionInfo0 = partitionInfo
     assertEquals(partitionInfo0.replicas.get(0), partitionInfo0.leader)

@@ -70,12 +70,12 @@ public class DeleteTopicsResult {
         return nameFutures;
     }
 
-    @Deprecated
     /**
      * @return a map from topic names to futures which can be used to check the status of
      * individual deletions if the deleteTopics request used topic names. Otherwise return null.
      * @deprecated Since 3.0 use {@link #topicNameValues} instead
      */
+    @Deprecated
     public Map<String, KafkaFuture<Void>> values() {
         return nameFutures;
     }

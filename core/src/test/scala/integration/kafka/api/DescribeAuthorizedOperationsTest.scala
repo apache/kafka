@@ -183,13 +183,13 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     createTopic(Topic2)
 
     // test without includeAuthorizedOperations flag
-    var describeTopicsResult = client.describeTopics(Set(Topic1, Topic2).asJava).all.get()
+    var describeTopicsResult = client.describeTopics(Set(Topic1, Topic2).asJava).allTopicNames.get()
     assertNull(describeTopicsResult.get(Topic1).authorizedOperations)
     assertNull(describeTopicsResult.get(Topic2).authorizedOperations)
 
     // test with includeAuthorizedOperations flag
     describeTopicsResult = client.describeTopics(Set(Topic1, Topic2).asJava,
-      new DescribeTopicsOptions().includeAuthorizedOperations(true)).all.get()
+      new DescribeTopicsOptions().includeAuthorizedOperations(true)).allTopicNames.get()
     assertEquals(Set(AclOperation.DESCRIBE), describeTopicsResult.get(Topic1).authorizedOperations().asScala.toSet)
     assertEquals(Set(AclOperation.DESCRIBE), describeTopicsResult.get(Topic2).authorizedOperations().asScala.toSet)
 
@@ -201,7 +201,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     val expectedOperations = AclEntry.supportedOperations(ResourceType.TOPIC).asJava
 
     describeTopicsResult = client.describeTopics(Set(Topic1, Topic2).asJava,
-      new DescribeTopicsOptions().includeAuthorizedOperations(true)).all.get()
+      new DescribeTopicsOptions().includeAuthorizedOperations(true)).allTopicNames.get()
     assertEquals(expectedOperations, describeTopicsResult.get(Topic1).authorizedOperations())
     assertEquals(Set(AclOperation.DESCRIBE, AclOperation.DELETE),
       describeTopicsResult.get(Topic2).authorizedOperations().asScala.toSet)
