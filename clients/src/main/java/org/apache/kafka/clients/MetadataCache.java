@@ -107,6 +107,7 @@ public class MetadataCache {
     Uuid topicId(String topicName) {
         return topicIds.get(topicName);
     }
+
     String topicName(Uuid topicId) {
         return topicNames.get(topicId);
     }

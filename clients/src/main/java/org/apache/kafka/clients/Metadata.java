@@ -399,8 +399,8 @@ public class Metadata implements Closeable {
                 return Optional.of(partitionMetadata);
             // If the topic ID changed, updated the metadata
             } else if (changedTopicId) {
-                log.debug("Topic ID changed, so this topic must have been recreated. " +
-                        "Removing last seen epoch {} for the old partition {} and adding epoch {} from new metadata", currentEpoch, tp, newEpoch);
+                log.debug("Topic ID for partition {} changed from {}, so this topic must have been recreated. " +
+                                "Using the newly updated metadata.", tp, cache.topicId(tp.topic()));
                 lastSeenLeaderEpochs.put(tp, newEpoch);
                 return Optional.of(partitionMetadata);
             } else {
