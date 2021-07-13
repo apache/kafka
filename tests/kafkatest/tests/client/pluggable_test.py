@@ -40,7 +40,7 @@ class PluggableConsumerTest(VerifiableConsumerTest):
         """
         consumer = self.setup_consumer(self.TOPIC)
 
-        for num_started, node in enumerate(consumer.nodes, 1):
+        for _, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
 
         self.logger.debug("Waiting for %d nodes to start" % len(consumer.nodes))
