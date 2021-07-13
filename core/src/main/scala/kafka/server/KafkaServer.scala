@@ -411,7 +411,7 @@ class KafkaServer(
                                                            ConfigType.Ip -> new IpConfigHandler(socketServer.connectionQuotas))
 
         // Create the config manager. start listening to notifications
-        dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
+        dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers, changeExpirationMs = 15 * 60 * 1000, Time.SYSTEM)
         dynamicConfigManager.startup()
 
         socketServer.startProcessingRequests(authorizerFutures)

@@ -187,7 +187,9 @@ class DelegationTokenManager(val config: KafkaConfig,
     if (config.tokenAuthEnabled) {
       zkClient.createDelegationTokenPaths()
       loadCache()
-      tokenChangeListener = new ZkNodeChangeNotificationListener(zkClient, DelegationTokenChangeNotificationZNode.path, DelegationTokenChangeNotificationSequenceZNode.SequenceNumberPrefix, TokenChangedNotificationHandler)
+      tokenChangeListener = new ZkNodeChangeNotificationListener(zkClient, DelegationTokenChangeNotificationZNode.path,
+        DelegationTokenChangeNotificationSequenceZNode.SequenceNumberPrefix, TokenChangedNotificationHandler,
+        changeExpirationMs = 15 * 60 * 1000, time = Time.SYSTEM)
       tokenChangeListener.init()
     }
   }

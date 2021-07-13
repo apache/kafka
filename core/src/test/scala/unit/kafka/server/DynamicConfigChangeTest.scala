@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.net.InetAddress
-import java.nio.charset.StandardCharsets
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 import kafka.integration.KafkaServerTestHarness
@@ -32,7 +31,6 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.metrics.Quota
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -280,45 +278,6 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     } finally {
       admin.close()
     }
-  }
-
-  @Test
-  def testProcessNotification(): Unit = {
-    val props = new Properties()
-    props.put("a.b", "10")
-
-    // Create a mock ConfigHandler to record config changes it is asked to process
-    val entityArgument = EasyMock.newCapture[String]
-    val propertiesArgument = EasyMock.newCapture[Properties]
-    val handler: ConfigHandler = EasyMock.createNiceMock(classOf[ConfigHandler])
-    handler.processConfigChanges(
-      EasyMock.and(EasyMock.capture(entityArgument), EasyMock.isA(classOf[String])),
-      EasyMock.and(EasyMock.capture(propertiesArgument), EasyMock.isA(classOf[Properties])))
-    EasyMock.expectLastCall().once()
-    EasyMock.replay(handler)
-
-    val configManager = new DynamicConfigManager(zkClient, Map(ConfigType.Topic -> handler))
-    // Notifications created using the old TopicConfigManager are ignored.
-    configManager.ConfigChangedNotificationHandler.processNotification("not json".getBytes(StandardCharsets.UTF_8))
-
-    // Incorrect Map. No version
-    var jsonMap: Map[String, Any] = Map("v" -> 1, "x" -> 2)
-
-    assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
-    // Version is provided. EntityType is incorrect
-    jsonMap = Map("version" -> 1, "entity_type" -> "garbage", "entity_name" -> "x")
-    assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
-
-    // EntityName isn't provided
-    jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic)
-    assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
-
-    // Everything is provided
-    jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic, "entity_name" -> "x")
-    configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-
-    // Verify that processConfigChanges was only called once
-    EasyMock.verify(handler)
   }
 
   @Test

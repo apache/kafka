@@ -653,7 +653,7 @@ sealed trait ZkAclChangeStore {
     val rawHandler: NotificationHandler = (bytes: Array[Byte]) => handler.processNotification(decode(bytes))
 
     val aclChangeListener = new ZkNodeChangeNotificationListener(
-      zkClient, aclChangePath, ZkAclChangeStore.SequenceNumberPrefix, rawHandler)
+      zkClient, aclChangePath, ZkAclChangeStore.SequenceNumberPrefix, rawHandler, changeExpirationMs = 15 * 60 * 1000, time = Time.SYSTEM)
 
     aclChangeListener.init()
 
