@@ -223,10 +223,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ENVELOPE => handleEnvelope(request, requestLocal)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
-        case ApiKeys.UNREGISTER_BROKER => maybeForwardToController(request, handleUnregisterBrokerRequest)
         case ApiKeys.DESCRIBE_TRANSACTIONS => handleDescribeTransactionsRequest(request)
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
-        case ApiKeys.ALLOCATE_PRODUCER_IDS => maybeForwardToController(request, handleAllocateProducerIdsRequest)
+        case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
         case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
@@ -3367,14 +3366,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     } catch {
       case e: Throwable => Some(ApiError.fromThrowable(e))
     }
-  }
-
-  def handleUnregisterBrokerRequest(request: RequestChannel.Request): Unit = {
-    // This function will not be called when in KRaft mode, since the
-    // UNREGISTER_BROKER API is marked as forwardable and we will always have a forwarding
-    // manager.
-    throw new UnsupportedVersionException("The broker unregistration API is not available when using " +
-      "Apache ZooKeeper mode.")
   }
 
   def handleDescribeTransactionsRequest(request: RequestChannel.Request): Unit = {
