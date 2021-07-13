@@ -318,7 +318,6 @@ class GroupMetadataManager(brokerId: Int,
 
       case None =>
         responseCallback(Errors.NOT_COORDINATOR)
-        None
     }
   }
 

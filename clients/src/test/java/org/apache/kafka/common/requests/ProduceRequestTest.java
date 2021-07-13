@@ -47,7 +47,7 @@ public class ProduceRequestTest {
                                                                "value".getBytes());
 
     @Test
-    public void shouldBeFlaggedAsTransactionalWhenTransactionalRecords() throws Exception {
+    public void shouldBeFlaggedAsTransactionalWhenTransactionalRecords() {
         final MemoryRecords memoryRecords = MemoryRecords.withTransactionalRecords(0, CompressionType.NONE, 1L,
                 (short) 1, 1, 1, simpleRecord);
 
@@ -65,19 +65,19 @@ public class ProduceRequestTest {
     }
 
     @Test
-    public void shouldNotBeFlaggedAsTransactionalWhenNoRecords() throws Exception {
+    public void shouldNotBeFlaggedAsTransactionalWhenNoRecords() {
         final ProduceRequest request = createNonIdempotentNonTransactionalRecords();
         assertFalse(RequestUtils.hasTransactionalRecords(request));
     }
 
     @Test
-    public void shouldNotBeFlaggedAsIdempotentWhenRecordsNotIdempotent() throws Exception {
+    public void shouldNotBeFlaggedAsIdempotentWhenRecordsNotIdempotent() {
         final ProduceRequest request = createNonIdempotentNonTransactionalRecords();
         assertFalse(RequestUtils.hasTransactionalRecords(request));
     }
 
     @Test
-    public void shouldBeFlaggedAsIdempotentWhenIdempotentRecords() throws Exception {
+    public void shouldBeFlaggedAsIdempotentWhenIdempotentRecords() {
         final MemoryRecords memoryRecords = MemoryRecords.withIdempotentRecords(1, CompressionType.NONE, 1L,
                 (short) 1, 1, 1, simpleRecord);
         final ProduceRequest request = ProduceRequest.forCurrentMagic(new ProduceRequestData()
@@ -244,7 +244,6 @@ public class ProduceRequestTest {
         final long producerId = 15L;
         final short producerEpoch = 5;
         final int sequence = 10;
-        final String transactionalId = "txnlId";
 
         final MemoryRecords nonTxnRecords = MemoryRecords.withRecords(CompressionType.NONE,
                 new SimpleRecord("foo".getBytes()));

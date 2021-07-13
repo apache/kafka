@@ -93,7 +93,7 @@ public class KafkaLZ4Test {
     private static class Lz4ArgumentsProvider implements ArgumentsProvider {
 
         @Override
-        public Stream<? extends Arguments> provideArguments(ExtensionContext context) throws Exception {
+        public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
             List<Payload> payloads = new ArrayList<>();
 
             payloads.add(new Payload("empty", new byte[0]));
@@ -174,8 +174,6 @@ public class KafkaLZ4Test {
         IOException e = assertThrows(IOException.class, () -> testDecompression(buffer, args));
         assertTrue(e.getMessage().contains("exceeded max"));
     }
-
-
 
     @ParameterizedTest
     @ArgumentsSource(Lz4ArgumentsProvider.class)

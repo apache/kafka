@@ -229,7 +229,7 @@ class KafkaRaftManager[T](
       metrics,
       expirationService,
       logContext,
-      metaProperties.clusterId.toString,
+      metaProperties.clusterId,
       OptionalInt.of(config.nodeId),
       raftConfig
     )

@@ -324,7 +324,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             return null;
     }
 
-    static interface SecurityStore {
+    interface SecurityStore {
         KeyStore get();
         char[] keyPassword();
         boolean modified();
