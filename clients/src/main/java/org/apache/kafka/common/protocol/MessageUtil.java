@@ -200,14 +200,35 @@ public final class MessageUtil {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int messageSize = message.size(cache, version);
         ByteBufferAccessor bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize + 2));
+        return getByteBuffer(version, message, cache, bytes);
+    }
+
+    private static ByteBuffer getByteBuffer(short version, Message message, ObjectSerializationCache cache, ByteBufferAccessor bytes) {
         bytes.writeShort(version);
         message.write(bytes, cache, version);
         bytes.flip();
         return bytes.buffer();
     }
 
+    public static ByteBuffer toMagicNumberAndVersionPrefixedByteBuffer(final int magicNumber, final short version, final Message message) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int messageSize = 4 + message.size(cache, version); // add 4 for the magic number
+        ByteBufferAccessor bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize + 2));
+        bytes.writeInt(magicNumber);
+        return getByteBuffer(version, message, cache, bytes);
+    }
+
     public static byte[] toVersionPrefixedBytes(final short version, final Message message) {
         ByteBuffer buffer = toVersionPrefixedByteBuffer(version, message);
+        return getBytes(buffer);
+    }
+
+    public static byte[] toMagicNumberAndVersionPrefixedBytes(final int magicNumber, final short version, final Message message) {
+        ByteBuffer buffer = toMagicNumberAndVersionPrefixedByteBuffer(magicNumber, version, message);
+        return getBytes(buffer);
+    }
+
+    private static byte[] getBytes(ByteBuffer buffer) {
         // take the inner array directly if it is full with data
         if (buffer.hasArray() &&
                 buffer.arrayOffset() == 0 &&

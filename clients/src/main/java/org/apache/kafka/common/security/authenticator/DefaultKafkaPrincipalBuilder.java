@@ -52,6 +52,7 @@ import java.security.Principal;
  * NOTE: This is an internal class and can change without notice.
  */
 public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, KafkaPrincipalSerde {
+    public static final int PRINCIPAL_SERDE_MAGIC_NUMBER_0 = 0;
     private final KerberosShortNamer kerberosShortNamer;
     private final SslPrincipalMapper sslPrincipalMapper;
 
@@ -118,12 +119,16 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Kafk
                                         .setType(principal.getPrincipalType())
                                         .setName(principal.getName())
                                         .setTokenAuthenticated(principal.tokenAuthenticated());
-        return MessageUtil.toVersionPrefixedBytes(DefaultPrincipalData.HIGHEST_SUPPORTED_VERSION, data);
+        return MessageUtil.toMagicNumberAndVersionPrefixedBytes(PRINCIPAL_SERDE_MAGIC_NUMBER_0, DefaultPrincipalData.HIGHEST_SUPPORTED_VERSION, data);
     }
 
     @Override
     public KafkaPrincipal deserialize(byte[] bytes) {
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        int magicNumber = buffer.getInt();
+        if (magicNumber != PRINCIPAL_SERDE_MAGIC_NUMBER_0) {
+            throw new SerializationException("Unknown Principal Serde magic number (was this really a serialized instance of a default Kafka principal?): " + magicNumber);
+        }
         short version = buffer.getShort();
         if (version < DefaultPrincipalData.LOWEST_SUPPORTED_VERSION || version > DefaultPrincipalData.HIGHEST_SUPPORTED_VERSION) {
             throw new SerializationException("Invalid principal data version " + version);
