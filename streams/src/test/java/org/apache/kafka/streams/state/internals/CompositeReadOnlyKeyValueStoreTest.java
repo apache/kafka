@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -31,6 +32,7 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.StateStoreProviderStub;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -49,6 +51,7 @@ import static org.junit.Assert.assertTrue;
 public class CompositeReadOnlyKeyValueStoreTest {
 
     private final String storeName = "my-store";
+    private KafkaStreams streams;
     private StateStoreProviderStub stubProviderTwo;
     private KeyValueStore<String, String> stubOneUnderlying;
     private KeyValueStore<String, String> otherUnderlyingStore;
@@ -63,8 +66,9 @@ public class CompositeReadOnlyKeyValueStoreTest {
         stubProviderOne.addStore(storeName, stubOneUnderlying);
         otherUnderlyingStore = newStoreInstance();
         stubProviderOne.addStore("other-store", otherUnderlyingStore);
+        streams = StreamsTestUtils.mockStreams();
         theStore = new CompositeReadOnlyKeyValueStore<>(
-            new WrappingStoreProvider(asList(stubProviderOne, stubProviderTwo), StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore())),
+            new WrappingStoreProvider(streams, asList(stubProviderOne, stubProviderTwo), StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore())),
             QueryableStoreTypes.keyValueStore(),
             storeName
         );
@@ -381,7 +385,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
 
     private CompositeReadOnlyKeyValueStore<Object, Object> rebalancing() {
         return new CompositeReadOnlyKeyValueStore<>(
-            new WrappingStoreProvider(
+            new WrappingStoreProvider(streams,
                 singletonList(new StateStoreProviderStub(true)),
                 StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore())),
             QueryableStoreTypes.keyValueStore(),

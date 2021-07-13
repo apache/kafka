@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -29,8 +30,10 @@ import java.util.Map;
 
 public class GlobalStateStoreProvider implements StateStoreProvider {
     private final Map<String, StateStore> globalStateStores;
+    private final KafkaStreams streams;
 
-    public GlobalStateStoreProvider(final Map<String, StateStore> globalStateStores) {
+    public GlobalStateStoreProvider(final KafkaStreams streams, final Map<String, StateStore> globalStateStores) {
+        this.streams = streams;
         this.globalStateStores = globalStateStores;
     }
 
@@ -51,4 +54,10 @@ public class GlobalStateStoreProvider implements StateStoreProvider {
         }
         return (List<T>) Collections.singletonList(store);
     }
+
+    @Override
+    public KafkaStreams.State streamsState() {
+        return streams.state();
+    }
+
 }

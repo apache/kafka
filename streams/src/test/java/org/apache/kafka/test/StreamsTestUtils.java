@@ -25,6 +25,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.easymock.EasyMock;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -243,5 +244,16 @@ public final class StreamsTestUtils {
     public static boolean isCheckSupplierCall() {
         return Arrays.stream(Thread.currentThread().getStackTrace())
                 .anyMatch(caller -> "org.apache.kafka.streams.internals.ApiUtils".equals(caller.getClassName()) && "checkSupplier".equals(caller.getMethodName()));
+    }
+
+    public static KafkaStreams mockStreams(KafkaStreams.State state) {
+        final KafkaStreams kafkaStreams = EasyMock.createNiceMock(KafkaStreams.class);
+        EasyMock.expect(kafkaStreams.state()).andStubReturn(state);
+        EasyMock.replay(kafkaStreams);
+        return kafkaStreams;
+    }
+
+    public static KafkaStreams mockStreams() {
+        return mockStreams(KafkaStreams.State.RUNNING);
     }
 }

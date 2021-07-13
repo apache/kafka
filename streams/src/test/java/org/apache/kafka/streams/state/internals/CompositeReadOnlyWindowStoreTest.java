@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -52,6 +53,7 @@ public class CompositeReadOnlyWindowStoreTest {
     private static final long WINDOW_SIZE = 30_000;
 
     private final String storeName = "window-store";
+    private KafkaStreams streams;
     private StateStoreProviderStub stubProviderOne;
     private StateStoreProviderStub stubProviderTwo;
     private CompositeReadOnlyWindowStore<String, String> windowStore;
@@ -67,9 +69,9 @@ public class CompositeReadOnlyWindowStoreTest {
 
         otherUnderlyingStore = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
         stubProviderOne.addStore("other-window-store", otherUnderlyingStore);
-
+        streams = StreamsTestUtils.mockStreams();
         windowStore = new CompositeReadOnlyWindowStore<>(
-            new WrappingStoreProvider(asList(stubProviderOne, stubProviderTwo), StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.windowStore())),
+            new WrappingStoreProvider(streams, asList(stubProviderOne, stubProviderTwo), StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.windowStore())),
             QueryableStoreTypes.windowStore(),
             storeName
         );
@@ -209,7 +211,7 @@ public class CompositeReadOnlyWindowStoreTest {
         underlyingWindowStore.setOpen(false);
         final CompositeReadOnlyWindowStore<Object, Object> store =
             new CompositeReadOnlyWindowStore<>(
-                new WrappingStoreProvider(singletonList(stubProviderOne), StoreQueryParameters.fromNameAndType("window-store", QueryableStoreTypes.windowStore())),
+                new WrappingStoreProvider(streams, singletonList(stubProviderOne), StoreQueryParameters.fromNameAndType("window-store", QueryableStoreTypes.windowStore())),
                 QueryableStoreTypes.windowStore(),
                 "window-store"
             );
@@ -227,7 +229,7 @@ public class CompositeReadOnlyWindowStoreTest {
         underlyingWindowStore.setOpen(false);
         final CompositeReadOnlyWindowStore<Object, Object> store =
             new CompositeReadOnlyWindowStore<>(
-                new WrappingStoreProvider(singletonList(stubProviderOne), StoreQueryParameters.fromNameAndType("window-store", QueryableStoreTypes.windowStore())),
+                new WrappingStoreProvider(streams, singletonList(stubProviderOne), StoreQueryParameters.fromNameAndType("window-store", QueryableStoreTypes.windowStore())),
                 QueryableStoreTypes.windowStore(),
                 "window-store"
             );

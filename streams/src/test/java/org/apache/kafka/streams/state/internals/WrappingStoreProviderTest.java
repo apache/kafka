@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.test.StateStoreProviderStub;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -39,6 +41,7 @@ import static org.junit.Assert.assertThrows;
 
 public class WrappingStoreProviderTest {
 
+    private KafkaStreams streams;
     private WrappingStoreProvider wrappingStoreProvider;
 
     private final int numStateStorePartitions = 2;
@@ -47,14 +50,14 @@ public class WrappingStoreProviderTest {
     public void before() {
         final StateStoreProviderStub stubProviderOne = new StateStoreProviderStub(false);
         final StateStoreProviderStub stubProviderTwo = new StateStoreProviderStub(false);
-
+        streams = StreamsTestUtils.mockStreams();
         for (int partition = 0; partition < numStateStorePartitions; partition++) {
             stubProviderOne.addStore("kv", partition, Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv"),
                     Serdes.serdeFrom(String.class),
                     Serdes.serdeFrom(String.class))
                     .build());
             stubProviderOne.addStore("window", partition, new NoOpWindowStore());
-            wrappingStoreProvider = new WrappingStoreProvider(
+            wrappingStoreProvider = new WrappingStoreProvider(streams,
                     Arrays.asList(stubProviderOne, stubProviderTwo),
                     StoreQueryParameters.fromNameAndType("kv", QueryableStoreTypes.keyValueStore())
             );

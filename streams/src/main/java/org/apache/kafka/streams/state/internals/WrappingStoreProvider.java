@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
@@ -30,10 +31,13 @@ import java.util.List;
 public class WrappingStoreProvider implements StateStoreProvider {
 
     private final List<StreamThreadStateStoreProvider> storeProviders;
+    private final KafkaStreams streams;
     private StoreQueryParameters storeQueryParameters;
 
-    WrappingStoreProvider(final List<StreamThreadStateStoreProvider> storeProviders,
+    WrappingStoreProvider(final KafkaStreams streams,
+                          final List<StreamThreadStateStoreProvider> storeProviders,
                           final StoreQueryParameters storeQueryParameters) {
+        this.streams = streams;
         this.storeProviders = storeProviders;
         this.storeQueryParameters = storeQueryParameters;
     }
@@ -66,5 +70,10 @@ public class WrappingStoreProvider implements StateStoreProvider {
             throw new InvalidStateStoreException("The state store, " + storeName + ", may have migrated to another instance.");
         }
         return allStores;
+    }
+
+    @Override
+    public KafkaStreams.State streamsState() {
+        return streams.state();
     }
 }
