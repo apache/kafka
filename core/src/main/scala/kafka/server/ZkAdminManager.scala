@@ -450,6 +450,7 @@ class ZkAdminManager(val config: KafkaConfig,
                                  configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
     val brokerId = getBrokerId(resource)
     val perBrokerConfig = brokerId.nonEmpty
+    this.config.dynamicConfig.validate(configProps, perBrokerConfig)
     validateConfigPolicy(resource, configEntriesMap)
     if (!validateOnly) {
       if (perBrokerConfig)
