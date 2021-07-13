@@ -3642,9 +3642,11 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId,
-                                                        Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                        AlterConsumerGroupOffsetsOptions options) {
+    public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(
+        String groupId,
+        Map<TopicPartition, OffsetAndMetadata> offsets,
+        AlterConsumerGroupOffsetsOptions options
+    ) {
         SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Errors>> future =
                 AlterConsumerGroupOffsetsHandler.newFuture(groupId);
         AlterConsumerGroupOffsetsHandler handler = new AlterConsumerGroupOffsetsHandler(groupId, offsets, logContext);
