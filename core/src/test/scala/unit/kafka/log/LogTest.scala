@@ -35,7 +35,6 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
-import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
@@ -868,8 +867,9 @@ class LogTest {
     records.batches.forEach(_.setPartitionLeaderEpoch(0))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
-      override def checkBatchRetention(batch: RecordBatch): BatchRetention = RecordFilter.BatchRetention.DELETE_EMPTY
+    records.filterTo(new TopicPartition("foo", 0), new RecordFilter(0, 0) {
+      override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
+        new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.DELETE_EMPTY, false)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
@@ -909,8 +909,9 @@ class LogTest {
     records.batches.forEach(_.setPartitionLeaderEpoch(0))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
-      override def checkBatchRetention(batch: RecordBatch): BatchRetention = RecordFilter.BatchRetention.RETAIN_EMPTY
+    records.filterTo(new TopicPartition("foo", 0), new RecordFilter(0, 0) {
+      override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
+        new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.RETAIN_EMPTY, true)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = false
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
@@ -952,8 +953,9 @@ class LogTest {
     records.batches.forEach(_.setPartitionLeaderEpoch(0))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
-      override def checkBatchRetention(batch: RecordBatch): BatchRetention = RecordFilter.BatchRetention.DELETE_EMPTY
+    records.filterTo(new TopicPartition("foo", 0), new RecordFilter(0, 0) {
+      override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
+        new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.DELETE_EMPTY, false)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()

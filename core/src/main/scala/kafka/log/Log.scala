@@ -270,7 +270,8 @@ class Log(@volatile private var _dir: File,
           val producerStateManager: ProducerStateManager,
           logDirFailureChannel: LogDirFailureChannel,
           @volatile private var _topicId: Option[Uuid],
-          val keepPartitionMetadataFile: Boolean) extends Logging with KafkaMetricsGroup {
+          val keepPartitionMetadataFile: Boolean,
+          @volatile var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
