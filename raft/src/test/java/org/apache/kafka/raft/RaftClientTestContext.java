@@ -129,7 +129,8 @@ public final class RaftClientTestContext {
         private final MockTime time = new MockTime();
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final Random random = Mockito.spy(new Random(1));
-        private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID);
+        private final LogContext logContext = new LogContext();
+        private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID, logContext);
         private final Set<Integer> voters;
         private final OptionalInt localId;
 
@@ -223,7 +224,6 @@ public final class RaftClientTestContext {
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel(voters);
-            LogContext logContext = new LogContext();
             MockListener listener = new MockListener(localId);
             Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
                 .collect(Collectors.toMap(id -> id, RaftClientTestContext::mockAddress));

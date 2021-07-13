@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
@@ -57,7 +58,7 @@ public class MockLogTest {
 
     @BeforeEach
     public void setup() {
-        log = new MockLog(topicPartition, topicId);
+        log = new MockLog(topicPartition, topicId, new LogContext());
     }
 
     @AfterEach
@@ -510,10 +511,7 @@ public class MockLogTest {
         assertTrue(log.deleteBeforeSnapshot(snapshotId));
         assertEquals(snapshotId.offset, log.startOffset());
 
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, epoch))
-        );
+        assertEquals(Optional.empty(), log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, epoch)));
     }
 
     @Test

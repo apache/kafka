@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import net.jqwik.api.AfterFailureMode;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import net.jqwik.api.Tag;
@@ -103,7 +104,7 @@ public class RaftEventSimulationTest {
     private static final int FETCH_MAX_WAIT_MS = 100;
     private static final int LINGER_MS = 0;
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canElectInitialLeader(
         @ForAll int seed,
         @ForAll @IntRange(min = 1, max = 5) int numVoters,
@@ -122,7 +123,7 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
     }
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canElectNewLeaderAfterOldLeaderFailure(
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
@@ -162,7 +163,7 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
     }
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canRecoverAfterAllNodesKilled(
         @ForAll int seed,
         @ForAll @IntRange(min = 1, max = 5) int numVoters,
@@ -195,7 +196,7 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
     }
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canElectNewLeaderAfterOldLeaderPartitionedAway(
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
@@ -227,7 +228,7 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, nonPartitionedNodes));
     }
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canMakeProgressIfMajorityIsReachable(
         @ForAll int seed,
         @ForAll @IntRange(min = 0, max = 3) int numObservers
@@ -272,7 +273,7 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(30));
     }
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canMakeProgressAfterBackToBackLeaderFailures(
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
@@ -305,7 +306,7 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.anyReachedHighWatermark(targetHighWatermark));
     }
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canRecoverFromSingleNodeCommittedDataLoss(
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
@@ -498,7 +499,15 @@ public class RaftEventSimulationTest {
 
     private static class PersistentState {
         final MockQuorumStateStore store = new MockQuorumStateStore();
-        final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID);
+        final MockLog log;
+
+        PersistentState(int nodeId) {
+            log = new MockLog(
+                METADATA_PARTITION,
+                Uuid.METADATA_TOPIC_ID,
+                new LogContext(String.format("[Node %s] ", nodeId))
+            );
+        }
     }
 
     private static class Cluster {
@@ -516,11 +525,11 @@ public class RaftEventSimulationTest {
             int nodeId = 0;
             for (; nodeId < numVoters; nodeId++) {
                 voters.add(nodeId);
-                nodes.put(nodeId, new PersistentState());
+                nodes.put(nodeId, new PersistentState(nodeId));
             }
 
             for (; nodeId < numVoters + numObservers; nodeId++) {
-                nodes.put(nodeId, new PersistentState());
+                nodes.put(nodeId, new PersistentState(nodeId));
             }
         }
 
@@ -674,7 +683,7 @@ public class RaftEventSimulationTest {
 
         void killAndDeletePersistentState(int nodeId) {
             kill(nodeId);
-            nodes.put(nodeId, new PersistentState());
+            nodes.put(nodeId, new PersistentState(nodeId));
         }
 
         private static RaftConfig.AddressSpec nodeAddress(int id) {
