@@ -199,6 +199,8 @@ class ControllerServer(
         CoreUtils.swallow(socketServer.shutdown(), this)
       if (controllerApisHandlerPool != null)
         CoreUtils.swallow(controllerApisHandlerPool.shutdown(), this)
+      if (controllerApis != null)
+        CoreUtils.swallow(controllerApis.close(), this)
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
       if (controller != null)
