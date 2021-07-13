@@ -29,6 +29,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.appendClientStates;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedActiveAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedStatefulAssignment;
@@ -231,7 +232,8 @@ public class TaskAssignorConvergenceTest {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 2,
                                                                 0,
-                                                                60_000L);
+                                                                60_000L,
+                                                                EMPTY_RACK_AWARE_ASSIGNMENT_TAGS);
 
         final Harness harness = Harness.initializeCluster(1, 1, 1, () -> 1);
 
@@ -250,7 +252,8 @@ public class TaskAssignorConvergenceTest {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
-                                                                60_000L);
+                                                                60_000L,
+                                                                EMPTY_RACK_AWARE_ASSIGNMENT_TAGS);
 
         final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 1, () -> 5);
         testForConvergence(harness, configs, 1);
@@ -272,7 +275,8 @@ public class TaskAssignorConvergenceTest {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
-                                                                60_000L);
+                                                                60_000L,
+                                                                EMPTY_RACK_AWARE_ASSIGNMENT_TAGS);
 
         final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 7, () -> 5);
         testForConvergence(harness, configs, 1);
@@ -313,7 +317,8 @@ public class TaskAssignorConvergenceTest {
             final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                     maxWarmupReplicas,
                                                                     numStandbyReplicas,
-                                                                    60_000L);
+                                                                    60_000L,
+                                                                    EMPTY_RACK_AWARE_ASSIGNMENT_TAGS);
 
             harness = Harness.initializeCluster(
                 numStatelessTasks,

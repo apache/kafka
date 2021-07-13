@@ -16,23 +16,24 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.Test;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.junit.Assert.assertThrows;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.UUID;
 
-public class AssignorConfigurationTest {
+abstract class StandbyTaskAssignor {
+    protected final AssignmentConfigs configs;
 
-    @Test
-    public void configsShouldRejectZeroWarmups() {
-        final ConfigException exception = assertThrows(
-            ConfigException.class,
-            () -> new AssignorConfiguration.AssignmentConfigs(1L, 0, 1, 1L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
-        );
+    StandbyTaskAssignor(final AssignmentConfigs configs) {
+        this.configs = configs;
+    }
 
-        assertThat(exception.getMessage(), containsString("Invalid value 0 for configuration max.warmup.replicas"));
+    abstract void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
+                                     final TreeMap<UUID, ClientState> clientStates);
+
+    boolean isValidTaskMovement(final TaskMovementAttempt taskMovementAttempt) {
+        return true;
     }
 }
