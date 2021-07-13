@@ -35,7 +35,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMock;
@@ -1128,14 +1128,17 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Test
     public void shouldNotThrowOnUnknownRevokedPartition() {
-        LogCaptureAppender.setClassLoggerToDebug(StoreChangelogReader.class);
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StoreChangelogReader.class)) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
+                this.getClass().getName() + "#shouldNotThrowOnUnknownRevokedPartition",
+                Collections.singletonMap(StoreChangelogReader.class.getName(), "DEBUG"))) {
+            logCaptureContext.setLatch(2);
+
             changelogReader.unregister(Collections.singletonList(new TopicPartition("unknown", 0)));
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("test-reader Changelog partition unknown-0 could not be found," +
-                    " it could be already cleaned up during the handling of task corruption and never restore again")
+            assertThat(logCaptureContext.getMessages(), hasItem(
+                "DEBUG test-reader Changelog partition unknown-0 could not be found, " +
+                    "it could be already cleaned up during the handling " +
+                    "of task corruption and never restore again ")
             );
         }
     }

@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -29,9 +28,9 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -81,10 +80,11 @@ public class KStreamKStreamOuterJoinTest {
 
         props.put(ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, 5);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#testOuterJoinWithInvalidSpuriousResultFixFlag");
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(props), props)) {
-            assertThat(appender.getMessages(), hasItem("Invalid value (5) on internal configuration " +
-                "'" + ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX + "'. Please specify a true/false value."));
+            assertThat(logCaptureContext.getMessages(), hasItem("WARN Invalid value (5) on internal configuration " +
+                "'" + ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX + "'. Please specify a true/false value. "));
         }
     }
 

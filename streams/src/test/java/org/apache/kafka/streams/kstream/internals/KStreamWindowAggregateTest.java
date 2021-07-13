@@ -33,10 +33,10 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.test.TestRecord;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessor;
@@ -281,14 +281,15 @@ public class KStreamWindowAggregateTest {
                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String())
             );
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeterWhenSkippingNullKey");
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "1");
 
-            assertThat(appender.getMessages(), hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[0] offset=[0]"));
+            assertThat(logCaptureContext.getMessages(), hasItem("WARN Skipping record due to null key. value=[1] topic=[topic] partition=[0] offset=[0] "));
         }
     }
 
@@ -313,7 +314,8 @@ public class KStreamWindowAggregateTest {
                .map((key, value) -> new KeyValue<>(key.toString(), value))
                .to("output");
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeterWhenSkippingExpiredWindow");
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -334,14 +336,14 @@ public class KStreamWindowAggregateTest {
                 is(84.875) // (0 + 100 + 99 + 98 + 97 + 96 + 95 + 94) / 8
             );
 
-            assertThat(appender.getMessages(), hasItems(
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[0] window=[0,10) expiration=[10] streamTime=[100]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[1] window=[0,10) expiration=[10] streamTime=[100]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[3] timestamp=[2] window=[0,10) expiration=[10] streamTime=[100]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[4] timestamp=[3] window=[0,10) expiration=[10] streamTime=[100]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[5] timestamp=[4] window=[0,10) expiration=[10] streamTime=[100]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[6] timestamp=[5] window=[0,10) expiration=[10] streamTime=[100]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[10] streamTime=[100]"
+            assertThat(logCaptureContext.getMessages(), hasItems(
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[0] window=[0,10) expiration=[10] streamTime=[100] ",
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[1] window=[0,10) expiration=[10] streamTime=[100] ",
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[3] timestamp=[2] window=[0,10) expiration=[10] streamTime=[100] ",
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[4] timestamp=[3] window=[0,10) expiration=[10] streamTime=[100] ",
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[5] timestamp=[4] window=[0,10) expiration=[10] streamTime=[100] ",
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[6] timestamp=[5] window=[0,10) expiration=[10] streamTime=[100] ",
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[10] streamTime=[100] "
             ));
 
             final TestOutputTopic<String, String> outputTopic =
@@ -372,7 +374,8 @@ public class KStreamWindowAggregateTest {
                .map((key, value) -> new KeyValue<>(key.toString(), value))
                .to("output");
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeterWhenSkippingExpiredWindowByGrace");
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -388,14 +391,14 @@ public class KStreamWindowAggregateTest {
 
             assertLatenessMetrics(driver, is(7.0), is(194.0), is(97.375));
 
-            assertThat(appender.getMessages(), hasItems(
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[100] window=[100,110) expiration=[110] streamTime=[200]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[101] window=[100,110) expiration=[110] streamTime=[200]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[3] timestamp=[102] window=[100,110) expiration=[110] streamTime=[200]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[4] timestamp=[103] window=[100,110) expiration=[110] streamTime=[200]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[5] timestamp=[104] window=[100,110) expiration=[110] streamTime=[200]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[6] timestamp=[105] window=[100,110) expiration=[110] streamTime=[200]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[110] streamTime=[200]"
+            assertThat(logCaptureContext.getMessages(), hasItems(
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[100] window=[100,110) expiration=[110] streamTime=[200] ",
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[101] window=[100,110) expiration=[110] streamTime=[200] ",
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[3] timestamp=[102] window=[100,110) expiration=[110] streamTime=[200] ",
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[4] timestamp=[103] window=[100,110) expiration=[110] streamTime=[200] ",
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[5] timestamp=[104] window=[100,110) expiration=[110] streamTime=[200] ",
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[6] timestamp=[105] window=[100,110) expiration=[110] streamTime=[200] ",
+                "WARN Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[110] streamTime=[200] "
             ));
 
             final TestOutputTopic<String, String> outputTopic =

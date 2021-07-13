@@ -52,7 +52,7 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockClientSupplier;
 
 import java.util.UUID;
@@ -728,46 +728,40 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldNotThrowStreamsExceptionOnSubsequentCallIfASendFailsWithContinueExceptionHandler() {
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            getExceptionalStreamsProducerOnSend(new Exception()),
-            new AlwaysContinueProductionExceptionHandler(),
-            streamsMetrics
-        );
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
+                + "#shouldNotThrowStreamsExceptionOnSubsequentCallIfASendFailsWithContinueExceptionHandler")) {
+            logCaptureContext.setLatch(1);
 
-        try (final LogCaptureAppender logCaptureAppender =
-                 LogCaptureAppender.createAndRegister(RecordCollectorImpl.class)) {
+            final RecordCollector collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                getExceptionalStreamsProducerOnSend(new Exception()),
+                new AlwaysContinueProductionExceptionHandler(),
+                streamsMetrics
+            );
 
             collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
             collector.flush();
 
-            final List<String> messages = logCaptureAppender.getMessages();
-            final StringBuilder errorMessage = new StringBuilder("Messages received:");
-            for (final String error : messages) {
-                errorMessage.append("\n - ").append(error);
-            }
-            assertTrue(
-                errorMessage.toString(),
-                messages.get(messages.size() - 1)
-                    .endsWith("Exception handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.")
-            );
+            final List<String> messages = logCaptureContext.getMessages();
+            assertTrue(messages.get(0)
+                .contains("Exception handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded. "));
+
+            final Metric metric = streamsMetrics.metrics().get(new MetricName(
+                "dropped-records-total",
+                "stream-task-metrics",
+                "The total number of dropped records",
+                mkMap(
+                    mkEntry("thread-id", Thread.currentThread().getName()),
+                    mkEntry("task-id", taskId.toString())
+                )
+            ));
+            assertEquals(1.0, metric.metricValue());
+
+            collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+            collector.flush();
+            collector.closeClean();
         }
-
-        final Metric metric = streamsMetrics.metrics().get(new MetricName(
-            "dropped-records-total",
-            "stream-task-metrics",
-            "The total number of dropped records",
-            mkMap(
-                mkEntry("thread-id", Thread.currentThread().getName()),
-                mkEntry("task-id", taskId.toString())
-            )
-        ));
-        assertEquals(1.0, metric.metricValue());
-
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
-        collector.flush();
-        collector.closeClean();
     }
 
     @Test

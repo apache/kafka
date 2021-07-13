@@ -46,7 +46,7 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
 
 ### Running a particular unit/integration test with log4j output ###
-Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
+Change the log4j setting in either `clients/src/test/resources/log4j2.properties` or `core/src/test/resources/log4j2.properties`
 
     ./gradlew clients:test --tests RequestResponseTest
 

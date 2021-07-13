@@ -30,10 +30,10 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.TestUtils;
@@ -70,8 +70,12 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.CoreMatchers.allOf;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
@@ -767,25 +771,22 @@ public class ProcessorStateManagerTest {
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
         stateDirectory.clean();
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ProcessorStateManager.class)) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
+                this.getClass().getName() + "#shouldLogAWarningIfCheckpointThrowsAnIOException")) {
+            logCaptureContext.setLatch(4);
+
             stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 10L));
             stateMgr.checkpoint();
 
-            boolean foundExpectedLogMessage = false;
-            for (final LogCaptureAppender.Event event : appender.getEvents()) {
-                if ("WARN".equals(event.getLevel())
-                    && event.getMessage().startsWith("process-state-manager-test Failed to write offset checkpoint file to [")
-                    && event.getMessage().endsWith(".checkpoint]." +
-                        " This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory." +
-                        " This may also occur due to running multiple instances on the same machine using the same state dir." +
-                        " Changing the location of state.dir may resolve the problem.")
-                    && event.getThrowableInfo().get().startsWith("java.io.FileNotFoundException: ")) {
-
-                    foundExpectedLogMessage = true;
-                    break;
-                }
-            }
-            assertTrue(foundExpectedLogMessage);
+            assertThat(logCaptureContext.getMessages(),
+                hasItem(
+                    allOf(
+                        startsWith("WARN process-state-manager-test Failed to write offset checkpoint file to ["),
+                        containsString(".checkpoint]." +
+                            " This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory." +
+                            " This may also occur due to running multiple instances on the same machine using the same state dir." +
+                            " Changing the location of state.dir may resolve the problem. "),
+                        containsString("java.io.FileNotFoundException: "))));
         }
     }
 

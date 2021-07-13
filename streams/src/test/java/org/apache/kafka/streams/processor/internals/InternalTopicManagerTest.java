@@ -53,7 +53,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager.ValidationResult;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.test.LogCaptureContext;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
@@ -74,6 +74,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.anEmptyMap;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasItem;
@@ -86,6 +87,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class InternalTopicManagerTest {
+
     private final Node broker1 = new Node(0, "dummyHost-1", 1234);
     private final Node broker2 = new Node(1, "dummyHost-2", 1234);
     private final List<Node> cluster = new ArrayList<Node>(2) {
@@ -773,31 +775,33 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldLogWhenTopicNotFoundAndNotThrowException() {
-        mockAdminClient.addTopic(
-            false,
-            topic1,
-            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
-            null);
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
+                this.getClass().getName() + "#shouldLogWhenTopicNotFoundAndNotThrowException",
+                Collections.singletonMap(InternalTopicManager.class.getName(), "DEBUG"))) {
+            logCaptureContext.setLatch(4);
 
-        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
-        internalTopicConfig.setNumberOfPartitions(1);
+            mockAdminClient.addTopic(
+                false,
+                topic1,
+                Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
+                null);
 
-        final InternalTopicConfig internalTopicConfigII =
-            new RepartitionTopicConfig("internal-topic", Collections.emptyMap());
-        internalTopicConfigII.setNumberOfPartitions(1);
+            final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
+            internalTopicConfig.setNumberOfPartitions(1);
 
-        final Map<String, InternalTopicConfig> topicConfigMap = new HashMap<>();
-        topicConfigMap.put(topic1, internalTopicConfig);
-        topicConfigMap.put("internal-topic", internalTopicConfigII);
+            final InternalTopicConfig internalTopicConfigII =
+                    new RepartitionTopicConfig("internal-topic", Collections.emptyMap());
+            internalTopicConfigII.setNumberOfPartitions(1);
 
-        LogCaptureAppender.setClassLoggerToDebug(InternalTopicManager.class);
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(InternalTopicManager.class)) {
+            final Map<String, InternalTopicConfig> topicConfigMap = new HashMap<>();
+            topicConfigMap.put(topic1, internalTopicConfig);
+            topicConfigMap.put("internal-topic", internalTopicConfigII);
+
             internalTopicManager.makeReady(topicConfigMap);
 
             assertThat(
-                appender.getMessages(),
-                hasItem("stream-thread [" + threadName + "] Topic internal-topic is unknown or not found, hence not existed yet.\n" +
-                    "Error message was: org.apache.kafka.common.errors.UnknownTopicOrPartitionException: Topic internal-topic not found.")
+                logCaptureContext.getMessages(),
+                hasItem(containsString("Topic internal-topic is unknown or not found, hence not existed yet"))
             );
         }
     }

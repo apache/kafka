@@ -144,7 +144,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     """
     PERSISTENT_ROOT = "/mnt/kafka"
     STDOUT_STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "server-start-stdout-stderr.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "kafka-log4j.properties")
+    LOG4J2_CONFIG = os.path.join(PERSISTENT_ROOT, "kafka-log4j2.properties")
     # Logs such as controller.log, server.log, etc all go here
     OPERATIONAL_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-operational-logs")
     OPERATIONAL_LOG_INFO_DIR = os.path.join(OPERATIONAL_LOG_DIR, "info")
@@ -681,7 +681,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def start_cmd(self, node):
         cmd = "export JMX_PORT=%d; " % self.jmx_port
-        cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
+        cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configurationFile=file:%s\"; " % self.LOG4J2_CONFIG
         heap_kafka_opts = "-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % \
                           self.logs["kafka_heap_dump_file"]["path"]
         security_kafka_opts = self.security_config.kafka_opts.strip('\"')
@@ -737,7 +737,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("kafka.properties:")
         self.logger.info(prop_file)
         node.account.create_file(KafkaService.CONFIG_FILE, prop_file)
-        node.account.create_file(self.LOG4J_CONFIG, self.render('log4j.properties', log_dir=KafkaService.OPERATIONAL_LOG_DIR))
+        node.account.create_file(self.LOG4J2_CONFIG, self.render('log4j2.properties', log_dir=KafkaService.OPERATIONAL_LOG_DIR))
 
         if self.quorum_info.using_kraft:
             # format log directories if necessary

@@ -32,6 +32,7 @@ import org.easymock.MockType;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.slf4j.Logger;
@@ -51,6 +52,7 @@ import static org.powermock.api.easymock.PowerMock.mockStatic;
 import static org.powermock.api.easymock.PowerMock.replayAll;
 
 @RunWith(PowerMockRunner.class)
+@PowerMockIgnore("javax.management.*")
 @PrepareForTest(Utils.class)
 public class StateManagerUtilTest {
 
@@ -193,7 +195,6 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerThrowsExceptionWhenDirty() {
         expect(stateManager.taskId()).andReturn(taskId);
-
         expect(stateDirectory.lock(taskId)).andReturn(true);
 
         stateManager.close();

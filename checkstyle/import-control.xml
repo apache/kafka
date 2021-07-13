@@ -421,6 +421,7 @@
 
   <subpackage name="test">
     <allow pkg="org.apache.kafka" />
+    <allow pkg="org.apache.logging.log4j" />
     <allow pkg="org.bouncycastle" />
     <allow pkg="org.rocksdb" />
   </subpackage>
@@ -524,7 +525,7 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
         <subpackage name="resources">
-          <allow pkg="org.apache.log4j" />
+          <allow pkg="org.apache.logging.log4j" />
         </subpackage>
       </subpackage>
 

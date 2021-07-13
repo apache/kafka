@@ -72,6 +72,7 @@ import static org.junit.Assert.fail;
  */
 @RunWith(EasyMockRunner.class)
 public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
+
     private final List<String> ignoreMethods = new LinkedList<String>() {
         {
             add("isOwningHandle");

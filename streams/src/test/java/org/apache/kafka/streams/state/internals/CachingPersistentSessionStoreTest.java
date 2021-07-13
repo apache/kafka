@@ -34,10 +34,10 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -681,19 +681,22 @@ public class CachingPersistentSessionStoreTest {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingSessionStore.class)) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
+                this.getClass().getName() + "#shouldNotThrowInvalidRangeExceptionWhenBackwardWithNegativeFromKey")) {
+            logCaptureContext.setLatch(2);
+
             final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
                 cachingStore.backwardFindSessions(keyFrom, keyTo, 0L, 10L);
             assertFalse(iterator.hasNext());
 
-            final List<String> messages = appender.getMessages();
+            final List<String> messages = logCaptureContext.getMessages();
             assertThat(
                 messages,
                 hasItem(
-                    "Returning empty iterator for fetch with invalid key range: from > to." +
+                    "WARN Returning empty iterator for fetch with invalid key range: from > to." +
                         " This may be due to range arguments set in the wrong order, " +
                         "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                        " Note that the built-in numerical serdes do not follow this for negative numbers"
+                        " Note that the built-in numerical serdes do not follow this for negative numbers "
                 )
             );
         }
@@ -704,18 +707,19 @@ public class CachingPersistentSessionStoreTest {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingSessionStore.class)) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
+                this.getClass().getName() + "#shouldNotThrowInvalidRangeExceptionWithNegativeFromKey")) {
             final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.findSessions(keyFrom, keyTo, 0L, 10L);
             assertFalse(iterator.hasNext());
 
-            final List<String> messages = appender.getMessages();
+            final List<String> messages = logCaptureContext.getMessages();
             assertThat(
                 messages,
                 hasItem(
-                    "Returning empty iterator for fetch with invalid key range: from > to." +
+                    "WARN Returning empty iterator for fetch with invalid key range: from > to." +
                         " This may be due to range arguments set in the wrong order, " +
                         "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                        " Note that the built-in numerical serdes do not follow this for negative numbers"
+                        " Note that the built-in numerical serdes do not follow this for negative numbers "
                 )
             );
         }

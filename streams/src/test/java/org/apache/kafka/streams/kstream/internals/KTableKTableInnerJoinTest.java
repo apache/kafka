@@ -29,9 +29,9 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.TestRecord;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -261,12 +261,13 @@ public class KTableKTableInnerJoinTest {
         context.setRecordMetadata("left", -1, -2, new RecordHeaders(), -3);
         join.init(context);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableInnerJoin.class)) {
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeterSkippedRecordsDueToNullLeftKey")) {
             join.process(null, new Change<>("new", "old"));
 
             assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2] ")
             );
         }
     }

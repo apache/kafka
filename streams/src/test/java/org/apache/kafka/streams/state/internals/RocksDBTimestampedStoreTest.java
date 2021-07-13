@@ -21,8 +21,8 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.test.LogCaptureContext;
 import org.hamcrest.core.IsNull;
 import org.junit.Test;
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -53,71 +53,76 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
     @Test
     public void shouldOpenNewStoreInRegularMode() {
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
+                this.getClass().getName() + "#shouldOpenNewStoreInRegularMode")) {
+            logCaptureContext.setLatch(2);
             rocksDBStore.init((StateStoreContext) context, rocksDBStore);
 
-            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
-        }
+            assertThat(logCaptureContext.getMessages(), hasItem("INFO Opening store " + DB_NAME + " in regular mode "));
 
-        try (final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all()) {
-            assertThat(iterator.hasNext(), is(false));
+            try (final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all()) {
+                assertThat(iterator.hasNext(), is(false));
+            }
         }
     }
 
     @Test
     public void shouldOpenExistingStoreInRegularMode() throws Exception {
-        // prepare store
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
-        rocksDBStore.put(new Bytes("key".getBytes()), "timestamped".getBytes());
-        rocksDBStore.close();
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
+                this.getClass().getName() + "#shouldOpenExistingStoreInRegularMode")) {
+            logCaptureContext.setLatch(3);
 
-        // re-open store
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
+            // prepare store
+            rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+            rocksDBStore.put(new Bytes("key".getBytes()), "timestamped".getBytes());
+            rocksDBStore.close();
+
+            // re-open store
+            rocksDBStore = getRocksDBStore();
             rocksDBStore.init((StateStoreContext) context, rocksDBStore);
 
-            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
-        } finally {
+            assertThat(logCaptureContext.getMessages(), hasItem("INFO Opening store " + DB_NAME + " in regular mode "));
             rocksDBStore.close();
-        }
 
-        // verify store
-        final DBOptions dbOptions = new DBOptions();
-        final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
+            // verify store
+            final DBOptions dbOptions = new DBOptions();
+            final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
 
-        final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
-            new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
-        final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
+            final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
+                    new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
+                    new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+            final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
-        RocksDB db = null;
-        ColumnFamilyHandle noTimestampColumnFamily = null, withTimestampColumnFamily = null;
-        try {
-            db = RocksDB.open(
-                dbOptions,
-                new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath(),
-                columnFamilyDescriptors,
-                columnFamilies);
+            RocksDB db = null;
+            ColumnFamilyHandle noTimestampColumnFamily = null, withTimestampColumnFamily = null;
+            try {
+                db = RocksDB.open(
+                        dbOptions,
+                        new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath(),
+                        columnFamilyDescriptors,
+                        columnFamilies);
 
-            noTimestampColumnFamily = columnFamilies.get(0);
-            withTimestampColumnFamily = columnFamilies.get(1);
+                noTimestampColumnFamily = columnFamilies.get(0);
+                withTimestampColumnFamily = columnFamilies.get(1);
 
-            assertThat(db.get(noTimestampColumnFamily, "key".getBytes()), new IsNull<>());
-            assertThat(db.getLongProperty(noTimestampColumnFamily, "rocksdb.estimate-num-keys"), is(0L));
-            assertThat(db.get(withTimestampColumnFamily, "key".getBytes()).length, is(11));
-            assertThat(db.getLongProperty(withTimestampColumnFamily, "rocksdb.estimate-num-keys"), is(1L));
-        } finally {
-            // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
-            if (noTimestampColumnFamily != null) {
-                noTimestampColumnFamily.close();
+                assertThat(db.get(noTimestampColumnFamily, "key".getBytes()), new IsNull<>());
+                assertThat(db.getLongProperty(noTimestampColumnFamily, "rocksdb.estimate-num-keys"), is(0L));
+                assertThat(db.get(withTimestampColumnFamily, "key".getBytes()).length, is(11));
+                assertThat(db.getLongProperty(withTimestampColumnFamily, "rocksdb.estimate-num-keys"), is(1L));
+            } finally {
+                // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
+                if (noTimestampColumnFamily != null) {
+                    noTimestampColumnFamily.close();
+                }
+                if (withTimestampColumnFamily != null) {
+                    withTimestampColumnFamily.close();
+                }
+                if (db != null) {
+                    db.close();
+                }
+                dbOptions.close();
+                columnFamilyOptions.close();
             }
-            if (withTimestampColumnFamily != null) {
-                withTimestampColumnFamily.close();
-            }
-            if (db != null) {
-                db.close();
-            }
-            dbOptions.close();
-            columnFamilyOptions.close();
         }
     }
 
@@ -125,89 +130,92 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
     public void shouldMigrateDataFromDefaultToTimestampColumnFamily() throws Exception {
         prepareOldStore();
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
+                + "#shouldMigrateDataFromDefaultToTimestampColumnFamily")) {
+            logCaptureContext.setLatch(3);
+
             rocksDBStore.init((StateStoreContext) context, rocksDBStore);
 
-            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in upgrade mode"));
+            assertThat(logCaptureContext.getMessages(), hasItem("INFO Opening store " + DB_NAME + " in upgrade mode "));
+
+            // approx: 7 entries on old CF, 0 in new CF
+            assertThat(rocksDBStore.approximateNumEntries(), is(7L));
+
+            // get()
+
+            // should be no-op on both CF
+            assertThat(rocksDBStore.get(new Bytes("unknown".getBytes())), new IsNull<>());
+            // approx: 7 entries on old CF, 0 in new CF
+            assertThat(rocksDBStore.approximateNumEntries(), is(7L));
+
+            // should migrate key1 from old to new CF
+            // must return timestamp plus value, ie, it's not 1 byte but 9 bytes
+            assertThat(rocksDBStore.get(new Bytes("key1".getBytes())).length, is(8 + 1));
+            // one delete on old CF, one put on new CF
+            // approx: 6 entries on old CF, 1 in new CF
+            assertThat(rocksDBStore.approximateNumEntries(), is(7L));
+
+            // put()
+
+            // should migrate key2 from old to new CF with new value
+            rocksDBStore.put(new Bytes("key2".getBytes()), "timestamp+22".getBytes());
+            // one delete on old CF, one put on new CF
+            // approx: 5 entries on old CF, 2 in new CF
+            assertThat(rocksDBStore.approximateNumEntries(), is(7L));
+
+            // should delete key3 from old and new CF
+            rocksDBStore.put(new Bytes("key3".getBytes()), null);
+            // count is off by one, due to two delete operations (even if one does not delete anything)
+            // approx: 4 entries on old CF, 1 in new CF
+            assertThat(rocksDBStore.approximateNumEntries(), is(5L));
+
+            // should add new key8 to new CF
+            rocksDBStore.put(new Bytes("key8".getBytes()), "timestamp+88888888".getBytes());
+            // one delete on old CF, one put on new CF
+            // approx: 3 entries on old CF, 2 in new CF
+            assertThat(rocksDBStore.approximateNumEntries(), is(5L));
+
+            // putIfAbsent()
+
+            // should migrate key4 from old to new CF with old value
+            assertThat(rocksDBStore.putIfAbsent(new Bytes("key4".getBytes()), "timestamp+4444".getBytes()).length, is(8 + 4));
+            // one delete on old CF, one put on new CF
+            // approx: 2 entries on old CF, 3 in new CF
+            assertThat(rocksDBStore.approximateNumEntries(), is(5L));
+
+            // should add new key11 to new CF
+            assertThat(rocksDBStore.putIfAbsent(new Bytes("key11".getBytes()), "timestamp+11111111111".getBytes()), new IsNull<>());
+            // one delete on old CF, one put on new CF
+            // approx: 1 entries on old CF, 4 in new CF
+            assertThat(rocksDBStore.approximateNumEntries(), is(5L));
+
+            // should not delete key5 but migrate to new CF
+            assertThat(rocksDBStore.putIfAbsent(new Bytes("key5".getBytes()), null).length, is(8 + 5));
+            // one delete on old CF, one put on new CF
+            // approx: 0 entries on old CF, 5 in new CF
+            assertThat(rocksDBStore.approximateNumEntries(), is(5L));
+
+            // should be no-op on both CF
+            assertThat(rocksDBStore.putIfAbsent(new Bytes("key12".getBytes()), null), new IsNull<>());
+            // two delete operation, however, only one is counted because old CF count was zero before already
+            // approx: 0 entries on old CF, 4 in new CF
+            assertThat(rocksDBStore.approximateNumEntries(), is(4L));
+
+            // delete()
+
+            // should delete key6 from old and new CF
+            assertThat(rocksDBStore.delete(new Bytes("key6".getBytes())).length, is(8 + 6));
+            // two delete operation, however, only one is counted because old CF count was zero before already
+            // approx: 0 entries on old CF, 3 in new CF
+            assertThat(rocksDBStore.approximateNumEntries(), is(3L));
+
+            iteratorsShouldNotMigrateData();
+            assertThat(rocksDBStore.approximateNumEntries(), is(3L));
+
+            rocksDBStore.close();
+
+            verifyOldAndNewColumnFamily(logCaptureContext);
         }
-
-        // approx: 7 entries on old CF, 0 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(7L));
-
-        // get()
-
-        // should be no-op on both CF
-        assertThat(rocksDBStore.get(new Bytes("unknown".getBytes())), new IsNull<>());
-        // approx: 7 entries on old CF, 0 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(7L));
-
-        // should migrate key1 from old to new CF
-        // must return timestamp plus value, ie, it's not 1 byte but 9 bytes
-        assertThat(rocksDBStore.get(new Bytes("key1".getBytes())).length, is(8 + 1));
-        // one delete on old CF, one put on new CF
-        // approx: 6 entries on old CF, 1 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(7L));
-
-        // put()
-
-        // should migrate key2 from old to new CF with new value
-        rocksDBStore.put(new Bytes("key2".getBytes()), "timestamp+22".getBytes());
-        // one delete on old CF, one put on new CF
-        // approx: 5 entries on old CF, 2 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(7L));
-
-        // should delete key3 from old and new CF
-        rocksDBStore.put(new Bytes("key3".getBytes()), null);
-        // count is off by one, due to two delete operations (even if one does not delete anything)
-        // approx: 4 entries on old CF, 1 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(5L));
-
-        // should add new key8 to new CF
-        rocksDBStore.put(new Bytes("key8".getBytes()), "timestamp+88888888".getBytes());
-        // one delete on old CF, one put on new CF
-        // approx: 3 entries on old CF, 2 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(5L));
-
-        // putIfAbsent()
-
-        // should migrate key4 from old to new CF with old value
-        assertThat(rocksDBStore.putIfAbsent(new Bytes("key4".getBytes()), "timestamp+4444".getBytes()).length, is(8 + 4));
-        // one delete on old CF, one put on new CF
-        // approx: 2 entries on old CF, 3 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(5L));
-
-        // should add new key11 to new CF
-        assertThat(rocksDBStore.putIfAbsent(new Bytes("key11".getBytes()), "timestamp+11111111111".getBytes()), new IsNull<>());
-        // one delete on old CF, one put on new CF
-        // approx: 1 entries on old CF, 4 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(5L));
-
-        // should not delete key5 but migrate to new CF
-        assertThat(rocksDBStore.putIfAbsent(new Bytes("key5".getBytes()), null).length, is(8 + 5));
-        // one delete on old CF, one put on new CF
-        // approx: 0 entries on old CF, 5 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(5L));
-
-        // should be no-op on both CF
-        assertThat(rocksDBStore.putIfAbsent(new Bytes("key12".getBytes()), null), new IsNull<>());
-        // two delete operation, however, only one is counted because old CF count was zero before already
-        // approx: 0 entries on old CF, 4 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(4L));
-
-        // delete()
-
-        // should delete key6 from old and new CF
-        assertThat(rocksDBStore.delete(new Bytes("key6".getBytes())).length, is(8 + 6));
-        // two delete operation, however, only one is counted because old CF count was zero before already
-        // approx: 0 entries on old CF, 3 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
-
-        iteratorsShouldNotMigrateData();
-        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
-
-        rocksDBStore.close();
-
-        verifyOldAndNewColumnFamily();
     }
 
     private void iteratorsShouldNotMigrateData() {
@@ -358,7 +366,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         }
     }
 
-    private void verifyOldAndNewColumnFamily() throws Exception {
+    private void verifyOldAndNewColumnFamily(final LogCaptureContext logCaptureContext) throws Exception {
         final DBOptions dbOptions = new DBOptions();
         final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
 
@@ -370,6 +378,8 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         RocksDB db = null;
         ColumnFamilyHandle noTimestampColumnFamily = null, withTimestampColumnFamily = null;
         boolean errorOccurred = false;
+
+        logCaptureContext.setLatch(2);
         try {
             db = RocksDB.open(
                 dbOptions,
@@ -423,18 +433,16 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         }
 
         // check that still in upgrade mode
-        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
-            rocksDBStore.init((StateStoreContext) context, rocksDBStore);
-
-            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in upgrade mode"));
-        } finally {
-            rocksDBStore.close();
-        }
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        assertThat(logCaptureContext.getMessages(), hasItem("INFO Opening store " + DB_NAME + " in upgrade mode "));
+        rocksDBStore.close();
 
         // clear old CF
         columnFamilies.clear();
         db = null;
         noTimestampColumnFamily = null;
+
+        logCaptureContext.setLatch(2);
         try {
             db = RocksDB.open(
                 dbOptions,
@@ -457,11 +465,8 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         }
 
         // check that still in regular mode
-        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
-            rocksDBStore.init((StateStoreContext) context, rocksDBStore);
-
-            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
-        }
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        assertThat(logCaptureContext.getMessages(), hasItem("INFO Opening store " + DB_NAME + " in regular mode "));
     }
 
     private void prepareOldStore() {

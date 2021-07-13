@@ -306,7 +306,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         node.account.mkdirs(self.PERSISTENT_ROOT)
         prop_file = self.prop_file()
         node.account.create_file(self.CONFIG_FILE, prop_file)
-        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('tools_log4j.properties', log_file=self.LOG_FILE))
+        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('tools_log4j2.properties', log_file=self.LOG_FILE))
 
         self.logger.info("Starting StreamsTest process on " + str(node.account))
         with node.account.monitor_log(self.STDOUT_FILE) as monitor:
@@ -365,7 +365,7 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
         args['version'] = self.KAFKA_STREAMS_VERSION
         args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
 
-        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\";" \
+        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configurationFile=file:%(log4j)s\";" \
               " INCLUDE_TEST_JARS=true UPGRADE_KAFKA_STREAMS_TEST_VERSION=%(version)s" \
               " %(kafka_run_class)s %(streams_class_name)s" \
               " %(config_file)s %(user_test_args1)s" \

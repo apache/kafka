@@ -32,15 +32,15 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.hamcrest.Matchers;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.UUID;
@@ -562,20 +562,16 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list1);
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldNeverWaitIfIdlingIsDisabled",
+                 Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(0L), is(true));
             assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo(
-                        "[test] Ready for processing because max.task.idle.ms is disabled.\n" +
-                            "\tThere may be out-of-order processing for this task as a result.\n" +
-                            "\tBuffered partitions: [topic-1]\n" +
-                            "\tNon-buffered partitions: [topic-2]"
-                    ))
-                ))
+                logCaptureContext.getMessages(),
+                hasItem("TRACE [test] Ready for processing because max.task.idle.ms is disabled.\n" +
+                    "\tThere may be out-of-order processing for this task as a result.\n" +
+                    "\tBuffered partitions: [topic-1]\n" +
+                    "\tNon-buffered partitions: [topic-2] ")
             );
         }
     }
@@ -605,15 +601,13 @@ public class PartitionGroupTest {
         group.addRawRecords(partition2, list2);
 
         assertThat(group.allPartitionsBufferedLocally(), is(true));
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldBeReadyIfAllPartitionsAreBuffered",
+                 Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(0L), is(true));
             assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo("[test] All partitions were buffered locally, so this task is ready for processing."))
-                ))
+                logCaptureContext.getMessages(),
+                hasItem("TRACE [test] All partitions were buffered locally, so this task is ready for processing. ")
             );
         }
     }
@@ -639,15 +633,13 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list1);
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldWaitForFetchesWhenMetadataIsIncomplete",
+                 Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo("[test] Waiting to fetch data for topic-2"))
-                ))
+                logCaptureContext.getMessages(),
+                hasItem("TRACE [test] Waiting to fetch data for topic-2 ")
             );
         }
         lags.put(partition2, OptionalLong.of(0L));
@@ -678,15 +670,13 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldWaitForPollWhenLagIsNonzero",
+                 Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo("[test] Lag for topic-2 is currently 1, but no data is buffered locally. Waiting to buffer some records."))
-                ))
+                logCaptureContext.getMessages(),
+                hasItem("TRACE [test] Lag for topic-2 is currently 1, but no data is buffered locally. Waiting to buffer some records. ")
             );
         }
     }
@@ -712,53 +702,43 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldIdleAsSpecifiedWhenLagIsZero.1",
+                     Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo("[test] Lag for topic-2 is currently 0 and current time is 0. Waiting for new data to be produced for configured idle time 1 (deadline is 1)."))
-                ))
+                logCaptureContext.getMessages(),
+                hasItem("TRACE [test] Lag for topic-2 is currently 0 and current time is 0. Waiting for new data to be produced for configured idle time 1 (deadline is 1). ")
             );
         }
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldIdleAsSpecifiedWhenLagIsZero.2",
+                 Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(1L), is(true));
             assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo(
-                        "[test] Continuing to process although some partitions are empty on the broker.\n" +
-                            "\tThere may be out-of-order processing for this task as a result.\n" +
-                            "\tPartitions with local data: [topic-1].\n" +
-                            "\tPartitions we gave up waiting for, with their corresponding deadlines: {topic-2=1}.\n" +
-                            "\tConfigured max.task.idle.ms: 1.\n" +
-                            "\tCurrent wall-clock time: 1."
-                    ))
-                ))
+                logCaptureContext.getMessages(),
+                hasItem("TRACE [test] Continuing to process although some partitions are empty on the broker.\n" +
+                    "\tThere may be out-of-order processing for this task as a result.\n" +
+                    "\tPartitions with local data: [topic-1].\n" +
+                    "\tPartitions we gave up waiting for, with their corresponding deadlines: {topic-2=1}.\n" +
+                    "\tConfigured max.task.idle.ms: 1.\n" +
+                    "\tCurrent wall-clock time: 1. ")
             );
         }
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#shouldIdleAsSpecifiedWhenLagIsZero.3",
+                 Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(2L), is(true));
             assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo(
-                        "[test] Continuing to process although some partitions are empty on the broker.\n" +
-                            "\tThere may be out-of-order processing for this task as a result.\n" +
-                            "\tPartitions with local data: [topic-1].\n" +
-                            "\tPartitions we gave up waiting for, with their corresponding deadlines: {topic-2=1}.\n" +
-                            "\tConfigured max.task.idle.ms: 1.\n" +
-                            "\tCurrent wall-clock time: 2."
-                    ))
-                ))
+                logCaptureContext.getMessages(),
+                hasItem("TRACE [test] Continuing to process although some partitions are empty on the broker.\n" +
+                    "\tThere may be out-of-order processing for this task as a result.\n" +
+                    "\tPartitions with local data: [topic-1].\n" +
+                    "\tPartitions we gave up waiting for, with their corresponding deadlines: {topic-2=1}.\n" +
+                    "\tConfigured max.task.idle.ms: 1.\n" +
+                    "\tCurrent wall-clock time: 2. ")
             );
         }
     }

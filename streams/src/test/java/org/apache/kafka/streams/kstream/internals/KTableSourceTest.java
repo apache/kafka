@@ -33,10 +33,9 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender.Event;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
+import org.apache.kafka.test.LogCaptureContext;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -138,7 +137,8 @@ public class KTableSourceTest {
         final String topic = "topic";
         builder.table(topic, stringConsumed);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(this.getClass().getName() + "#kTableShouldLogAndMeterOnSkippedRecords");
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -152,11 +152,8 @@ public class KTableSourceTest {
             inputTopic.pipeInput(null, "value");
 
             assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
+                logCaptureContext.getMessages(),
+                hasItem("WARN Skipping record due to null key. topic=[topic] partition=[0] offset=[0] ")
             );
         }
     }

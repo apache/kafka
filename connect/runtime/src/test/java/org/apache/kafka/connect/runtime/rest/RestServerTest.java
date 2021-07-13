@@ -63,7 +63,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
-@PowerMockIgnore({"javax.net.ssl.*", "javax.security.*", "javax.crypto.*"})
+@PowerMockIgnore({"javax.net.ssl.*", "javax.security.*", "javax.crypto.*", "javax.management.*"})
 public class RestServerTest {
     @MockStrict
     private Herder herder;

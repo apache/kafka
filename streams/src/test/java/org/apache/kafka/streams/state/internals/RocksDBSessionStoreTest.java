@@ -31,7 +31,6 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.junit.Assert.assertEquals;
 
-
 public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
 
     private static final String STORE_NAME = "rocksDB session store";

@@ -22,7 +22,7 @@ import javax.management.InstanceAlreadyExistsException
 import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.{Exit, LogCaptureAppender, Logging, TestUtils}
+import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.acl.AclOperation._
@@ -34,9 +34,12 @@ import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{AppInfoParser, SecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.log4j.Level
+import org.apache.logging.log4j.Level
+
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+
+import unit.kafka.utils.LogCaptureContext
 
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
@@ -199,19 +202,18 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
     createServer(Some(adminClientConfig))
 
-    val appender = LogCaptureAppender.createAndRegister()
-    val previousLevel = LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], Level.WARN)
+    val logCaptureContext = LogCaptureContext(
+      classOf[AppInfoParser].getName, Map(classOf[AppInfoParser].getName -> "WARN")
+    )
     try {
         testAclCli(adminArgs)
+      val warning = logCaptureContext.getMessages.find(e => e.getLevel == Level.WARN &&
+        e.getThrown != null &&
+        e.getThrown.getClass.getName.equals(classOf[InstanceAlreadyExistsException].getName))
+      assertFalse(warning.isDefined, "There should be no warnings about multiple registration of mbeans")
     } finally {
-      LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], previousLevel)
-      LogCaptureAppender.unregister(appender)
+      logCaptureContext.close
     }
-    val warning = appender.getMessages.find(e => e.getLevel == Level.WARN &&
-      e.getThrowableInformation != null &&
-      e.getThrowableInformation.getThrowable.getClass.getName == classOf[InstanceAlreadyExistsException].getName)
-    assertFalse(warning.isDefined, "There should be no warnings about multiple registration of mbeans")
-
   }
 
   private def testProducerConsumerCli(cmdArgs: Array[String]): Unit = {

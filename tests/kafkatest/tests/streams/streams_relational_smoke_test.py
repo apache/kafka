@@ -32,10 +32,10 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
         self.mode = mode
         self.nodeId = nodeId
         self.processing_guarantee = processing_guarantee
-        self.log4j_template = 'log4j_template.properties'
+        self.log4j_template = 'log4j2_template.properties'
 
     def start_cmd(self, node):
-        return "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+        return "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configurationFile=file:%(log4j)s\"; " \
                "INCLUDE_TEST_JARS=true %(kafka_run_class)s org.apache.kafka.streams.tests.RelationalSmokeTest " \
                " %(mode)s %(kafka)s %(nodeId)s %(processing_guarantee)s %(state_dir)s" \
                " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % {
@@ -54,7 +54,7 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
     def start_node(self, node):
         node.account.mkdirs(self.PERSISTENT_ROOT)
         node.account.create_file(self.LOG4J_CONFIG_FILE,
-                                 self.render("log4j_template.properties", log_file=self.LOG_FILE))
+                                 self.render("log4j2_template.properties", log_file=self.LOG_FILE))
 
         self.logger.info("Starting process on " + str(node.account))
         node.account.ssh(self.start_cmd(node))
