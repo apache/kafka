@@ -227,6 +227,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
         case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
         case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
+        case ApiKeys.ALTER_REPLICA_STATE => handleAlterReplicaStateRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3249,6 +3250,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  def handleAlterReplicaStateRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
+    val alterReplicaStateRequest = request.body[AlterReplicaStateRequest]
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    if (!zkSupport.controller.isActive) {
+      requestHelper.sendResponseExemptThrottle(request, alterReplicaStateRequest.getErrorResponse(
+        AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.NOT_CONTROLLER.exception))
+    } else {
+      zkSupport.controller.alterReplicaState(alterReplicaStateRequest,
+        alterReplicaStateRequestData => requestHelper.sendResponseExemptThrottle(request,
+          new AlterReplicaStateResponse(alterReplicaStateRequestData)
+        )
+      )
+    }
+  }
+
   def handleDescribeCluster(request: RequestChannel.Request): Unit = {
     val describeClusterRequest = request.body[DescribeClusterRequest]
 
@@ -3269,7 +3287,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setThrottleTimeMs(requestThrottleMs)
         .setClusterId(clusterId)
         .setControllerId(controllerId)
-        .setClusterAuthorizedOperations(clusterAuthorizedOperations);
+        .setClusterAuthorizedOperations(clusterAuthorizedOperations)
 
 
       brokers.foreach { broker =>

@@ -16,10 +16,6 @@
  */
 package kafka.server
 
-import java.io.File
-import java.util.Collections
-import java.util.concurrent.{ExecutionException, TimeUnit}
-
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll}
@@ -32,6 +28,9 @@ import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
+import java.io.File
+import java.util.Collections
+import java.util.concurrent.{ExecutionException, TimeUnit}
 import scala.jdk.CollectionConverters._
 
 /**
@@ -159,7 +158,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
-
+    this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     val producer = createProducer()
 
     val partition = new TopicPartition(topic, 0)
@@ -177,11 +176,12 @@ class LogDirFailureTest extends IntegrationTestHarness {
     TestUtils.waitUntilTrue(() => {
       // ProduceResponse may contain KafkaStorageException and trigger metadata update
       producer.send(record)
-      producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id() != leaderServerId
-    }, "Expected new leader for the partition", 6000L)
+      val partitionInfo = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get
+      partitionInfo.leader() != null && partitionInfo.leader().id() != leaderServerId
+    }, "Expected new leader for the partition")
 
     // Block on send to ensure that new leader accepts a message.
-    producer.send(record).get(6000L, TimeUnit.MILLISECONDS)
+    producer.send(record).get(15000L, TimeUnit.MILLISECONDS)
 
     // Consumer should receive some messages
     TestUtils.pollUntilAtLeastNumRecords(consumer, 1)

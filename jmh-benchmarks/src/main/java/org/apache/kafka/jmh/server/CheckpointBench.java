@@ -23,6 +23,7 @@ import kafka.log.LogManager;
 import kafka.server.AlterIsrManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
+import kafka.server.LogDirEventManager;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
@@ -88,6 +89,7 @@ public class CheckpointBench {
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
     private AlterIsrManager alterIsrManager;
+    private LogDirEventManager logDirEventManagerManager;
 
 
     @SuppressWarnings("deprecation")
@@ -117,6 +119,7 @@ public class CheckpointBench {
                         this.time, "");
 
         this.alterIsrManager = TestUtils.createAlterIsrManager();
+        this.logDirEventManagerManager = TestUtils.createMockLogDirEventManager();
         this.replicaManager = new ReplicaManager(
                 this.brokerProperties,
                 this.metrics,
@@ -130,7 +133,8 @@ public class CheckpointBench {
                 metadataCache,
                 this.failureChannel,
                 alterIsrManager,
-                Option.empty());
+                Option.empty(),
+                logDirEventManagerManager);
         replicaManager.startup();
 
         List<TopicPartition> topicPartitions = new ArrayList<>();

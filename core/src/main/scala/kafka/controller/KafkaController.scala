@@ -21,36 +21,35 @@ import java.util.concurrent.TimeUnit
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
-import kafka.controller.KafkaController.AlterIsrCallback
-import kafka.cluster.Broker
-import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, UpdateFeaturesCallback}
+import kafka.controller.KafkaController.{AlterIsrCallback, AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, LogDirChangeCallback, UpdateFeaturesCallback}
+import kafka.controller.{ReplicaState => CReplicaState}
 import kafka.coordinator.transaction.ZkProducerIdManager
+import kafka.cluster.Broker
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
-import kafka.utils._
 import kafka.utils.Implicits._
+import kafka.utils._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zk.{FeatureZNodeStatus, _}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
-import org.apache.kafka.common.ElectionType
-import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{ElectionType, KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
-import org.apache.kafka.common.message.{AllocateProducerIdsRequestData, AllocateProducerIdsResponseData, AlterIsrRequestData, AlterIsrResponseData, UpdateFeaturesRequestData}
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
+import org.apache.kafka.common.message.{AllocateProducerIdsRequestData, AllocateProducerIdsResponseData, AlterIsrRequestData, AlterIsrResponseData, AlterReplicaStateResponseData, UpdateFeaturesRequestData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
+import org.apache.kafka.common.requests.{AbstractControlRequest, AlterReplicaStateRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.common.ProducerIdsBlock
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
-import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
+
 
 sealed trait ElectionTrigger
 final case object AutoTriggered extends ElectionTrigger
@@ -66,6 +65,7 @@ object KafkaController extends Logging {
   type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
   type AlterIsrCallback = Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors] => Unit
   type UpdateFeaturesCallback = Either[ApiError, Map[String, ApiError]] => Unit
+  type LogDirChangeCallback = Either[Map[TopicPartition, Either[Errors, CReplicaState]], Errors] => Unit
 }
 
 class KafkaController(val config: KafkaConfig,
@@ -2436,6 +2436,117 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
+  def alterReplicaState(alterReplicaStateRequest: AlterReplicaStateRequest,
+                        callback: AlterReplicaStateResponseData => Unit): Unit = {
+    val alterReplicaStateRequestDataData = alterReplicaStateRequest.data()
+    val newState = alterReplicaStateRequestDataData.newState()
+    val reason = alterReplicaStateRequestDataData.reason()
+    val replicasToAlterState = mutable.Set[TopicPartition]()
+    alterReplicaStateRequestDataData.topics.forEach { topicReq =>
+      topicReq.partitions.forEach { partitionReq =>
+        val tp = new TopicPartition(topicReq.name, partitionReq.partitionIndex)
+        replicasToAlterState.add(tp)
+      }
+    }
+
+    def responseCallback(results: Either[Map[TopicPartition, Either[Errors, CReplicaState]], Errors]): Unit = {
+      val resp = new AlterReplicaStateResponseData()
+      results match {
+        case Right(error) =>
+          resp.setErrorCode(error.code)
+        case Left(partitionResults) =>
+          resp.setTopics(new util.ArrayList())
+          partitionResults
+            .groupBy { case (tp, _) => tp.topic }   // Group by topic
+            .foreach { case (topic, partitions) =>
+
+              val topicResp = new AlterReplicaStateResponseData.TopicData()
+                .setName(topic)
+                .setPartitions(new util.ArrayList())
+              resp.topics.add(topicResp)
+              partitions.foreach { case (tp, errorOrPartition) =>
+                // Add each partition part to the response (partition or error)
+                errorOrPartition match {
+                  case Left(error) => topicResp.partitions.add(
+                    new AlterReplicaStateResponseData.PartitionData()
+                      .setPartitionIndex(tp.partition)
+                      .setErrorCode(error.code))
+                  case Right(_) => topicResp.partitions.add(
+                    new AlterReplicaStateResponseData.PartitionData()
+                      .setPartitionIndex(tp.partition))
+                }
+              }
+            }
+      }
+      callback.apply(resp)
+    }
+
+    eventManager.put(AlterReplicaStateReceived(alterReplicaStateRequestDataData.brokerId,
+      alterReplicaStateRequestDataData.brokerEpoch, replicasToAlterState, newState, reason, responseCallback))
+  }
+
+  def processAlterReplicaState(brokerId: Int, brokerEpoch: Long,
+                               topicPartitionsToAlterState: Set[TopicPartition], newStateByte: Byte, reason: String,
+                               callback: LogDirChangeCallback): Unit = {
+    if (!isActive) {
+      callback.apply(Right(Errors.NOT_CONTROLLER))
+      return
+    }
+
+    val newState = newStateByte match {
+      case OfflineReplica.state => OfflineReplica
+      case _ =>
+        callback.apply(Right(Errors.UNKNOWN_REPLICA_STATE))
+        info(s"Ignoring AlterReplicaState due to unknown replica state $newStateByte")
+        return
+    }
+
+    val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(brokerId)
+    if (brokerEpochOpt.isEmpty) {
+      info(s"Ignoring AlterReplicaState due to unknown broker $brokerId")
+      callback.apply(Right(Errors.STALE_BROKER_EPOCH))
+      return
+    }
+
+    if (!brokerEpochOpt.contains(brokerEpoch)) {
+      info(s"Ignoring AlterReplicaState due to stale broker epoch $brokerEpoch for broker $brokerId")
+      callback.apply(Right(Errors.STALE_BROKER_EPOCH))
+      return
+    }
+
+    val response = try {
+      val partitionResponses = mutable.HashMap[TopicPartition, Either[Errors, CReplicaState]]()
+
+      debug(s"Updating Replica State for partitions: $topicPartitionsToAlterState to $newState on broker: $brokerId due to $reason.")
+
+      val replicasToAlterState = topicPartitionsToAlterState.flatMap { tp =>
+        val replicaToAlterState = PartitionAndReplica(new TopicPartition(tp.topic, tp.partition), brokerId)
+        controllerContext.replicaStates.get(replicaToAlterState) match {
+          case Some(replicaState) =>
+            partitionResponses(tp) = Right(newState)
+            // If a replica is already in the desired state, just return it
+            if (replicaState == newState) {
+              None
+            } else {
+              Some(replicaToAlterState)
+            }
+
+          case None =>
+            partitionResponses(tp) = Left(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+            None
+        }
+      }
+
+      replicaStateMachine.handleStateChanges(replicasToAlterState.toSeq, OnlineReplica)
+      Left(partitionResponses)
+    } catch {
+      case e: Throwable =>
+        error(s"Error when processing AlterReplicaState for partitions: ${topicPartitionsToAlterState.toSeq}", e)
+        Right(Errors.UNKNOWN_SERVER_ERROR)
+    }
+    callback(response)
+  }
+
   private def processControllerChange(): Unit = {
     maybeResign()
   }
@@ -2516,6 +2627,8 @@ class KafkaController(val config: KafkaConfig,
           processAlterIsr(brokerId, brokerEpoch, isrsToAlter, callback)
         case AllocateProducerIds(brokerId, brokerEpoch, callback) =>
           processAllocateProducerIds(brokerId, brokerEpoch, callback)
+        case AlterReplicaStateReceived(brokerId, brokerEpoch, replicasToAlterState, newState, reason, responseCallback) =>
+          processAlterReplicaState(brokerId, brokerEpoch, replicasToAlterState, newState, reason, responseCallback)
         case Startup =>
           processStartup()
       }
@@ -2776,6 +2889,13 @@ case object IsrChangeNotification extends ControllerEvent {
 case class AlterIsrReceived(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr],
                             callback: AlterIsrCallback) extends ControllerEvent {
   override def state: ControllerState = ControllerState.IsrChange
+  override def preempt(): Unit = {}
+}
+
+case class AlterReplicaStateReceived(brokerId: Int, brokerEpoch: Long, replicasToAlterState: Set[TopicPartition],
+                                     newState: Byte, reason: String,
+                                     callback: LogDirChangeCallback) extends ControllerEvent {
+  override def state: ControllerState = ControllerState.LogDirChange
   override def preempt(): Unit = {}
 }
 

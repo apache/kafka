@@ -212,7 +212,8 @@ public class ReplicaFetcherThreadBenchmark {
         metadataCache.updateMetadata(0, updateMetadataRequest);
 
         replicaManager = new ReplicaManager(config, metrics, new MockTime(), Option.apply(Mockito.mock(KafkaZkClient.class)), scheduler, logManager, new AtomicBoolean(false),
-                Mockito.mock(QuotaFactory.QuotaManagers.class), brokerTopicStats, metadataCache, new LogDirFailureChannel(logDirs.size()), TestUtils.createAlterIsrManager(), Option.empty());
+                Mockito.mock(QuotaFactory.QuotaManagers.class), brokerTopicStats, metadataCache, new LogDirFailureChannel(logDirs.size()), TestUtils.createAlterIsrManager(),
+                Option.empty(), TestUtils.createMockLogDirEventManager());
         fetcher = new ReplicaFetcherBenchThread(config, replicaManager, pool);
         fetcher.addPartitions(initialFetchStates);
         // force a pass to move partitions to fetching state. We do this in the setup phase

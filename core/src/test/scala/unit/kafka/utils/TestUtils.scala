@@ -1157,6 +1157,17 @@ object TestUtils extends Logging {
     new MockIsrChangeListener()
   }
 
+  class MockLogDirEventManager extends LogDirEventManager {
+    override def start(): Unit = {}
+    override def pendingAlterReplicaStateItemCount(): Int = 0
+    override def handleAlterReplicaStateChanges(logDirEventItem: AlterReplicaStateItem): Unit = {}
+    override def shutdown(): Unit = {}
+  }
+
+  def createMockLogDirEventManager(): MockLogDirEventManager = {
+    new MockLogDirEventManager
+  }
+
   def produceMessages(servers: Seq[KafkaServer],
                       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
                       acks: Int = -1): Unit = {

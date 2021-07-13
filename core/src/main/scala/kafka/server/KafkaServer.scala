@@ -138,6 +138,8 @@ class KafkaServer(
 
   var alterIsrManager: AlterIsrManager = null
 
+  var logDirEventManager: LogDirEventManager = null
+
   var kafkaScheduler: KafkaScheduler = null
 
   var metadataCache: ZkMetadataCache = null
@@ -308,6 +310,21 @@ class KafkaServer(
         }
         alterIsrManager.start()
 
+        val alterReplicaStateChannelManager = new BrokerToControllerChannelManagerImpl(
+          controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
+          time = time,
+          metrics = metrics,
+          config = config,
+          channelName = "alterReplicaStateChannel",
+          threadNamePrefix = threadNamePrefix,
+          retryTimeoutMs = Long.MaxValue)
+        if (config.interBrokerProtocolVersion >= kafka.api.KAFKA_3_0_IV1) {
+          alterReplicaStateChannelManager.start()
+        }
+
+        logDirEventManager = new LogDirEventManagerImpl(alterReplicaStateChannelManager, kafkaScheduler, time,
+          config.brokerId, () => kafkaController.brokerEpoch)
+
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 
@@ -435,7 +452,7 @@ class KafkaServer(
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
     new ReplicaManager(config, metrics, time, Some(zkClient), kafkaScheduler, logManager, isShuttingDown, quotaManagers,
-      brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager)
+      brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager, logDirEventManager = logDirEventManager)
   }
 
   private def initZkClient(time: Time): Unit = {
@@ -692,6 +709,10 @@ class KafkaServer(
 
         if (clientToControllerChannelManager != null)
           CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
+
+        if (logDirEventManager != null) {
+          CoreUtils.swallow(logDirEventManager.shutdown(), this)
+        }
 
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)
