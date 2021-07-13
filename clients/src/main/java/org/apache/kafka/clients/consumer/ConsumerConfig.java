@@ -121,8 +121,8 @@ public class ConsumerConfig extends AbstractConfig {
         "<li><code>org.apache.kafka.clients.consumer.CooperativeStickyAssignor</code>: Follows the same StickyAssignor " +
         "logic, but allows for cooperative rebalancing.</li>" +
         "</ul>" +
-        "<p>The default assignor is [RangeAssignor, CooperativeStickyAssignor], which will use RangeAssignor to do assignment, " +
-        "but just needs 1 rolling bounce to upgrade to CooperativeStickyAssignor</p>" +
+        "<p>The default assignor is [RangeAssignor, CooperativeStickyAssignor], which will use the RangeAssignor by default, " +
+        "but allows upgrading to the CooperativeStickyAssignor with just a single rolling bounce that removes the RangeAssignor from the list.</p>" +
         "<p>Implementing the <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> " +
         "interface allows you to plug in a custom assignment strategy.</p>";
 
