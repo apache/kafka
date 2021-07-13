@@ -69,6 +69,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -1157,6 +1158,17 @@ public final class Utils {
         List<T> res = new ArrayList<>();
         while (iterator.hasNext())
             res.add(iterator.next());
+        return res;
+    }
+
+    public static <T> List<T> toList(Iterator<T> iterator, Predicate<T> predicate) {
+        List<T> res = new ArrayList<>();
+        while (iterator.hasNext()) {
+            T e = iterator.next();
+            if (predicate.test(e)) {
+                res.add(e);
+            }
+        }
         return res;
     }
 

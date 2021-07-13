@@ -134,24 +134,30 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     private KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean forward) {
-        if (from.compareTo(to) > 0) {
+        if (from == null && to == null) {
+            return getKeyValueIterator(map.keySet(), forward);
+        } else if (from == null) {
+            return getKeyValueIterator(map.headMap(to, true).keySet(), forward);
+        } else if (to == null) {
+            return getKeyValueIterator(map.tailMap(from, true).keySet(), forward);
+        } else if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
-                "This may be due to range arguments set in the wrong order, " +
-                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
+                    "This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                    "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
+        } else {
+            return getKeyValueIterator(map.subMap(from, true, to, true).keySet(), forward);
         }
+    }
 
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet(), forward));
+    private KeyValueIterator<Bytes, byte[]> getKeyValueIterator(final Set<Bytes> rangeSet, final boolean forward) {
+        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator(rangeSet, forward));
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.keySet(), true));
+        return range(null, null);
     }
 
     @Override
