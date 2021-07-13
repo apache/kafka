@@ -18,12 +18,10 @@
 package kafka.server
 
 import kafka.admin.BrokerMetadata
-
-import kafka.server.metadata.RaftMetadataCache
+import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 import org.apache.kafka.common.message.{MetadataResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.requests.UpdateMetadataRequest
 
 trait MetadataCache {
 
@@ -79,13 +77,6 @@ trait MetadataCache {
 
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster
 
-  /**
-   * Update the metadata cache with a given UpdateMetadataRequest.
-   *
-   * @return  The deleted topics from the given UpdateMetadataRequest.
-   */
-  def updateMetadata(correlationId: Int, request: UpdateMetadataRequest): collection.Seq[TopicPartition]
-
   def contains(topic: String): Boolean
 
   def contains(tp: TopicPartition): Boolean
@@ -96,7 +87,7 @@ object MetadataCache {
     new ZkMetadataCache(brokerId)
   }
 
-  def raftMetadataCache(brokerId: Int): RaftMetadataCache = {
-    new RaftMetadataCache(brokerId)
+  def kRaftMetadataCache(brokerId: Int): KRaftMetadataCache = {
+    new KRaftMetadataCache(brokerId)
   }
 }

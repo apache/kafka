@@ -159,7 +159,7 @@ public class TestKitNodes {
             BrokerNode node = entry.getValue();
             newBrokerNodes.put(entry.getKey(), new BrokerNode(node.id(),
                 node.incarnationId(), absolutize(baseDirectory, node.metadataDirectory()),
-                absolutize(baseDirectory, node.logDataDirectories())));
+                absolutize(baseDirectory, node.logDataDirectories()), node.propertyOverrides()));
         }
         return new TestKitNodes(clusterId, newControllerNodes, newBrokerNodes);
     }

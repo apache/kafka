@@ -87,12 +87,14 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         List<CoordinatorKey> unmapped = new ArrayList<>();
 
-        if (response.error() != Errors.NONE) {
-            handleError(groupId, response.error(), failed, unmapped);
+        Errors responseError = response.groupLevelError(groupId.idValue);
+        if (responseError != Errors.NONE) {
+            handleError(groupId, responseError, failed, unmapped);
         } else {
             final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
-            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
-                response.responseData().entrySet()) {
+            Map<TopicPartition, OffsetFetchResponse.PartitionData> partitionDataMap =
+                response.partitionDataMap(groupId.idValue);
+            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : partitionDataMap.entrySet()) {
                 final TopicPartition topicPartition = entry.getKey();
                 OffsetFetchResponse.PartitionData partitionData = entry.getValue();
                 final Errors error = partitionData.error;
