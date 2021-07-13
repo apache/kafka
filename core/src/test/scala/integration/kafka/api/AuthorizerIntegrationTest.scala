@@ -54,7 +54,8 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
-import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
+import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, Uuid, requests}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
@@ -76,7 +77,7 @@ object AuthorizerIntegrationTest {
   val BrokerListenerName = "BROKER"
   val ClientListenerName = "CLIENT"
 
-  class PrincipalBuilder extends KafkaPrincipalBuilder {
+  class PrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       context.listenerName match {
         case BrokerListenerName => BrokerPrincipal
