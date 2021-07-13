@@ -1009,7 +1009,7 @@ project(':core') {
     from(project.file("$rootDir/config")) { into "config/" }
     from(project.file("$rootDir/licenses")) { into "licenses/" }
     from "$rootDir/LICENSE-binary" rename {String filename -> filename.replace("-binary", "")}
-    from "$rootDir/NOTICE"
+    from "$rootDir/NOTICE-binary" rename {String filename -> filename.replace("-binary", "")}
     from(configurations.runtimeClasspath) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
