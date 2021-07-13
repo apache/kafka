@@ -157,7 +157,6 @@ public class KafkaStreams implements AutoCloseable {
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
-    private final QueryableStoreProvider queryableStoreProvider;
     private final Admin adminClient;
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology taskTopology;
@@ -172,6 +171,7 @@ public class KafkaStreams implements AutoCloseable {
     private final InternalTopologyBuilder internalTopologyBuilder;
 
     GlobalStreamThread globalStreamThread;
+    private QueryableStoreProvider queryableStoreProvider;
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
     private boolean oldHandler;
@@ -998,6 +998,7 @@ public class KafkaStreams implements AutoCloseable {
                 // Creating thread should hold the lock in order to avoid duplicate thread index.
                 // If the duplicate index happen, the metadata of thread may be duplicate too.
                 streamThread = createAndAddStreamThread(cacheSizePerThread, threadIdx);
+                queryableStoreProvider = queryableStoreProvider.newWithStoreProviders(storeProviders);
             }
 
             synchronized (stateLock) {
