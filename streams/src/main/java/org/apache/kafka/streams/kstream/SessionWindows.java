@@ -140,7 +140,7 @@ public final class SessionWindows {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
         final long inactivityGapMs = validateMillisecondDuration(inactivityGap, msgPrefix);
 
-        return new SessionWindows(inactivityGapMs, DEPRECATED_OLD_24_HR_GRACE_PERIOD);
+        return new SessionWindows(inactivityGapMs, Math.max(DEPRECATED_OLD_24_HR_GRACE_PERIOD - inactivityGapMs, 0));
     }
 
     /**
