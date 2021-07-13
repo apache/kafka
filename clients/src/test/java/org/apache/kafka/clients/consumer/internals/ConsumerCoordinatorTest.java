@@ -101,6 +101,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
@@ -2789,7 +2790,8 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testConsumerRejoinAfterRebalance() {
+    public void testConsumerPrepareJoinAndRejoinAfterFailedRebalance() {
+        final List<TopicPartition> partitions = singletonList(t1p);
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"))) {
             coordinator.ensureActiveGroup();
 
@@ -2824,7 +2826,7 @@ public class ConsumerCoordinatorTest {
 
             assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
 
-            client.respond(syncGroupResponse(singletonList(t1p), Errors.NONE));
+            client.respond(syncGroupResponse(partitions, Errors.NONE));
 
             // Join future should succeed but generation already cleared so result of join is false.
             res = coordinator.joinGroupIfNeeded(time.timer(1));
@@ -2839,7 +2841,7 @@ public class ConsumerCoordinatorTest {
 
             // Retry join should then succeed
             client.respond(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
-            client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+            client.prepareResponse(syncGroupResponse(partitions, Errors.NONE));
 
             res = coordinator.joinGroupIfNeeded(time.timer(3000));
 
@@ -2847,6 +2849,9 @@ public class ConsumerCoordinatorTest {
             assertFalse(client.hasPendingResponses());
             assertFalse(client.hasInFlightRequests());
         }
+        Collection<TopicPartition> lost = getLost(partitions);
+        assertEquals(lost.isEmpty() ? 0 : 1, rebalanceListener.lostCount);
+        assertEquals(lost.isEmpty() ? null : lost, rebalanceListener.lost);
     }
 
     @Test
@@ -3031,6 +3036,17 @@ public class ConsumerCoordinatorTest {
                 final List<TopicPartition> revoked = new ArrayList<>(owned);
                 revoked.removeAll(assigned);
                 return toSet(revoked);
+            default:
+                throw new IllegalStateException("This should not happen");
+        }
+    }
+
+    private Collection<TopicPartition> getLost(final List<TopicPartition> owned) {
+        switch (protocol) {
+            case EAGER:
+                return emptySet();
+            case COOPERATIVE:
+                return toSet(owned);
             default:
                 throw new IllegalStateException("This should not happen");
         }
