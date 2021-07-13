@@ -114,15 +114,17 @@ public class ConsumerConfig extends AbstractConfig {
         "ordered by preference, of supported partition assignment strategies that the client will use to distribute " +
         "partition ownership amongst consumer instances when group management is used. Available options are:" +
         "<ul>" +
-        "<li><code>org.apache.kafka.clients.consumer.RangeAssignor</code>: The default assignor, which works on a per-topic basis.</li>" +
+        "<li><code>org.apache.kafka.clients.consumer.RangeAssignor</code>: Assigns partitions on a per-topic basis.</li>" +
         "<li><code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>: Assigns partitions to consumers in a round-robin fashion.</li>" +
         "<li><code>org.apache.kafka.clients.consumer.StickyAssignor</code>: Guarantees an assignment that is " +
         "maximally balanced while preserving as many existing partition assignments as possible.</li>" +
         "<li><code>org.apache.kafka.clients.consumer.CooperativeStickyAssignor</code>: Follows the same StickyAssignor " +
         "logic, but allows for cooperative rebalancing.</li>" +
         "</ul>" +
+        "<p>The default assignor is [RangeAssignor, CooperativeStickyAssignor], which will use the RangeAssignor by default, " +
+        "but allows upgrading to the CooperativeStickyAssignor with just a single rolling bounce that removes the RangeAssignor from the list.</p>" +
         "<p>Implementing the <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> " +
-        "interface allows you to plug in a custom assignment strategy.";
+        "interface allows you to plug in a custom assignment strategy.</p>";
 
     /**
      * <code>auto.offset.reset</code>
