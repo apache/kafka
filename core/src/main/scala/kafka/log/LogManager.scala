@@ -312,15 +312,7 @@ class LogManager(logDirs: Seq[File],
       val logDirAbsolutePath = dir.getAbsolutePath
       var hadCleanShutdown: Boolean = false
       try {
-        val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir, new ThreadFactory {
-          private val factory = Executors.defaultThreadFactory()
-          private val threadNumber = new AtomicInteger(1)
-          override def newThread(r: Runnable): Thread = {
-            val thread = factory.newThread(r)
-            thread.setName(s"log-recovery($logDirAbsolutePath, ${threadNumber.getAndIncrement()})")
-            thread
-          }
-        })
+        val pool = logDirExecutor(logDirAbsolutePath, "log-recovery")
         threadPools.append(pool)
 
         val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
@@ -404,6 +396,18 @@ class LogManager(logDirs: Seq[File],
     }
 
     info(s"Loaded $numTotalLogs logs in ${time.hiResClockMs() - startMs}ms.")
+  }
+
+  private def logDirExecutor(logDirAbsolutePath: String, threadNamePrefix: String): ExecutorService = {
+    Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir, new ThreadFactory {
+      private val factory = Executors.defaultThreadFactory()
+
+      override def newThread(r: Runnable): Thread = {
+        val thread = factory.newThread(r)
+        thread.setName(s"$threadNamePrefix-$logDirAbsolutePath")
+        thread
+      }
+    })
   }
 
   /**
@@ -492,7 +496,7 @@ class LogManager(logDirs: Seq[File],
     for (dir <- liveLogDirs) {
       debug(s"Flushing and closing logs at $dir")
 
-      val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
+      val pool = logDirExecutor(dir.getAbsolutePath, "log-closing")
       threadPools.append(pool)
 
       val logs = logsInDir(localLogsByDir, dir).values
