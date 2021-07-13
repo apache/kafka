@@ -28,7 +28,7 @@ import kafka.server.metadata.ConfigRepository
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
 
 import scala.jdk.CollectionConverters._
@@ -312,7 +312,8 @@ class LogManager(logDirs: Seq[File],
       val logDirAbsolutePath = dir.getAbsolutePath
       var hadCleanShutdown: Boolean = false
       try {
-        val pool = logDirExecutor(logDirAbsolutePath, "log-recovery")
+        val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir,
+          KafkaThread.nonDaemon(s"log-recovery-$logDirAbsolutePath", _))
         threadPools.append(pool)
 
         val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
@@ -396,18 +397,6 @@ class LogManager(logDirs: Seq[File],
     }
 
     info(s"Loaded $numTotalLogs logs in ${time.hiResClockMs() - startMs}ms.")
-  }
-
-  private def logDirExecutor(logDirAbsolutePath: String, threadNamePrefix: String): ExecutorService = {
-    Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir, new ThreadFactory {
-      private val factory = Executors.defaultThreadFactory()
-
-      override def newThread(r: Runnable): Thread = {
-        val thread = factory.newThread(r)
-        thread.setName(s"$threadNamePrefix-$logDirAbsolutePath")
-        thread
-      }
-    })
   }
 
   /**
@@ -496,7 +485,8 @@ class LogManager(logDirs: Seq[File],
     for (dir <- liveLogDirs) {
       debug(s"Flushing and closing logs at $dir")
 
-      val pool = logDirExecutor(dir.getAbsolutePath, "log-closing")
+      val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir,
+        KafkaThread.nonDaemon(s"log-closing-${dir.getAbsolutePath}", _))
       threadPools.append(pool)
 
       val logs = logsInDir(localLogsByDir, dir).values
