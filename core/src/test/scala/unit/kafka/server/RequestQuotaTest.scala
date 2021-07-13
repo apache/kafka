@@ -320,7 +320,7 @@ class RequestQuotaTest extends BaseRequestTest {
               )
           )
         case ApiKeys.OFFSET_FETCH =>
-          new OffsetFetchRequest.Builder("test-group", false, List(tp).asJava, false)
+          new OffsetFetchRequest.Builder(Map("test-group"-> List(tp).asJava).asJava, false, false)
 
         case ApiKeys.FIND_COORDINATOR =>
           new FindCoordinatorRequest.Builder(
