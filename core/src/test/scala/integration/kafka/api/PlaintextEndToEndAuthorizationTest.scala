@@ -19,6 +19,7 @@ package kafka.api
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 import org.apache.kafka.common.errors.TopicAuthorizationException
@@ -30,7 +31,7 @@ object PlaintextEndToEndAuthorizationTest {
   private var clientListenerName = None: Option[String]
   @volatile
   private var serverListenerName = None: Option[String]
-  class TestClientPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestClientPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       clientListenerName = Some(context.listenerName)
       context match {
@@ -42,7 +43,7 @@ object PlaintextEndToEndAuthorizationTest {
     }
   }
 
-  class TestServerPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestServerPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       serverListenerName = Some(context.listenerName)
       context match {
