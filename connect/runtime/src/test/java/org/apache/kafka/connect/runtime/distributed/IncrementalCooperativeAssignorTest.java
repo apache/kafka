@@ -127,6 +127,14 @@ public class IncrementalCooperativeAssignorTest {
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 1 worker and 2 connectors configured but not yet assigned
+        //
+        // note: the assigned/revoked Connectors/tasks might be different, but the amount should be the same
+        // assignment after this phase:
+        // W1: assignedConnectors:[C0, C1], assignedTasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0, C1], tasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1, T1-2, T1-3]
         expectGeneration();
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
         ++rebalanceNum;
@@ -137,6 +145,16 @@ public class IncrementalCooperativeAssignorTest {
         assertAssignment(2, 8, 0, 0, "worker1");
 
         // Second assignment with a second worker joining and all connectors running on previous worker
+        //
+        // assignment after this phase:
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[C1], revokedTasks:[T1-0, T1-1, T1-2, T1-3]
+        // W2: assignedConnectors:[], assignedTasks:[]
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[], tasks:[]
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         memberConfigs.put("worker2", new ExtendedWorkerState(leaderUrl, offset, null));
@@ -150,6 +168,16 @@ public class IncrementalCooperativeAssignorTest {
         assertAssignment(0, 0, 1, 4, "worker1", "worker2");
 
         // Third assignment after revocations
+        //
+        // assignment after this phase:
+        // W1: assignedTasks:[], assignedTasks:[],
+        //     revokedConnectors:[], revokedTasks:[]
+        // W2: assignedTasks:[C1], assignedTasks:[T1-0, T1-1, T1-2, T1-3]
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T1-3]
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         expectGeneration();
@@ -181,6 +209,155 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     @Test
+    public void testTaskAssignmentWhenWorkerJoinAfterRevocation() {
+        when(coordinator.configSnapshot()).thenReturn(configState);
+        doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
+
+        // First assignment with 1 worker and 2 connectors configured but not yet assigned
+        //
+        // note: the assigned/revoked Connectors/tasks might be different, but the amount should be the same
+        // assignment after this phase:
+        // W1: assignedConnectors:[C0, C1], assignedTasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0, C1], tasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1, T1-2, T1-3]
+        expectGeneration();
+        assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
+        ++rebalanceNum;
+        returnedAssignments = assignmentsCapture.getValue();
+        assertDelay(0, returnedAssignments);
+        expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
+        assertNoReassignments(memberConfigs, expectedMemberConfigs);
+        assertAssignment(2, 8, 0, 0, "worker1");
+
+        // Second assignment with a second worker joining and all connectors running on previous worker
+        //
+        // assignment after this phase:
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[C1], revokedTasks:[T1-0, T1-1, T1-2, T1-3]
+        // W2: assignedConnectors:[], assignedTasks:[]
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[], tasks:[]
+        applyAssignments(returnedAssignments);
+        memberConfigs = memberConfigs(leader, offset, assignments);
+        memberConfigs.put("worker2", new ExtendedWorkerState(leaderUrl, offset, null));
+        expectGeneration();
+        assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
+        ++rebalanceNum;
+        returnedAssignments = assignmentsCapture.getValue();
+        assertDelay(0, returnedAssignments);
+        expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
+        assertNoReassignments(memberConfigs, expectedMemberConfigs);
+        assertAssignment(0, 0, 1, 4, "worker1", "worker2");
+
+        // Third assignment after revocations, and a third worker joining
+        //
+        // assignment after this phase:
+        // W1: assignedTasks:[], assignedTasks:[],
+        //     revokedConnectors:[], revokedTasks:[T0-3]
+        // W2: assignedTasks:[C1], assignedTasks:[T1-0, T1-1]
+        //     revokedConnectors:[] revokedTasks:[]
+        // W3: assignedTasks:[], assignedTasks:[T1-2, T1-3]
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1]
+        // W3: connectors:[], tasks:[T1-2, T1-3]
+        applyAssignments(returnedAssignments);
+        memberConfigs = memberConfigs(leader, offset, assignments);
+        memberConfigs.put("worker3", new ExtendedWorkerState(leaderUrl, offset, null));
+        expectGeneration();
+        assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
+        ++rebalanceNum;
+        returnedAssignments = assignmentsCapture.getValue();
+        assertDelay(0, returnedAssignments);
+        expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
+        assertNoReassignments(memberConfigs, expectedMemberConfigs);
+        assertAssignment(1, 4, 0, 1, "worker1", "worker2", "worker3");
+
+        // Forth assignment after revocations, and a forth worker joining
+        //
+        // assignment after this phase:
+        // W1: assignedTasks:[], assignedTasks:[],
+        //     revokedConnectors:[], revokedTasks:[T0-2]
+        // W2: assignedTasks:[], assignedTasks:[]
+        //     revokedConnectors:[] revokedTasks:[]
+        // W3: assignedTasks:[], assignedTasks:[]
+        //     revokedConnectors:[] revokedTasks:[]
+        // W4: assignedTasks:[], assignedTasks:[T0-3]
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1]
+        // W3: connectors:[], tasks:[T1-2, T1-3]
+        // W4: connectors:[], tasks:[T0-3]
+        applyAssignments(returnedAssignments);
+        memberConfigs = memberConfigs(leader, offset, assignments);
+        memberConfigs.put("worker4", new ExtendedWorkerState(leaderUrl, offset, null));
+        expectGeneration();
+        assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
+        ++rebalanceNum;
+        returnedAssignments = assignmentsCapture.getValue();
+        assertDelay(0, returnedAssignments);
+        expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
+        assertNoReassignments(memberConfigs, expectedMemberConfigs);
+        assertAssignment(0, 1, 0, 1, "worker1", "worker2", "worker3", "worker4");
+
+        // Fifth assignment after revocations
+        //
+        // assignment after this phase:
+        // W1: assignedTasks:[], assignedTasks:[],
+        //     revokedConnectors:[], revokedTasks:[]
+        // W2: assignedTasks:[], assignedTasks:[]
+        //     revokedConnectors:[] revokedTasks:[]
+        // W3: assignedTasks:[], assignedTasks:[]
+        //     revokedConnectors:[] revokedTasks:[]
+        // W4: assignedTasks:[], assignedTasks:[T0-2]
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1]
+        // W3: connectors:[], tasks:[T1-2, T1-3]
+        // W4: connectors:[], tasks:[T0-3, T0-2]
+        applyAssignments(returnedAssignments);
+        memberConfigs = memberConfigs(leader, offset, assignments);
+        expectGeneration();
+        assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
+        ++rebalanceNum;
+        returnedAssignments = assignmentsCapture.getValue();
+        assertDelay(0, returnedAssignments);
+        expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
+        assertNoReassignments(memberConfigs, expectedMemberConfigs);
+        assertAssignment(0, 1, 0, 0, "worker1", "worker2", "worker3", "worker4");
+
+
+        // A sixth rebalance should not change assignments
+        applyAssignments(returnedAssignments);
+        memberConfigs = memberConfigs(leader, offset, assignments);
+        expectGeneration();
+        assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
+        ++rebalanceNum;
+        returnedAssignments = assignmentsCapture.getValue();
+        assertDelay(0, returnedAssignments);
+        expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
+        assertNoReassignments(memberConfigs, expectedMemberConfigs);
+        assertAssignment(0, 0, 0, 0, "worker1", "worker2", "worker3", "worker4");
+
+        verify(coordinator, times(rebalanceNum)).configSnapshot();
+        verify(coordinator, times(rebalanceNum)).leaderState(any());
+        verify(coordinator, times(2 * rebalanceNum)).generationId();
+        verify(coordinator, times(rebalanceNum)).memberId();
+        verify(coordinator, times(rebalanceNum)).lastCompletedGenerationId();
+    }
+
+    @Test
     public void testTaskAssignmentWhenWorkerLeavesPermanently() {
         // Customize assignor for this test case
         time = new MockTime();
@@ -190,6 +367,17 @@ public class IncrementalCooperativeAssignorTest {
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 2 workers and 2 connectors configured but not yet assigned
+        //
+        // note: the assigned/revoked Connectors/tasks might be different, but the amount should be the same
+        // assignment after this phase: (suppose W1 is the leader)
+        // W1: assignedConnectors:[C0], assignedTasks:[T0-0, T0-1, T0-2, T0-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W2: assignedConnectors:[C1], assignedTasks:[T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T1-3]
         memberConfigs.put("worker2", new ExtendedWorkerState(leaderUrl, offset, null));
         expectGeneration();
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
@@ -233,6 +421,13 @@ public class IncrementalCooperativeAssignorTest {
         time.sleep(rebalanceDelay / 2 + 1);
 
         // Fourth assignment after delay expired
+        //
+        // assignment after this phase:
+        // W1: assignedConnectors:[C1], assignedTasks:[T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0, C1], tasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1, T1-2, T1-3]
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         expectGeneration();
@@ -261,6 +456,17 @@ public class IncrementalCooperativeAssignorTest {
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 2 workers and 2 connectors configured but not yet assigned
+        //
+        // note: the assigned/revoked Connectors/tasks might be different, but the amount should be the same
+        // assignment after this phase: (suppose W1 is the leader)
+        // W1: assignedConnectors:[C0], assignedTasks:[T0-0, T0-1, T0-2, T0-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W2: assignedConnectors:[C1], assignedTasks:[T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T1-3]
         memberConfigs.put("worker2", new ExtendedWorkerState(leaderUrl, offset, null));
         expectGeneration();
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
@@ -321,6 +527,16 @@ public class IncrementalCooperativeAssignorTest {
 
         // Fifth assignment with the same two workers. The delay has expired, so the lost
         // assignments ought to be assigned to the worker that has appeared as returned.
+        //
+        // assignment after this phase:
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W2: assignedConnectors:[C1], assignedTasks:[T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T1-3]
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         expectGeneration();
@@ -349,6 +565,20 @@ public class IncrementalCooperativeAssignorTest {
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 3 workers and 2 connectors configured but not yet assigned
+        //
+        // note: the assigned/revoked Connectors/tasks might be different, but the amount should be the same
+        // assignment after this phase: (suppose W1 is the leader)
+        // W1: assignedConnectors:[C0], assignedTasks:[T0-0, T0-1, T0-2],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W2: assignedConnectors:[C1], assignedTasks:[T1-0, T1-1, T1-2],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W3: assignedConnectors:[], assignedTasks:[T0-3, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2]
+        // W3: connectors:[], tasks:[T0-3, T1-3]
         memberConfigs.put("worker2", new ExtendedWorkerState(leaderUrl, offset, null));
         memberConfigs.put("worker3", new ExtendedWorkerState(leaderUrl, offset, null));
         expectGeneration();
@@ -363,6 +593,16 @@ public class IncrementalCooperativeAssignorTest {
         // Second assignment with two workers remaining in the group. The worker that left the
         // group was the leader. The new leader has no previous assignments and is not tracking a
         // delay upon a leader's exit
+        //
+        // assignment after this phase: (suppose W2 is the leader)
+        // W2: assignedConnectors:[], assignedTasks:[T0-0],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W3: assignedConnectors:[C0], assignedTasks:[T0-1, T0-2],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T0-0]
+        // W3: connectors:[C0], tasks:[T0-1, T0-2, T0-3, T1-3]
         applyAssignments(returnedAssignments);
         assignments.remove("worker1");
         leader = "worker2";
@@ -382,7 +622,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(1, 3, 0, 0, "worker2", "worker3");
 
-        // Third (incidental) assignment with still only one worker in the group.
+        // Third (incidental) assignment with still only 2 workers in the group.
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         expectGeneration();
@@ -410,6 +650,20 @@ public class IncrementalCooperativeAssignorTest {
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 3 workers and 2 connectors configured but not yet assigned
+        //
+        // note: the assigned/revoked Connectors/tasks might be different, but the amount should be the same
+        // assignment after this phase: (suppose W1 is the leader)
+        // W1: assignedConnectors:[C0], assignedTasks:[T0-0, T0-1, T0-2],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W2: assignedConnectors:[C1], assignedTasks:[T1-0, T1-1, T1-2],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W3: assignedConnectors:[], assignedTasks:[T0-3, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2]
+        // W3: connectors:[], tasks:[T0-3, T1-3]
         memberConfigs.put("worker2", new ExtendedWorkerState(leaderUrl, offset, null));
         memberConfigs.put("worker3", new ExtendedWorkerState(leaderUrl, offset, null));
         expectGeneration();
@@ -424,6 +678,16 @@ public class IncrementalCooperativeAssignorTest {
         // Second assignment with two workers remaining in the group. The worker that left the
         // group was the leader. The new leader has no previous assignments and is not tracking a
         // delay upon a leader's exit
+        //
+        // assignment after this phase: (suppose W2 is the leader)
+        // W2: assignedConnectors:[], assignedTasks:[T0-0],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W3: assignedConnectors:[C0], assignedTasks:[T0-1, T0-2],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T0-0]
+        // W3: connectors:[C0], tasks:[T0-1, T0-2, T0-3, T1-3]
         applyAssignments(returnedAssignments);
         assignments.remove("worker1");
         leader = "worker2";
@@ -446,6 +710,19 @@ public class IncrementalCooperativeAssignorTest {
         // Third assignment with the previous leader returning as a follower. In this case, the
         // arrival of the previous leader is treated as an arrival of a new worker. Reassignment
         // happens immediately, first with a revocation
+        //
+        // assignment after this phase: (suppose W2 is the leader)
+        // W2: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[T0-0]
+        // W3: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[T0-2]
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2]
+        // W3: connectors:[C0], tasks:[T0-1, T0-3, T1-3]
+        // W1: connectors:[], tasks:[]
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         memberConfigs.put("worker1", new ExtendedWorkerState(leaderUrl, offset, null));
@@ -458,6 +735,19 @@ public class IncrementalCooperativeAssignorTest {
         assertAssignment(0, 0, 0, 2, "worker1", "worker2", "worker3");
 
         // Fourth assignment after revocations
+        //
+        // assignment after this phase: (suppose W2 is the leader)
+        // W2: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W3: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W1: assignedConnectors:[], assignedTasks:[T0-0, T0-2],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2]
+        // W3: connectors:[C0], tasks:[T0-1, T0-3, T1-3]
+        // W1: connectors:[], tasks:[T0-0, T0-2]
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         expectGeneration();
@@ -487,6 +777,17 @@ public class IncrementalCooperativeAssignorTest {
                 .when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 2 workers and 2 connectors configured but not yet assigned
+        //
+        // note: the assigned/revoked Connectors/tasks might be different, but the amount should be the same
+        // assignment after this phase: (suppose W1 is the leader)
+        // W1: assignedConnectors:[C0], assignedTasks:[T0-0, T0-1, T0-2, T0-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W2: assignedConnectors:[C1], assignedTasks:[T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase due to failure:
+        // W1: connectors:[], tasks:[]
+        // W2: connectors:[], tasks:[]
         memberConfigs.put("worker2", new ExtendedWorkerState(leaderUrl, offset, null));
         try {
             expectGeneration();
@@ -505,6 +806,16 @@ public class IncrementalCooperativeAssignorTest {
         // Second assignment happens with members returning the same assignments (memberConfigs)
         // as the first time. The assignor detects that the number of members did not change and
         // avoids the rebalance delay, treating the lost assignments as new assignments.
+        //
+        // assignment after this phase: (suppose W1 is the leader)
+        // W1: assignedConnectors:[C0], assignedTasks:[T0-0, T0-1, T0-2, T0-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W2: assignedConnectors:[C1], assignedTasks:[T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T1-3]
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
         expectGeneration();
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
@@ -532,6 +843,17 @@ public class IncrementalCooperativeAssignorTest {
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 2 workers and 2 connectors configured but not yet assigned
+        //
+        // note: the assigned/revoked Connectors/tasks might be different, but the amount should be the same
+        // assignment after this phase: (suppose W1 is the leader)
+        // W1: assignedConnectors:[C0], assignedTasks:[T0-0, T0-1, T0-2, T0-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W2: assignedConnectors:[C1], assignedTasks:[T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T1-3]
         memberConfigs.put("worker2", new ExtendedWorkerState(leaderUrl, offset, null));
         expectGeneration();
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
@@ -548,6 +870,19 @@ public class IncrementalCooperativeAssignorTest {
 
         // Second assignment triggered by a third worker joining. The computed assignment should
         // revoke tasks from the existing group. But the assignment won't be correctly delivered.
+        //
+        // assignment after this phase: (suppose W1 is the leader)
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[T0-3]
+        // W2: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[T1-3]
+        // W3: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase due to failure:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T1-3]
+        // W3: connectors:[], tasks:[]
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         memberConfigs.put("worker3", new ExtendedWorkerState(leaderUrl, offset, null));
@@ -567,6 +902,19 @@ public class IncrementalCooperativeAssignorTest {
 
         // Third assignment happens with members returning the same assignments (memberConfigs)
         // as the first time.
+        //
+        // assignment after this phase: (suppose W1 is the leader)
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[T0-3]
+        // W2: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[T1-3]
+        // W3: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2]
+        // W3: connectors:[], tasks:[]
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
         expectGeneration();
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
@@ -595,6 +943,17 @@ public class IncrementalCooperativeAssignorTest {
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 2 workers and 2 connectors configured but not yet assigned
+        //
+        // note: the assigned/revoked Connectors/tasks might be different, but the amount should be the same
+        // assignment after this phase: (suppose W1 is the leader)
+        // W1: assignedConnectors:[C0], assignedTasks:[T0-0, T0-1, T0-2, T0-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W2: assignedConnectors:[C1], assignedTasks:[T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T1-3]
         memberConfigs.put("worker2", new ExtendedWorkerState(leaderUrl, offset, null));
         expectGeneration();
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
@@ -608,6 +967,19 @@ public class IncrementalCooperativeAssignorTest {
         // Second assignment triggered by a third worker joining. The computed assignment should
         // revoke tasks from the existing group. But the assignment won't be correctly delivered
         // and sync group with fail on the leader worker.
+        //
+        // assignment after this phase: (suppose W1 is the leader)
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[T0-3]
+        // W2: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[T1-3]
+        // W3: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase due to failure:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T1-3]
+        // W3: connectors:[], tasks:[]
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         memberConfigs.put("worker3", new ExtendedWorkerState(leaderUrl, offset, null));
@@ -626,6 +998,19 @@ public class IncrementalCooperativeAssignorTest {
 
         // Third assignment happens with members returning the same assignments (memberConfigs)
         // as the first time.
+        //
+        // assignment after this phase: (suppose W1 is the leader)
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[T0-3]
+        // W2: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[T1-3]
+        // W3: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase due to failure:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2]
+        // W3: connectors:[], tasks:[]
         when(coordinator.lastCompletedGenerationId()).thenReturn(assignor.previousGenerationId - 1);
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
         expectGeneration();
@@ -650,7 +1035,18 @@ public class IncrementalCooperativeAssignorTest {
         when(coordinator.configSnapshot()).thenReturn(configState);
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
-        // First assignment with 1 worker and 2 connectors configured but not yet assigned
+        // First assignment with 2 worker and 3 connectors configured but not yet assigned
+        //
+        // note: the assigned/revoked Connectors/tasks might be different, but the amount should be the same
+        // assignment after this phase:
+        // W1: assignedConnectors:[C0, C1], assignedTasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W2: assignedConnectors:[C2], assignedTasks:[T1-2, T1-3, T2-0, T2-1, T2-2, T2-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0, C1], tasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1]
+        // W2: connectors:[C2], tasks:[T1-2, T1-3, T2-0, T2-1, T2-2, T2-3]
         memberConfigs.put("worker2", new ExtendedWorkerState(leaderUrl, offset, null));
         expectGeneration();
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
@@ -662,6 +1058,16 @@ public class IncrementalCooperativeAssignorTest {
         assertAssignment(3, 12, 0, 0, "worker1", "worker2");
 
         // Second assignment with an updated config state that reflects removal of a connector
+        //
+        // assignment after this phase:
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[C1] revokedTasks:[T1-0, T1-1]
+        // W2: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[T1-2, T1-3]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[C2], tasks:[T2-0, T2-1, T2-2, T2-3]
         configState = clusterConfigState(offset + 1, 2, 4);
         when(coordinator.configSnapshot()).thenReturn(configState);
         applyAssignments(returnedAssignments);
@@ -1101,6 +1507,14 @@ public class IncrementalCooperativeAssignorTest {
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 1 worker and 2 connectors configured but not yet assigned
+        //
+        // note: the assigned/revoked Connectors/tasks might be different, but the amount should be the same
+        // assignment after this phase:
+        // W1: assignedConnectors:[C0, C1], assignedTasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0, C1], tasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1, T1-2, T1-3]
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
         ++rebalanceNum;
         returnedAssignments = assignmentsCapture.getValue();
@@ -1110,6 +1524,19 @@ public class IncrementalCooperativeAssignorTest {
         assertAssignment(2, 8, 0, 0, "worker1");
 
         // Second assignment with a second worker with duplicate assignment joining and all connectors running on previous worker
+        //
+        // W1 joined with assignment: connectors:[C0, C1], tasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1, T1-2, T1-3]
+        // W2 joined with assignment: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T1-3]
+        //
+        // assignment after this phase:
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[C1] revokedTasks:[T1-0, T1-1, T1-2, T1-3]
+        // W2: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[C1] revokedTasks:[T1-0, T1-1, T1-2, T1-3]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[], tasks:[]
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         ExtendedAssignment duplicatedWorkerAssignment = newExpandableAssignment();
@@ -1125,6 +1552,16 @@ public class IncrementalCooperativeAssignorTest {
         assertAssignment(0, 0, 2, 8, "worker1", "worker2");
 
         // Third assignment after revocations
+        //
+        // assignment after this phase:
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W2: assignedConnectors:[C1], assignedTasks:[T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1, T0-2, T0-3]
+        // W2: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T1-3]
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
@@ -1133,20 +1570,9 @@ public class IncrementalCooperativeAssignorTest {
         assertDelay(0, returnedAssignments);
         expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
-        assertAssignment(1, 4, 0, 2, "worker1", "worker2");
+        assertAssignment(1, 4, 0, 0, "worker1", "worker2");
 
-        // fourth rebalance after revocations
-        applyAssignments(returnedAssignments);
-        memberConfigs = memberConfigs(leader, offset, assignments);
-        assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
-        ++rebalanceNum;
-        returnedAssignments = assignmentsCapture.getValue();
-        assertDelay(0, returnedAssignments);
-        expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
-        assertNoReassignments(memberConfigs, expectedMemberConfigs);
-        assertAssignment(0, 2, 0, 0, "worker1", "worker2");
-
-        // Fifth rebalance should not change assignments
+        // Fourth rebalance should not change assignments
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
@@ -1170,6 +1596,14 @@ public class IncrementalCooperativeAssignorTest {
         doReturn(Collections.EMPTY_MAP).when(assignor).serializeAssignments(assignmentsCapture.capture());
 
         // First assignment with 1 worker and 2 connectors configured but not yet assigned
+        //
+        // note: the assigned/revoked Connectors/tasks might be different, but the amount should be the same
+        // assignment after this phase:
+        // W1: assignedConnectors:[C0, C1], assignedTasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1, T1-2, T1-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0, C1], tasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1, T1-2, T1-3]
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
         ++rebalanceNum;
         returnedAssignments = assignmentsCapture.getValue();
@@ -1183,6 +1617,20 @@ public class IncrementalCooperativeAssignorTest {
         when(coordinator.configSnapshot()).thenReturn(configState);
 
         // Second assignment with a second worker with duplicate assignment joining and the duplicated assignment is deleted at the same time
+        //
+        // W1 joined with assignment: connectors:[C0, C1], tasks:[T0-0, T0-1, T0-2, T0-3, T1-0, T1-1, T1-2, T1-3]
+        // W2 joined with assignment: connectors:[C1], tasks:[T1-0, T1-1, T1-2, T1-3]
+        // Connector "C1" is deleted
+        //
+        // assignment after this phase:
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[C1] revokedTasks:[T1-0, T1-1, T1-2, T1-3, T0-2, T0-3]
+        // W2: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[C1] revokedTasks:[T1-0, T1-1, T1-2, T1-3]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1]
+        // W2: connectors:[], tasks:[]
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         ExtendedAssignment duplicatedWorkerAssignment = newExpandableAssignment();
@@ -1195,20 +1643,19 @@ public class IncrementalCooperativeAssignorTest {
         assertDelay(0, returnedAssignments);
         expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
-        assertAssignment(0, 0, 2, 8, "worker1", "worker2");
+        assertAssignment(0, 0, 2, 10, "worker1", "worker2");
 
-        // Third assignment after revocations
-        applyAssignments(returnedAssignments);
-        memberConfigs = memberConfigs(leader, offset, assignments);
-        assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
-        ++rebalanceNum;
-        returnedAssignments = assignmentsCapture.getValue();
-        assertDelay(0, returnedAssignments);
-        expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
-        assertNoReassignments(memberConfigs, expectedMemberConfigs);
-        assertAssignment(0, 0, 0, 2, "worker1", "worker2");
-
-        // fourth rebalance after revocations
+        // Third rebalance after revocations
+        //
+        // assignment after this phase:
+        // W1: assignedConnectors:[], assignedTasks:[],
+        //     revokedConnectors:[] revokedTasks:[]
+        // W2: assignedConnectors:[], assignedTasks:[T0-2, T0-3],
+        //     revokedConnectors:[] revokedTasks:[]
+        //
+        // Final distribution after this phase:
+        // W1: connectors:[C0], tasks:[T0-0, T0-1]
+        // W2: connectors:[], tasks:[T0-2, T0-3]
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
@@ -1219,7 +1666,7 @@ public class IncrementalCooperativeAssignorTest {
         assertNoReassignments(memberConfigs, expectedMemberConfigs);
         assertAssignment(0, 2, 0, 0, "worker1", "worker2");
 
-        // Fifth rebalance should not change assignments
+        // Fourth rebalance should not change assignments
         applyAssignments(returnedAssignments);
         memberConfigs = memberConfigs(leader, offset, assignments);
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator, protocolVersion);
