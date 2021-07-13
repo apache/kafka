@@ -3446,33 +3446,35 @@ grouped
                 <p>First, we need to implement a custom stream processor, <code class="docutils literal"><span class="pre">PopularPageEmailAlert</span></code>, that implements the <code class="docutils literal"><span class="pre">Processor</span></code>
                     interface:</p>
                 <pre class="line-numbers"><code class="language-java">// A processor that sends an alert message about a popular page to a configurable email address
-public class PopularPageEmailAlert implements Processor&lt;PageId, Long&gt; {
+public class PopularPageEmailAlert implements Processor&lt;PageId, Long, Void, Void&gt; {
 
   private final String emailAddress;
-  private ProcessorContext context;
+  private ProcessorContext&lt;Void, Void&gt; context;
 
   public PopularPageEmailAlert(String emailAddress) {
     this.emailAddress = emailAddress;
   }
 
   @Override
-  public void init(ProcessorContext context) {
+  public void init(ProcessorContext&lt;Void, Void&gt; context) {
     this.context = context;
 
     // Here you would perform any additional initializations such as setting up an email client.
   }
 
   @Override
-  void process(PageId pageId, Long count) {
+  void process(Record&lt;PageId, Long&gt; record) {
     // Here you would format and send the alert email.
     //
-    // In this specific example, you would be able to include information about the page&#39;s ID and its view count
-    // (because the class implements `Processor&lt;PageId, Long&gt;`).
+    // In this specific example, you would be able to include
+    // information about the page&#39;s ID and its view count
   }
 
   @Override
   void close() {
-    // Any code for clean up would go here.  This processor instance will not be used again after this call.
+    // Any code for clean up would go here, for example tearing down the email client and anything
+    // else you created in the init() method
+    // This processor instance will not be used again after this call.
   }
 
 }</code></pre>
@@ -3492,7 +3494,6 @@ public class PopularPageEmailAlert implements Processor&lt;PageId, Long&gt; {
                     </ul>
                 </div>
                 <p>Then we can leverage the <code class="docutils literal"><span class="pre">PopularPageEmailAlert</span></code> processor in the DSL via <code class="docutils literal"><span class="pre">KStream#process</span></code>.</p>
-                <p>In Java 8+, using lambda expressions:</p>
                 <pre class="line-numbers"><code class="language-java">KStream&lt;String, GenericRecord&gt; pageViews = ...;
 
 // Send an email notification when the view count of a page reaches one thousand.
@@ -3502,25 +3503,6 @@ pageViews.groupByKey()
          // PopularPageEmailAlert is your custom processor that implements the
          // `Processor` interface, see further down below.
          .process(() -&gt; new PopularPageEmailAlert(&quot;alerts@yourcompany.com&quot;));</code></pre>
-                <p>In Java 7:</p>
-                <pre class="line-numbers"><code class="language-java">// Send an email notification when the view count of a page reaches one thousand.
-pageViews.groupByKey().
-         .count()
-         .filter(
-            new Predicate&lt;PageId, Long&gt;() {
-              public boolean test(PageId pageId, Long viewCount) {
-                return viewCount == 1000;
-              }
-            })
-         .process(
-           new ProcessorSupplier&lt;PageId, Long&gt;() {
-             public Processor&lt;PageId, Long&gt; get() {
-               // PopularPageEmailAlert is your custom processor that implements
-               // the `Processor` interface, see further down below.
-               return new PopularPageEmailAlert(&quot;alerts@yourcompany.com&quot;);
-             }
-           });</code></pre>
-            </div>
         </div>
         <div class="section" id="naming-a-streams-app">
             <a class="headerlink" href="#naming-a-streams-app" title="Permalink to this headline"><h2><a class="toc-backref" href="#id33">Naming Operators in a Streams DSL application</a></h2></a>
