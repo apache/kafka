@@ -106,6 +106,11 @@ public class RemoteLogMetadataSerdeTest {
         public InvalidRemoteLogMetadata(int brokerId, long eventTimestampMs) {
             super(brokerId, eventTimestampMs);
         }
+
+        @Override
+        public TopicIdPartition topicIdPartition() {
+            throw new UnsupportedOperationException();
+        }
     }
 
 }
