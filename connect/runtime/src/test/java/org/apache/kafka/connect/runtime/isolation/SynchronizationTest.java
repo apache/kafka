@@ -168,7 +168,9 @@ public class SynchronizationTest {
     }
 
     private class SynchronizedDelegatingClassLoader extends DelegatingClassLoader {
-        // NOTE: the DelegatingClassLoader is not parallel capable, and neither is this subclass.
+        {
+            ClassLoader.registerAsParallelCapable();
+        }
 
         public SynchronizedDelegatingClassLoader(List<String> pluginPaths) {
             super(pluginPaths);

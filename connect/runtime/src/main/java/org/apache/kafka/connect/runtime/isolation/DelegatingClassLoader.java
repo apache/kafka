@@ -69,7 +69,7 @@ import java.util.stream.Collectors;
  * this delegating classloader delegates its loading to its parent. This makes this classloader a
  * child-first classloader.
  * <p>
- * This class is thread-safe but not parallel capable.
+ * This class is thread-safe and parallel capable.
  */
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
@@ -92,6 +92,14 @@ public class DelegatingClassLoader extends URLClassLoader {
     private static final Set<String> PLUGIN_MANIFEST_FILES =
         Arrays.stream(SERVICE_LOADER_PLUGINS).map(serviceLoaderPlugin -> MANIFEST_PREFIX + serviceLoaderPlugin.getName())
             .collect(Collectors.toSet());
+
+    // Although this classloader does not load classes directly but rather delegates loading to a
+    // PluginClassLoader or its parent through its base class, because of the use of inheritance in
+    // in the latter case, this classloader needs to also be declared as parallel capable to use
+    // fine-grain locking when loading classes.
+    static {
+        ClassLoader.registerAsParallelCapable();
+    }
 
     public DelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
         super(new URL[0], parent);
