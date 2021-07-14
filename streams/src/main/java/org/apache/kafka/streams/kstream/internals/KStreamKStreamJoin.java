@@ -108,7 +108,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
                     StreamsConfig.InternalConfig.getLong(
                         context.appConfigs(),
                         EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
-                        500L
+                        1000L
                     )
                 );
             }
