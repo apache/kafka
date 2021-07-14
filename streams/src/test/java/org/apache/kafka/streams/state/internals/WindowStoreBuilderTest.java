@@ -144,17 +144,6 @@ public class WindowStoreBuilderTest {
     }
 
     @Test
-    public void shouldThrowNullPointerIfKeySerdeIsNull() {
-        assertThrows(NullPointerException.class, () -> new WindowStoreBuilder<>(supplier, null, Serdes.String(), new MockTime()));
-    }
-
-    @Test
-    public void shouldThrowNullPointerIfValueSerdeIsNull() {
-        assertThrows(NullPointerException.class, () -> new WindowStoreBuilder<>(supplier, Serdes.String(),
-            null, new MockTime()));
-    }
-
-    @Test
     public void shouldThrowNullPointerIfTimeIsNull() {
         assertThrows(NullPointerException.class, () -> new WindowStoreBuilder<>(supplier, Serdes.String(),
                 Serdes.String(), null));
