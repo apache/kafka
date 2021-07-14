@@ -3360,23 +3360,23 @@ public class KafkaAdminClientTest {
                 prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             env.kafkaClient().prepareResponse(new OffsetDeleteResponse(
-                    new OffsetDeleteResponseData()
-                        .setTopics(new OffsetDeleteResponseTopicCollection(Stream.of(
-                            new OffsetDeleteResponseTopic()
-                                .setName("foo")
-                                .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
-                                    new OffsetDeleteResponsePartition()
-                                        .setPartitionIndex(0)
-                                        .setErrorCode(Errors.NONE.code())
-                                ).iterator())),
-                            new OffsetDeleteResponseTopic()
-                                .setName("bar")
-                                .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
-                                    new OffsetDeleteResponsePartition()
-                                        .setPartitionIndex(0)
-                                        .setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code())
-                                ).iterator()))
-                        ).collect(Collectors.toList()).iterator()))
+                new OffsetDeleteResponseData()
+                    .setTopics(new OffsetDeleteResponseTopicCollection(Stream.of(
+                        new OffsetDeleteResponseTopic()
+                            .setName("foo")
+                            .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
+                                new OffsetDeleteResponsePartition()
+                                    .setPartitionIndex(0)
+                                    .setErrorCode(Errors.NONE.code())
+                            ).iterator())),
+                        new OffsetDeleteResponseTopic()
+                            .setName("bar")
+                            .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
+                                new OffsetDeleteResponsePartition()
+                                    .setPartitionIndex(0)
+                                    .setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code())
+                            ).iterator()))
+                    ).collect(Collectors.toList()).iterator()))
                 )
             );
 

@@ -110,10 +110,10 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
                 .setThrottleTimeMs(0)
                 .setTopics(new OffsetDeleteResponseTopicCollection(singletonList(
                     new OffsetDeleteResponseTopic()
-                        .setName("t0")
+                        .setName(t0p0.topic())
                         .setPartitions(new OffsetDeleteResponsePartitionCollection(singletonList(
                             new OffsetDeleteResponsePartition()
-                                .setPartitionIndex(0)
+                                .setPartitionIndex(t0p0.partition())
                                 .setErrorCode(error.code())
                         ).iterator()))
                 ).iterator()));
@@ -127,10 +127,10 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
                 .setThrottleTimeMs(0)
                 .setTopics(new OffsetDeleteResponseTopicCollection(singletonList(
                     new OffsetDeleteResponseTopic()
-                        .setName("t0")
+                        .setName(t0p0.topic())
                         .setPartitions(new OffsetDeleteResponsePartitionCollection(singletonList(
                             new OffsetDeleteResponsePartition()
-                                .setPartitionIndex(0)
+                                .setPartitionIndex(t0p0.partition())
                                 .setErrorCode(error.code())
                         ).iterator()))
                 ).iterator()))
@@ -202,8 +202,7 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
         // verify the completed value is expected result
         Collection<Map<TopicPartition, Errors>> completeCollection = result.completedKeys.values();
         assertEquals(1, completeCollection.size());
-        Map<TopicPartition, Errors> completeMap = completeCollection.iterator().next();
-        assertEquals(expectedResult, completeMap);
+        assertEquals(expectedResult, result.completedKeys.get(key));
 
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(emptySet(), result.failedKeys.keySet());

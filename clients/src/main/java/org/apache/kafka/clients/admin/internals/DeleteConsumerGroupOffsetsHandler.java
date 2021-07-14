@@ -111,14 +111,15 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         validateKeys(groupIds);
 
         final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
-        final Map<CoordinatorKey, Map<TopicPartition, Errors>> completed = new HashMap<>();
-        final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
-        final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
-        final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
-
         final Errors error = Errors.forCode(response.data().errorCode());
+
         if (error != Errors.NONE) {
-            handleGroupError(groupId, error, failed, groupsToUnmap, groupsToRetry);
+            final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+            final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
+
+            handleGroupError(groupId, error, failed, groupsToUnmap);
+
+            return new ApiResult<>(Collections.emptyMap(), failed, new ArrayList<>(groupsToUnmap));
         } else {
             final Map<TopicPartition, Errors> partitionResults = new HashMap<>();
             response.data().topics().forEach(topic ->
@@ -129,21 +130,10 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
                 })
             );
 
-            completed.put(groupId, partitionResults);
-        }
-
-        if (groupsToUnmap.isEmpty() && groupsToRetry.isEmpty()) {
             return new ApiResult<>(
-                completed,
-                failed,
+                Collections.singletonMap(groupId, partitionResults),
+                Collections.emptyMap(),
                 Collections.emptyList()
-            );
-        } else {
-            // retry the request, so don't send completed/failed results back
-            return new ApiResult<>(
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                new ArrayList<>(groupsToUnmap)
             );
         }
     }
@@ -152,33 +142,31 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         CoordinatorKey groupId,
         Errors error,
         Map<CoordinatorKey, Throwable> failed,
-        Set<CoordinatorKey> groupsToUnmap,
-        Set<CoordinatorKey> groupsToRetry
+        Set<CoordinatorKey> groupsToUnmap
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
             case GROUP_ID_NOT_FOUND:
             case INVALID_GROUP_ID:
             case NON_EMPTY_GROUP:
-                log.debug("`OffsetDelete` request for group id {} failed due to error {}.", groupId, error);
+                log.debug("`OffsetDelete` request for group id {} failed due to error {}.", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`OffsetDelete` request for group {} failed because the coordinator" +
-                    " is still in the process of loading state. Will retry.", groupId);
-                groupsToRetry.add(groupId);
+                log.debug("`OffsetDelete` request for group id {} failed because the coordinator" +
+                    " is still in the process of loading state. Will retry.", groupId.idValue);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
-                log.debug("`OffsetDelete` request for group {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry.", groupId, error);
+                log.debug("`OffsetDelete` request for group id {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry.", groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
             default:
-                log.error("`OffsetDelete` request for group id {} failed due to unexpected error {}.", groupId, error);
+                log.error("`OffsetDelete` request for group id {} failed due to unexpected error {}.", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
         }
