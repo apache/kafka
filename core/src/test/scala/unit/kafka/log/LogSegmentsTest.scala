@@ -21,6 +21,7 @@ import java.io.File
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -222,5 +223,18 @@ class LogSegmentsTest {
       val iterator = segments.higherSegments(9).iterator
       assertFalse(iterator.hasNext)
     }
+  }
+
+  @Test
+  def testSizeForLargeLogs(): Unit = {
+    val largeSize = Int.MaxValue.toLong * 2
+    val logSegment: LogSegment = EasyMock.createMock(classOf[LogSegment])
+
+    EasyMock.expect(logSegment.size).andReturn(Int.MaxValue).anyTimes
+    EasyMock.replay(logSegment)
+
+    assertEquals(Int.MaxValue, LogSegments.sizeInBytes(Seq(logSegment)))
+    assertEquals(largeSize, LogSegments.sizeInBytes(Seq(logSegment, logSegment)))
+    assertTrue(Log.sizeInBytes(Seq(logSegment, logSegment)) > Int.MaxValue)
   }
 }

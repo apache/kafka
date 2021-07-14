@@ -315,7 +315,7 @@ class LogManager(logDirs: Seq[File],
         val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
         threadPools.append(pool)
 
-        val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
+        val cleanShutdownFile = new File(dir, LogLoader.CleanShutdownFile)
         if (cleanShutdownFile.exists) {
           info(s"Skipping recovery for all logs in $logDirAbsolutePath since clean shutdown file was found")
           // Cache the clean shutdown status and use that for rest of log loading workflow. Delete the CleanShutdownFile
@@ -516,7 +516,7 @@ class LogManager(logDirs: Seq[File],
 
           // mark that the shutdown was clean by creating marker file
           debug(s"Writing clean shutdown marker at $dir")
-          CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath), this)
+          CoreUtils.swallow(Files.createFile(new File(dir, LogLoader.CleanShutdownFile).toPath), this)
         }
       }
     } finally {

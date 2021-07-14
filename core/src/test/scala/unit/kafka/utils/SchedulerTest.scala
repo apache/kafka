@@ -19,8 +19,7 @@ package kafka.utils
 import java.util.Properties
 import java.util.concurrent.atomic._
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
-
-import kafka.log.{LoadLogParams, Log, LogConfig, LogLoader, LogManager, LogSegments, ProducerStateManager}
+import kafka.log.{LoadLogParams, LocalLog, Log, LogConfig, LogLoader, LogManager, LogSegments, ProducerStateManager}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.TestUtils.retry
 import org.junit.jupiter.api.Assertions._
@@ -139,10 +138,12 @@ class SchedulerTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager))
-    val log = new Log(logDir, logConfig, segments = segments, logStartOffset = offsets.logStartOffset,
-      recoveryPoint = offsets.recoveryPoint, nextOffsetMetadata = offsets.nextOffsetMetadata, scheduler,
-      brokerTopicStats, mockTime, LogManager.ProducerIdExpirationCheckIntervalMs,
-      topicPartition, leaderEpochCache, producerStateManager, logDirFailureChannel,
+    val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, scheduler, mockTime, topicPartition, logDirFailureChannel)
+    val log = new Log(logStartOffset = offsets.logStartOffset,
+      localLog = localLog,
+      brokerTopicStats, LogManager.ProducerIdExpirationCheckIntervalMs,
+      leaderEpochCache, producerStateManager,
       _topicId = None, keepPartitionMetadataFile = true)
     assertTrue(scheduler.taskRunning(log.producerExpireCheck))
     log.close()
