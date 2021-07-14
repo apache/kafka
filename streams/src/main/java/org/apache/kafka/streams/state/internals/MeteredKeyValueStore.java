@@ -259,7 +259,7 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
-        Objects.requireNonNull(prefix, "key cannot be null");
+        Objects.requireNonNull(prefix, "prefix cannot be null");
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
         return new MeteredKeyValueIterator(wrapped().prefixScan(prefix, prefixKeySerializer), prefixScanSensor);
     }

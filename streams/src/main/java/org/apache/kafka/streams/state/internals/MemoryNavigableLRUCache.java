@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -64,6 +65,20 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
         return new DelegatingPeekingKeyValueIterator<>(name(),
             new MemoryNavigableLRUCache.CacheIterator(treeMap
                 .subMap(from, true, to, true).descendingKeySet().iterator(), treeMap));
+    }
+
+    @Override
+    public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
+
+        final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
+        final Bytes to = Bytes.increment(from);
+
+        final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
+
+        return new DelegatingPeekingKeyValueIterator<>(
+            name(),
+            new MemoryNavigableLRUCache.CacheIterator(treeMap.subMap(from, true, to, false).keySet().iterator(), treeMap)
+        );
     }
 
     @Override
