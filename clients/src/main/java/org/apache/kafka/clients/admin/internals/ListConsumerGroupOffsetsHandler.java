@@ -70,8 +70,18 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         return lookupStrategy;
     }
 
+    private void validateKeys(
+        Set<CoordinatorKey> groupIds
+    ) {
+        if (!groupIds.equals(Collections.singleton(groupId))) {
+            throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
+                " (expected only " + Collections.singleton(groupId) + ")");
+        }
+    }
+
     @Override
-    public OffsetFetchRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
+    public OffsetFetchRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
+        validateKeys(groupIds);
         // Set the flag to false as for admin client request,
         // we don't need to wait for any pending offset state to clear.
         return new OffsetFetchRequest.Builder(groupId.idValue, false, partitions, false);
@@ -83,9 +93,11 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
     ) {
+        validateKeys(groupIds);
+
         final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
-        Map<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> completed = new HashMap<>();
-        Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+        final Map<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> completed = new HashMap<>();
+        final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
         final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
 
@@ -112,6 +124,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                         groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
                     }
                 } else {
+                    // In responseData V0-V7, there's no group level error, we have to handle partition errors here
                     handlePartitionError(groupId, topicPartition, error, groupsToUnmap, groupsToRetry);
                 }
             }
@@ -143,30 +156,29 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `{}` response", groupId,
-                    apiName(), error.exception());
+                log.debug("`OffsetFetch` request for group id {} failed due to error {}", groupId, error);
                 failed.put(groupId, error.exception());
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`{}` request for group {} failed because the coordinator " +
-                    "is still in the process of loading state. Will retry", apiName(), groupId);
+                log.debug("`OffsetFetch` request for group {} failed because the coordinator " +
+                    "is still in the process of loading state. Will retry", groupId);
                 groupsToRetry.add(groupId);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
-                log.debug("`{}` request for group {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry", apiName(), groupId, error);
+                log.debug("`OffsetFetch` request for group {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry", groupId, error);
                 groupsToUnmap.add(groupId);
                 break;
 
             default:
-                final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
-                    groupId, apiName());
-                log.error(unexpectedErrorMsg, error.exception());
+                final String unexpectedErrorMsg =
+                    String.format("`OffsetFetch` request for group id %s failed due to error %s", groupId, error);
+                log.error(unexpectedErrorMsg);
                 failed.put(groupId, error.exception(unexpectedErrorMsg));
         }
     }
