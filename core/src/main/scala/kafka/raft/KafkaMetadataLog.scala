@@ -18,13 +18,15 @@ package kafka.raft
 
 import kafka.api.ApiVersion
 import kafka.log.{AppendOrigin, Defaults, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
+import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, KafkaConfig, LogDirFailureChannel, RequestLocal}
 import kafka.utils.{CoreUtils, Logging, Scheduler}
 import org.apache.kafka.common.config.AbstractConfig
+import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.{ControlRecordUtils, MemoryRecords, Records}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.raft.{Isolation, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
+import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 
 import java.io.File
@@ -233,16 +235,15 @@ final class KafkaMetadataLog private (
   }
 
   override def createNewSnapshot(snapshotId: OffsetAndEpoch): Optional[RawSnapshotWriter] = {
+    if (snapshotId.offset < startOffset) {
+      info(s"Cannot create a snapshot with an id ($snapshotId) less than the log start offset ($startOffset)")
+      return Optional.empty()
+    }
+
     val highWatermarkOffset = highWatermark.offset
     if (snapshotId.offset > highWatermarkOffset) {
       throw new IllegalArgumentException(
-        s"Cannot create a snapshot for an end offset ($endOffset) greater than the high-watermark ($highWatermarkOffset)"
-      )
-    }
-
-    if (snapshotId.offset < startOffset) {
-      throw new IllegalArgumentException(
-        s"Cannot create a snapshot for an end offset ($endOffset) less than the log start offset ($startOffset)"
+        s"Cannot create a snapshot with an id ($snapshotId) greater than the high-watermark ($highWatermarkOffset)"
       )
     }
 
@@ -514,6 +515,7 @@ object MetadataLogConfig {
   def apply(config: AbstractConfig, maxBatchSizeInBytes: Int, maxFetchSizeInBytes: Int): MetadataLogConfig = {
     new MetadataLogConfig(
       config.getInt(KafkaConfig.MetadataLogSegmentBytesProp),
+      config.getInt(KafkaConfig.MetadataLogSegmentMinBytesProp),
       config.getLong(KafkaConfig.MetadataLogSegmentMillisProp),
       config.getLong(KafkaConfig.MetadataMaxRetentionBytesProp),
       config.getLong(KafkaConfig.MetadataMaxRetentionMillisProp),
@@ -526,6 +528,7 @@ object MetadataLogConfig {
 }
 
 case class MetadataLogConfig(logSegmentBytes: Int,
+                             logSegmentMinBytes: Int,
                              logSegmentMillis: Long,
                              retentionMaxBytes: Long,
                              retentionMillis: Long,
@@ -553,6 +556,10 @@ object KafkaMetadataLog {
     LogConfig.validateValues(props)
     val defaultLogConfig = LogConfig(props)
 
+    if (config.logSegmentBytes < config.logSegmentMinBytes) {
+      throw new InvalidConfigurationException(s"Cannot set $MetadataLogSegmentBytesProp below ${config.logSegmentMinBytes}")
+    }
+
     val log = Log(
       dir = dataDir,
       config = defaultLogConfig,
@@ -577,6 +584,12 @@ object KafkaMetadataLog {
       topicPartition,
       config
     )
+
+    // Print a warning if users have overridden the internal config
+    if (config.logSegmentMinBytes != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
+      metadataLog.error(s"Overriding $MetadataLogSegmentMinBytesProp is only supported for testing. Setting " +
+        s"this value too low may lead to an inability to write batches of metadata records.")
+    }
 
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
     // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.

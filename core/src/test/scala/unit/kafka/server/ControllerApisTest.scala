@@ -20,6 +20,7 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.Properties
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
@@ -50,8 +51,9 @@ import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfig 
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
-import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.ApiMessage
+import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.controller.Controller
@@ -147,6 +149,57 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
       Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
         handleFetch(buildRequest(new FetchRequest(new FetchRequestData(), 12))))
+  }
+
+  @Test
+  def testFetchSentToKRaft(): Unit = {
+    when(
+      raftManager.handleRequest(
+        any(classOf[RequestHeader]),
+        any(classOf[ApiMessage]),
+        any(classOf[Long])
+      )
+    ).thenReturn(
+      new CompletableFuture[ApiMessage]()
+    )
+
+    createControllerApis(None, new MockController.Builder().build())
+      .handleFetch(buildRequest(new FetchRequest(new FetchRequestData(), 12)))
+
+    verify(raftManager).handleRequest(
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any()
+    )
+  }
+
+  @Test
+  def testUnauthorizedFetchSnapshot(): Unit = {
+    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
+      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
+        handleFetchSnapshot(buildRequest(new FetchSnapshotRequest(new FetchSnapshotRequestData(), 0))))
+  }
+
+  @Test
+  def testFetchSnapshotSentToKRaft(): Unit = {
+    when(
+      raftManager.handleRequest(
+        any(classOf[RequestHeader]),
+        any(classOf[ApiMessage]),
+        any(classOf[Long])
+      )
+    ).thenReturn(
+      new CompletableFuture[ApiMessage]()
+    )
+
+    createControllerApis(None, new MockController.Builder().build())
+      .handleFetchSnapshot(buildRequest(new FetchSnapshotRequest(new FetchSnapshotRequestData(), 0)))
+
+    verify(raftManager).handleRequest(
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any()
+    )
   }
 
   @Test
