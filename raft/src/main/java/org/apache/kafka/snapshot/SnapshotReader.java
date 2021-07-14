@@ -84,7 +84,7 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
      */
     public long lastContainedLogTimestamp() {
         if (!lastContainedLogTimestamp.isPresent()) {
-            // nextBatch is expected to be empty
+            // nextBatch is expected to be equal to Optional.empty() so just replace it
             nextBatch = nextBatch();
         }
 

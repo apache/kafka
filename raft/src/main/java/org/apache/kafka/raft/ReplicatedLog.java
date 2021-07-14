@@ -280,11 +280,19 @@ public interface ReplicatedLog extends AutoCloseable {
     Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId);
 
     /**
-     * Returns the latest snapshot id if one exists.
+     * Returns the latest readable snapshot if one exists.
      *
-     * @return an Optional snapshot id of the latest snashot if one exists, otherwise returns an
-     * empty Optional
+     * @return an Optional with the latest readable snapshot, if one exists, otherwise
+     *         returns an empty Optional
      */
+    Optional<RawSnapshotReader> latestSnapshot();
+
+     /**
+      * Returns the latest snapshot id if one exists.
+      *
+      * @return an Optional snapshot id of the latest snashot if one exists, otherwise returns an
+      *         empty Optional
+      */
     Optional<OffsetAndEpoch> latestSnapshotId();
 
     /**

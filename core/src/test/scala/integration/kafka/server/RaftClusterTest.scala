@@ -63,7 +63,7 @@ class RaftClusterTest {
       cluster.startup()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
@@ -89,7 +89,7 @@ class RaftClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
 
       val admin = Admin.create(cluster.clientProperties())
@@ -147,7 +147,7 @@ class RaftClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
@@ -190,7 +190,7 @@ class RaftClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
