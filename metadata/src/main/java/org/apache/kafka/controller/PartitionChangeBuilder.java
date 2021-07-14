@@ -35,7 +35,7 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
 /**
- * PartitionMutator handles changing partition registrations.
+ * PartitionChangeBuilder handles changing partition registrations.
  */
 public class PartitionChangeBuilder {
     public static boolean changeRecordIsNoOp(PartitionChangeRecord record) {

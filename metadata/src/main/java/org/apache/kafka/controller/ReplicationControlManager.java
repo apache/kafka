@@ -852,6 +852,7 @@ public class ReplicationControlManager {
             partitionId,
             r -> clusterControl.unfenced(r),
             () -> uncleanOk || configurationControl.uncleanLeaderElectionEnabledForTopic(topic));
+        builder.setAlwaysElectPreferredIfPossible(true);
         Optional<ApiMessageAndVersion> record = builder.build();
         if (!record.isPresent()) {
             if (partition.leader == NO_LEADER) {

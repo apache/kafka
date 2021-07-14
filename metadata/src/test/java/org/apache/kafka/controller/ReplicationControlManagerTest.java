@@ -847,9 +847,7 @@ public class ReplicationControlManagerTest {
                     setPartitionIndex(1).
                     setErrorCode(FENCED_LEADER_EPOCH.code()))))),
             alterIsrResult.response());
-        System.out.println("applying final alterIsr...");
         ctx.replay(alterIsrResult.records());
-        System.out.println("performing final check...");
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
     }
 
