@@ -123,9 +123,11 @@ public class PartitionChangeBuilderTest {
         testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder(false).
             setTargetIsr(Arrays.asList(2, 1)), new PartitionChangeRecord(), 1);
         testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder(false).
-            setTargetIsr(Arrays.asList(2, 1, 3, 4)), new PartitionChangeRecord(), 1);
+            setTargetIsr(Arrays.asList(2, 1, 3, 4)), new PartitionChangeRecord(),
+            NO_LEADER_CHANGE);
         testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder(false).
-            setTargetReplicas(Arrays.asList(2, 1, 3, 4)), new PartitionChangeRecord(), 1);
+            setTargetReplicas(Arrays.asList(2, 1, 3, 4)), new PartitionChangeRecord(),
+            NO_LEADER_CHANGE);
         testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder(false).
             setTargetReplicas(Arrays.asList(2, 1, 3, 4)),
             new PartitionChangeRecord().setLeader(2), 2);
@@ -205,7 +207,7 @@ public class PartitionChangeBuilderTest {
     }
 
     @Test
-    public void testQuickReassignment() {
+    public void testRemovingReplicaReassignment() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
             Replicas.toList(FOO.replicas), Arrays.asList(1, 2));
         assertEquals(Collections.singletonList(3), replicas.removing());
@@ -225,7 +227,7 @@ public class PartitionChangeBuilderTest {
     }
 
     @Test
-    public void testStartLongReassignment() {
+    public void testAddingReplicaReassignment() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
             Replicas.toList(FOO.replicas), Arrays.asList(1, 2, 3, 4));
         assertEquals(Collections.emptyList(), replicas.removing());
@@ -235,8 +237,7 @@ public class PartitionChangeBuilderTest {
                 setTopicId(FOO_ID).
                 setPartitionId(0).
                 setReplicas(Arrays.asList(1, 2, 3, 4)).
-                setAddingReplicas(Collections.singletonList(4)).
-                setLeader(1),
+                setAddingReplicas(Collections.singletonList(4)),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion())),
             createFooBuilder(false).
                 setTargetReplicas(replicas.merged()).

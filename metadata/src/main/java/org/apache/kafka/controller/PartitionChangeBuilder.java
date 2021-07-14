@@ -150,14 +150,28 @@ public class PartitionChangeBuilder {
         }
     }
 
+    /**
+     * Trigger a leader epoch bump if one is needed.
+     *
+     * We need to bump the leader epoch if:
+     * 1. The leader changed.
+     * 2. The new ISR does not contain all the nodes that the old ISR did.
+     * 3. The new replia list does not contain all the nodes that the old replia list did.
+     *
+     * Changes that do NOT fall in these categories will increase the partition epoch, but
+     * not the leader epoch. Note that if the leader epoch increases, the partition epoch
+     * will always increases as well; there is no case where the partition epoch increases
+     * more slowly than the leader epoch.
+     *
+     * If the PartitionChangeRecord sets the leader field to something other than
+     * NO_LEADER_CHANGE, a leader epoch bump will automatically occur. That takes care of
+     * case 1. In this function, we check for cases 2 and 3, and handle them by manually
+     * setting record.leader to the current leader.
+     */
     void triggerLeaderEpochBumpIfNeeded(PartitionChangeRecord record) {
-        // If we didn't elect a new leader, but the ISR or replica set has changed, we
-        // still want to increase the leader epoch. Therefore, we set the leader field in
-        // the PartitionChangeRecord to the value of the current leader. This will trigger
-        // a leader epoch bump without changing the leader.
         if (record.leader() == NO_LEADER_CHANGE) {
-            if (!targetIsr.equals(Replicas.toList(partition.isr)) ||
-                    !Replicas.areEqualAsSets(targetReplicas, partition.replicas)) {
+            if (!Replicas.contains(targetIsr, partition.isr) ||
+                    !Replicas.contains(targetReplicas, partition.replicas)) {
                 record.setLeader(partition.leader);
             }
         }

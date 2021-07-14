@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 
@@ -29,6 +30,7 @@ import java.util.Objects;
 class PartitionReassignmentRevert {
     private final List<Integer> replicas;
     private final List<Integer> isr;
+    private final boolean unclean;
 
     PartitionReassignmentRevert(PartitionRegistration registration) {
         // Figure out the replica list and ISR that we will have after reverting the
@@ -42,20 +44,30 @@ class PartitionReassignmentRevert {
             int replica = registration.isr[i];
             if (!adding.contains(replica)) {
                 this.isr.add(replica);
-            } else if (i == registration.isr.length - 1 && isr.isEmpty()) {
-                // This is a special case where taking out all the "adding" replicas is
-                // not possible. The reason it is not possible is that doing so would
-                // create an empty ISR, which is not allowed.
-                //
-                // In this case, we leave in one of the adding replicas permanently.
-                this.isr.add(replica);
-                this.replicas.add(replica);
             }
         }
         for (int replica : registration.replicas) {
             if (!adding.contains(replica)) {
                 this.replicas.add(replica);
             }
+        }
+        if (isr.isEmpty()) {
+            // In the special case that all the replicas that are in the ISR are also
+            // contained in addingReplicas, we choose the first remaining replica and add
+            // it to the ISR. This is considered an unclean leader election. Therefore,
+            // calling code must check that unclean leader election is enabled before
+            // accepting the new ISR.
+            if (this.replicas.isEmpty()) {
+                // This should not be reachable, since it would require a partition
+                // starting with an empty replica set prior to the reassignment we are
+                // trying to revert.
+                throw new InvalidReplicaAssignmentException("Invalid replica " +
+                    "assignment: addingReplicas contains all replicas.");
+            }
+            isr.add(replicas.get(0));
+            this.unclean = true;
+        } else {
+            this.unclean = false;
         }
     }
 
@@ -65,6 +77,10 @@ class PartitionReassignmentRevert {
 
     List<Integer> isr() {
         return isr;
+    }
+
+    boolean unclean() {
+        return unclean;
     }
 
     @Override

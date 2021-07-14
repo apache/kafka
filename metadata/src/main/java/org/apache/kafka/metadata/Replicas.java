@@ -140,6 +140,31 @@ public class Replicas {
     }
 
     /**
+     * Check if the first list of integers contains the second.
+     *
+     * @param a             The first list
+     * @param b             The second list
+     *
+     * @return              True only if the first contains the second.
+     */
+    public static boolean contains(List<Integer> a, int[] b) {
+        List<Integer> aSorted = new ArrayList<>(a);
+        aSorted.sort(Integer::compareTo);
+        List<Integer> bSorted = Replicas.toList(b);
+        bSorted.sort(Integer::compareTo);
+        int i = 0;
+        for (int replica : bSorted) {
+            while (true) {
+                if (i >= aSorted.size()) return false;
+                int replica2 = aSorted.get(i++);
+                if (replica2 == replica) break;
+                if (replica2 > replica) return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Copy a replica array without any occurrences of the given value.
      *
      * @param replicas      The replica array.
@@ -219,22 +244,5 @@ public class Replicas {
             result.add(replica);
         }
         return result;
-    }
-
-    /**
-     * Check if two lists of integers are equal when considered as unordered sets.
-     *
-     * @param a             The first list
-     * @param b             The second list
-     *
-     * @return              A new array with the given value.
-     */
-    public static boolean areEqualAsSets(List<Integer> a, int[] b) {
-        if (a.size() != b.length) return false;
-        List<Integer> aSorted = new ArrayList<>(a);
-        aSorted.sort(Integer::compareTo);
-        List<Integer> bSorted = Replicas.toList(b);
-        bSorted.sort(Integer::compareTo);
-        return aSorted.equals(bSorted);
     }
 }

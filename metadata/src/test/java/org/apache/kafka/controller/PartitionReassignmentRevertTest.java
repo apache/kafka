@@ -25,6 +25,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(40)
@@ -37,6 +39,7 @@ public class PartitionReassignmentRevertTest {
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
         assertEquals(Arrays.asList(3, 2), revert.isr());
+        assertFalse(revert.unclean());
     }
 
     @Test
@@ -47,6 +50,7 @@ public class PartitionReassignmentRevertTest {
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
         assertEquals(Arrays.asList(3, 2), revert.isr());
+        assertFalse(revert.unclean());
     }
 
     @Test
@@ -57,6 +61,7 @@ public class PartitionReassignmentRevertTest {
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
         assertEquals(Arrays.asList(2), revert.isr());
+        assertFalse(revert.unclean());
     }
 
     @Test
@@ -67,6 +72,7 @@ public class PartitionReassignmentRevertTest {
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
         assertEquals(Arrays.asList(2), revert.isr());
+        assertFalse(revert.unclean());
     }
 
     @Test
@@ -75,7 +81,8 @@ public class PartitionReassignmentRevertTest {
             new int[] {4, 5, 3, 2, 1}, new int[] {4, 5},
             new int[] {2}, new int[] {4, 5}, 3, 100, 200);
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
-        assertEquals(Arrays.asList(5, 3, 2, 1), revert.replicas());
-        assertEquals(Arrays.asList(5), revert.isr());
+        assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
+        assertEquals(Arrays.asList(3), revert.isr());
+        assertTrue(revert.unclean());
     }
 }

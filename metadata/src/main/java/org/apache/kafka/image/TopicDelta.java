@@ -104,7 +104,7 @@ public final class TopicDelta {
             if (entry.getValue().leader == brokerId) {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
                 if (prevPartition == null ||
-                        prevPartition.leaderEpoch != entry.getValue().leaderEpoch) {
+                        prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
                     results.add(entry);
                 }
             }
@@ -125,7 +125,7 @@ public final class TopicDelta {
                     Replicas.contains(entry.getValue().replicas, brokerId)) {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
                 if (prevPartition == null ||
-                        prevPartition.leaderEpoch != entry.getValue().leaderEpoch) {
+                        prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
                     results.add(entry);
                 }
             }

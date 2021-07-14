@@ -191,38 +191,7 @@ public class PartitionRegistration {
      * Returns true if this partition is reassigning.
      */
     public boolean isReassigning() {
-        return removingReplicas.length > 0 | addingReplicas.length > 0;
-    }
-
-    /**
-     * Check if an ISR change completes this partition's reassignment.
-     *
-     * @param newIsr    The new ISR.
-     * @return          True if the reassignment is complete.
-     */
-    public boolean isrChangeCompletesReassignment(int[] newIsr) {
-        // Check if there is any reassignment in progress.
-        if (!isReassigning()) return false;
-
-        if (removingReplicas.length > 0) {
-            // Check that we would still have at least one replica in the ISR after
-            // removing all removingReplicas.
-            boolean foundNode = false;
-            for (int replica : newIsr) {
-                if (!Replicas.contains(removingReplicas, replica)) {
-                    foundNode = true;
-                    break;
-                }
-            }
-            if (!foundNode) return false;
-        }
-        if (addingReplicas.length > 0) {
-            // Check that the new ISR includes all addingReplicas.
-            for (int replica : addingReplicas) {
-                if (!Replicas.contains(newIsr, replica)) return false;
-            }
-        }
-        return true;
+        return removingReplicas.length > 0 || addingReplicas.length > 0;
     }
 
     @Override

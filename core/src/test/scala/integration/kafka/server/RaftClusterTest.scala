@@ -368,6 +368,7 @@ class RaftClusterTest {
         assignments.put(0, Arrays.asList(0, 1, 2))
         assignments.put(1, Arrays.asList(1, 2, 3))
         assignments.put(2, Arrays.asList(2, 3, 0))
+        assignments.put(3, Arrays.asList(3, 2, 1))
         val createTopicResult = admin.createTopics(Collections.singletonList(
           new NewTopic("foo", assignments)))
         createTopicResult.all().get()
@@ -382,12 +383,14 @@ class RaftClusterTest {
           Optional.of(new NewPartitionReassignment(Arrays.asList(0, 1, 2))))
         reassignments.put(new TopicPartition("foo", 2),
           Optional.of(new NewPartitionReassignment(Arrays.asList(2, 3))))
+        reassignments.put(new TopicPartition("foo", 3),
+          Optional.of(new NewPartitionReassignment(Arrays.asList(3, 2, 0, 1))))
         admin.alterPartitionReassignments(reassignments).all().get()
         TestUtils.waitUntilTrue(
           () => admin.listPartitionReassignments().reassignments().get().isEmpty(),
           "The reassignment never completed.")
         var currentMapping: Seq[Seq[Int]] = Seq()
-        val expectedMapping = Seq(Seq(2, 1, 0), Seq(0, 1, 2), Seq(2, 3))
+        val expectedMapping = Seq(Seq(2, 1, 0), Seq(0, 1, 2), Seq(2, 3), Seq(3, 2, 0, 1))
         TestUtils.waitUntilTrue( () => {
           val topicInfoMap = admin.describeTopics(Collections.singleton("foo")).all().get()
           if (topicInfoMap.containsKey("foo")) {

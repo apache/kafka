@@ -111,13 +111,18 @@ public class ReplicasTest {
         assertEquals(Collections.emptySet(), Replicas.toSet(new int[] {}));
         assertEquals(new HashSet<>(Arrays.asList(3, 1, 5)),
             Replicas.toSet(new int[] {1, 3, 5}));
+        assertEquals(new HashSet<>(Arrays.asList(1, 2, 10)),
+            Replicas.toSet(new int[] {1, 1, 2, 10, 10}));
     }
 
     @Test
-    public void testAreEqualAsSets() {
-        assertTrue(Replicas.areEqualAsSets(Collections.emptyList(), Replicas.NONE));
-        assertFalse(Replicas.areEqualAsSets(Collections.emptyList(), new int[] {3}));
-        assertTrue(Replicas.areEqualAsSets(Arrays.asList(1, 2), new int[] {1, 2}));
-        assertTrue(Replicas.areEqualAsSets(Arrays.asList(1, 2, 3), new int[] {2, 1, 3}));
+    public void testContains2() {
+        assertTrue(Replicas.contains(Collections.emptyList(), Replicas.NONE));
+        assertFalse(Replicas.contains(Collections.emptyList(), new int[] {1}));
+        assertTrue(Replicas.contains(Arrays.asList(1, 2, 3), new int[] {3, 2, 1}));
+        assertTrue(Replicas.contains(Arrays.asList(1, 2, 3, 4), new int[] {3}));
+        assertTrue(Replicas.contains(Arrays.asList(1, 2, 3, 4), new int[] {3, 1}));
+        assertFalse(Replicas.contains(Arrays.asList(1, 2, 3, 4), new int[] {3, 1, 7}));
+        assertTrue(Replicas.contains(Arrays.asList(1, 2, 3, 4), new int[] {}));
     }
 }

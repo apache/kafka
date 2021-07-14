@@ -70,6 +70,8 @@ import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -102,6 +104,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(40)
 public class ReplicationControlManagerTest {
+    private final static Logger log = LoggerFactory.getLogger(ReplicationControlManagerTest.class);
+
     private static class ReplicationControlTestContext {
         final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         final LogContext logContext = new LogContext();
@@ -869,12 +873,12 @@ public class ReplicationControlManagerTest {
                         setErrorCode(NO_REASSIGNMENT_IN_PROGRESS.code()).
                         setErrorMessage(null)))))),
             cancelResult);
-        System.out.println("running final alterIsr...");
+        log.info("running final alterIsr...");
         ControllerResult<AlterIsrResponseData> alterIsrResult = replication.alterIsr(
             new AlterIsrRequestData().setBrokerId(3).setBrokerEpoch(103).
                 setTopics(Arrays.asList(new TopicData().setName("foo").setPartitions(Arrays.asList(
                     new PartitionData().setPartitionIndex(1).setCurrentIsrVersion(1).
-                        setLeaderEpoch(1).setNewIsr(Arrays.asList(3, 0, 2, 1)))))));
+                        setLeaderEpoch(0).setNewIsr(Arrays.asList(3, 0, 2, 1)))))));
         assertEquals(new AlterIsrResponseData().setTopics(Arrays.asList(
             new AlterIsrResponseData.TopicData().setName("foo").setPartitions(Arrays.asList(
                 new AlterIsrResponseData.PartitionData().
@@ -942,7 +946,7 @@ public class ReplicationControlManagerTest {
         assertEquals(new PartitionRegistration(new int[] {1, 2, 3, 0}, new int[] {0, 1, 2},
             new int[] {}, new int[] {}, 0, 1, 2), replication.getPartition(fooId, 1));
         assertEquals(new PartitionRegistration(new int[] {1, 2, 3, 4, 0}, new int[] {4, 2},
-            new int[] {}, new int[] {0, 1}, 4, 2, 2), replication.getPartition(barId, 0));
+            new int[] {}, new int[] {0, 1}, 4, 1, 2), replication.getPartition(barId, 0));
         ListPartitionReassignmentsResponseData currentReassigning =
             new ListPartitionReassignmentsResponseData().setErrorMessage(null).
                 setTopics(Arrays.asList(new OngoingTopicReassignment().
@@ -986,13 +990,13 @@ public class ReplicationControlManagerTest {
             new AlterIsrRequestData().setBrokerId(4).setBrokerEpoch(104).
                 setTopics(Arrays.asList(new TopicData().setName("bar").setPartitions(Arrays.asList(
                     new PartitionData().setPartitionIndex(0).setCurrentIsrVersion(2).
-                        setLeaderEpoch(2).setNewIsr(Arrays.asList(4, 1, 2, 3, 0)))))));
+                        setLeaderEpoch(1).setNewIsr(Arrays.asList(4, 1, 2, 3, 0)))))));
         assertEquals(new AlterIsrResponseData().setTopics(Arrays.asList(
             new AlterIsrResponseData.TopicData().setName("bar").setPartitions(Arrays.asList(
                 new AlterIsrResponseData.PartitionData().
                     setPartitionIndex(0).
                     setLeaderId(4).
-                    setLeaderEpoch(3).
+                    setLeaderEpoch(1).
                     setIsr(Arrays.asList(4, 1, 2, 3, 0)).
                     setCurrentIsrVersion(3).
                     setErrorCode(NONE.code()))))),
@@ -1000,7 +1004,7 @@ public class ReplicationControlManagerTest {
         ctx.replay(cancelResult.records());
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
         assertEquals(new PartitionRegistration(new int[] {2, 3, 4}, new int[] {4, 2},
-            new int[] {}, new int[] {}, 4, 3, 3), replication.getPartition(barId, 0));
+            new int[] {}, new int[] {}, 4, 2, 3), replication.getPartition(barId, 0));
     }
 
     @Test
