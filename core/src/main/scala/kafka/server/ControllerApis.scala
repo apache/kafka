@@ -22,6 +22,7 @@ import java.util.Collections
 import java.util.Map.Entry
 import java.util.concurrent.{CompletableFuture, ExecutionException}
 import java.util.concurrent.TimeUnit.{MILLISECONDS, NANOSECONDS}
+
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -80,6 +81,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     try {
       request.header.apiKey match {
         case ApiKeys.FETCH => handleFetch(request)
+        case ApiKeys.FETCH_SNAPSHOT => handleFetchSnapshot(request)
         case ApiKeys.METADATA => handleMetadataRequest(request)
         case ApiKeys.CREATE_TOPICS => handleCreateTopics(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopics(request)
@@ -138,6 +140,11 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleFetch(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     handleRaftRequest(request, response => new FetchResponse(response.asInstanceOf[FetchResponseData]))
+  }
+
+  def handleFetchSnapshot(request: RequestChannel.Request): Unit = {
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    handleRaftRequest(request, response => new FetchSnapshotResponse(response.asInstanceOf[FetchSnapshotResponseData]))
   }
 
   def handleMetadataRequest(request: RequestChannel.Request): Unit = {
