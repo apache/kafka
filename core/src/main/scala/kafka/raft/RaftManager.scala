@@ -129,12 +129,10 @@ class KafkaRaftManager[T](
   scheduler.startup()
 
   private val dataDir = createDataDir()
-  override val replicatedLog = buildMetadataLog()
+  override val replicatedLog: ReplicatedLog = buildMetadataLog()
   private val netChannel = buildNetworkChannel()
   override val client: KafkaRaftClient[T] = buildRaftClient()
   private val raftIoThread = new RaftIoThread(client, threadNamePrefix)
-
-  def kafkaRaftClient: KafkaRaftClient[T] = client
 
   def startup(): Unit = {
     // Update the voter endpoints (if valid) with what's in RaftConfig

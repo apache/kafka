@@ -333,12 +333,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private Optional<SnapshotReader<T>> latestSnapshot() {
-        return log.latestSnapshotId().flatMap(snapshotId ->
-            log
-            .readSnapshot(snapshotId)
-            .map(reader ->
-                SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
-            )
+        return log.latestSnapshot().map(reader ->
+            SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
         );
     }
 

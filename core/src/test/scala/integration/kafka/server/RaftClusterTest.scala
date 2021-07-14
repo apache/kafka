@@ -65,7 +65,7 @@ class RaftClusterTest {
       cluster.startup()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
@@ -91,7 +91,7 @@ class RaftClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
 
       val admin = Admin.create(cluster.clientProperties())
@@ -128,7 +128,7 @@ class RaftClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
@@ -140,7 +140,7 @@ class RaftClusterTest {
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
 
-        // List created topic
+        // List created topics
         waitForTopicListing(admin, Seq("test-topic-1", "test-topic-2", "test-topic-3"), Seq())
       } finally {
         admin.close()

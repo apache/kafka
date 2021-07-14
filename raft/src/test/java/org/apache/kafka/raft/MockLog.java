@@ -490,6 +490,11 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
+    public Optional<RawSnapshotReader> latestSnapshot() {
+        return latestSnapshotId().flatMap(this::readSnapshot);
+    }
+
+    @Override
     public Optional<OffsetAndEpoch> latestSnapshotId() {
         return Optional.ofNullable(snapshots.lastEntry())
             .map(Map.Entry::getKey);

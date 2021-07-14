@@ -294,6 +294,12 @@ final class KafkaMetadataLog private (
     }
   }
 
+  override def latestSnapshot(): Optional[RawSnapshotReader] = {
+    snapshots synchronized {
+      latestSnapshotId().flatMap(readSnapshot)
+    }
+  }
+
   override def latestSnapshotId(): Optional[OffsetAndEpoch] = {
     snapshots synchronized {
       snapshots.lastOption.map { case (snapshotId, _) => snapshotId }.asJava
