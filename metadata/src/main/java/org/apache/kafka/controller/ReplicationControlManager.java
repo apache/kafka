@@ -377,8 +377,20 @@ public class ReplicationControlManager {
                 validateManualPartitionAssignment(assignment.brokerIds(), replicationFactor);
                 replicationFactor = OptionalInt.of(assignment.brokerIds().size());
                 int[] replicas = Replicas.toArray(assignment.brokerIds());
+                List<Integer> isr = new ArrayList<>();
+                for (int replica : replicas) {
+                    if (clusterControl.unfenced(replica)) {
+                        isr.add(replica);
+                    }
+                }
+                if (isr.isEmpty()) {
+                    return new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+                        "All brokers specified in the manual partition assignment for " +
+                        "partition " + assignment.partitionIndex() + " are fenced.");
+                }
                 newParts.put(assignment.partitionIndex(), new PartitionRegistration(
-                    replicas, replicas, Replicas.NONE, Replicas.NONE, replicas[0], 0, 0));
+                    replicas, Replicas.toArray(isr), Replicas.NONE, Replicas.NONE,
+                    isr.get(0), 0, 0));
             }
         } else if (topic.replicationFactor() < -1 || topic.replicationFactor() == 0) {
             return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
