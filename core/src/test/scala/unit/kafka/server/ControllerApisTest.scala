@@ -160,7 +160,7 @@ class ControllerApisTest {
         any(classOf[Long])
       )
     ).thenReturn(
-      new CompletableFuture()
+      new CompletableFuture[ApiMessage]()
     )
 
     createControllerApis(None, new MockController.Builder().build())
@@ -189,7 +189,7 @@ class ControllerApisTest {
         any(classOf[Long])
       )
     ).thenReturn(
-      new CompletableFuture()
+      new CompletableFuture[ApiMessage]()
     )
 
     createControllerApis(None, new MockController.Builder().build())
