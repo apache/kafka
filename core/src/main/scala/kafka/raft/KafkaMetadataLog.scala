@@ -235,16 +235,15 @@ final class KafkaMetadataLog private (
   }
 
   override def createNewSnapshot(snapshotId: OffsetAndEpoch): Optional[RawSnapshotWriter] = {
+    if (snapshotId.offset < startOffset) {
+      info(s"Cannot create a snapshot with an id ($snapshotId) less than the log start offset ($startOffset)")
+      return Optional.empty()
+    }
+
     val highWatermarkOffset = highWatermark.offset
     if (snapshotId.offset > highWatermarkOffset) {
       throw new IllegalArgumentException(
-        s"Cannot create a snapshot for an end offset ($endOffset) greater than the high-watermark ($highWatermarkOffset)"
-      )
-    }
-
-    if (snapshotId.offset < startOffset) {
-      throw new IllegalArgumentException(
-        s"Cannot create a snapshot for an end offset ($endOffset) less than the log start offset ($startOffset)"
+        s"Cannot create a snapshot with an id ($snapshotId) greater than the high-watermark ($highWatermarkOffset)"
       )
     }
 

@@ -193,10 +193,7 @@ final class KafkaMetadataLogTest {
     // Simulate log cleanup that advances the LSO
     log.log.maybeIncrementLogStartOffset(snapshotId.offset - 1, SegmentDeletion)
 
-    assertThrows(
-      classOf[IllegalArgumentException],
-      () => log.createNewSnapshot(new OffsetAndEpoch(snapshotId.offset - 2, snapshotId.epoch))
-    )
+    assertEquals(Optional.empty(), log.createNewSnapshot(new OffsetAndEpoch(snapshotId.offset - 2, snapshotId.epoch)))
   }
 
   @Test
