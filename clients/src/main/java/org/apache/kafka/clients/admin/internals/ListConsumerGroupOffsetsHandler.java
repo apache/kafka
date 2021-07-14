@@ -156,28 +156,28 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.debug("`OffsetFetch` request for group id {} failed due to error {}", groupId, error);
+                log.debug("`OffsetFetch` request for group id {} failed due to error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`OffsetFetch` request for group {} failed because the coordinator " +
-                    "is still in the process of loading state. Will retry", groupId);
+                log.debug("`OffsetFetch` request for group id {} failed because the coordinator " +
+                    "is still in the process of loading state. Will retry", groupId.idValue);
                 groupsToRetry.add(groupId);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
-                log.debug("`OffsetFetch` request for group {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry", groupId, error);
+                log.debug("`OffsetFetch` request for group id {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry", groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
 
             default:
                 final String unexpectedErrorMsg =
-                    String.format("`OffsetFetch` request for group id %s failed due to error %s", groupId, error);
+                    String.format("`OffsetFetch` request for group id %s failed due to error %s", groupId.idValue, error);
                 log.error(unexpectedErrorMsg);
                 failed.put(groupId, error.exception(unexpectedErrorMsg));
         }
