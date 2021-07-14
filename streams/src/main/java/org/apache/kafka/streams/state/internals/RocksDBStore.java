@@ -316,6 +316,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
 
         validateStoreOpen();
+        Objects.requireNonNull(prefix, "prefix cannot be null");
+        Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
         final Bytes prefixBytes = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
 
         final KeyValueIterator<Bytes, byte[]> rocksDbPrefixSeekIterator = dbAccessor.prefixScan(prefixBytes);

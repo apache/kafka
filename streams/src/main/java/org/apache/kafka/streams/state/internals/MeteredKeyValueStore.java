@@ -234,7 +234,6 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
-
         return new MeteredKeyValueIterator(wrapped().prefixScan(prefix, prefixKeySerializer), prefixScanSensor);
     }
 
