@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeMap;
+import java.util.SortedMap;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -49,7 +49,7 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
 
     @Override
     public void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
-                                   final TreeMap<UUID, ClientState> clientStates) {
+                                   final SortedMap<UUID, ClientState> clientStates) {
         final int numStandbyReplicas = configs.numStandbyReplicas;
         final Set<String> rackAwareAssignmentTags = new HashSet<>(configs.rackAwareAssignmentTags);
 
@@ -79,7 +79,7 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
 
     private static final class StandbyTaskDistributor {
         private final int numStandbyReplicas;
-        private final TreeMap<UUID, ClientState> clientStates;
+        private final SortedMap<UUID, ClientState> clientStates;
         private final Set<String> rackAwareAssignmentTags;
         private final Map<String, Set<String>> tagKeyToTagValuesMapping;
         private final Map<String, Set<UUID>> clientsPerTagValue;
@@ -89,7 +89,7 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
         private final Map<TaskId, Integer> tasksToRemainingStandbys;
 
         StandbyTaskDistributor(final int numStandbyReplicas,
-                               final TreeMap<UUID, ClientState> clientStates,
+                               final SortedMap<UUID, ClientState> clientStates,
                                final Set<String> rackAwareAssignmentTags,
                                final Map<TaskId, UUID> statefulTasksWithClients) {
             tagKeyToTagValuesMapping = new HashMap<>();
@@ -158,7 +158,7 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
             usedClients.add(activeTaskClientId);
         }
 
-        private void fillData(final TreeMap<UUID, ClientState> clientStates) {
+        private void fillData(final SortedMap<UUID, ClientState> clientStates) {
             for (final Entry<UUID, ClientState> clientStateEntry : clientStates.entrySet()) {
                 final UUID clientId = clientStateEntry.getKey();
                 final ClientState clientState = clientStateEntry.getValue();

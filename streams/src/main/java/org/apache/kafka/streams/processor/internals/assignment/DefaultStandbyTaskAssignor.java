@@ -22,7 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
+import java.util.SortedMap;
 import java.util.UUID;
 
 import static java.util.stream.Collectors.toMap;
@@ -36,11 +36,11 @@ class DefaultStandbyTaskAssignor extends StandbyTaskAssignor {
 
     @Override
     public void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
-                                   final TreeMap<UUID, ClientState> clientStates) {
+                                   final SortedMap<UUID, ClientState> clientStates) {
         final int numStandbyReplicas = configs.numStandbyReplicas;
         final Set<TaskId> statefulTasks = statefulTasksWithClients.keySet();
         final Map<TaskId, Integer> tasksToRemainingStandbys =
-            statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> numStandbyReplicas));
+            statefulTasks.stream().collect(toMap(task -> task, t -> numStandbyReplicas));
 
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
             (client, task) -> !clientStates.get(client).hasAssignedTask(task),

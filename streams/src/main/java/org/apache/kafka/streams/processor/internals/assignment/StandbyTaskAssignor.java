@@ -20,7 +20,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
 import java.util.Map;
-import java.util.TreeMap;
+import java.util.SortedMap;
 import java.util.UUID;
 
 abstract class StandbyTaskAssignor {
@@ -31,7 +31,7 @@ abstract class StandbyTaskAssignor {
     }
 
     abstract void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
-                                     final TreeMap<UUID, ClientState> clientStates);
+                                     final SortedMap<UUID, ClientState> clientStates);
 
     boolean isValidTaskMovement(final TaskMovementAttempt taskMovementAttempt) {
         return true;

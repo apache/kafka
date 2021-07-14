@@ -35,12 +35,6 @@ public class StandbyTaskAssignorInitializerTest {
     }
 
     @Test
-    public void shouldReturnNoopStandbyTaskAssignorWhenNumOfStandbyReplicasConfigIsZero() {
-        final StandbyTaskAssignor standbyTaskAssignor = standbyTaskAssignorInitializer.initStandbyTaskAssignor(newAssignmentConfigs(0));
-        assertTrue(standbyTaskAssignor instanceof NoopStandbyTaskAssignor);
-    }
-
-    @Test
     public void shouldReturnClientTagAwareStandbyTaskAssignorWhenRackAwareAssignmentTagsIsSet() {
         final StandbyTaskAssignor standbyTaskAssignor = standbyTaskAssignorInitializer.initStandbyTaskAssignor(newAssignmentConfigs(1, singletonList("az")));
         assertTrue(standbyTaskAssignor instanceof ClientTagAwareStandbyTaskAssignor);
@@ -50,10 +44,6 @@ public class StandbyTaskAssignorInitializerTest {
     public void shouldReturnDefaultStandbyTaskAssignorWhenRackAwareAssignmentTagsIsEmpty() {
         final StandbyTaskAssignor standbyTaskAssignor = standbyTaskAssignorInitializer.initStandbyTaskAssignor(newAssignmentConfigs(1, Collections.emptyList()));
         assertTrue(standbyTaskAssignor instanceof DefaultStandbyTaskAssignor);
-    }
-
-    private static AssignorConfiguration.AssignmentConfigs newAssignmentConfigs(final int numStandbyReplicas) {
-        return newAssignmentConfigs(numStandbyReplicas, Collections.emptyList());
     }
 
     private static AssignorConfiguration.AssignmentConfigs newAssignmentConfigs(final int numStandbyReplicas,

@@ -137,6 +137,10 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
                                            final Map<TaskId, UUID> statefulTasks,
                                            final AssignmentConfigs configs) {
+        if (configs.numStandbyReplicas == 0) {
+            return;
+        }
+
         final StandbyTaskAssignor standbyTaskAssignor = standbyTaskAssignorInitializer.initStandbyTaskAssignor(configs);
 
         standbyTaskAssignor.assignStandbyTasks(statefulTasks, clientStates);

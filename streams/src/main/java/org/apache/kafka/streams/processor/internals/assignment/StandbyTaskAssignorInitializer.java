@@ -24,9 +24,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 class StandbyTaskAssignorInitializer {
 
     StandbyTaskAssignor initStandbyTaskAssignor(final AssignmentConfigs configs) {
-        if (configs.numStandbyReplicas == 0) {
-            return new NoopStandbyTaskAssignor(configs);
-        } else if (!configs.rackAwareAssignmentTags.isEmpty()) {
+        if (!configs.rackAwareAssignmentTags.isEmpty()) {
             return new ClientTagAwareStandbyTaskAssignor(configs);
         } else {
             return new DefaultStandbyTaskAssignor(configs);
