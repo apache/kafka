@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -176,6 +177,15 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseAll() {
         throw new UnsupportedOperationException("MemoryLRUCache does not support reverseAll() function.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException at every invocation
+     */
+    @Override
+    public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
+                                                                                    final PS prefixKeySerializer) {
+        throw new UnsupportedOperationException("MemoryLRUCache does not support prefixScan() function.");
     }
 
     @Override
