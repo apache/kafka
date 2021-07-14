@@ -18,7 +18,6 @@ package org.apache.kafka.clients.admin.internals;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -88,77 +87,54 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
     ) {
-        DeleteGroupsResponse response = (DeleteGroupsResponse) abstractResponse;
-        Map<CoordinatorKey, Void> completed = new HashMap<>();
-        Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+        final DeleteGroupsResponse response = (DeleteGroupsResponse) abstractResponse;
+        final Map<CoordinatorKey, Void> completed = new HashMap<>();
+        final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
-        final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
 
         for (DeletableGroupResult deletedGroup : response.data().results()) {
             CoordinatorKey groupIdKey = CoordinatorKey.byGroupId(deletedGroup.groupId());
             Errors error = Errors.forCode(deletedGroup.errorCode());
             if (error != Errors.NONE) {
-                handleError(groupIdKey, error, failed, groupsToUnmap, groupsToRetry);
+                handleError(groupIdKey, error, failed, groupsToUnmap);
                 continue;
             }
 
             completed.put(groupIdKey, null);
         }
 
-        if (groupsToUnmap.isEmpty() && groupsToRetry.isEmpty()) {
-            return new ApiResult<>(
-                completed,
-                failed,
-                Collections.emptyList()
-            );
-        } else {
-            // retry the request, so don't send completed/failed results back
-            return new ApiResult<>(
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                new ArrayList<>(groupsToUnmap)
-            );
-        }
+        return new ApiResult<>(completed, failed, new ArrayList<>(groupsToUnmap));
     }
 
     private void handleError(
         CoordinatorKey groupId,
         Errors error,
         Map<CoordinatorKey, Throwable> failed,
-        Set<CoordinatorKey> groupsToUnmap,
-        Set<CoordinatorKey> groupsToRetry
+        Set<CoordinatorKey> groupsToUnmap
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `{}` response", groupId,
-                    apiName(), error.exception());
-                failed.put(groupId, error.exception());
-                break;
             case INVALID_GROUP_ID:
             case NON_EMPTY_GROUP:
             case GROUP_ID_NOT_FOUND:
-                log.error("Received non retriable failure for group {} in `{}` response", groupId,
-                    apiName(), error.exception());
+                log.debug("`DeleteConsumerGroups` request for group id {} failed due to error {}", groupId, error);
                 failed.put(groupId, error.exception());
                 break;
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`{}` request for group {} failed because the coordinator " +
-                    "is still in the process of loading state. Will retry", apiName(), groupId);
-                groupsToRetry.add(groupId);
+                log.debug("`DeleteConsumerGroups` request for group {} failed because the coordinator " +
+                    "is still in the process of loading state. Will retry", groupId);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
-                log.debug("`{}` request for group {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry", apiName(), groupId, error);
+                log.debug("`DeleteConsumerGroups` request for group {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry", groupId, error);
                 groupsToUnmap.add(groupId);
                 break;
             default:
-                final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
-                    groupId, apiName());
-                log.error(unexpectedErrorMsg, error.exception());
+                log.error("`DeleteConsumerGroups` request for group id {} failed due to unexpected error {}", groupId, error);
                 failed.put(groupId, error.exception());
         }
     }
