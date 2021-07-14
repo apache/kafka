@@ -962,6 +962,21 @@ public class ReplicationControlManagerTest {
         assertEquals(currentReassigning, replication.listPartitionReassignments(Arrays.asList(
             new ListPartitionReassignmentsTopics().setName("bar").
                 setPartitionIndexes(Arrays.asList(0, 1, 2)))));
+        ControllerResult<AlterIsrResponseData> alterIsrResult = replication.alterIsr(
+            new AlterIsrRequestData().setBrokerId(4).setBrokerEpoch(104).
+                setTopics(Arrays.asList(new TopicData().setName("bar").setPartitions(Arrays.asList(
+                    new PartitionData().setPartitionIndex(0).setCurrentIsrVersion(2).
+                        setLeaderEpoch(1).setNewIsr(Arrays.asList(4, 1, 2, 3, 0)))))));
+        assertEquals(new AlterIsrResponseData().setTopics(Arrays.asList(
+            new AlterIsrResponseData.TopicData().setName("bar").setPartitions(Arrays.asList(
+                new AlterIsrResponseData.PartitionData().
+                    setPartitionIndex(0).
+                    setLeaderId(4).
+                    setLeaderEpoch(1).
+                    setIsr(Arrays.asList(4, 1, 2, 3, 0)).
+                    setCurrentIsrVersion(3).
+                    setErrorCode(NONE.code()))))),
+            alterIsrResult.response());
         ControllerResult<AlterPartitionReassignmentsResponseData> cancelResult =
             replication.alterPartitionReassignments(
                 new AlterPartitionReassignmentsRequestData().setTopics(Arrays.asList(
@@ -986,21 +1001,6 @@ public class ReplicationControlManagerTest {
                     new ReassignablePartitionResponse().setPartitionIndex(0).
                         setErrorMessage(null)))))),
             cancelResult);
-        ControllerResult<AlterIsrResponseData> alterIsrResult = replication.alterIsr(
-            new AlterIsrRequestData().setBrokerId(4).setBrokerEpoch(104).
-                setTopics(Arrays.asList(new TopicData().setName("bar").setPartitions(Arrays.asList(
-                    new PartitionData().setPartitionIndex(0).setCurrentIsrVersion(2).
-                        setLeaderEpoch(1).setNewIsr(Arrays.asList(4, 1, 2, 3, 0)))))));
-        assertEquals(new AlterIsrResponseData().setTopics(Arrays.asList(
-            new AlterIsrResponseData.TopicData().setName("bar").setPartitions(Arrays.asList(
-                new AlterIsrResponseData.PartitionData().
-                    setPartitionIndex(0).
-                    setLeaderId(4).
-                    setLeaderEpoch(1).
-                    setIsr(Arrays.asList(4, 1, 2, 3, 0)).
-                    setCurrentIsrVersion(3).
-                    setErrorCode(NONE.code()))))),
-            alterIsrResult.response());
         ctx.replay(cancelResult.records());
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null));
         assertEquals(new PartitionRegistration(new int[] {2, 3, 4}, new int[] {4, 2},
