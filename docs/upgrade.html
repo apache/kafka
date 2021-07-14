@@ -32,6 +32,8 @@
         For a complete list of removed APIs compare the detailed Kafka Streams upgrade notes.</li>
     <li>Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
         Projects that were relying on this transitive dependency will have to explicitly declare it.</li>
+    <li>Custom principal builder implementations specified through <code>principal.builder.class</code> must now implement the 
+        <code>KafkaPrincipalSerde</code> interface to allow for forwarding between brokers. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-590%3A+Redirect+Zookeeper+Mutation+Protocols+to+The+Controller">KIP-590</a> for more details about the usage of KafkaPrincipalSerde.</li>
     <li>A number of deprecated classes, methods and tools have been removed from the <code>clients</code>, <code>connect</code>, <code>core</code> and <code>tools</code> modules:</li>
     <ul>
         <li>The Scala <code>Authorizer</code>, <code>SimpleAclAuthorizer</code> and related classes have been removed. Please use the Java <code>Authorizer</code>
@@ -60,6 +62,9 @@
             were removed. These methods were not intended to be public API and there is no replacement.</li>
         <li>The <code>NoOffsetForPartitionException.partition()</code> method was removed. Please use <code>partitions()</code>
             instead.</li>
+        <li>The default <code>partition.assignment.strategy</code> is changed to "[RangeAssignor, CooperativeStickyAssignor]",
+            which will use the RangeAssignor by default, but allows upgrading to the CooperativeStickyAssignor with just a single rolling bounce that removes the RangeAssignor from the list.
+            Please check the client upgrade path guide <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-429:+Kafka+Consumer+Incremental+Rebalance+Protocol#KIP429:KafkaConsumerIncrementalRebalanceProtocol-Consumer">here</a> for more detail.</li>
         <li>The Scala <code>kafka.common.MessageFormatter</code> was removed. Please use the Java <code>org.apache.kafka.common.MessageFormatter</code>.</li>
         <li>The <code>MessageFormatter.init(Properties)</code> method was removed. Please use <code>configure(Map)</code> instead.</li>
         <li>The <code>checksum()</code> method has been removed from <code>ConsumerRecord</code> and <code>RecordMetadata</code>. The message
