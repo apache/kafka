@@ -39,13 +39,8 @@ class DefaultStandbyTaskAssignor extends StandbyTaskAssignor {
                                    final TreeMap<UUID, ClientState> clientStates) {
         final int numStandbyReplicas = configs.numStandbyReplicas;
         final Set<TaskId> statefulTasks = statefulTasksWithClients.keySet();
-        final Map<TaskId, Integer> tasksToRemainingStandbys = statefulTasks.stream()
-                                                                           .collect(
-                                                                               toMap(
-                                                                                   task -> task,
-                                                                                   t -> numStandbyReplicas
-                                                                               )
-                                                                           );
+        final Map<TaskId, Integer> tasksToRemainingStandbys =
+            statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> numStandbyReplicas));
 
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
             (client, task) -> !clientStates.get(client).hasAssignedTask(task),
