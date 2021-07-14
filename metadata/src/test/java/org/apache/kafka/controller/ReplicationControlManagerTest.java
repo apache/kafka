@@ -795,7 +795,7 @@ public class ReplicationControlManagerTest {
     public void testManualPartitionAssignmentOnAllFencedBrokers() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ctx.registerBrokers(0, 1, 2, 3);
-        ctx.createTestTopic("foo", new int[][] { new int[] {0, 1, 2}},
+        ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2}},
             INVALID_REPLICA_ASSIGNMENT.code());
     }
 
@@ -804,10 +804,10 @@ public class ReplicationControlManagerTest {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ctx.registerBrokers(0, 1, 2, 3, 4, 5);
         ctx.unfenceBrokers(0, 1, 2);
-        Uuid fooId = ctx.createTestTopic("foo", new int[][] { new int[] {0, 1, 2}}).topicId();
-        ctx.createPartitions(2, "foo", new int[][] { new int[] {3, 4, 5}},
+        Uuid fooId = ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2}}).topicId();
+        ctx.createPartitions(2, "foo", new int[][] {new int[] {3, 4, 5}},
             INVALID_REPLICA_ASSIGNMENT.code());
-        ctx.createPartitions(2, "foo", new int[][] { new int[] {2, 4, 5}}, NONE.code());
+        ctx.createPartitions(2, "foo", new int[][] {new int[] {2, 4, 5}}, NONE.code());
         assertEquals(new PartitionRegistration(new int[] {2, 4, 5},
                 new int[] {2}, Replicas.NONE, Replicas.NONE, 2, 0, 0),
             ctx.replicationControl.getPartition(fooId, 1));
