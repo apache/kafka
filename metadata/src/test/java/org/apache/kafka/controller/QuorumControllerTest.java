@@ -347,18 +347,12 @@ public class QuorumControllerTest {
     public void testSnapshotOnlyAfterConfiguredMinBytes() throws Throwable {
         final int numBrokers = 4;
         final int maxNewRecordBytes = 1000;
-        int appendedBytes = 0;
         Map<Integer, Long> brokerEpochs = new HashMap<>();
-        Uuid fooId;
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv,
-                    builder -> {
-                        builder
-                            .setConfigDefs(CONFIGS)
-                            .setSnapshotMaxNewRecordBytes(maxNewRecordBytes);
-                    })
+                    builder -> builder.setConfigDefs(CONFIGS).
+                        setSnapshotMaxNewRecordBytes(maxNewRecordBytes))
             ) {
-
                 QuorumController active = controlEnv.activeController();
                 for (int i = 0; i < numBrokers; i++) {
                     BrokerRegistrationReply reply = active.registerBroker(
@@ -371,25 +365,23 @@ public class QuorumControllerTest {
                                 setName("PLAINTEXT").setHost("localhost").
                                 setPort(9092 + i)).iterator()))).get();
                     brokerEpochs.put(i, reply.epoch());
+                    assertEquals(new BrokerHeartbeatReply(true, false, false, false),
+                        active.processBrokerHeartbeat(new BrokerHeartbeatRequestData().
+                            setWantFence(false).setBrokerEpoch(brokerEpochs.get(i)).
+                            setBrokerId(i).setCurrentMetadataOffset(100000L)).get());
                 }
 
-                assertTrue(
-                    logEnv.appendedBytes() < maxNewRecordBytes,
-                    String.format(
-                        "%s appended bytes is not less than %s max new record bytes",
+                assertTrue(logEnv.appendedBytes() < maxNewRecordBytes,
+                    String.format("%s appended bytes is not less than %s max new record bytes",
                         logEnv.appendedBytes(),
-                        maxNewRecordBytes
-                    )
-                );
+                        maxNewRecordBytes));
 
                 // Keep creating topic until we reached the max bytes limit
                 int counter = 0;
                 while (logEnv.appendedBytes() < maxNewRecordBytes) {
                     counter += 1;
                     String topicName = String.format("foo-%s", counter);
-
-                    CreateTopicsResponseData reply = active.createTopics(
-                        new CreateTopicsRequestData().setTopics(
+                    active.createTopics(new CreateTopicsRequestData().setTopics(
                             new CreatableTopicCollection(Collections.singleton(
                                 new CreatableTopic().setName(topicName).setNumPartitions(-1).
                                     setReplicationFactor((short) -1).
@@ -402,7 +394,6 @@ public class QuorumControllerTest {
                                             setBrokerIds(Arrays.asList(1, 2, 0))).
                                                 iterator()))).iterator()))).get();
                 }
-
                 logEnv.waitForLatestSnapshot();
             }
         }
