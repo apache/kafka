@@ -26,6 +26,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.connector.Connector;
@@ -112,7 +114,9 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
     protected Properties backupBrokerProps = new Properties();
     protected Map<String, String> primaryWorkerProps = new HashMap<>();
     protected Map<String, String> backupWorkerProps = new HashMap<>();
-    
+    protected ListenerName primaryBrokerListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
+    protected ListenerName backupBrokerListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
+
     @BeforeEach
     public void startClusters() throws Exception {
         startClusters(new HashMap<String, String>() {{
@@ -171,6 +175,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
                 .brokerProps(primaryBrokerProps)
                 .workerProps(primaryWorkerProps)
                 .maskExitProcedures(false)
+                .brokerListener(primaryBrokerListener)
                 .build();
 
         backup = new EmbeddedConnectCluster.Builder()
@@ -180,6 +185,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
                 .brokerProps(backupBrokerProps)
                 .workerProps(backupWorkerProps)
                 .maskExitProcedures(false)
+                .brokerListener(backupBrokerListener)
                 .build();
         
         primary.start();
@@ -718,9 +724,12 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         adminClientConfig.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_DURATION_MS);
 
         // create these topics before starting the connectors so we don't need to wait for discovery
+        adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, primary.kafka().bootstrapServers(primaryBrokerListener));
         primary.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, topicConfig, adminClientConfig);
         primary.kafka().createTopic("backup.test-topic-1", 1, 1, emptyMap, adminClientConfig);
         primary.kafka().createTopic("heartbeats", 1, 1, emptyMap, adminClientConfig);
+
+        adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, backup.kafka().bootstrapServers(backupBrokerListener));
         backup.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, emptyMap, adminClientConfig);
         backup.kafka().createTopic("primary.test-topic-1", 1, 1, emptyMap, adminClientConfig);
         backup.kafka().createTopic("heartbeats", 1, 1, emptyMap, adminClientConfig);

@@ -432,13 +432,14 @@ class VerifiableSource(VerifiableConnector):
     Helper class for running a verifiable source connector on a Kafka Connect cluster and analyzing the output.
     """
 
-    def __init__(self, cc, name="verifiable-source", tasks=1, topic="verifiable", throughput=1000):
+    def __init__(self, cc, name="verifiable-source", tasks=1, topic="verifiable", throughput=1000, complete_records=False):
         self.cc = cc
         self.logger = self.cc.logger
         self.name = name
         self.tasks = tasks
         self.topic = topic
         self.throughput = throughput
+        self.complete_records = complete_records
 
     def committed_messages(self):
         return list(filter(lambda m: 'committed' in m and m['committed'], self.messages()))
@@ -453,7 +454,8 @@ class VerifiableSource(VerifiableConnector):
             'connector.class': 'org.apache.kafka.connect.tools.VerifiableSourceConnector',
             'tasks.max': self.tasks,
             'topic': self.topic,
-            'throughput': self.throughput
+            'throughput': self.throughput,
+            'complete.record.data': self.complete_records
         })
 
 

@@ -114,7 +114,6 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     public synchronized Future<Void> executeFailed(Stage stage, Class<?> executingClass,
                                                    SourceRecord sourceRecord,
                                                    Throwable error) {
-
         markAsFailed();
         context.sourceRecord(sourceRecord);
         context.currentContext(stage, executingClass);

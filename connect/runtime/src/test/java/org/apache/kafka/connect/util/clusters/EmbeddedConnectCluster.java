@@ -18,6 +18,8 @@ package org.apache.kafka.connect.util.clusters;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -80,6 +82,7 @@ public class EmbeddedConnectCluster {
 
     private final Set<WorkerHandle> connectCluster;
     private final EmbeddedKafkaCluster kafkaCluster;
+    private final ListenerName brokerListener;
     private final Map<String, String> workerProps;
     private final String connectClusterName;
     private final int numBrokers;
@@ -93,12 +96,13 @@ public class EmbeddedConnectCluster {
     private final ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
 
     private EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numWorkers,
-                                   int numBrokers, Properties brokerProps,
+                                   int numBrokers, Properties brokerProps, ListenerName brokerListener,
                                    boolean maskExitProcedures) {
         this.workerProps = workerProps;
         this.connectClusterName = name;
         this.numBrokers = numBrokers;
         this.kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps);
+        this.brokerListener = brokerListener;
         this.connectCluster = new LinkedHashSet<>();
         this.numInitialWorkers = numWorkers;
         this.maskExitProcedures = maskExitProcedures;
@@ -240,7 +244,7 @@ public class EmbeddedConnectCluster {
     public void startConnect() {
         log.info("Starting Connect cluster '{}' with {} workers", connectClusterName, numInitialWorkers);
 
-        workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
+        workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers(brokerListener));
         // use a random available port
         workerProps.put(LISTENERS_CONFIG, "HTTP://" + REST_HOST_NAME + ":0");
 
@@ -795,6 +799,7 @@ public class EmbeddedConnectCluster {
         private Map<String, String> workerProps = new HashMap<>();
         private int numWorkers = DEFAULT_NUM_WORKERS;
         private int numBrokers = DEFAULT_NUM_BROKERS;
+        private ListenerName brokerListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
         private Properties brokerProps = DEFAULT_BROKER_CONFIG;
         private boolean maskExitProcedures = true;
 
@@ -815,6 +820,11 @@ public class EmbeddedConnectCluster {
 
         public Builder numBrokers(int numBrokers) {
             this.numBrokers = numBrokers;
+            return this;
+        }
+
+        public Builder brokerListener(ListenerName brokerListener) {
+            this.brokerListener = brokerListener;
             return this;
         }
 
@@ -842,7 +852,7 @@ public class EmbeddedConnectCluster {
 
         public EmbeddedConnectCluster build() {
             return new EmbeddedConnectCluster(name, workerProps, numWorkers, numBrokers,
-                    brokerProps, maskExitProcedures);
+                    brokerProps, brokerListener, maskExitProcedures);
         }
     }
 

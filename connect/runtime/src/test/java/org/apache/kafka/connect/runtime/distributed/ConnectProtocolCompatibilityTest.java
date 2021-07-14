@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.After;
@@ -67,6 +68,9 @@ public class ConnectProtocolCompatibilityTest {
                 Collections.singletonMap(connectorId1, new HashMap<>()),
                 Collections.singletonMap(connectorId1, TargetState.STARTED),
                 Collections.singletonMap(taskId1x0, new HashMap<>()),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
                 Collections.emptySet());
     }
 

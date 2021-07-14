@@ -36,7 +36,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> {
+public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> {
 
     private final CoordinatorKey groupId;
     private final List<TopicPartition> partitions;
@@ -78,7 +78,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     }
 
     @Override
-    public OffsetFetchRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
+    public OffsetFetchRequest.Builder buildBatchedRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
         validateKeys(groupIds);
         // Set the flag to false as for admin client request,
         // we don't need to wait for any pending offset state to clear.

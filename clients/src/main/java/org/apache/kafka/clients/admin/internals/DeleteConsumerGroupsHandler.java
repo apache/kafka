@@ -36,7 +36,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorKey, Void> {
+public class DeleteConsumerGroupsHandler extends AdminApiHandler.Batched<CoordinatorKey, Void> {
 
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
@@ -71,7 +71,7 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
     }
 
     @Override
-    public DeleteGroupsRequest.Builder buildRequest(
+    public DeleteGroupsRequest.Builder buildBatchedRequest(
         int coordinatorId,
         Set<CoordinatorKey> keys
     ) {

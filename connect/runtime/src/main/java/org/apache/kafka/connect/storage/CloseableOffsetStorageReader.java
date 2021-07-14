@@ -27,7 +27,9 @@ public interface CloseableOffsetStorageReader extends Closeable, OffsetStorageRe
      * {@link Future#cancel(boolean) Cancel} all outstanding offset read requests, and throw an
      * exception in all current and future calls to {@link #offsets(Collection)} and
      * {@link #offset(Map)}. This is useful for unblocking task threads which need to shut down but
-     * are blocked on offset reads.
+     * are blocked on offset reads. Additionally, release any resources allocated specifically for
+     * tracking this connector's offsets. This method should be idempotent; after it is successfully
+     * invoked for the first time, successive invocations should have no effect.
      */
     void close();
 }

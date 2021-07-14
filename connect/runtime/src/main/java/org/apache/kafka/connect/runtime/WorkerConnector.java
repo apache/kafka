@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -23,6 +24,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkConnectorContext;
 import org.apache.kafka.connect.source.SourceConnectorContext;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
@@ -74,7 +76,7 @@ public class WorkerConnector implements Runnable {
     private volatile boolean cancelled; // indicates whether the Worker has cancelled the connector (e.g. because of slow shutdown)
 
     private State state;
-    private final OffsetStorageReader offsetStorageReader;
+    private final CloseableOffsetStorageReader offsetStorageReader;
 
     public WorkerConnector(String connName,
                            Connector connector,
@@ -82,7 +84,7 @@ public class WorkerConnector implements Runnable {
                            CloseableConnectorContext ctx,
                            ConnectMetrics metrics,
                            ConnectorStatus.Listener statusListener,
-                           OffsetStorageReader offsetStorageReader,
+                           CloseableOffsetStorageReader offsetStorageReader,
                            ClassLoader loader) {
         this.connName = connName;
         this.config = connectorConfig.originalsStrings();
@@ -165,6 +167,7 @@ public class WorkerConnector implements Runnable {
                 SinkConnectorConfig.validate(config);
                 connector.initialize(new WorkerSinkConnectorContext());
             } else {
+                Objects.requireNonNull(offsetStorageReader, "Offset reader cannot be null for source connectors");
                 connector.initialize(new WorkerSourceConnectorContext(offsetStorageReader));
             }
         } catch (Throwable t) {
@@ -271,8 +274,9 @@ public class WorkerConnector implements Runnable {
             state = State.FAILED;
             statusListener.onFailure(connName, t);
         } finally {
-            ctx.close();
-            metrics.close();
+            Utils.closeQuietly(ctx, "Connector context for " + connName);
+            Utils.closeQuietly(metrics, "Connector metrics for " + connName);
+            Utils.closeQuietly(offsetStorageReader, "Offset reader for " + connName);
         }
     }
 
@@ -281,7 +285,9 @@ public class WorkerConnector implements Runnable {
         // instance is being abandoned and we won't update the status on its behalf any more
         // after this since a new instance may be started soon
         statusListener.onShutdown(connName);
-        ctx.close();
+        Utils.closeQuietly(ctx, "Connector context for " + connName);
+        // Preemptively close the offset reader in case the connector is blocked on an offset read.
+        Utils.closeQuietly(offsetStorageReader, "Offset reader for " + connName);
         cancelled = true;
     }
 

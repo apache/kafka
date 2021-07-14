@@ -17,6 +17,9 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
@@ -31,9 +34,12 @@ import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
@@ -192,6 +198,44 @@ public class DistributedConfig extends WorkerConfig {
     public static final String INTER_WORKER_VERIFICATION_ALGORITHMS_DOC = "A list of permitted algorithms for verifying internal requests";
     public static final List<String> INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT = Collections.singletonList(INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
 
+    private enum ExactlyOnceSourceSupport {
+        DISABLED(false),
+        PREPARING(true),
+        ENABLED(true);
+
+        public final boolean usesTransactionalLeader;
+
+        ExactlyOnceSourceSupport(boolean usesTransactionalLeader) {
+            this.usesTransactionalLeader = usesTransactionalLeader;
+        }
+
+        public static List<String> options() {
+            return Stream.of(values()).map(ExactlyOnceSourceSupport::toString).collect(Collectors.toList());
+        }
+
+        public static ExactlyOnceSourceSupport fromProperty(String property) {
+            return ExactlyOnceSourceSupport.valueOf(property.toUpperCase(Locale.ROOT));
+        }
+
+        @Override
+        public String toString() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+    }
+
+    public static final String EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG = "exactly.once.source.support";
+    public static final String EXACTLY_ONCE_SOURCE_SUPPORT_DOC = "Whether to enable exactly-once support for source connectors in the cluster "
+            + "by using transactions to write source records and their source offsets, and by proactively fencing out old task generations before bringing up new ones. "
+            + "If this feature is enabled, consumers of the topics to which exactly-once source connectors write should be configured with the "
+            + ConsumerConfig.ISOLATION_LEVEL_CONFIG + " property set to '" + IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT) + "'. "
+            + "Note that this must be enabled on every worker in a cluster in order for exactly-once delivery to be guaranteed, "
+            + "and that some source connectors may still not be able to provide exactly-once delivery guarantees even with this support enabled. "
+            + "Permitted values are \"" + ExactlyOnceSourceSupport.DISABLED + "\", \"" + ExactlyOnceSourceSupport.PREPARING + "\", and \"" +  ExactlyOnceSourceSupport.ENABLED + "\". "
+            + "In order to safely enable exactly-once support for source connectors, "
+            + "all workers in the cluster must first be updated to use the \"preparing\" value for this property. "
+            + "Once this has been done, a second update of all of the workers in the cluster should be performed to change the value of this property to \"enabled\".";
+    public static final String EXACTLY_ONCE_SOURCE_SUPPORT_DEFAULT = ExactlyOnceSourceSupport.DISABLED.toString();
+
     @SuppressWarnings("unchecked")
     private static final ConfigDef CONFIG = baseConfigDef()
             .define(GROUP_ID_CONFIG,
@@ -213,6 +257,12 @@ public class DistributedConfig extends WorkerConfig {
                     Math.toIntExact(TimeUnit.SECONDS.toMillis(3)),
                     ConfigDef.Importance.HIGH,
                     HEARTBEAT_INTERVAL_MS_DOC)
+            .define(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG,
+                    ConfigDef.Type.STRING,
+                    EXACTLY_ONCE_SOURCE_SUPPORT_DEFAULT,
+                    ConfigDef.CaseInsensitiveValidString.in(ExactlyOnceSourceSupport.options().toArray(new String[0])),
+                    ConfigDef.Importance.HIGH,
+                    EXACTLY_ONCE_SOURCE_SUPPORT_DOC)
             .define(CommonClientConfigs.METADATA_MAX_AGE_CONFIG,
                     ConfigDef.Type.LONG,
                     TimeUnit.MINUTES.toMillis(5),
@@ -396,13 +446,58 @@ public class DistributedConfig extends WorkerConfig {
                     ConfigDef.Importance.LOW,
                     INTER_WORKER_VERIFICATION_ALGORITHMS_DOC);
 
+    private final ExactlyOnceSourceSupport exactlyOnceSourceSupport;
+
     @Override
     public Integer getRebalanceTimeout() {
         return getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
     }
 
+    @Override
+    public boolean exactlyOnceSourceEnabled() {
+        return exactlyOnceSourceSupport == ExactlyOnceSourceSupport.ENABLED;
+    }
+
+    /**
+     * @return whether the Connect cluster's leader should use a transactional producer to perform writes to the config
+     * topic, which is useful for ensuring that zombie leaders are fenced out and unable to write to the topic after a
+     * new leader has been elected.
+     */
+    public boolean transactionalLeaderEnabled() {
+        return exactlyOnceSourceSupport.usesTransactionalLeader;
+    }
+
+    /**
+     * @return the {@link ProducerConfig#TRANSACTIONAL_ID_CONFIG transactional ID} to use for the worker's producer if
+     * the worker is the leader of the cluster and is
+     * {@link #transactionalLeaderEnabled() configured to use a transactional producer}.
+     */
+    public String transactionalProducerId() {
+        return transactionalProducerId(groupId());
+    }
+
+    public static String transactionalProducerId(String groupId) {
+        return "connect-cluster-" + groupId;
+    }
+
+    @Override
+    public String offsetsTopic() {
+        return getString(OFFSET_STORAGE_TOPIC_CONFIG);
+    }
+
+    @Override
+    public boolean connectorOffsetsTopicsPermitted() {
+        return true;
+    }
+
+    @Override
+    public String groupId() {
+        return getString(GROUP_ID_CONFIG);
+    }
+
     public DistributedConfig(Map<String, String> props) {
         super(CONFIG, props);
+        exactlyOnceSourceSupport = ExactlyOnceSourceSupport.fromProperty(getString(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG));
         getInternalRequestKeyGenerator(); // Check here for a valid key size + key algorithm to fail fast if either are invalid
         validateKeyAlgorithmAndVerificationAlgorithms();
     }

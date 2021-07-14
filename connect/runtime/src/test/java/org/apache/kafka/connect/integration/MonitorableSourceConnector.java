@@ -20,8 +20,11 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.runtime.TestSourceConnector;
+import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.tools.ThroughputThrottler;
@@ -32,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -74,7 +78,7 @@ public class MonitorableSourceConnector extends TestSourceConnector {
         for (int i = 0; i < maxTasks; i++) {
             Map<String, String> config = new HashMap<>(commonConfigs);
             config.put("connector.name", connectorName);
-            config.put("task.id", connectorName + "-" + i);
+            config.put("task.id", taskId(connectorName, i));
             configs.add(config);
         }
         return configs;
@@ -92,17 +96,54 @@ public class MonitorableSourceConnector extends TestSourceConnector {
         return new ConfigDef();
     }
 
+    @Override
+    public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> connectorConfig) {
+        String supportLevel = connectorConfig.getOrDefault("exactly.once.support.level", "null").toLowerCase(Locale.ROOT);
+        switch (supportLevel) {
+            case "supported":
+                return ExactlyOnceSupport.SUPPORTED;
+            case "unsupported":
+                return ExactlyOnceSupport.UNSUPPORTED;
+            case "fail":
+                throw new ConnectException("\uD83D\uDE0E");
+            default:
+            case "null":
+                return null;
+        }
+    }
+
+    @Override
+    public ConnectorTransactionBoundaries canDefineTransactionBoundaries(Map<String, String> connectorConfig) {
+        String supportLevel = connectorConfig.getOrDefault("custom.transaction.boundary.support", "null").toLowerCase(Locale.ROOT);
+        switch (supportLevel) {
+            case "supported":
+                return ConnectorTransactionBoundaries.SUPPORTED;
+            case "unsupported":
+                return ConnectorTransactionBoundaries.UNSUPPORTED;
+            case "fail":
+                throw new ConnectException("\uD83D\uDC83");
+            default:
+            case "null":
+                return null;
+        }
+    }
+
+    public static String taskId(String connectorName, int taskId) {
+        return connectorName + "-" + taskId;
+    }
+
     public static class MonitorableSourceTask extends SourceTask {
-        private String connectorName;
         private String taskId;
         private String topicName;
         private TaskHandle taskHandle;
         private volatile boolean stopped;
         private long startingSeqno;
         private long seqno;
-        private long throughput;
         private int batchSize;
         private ThroughputThrottler throttler;
+
+        private long priorTransactionBoundary;
+        private long nextTransactionBoundary;
 
         @Override
         public String version() {
@@ -112,21 +153,23 @@ public class MonitorableSourceConnector extends TestSourceConnector {
         @Override
         public void start(Map<String, String> props) {
             taskId = props.get("task.id");
-            connectorName = props.get("connector.name");
             topicName = props.getOrDefault(TOPIC_CONFIG, "sequential-topic");
-            throughput = Long.valueOf(props.getOrDefault("throughput", "-1"));
-            batchSize = Integer.valueOf(props.getOrDefault("messages.per.poll", "1"));
-            taskHandle = RuntimeHandles.get().connectorHandle(connectorName).taskHandle(taskId);
+            batchSize = Integer.parseInt(props.getOrDefault("messages.per.poll", "1"));
+            taskHandle = RuntimeHandles.get().connectorHandle(props.get("connector.name")).taskHandle(taskId);
             Map<String, Object> offset = Optional.ofNullable(
                     context.offsetStorageReader().offset(Collections.singletonMap("task.id", taskId)))
                     .orElse(Collections.emptyMap());
             startingSeqno = Optional.ofNullable((Long) offset.get("saved")).orElse(0L);
+            seqno = startingSeqno;
             log.info("Started {} task {} with properties {}", this.getClass().getSimpleName(), taskId, props);
-            throttler = new ThroughputThrottler(throughput, System.currentTimeMillis());
+            throttler = new ThroughputThrottler(Long.parseLong(props.getOrDefault("throughput", "-1")), System.currentTimeMillis());
             taskHandle.recordTaskStart();
+            priorTransactionBoundary = 0;
+            nextTransactionBoundary = 1;
             if (Boolean.parseBoolean(props.getOrDefault("task-" + taskId + ".start.inject.error", "false"))) {
                 throw new RuntimeException("Injecting errors during task start");
             }
+            calculateNextBoundary();
         }
 
         @Override
@@ -136,19 +179,24 @@ public class MonitorableSourceConnector extends TestSourceConnector {
                     throttler.throttle();
                 }
                 taskHandle.record(batchSize);
-                log.info("Returning batch of {} records", batchSize);
+                log.trace("Returning batch of {} records", batchSize);
                 return LongStream.range(0, batchSize)
-                        .mapToObj(i -> new SourceRecord(
-                                Collections.singletonMap("task.id", taskId),
-                                Collections.singletonMap("saved", ++seqno),
-                                topicName,
-                                null,
-                                Schema.STRING_SCHEMA,
-                                "key-" + taskId + "-" + seqno,
-                                Schema.STRING_SCHEMA,
-                                "value-" + taskId + "-" + seqno,
-                                null,
-                                new ConnectHeaders().addLong("header-" + seqno, seqno)))
+                        .mapToObj(i -> {
+                            seqno++;
+                            SourceRecord record = new SourceRecord(
+                                    sourcePartition(taskId),
+                                    sourceOffset(seqno),
+                                    topicName,
+                                    null,
+                                    Schema.STRING_SCHEMA,
+                                    "key-" + taskId + "-" + seqno,
+                                    Schema.STRING_SCHEMA,
+                                    "value-" + taskId + "-" + seqno,
+                                    null,
+                                    new ConnectHeaders().addLong("header-" + seqno, seqno));
+                            maybeDefineTransactionBoundary(record);
+                            return record;
+                        })
                         .collect(Collectors.toList());
             }
             return null;
@@ -172,5 +220,35 @@ public class MonitorableSourceConnector extends TestSourceConnector {
             stopped = true;
             taskHandle.recordTaskStop();
         }
+
+        private void calculateNextBoundary() {
+            while (nextTransactionBoundary <= seqno) {
+                nextTransactionBoundary += priorTransactionBoundary;
+                priorTransactionBoundary = nextTransactionBoundary - priorTransactionBoundary;
+            }
+        }
+
+        private void maybeDefineTransactionBoundary(SourceRecord record) {
+            if (context.transactionContext() == null || seqno != nextTransactionBoundary) {
+                return;
+            }
+            // If the transaction boundary ends on an even-numbered offset, abort it
+            // Otherwise, commit
+            boolean abort = nextTransactionBoundary % 2 == 0;
+            calculateNextBoundary();
+            if (abort) {
+                context.transactionContext().abortTransaction(record);
+            } else {
+                context.transactionContext().commitTransaction(record);
+            }
+        }
+    }
+
+    public static Map<String, Object> sourcePartition(String taskId) {
+        return Collections.singletonMap("task.id", taskId);
+    }
+
+    public static Map<String, Object> sourceOffset(long seqno) {
+        return Collections.singletonMap("saved", seqno);
     }
 }

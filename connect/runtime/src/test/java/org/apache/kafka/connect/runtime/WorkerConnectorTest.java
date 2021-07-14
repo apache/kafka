@@ -24,7 +24,7 @@ import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkConnectorContext;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceConnectorContext;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.easymock.Capture;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.EasyMock;
@@ -65,7 +65,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
     @Mock Connector connector;
     @Mock CloseableConnectorContext ctx;
     @Mock ConnectorStatus.Listener listener;
-    @Mock OffsetStorageReader offsetStorageReader;
+    @Mock CloseableOffsetStorageReader offsetStorageReader;
     @Mock ClassLoader classLoader;
 
     @Before
@@ -97,6 +97,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         expectLastCall();
 
         ctx.close();
+        expectLastCall();
+
+        offsetStorageReader.close();
         expectLastCall();
 
         replayAll();
@@ -132,6 +135,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         expectLastCall();
 
         ctx.close();
+        expectLastCall();
+
+        offsetStorageReader.close();
         expectLastCall();
 
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
@@ -175,6 +181,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         expectLastCall();
 
         ctx.close();
+        expectLastCall();
+
+        offsetStorageReader.close();
         expectLastCall();
 
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
@@ -221,6 +230,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         expectLastCall();
 
         ctx.close();
+        expectLastCall();
+
+        offsetStorageReader.close();
         expectLastCall();
 
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
@@ -273,6 +285,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
         onStateChange.onCompletion(EasyMock.isNull(), EasyMock.eq(TargetState.PAUSED));
         expectLastCall();
@@ -316,6 +331,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
         onStateChange.onCompletion(EasyMock.isNull(), EasyMock.eq(TargetState.PAUSED));
         expectLastCall();
@@ -356,6 +374,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         expectLastCall();
 
         ctx.close();
+        expectLastCall();
+
+        offsetStorageReader.close();
         expectLastCall();
 
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
@@ -407,6 +428,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
         replayAll();
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, classLoader);
@@ -445,6 +469,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         expectLastCall();
 
         ctx.close();
+        expectLastCall();
+
+        offsetStorageReader.close();
         expectLastCall();
 
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
@@ -493,6 +520,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         expectLastCall();
 
         ctx.close();
+        expectLastCall();
+
+        offsetStorageReader.close();
         expectLastCall();
 
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);

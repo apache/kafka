@@ -42,6 +42,7 @@ import javax.ws.rs.core.Response;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -58,7 +59,7 @@ public class JaasBasicAuthFilterTest {
         ContainerRequestContext requestContext = setMock("Basic", "user", "password");
         jaasBasicAuthFilter.filter(requestContext);
 
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -69,7 +70,7 @@ public class JaasBasicAuthFilterTest {
         ContainerRequestContext requestContext = setMock("Basic", "user", "password");
         jaasBasicAuthFilter.filter(requestContext);
 
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -81,7 +82,7 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -93,7 +94,7 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -105,7 +106,7 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -117,7 +118,7 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -128,7 +129,7 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -139,14 +140,23 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
     @Test
-    public void testPostWithoutAppropriateCredential() throws IOException {
+    public void testInternalTaskConfigEndpointSkipped() throws IOException {
+        testInternalEndpointSkipped("connectors/connName/tasks");
+    }
+
+    @Test
+    public void testInternalZombieFencingEndpointSkipped() throws IOException {
+        testInternalEndpointSkipped("connectors/connName/fence");
+    }
+
+    private void testInternalEndpointSkipped(String endpoint) throws IOException {
         UriInfo uriInfo = mock(UriInfo.class);
-        when(uriInfo.getPath()).thenReturn("connectors/connName/tasks");
+        when(uriInfo.getPath()).thenReturn(endpoint);
 
         ContainerRequestContext requestContext = mock(ContainerRequestContext.class);
         when(requestContext.getMethod()).thenReturn(HttpMethod.POST);
@@ -158,7 +168,7 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(uriInfo).getPath();
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getUriInfo();
     }
 

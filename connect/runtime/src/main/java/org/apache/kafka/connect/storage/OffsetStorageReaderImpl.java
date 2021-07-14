@@ -89,9 +89,9 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
             synchronized (offsetReadFutures) {
                 if (closed.get()) {
                     throw new ConnectException(
-                        "Offset reader is closed. This is likely because the task has already been "
-                            + "scheduled to stop but has taken longer than the graceful shutdown "
-                            + "period to do so.");
+                            "Offset reader is closed. This is likely because the task has already been "
+                                    + "scheduled to stop but has taken longer than the graceful shutdown "
+                                    + "period to do so.");
                 }
                 offsetReadFuture = backingStore.get(serializedToOriginal.keySet());
                 offsetReadFutures.add(offsetReadFuture);
@@ -101,9 +101,9 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
                 raw = offsetReadFuture.get();
             } catch (CancellationException e) {
                 throw new ConnectException(
-                    "Offset reader closed while attempting to read offsets. This is likely because "
-                        + "the task was been scheduled to stop but has taken longer than the "
-                        + "graceful shutdown period to do so.");
+                        "Offset reader closed while attempting to read offsets. This is likely because "
+                                + "the task was been scheduled to stop but has taken longer than the "
+                                + "graceful shutdown period to do so.");
             } finally {
                 synchronized (offsetReadFutures) {
                     offsetReadFutures.remove(offsetReadFuture);
@@ -141,6 +141,7 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
         return result;
     }
 
+    @Override
     public void close() {
         if (!closed.getAndSet(true)) {
             synchronized (offsetReadFutures) {

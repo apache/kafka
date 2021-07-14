@@ -75,6 +75,8 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMI
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 
 /**
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
@@ -95,7 +97,7 @@ public class EmbeddedKafkaCluster {
     private final boolean hasListenerConfig;
 
     private EmbeddedZookeeper zookeeper = null;
-    private ListenerName listenerName = new ListenerName("PLAINTEXT");
+    private ListenerName defaultListenerName = new ListenerName("PLAINTEXT");
     private KafkaProducer<byte[], byte[]> producer;
 
     public EmbeddedKafkaCluster(final int numBrokers,
@@ -139,20 +141,18 @@ public class EmbeddedKafkaCluster {
         putIfAbsent(brokerConfig, KafkaConfig.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
 
         Object listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerListenerNameProp());
-        if (listenerConfig == null)
-            listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerSecurityProtocolProp());
-        if (listenerConfig == null)
-            listenerConfig = "PLAINTEXT";
-        listenerName = new ListenerName(listenerConfig.toString());
+        if (listenerConfig != null) {
+            defaultListenerName = new ListenerName(listenerConfig.toString());
+        }
 
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
             currentBrokerLogDirs[i] = currentBrokerLogDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
             brokerConfig.put(KafkaConfig.LogDirProp(), currentBrokerLogDirs[i]);
             if (!hasListenerConfig)
-                brokerConfig.put(KafkaConfig.ListenersProp(), listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
+                brokerConfig.put(KafkaConfig.ListenersProp(), defaultListenerName.value() + "://localhost:" + currentBrokerPorts[i]);
             brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time);
-            currentBrokerPorts[i] = brokers[i].boundPort(listenerName);
+            currentBrokerPorts[i] = brokers[i].boundPort(defaultListenerName);
         }
 
         Map<String, Object> producerProps = new HashMap<>();
@@ -187,7 +187,7 @@ public class EmbeddedKafkaCluster {
             try {
                 broker.shutdown();
             } catch (Throwable t) {
-                String msg = String.format("Could not shutdown broker at %s", address(broker));
+                String msg = String.format("Could not shutdown broker at %s", address(broker, defaultListenerName));
                 log.error(msg, t);
                 throw new RuntimeException(msg, t);
             }
@@ -200,7 +200,7 @@ public class EmbeddedKafkaCluster {
                     CoreUtils.delete(broker.config().logDirs());
                 } catch (Throwable t) {
                     String msg = String.format("Could not clean up log dirs for broker at %s",
-                            address(broker));
+                            address(broker, defaultListenerName));
                     log.error(msg, t);
                     throw new RuntimeException(msg, t);
                 }
@@ -234,13 +234,19 @@ public class EmbeddedKafkaCluster {
     }
 
     public String bootstrapServers() {
+        return bootstrapServers(defaultListenerName);
+    }
+
+    public String bootstrapServers(ListenerName listenerName) {
         return Arrays.stream(brokers)
-                .map(this::address)
+                .map(broker -> address(broker, listenerName))
                 .collect(Collectors.joining(","));
     }
 
-    public String address(KafkaServer server) {
-        final EndPoint endPoint = server.advertisedListeners().head();
+    public String address(KafkaServer server, ListenerName listenerName) {
+        final EndPoint endPoint = server.advertisedListeners()
+            .find(endpoint -> listenerName.equals(endpoint.listenerName()))
+            .get();
         return endPoint.host() + ":" + endPoint.port();
     }
 
@@ -416,7 +422,7 @@ public class EmbeddedKafkaCluster {
     }
 
     public Admin createAdminClient(Properties adminClientConfig) {
-        adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        adminClientConfig.putIfAbsent(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         final Object listeners = brokerConfig.get(KafkaConfig.ListenersProp());
         if (listeners != null && listeners.toString().contains("SSL")) {
             adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
@@ -439,9 +445,23 @@ public class EmbeddedKafkaCluster {
      * @return a {@link ConsumerRecords} collection containing at least n records.
      */
     public ConsumerRecords<byte[], byte[]> consume(int n, long maxDuration, String... topics) {
+        return consume(n, maxDuration, Collections.emptyMap(), topics);
+    }
+
+    /**
+     * Consume at least n records in a given duration or throw an exception.
+     *
+     * @param n the number of expected records in this topic.
+     * @param maxDuration the max duration to wait for these records (in milliseconds).
+     * @param topics the topics to subscribe and consume records from.
+     * @param consumerProps overrides to the default properties the consumer is constructed with;
+     *                      may not be null
+     * @return a {@link ConsumerRecords} collection containing at least n records.
+     */
+    public ConsumerRecords<byte[], byte[]> consume(int n, long maxDuration, Map<String, Object> consumerProps, String... topics) {
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = new HashMap<>();
         int consumedRecords = 0;
-        try (KafkaConsumer<byte[], byte[]> consumer = createConsumerAndSubscribeTo(Collections.emptyMap(), topics)) {
+        try (KafkaConsumer<byte[], byte[]> consumer = createConsumerAndSubscribeTo(consumerProps, topics)) {
             final long startMillis = System.currentTimeMillis();
             long allowedDuration = maxDuration;
             while (allowedDuration > 0) {
@@ -493,6 +513,28 @@ public class EmbeddedKafkaCluster {
         KafkaConsumer<byte[], byte[]> consumer = createConsumer(consumerProps);
         consumer.subscribe(Arrays.asList(topics));
         return consumer;
+    }
+
+    public KafkaProducer<byte[], byte[]> createProducer(Map<String, Object> producerProps) {
+        Map<String, Object> props = new HashMap<>(producerProps);
+
+        putIfAbsent(props, BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        putIfAbsent(props, ENABLE_AUTO_COMMIT_CONFIG, "false");
+        putIfAbsent(props, AUTO_OFFSET_RESET_CONFIG, "earliest");
+        putIfAbsent(props, KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        putIfAbsent(props, VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        if (sslEnabled()) {
+            putIfAbsent(props, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            putIfAbsent(props, SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+            putIfAbsent(props, CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+        }
+        KafkaProducer<byte[], byte[]> producer;
+        try {
+            producer = new KafkaProducer<>(props);
+        } catch (Throwable t) {
+            throw new ConnectException("Failed to create producer", t);
+        }
+        return producer;
     }
 
     private static void putIfAbsent(final Map<String, Object> props, final String propertyKey, final Object propertyValue) {
