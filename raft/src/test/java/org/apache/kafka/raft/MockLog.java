@@ -27,11 +27,13 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.snapshot.RawSnapshotReader;
-import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
+import org.apache.kafka.snapshot.RawSnapshotReader;
+import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -59,14 +61,20 @@ public class MockLog implements ReplicatedLog {
     private final NavigableMap<OffsetAndEpoch, MockRawSnapshotReader> snapshots = new TreeMap<>();
     private final TopicPartition topicPartition;
     private final Uuid topicId;
+    private final Logger logger;
 
     private long nextId = ID_GENERATOR.getAndIncrement();
     private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0, Optional.empty());
     private long lastFlushedOffset = 0;
 
-    public MockLog(TopicPartition topicPartition, Uuid topicId) {
+    public MockLog(
+        TopicPartition topicPartition,
+        Uuid topicId,
+        LogContext logContext
+    ) {
         this.topicPartition = topicPartition;
         this.topicId = topicId;
+        this.logger = logContext.logger(MockLog.class);
     }
 
     @Override
@@ -218,17 +226,25 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public LogOffsetMetadata endOffset() {
-        long nextOffset = lastEntry().map(entry -> entry.offset + 1).orElse(logStartOffset());
+        long nextOffset = lastEntry()
+            .map(entry -> entry.offset + 1)
+            .orElse(
+                latestSnapshotId()
+                    .map(id -> id.offset)
+                    .orElse(0L)
+            );
         return new LogOffsetMetadata(nextOffset, Optional.of(new MockOffsetMetadata(nextId)));
     }
 
     @Override
     public long startOffset() {
-        return firstEntry().map(entry -> entry.offset).orElse(logStartOffset());
-    }
-
-    private long logStartOffset() {
-        return earliestSnapshotId().map(id -> id.offset).orElse(0L);
+        return firstEntry()
+            .map(entry -> entry.offset)
+            .orElse(
+                earliestSnapshotId()
+                    .map(id -> id.offset)
+                    .orElse(0L)
+            );
     }
 
     private List<LogEntry> buildEntries(RecordBatch batch, Function<Record, Long> offsetSupplier) {
@@ -420,6 +436,16 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId) {
+        if (snapshotId.offset < startOffset()) {
+            logger.info(
+                "Cannot create a snapshot with an id ({}) less than the log start offset ({})",
+                snapshotId,
+                startOffset()
+            );
+
+            return Optional.empty();
+        }
+
         long highWatermarkOffset = highWatermark().offset;
         if (snapshotId.offset > highWatermarkOffset) {
             throw new IllegalArgumentException(
@@ -427,16 +453,6 @@ public class MockLog implements ReplicatedLog {
                     "Cannot create a snapshot with an id (%s) greater than the high-watermark (%s)",
                     snapshotId,
                     highWatermarkOffset
-                )
-            );
-        }
-
-        if (snapshotId.offset < logStartOffset()) {
-            throw new IllegalArgumentException(
-                String.format(
-                    "Cannot create a snapshot with and id (%s) less than the log start offset (%s)",
-                    snapshotId,
-                    logStartOffset()
                 )
             );
         }
@@ -490,12 +506,12 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public boolean deleteBeforeSnapshot(OffsetAndEpoch snapshotId) {
-        if (logStartOffset() > snapshotId.offset) {
+        if (startOffset() > snapshotId.offset) {
             throw new OffsetOutOfRangeException(
                 String.format(
                     "New log start (%s) is less than the curent log start offset (%s)",
                     snapshotId,
-                    logStartOffset()
+                    startOffset()
                 )
             );
         }

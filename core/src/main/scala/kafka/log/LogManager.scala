@@ -28,7 +28,7 @@ import kafka.server.metadata.ConfigRepository
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
 
 import scala.jdk.CollectionConverters._
@@ -312,10 +312,11 @@ class LogManager(logDirs: Seq[File],
       val logDirAbsolutePath = dir.getAbsolutePath
       var hadCleanShutdown: Boolean = false
       try {
-        val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
+        val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir,
+          KafkaThread.nonDaemon(s"log-recovery-$logDirAbsolutePath", _))
         threadPools.append(pool)
 
-        val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
+        val cleanShutdownFile = new File(dir, LogLoader.CleanShutdownFile)
         if (cleanShutdownFile.exists) {
           info(s"Skipping recovery for all logs in $logDirAbsolutePath since clean shutdown file was found")
           // Cache the clean shutdown status and use that for rest of log loading workflow. Delete the CleanShutdownFile
@@ -484,7 +485,8 @@ class LogManager(logDirs: Seq[File],
     for (dir <- liveLogDirs) {
       debug(s"Flushing and closing logs at $dir")
 
-      val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
+      val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir,
+        KafkaThread.nonDaemon(s"log-closing-${dir.getAbsolutePath}", _))
       threadPools.append(pool)
 
       val logs = logsInDir(localLogsByDir, dir).values
@@ -516,7 +518,7 @@ class LogManager(logDirs: Seq[File],
 
           // mark that the shutdown was clean by creating marker file
           debug(s"Writing clean shutdown marker at $dir")
-          CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath), this)
+          CoreUtils.swallow(Files.createFile(new File(dir, LogLoader.CleanShutdownFile).toPath), this)
         }
       }
     } finally {
