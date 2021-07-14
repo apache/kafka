@@ -88,11 +88,20 @@ public class TopologyMetadata {
             return 0;
         }
 
-        // If there are topologies but they are all empty, this indicates a bug in user code
-        if (hasNoNonGlobalTopology() && !hasGlobalTopology()) {
-            log.error("Topology with no input topics will create no stream threads and no global thread.");
-            throw new TopologyException("Topology has no stream threads and no global threads, " +
-                                            "must subscribe to at least one source topic or global table.");
+        // If there are named topologies but some are empty, this indicates a bug in user code
+        if (hasNamedTopologies()) {
+            if (hasNoNonGlobalTopology() && !hasGlobalTopology()) {
+                log.error("Detected a named topology with no input topics, a named topology may not be empty.");
+                throw new TopologyException("Topology has no stream threads and no global threads, " +
+                                                "must subscribe to at least one source topic or pattern.");
+            }
+        } else {
+            // If both the global and non-global topologies are empty, this indicates a bug in user code
+            if (hasNoNonGlobalTopology() && !hasGlobalTopology()) {
+                log.error("Topology with no input topics will create no stream threads and no global thread.");
+                throw new TopologyException("Topology has no stream threads and no global threads, " +
+                                                "must subscribe to at least one source topic or global table.");
+            }
         }
 
         // Lastly we check for an empty non-global topology and override the threads to zero if set otherwise
