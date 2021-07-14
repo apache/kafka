@@ -37,7 +37,6 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AclOperation;
-import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
@@ -104,26 +103,19 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         return new DescribeGroupsRequest.Builder(data);
     }
 
-    private void validateGroupsNotEmpty(List<DescribedGroup> describedGroups) {
-        if (describedGroups.isEmpty()) {
-            throw new InvalidGroupIdException("No consumer group found");
-        }
-    }
-
     @Override
     public ApiResult<CoordinatorKey, ConsumerGroupDescription> handleResponse(
         Node coordinator,
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
     ) {
-        DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
-        Map<CoordinatorKey, ConsumerGroupDescription> completed = new HashMap<>();
-        Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+        final DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
+        final Map<CoordinatorKey, ConsumerGroupDescription> completed = new HashMap<>();
+        final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
         final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
 
         List<DescribedGroup> describedGroups = response.data().groups();
-        validateGroupsNotEmpty(describedGroups);
 
         for (DescribedGroup describedGroup : describedGroups) {
             CoordinatorKey groupIdKey = CoordinatorKey.byGroupId(describedGroup.groupId());
@@ -167,20 +159,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
             }
         }
 
-        if (groupsToUnmap.isEmpty() && groupsToRetry.isEmpty()) {
-            return new ApiResult<>(
-                completed,
-                failed,
-                Collections.emptyList()
-            );
-        } else {
-            // retry the request, so don't send completed/failed results back
-            return new ApiResult<>(
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                new ArrayList<>(groupsToUnmap)
-            );
-        }
+        return new ApiResult<>(completed, failed,  new ArrayList<>(groupsToUnmap));
     }
 
     private void handleError(
