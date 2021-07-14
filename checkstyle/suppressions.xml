@@ -42,7 +42,7 @@
               files="AbstractResponse.java"/>
 
     <suppress checks="MethodLength"
-              files="KerberosLogin.java|RequestResponseTest.java|ConnectMetricsRegistry.java|KafkaConsumer.java"/>
+              files="(KerberosLogin|RequestResponseTest|ConnectMetricsRegistry|KafkaConsumer|AbstractStickyAssignor).java"/>
 
     <suppress checks="ParameterNumber"
               files="(NetworkClient|FieldSpec|KafkaRaftClient).java"/>
@@ -272,7 +272,7 @@
     <suppress checks="ClassDataAbstractionCoupling"
               files="(QuorumControllerTest|ReplicationControlManager|ReplicationControlManagerTest).java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="(QuorumController|ReplicationControlManager).java"/>
+              files="(QuorumController|ReplicationControlManager|ReplicationControlManagerTest).java"/>
     <suppress checks="ParameterNumber"
               files="(QuorumController).java"/>
     <suppress checks="CyclomaticComplexity"

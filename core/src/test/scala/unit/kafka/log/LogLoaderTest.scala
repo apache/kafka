@@ -40,6 +40,7 @@ import scala.jdk.CollectionConverters._
 class LogLoaderTest {
   var config: KafkaConfig = null
   val brokerTopicStats = new BrokerTopicStats
+  val maxProducerIdExpirationMs: Int = 60 * 60 * 1000
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val mockTime = new MockTime()
@@ -99,15 +100,17 @@ class LogLoaderTest {
             logDirFailureChannel, hadCleanShutdown, segments, logStartOffset, logRecoveryPoint,
             maxProducerIdExpirationMs, leaderEpochCache, producerStateManager)
           val offsets = LogLoader.load(loadLogParams)
-          new Log(logDir, config, segments, offsets.logStartOffset, offsets.recoveryPoint,
-            offsets.nextOffsetMetadata, time.scheduler, brokerTopicStats, time,
-            LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
-            producerStateManager, logDirFailureChannel, None, true)
+          val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
+            offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+            logDirFailureChannel)
+          new Log(offsets.logStartOffset, localLog, brokerTopicStats,
+            LogManager.ProducerIdExpirationCheckIntervalMs, leaderEpochCache,
+            producerStateManager, None, true)
         }
       }
     }
 
-    val cleanShutdownFile = new File(logDir, Log.CleanShutdownFile)
+    val cleanShutdownFile = new File(logDir, LogLoader.CleanShutdownFile)
     locally {
       val logManager: LogManager = interceptedLogManager(logConfig, logDirs, simulateError)
       log = logManager.getOrCreateLog(topicPartition, isNew = true, topicId = None)
@@ -161,7 +164,7 @@ class LogLoaderTest {
                         recoveryPoint: Long = 0L,
                         scheduler: Scheduler = mockTime.scheduler,
                         time: Time = mockTime,
-                        maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
+                        maxProducerIdExpirationMs: Int = maxProducerIdExpirationMs,
                         producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                         lastShutdownClean: Boolean = true): Log = {
     LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
@@ -280,10 +283,12 @@ class LogLoaderTest {
         leaderEpochCache,
         producerStateManager)
       val offsets = LogLoader.load(loadLogParams)
-      new Log(logDir, logConfig, interceptedLogSegments, offsets.logStartOffset, offsets.recoveryPoint,
-        offsets.nextOffsetMetadata, mockTime.scheduler, brokerTopicStats, mockTime,
-        LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
-        producerStateManager, logDirFailureChannel, _topicId = None, keepPartitionMetadataFile = true)
+      val localLog = new LocalLog(logDir, logConfig, interceptedLogSegments, offsets.recoveryPoint,
+        offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+        logDirFailureChannel)
+      new Log(offsets.logStartOffset, localLog, brokerTopicStats,
+        LogManager.ProducerIdExpirationCheckIntervalMs, leaderEpochCache, producerStateManager,
+        None, keepPartitionMetadataFile = true)
     }
 
     // Retain snapshots for the last 2 segments
@@ -351,20 +356,15 @@ class LogLoaderTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       stateManager))
-    val log = new Log(logDir,
-      config,
-      segments = segments,
-      logStartOffset = offsets.logStartOffset,
-      recoveryPoint = offsets.recoveryPoint,
-      nextOffsetMetadata = offsets.nextOffsetMetadata,
-      scheduler = mockTime.scheduler,
+    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+      logDirFailureChannel)
+    val log = new Log(offsets.logStartOffset,
+      localLog,
       brokerTopicStats = brokerTopicStats,
-      time = mockTime,
       producerIdExpirationCheckIntervalMs = 30000,
-      topicPartition = topicPartition,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
-      logDirFailureChannel = logDirFailureChannel,
       _topicId = None,
       keepPartitionMetadataFile = true)
 
@@ -398,7 +398,6 @@ class LogLoaderTest {
     EasyMock.expect(stateManager.mapEndOffset).andReturn(0L)
     // We skip directly to updating the map end offset
     EasyMock.expect(stateManager.updateMapEndOffset(1L))
-    EasyMock.expect(stateManager.onHighWatermarkUpdated(0L))
 
     // Finally, we take a snapshot
     stateManager.takeSnapshot()
@@ -485,20 +484,15 @@ class LogLoaderTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       stateManager))
-    new Log(logDir,
-      config,
-      segments = segments,
-      logStartOffset = offsets.logStartOffset,
-      recoveryPoint = offsets.recoveryPoint,
-      nextOffsetMetadata = offsets.nextOffsetMetadata,
-      scheduler = mockTime.scheduler,
+    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+      logDirFailureChannel)
+    new Log(offsets.logStartOffset,
+      localLog,
       brokerTopicStats = brokerTopicStats,
-      time = mockTime,
       producerIdExpirationCheckIntervalMs = 30000,
-      topicPartition = topicPartition,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
-      logDirFailureChannel = logDirFailureChannel,
       _topicId = None,
       keepPartitionMetadataFile = true)
 
@@ -546,20 +540,15 @@ class LogLoaderTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       stateManager))
-    new Log(logDir,
-      config,
-      segments = segments,
-      logStartOffset = offsets.logStartOffset,
-      recoveryPoint = offsets.recoveryPoint,
-      nextOffsetMetadata = offsets.nextOffsetMetadata,
-      scheduler = mockTime.scheduler,
+    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+      logDirFailureChannel)
+    new Log(offsets.logStartOffset,
+      localLog,
       brokerTopicStats = brokerTopicStats,
-      time = mockTime,
       producerIdExpirationCheckIntervalMs = 30000,
-      topicPartition = topicPartition,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
-      logDirFailureChannel = logDirFailureChannel,
       _topicId = None,
       keepPartitionMetadataFile = true)
 
@@ -609,20 +598,15 @@ class LogLoaderTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       stateManager))
-    new Log(logDir,
-      config,
-      segments = segments,
-      logStartOffset = offsets.logStartOffset,
-      recoveryPoint = offsets.recoveryPoint,
-      nextOffsetMetadata = offsets.nextOffsetMetadata,
-      scheduler = mockTime.scheduler,
+    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+      logDirFailureChannel)
+    new Log(offsets.logStartOffset,
+      localLog,
       brokerTopicStats = brokerTopicStats,
-      time = mockTime,
       producerIdExpirationCheckIntervalMs = 30000,
-      topicPartition = topicPartition,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
-      logDirFailureChannel = logDirFailureChannel,
       _topicId = None,
       keepPartitionMetadataFile = true)
 
@@ -1528,7 +1512,7 @@ class LogLoaderTest {
     assertEquals(startOffset, log.logStartOffset)
     assertEquals(startOffset, log.logEndOffset)
     // Validate that the remaining segment matches our expectations
-    val onlySegment = log.segments.firstSegment.get
+    val onlySegment = log.logSegments.head
     assertEquals(startOffset, onlySegment.baseOffset)
     assertTrue(onlySegment.log.file().exists())
     assertTrue(onlySegment.lazyOffsetIndex.file.exists())

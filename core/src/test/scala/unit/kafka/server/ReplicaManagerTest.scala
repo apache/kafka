@@ -1663,21 +1663,15 @@ class ReplicaManagerTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager))
+    val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockScheduler, time, tp, mockLogDirFailureChannel)
     val mockLog = new Log(
-      _dir = logDir,
-      config = logConfig,
-      segments = segments,
       logStartOffset = offsets.logStartOffset,
-      recoveryPoint = offsets.recoveryPoint,
-      nextOffsetMetadata = offsets.nextOffsetMetadata,
-      scheduler = mockScheduler,
+      localLog = localLog,
       brokerTopicStats = mockBrokerTopicStats,
-      time = time,
       producerIdExpirationCheckIntervalMs = 30000,
-      topicPartition = tp,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = producerStateManager,
-      logDirFailureChannel = mockLogDirFailureChannel,
       _topicId = topicId,
       keepPartitionMetadataFile = true) {
 
