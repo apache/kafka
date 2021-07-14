@@ -330,12 +330,11 @@ public class Metadata implements Closeable {
             String topicName = metadata.topic();
             Uuid topicId = metadata.topicId();
             topics.add(topicName);
-            boolean changedTopicId = false;
+            // We only update if the current metadata since we can only compare when both topics have valid IDs
+            Uuid oldTopicId = null;
             if (!topicId.equals(Uuid.ZERO_UUID)) {
                 topicIds.put(topicName, topicId);
-                Uuid oldTopicId = cache.topicId(topicName);
-                if (oldTopicId != null && !oldTopicId.equals(topicId))
-                    changedTopicId = true;
+                oldTopicId = cache.topicId(topicName);
             }
 
             if (!retainTopic(topicName, metadata.isInternal(), nowMs))
@@ -348,7 +347,7 @@ public class Metadata implements Closeable {
                 for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
                     // Even if the partition's metadata includes an error, we need to handle
                     // the update to catch new epochs
-                    updateLatestMetadata(partitionMetadata, metadataResponse.hasReliableLeaderEpochs(), changedTopicId)
+                    updateLatestMetadata(partitionMetadata, metadataResponse.hasReliableLeaderEpochs(), topicId, oldTopicId)
                         .ifPresent(partitions::add);
 
                     if (partitionMetadata.error.exception() instanceof InvalidMetadataException) {
@@ -387,7 +386,8 @@ public class Metadata implements Closeable {
     private Optional<MetadataResponse.PartitionMetadata> updateLatestMetadata(
             MetadataResponse.PartitionMetadata partitionMetadata,
             boolean hasReliableLeaderEpoch,
-            boolean changedTopicId) {
+            Uuid topicId,
+            Uuid oldTopicId) {
         TopicPartition tp = partitionMetadata.topicPartition;
         if (hasReliableLeaderEpoch && partitionMetadata.leaderEpoch.isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch.get();
@@ -397,10 +397,10 @@ public class Metadata implements Closeable {
                 log.debug("Updating last seen epoch for partition {} from {} to epoch {} from new metadata", tp, currentEpoch, newEpoch);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
                 return Optional.of(partitionMetadata);
-            // If the topic ID changed, updated the metadata
-            } else if (changedTopicId) {
-                log.debug("Topic ID for partition {} changed from {}, so this topic must have been recreated. " +
-                                "Using the newly updated metadata.", tp, cache.topicId(tp.topic()));
+            // If both topic IDs were valid and the topic ID changed, update the metadata
+            } else if (!topicId.equals(Uuid.ZERO_UUID) && oldTopicId != null && !topicId.equals(oldTopicId)) {
+                log.debug("Topic ID for partition {} changed from {} to {}, so this topic must have been recreated. " +
+                                "Using the newly updated metadata.", tp, oldTopicId, topicId);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
                 return Optional.of(partitionMetadata);
             } else {
