@@ -69,8 +69,18 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
         return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
 
+    private void validateKeys(
+        Set<CoordinatorKey> groupIds
+    ) {
+        if (!groupIds.equals(Collections.singleton(groupId))) {
+            throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
+                " (expected only " + Collections.singleton(groupId) + ")");
+        }
+    }
+
     @Override
-    public LeaveGroupRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
+    public LeaveGroupRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
+        validateKeys(groupIds);
         return new LeaveGroupRequest.Builder(groupId.idValue, members);
     }
 
@@ -80,9 +90,11 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
     ) {
+        validateKeys(groupIds);
+
         final LeaveGroupResponse response = (LeaveGroupResponse) abstractResponse;
-        Map<CoordinatorKey, Map<MemberIdentity, Errors>> completed = new HashMap<>();
-        Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+        final Map<CoordinatorKey, Map<MemberIdentity, Errors>> completed = new HashMap<>();
+        final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
         final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
 
@@ -94,10 +106,6 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
             for (MemberResponse memberResponse : response.memberResponses()) {
                 Errors memberError = Errors.forCode(memberResponse.errorCode());
                 String memberId = memberResponse.memberId();
-
-                if (memberError != Errors.NONE) {
-                    handleMemberError(groupId, memberId, memberError, groupsToUnmap, groupsToRetry);
-                }
 
                 memberErrors.put(new MemberIdentity()
                                      .setMemberId(memberId)
@@ -133,63 +141,30 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `{}` response", groupId,
-                    apiName(), error.exception());
+                log.debug("`LeaveGroup` request for group id {} failed due to error {}", groupId, error);
                 failed.put(groupId, error.exception());
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`{}` request for group {} failed because the coordinator " +
-                    "is still in the process of loading state. Will retry", apiName(), groupId);
+                log.debug("`LeaveGroup` request for group {} failed because the coordinator " +
+                    "is still in the process of loading state. Will retry", groupId);
                 groupsToRetry.add(groupId);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
-                log.debug("`{}` request for group {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry", apiName(), groupId, error);
+                log.debug("`LeaveGroup` request for group {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry", groupId, error);
                 groupsToUnmap.add(groupId);
                 break;
 
             default:
-                final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
-                    groupId, apiName());
-                log.error(unexpectedErrorMsg, error.exception());
+                final String unexpectedErrorMsg =
+                    String.format("`LeaveGroup` request for group id %s failed due to unexpected error %s", groupId, error);
+                log.error(unexpectedErrorMsg);
                 failed.put(groupId, error.exception(unexpectedErrorMsg));
-        }
-    }
-
-    private void handleMemberError(
-        CoordinatorKey groupId,
-        String memberId,
-        Errors error,
-        Set<CoordinatorKey> groupsToUnmap,
-        Set<CoordinatorKey> groupsToRetry
-    ) {
-        switch (error) {
-            case COORDINATOR_LOAD_IN_PROGRESS:
-                // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`{}` request for the member {} in group {} failed because the coordinator " +
-                    "is still in the process of loading state. Will retry", apiName(), memberId, groupId);
-                groupsToRetry.add(groupId);
-                break;
-            case COORDINATOR_NOT_AVAILABLE:
-            case NOT_COORDINATOR:
-                // If the coordinator is unavailable or there was a coordinator change, then we unmap
-                // the key so that we retry the `FindCoordinator` request
-                log.debug("`{}` request for the member {} in group {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry", apiName(), memberId, groupId, error);
-                groupsToUnmap.add(groupId);
-                break;
-            case FENCED_INSTANCE_ID:
-            case UNKNOWN_MEMBER_ID:
-                log.debug("`{}` request for the member {} in group {} returned error {}.", apiName(), memberId, groupId, error);
-                break;
-            default:
-                log.debug("`{}` request for the member {} in group {} returned unexpected error {}.",
-                    apiName(), memberId, groupId, error);
         }
     }
 
