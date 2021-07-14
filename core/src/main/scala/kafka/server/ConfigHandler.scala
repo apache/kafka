@@ -112,19 +112,18 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
 
   @nowarn("cat=deprecation")
   def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
-    def logMessageFormatIgnoredWarning(versionString: String): Unit =
-      warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
-        s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
-
     // Verify message format version
     Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
       val messageFormatVersion = ApiVersion(versionString)
       if (kafkaConfig.interBrokerProtocolVersion >= KAFKA_3_0_IV1) {
         if (messageFormatVersion.recordVersion.precedes(RecordVersion.V2))
-          logMessageFormatIgnoredWarning(versionString)
+          warn(s"Topic configuration ${LogConfig.MessageFormatVersionProp} with value `$versionString` is ignored " +
+            s"for `$topic` because the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}` is " +
+            "greater or equal than 3.0")
         Some(LogConfig.MessageFormatVersionProp)
       } else if (kafkaConfig.interBrokerProtocolVersion < messageFormatVersion) {
-        logMessageFormatIgnoredWarning(versionString)
+        warn(s"Topic configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
+          s"is higher than what is allowed by the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
         Some(LogConfig.MessageFormatVersionProp)
       } else
         None

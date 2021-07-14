@@ -38,10 +38,10 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.record.{LegacyRecord, Records, TimestampType}
-import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
+import org.apache.kafka.common.record.{LegacyRecord, RecordVersion, Records, TimestampType}
+import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
@@ -1965,10 +1965,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s"Currently they both have the value ${controlPlaneListenerName.get}")
     }
 
-    if (interBrokerProtocolVersion >= KAFKA_3_0_IV1 && originals.containsKey(LogMessageFormatVersionProp))
-      warn(s"Property $LogMessageFormatVersionProp is ignored if inter-broker protocol is ${KAFKA_3_0_IV1.shortVersion} or higher")
-
     val recordVersion = logMessageFormatVersion.recordVersion
+    if (interBrokerProtocolVersion >= KAFKA_3_0_IV1 && recordVersion.precedes(RecordVersion.V2))
+      warn(s"Broker configuration $LogMessageFormatVersionProp with value $logMessageFormatVersionString is ignored " +
+        s"because the inter-broker protocol version `$interBrokerProtocolVersionString` is greater or equal than 3.0")
+
     require(interBrokerProtocolVersion.recordVersion.value >= recordVersion.value,
       s"log.message.format.version $logMessageFormatVersionString can only be used when inter.broker.protocol.version " +
       s"is set to version ${ApiVersion.minSupportedFor(recordVersion).shortVersion} or higher")
