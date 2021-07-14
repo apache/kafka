@@ -93,7 +93,7 @@ public final class TopicDelta {
     }
 
     /**
-     * Find the partitions that we are now leading, whose leader epoch has changed.
+     * Find the partitions that we are now leading, whose partition epoch has changed.
      *
      * @param brokerId  The broker id.
      * @return          A list of (partition ID, partition registration) entries.
@@ -113,7 +113,7 @@ public final class TopicDelta {
     }
 
     /**
-     * Find the partitions that we are now following, whose leader epoch has changed.
+     * Find the partitions that we are now following, whose partition epoch has changed.
      *
      * @param brokerId  The broker id.
      * @return          A list of (partition ID, partition registration) entries.
