@@ -72,8 +72,19 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
 
+    private void validateKeys(
+        Set<CoordinatorKey> groupIds
+    ) {
+        if (!groupIds.equals(Collections.singleton(groupId))) {
+            throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
+                " (expected only " + Collections.singleton(groupId) + ")");
+        }
+    }
+
     @Override
-    public OffsetDeleteRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
+    public OffsetDeleteRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
+        validateKeys(groupIds);
+
         final OffsetDeleteRequestTopicCollection topics = new OffsetDeleteRequestTopicCollection();
         partitions.stream().collect(Collectors.groupingBy(TopicPartition::topic)).forEach((topic, topicPartitions) -> topics.add(
             new OffsetDeleteRequestTopic()
@@ -97,6 +108,8 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
     ) {
+        validateKeys(groupIds);
+
         final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
         Map<CoordinatorKey, Map<TopicPartition, Errors>> completed = new HashMap<>();
         Map<CoordinatorKey, Throwable> failed = new HashMap<>();
@@ -111,10 +124,6 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
             response.data().topics().forEach(topic ->
                 topic.partitions().forEach(partition -> {
                     Errors partitionError = Errors.forCode(partition.errorCode());
-                    TopicPartition topicPartition = new TopicPartition(topic.name(), partition.partitionIndex());
-                    if (partitionError != Errors.NONE) {
-                        handlePartitionError(groupId, partitionError, topicPartition, groupsToUnmap, groupsToRetry);
-                    }
 
                     partitionResults.put(new TopicPartition(topic.name(), partition.partitionIndex()), partitionError);
                 })
@@ -151,63 +160,26 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
             case GROUP_ID_NOT_FOUND:
             case INVALID_GROUP_ID:
             case NON_EMPTY_GROUP:
-                log.error("Received non retriable error for group {} in `{}` response", groupId,
-                    apiName(), error.exception());
+                log.debug("`OffsetDelete` request for group id {} failed due to error {}.", groupId, error);
                 failed.put(groupId, error.exception());
                 break;
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`{}` request for group {} failed because the coordinator" +
-                    " is still in the process of loading state. Will retry.", apiName(), groupId);
+                log.debug("`OffsetDelete` request for group {} failed because the coordinator" +
+                    " is still in the process of loading state. Will retry.", groupId);
                 groupsToRetry.add(groupId);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
-                log.debug("`{}` request for group {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry.", apiName(), groupId, error);
+                log.debug("`OffsetDelete` request for group {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry.", groupId, error);
                 groupsToUnmap.add(groupId);
                 break;
             default:
-                final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
-                    groupId, apiName());
-                log.error(unexpectedErrorMsg, error.exception());
+                log.error("`OffsetDelete` request for group id {} failed due to unexpected error {}.", groupId, error);
                 failed.put(groupId, error.exception());
-                break;
-        }
-    }
-
-    private void handlePartitionError(
-        CoordinatorKey groupId,
-        Errors error,
-        TopicPartition topicPartition,
-        Set<CoordinatorKey> groupsToUnmap,
-        Set<CoordinatorKey> groupsToRetry
-    ) {
-        switch (error) {
-            case COORDINATOR_LOAD_IN_PROGRESS:
-                // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`{}` request for group {} in partition {} failed because the coordinator" +
-                    " is still in the process of loading state. Will retry.", apiName(), groupId, topicPartition);
-                groupsToRetry.add(groupId);
-                break;
-            case COORDINATOR_NOT_AVAILABLE:
-            case NOT_COORDINATOR:
-                // If the coordinator is unavailable or there was a coordinator change, then we unmap
-                // the key so that we retry the `FindCoordinator` request
-                log.debug("`{}` request for group {} in partition {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry.", apiName(), groupId, topicPartition, error);
-                groupsToUnmap.add(groupId);
-                break;
-            case GROUP_SUBSCRIBED_TO_TOPIC:
-            case TOPIC_AUTHORIZATION_FAILED:
-            case UNKNOWN_TOPIC_OR_PARTITION:
-                log.debug("`{}` request for group {} in partition {} returned error {}.", apiName(), groupId, topicPartition, error);
-                break;
-            default:
-                log.error("`{}` request for group {} in partition {} returned unexpected error {}.",
-                    apiName(), groupId, topicPartition, error);
                 break;
         }
     }

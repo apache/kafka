@@ -76,14 +76,11 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
     public void testUnmappedHandleResponse() {
         assertUnmapped(handleWithGroupError(Errors.NOT_COORDINATOR));
         assertUnmapped(handleWithGroupError(Errors.COORDINATOR_NOT_AVAILABLE));
-        assertUnmapped(handleWithPartitionError(Errors.NOT_COORDINATOR));
-        assertUnmapped(handleWithPartitionError(Errors.COORDINATOR_NOT_AVAILABLE));
     }
 
     @Test
     public void testRetriableHandleResponse() {
         assertRetriable(handleWithGroupError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
-        assertRetriable(handleWithPartitionError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
     }
 
     @Test
