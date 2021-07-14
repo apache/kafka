@@ -25,18 +25,19 @@ import java.security.cert.X509Certificate
 import java.time.Duration
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
-import java.util.{Arrays, Collections, Properties}
-
+import java.util.{Arrays, Collections, Optional, Properties}
 import com.yammer.metrics.core.Meter
+
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log._
 import kafka.metrics.KafkaYammerMetrics
+import kafka.network.RequestChannel
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
-import kafka.server.metadata.{CachedConfigRepository, ConfigRepository, MetadataBroker}
+import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -46,27 +47,33 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.ConfigResource.Type.TOPIC
 import org.apache.kafka.common.errors.{KafkaStorageException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
-import org.apache.kafka.common.network.{ListenerName, Mode}
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.network.{ClientInformation, ListenerName, Mode}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.{AbstractRequest, EnvelopeRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.resource.ResourcePattern
-import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaFuture, Node, TopicPartition}
+import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
+import org.mockito.Mockito
 
+import java.net.InetAddress
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, mutable}
 import scala.concurrent.duration.FiniteDuration
@@ -169,20 +176,6 @@ object TestUtils extends Logging {
 
   def boundPort(server: KafkaServer, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int =
     server.boundPort(ListenerName.forSecurityProtocol(securityProtocol))
-
-  def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): MetadataBroker = {
-    MetadataBroker(id, null, Map(securityProtocol.name -> new Node(id, host, port)), false)
-  }
-
-  def createMetadataBroker(id: Int,
-                           host: String = "localhost",
-                           port: Int = 9092,
-                           securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
-                           rack: Option[String] = None,
-                           fenced: Boolean = false): MetadataBroker = {
-    MetadataBroker(id, rack.getOrElse(null),
-      Map(securityProtocol.name -> new Node(id, host, port, rack.getOrElse(null))), fenced)
-  }
 
   def createBrokerAndEpoch(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                            epoch: Long = 0): (Broker, Long) = {
@@ -677,12 +670,6 @@ object TestUtils extends Logging {
     brokers
   }
 
-  def deleteBrokersInZk(zkClient: KafkaZkClient, ids: Seq[Int]): Seq[MetadataBroker] = {
-    val brokers = ids.map(createBroker(_, "localhost", 6667, SecurityProtocol.PLAINTEXT))
-    ids.foreach(b => zkClient.deletePath(BrokerIdsZNode.path + "/" + b))
-    brokers
-  }
-
   def getMsgStrings(n: Int): Seq[String] = {
     val buffer = new ListBuffer[String]
     for (i <- 0 until  n)
@@ -936,7 +923,7 @@ object TestUtils extends Logging {
                                           timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = servers.map(_.config.brokerId).toSet
     waitUntilTrue(() => servers.forall(server =>
-      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers.map(_.id).toSet
+      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers().map(_.id).toSet
     ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
   }
 
@@ -952,10 +939,7 @@ object TestUtils extends Logging {
                                    topic: String, expectedNumPartitions: Int): Map[TopicPartition, UpdateMetadataPartitionState] = {
     waitUntilTrue(
       () => servers.forall { server =>
-        server.metadataCache.numPartitions(topic) match {
-          case Some(numPartitions) => numPartitions == expectedNumPartitions
-          case _ => false
-        }
+        server.metadataCache.numPartitions(topic) == Some(expectedNumPartitions)
       },
       s"Topic [$topic] metadata not propagated after 60000 ms", waitTimeMs = 60000L)
 
@@ -1094,7 +1078,7 @@ object TestUtils extends Logging {
    */
   def createLogManager(logDirs: Seq[File] = Seq.empty[File],
                        defaultConfig: LogConfig = LogConfig(),
-                       configRepository: ConfigRepository = new CachedConfigRepository,
+                       configRepository: ConfigRepository = new MockConfigRepository,
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
                        time: MockTime = new MockTime()): LogManager = {
     new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
@@ -1173,12 +1157,6 @@ object TestUtils extends Logging {
     new MockIsrChangeListener()
   }
 
-  def createConfigRepository(topic: String, props: Properties): CachedConfigRepository = {
-    val configRepository = new CachedConfigRepository()
-    props.entrySet().forEach(e => configRepository.setTopicConfig(topic, e.getKey.toString, e.getValue.toString))
-    configRepository
-  }
-
   def produceMessages(servers: Seq[KafkaServer],
                       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
                       acks: Int = -1): Unit = {
@@ -1207,16 +1185,17 @@ object TestUtils extends Logging {
     values
   }
 
-  def produceMessage(servers: Seq[KafkaServer], topic: String, message: String,
+  def produceMessage(servers: Seq[KafkaServer], topic: String, message: String, timestamp: java.lang.Long = null,
                      deliveryTimeoutMs: Int = 30 * 1000, requestTimeoutMs: Int = 20 * 1000): Unit = {
     val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers),
       deliveryTimeoutMs = deliveryTimeoutMs, requestTimeoutMs = requestTimeoutMs)
     try {
-      producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
+      producer.send(new ProducerRecord(topic, null, timestamp, topic.getBytes, message.getBytes)).get
     } finally {
       producer.close()
     }
   }
+
 
   def verifyTopicDeletion(zkClient: KafkaZkClient, topic: String, numPartitions: Int, servers: Seq[KafkaServer]): Unit = {
     val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))
@@ -1737,7 +1716,11 @@ object TestUtils extends Logging {
   }
 
   def totalMetricValue(server: KafkaServer, metricName: String): Long = {
-    val allMetrics = server.metrics.metrics
+    totalMetricValue(server.metrics, metricName)
+  }
+
+  def totalMetricValue(metrics: Metrics, metricName: String): Long = {
+    val allMetrics = metrics.metrics
     val total = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
       .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     total.toLong
@@ -1819,7 +1802,7 @@ object TestUtils extends Logging {
   def assignThrottledPartitionReplicas(adminClient: Admin, allReplicasByPartition: Map[TopicPartition, Seq[Int]]): Unit = {
     val throttles = allReplicasByPartition.groupBy(_._1.topic()).map {
       case (topic, replicasByPartition) =>
-        new ConfigResource(ConfigResource.Type.TOPIC, topic) -> Seq(
+        new ConfigResource(TOPIC, topic) -> Seq(
           new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET),
           new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET)
         ).asJavaCollection
@@ -1830,7 +1813,7 @@ object TestUtils extends Logging {
   def removePartitionReplicaThrottles(adminClient: Admin, partitions: Set[TopicPartition]): Unit = {
     val throttles = partitions.map {
       tp =>
-        new ConfigResource(ConfigResource.Type.TOPIC, tp.topic()) -> Seq(
+        new ConfigResource(TOPIC, tp.topic()) -> Seq(
           new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE),
           new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE)
         ).asJavaCollection
@@ -1874,6 +1857,48 @@ object TestUtils extends Logging {
     waitAndVerifyAcls(
       authorizer.acls(aclFilter).asScala.map(_.entry).toSet -- acls,
       authorizer, resource)
+  }
+
+  def buildRequestWithEnvelope(request: AbstractRequest,
+                               principalSerde: KafkaPrincipalSerde,
+                               requestChannelMetrics: RequestChannel.Metrics,
+                               startTimeNanos: Long,
+                               fromPrivilegedListener: Boolean = true,
+                               shouldSpyRequestContext: Boolean = false,
+                               envelope: Option[RequestChannel.Request] = None
+                              ): RequestChannel.Request = {
+    val clientId = "id"
+    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+
+    val requestHeader = new RequestHeader(request.apiKey, request.version, clientId, 0)
+    val requestBuffer = request.serializeWithHeader(requestHeader)
+
+    val envelopeHeader = new RequestHeader(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion(), clientId, 0)
+    val envelopeBuffer = new EnvelopeRequest.Builder(
+      requestBuffer,
+      principalSerde.serialize(KafkaPrincipal.ANONYMOUS),
+      InetAddress.getLocalHost.getAddress
+    ).build().serializeWithHeader(envelopeHeader)
+
+    RequestHeader.parse(envelopeBuffer)
+
+    var requestContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
+      KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
+      fromPrivilegedListener, Optional.of(principalSerde))
+
+    if (shouldSpyRequestContext) {
+      requestContext = Mockito.spy(requestContext)
+    }
+
+    new RequestChannel.Request(
+      processor = 1,
+      context = requestContext,
+      startTimeNanos = startTimeNanos,
+      memoryPool = MemoryPool.NONE,
+      buffer = envelopeBuffer,
+      metrics = requestChannelMetrics,
+      envelope = envelope
+    )
   }
 
 }

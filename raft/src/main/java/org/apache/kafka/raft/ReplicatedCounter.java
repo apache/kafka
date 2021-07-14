@@ -22,6 +22,7 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
+import java.util.Optional;
 import java.util.OptionalInt;
 
 import static java.util.Collections.singletonList;
@@ -35,7 +36,9 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     private int committed = 0;
     private int uncommitted = 0;
     private OptionalInt claimedEpoch = OptionalInt.empty();
-    private long lastSnapshotEndOffset = 0;
+    private long lastOffsetSnapshotted = -1;
+
+    private int handleSnapshotCalls = 0;
 
     public ReplicatedCounter(
         int nodeId,
@@ -69,8 +72,9 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     public synchronized void handleCommit(BatchReader<Integer> reader) {
         try {
             int initialCommitted = committed;
-            long nextReadOffset = 0;
-            int readEpoch = 0;
+            long lastCommittedOffset = -1;
+            int lastCommittedEpoch = 0;
+            long lastCommittedTimestamp = -1;
 
             while (reader.hasNext()) {
                 Batch<Integer> batch = reader.next();
@@ -93,17 +97,33 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     committed = nextCommitted;
                 }
 
-                nextReadOffset = batch.lastOffset() + 1;
-                readEpoch = batch.epoch();
+                lastCommittedOffset = batch.lastOffset();
+                lastCommittedEpoch = batch.epoch();
+                lastCommittedTimestamp = batch.appendTimestamp();
             }
             log.debug("Counter incremented from {} to {}", initialCommitted, committed);
 
-            if (lastSnapshotEndOffset + snapshotDelayInRecords  < nextReadOffset) {
-                log.debug("Generating new snapshot at {} since next commit offset is {}", lastSnapshotEndOffset, nextReadOffset);
-                try (SnapshotWriter<Integer> snapshot = client.createSnapshot(new OffsetAndEpoch(nextReadOffset, readEpoch))) {
-                    snapshot.append(singletonList(committed));
-                    snapshot.freeze();
-                    lastSnapshotEndOffset = nextReadOffset;
+            if (lastOffsetSnapshotted + snapshotDelayInRecords  < lastCommittedOffset) {
+                log.debug(
+                    "Generating new snapshot with committed offset {} and epoch {} since the previoud snapshot includes {}",
+                    lastCommittedOffset,
+                    lastCommittedEpoch,
+                    lastOffsetSnapshotted
+                );
+                Optional<SnapshotWriter<Integer>> snapshot = client.createSnapshot(
+                    lastCommittedOffset,
+                    lastCommittedEpoch,
+                    lastCommittedTimestamp);
+                if (snapshot.isPresent()) {
+                    try {
+                        snapshot.get().append(singletonList(committed));
+                        snapshot.get().freeze();
+                        lastOffsetSnapshotted = lastCommittedOffset;
+                    } finally {
+                        snapshot.get().close();
+                    }
+                } else {
+                    lastOffsetSnapshotted = lastCommittedOffset;
                 }
             }
         } finally {
@@ -133,6 +153,8 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     uncommitted = value;
                 }
             }
+            lastOffsetSnapshotted = reader.lastContainedLogOffset();
+            handleSnapshotCalls += 1;
             log.debug("Finished loading snapshot. Set value: {}", committed);
         } finally {
             reader.close();
@@ -151,5 +173,11 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             uncommitted = -1;
             claimedEpoch = OptionalInt.empty();
         }
+        handleSnapshotCalls = 0;
+    }
+
+    /** Use handleSnapshotCalls to verify leader is never asked to load snapshot */
+    public int handleSnapshotCalls() {
+        return handleSnapshotCalls;
     }
 }

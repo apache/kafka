@@ -34,6 +34,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -206,6 +207,21 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             .field("key", Schema.STRING_SCHEMA)
             .field("algorithm", Schema.STRING_SCHEMA)
             .field("creation-timestamp", Schema.INT64_SCHEMA)
+            .build();
+
+    public static final String RESTART_PREFIX = "restart-connector-";
+
+    public static String RESTART_KEY(String connectorName) {
+        return RESTART_PREFIX + connectorName;
+    }
+
+    public static final boolean ONLY_FAILED_DEFAULT = false;
+    public static final boolean INCLUDE_TASKS_DEFAULT = false;
+    public static final String ONLY_FAILED_FIELD_NAME = "only-failed";
+    public static final String INCLUDE_TASKS_FIELD_NAME = "include-tasks";
+    public static final Schema RESTART_REQUEST_V0 = SchemaBuilder.struct()
+            .field(INCLUDE_TASKS_FIELD_NAME, Schema.BOOLEAN_SCHEMA)
+            .field(ONLY_FAILED_FIELD_NAME, Schema.BOOLEAN_SCHEMA)
             .build();
 
     private static final long READ_TO_END_TIMEOUT_MS = 30000;
@@ -470,6 +486,23 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         }
     }
 
+    @Override
+    public void putRestartRequest(RestartRequest restartRequest) {
+        log.debug("Writing {} to Kafka", restartRequest);
+        String key = RESTART_KEY(restartRequest.connectorName());
+        Struct value = new Struct(RESTART_REQUEST_V0);
+        value.put(INCLUDE_TASKS_FIELD_NAME, restartRequest.includeTasks());
+        value.put(ONLY_FAILED_FIELD_NAME, restartRequest.onlyFailed());
+        byte[] serializedValue = converter.fromConnectData(topic, value.schema(), value);
+        try {
+            configLog.send(key, serializedValue);
+            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            log.error("Failed to write {} to Kafka: ", restartRequest, e);
+            throw new ConnectException("Error writing " + restartRequest + " to Kafka", e);
+        }
+    }
+
     // package private for testing
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
         String clusterId = ConnectUtils.lookupKafkaClusterId(config);
@@ -717,6 +750,12 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
                 if (started)
                     updateListener.onTaskConfigUpdate(updatedTasks);
+            } else if (record.key().startsWith(RESTART_PREFIX)) {
+                RestartRequest request = recordToRestartRequest(record, value);
+                // Only notify the listener if this backing store is already successfully started (having caught up the first time)
+                if (request != null && started) {
+                    updateListener.onRestartRequest(request);
+                }
             } else if (record.key().equals(SESSION_KEY_KEY)) {
                 if (value.value() == null) {
                     log.error("Ignoring session key because it is unexpectedly null");
@@ -759,6 +798,36 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             }
         }
 
+    }
+
+    @SuppressWarnings("unchecked")
+    RestartRequest recordToRestartRequest(ConsumerRecord<String, byte[]> record, SchemaAndValue value) {
+        String connectorName = record.key().substring(RESTART_PREFIX.length());
+        if (!(value.value() instanceof Map)) {
+            log.error("Ignoring restart request because the value is not a Map but is {}", value.value() == null ? "null" : value.value().getClass());
+            return null;
+        }
+
+        Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
+
+        Object failed = valueAsMap.get(ONLY_FAILED_FIELD_NAME);
+        boolean onlyFailed;
+        if (!(failed instanceof Boolean)) {
+            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", ONLY_FAILED_FIELD_NAME, failed == null ? "null" : failed.getClass(), ONLY_FAILED_DEFAULT);
+            onlyFailed = ONLY_FAILED_DEFAULT;
+        } else {
+            onlyFailed = (Boolean) failed;
+        }
+
+        Object withTasks = valueAsMap.get(INCLUDE_TASKS_FIELD_NAME);
+        boolean includeTasks;
+        if (!(withTasks instanceof Boolean)) {
+            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", INCLUDE_TASKS_FIELD_NAME, withTasks == null ? "null" : withTasks.getClass(), INCLUDE_TASKS_DEFAULT);
+            includeTasks = INCLUDE_TASKS_DEFAULT;
+        } else {
+            includeTasks = (Boolean) withTasks;
+        }
+        return new RestartRequest(connectorName, onlyFailed, includeTasks);
     }
 
     private ConnectorTaskId parseTaskId(String key) {

@@ -45,7 +45,7 @@ import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPar
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import scala.collection.{Seq, mutable}
+import scala.collection.{Seq, immutable, mutable}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
@@ -243,12 +243,12 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  *                         with the provided logStartOffset and nextOffsetMetadata
  * @param producerStateManager The ProducerStateManager instance containing state associated with the provided segments
  * @param logDirFailureChannel The LogDirFailureChannel instance to asynchronously handle log directory failure
- * @param topicId optional Uuid to specify the topic ID for the topic if it exists. Should only be specified when
+ * @param _topicId optional Uuid to specify the topic ID for the topic if it exists. Should only be specified when
  *                first creating the log through Partition.makeLeader or Partition.makeFollower. When reloading a log,
  *                this field will be populated by reading the topic ID value from partition.metadata if it exists.
  * @param keepPartitionMetadataFile boolean flag to indicate whether the partition.metadata file should be kept in the
  *                                  log directory. A partition.metadata file is only created when the raft controller is used
- *                                  or the ZK controller's inter-broker protocol version is at least 2.8.
+ *                                  or the ZK controller and this broker's inter-broker protocol version is at least 2.8.
  *                                  This file will persist the topic ID on the broker. If inter-broker protocol for a ZK controller
  *                                  is downgraded below 2.8, a topic ID may be lost and a new ID generated upon re-upgrade.
  *                                  If the inter-broker protocol version on a ZK cluster is below 2.8, partition.metadata
@@ -315,27 +315,41 @@ class Log(@volatile private var _dir: File,
     initializePartitionMetadata()
     updateLogStartOffset(logStartOffset)
     maybeIncrementFirstUnstableOffset()
-    // Delete partition metadata file if the version does not support topic IDs.
-    // Recover topic ID if present and topic IDs are supported
-    // If we were provided a topic ID when creating the log, partition metadata files are supported, and one does not yet exist
-    // write to the partition metadata file.
-    // Ensure we do not try to assign a provided topicId that is inconsistent with the ID on file.
+    initializeTopicId()
+  }
+
+  /**
+   * Initialize topic ID information for the log by maintaining the partition metadata file and setting the in-memory _topicId.
+   * Delete partition metadata file if the version does not support topic IDs.
+   * Set _topicId based on a few scenarios:
+   *   - Recover topic ID if present and topic IDs are supported. Ensure we do not try to assign a provided topicId that is inconsistent
+   *     with the ID on file.
+   *   - If we were provided a topic ID when creating the log, partition metadata files are supported, and one does not yet exist
+   *     set _topicId and write to the partition metadata file.
+   *   - Otherwise set _topicId to None
+   */
+  def initializeTopicId(): Unit =  {
     if (partitionMetadataFile.exists()) {
-        if (keepPartitionMetadataFile) {
-          val fileTopicId = partitionMetadataFile.read().topicId
-          if (_topicId.isDefined && !_topicId.contains(fileTopicId))
-            throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
-              s"but log already contained topic ID $fileTopicId")
-          _topicId = Some(fileTopicId)
-        } else {
-          try partitionMetadataFile.delete()
-          catch {
-            case e: IOException =>
-              error(s"Error while trying to delete partition metadata file ${partitionMetadataFile}", e)
-          }
+      if (keepPartitionMetadataFile) {
+        val fileTopicId = partitionMetadataFile.read().topicId
+        if (_topicId.isDefined && !_topicId.contains(fileTopicId))
+          throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+            s"but log already contained topic ID $fileTopicId")
+
+        _topicId = Some(fileTopicId)
+
+      } else {
+        try partitionMetadataFile.delete()
+        catch {
+          case e: IOException =>
+            error(s"Error while trying to delete partition metadata file ${partitionMetadataFile}", e)
         }
+      }
     } else if (keepPartitionMetadataFile) {
       _topicId.foreach(partitionMetadataFile.write)
+    } else {
+      // We want to keep the file and the in-memory topic ID in sync.
+      _topicId = None
     }
   }
 
@@ -555,8 +569,10 @@ class Log(@volatile private var _dir: File,
 
   /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
   def assignTopicId(topicId: Uuid): Unit = {
-    partitionMetadataFile.write(topicId)
-    _topicId = Some(topicId)
+    if (keepPartitionMetadataFile) {
+      partitionMetadataFile.write(topicId)
+      _topicId = Some(topicId)
+    }
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
@@ -1322,6 +1338,17 @@ class Log(@volatile private var _dir: File,
         val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
         val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epochOptional))
+      } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
+        // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
+        // constant time access while being safe to use with concurrent collections unlike `toArray`.
+        val segmentsCopy = logSegments.toBuffer
+        val latestTimestampSegment = segmentsCopy.maxBy(_.maxTimestampSoFar)
+        val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
+        val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
+        val latestTimestampAndOffset = latestTimestampSegment.maxTimestampAndOffsetSoFar
+        Some(new TimestampAndOffset(latestTimestampAndOffset.timestamp,
+          latestTimestampAndOffset.offset,
+          epochOptional))
       } else {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
         // constant time access while being safe to use with concurrent collections unlike `toArray`.
@@ -1879,9 +1906,10 @@ class Log(@volatile private var _dir: File,
                                       reason: SegmentDeletionReason): Unit = {
     if (segments.nonEmpty) {
       lock synchronized {
-        // As most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
+        // Most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
         // removing the deleted segment, we should force materialization of the iterator here, so that results of the
-        // iteration remain valid and deterministic.
+        // iteration remain valid and deterministic. We should also pass only the materialized view of the
+        // iterator to the logic that actually deletes the segments.
         val toDelete = segments.toList
         reason.logReason(this, toDelete)
         toDelete.foreach { segment =>
@@ -1892,7 +1920,7 @@ class Log(@volatile private var _dir: File,
     }
   }
 
-  private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean, deleteProducerStateSnapshots: Boolean = true): Unit = {
+  private def deleteSegmentFiles(segments: immutable.Iterable[LogSegment], asyncDelete: Boolean, deleteProducerStateSnapshots: Boolean = true): Unit = {
     Log.deleteSegmentFiles(segments, asyncDelete, deleteProducerStateSnapshots, dir, topicPartition,
       config, scheduler, logDirFailureChannel, producerStateManager, this.logIdent)
   }
@@ -2378,7 +2406,7 @@ object Log extends Logging {
    * @param logPrefix The logging prefix
    * @throws IOException if the file can't be renamed and still exists
    */
-  private[log] def deleteSegmentFiles(segmentsToDelete: Iterable[LogSegment],
+  private[log] def deleteSegmentFiles(segmentsToDelete: immutable.Iterable[LogSegment],
                                       asyncDelete: Boolean,
                                       deleteProducerStateSnapshots: Boolean = true,
                                       dir: File,
@@ -2389,6 +2417,11 @@ object Log extends Logging {
                                       producerStateManager: ProducerStateManager,
                                       logPrefix: String): Unit = {
     segmentsToDelete.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
+    val snapshotsToDelete = if (deleteProducerStateSnapshots)
+      segmentsToDelete.flatMap { segment =>
+        producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset)}
+    else
+      Seq()
 
     def deleteSegments(): Unit = {
       info(s"${logPrefix}Deleting segment files ${segmentsToDelete.mkString(",")}")
@@ -2396,8 +2429,9 @@ object Log extends Logging {
       maybeHandleIOException(logDirFailureChannel, parentDir, s"Error while deleting segments for $topicPartition in dir $parentDir") {
         segmentsToDelete.foreach { segment =>
           segment.deleteIfExists()
-          if (deleteProducerStateSnapshots)
-            producerStateManager.removeAndDeleteSnapshot(segment.baseOffset)
+        }
+        snapshotsToDelete.foreach { snapshot =>
+          snapshot.deleteIfExists()
         }
       }
     }
@@ -2567,7 +2601,7 @@ object Log extends Logging {
                                           producerStateManager: ProducerStateManager,
                                           logPrefix: String): List[LogSegment] = {
     require(Log.isLogFile(segment.log.file), s"Cannot split file ${segment.log.file.getAbsoluteFile}")
-    require(segment.hasOverflow, "Split operation is only permitted for segments with overflow")
+    require(segment.hasOverflow, s"Split operation is only permitted for segments with overflow, and the problem path is ${segment.log.file.getAbsoluteFile}")
 
     info(s"${logPrefix}Splitting overflowed segment $segment")
 

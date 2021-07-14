@@ -38,7 +38,7 @@ plugins {
   id 'org.nosphere.apache.rat' version "0.7.0"
 
   id "com.github.spotbugs" version '4.7.1' apply false
-  id 'org.gradle.test-retry' version '1.2.1' apply false
+  id 'org.gradle.test-retry' version '1.3.1' apply false
   id 'org.scoverage' version '5.0.0' apply false
   id 'com.github.johnrengelman.shadow' version '7.0.0' apply false
 }
@@ -102,6 +102,8 @@ ext {
 
   defaultMaxHeapSize = "2g"
   defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC"]
+  if (JavaVersion.current() == JavaVersion.VERSION_16)  
+    defaultJvmArgs.add("--illegal-access=permit")
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
   userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures : false
@@ -220,7 +222,8 @@ subprojects {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
     // temporary exclusions until all the warnings are fixed
-    options.compilerArgs << "-Xlint:-rawtypes"
+    if (!project.path.startsWith(":connect"))
+      options.compilerArgs << "-Xlint:-rawtypes"
     options.compilerArgs << "-Xlint:-serial"
     options.compilerArgs << "-Xlint:-try"
     options.compilerArgs << "-Werror"
@@ -353,6 +356,27 @@ subprojects {
     }
   }
 
+  // The suites are for running sets of tests in IDEs.
+  // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
+  def testsToExclude = ['**/*Suite.class']
+  // Exclude PowerMock tests when running with Java 16 until a version of PowerMock that supports Java 16 is released
+  // The relevant issues are https://github.com/powermock/powermock/issues/1094 and https://github.com/powermock/powermock/issues/1099
+  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
+    testsToExclude.addAll([
+      // connect tests
+      "**/AbstractHerderTest.*", "**/ConnectClusterStateImplTest.*", "**/ConnectorPluginsResourceTest.*",
+      "**/ConnectorsResourceTest.*", "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
+      "**/ErrorHandlingTaskTest.*", "**/KafkaConfigBackingStoreTest.*", "**/KafkaOffsetBackingStoreTest.*",
+      "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
+      "**/SourceTaskOffsetCommitterTest.*", "**/WorkerConfigTransformerTest.*", "**/WorkerGroupMemberTest.*",
+      "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*", "**/WorkerSourceTaskTest.*",
+      "**/WorkerTaskTest.*", "**/WorkerTest.*", "**/RestServerTest.*",
+      // streams tests
+      "**/KafkaStreamsTest.*", "**/RepartitionTopicsTest.*", "**/RocksDBMetricsRecorderTest.*",
+      "**/StreamsMetricsImplTest.*", "**/StateManagerUtilTest.*", "**/TableSourceNodeTest.*"
+    ])
+  }
+
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
     ignoreFailures = userIgnoreFailures
@@ -367,9 +391,7 @@ subprojects {
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
-    // The suites are for running sets of tests in IDEs.
-    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
-    exclude '**/*Suite.class'
+    exclude testsToExclude
 
     if (shouldUseJUnit5)
       useJUnitPlatform()
@@ -395,9 +417,7 @@ subprojects {
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
-    // The suites are for running sets of tests in IDEs.
-    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
-    exclude '**/*Suite.class'
+    exclude testsToExclude
 
     if (shouldUseJUnit5) {
       useJUnitPlatform {
@@ -429,9 +449,7 @@ subprojects {
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
-    // The suites are for running sets of tests in IDEs.
-    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
-    exclude '**/*Suite.class'
+    exclude testsToExclude
 
     if (shouldUseJUnit5) {
       useJUnitPlatform {
@@ -806,6 +824,9 @@ project(':core') {
     implementation libs.scalaLogging
     implementation libs.slf4jApi
     implementation(libs.zookeeper) {
+      // Dropwizard Metrics are required by ZooKeeper as of v3.6.0,
+      // but the library should *not* be used in Kafka code
+      implementation libs.dropwizardMetrics
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
     }
@@ -815,6 +836,8 @@ project(':core') {
     compileOnly libs.log4j
 
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':metadata').sourceSets.test.output
+    testImplementation project(':raft').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation libs.easymock
@@ -1565,7 +1588,7 @@ project(':tools') {
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
-
+    testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testRuntimeOnly libs.slf4jlog4j
   }
 
@@ -1710,6 +1733,7 @@ project(':streams') {
     testImplementation libs.powermockEasymock
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly libs.slf4jlog4j
@@ -2181,7 +2205,7 @@ project(':log4j-appender') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.hamcrest
-    testImplementation libs.easymock
+    testImplementation libs.mockitoCore
   }
 
   javadoc {

@@ -52,6 +52,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -62,6 +63,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 public class TopologyTest {
 
     private final StoreBuilder<MockKeyValueStore> storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
@@ -358,8 +360,11 @@ public class TopologyTest {
                 goodNodeName)
             .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
 
+        final Properties config = new Properties();
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
         try {
-            new TopologyTestDriver(topology);
+            new TopologyTestDriver(topology, config);
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             final String error = e.toString();
@@ -848,7 +853,7 @@ public class TopologyTest {
         stream1.leftJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
 
         final TopologyDescription describe = builder.build().describe();
@@ -890,7 +895,7 @@ public class TopologyTest {
         stream1.leftJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
                 .withStoreName("custom-name"));
 
@@ -930,7 +935,7 @@ public class TopologyTest {
         stream1 = builder.stream("input-topic1");
         stream2 = builder.stream("input-topic2");
 
-        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100));
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100));
 
         final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store",
             Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
@@ -987,7 +992,7 @@ public class TopologyTest {
         stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
 
         final TopologyDescription describe = builder.build().describe();
@@ -1029,7 +1034,7 @@ public class TopologyTest {
         stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
                 .withStoreName("custom-name"));
 
@@ -1069,7 +1074,7 @@ public class TopologyTest {
         stream1 = builder.stream("input-topic1");
         stream2 = builder.stream("input-topic2");
 
-        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100));
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100));
 
         final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store",
             Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),

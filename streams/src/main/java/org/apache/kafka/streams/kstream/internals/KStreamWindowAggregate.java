@@ -23,9 +23,6 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -38,6 +35,7 @@ import java.util.Map;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -59,7 +57,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
     }
 
     @Override
-    public Processor<K, V> get() {
+    public org.apache.kafka.streams.processor.Processor<K, V> get() {
         return new KStreamWindowAggregateProcessor();
     }
 
@@ -73,29 +71,19 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
     }
 
 
-    private class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
+    private class KStreamWindowAggregateProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, V> {
         private TimestampedWindowStore<K, Agg> windowStore;
         private TimestampedTupleForwarder<Windowed<K>, Agg> tupleForwarder;
-        private Sensor lateRecordDropSensor;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
             final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
             final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
-            lateRecordDropSensor = droppedRecordsSensor(
-                threadId,
-                context.taskId().toString(),
-                metrics
-            );
-            droppedRecordsSensor = droppedRecordsSensor(
-                threadId,
-                context.taskId().toString(),
-                metrics
-            );
+            droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
             windowStore = context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,
@@ -169,7 +157,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                         closeTime,
                         observedStreamTime
                     );
-                    lateRecordDropSensor.record();
+                    droppedRecordsSensor.record();
                 }
             }
         }
@@ -194,7 +182,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
         private TimestampedWindowStore<K, Agg> windowStore;
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             windowStore = context.getStateStore(storeName);
         }
 

@@ -579,11 +579,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean lagComputationSuccessful =
             populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogTopics);
 
+        log.info("All members participating in this rebalance: \n{}.",
+                 clientStates.entrySet().stream()
+                     .map(entry -> entry.getKey() + ": " + entry.getValue().consumers())
+                     .collect(Collectors.joining(Utils.NL)));
+
         final Set<TaskId> allTasks = partitionsForTask.keySet();
         statefulTasks.addAll(changelogTopics.statefulTaskIds());
 
-        log.debug("Assigning tasks {} to clients {} with number of replicas {}",
-            allTasks, clientStates, numStandbyReplicas());
+        log.debug("Assigning tasks {} including stateful {} to clients {} with number of replicas {}",
+            allTasks, statefulTasks, clientStates, numStandbyReplicas());
 
         final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
 
@@ -662,6 +667,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             state.computeTaskLags(uuid, allTaskEndOffsetSums);
             clientStates.put(uuid, state);
         }
+
         return fetchEndOffsetsSuccessful;
     }
 

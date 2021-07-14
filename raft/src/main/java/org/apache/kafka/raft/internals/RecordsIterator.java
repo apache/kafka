@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -102,7 +103,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         try {
             fileRecords.readInto(buffer, bytesRead);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to read records into memory", e);
+            throw new UncheckedIOException("Failed to read records into memory", e);
         }
 
         bytesRead += buffer.limit() - start;
@@ -181,7 +182,13 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     private Batch<T> readBatch(DefaultRecordBatch batch) {
         final Batch<T> result;
         if (batch.isControlBatch()) {
-            result = Batch.empty(batch.baseOffset(), batch.partitionLeaderEpoch(), batch.lastOffset());
+            result = Batch.control(
+                batch.baseOffset(),
+                batch.partitionLeaderEpoch(),
+                batch.maxTimestamp(),
+                batch.sizeInBytes(),
+                batch.lastOffset()
+            );
         } else {
             Integer numRecords = batch.countOrNull();
             if (numRecords == null) {
@@ -196,7 +203,13 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
                 }
             }
 
-            result = Batch.of(batch.baseOffset(), batch.partitionLeaderEpoch(), records);
+            result = Batch.data(
+                batch.baseOffset(),
+                batch.partitionLeaderEpoch(),
+                batch.maxTimestamp(),
+                batch.sizeInBytes(),
+                records
+            );
         }
 
         return result;

@@ -54,7 +54,7 @@
 
     <p>
         Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2. This can be configured
-        by setting <code>"processing.guarantee"</code> to <code>"exactly_once"</code> for
+        by setting <code>"processing.guarantee"</code> to <code>"exactly_once_v2"</code> for
         application versions 3.0+, or setting it to <code>"exactly_once_beta"</code> for versions between 2.6 and 2.8.
         To use this new feature, your brokers must be on version 2.5.x or newer.
         If you want to upgrade your EOS application from an older version and enable this feature in version 3.0+,
@@ -96,6 +96,23 @@
 
     <h3><a id="streams_api_changes_300" href="#streams_api_changes_300">Streams API changes in 3.0.0</a></h3>
     <p>
+      We improved the semantics of
+      <a href="/documentation/streams/developer-guide/config-streams.html#max-task-idle-ms">task idling (<code>max.task.idle.ms</code>)</a>.
+      Now Streams provides stronger in-order join and merge processing semantics.
+      Streams's new default pauses processing on tasks with multiple input partitions
+      when one of the partitions has no data buffered locally but has a non-zero lag. In other
+      words, Streams will wait to fetch records that are already available on the broker. This
+      results in improved join semantics, since it allows Streams to interleave the two input
+      partitions in timestamp order instead of just processing whichever partition happens to be
+      buffered. There is an option to disable this new behavior, and there is also an option to
+      make Streams wait even longer for new records to be <em>produced</em> to the input partitions,
+      which you can use to get stronger time semantics when you know some of your producers may be
+      slow. See the
+      <a href="/documentation/streams/developer-guide/config-streams.html#max-task-idle-ms">config reference</a>
+      for more information, and <a href="https://cwiki.apache.org/confluence/x/JSXZCQ">KIP-695</a>
+      for the larger context of this change.
+    </p>
+    <p>
         Interactive Queries may throw new exceptions for different errors:
     </p>
     <ul>
@@ -121,10 +138,23 @@
     <p>
         The public <code>topicGroupId</code> and <code>partition</code> fields on TaskId have been deprecated and replaced with getters. Please migrate to using the new <code>TaskId.subtopology()</code>
         (which replaces <code>topicGroupId</code>) and <code>TaskId.partition()</code> APIs instead. Also, the <code>TaskId#readFrom</code> and <code>TaskId#writeTo</code> methods have been deprecated
-        and will be removed, as they were never intended for public use. Finally, we have deprecated the <code>TaskMetadata.taskId()</code> method as well as the <code>TaskMetadata</code> constructor.
-        These have been replaced with APIs that better represent the task id as an actual <code>TaskId</code> object instead of a String. Please migrate to the new <code>TaskMetadata#getTaskId</code>
-        method. See <a href="https://cwiki.apache.org/confluence/x/vYTOCg">KIP-740</a> for more details.
+        and will be removed, as they were never intended for public use. We have also deprecated the <code>org.apache.kafka.streams.processsor.TaskMetadata</code> class and introduced a new interface
+        <code>org.apache.kafka.streams.TaskMetadata</code> to be used instead. This change was introduced to better reflect the fact that <code>TaskMetadata</code> was not meant to be instantiated outside
+        of Kafka codebase.
+        Please note that the new <code>TaskMetadata</code> offers APIs that better represent the task id as an actual <code>TaskId</code> object instead of a String. Please migrate to the new
+        <code>org.apache.kafka.streams.TaskMetadata</code> which offers these better methods, for example, by using the new <code>ThreadMetadata#activeTasks</code> and <code>ThreadMetadata#standbyTasks</code>.
+        <code>org.apache.kafka.streams.processor.ThreadMetadata</code> class is also now deprecated and the newly introduced interface <code>org.apache.kafka.streams.ThreadMetadata</code> is to be used instead. In this new <code>ThreadMetadata</code>
+        interface, any reference to the deprecated <code>TaskMetadata</code> is replaced by the new interface.
+        Finally, also <code>org.apache.kafka.streams.state.StreamsMetadata</code> has been deprecated. Please migrate to the new <code>org.apache.kafka.streams.StreamsMetadata</code>.
+        We have deprecated several methods under <code>org.apache.kafka.streams.KafkaStreams</code> that returned the aforementioned deprecated classes:
     </p>
+    <ul>
+        <li>Users of <code>KafkaStreams#allMetadata</code> are meant to migrate to the new <code>KafkaStreams#metadataForAllStreamsClients</code>.</li>
+        <li>Users of <code>KafkaStreams#allMetadataForStore(String)</code> are meant to migrate to the new <code>KafkaStreams#streamsMetadataForStore(String)</code>.</li>
+        <li>Users of <code>KafkaStreams#localThreadsMetadata</code> are meant to migrate to the new <code>KafkaStreams#metadataForLocalThreads</code>.</li>
+    </ul>
+    <p>See <a href="https://cwiki.apache.org/confluence/x/vYTOCg">KIP-740</a> and <a href="https://cwiki.apache.org/confluence/x/XIrOCg">KIP-744</a> for more details.</p>
+
     <p>
         We removed the following deprecated APIs:
     </p>
@@ -218,6 +248,11 @@
         If a task does not make progress within the specified task timeout, which is tracked on a per-task basis,
         Kafka Streams throws a <code>TimeoutException</code>
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-572%3A+Improve+timeouts+and+retries+in+Kafka+Streams">KIP-572</a>).
+    </p>
+    <p>
+        We changed the default value of <code>default.key.serde</code> and <code>default.value.serde</code> to be <code>null</code> instead of <code>ByteArraySerde</code>.
+        Users will now see a <code>ConfigException</code> if their serdes are not correctly configured through those configs or passed in explicitly.
+        See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-741%3A+Change+default+serde+to+be+null">KIP-741</a> for more details.
     </p>
 
     <h3><a id="streams_api_changes_270" href="#streams_api_changes_270">Streams API changes in 2.7.0</a></h3>

@@ -22,7 +22,7 @@ import java.net.{InetAddress, SocketTimeoutException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
-import kafka.cluster.Broker
+import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
@@ -31,7 +31,7 @@ import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
-import kafka.server.metadata.{MetadataBroker, ZkConfigRepository}
+import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
@@ -404,7 +404,7 @@ class KafkaServer(
         config.dynamicConfig.addReconfigurables(this)
 
         /* start dynamic config manager */
-        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, kafkaController),
+        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, Some(kafkaController)),
                                                            ConfigType.Client -> new ClientIdConfigHandler(quotaManagers),
                                                            ConfigType.User -> new UserConfigHandler(quotaManagers, credentialProvider),
                                                            ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
@@ -435,7 +435,7 @@ class KafkaServer(
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
     new ReplicaManager(config, metrics, time, Some(zkClient), kafkaScheduler, logManager, isShuttingDown, quotaManagers,
-      brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager, configRepository)
+      brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager)
   }
 
   private def initZkClient(time: Time): Unit = {
@@ -491,9 +491,6 @@ class KafkaServer(
    * Performs controlled shutdown
    */
   private def controlledShutdown(): Unit = {
-
-    def node(broker: MetadataBroker): Node = broker.node(config.interBrokerListenerName)
-
     val socketTimeoutMs = config.controllerSocketTimeoutMs
 
     def doControlledShutdown(retries: Int): Boolean = {
@@ -542,7 +539,7 @@ class KafkaServer(
       try {
 
         var remainingRetries = retries
-        var prevController: MetadataBroker = null
+        var prevController: Node = null
         var ioException = false
 
         while (!shutdownSucceeded && remainingRetries > 0) {
@@ -552,7 +549,7 @@ class KafkaServer(
           // If the controller id or the broker registration are missing, we sleep and retry (if there are remaining retries)
           metadataCache.getControllerId match {
             case Some(controllerId) =>
-              metadataCache.getAliveBroker(controllerId) match {
+              metadataCache.getAliveBrokerNode(controllerId, config.interBrokerListenerName) match {
                 case Some(broker) =>
                   // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
                   // attempt, connect to the most recent controller
@@ -561,10 +558,10 @@ class KafkaServer(
                     ioException = false
 
                     if (prevController != null)
-                      networkClient.close(node(prevController).idString)
+                      networkClient.close(prevController.idString)
 
                     prevController = broker
-                    metadataUpdater.setNodes(Seq(node(prevController)).asJava)
+                    metadataUpdater.setNodes(Seq(prevController).asJava)
                   }
                 case None =>
                   info(s"Broker registration for controller $controllerId is not available in the metadata cache")
@@ -577,7 +574,7 @@ class KafkaServer(
           if (prevController != null) {
             try {
 
-              if (!NetworkClientUtils.awaitReady(networkClient, node(prevController), time, socketTimeoutMs))
+              if (!NetworkClientUtils.awaitReady(networkClient, prevController, time, socketTimeoutMs))
                 throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
               // send the controlled shutdown request
@@ -592,7 +589,7 @@ class KafkaServer(
                     .setBrokerId(config.brokerId)
                     .setBrokerEpoch(kafkaController.brokerEpoch),
                     controlledShutdownApiVersion)
-              val request = networkClient.newClientRequest(node(prevController).idString, controlledShutdownRequest,
+              val request = networkClient.newClientRequest(prevController.idString, controlledShutdownRequest,
                 time.milliseconds(), true)
               val clientResponse = NetworkClientUtils.sendAndReceive(networkClient, request, time)
 
@@ -752,6 +749,13 @@ class KafkaServer(
   def getLogManager: LogManager = logManager
 
   def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
+
+  /** Return advertised listeners with the bound port (this may differ from the configured port if the latter is `0`). */
+  def advertisedListeners: Seq[EndPoint] = {
+    config.advertisedListeners.map { endPoint =>
+      endPoint.copy(port = boundPort(endPoint.listenerName))
+    }
+  }
 
   /**
    * Checkpoint the BrokerMetadata to all the online log.dirs

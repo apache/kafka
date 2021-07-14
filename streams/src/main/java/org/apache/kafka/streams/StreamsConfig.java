@@ -32,7 +32,6 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
@@ -135,7 +134,6 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  * @see ConsumerConfig
  * @see ProducerConfig
  */
-@SuppressWarnings("deprecation")
 public class StreamsConfig extends AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
@@ -429,8 +427,18 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code max.task.idle.ms} */
     public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
-    private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time in milliseconds a stream task will stay idle when not all of its partition buffers contain records," +
-        " to avoid potential out-of-order record processing across multiple input streams.";
+    private static final String MAX_TASK_IDLE_MS_DOC = "This config controls whether joins and merges"
+        + " may produce out-of-order results."
+        + " The config value is the maximum amount of time in milliseconds a stream task will stay idle"
+        + " when it is fully caught up on some (but not all) input partitions"
+        + " to wait for producers to send additional records and avoid potential"
+        + " out-of-order record processing across multiple input streams."
+        + " The default (zero) does not wait for producers to send more records,"
+        + " but it does wait to fetch data that is already present on the brokers."
+        + " This default means that for records that are already present on the brokers,"
+        + " Streams will process them in timestamp order."
+        + " Set to -1 to disable idling entirely and process any locally available data,"
+        + " even though doing so may produce out-of-order processing.";
 
     /** {@code max.warmup.replicas} */
     public static final String MAX_WARMUP_REPLICAS_CONFIG = "max.warmup.replicas";
@@ -644,7 +652,7 @@ public class StreamsConfig extends AbstractConfig {
                     DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
                     Type.CLASS,
-                    Serdes.ByteArraySerde.class.getName(),
+                    null,
                     Importance.MEDIUM,
                     DEFAULT_KEY_SERDE_CLASS_DOC)
             .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS,
@@ -679,7 +687,7 @@ public class StreamsConfig extends AbstractConfig {
                     DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
             .define(DEFAULT_VALUE_SERDE_CLASS_CONFIG,
                     Type.CLASS,
-                    Serdes.ByteArraySerde.class.getName(),
+                    null,
                     Importance.MEDIUM,
                     DEFAULT_VALUE_SERDE_CLASS_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
@@ -939,6 +947,9 @@ public class StreamsConfig extends AbstractConfig {
         // Private API used to disable the fix on left/outer joins (https://issues.apache.org/jira/browse/KAFKA-10847)
         public static final String ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__enable.kstreams.outer.join.spurious.results.fix__";
 
+        // Private API used to control the emit latency for left/outer join results (https://issues.apache.org/jira/browse/KAFKA-10847)
+        public static final String EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__emit.interval.ms.kstreams.outer.join.spurious.results.fix__";
+
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);
             if (value instanceof Boolean) {
@@ -947,6 +958,18 @@ public class StreamsConfig extends AbstractConfig {
                 return Boolean.parseBoolean((String) value);
             } else {
                 log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a true/false value.");
+                return defaultValue;
+            }
+        }
+
+        public static long getLong(final Map<String, Object> configs, final String key, final long defaultValue) {
+            final Object value = configs.getOrDefault(key, defaultValue);
+            if (value instanceof Number) {
+                return ((Number) value).longValue();
+            } else if (value instanceof String) {
+                return Long.parseLong((String) value);
+            } else {
+                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a numeric value.");
                 return defaultValue;
             }
         }
@@ -1425,6 +1448,9 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public Serde defaultKeySerde() {
         final Object keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
+        if (keySerdeConfigSetting ==  null) {
+            throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
+        }
         try {
             final Serde<?> serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
             serde.configure(originals(), true);
@@ -1444,6 +1470,9 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public Serde defaultValueSerde() {
         final Object valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
+        if (valueSerdeConfigSetting == null) {
+            throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
+        }
         try {
             final Serde<?> serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
             serde.configure(originals(), false);

@@ -21,15 +21,20 @@
 
 <h5><a id="upgrade_300_notable" href="#upgrade_300_notable">Notable changes in 3.0.0</a></h5>
 <ul>
+    <li>ZooKeeper has been upgraded to version 3.6.3.</li>
     <li>The release tarball no longer includes test, sources, javadoc and test sources jars. These are still published to the Maven Central repository. </li>
     <li>A number of implementation dependency jars are <a href="https://github.com/apache/kafka/pull/10203">now available in the runtime classpath
         instead of compile and runtime classpaths</a>. Compilation errors after the upgrade can be fixed by adding the missing dependency jar(s) explicitly
         or updating the application not to use internal classes.</li>
+    <li>The default value for the consumer configuration <code>session.timeout.ms</code> was increased from 10s to 45s. See
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-735%3A+Increase+default+consumer+session+timeout">KIP-735</a> for more details.</li>
     <li>The Streams API removed all deprecated APIs that were deprecated in version 2.5.0 or earlier.
         For a complete list of removed APIs compare the detailed Kafka Streams upgrade notes.</li>
     <li>Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
         Projects that were relying on this transitive dependency will have to explicitly declare it.</li>
-    <li>A number of deprecated classes, methods and tools have been removed from the <code>clients</code>, <code>core</code> and <code>tools</code> modules:</li>
+    <li>Custom principal builder implementations specified through <code>principal.builder.class</code> must now implement the 
+        <code>KafkaPrincipalSerde</code> interface to allow for forwarding between brokers. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-590%3A+Redirect+Zookeeper+Mutation+Protocols+to+The+Controller">KIP-590</a> for more details about the usage of KafkaPrincipalSerde.</li>
+    <li>A number of deprecated classes, methods and tools have been removed from the <code>clients</code>, <code>connect</code>, <code>core</code> and <code>tools</code> modules:</li>
     <ul>
         <li>The Scala <code>Authorizer</code>, <code>SimpleAclAuthorizer</code> and related classes have been removed. Please use the Java <code>Authorizer</code>
             and <code>AclAuthorizer</code> instead.</li>
@@ -57,6 +62,9 @@
             were removed. These methods were not intended to be public API and there is no replacement.</li>
         <li>The <code>NoOffsetForPartitionException.partition()</code> method was removed. Please use <code>partitions()</code>
             instead.</li>
+        <li>The default <code>partition.assignment.strategy</code> is changed to "[RangeAssignor, CooperativeStickyAssignor]",
+            which will use the RangeAssignor by default, but allows upgrading to the CooperativeStickyAssignor with just a single rolling bounce that removes the RangeAssignor from the list.
+            Please check the client upgrade path guide <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-429:+Kafka+Consumer+Incremental+Rebalance+Protocol#KIP429:KafkaConsumerIncrementalRebalanceProtocol-Consumer">here</a> for more detail.</li>
         <li>The Scala <code>kafka.common.MessageFormatter</code> was removed. Please use the Java <code>org.apache.kafka.common.MessageFormatter</code>.</li>
         <li>The <code>MessageFormatter.init(Properties)</code> method was removed. Please use <code>configure(Map)</code> instead.</li>
         <li>The <code>checksum()</code> method has been removed from <code>ConsumerRecord</code> and <code>RecordMetadata</code>. The message
@@ -69,6 +77,10 @@
             <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> instead.</li>
         <li>The <code>quota.producer.default</code> and <code>quota.consumer.default</code> configurations were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12591">KAFKA-12591</a>).
             Dynamic quota defaults must be used instead.</li>
+        <li>The <code>port</code> and <code>host.name</code> configurations were removed. Please use <code>listeners</code> instead.</li>
+        <li>The <code>advertised.port</code> and <code>advertised.host.name</code> configurations were removed. Please use <code>advertised.listeners</code> instead.</li>
+        <li>The deprecated worker configurations <code>rest.host.name</code> and <code>rest.port</code> were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12482">KAFKA-12482</a>) from the Kafka Connect worker configuration.
+            Please use <code>listeners</code> instead.</li>
     </ul>
     <li> The <code>Producer#sendOffsetsToTransaction(Map offsets, String consumerGroupId)</code> method has been deprecated. Please use
         <code>Producer#sendOffsetsToTransaction(Map offsets, ConsumerGroupMetadata metadata)</code> instead, where the <code>ConsumerGroupMetadata</code>
@@ -76,7 +88,24 @@
         understood by brokers or version 2.5 or higher, so you must upgrade your kafka cluster to get the stronger semantics. Otherwise, you can just pass
         in <code>new ConsumerGroupMetadata(consumerGroupId)</code> to work with older brokers. See <a href="https://cwiki.apache.org/confluence/x/zJONCg">KIP-732</a> for more details.
     </li>
-
+    <li>
+        The Connect <code>internal.key.converter</code> and <code>internal.value.converter</code> properties have been completely <a href="https://cwiki.apache.org/confluence/x/2YDOCg">removed</a>.
+        The use of these Connect worker properties has been deprecated since version 2.0.0. 
+        Workers are now hardcoded to use the JSON converter with <code>schemas.enable</code> set to <code>false</code>. If your cluster has been using
+        a different internal key or value converter, you can follow the migration steps outlined in <a href="https://cwiki.apache.org/confluence/x/2YDOCg">KIP-738</a>
+        to safely upgrade your Connect cluster to 3.0.
+    </li>
+    <li> The Connect-based MirrorMaker (MM2) includes changes to support <code>IdentityReplicationPolicy</code>, enabling replication without renaming topics.
+        The existing <code>DefaultReplicationPolicy</code> is still used by default, but identity replication can be enabled via the
+        <code>replication.policy</code> configuration property. This is especially useful for users migrating from the older MirrorMaker (MM1), or for
+        use-cases with simple one-way replication topologies where topic renaming is undesirable. Note that <code>IdentityReplicationPolicy</code>, unlike
+        <code>DefaultReplicationPolicy</code>, cannot prevent replication cycles based on topic names, so take care to avoid cycles when constructing your
+        replication topology.
+    </li>
+    <li> The original MirrorMaker (MM1) and related classes have been deprecated. Please use the Connect-based
+        MirrorMaker (MM2), as described in the
+        <a href="/{{version}}/documentation/#georeplication">Geo-Replication section</a>.
+    </li>
 </ul>
 
 <h5><a id="upgrade_280_notable" href="#upgrade_280_notable">Notable changes in 2.8.0</a></h5>

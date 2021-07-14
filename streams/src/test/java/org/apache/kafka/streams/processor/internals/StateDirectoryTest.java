@@ -66,7 +66,6 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHEC
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.toTaskDirString;
 
 import static java.util.Collections.emptyList;
-import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -233,6 +232,30 @@ public class StateDirectoryTest {
 
         Utils.delete(stateDir);
 
+        assertThrows(ProcessorStateException.class, () -> directory.getOrCreateDirectoryForTask(taskId));
+    }
+
+    @Test
+    public void shouldThrowProcessorStateExceptionIfStateDirOccupied() throws IOException {
+        final TaskId taskId = new TaskId(0, 0);
+
+        // Replace application's stateDir to regular file
+        Utils.delete(appDir);
+        appDir.createNewFile();
+
+        assertThrows(ProcessorStateException.class, () -> directory.getOrCreateDirectoryForTask(taskId));
+    }
+
+    @Test
+    public void shouldThrowProcessorStateExceptionIfTestDirOccupied() throws IOException {
+        final TaskId taskId = new TaskId(0, 0);
+
+        // Replace taskDir to a regular file
+        final File taskDir = new File(appDir, toTaskDirString(taskId));
+        Utils.delete(taskDir);
+        taskDir.createNewFile();
+
+        // Error: ProcessorStateException should be thrown.
         assertThrows(ProcessorStateException.class, () -> directory.getOrCreateDirectoryForTask(taskId));
     }
 
@@ -464,8 +487,8 @@ public class StateDirectoryTest {
 
         directory.clean();
 
-        assertEquals(emptySet(), Arrays.stream(
-            Objects.requireNonNull(appDir.listFiles())).collect(Collectors.toSet()));
+        // if appDir is empty, it is deleted in StateDirectory#clean process.
+        assertFalse(appDir.exists());
     }
 
     @Test
@@ -521,6 +544,43 @@ public class StateDirectoryTest {
         assertTrue(passed.get());
         assertTrue(runner.taskDirectory.exists());
         assertTrue(runner.taskDirectory.isDirectory());
+    }
+
+    @Test
+    public void shouldDeleteAppDirWhenCleanUpIfEmpty() {
+        final TaskId taskId = new TaskId(0, 0);
+        final File taskDirectory = directory.getOrCreateDirectoryForTask(taskId);
+        final File testFile = new File(taskDirectory, "testFile");
+        assertThat(testFile.mkdir(), is(true));
+        assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
+
+        // call StateDirectory#clean
+        directory.clean();
+
+        // if appDir is empty, it is deleted in StateDirectory#clean process.
+        assertFalse(appDir.exists());
+    }
+
+    @Test
+    public void shouldNotDeleteAppDirWhenCleanUpIfNotEmpty() throws IOException {
+        final TaskId taskId = new TaskId(0, 0);
+        final File taskDirectory = directory.getOrCreateDirectoryForTask(taskId);
+        final File testFile = new File(taskDirectory, "testFile");
+        assertThat(testFile.mkdir(), is(true));
+        assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
+
+        // Create a dummy file in appDir; for this, appDir will not be empty after cleanup.
+        final File dummyFile = new File(appDir, "dummy");
+        assertTrue(dummyFile.createNewFile());
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            // call StateDirectory#clean
+            directory.clean();
+            assertThat(
+                appender.getMessages(),
+                hasItem(endsWith(String.format("Failed to delete state store directory of %s for it is not empty", appDir.getAbsolutePath())))
+            );
+        }
     }
 
     @Test

@@ -1174,6 +1174,52 @@ class LogCleanerTest {
       "All but the last group should be the target size.")
   }
 
+  @Test
+  def testSegmentGroupingWithSparseOffsetsAndEmptySegments(): Unit ={
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val k="key".getBytes()
+    val v="val".getBytes()
+
+    //create 3 segments
+    for(i <- 0 until 3){
+      log.appendAsLeader(TestUtils.singletonRecords(value = v, key = k), leaderEpoch = 0)
+      //0 to Int.MaxValue is Int.MaxValue+1 message, -1 will be the last message of i-th segment
+      val records = messageWithOffset(k, v, (i + 1L) * (Int.MaxValue + 1L) -1 )
+      log.appendAsFollower(records)
+      assertEquals(i + 1, log.numberOfSegments)
+    }
+
+    //4th active segment, not clean
+    log.appendAsLeader(TestUtils.singletonRecords(value = v, key = k), leaderEpoch = 0)
+
+    val totalSegments = 4
+    //last segment not cleanable
+    val firstUncleanableOffset = log.logEndOffset - 1
+    val notCleanableSegments = 1
+
+    assertEquals(totalSegments, log.numberOfSegments)
+    var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, firstUncleanableOffset)
+    //because index file uses 4 byte relative index offset and current segments all none empty,
+    //segments will not group even their size is very small.
+    assertEquals(totalSegments - notCleanableSegments, groups.size)
+    //do clean to clean first 2 segments to empty
+    cleaner.clean(LogToClean(log.topicPartition, log, 0, firstUncleanableOffset))
+    assertEquals(totalSegments, log.numberOfSegments)
+    assertEquals(0, log.logSegments.head.size)
+
+    //after clean we got 2 empty segment, they will group together this time
+    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, firstUncleanableOffset)
+    val noneEmptySegment = 1
+    assertEquals(noneEmptySegment + 1, groups.size)
+
+    //trigger a clean and 2 empty segments should cleaned to 1
+    cleaner.clean(LogToClean(log.topicPartition, log, 0, firstUncleanableOffset))
+    assertEquals(totalSegments - 1, log.numberOfSegments)
+  }
+
   /**
    * Validate the logic for grouping log segments together for cleaning when only a small number of
    * messages are retained, but the range of offsets is greater than Int.MaxValue. A group should not
@@ -1405,7 +1451,24 @@ class LogCleanerTest {
     cleanedKeys = LogTestUtils.keysInLog(log)
     log.close()
 
-    // 2) Simulate recovery just after swap file is created, before old segment files are
+    // 2) Simulate recovery just after .cleaned file is created, and a subset of them are renamed to .swap
+    //    On recovery, clean operation is aborted. All messages should be present in the log
+    log.logSegments.head.changeFileSuffixes("", Log.CleanedFileSuffix)
+    log.logSegments.head.log.renameTo(new File(CoreUtils.replaceSuffix(log.logSegments.head.log.file.getPath, Log.CleanedFileSuffix, Log.SwapFileSuffix)))
+    for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")), false)
+    }
+    log = recoverAndCheck(config, allKeys)
+
+    // clean again
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats(),
+      new CleanedTransactionMetadata)
+    // clear scheduler so that async deletes don't run
+    time.scheduler.clear()
+    cleanedKeys = LogTestUtils.keysInLog(log)
+    log.close()
+
+    // 3) Simulate recovery just after swap file is created, before old segment files are
     //    renamed to .deleted. Clean operation is resumed during recovery.
     log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
@@ -1426,7 +1489,7 @@ class LogCleanerTest {
     time.scheduler.clear()
     cleanedKeys = LogTestUtils.keysInLog(log)
 
-    // 3) Simulate recovery after swap file is created and old segments files are renamed
+    // 4) Simulate recovery after swap file is created and old segments files are renamed
     //    to .deleted. Clean operation is resumed during recovery.
     log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
     log = recoverAndCheck(config, cleanedKeys)
@@ -1443,9 +1506,27 @@ class LogCleanerTest {
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
     cleanedKeys = LogTestUtils.keysInLog(log)
+
+    // 5) Simulate recovery after a subset of swap files are renamed to regular files and old segments files are renamed
+    //    to .deleted. Clean operation is resumed during recovery.
+    log.logSegments.head.timeIndex.file.renameTo(new File(CoreUtils.replaceSuffix(log.logSegments.head.timeIndex.file.getPath, "", Log.SwapFileSuffix)))
+    log = recoverAndCheck(config, cleanedKeys)
+
+    // add some more messages and clean the log again
+    while (log.numberOfSegments < 10) {
+      log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
+      messageCount += 1
+    }
+    for (k <- 1 until messageCount by 2)
+      offsetMap.put(key(k), Long.MaxValue)
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats(),
+      new CleanedTransactionMetadata)
+    // clear scheduler so that async deletes don't run
+    time.scheduler.clear()
+    cleanedKeys = LogTestUtils.keysInLog(log)
     log.close()
 
-    // 4) Simulate recovery after swap is complete, but async deletion
+    // 6) Simulate recovery after swap is complete, but async deletion
     //    is not yet complete. Clean operation is resumed during recovery.
     log = recoverAndCheck(config, cleanedKeys)
     log.close()

@@ -108,6 +108,6 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     public String getFullTopologyDescription() {
-        return topologyMetadata.topologyDescription();
+        return topologyMetadata.topologyDescriptionString();
     }
 }

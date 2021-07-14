@@ -99,6 +99,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
     </Match>
 
+    <!-- false positive, see https://github.com/spotbugs/spotbugs/issues/1001 -->
+    <Match>
+        <Class name="org.apache.kafka.common.internals.KafkaFutureImpl"/>
+        <Bug pattern="NP_NONNULL_PARAM_VIOLATION"/>
+    </Match>
+
     <Match>
         <!-- Suppression for the equals() for extension methods. -->
         <Class name="kafka.api.package$ElectLeadersRequestOps"/>
@@ -155,6 +161,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
         <Source name="ControllerContext.scala"/>
         <Package name="kafka.controller"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="LogConfig.scala"/>
+        <Package name="kafka.log"/>
         <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
     </Match>
 

@@ -57,15 +57,26 @@ class KStreamImplJoin {
     private final boolean leftOuter;
     private final boolean rightOuter;
 
-    static class MaxObservedStreamTime {
-        private long maxObservedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+    static class TimeTracker {
+        private long emitIntervalMs = 50L;
+        long streamTime = ConsumerRecord.NO_TIMESTAMP;
+        long minTime = Long.MAX_VALUE;
+        long nextTimeToEmit;
 
-        public void advance(final long streamTime) {
-            maxObservedStreamTime = Math.max(streamTime, maxObservedStreamTime);
+        public void setEmitInterval(final long emitIntervalMs) {
+            this.emitIntervalMs = emitIntervalMs;
         }
 
-        public long get() {
-            return maxObservedStreamTime;
+        public void advanceStreamTime(final long recordTimestamp) {
+            streamTime = Math.max(recordTimestamp, streamTime);
+        }
+
+        public void updatedMinTime(final long recordTimestamp) {
+            minTime = Math.min(recordTimestamp, minTime);
+        }
+
+        public void advanceNextTimeToEmit() {
+            nextTimeToEmit += emitIntervalMs;
         }
     }
 
@@ -148,30 +159,27 @@ class KStreamImplJoin {
         }
 
         // Time shared between joins to keep track of the maximum stream time
-        final MaxObservedStreamTime maxObservedStreamTime = new MaxObservedStreamTime();
+        final TimeTracker sharedTimeTracker = new TimeTracker();
 
+        final JoinWindowsInternal internalWindows = new JoinWindowsInternal(windows);
         final KStreamKStreamJoin<K1, R, V1, V2> joinThis = new KStreamKStreamJoin<>(
             true,
             otherWindowStore.name(),
-            windows.beforeMs,
-            windows.afterMs,
-            windows.gracePeriodMs(),
+            internalWindows,
             joiner,
             leftOuter,
             outerJoinWindowStore.map(StoreBuilder::name),
-            maxObservedStreamTime
+            sharedTimeTracker
         );
 
         final KStreamKStreamJoin<K1, R, V2, V1> joinOther = new KStreamKStreamJoin<>(
             false,
             thisWindowStore.name(),
-            windows.afterMs,
-            windows.beforeMs,
-            windows.gracePeriodMs(),
+            internalWindows,
             AbstractStream.reverseJoinerWithKey(joiner),
             rightOuter,
             outerJoinWindowStore.map(StoreBuilder::name),
-            maxObservedStreamTime
+            sharedTimeTracker
         );
 
         final PassThrough<K1, R> joinMerge = new PassThrough<>();
@@ -192,6 +200,10 @@ class KStreamImplJoin {
                    .withOuterJoinWindowStoreBuilder(outerJoinWindowStore)
                    .withValueJoiner(joiner)
                    .withNodeName(joinMergeName);
+
+        if (internalWindows.spuriousResultFixEnabled()) {
+            joinBuilder.withSpuriousResultFixEnabled();
+        }
 
         final GraphNode joinGraphNode = joinBuilder.build();
 

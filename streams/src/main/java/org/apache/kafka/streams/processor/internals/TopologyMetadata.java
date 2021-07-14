@@ -47,7 +47,8 @@ import org.slf4j.LoggerFactory;
 public class TopologyMetadata {
     private final Logger log = LoggerFactory.getLogger(TopologyMetadata.class);
 
-    // the '_' character is not allowed for topology names, thus it's safe to use to indicate that it's not a named topology
+    // the "__" (double underscore) string is not allowed for topology names, so it's safe to use to indicate
+    // that it's not a named topology
     private static final String UNNAMED_TOPOLOGY = "__UNNAMED_TOPOLOGY__";
     private static final Pattern EMPTY_ZERO_LENGTH_PATTERN = Pattern.compile("");
 
@@ -62,7 +63,7 @@ public class TopologyMetadata {
         this.config = config;
         builders = new TreeMap<>();
         if (builder.hasNamedTopology()) {
-            builders.put(builder.namedTopology(), builder);
+            builders.put(builder.topologyName(), builder);
         } else {
             builders.put(UNNAMED_TOPOLOGY, builder);
         }
@@ -176,7 +177,7 @@ public class TopologyMetadata {
         return builders.isEmpty();
     }
 
-    public String topologyDescription() {
+    public String topologyDescriptionString() {
         if (isEmpty()) {
             return "";
         }
@@ -206,13 +207,13 @@ public class TopologyMetadata {
                 inputTopics.retainAll(allInputTopics);
                 inputPatterns.retainAll(allInputTopics);
                 inputTopics.addAll(inputPatterns);
-                log.error("Tried to add the NamedTopology {} but it had overlap with other input topics: {}", builder.namedTopology(), inputTopics);
+                log.error("Tried to add the NamedTopology {} but it had overlap with other input topics: {}", builder.topologyName(), inputTopics);
                 throw new TopologyException("Named Topologies may not subscribe to the same input topics or patterns");
             }
 
             final ProcessorTopology globalTopology = builder.buildGlobalStateTopology();
             if (globalTopology != null) {
-                if (builder.namedTopology() != null) {
+                if (builder.topologyName() != null) {
                     throw new IllegalStateException("Global state stores are not supported with Named Topologies");
                 } else if (this.globalTopology == null) {
                     this.globalTopology = globalTopology;

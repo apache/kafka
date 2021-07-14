@@ -626,9 +626,9 @@ public class InternalTopologyBuilderTest {
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> expectedTopicGroups = new HashMap<>();
-        final String store1 = ProcessorStateManager.storeChangelogTopic("X", "store-1", builder.namedTopology());
-        final String store2 = ProcessorStateManager.storeChangelogTopic("X", "store-2", builder.namedTopology());
-        final String store3 = ProcessorStateManager.storeChangelogTopic("X", "store-3", builder.namedTopology());
+        final String store1 = ProcessorStateManager.storeChangelogTopic("X", "store-1", builder.topologyName());
+        final String store2 = ProcessorStateManager.storeChangelogTopic("X", "store-2", builder.topologyName());
+        final String store3 = ProcessorStateManager.storeChangelogTopic("X", "store-3", builder.topologyName());
         expectedTopicGroups.put(SUBTOPOLOGY_0, new InternalTopologyBuilder.TopicsInfo(
             Collections.emptySet(), mkSet("topic-1", "topic-1x", "topic-2"),
             Collections.emptyMap(),

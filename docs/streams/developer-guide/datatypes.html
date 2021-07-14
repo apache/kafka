@@ -33,28 +33,30 @@
 
   <div class="section" id="data-types-and-serialization">
     <span id="streams-developer-guide-serdes"></span><h1>Data Types and Serialization<a class="headerlink" href="#data-types-and-serialization" title="Permalink to this headline"></a></h1>
-    <p>Every Kafka Streams application must provide SerDes (Serializer/Deserializer) for the data types of record keys and record values (e.g. <code class="docutils literal"><span class="pre">java.lang.String</span></code>) to materialize the data when necessary.  Operations that require such SerDes information include: <code class="docutils literal"><span class="pre">stream()</span></code>, <code class="docutils literal"><span class="pre">table()</span></code>, <code class="docutils literal"><span class="pre">to()</span></code>, <code class="docutils literal"><span class="pre">repartition()</span></code>, <code class="docutils literal"><span class="pre">groupByKey()</span></code>, <code class="docutils literal"><span class="pre">groupBy()</span></code>.</p>
-    <p>You can provide SerDes by using either of these methods:</p>
+    <p>Every Kafka Streams application must provide Serdes (Serializer/Deserializer) for the data types of record keys and record values (e.g. <code class="docutils literal"><span class="pre">java.lang.String</span></code>) to materialize the data when necessary.  Operations that require such Serdes information include: <code class="docutils literal"><span class="pre">stream()</span></code>, <code class="docutils literal"><span class="pre">table()</span></code>, <code class="docutils literal"><span class="pre">to()</span></code>, <code class="docutils literal"><span class="pre">repartition()</span></code>, <code class="docutils literal"><span class="pre">groupByKey()</span></code>, <code class="docutils literal"><span class="pre">groupBy()</span></code>.</p>
+    <p>You can provide Serdes by using either of these methods, but you must use at least one:</p>
     <ul class="simple">
-      <li>By setting default SerDes in the <code class="docutils literal"><span class="pre">java.util.Properties</span></code> config instance.</li>
-      <li>By specifying explicit SerDes when calling the appropriate API methods, thus overriding the defaults.</li>
+      <li>By setting default Serdes in the <code class="docutils literal"><span class="pre">java.util.Properties</span></code> config instance.</li>
+      <li>By specifying explicit Serdes when calling the appropriate API methods, thus overriding the defaults.</li>
     </ul>
 
       <p class="topic-title first"><b>Table of Contents</b></p>
       <ul class="simple">
-          <li><a class="reference internal" href="#configuring-serdes" id="id1">Configuring SerDes</a></li>
-          <li><a class="reference internal" href="#overriding-default-serdes" id="id2">Overriding default SerDes</a></li>
-          <li><a class="reference internal" href="#available-serdes" id="id3">Available SerDes</a></li>
+          <li><a class="reference internal" href="#configuring-serdes" id="id1">Configuring Serdes</a></li>
+          <li><a class="reference internal" href="#overriding-default-serdes" id="id2">Overriding default Serdes</a></li>
+          <li><a class="reference internal" href="#available-serdes" id="id3">Available Serdes</a></li>
           <ul>
               <li><a class="reference internal" href="#primitive-and-basic-types" id="id4">Primitive and basic types</a></li>
               <li><a class="reference internal" href="#json" id="id6">JSON</a></li>
               <li><a class="reference internal" href="#implementing-custom-serdes" id="id5">Implementing custom serdes</a></li>
           </ul>
-          <li><a class="reference internal" href="#scala-dsl-serdes" id="id8">Kafka Streams DSL for Scala Implicit SerDes</a></li>
+          <li><a class="reference internal" href="#scala-dsl-serdes" id="id8">Kafka Streams DSL for Scala Implicit Serdes</a></li>
       </ul>
     <div class="section" id="configuring-serdes">
-      <h2>Configuring SerDes<a class="headerlink" href="#configuring-serdes" title="Permalink to this headline"></a></h2>
-      <p>SerDes specified in the Streams configuration are used as the default in your Kafka Streams application.</p>
+      <h2>Configuring Serdes<a class="headerlink" href="#configuring-serdes" title="Permalink to this headline"></a></h2>
+      <p>Serdes specified in the Streams configuration are used as the default in your Kafka Streams application.
+         Because this config's default is null, you must either set a default SerDe by using this
+         configuration or pass in Serdes explicitly, as described below.</p>
       <pre class="line-numbers"><code class="language-java">import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 
@@ -65,8 +67,8 @@ settings.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getCl
 settings.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());</code></pre>
     </div>
     <div class="section" id="overriding-default-serdes">
-      <h2>Overriding default SerDes<a class="headerlink" href="#overriding-default-serdes" title="Permalink to this headline"></a></h2>
-      <p>You can also specify SerDes explicitly by passing them to the appropriate API methods, which overrides the default serde settings:</p>
+      <h2>Overriding default Serdes<a class="headerlink" href="#overriding-default-serdes" title="Permalink to this headline"></a></h2>
+      <p>You can also specify Serdes explicitly by passing them to the appropriate API methods, which overrides the default serde settings:</p>
       <pre class="line-numbers"><code class="language-java">import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 
@@ -93,7 +95,7 @@ userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.valueSerde(Serdes.L
       </p>
     </div>
     <div class="section" id="available-serdes">
-      <span id="streams-developer-guide-serdes-available"></span><h2>Available SerDes<a class="headerlink" href="#available-serdes" title="Permalink to this headline"></a></h2>
+      <span id="streams-developer-guide-serdes-available"></span><h2>Available Serdes<a class="headerlink" href="#available-serdes" title="Permalink to this headline"></a></h2>
       <div class="section" id="primitive-and-basic-types">
         <h3>Primitive and basic types<a class="headerlink" href="#primitive-and-basic-types" title="Permalink to this headline"></a></h3>
         <p>Apache Kafka includes several built-in serde implementations for Java primitives and basic types such as <code class="docutils literal"><span class="pre">byte[]</span></code> in
@@ -159,9 +161,9 @@ userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.valueSerde(Serdes.L
         </p>
       </div>
       <div class="section" id="implementing-custom-serdes">
-        <span id="streams-developer-guide-serdes-custom"></span><h2>Implementing custom SerDes<a class="headerlink" href="#implementing-custom-serdes" title="Permalink to this headline"></a></h2>
-        <p>If you need to implement custom SerDes, your best starting point is to take a look at the source code references of
-          existing SerDes (see previous section).  Typically, your workflow will be similar to:</p>
+        <span id="streams-developer-guide-serdes-custom"></span><h2>Implementing custom Serdes<a class="headerlink" href="#implementing-custom-serdes" title="Permalink to this headline"></a></h2>
+        <p>If you need to implement custom Serdes, your best starting point is to take a look at the source code references of
+          existing Serdes (see previous section).  Typically, your workflow will be similar to:</p>
         <ol class="arabic simple">
           <li>Write a <em>serializer</em> for your data type <code class="docutils literal"><span class="pre">T</span></code> by implementing
             <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/serialization/Serializer.java">org.apache.kafka.common.serialization.Serializer</a>.</li>
@@ -169,7 +171,7 @@ userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.valueSerde(Serdes.L
             <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/serialization/Deserializer.java">org.apache.kafka.common.serialization.Deserializer</a>.</li>
           <li>Write a <em>serde</em> for <code class="docutils literal"><span class="pre">T</span></code> by implementing
             <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/serialization/Serde.java">org.apache.kafka.common.serialization.Serde</a>,
-            which you either do manually (see existing SerDes in the previous section) or by leveraging helper functions in
+            which you either do manually (see existing Serdes in the previous section) or by leveraging helper functions in
             <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/serialization/Serdes.java">Serdes</a>
             such as <code class="docutils literal"><span class="pre">Serdes.serdeFrom(Serializer&lt;T&gt;, Deserializer&lt;T&gt;)</span></code>.
             Note that you will need to implement your own class (that has no generic types) if you want to use your custom serde in the configuration provided to <code class="docutils literal"><span class="pre">KafkaStreams</span></code>.
@@ -179,8 +181,8 @@ userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.valueSerde(Serdes.L
       </div>
     </div>
     <div class="section" id="scala-dsl-serdes">
-      <h2>Kafka Streams DSL for Scala Implicit SerDes<a class="headerlink" href="scala-dsl-serdes" title="Permalink to this headline"></a></h2>
-      <p>When using the <a href="dsl-api.html#scala-dsl">Kafka Streams DSL for Scala</a> you're not required to configure a default SerDes.  In fact, it's not supported.  SerDes are instead provided implicitly by default implementations for common primitive datatypes.  See the <a href="dsl-api.html#scala-dsl-implicit-serdes">Implicit SerDes</a> and <a href="dsl-api.html#scala-dsl-user-defined-serdes">User-Defined SerDes</a> sections in the DSL API documentation for details</p>
+      <h2>Kafka Streams DSL for Scala Implicit Serdes<a class="headerlink" href="scala-dsl-serdes" title="Permalink to this headline"></a></h2>
+      <p>When using the <a href="dsl-api.html#scala-dsl">Kafka Streams DSL for Scala</a> you're not required to configure a default Serdes.  In fact, it's not supported.  Serdes are instead provided implicitly by default implementations for common primitive datatypes.  See the <a href="dsl-api.html#scala-dsl-implicit-serdes">Implicit Serdes</a> and <a href="dsl-api.html#scala-dsl-user-defined-serdes">User-Defined Serdes</a> sections in the DSL API documentation for details</p>
     </div>
 
 

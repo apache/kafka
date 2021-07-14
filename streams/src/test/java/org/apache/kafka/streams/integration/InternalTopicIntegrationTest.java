@@ -71,6 +71,7 @@ import static org.junit.Assert.assertTrue;
 /**
  * Tests related to internal topics in streams
  */
+@SuppressWarnings("deprecation")
 @Category({IntegrationTest.class})
 public class InternalTopicIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);

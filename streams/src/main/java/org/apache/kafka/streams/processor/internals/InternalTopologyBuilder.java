@@ -135,7 +135,7 @@ public class InternalTopologyBuilder {
     private StreamsConfig config = null;
 
     // The name of the topology this builder belongs to, or null if none
-    private String namedTopology;
+    private String topologyName;
 
     private boolean hasPersistentStores = false;
 
@@ -215,6 +215,7 @@ public class InternalTopologyBuilder {
             this.supplier = supplier;
         }
 
+        @SuppressWarnings("deprecation") // Old PAPI compatibility.
         ProcessorNodeFactory(final String name,
                              final String[] predecessors,
                              final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> supplier) {
@@ -345,11 +346,11 @@ public class InternalTopologyBuilder {
 
     public void setTopologyName(final String namedTopology) {
         Objects.requireNonNull(namedTopology, "named topology can't be null");
-        if (this.namedTopology != null) {
-            log.error("Tried to reset the namedTopology to {} but it was already set to {}", namedTopology, this.namedTopology);
-            throw new IllegalStateException("NamedTopology has already been set to " + this.namedTopology);
+        if (this.topologyName != null) {
+            log.error("Tried to reset the namedTopology to {} but it was already set to {}", namedTopology, this.topologyName);
+            throw new IllegalStateException("NamedTopology has already been set to " + this.topologyName);
         }
-        this.namedTopology = namedTopology;
+        this.topologyName = namedTopology;
     }
 
     // public for testing only
@@ -371,8 +372,8 @@ public class InternalTopologyBuilder {
         return config;
     }
 
-    public String namedTopology() {
-        return namedTopology;
+    public String topologyName() {
+        return topologyName;
     }
 
     public synchronized final InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {
@@ -1048,28 +1049,26 @@ public class InternalTopologyBuilder {
         }
         for (final String stateStoreName : factory.stateStoreNames) {
             if (!stateStoreMap.containsKey(stateStoreName)) {
+                final StateStore store;
                 if (stateFactories.containsKey(stateStoreName)) {
                     final StateStoreFactory<?> stateStoreFactory = stateFactories.get(stateStoreName);
 
                     // remember the changelog topic if this state store is change-logging enabled
                     if (stateStoreFactory.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
                         final String changelogTopic =
-                            ProcessorStateManager.storeChangelogTopic(applicationId, stateStoreName, namedTopology);
+                            ProcessorStateManager.storeChangelogTopic(applicationId, stateStoreName, topologyName);
                         storeToChangelogTopic.put(stateStoreName, changelogTopic);
                         changelogTopicToStore.put(changelogTopic, stateStoreName);
                     }
-                    final StateStore store = stateStoreFactory.build();
+                    store = stateStoreFactory.build();
                     stateStoreMap.put(stateStoreName, store);
-                    if (store.persistent()) {
-                        hasPersistentStores = true;
-                    }
-
                 } else {
-                    final StateStore store = globalStateStores.get(stateStoreName);
+                    store = globalStateStores.get(stateStoreName);
                     stateStoreMap.put(stateStoreName, store);
-                    if (store.persistent()) {
-                        hasPersistentStores = true;
-                    }
+                }
+
+                if (store.persistent()) {
+                    hasPersistentStores = true;
                 }
             }
         }
@@ -1172,7 +1171,7 @@ public class InternalTopologyBuilder {
                 }
             }
             if (!sourceTopics.isEmpty()) {
-                topicGroups.put(new Subtopology(entry.getKey(), namedTopology), new TopicsInfo(
+                topicGroups.put(new Subtopology(entry.getKey(), topologyName), new TopicsInfo(
                         Collections.unmodifiableSet(sinkTopics),
                         Collections.unmodifiableSet(sourceTopics),
                         Collections.unmodifiableMap(repartitionTopics),
@@ -1341,7 +1340,7 @@ public class InternalTopologyBuilder {
                                             + "setApplicationId first");
         }
         if (hasNamedTopology()) {
-            return applicationId + "-" + namedTopology + "-" + topic;
+            return applicationId + "-" + topologyName + "-" + topic;
         } else {
             return applicationId + "-" + topic;
         }
@@ -1415,7 +1414,7 @@ public class InternalTopologyBuilder {
     }
 
     public TopologyDescription describe() {
-        final TopologyDescription description = new TopologyDescription(namedTopology);
+        final TopologyDescription description = new TopologyDescription(topologyName);
 
         for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
 
@@ -2114,7 +2113,7 @@ public class InternalTopologyBuilder {
     }
 
     public boolean hasNamedTopology() {
-        return namedTopology != null;
+        return topologyName != null;
     }
 
     // following functions are for test only
