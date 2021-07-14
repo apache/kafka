@@ -145,6 +145,25 @@ public class ReplicationControlManagerTest {
             return topicResult;
         }
 
+        void createPartitions(int count, String name,
+                int[][] replicas, short expectedErrorCode) throws Exception {
+            assertFalse(replicas.length == 0);
+            CreatePartitionsTopic topic = new CreatePartitionsTopic().
+                setName(name).
+                setCount(count);
+            for (int i = 0; i < replicas.length; i++) {
+                topic.assignments().add(new CreatePartitionsAssignment().
+                    setBrokerIds(Replicas.toList(replicas[i])));
+            }
+            ControllerResult<List<CreatePartitionsTopicResult>> result =
+                replicationControl.createPartitions(Collections.singletonList(topic));
+            assertEquals(1, result.response().size());
+            CreatePartitionsTopicResult topicResult = result.response().get(0);
+            assertEquals(name, topicResult.name());
+            assertEquals(expectedErrorCode, topicResult.errorCode());
+            replay(result.records());
+        }
+
         void registerBrokers(Integer... brokerIds) throws Exception {
             for (int brokerId : brokerIds) {
                 RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
@@ -778,6 +797,20 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokers(0, 1, 2, 3);
         ctx.createTestTopic("foo", new int[][] { new int[] {0, 1, 2}},
             INVALID_REPLICA_ASSIGNMENT.code());
+    }
+
+    @Test
+    public void testCreatePartitionsFailsWithManualAssignmentWithAllFenced() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ctx.registerBrokers(0, 1, 2, 3, 4, 5);
+        ctx.unfenceBrokers(0, 1, 2);
+        Uuid fooId = ctx.createTestTopic("foo", new int[][] { new int[] {0, 1, 2}}).topicId();
+        ctx.createPartitions(2, "foo", new int[][] { new int[] {3, 4, 5}},
+            INVALID_REPLICA_ASSIGNMENT.code());
+        ctx.createPartitions(2, "foo", new int[][] { new int[] {2, 4, 5}}, NONE.code());
+        assertEquals(new PartitionRegistration(new int[] {2, 4, 5},
+                new int[] {2}, Replicas.NONE, Replicas.NONE, 2, 0, 0),
+            ctx.replicationControl.getPartition(fooId, 1));
     }
 
     @Test
