@@ -946,6 +946,7 @@ public class KStreamKStreamLeftJoinTest {
 
         // push a dummy record to produce all left-join non-joined items
         time += 301L;
+        driver.advanceWallClockTime(Duration.ofMillis(50L));
         inputTopic1.pipeInput(0, "dummy", time);
         processor.checkAndClearProcessResult(
             new KeyValueTimestamp<>(0, "C0+null", 1101L),

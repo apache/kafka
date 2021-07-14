@@ -103,13 +103,12 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
                     true
                 )) {
                 outerJoinWindowStore = outerJoinWindowName.map(context::getStateStore);
-                sharedTimeTracker.nextTimeToEmit = context.currentSystemTimeMs();
 
                 sharedTimeTracker.setEmitInterval(
                     StreamsConfig.InternalConfig.getLong(
                         context.appConfigs(),
                         EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
-                        1000L
+                        50L
                     )
                 );
             }
@@ -207,6 +206,9 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
             // as throttling is a non-functional performance optimization
             if (context.currentSystemTimeMs() < sharedTimeTracker.nextTimeToEmit) {
                 return;
+            }
+            if (sharedTimeTracker.nextTimeToEmit == 0) {
+                sharedTimeTracker.nextTimeToEmit = context.currentSystemTimeMs();
             }
             sharedTimeTracker.advanceNextTimeToEmit();
 
