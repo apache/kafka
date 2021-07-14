@@ -171,28 +171,27 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `{}` response", groupId,
-                    apiName(), error.exception());
+                log.debug("`DescribeGroups` request for group id {} failed due to error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`{}` request for group {} failed because the coordinator " +
-                    "is still in the process of loading state. Will retry", apiName(), groupId);
+                log.debug("`DescribeGroups` request for group id {} failed because the coordinator " +
+                    "is still in the process of loading state. Will retry", groupId.idValue);
                 groupsToRetry.add(groupId);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
-                log.debug("`{}` request for group {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry", apiName(), groupId, error);
+                log.debug("`DescribeGroups` request for group id {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry", groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
             default:
-                final String unexpectedErrorMsg = String.format("Received unexpected error for group %s in `%s` response",
-                    groupId, apiName());
-                log.error(unexpectedErrorMsg, error.exception());
+                final String unexpectedErrorMsg =
+                    String.format("`DescribeGroups` request for group id %s failed due to error %s", groupId.idValue, error);
+                log.error(unexpectedErrorMsg);
                 failed.put(groupId, error.exception(unexpectedErrorMsg));
         }
     }
