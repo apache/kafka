@@ -1257,8 +1257,8 @@ public class InternalTopologyBuilder {
             latestResetPatterns.stream().anyMatch(p -> p.matcher(topic).matches())) {
             return LATEST;
         } else if (maybeDecorateInternalSourceTopics(sourceTopicNames).contains(topic)
-                || (usesPatternSubscription() && Pattern.compile(sourceTopicPatternString).matcher(topic).matches())
-                || !hasNamedTopology()) {
+                || !hasNamedTopology()
+                || (usesPatternSubscription() && Pattern.compile(sourceTopicPatternString).matcher(topic).matches())) {
             return NONE;
         } else {
             // return null if the topic wasn't found at all while using NamedTopologies as it's likely in another
