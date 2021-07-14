@@ -111,8 +111,8 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         validateKeys(groupIds);
 
         final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
-        Map<CoordinatorKey, Map<TopicPartition, Errors>> completed = new HashMap<>();
-        Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+        final Map<CoordinatorKey, Map<TopicPartition, Errors>> completed = new HashMap<>();
+        final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
         final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
 
