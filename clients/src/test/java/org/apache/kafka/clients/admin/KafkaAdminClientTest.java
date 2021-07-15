@@ -3589,7 +3589,7 @@ public class KafkaAdminClientTest {
             Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove("instance-1"), new MemberToRemove("instance-2"));
 
             final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
-                "groupId", new RemoveMembersFromConsumerGroupOptions(membersToRemove));
+                GROUP_ID, new RemoveMembersFromConsumerGroupOptions(membersToRemove));
 
             TestUtils.assertFutureError(result.all(), TimeoutException.class);
         }
@@ -3657,10 +3657,6 @@ public class KafkaAdminClientTest {
                 prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             env.kafkaClient().prepareResponse(
-                new LeaveGroupResponse(new LeaveGroupResponseData()
-                        .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())));
-
-            env.kafkaClient().prepareResponse(
                     new LeaveGroupResponse(new LeaveGroupResponseData()
                         .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())));
 
@@ -3668,10 +3664,19 @@ public class KafkaAdminClientTest {
              * We need to return two responses here, one for NOT_COORDINATOR call when calling remove member
              * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
              * FindCoordinatorResponse.
+             *
+             * And the same reason for the following COORDINATOR_NOT_AVAILABLE error response
              */
             env.kafkaClient().prepareResponse(
                     new LeaveGroupResponse(new LeaveGroupResponseData()
                             .setErrorCode(Errors.NOT_COORDINATOR.code())));
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(
+                new LeaveGroupResponse(new LeaveGroupResponseData()
+                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())));
 
             env.kafkaClient().prepareResponse(
                 prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
@@ -3734,13 +3739,10 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Retriable FindCoordinatorResponse errors should be retried
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             // Retriable errors should be retried
-            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
-                                                                         .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())));
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                                                                          .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())));
 

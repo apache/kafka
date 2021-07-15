@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -68,8 +69,18 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
         return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
 
+    private void validateKeys(
+        Set<CoordinatorKey> groupIds
+    ) {
+        if (!groupIds.equals(Collections.singleton(groupId))) {
+            throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
+                " (expected only " + Collections.singleton(groupId) + ")");
+        }
+    }
+
     @Override
-    public LeaveGroupRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
+    public LeaveGroupRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
+        validateKeys(groupIds);
         return new LeaveGroupRequest.Builder(groupId.idValue, members);
     }
 
@@ -79,14 +90,17 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
     ) {
+        validateKeys(groupIds);
         final LeaveGroupResponse response = (LeaveGroupResponse) abstractResponse;
-        Map<CoordinatorKey, Map<MemberIdentity, Errors>> completed = new HashMap<>();
-        Map<CoordinatorKey, Throwable> failed = new HashMap<>();
-        List<CoordinatorKey> unmapped = new ArrayList<>();
 
-        final Errors error = Errors.forCode(response.data().errorCode());
+        final Errors error = response.topLevelError();
         if (error != Errors.NONE) {
-            handleError(groupId, error, failed, unmapped);
+            final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+            final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
+
+            handleGroupError(groupId, error, failed, groupsToUnmap);
+
+            return new ApiResult<>(Collections.emptyMap(), failed, new ArrayList<>(groupsToUnmap));
         } else {
             final Map<MemberIdentity, Errors> memberErrors = new HashMap<>();
             for (MemberResponse memberResponse : response.memberResponses()) {
@@ -94,39 +108,45 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
                                      .setMemberId(memberResponse.memberId())
                                      .setGroupInstanceId(memberResponse.groupInstanceId()),
                                  Errors.forCode(memberResponse.errorCode()));
-
             }
-            completed.put(groupId, memberErrors);
+
+            return new ApiResult<>(
+                Collections.singletonMap(groupId, memberErrors),
+                Collections.emptyMap(),
+                Collections.emptyList()
+            );
         }
-        return new ApiResult<>(completed, failed, unmapped);
     }
 
-    private void handleError(
+    private void handleGroupError(
         CoordinatorKey groupId,
-        Errors error, Map<CoordinatorKey,
-        Throwable> failed,
-        List<CoordinatorKey> unmapped
+        Errors error,
+        Map<CoordinatorKey, Throwable> failed,
+        Set<CoordinatorKey> groupsToUnmap
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `LeaveGroup` response", groupId,
-                        error.exception());
+                log.debug("`LeaveGroup` request for group id {} failed due to error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
+
             case COORDINATOR_LOAD_IN_PROGRESS:
+                // If the coordinator is in the middle of loading, then we just need to retry
+                log.debug("`LeaveGroup` request for group id {} failed because the coordinator " +
+                    "is still in the process of loading state. Will retry", groupId.idValue);
+                break;
             case COORDINATOR_NOT_AVAILABLE:
-                break;
             case NOT_COORDINATOR:
-                log.debug("LeaveGroup request for group {} returned error {}. Will retry",
-                        groupId, error);
-                unmapped.add(groupId);
+                // If the coordinator is unavailable or there was a coordinator change, then we unmap
+                // the key so that we retry the `FindCoordinator` request
+                log.debug("`LeaveGroup` request for group id {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry", groupId.idValue, error);
+                groupsToUnmap.add(groupId);
                 break;
+
             default:
-                log.error("Received unexpected error for group {} in `LeaveGroup` response",
-                        groupId, error.exception());
-                failed.put(groupId, error.exception(
-                        "Received unexpected error for group " + groupId + " in `LeaveGroup` response"));
-                break;
+                log.error("`LeaveGroup` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
+                failed.put(groupId, error.exception());
         }
     }
 
