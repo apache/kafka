@@ -20,6 +20,7 @@ package kafka.server
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
@@ -2748,5 +2749,20 @@ class ReplicaManagerTest {
         new PartitionRegistration(Array(2, 4, 1), Array(2, 4, 1),
           Replicas.NONE, Replicas.NONE, 2, 123, 456)))),
     replicaManager.calculateDeltaChanges(TEST_DELTA))
+  }
+
+  @Test
+  def testMetricNames(): Unit = {
+    setupReplicaManagerWithMockedPurgatories(new MockTimer(time)) // create the metrics
+    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+    val expectedPrefix = "kafka.server:type=ReplicaManager,name"
+    val expectedMetricNames = Set(
+      "LeaderCount", "PartitionCount", "OfflineReplicaCount", "UnderReplicatedPartitions",
+      "UnderMinIsrPartitionCount", "AtMinIsrPartitionCount", "ReassigningPartitions",
+      "IsrExpandsPerSec", "IsrShrinksPerSec", "FailedIsrUpdatesPerSec",
+    )
+    expectedMetricNames.foreach { metricName =>
+      assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName == s"$expectedPrefix=$metricName"))
+    }
   }
 }
