@@ -154,14 +154,14 @@ public class PartitionChangeBuilder {
      * Trigger a leader epoch bump if one is needed.
      *
      * We need to bump the leader epoch if:
-     * 1. The leader changed.
-     * 2. The new ISR does not contain all the nodes that the old ISR did.
+     * 1. The leader changed, or
+     * 2. The new ISR does not contain all the nodes that the old ISR did, or
      * 3. The new replia list does not contain all the nodes that the old replia list did.
      *
-     * Changes that do NOT fall in these categories will increase the partition epoch, but
-     * not the leader epoch. Note that if the leader epoch increases, the partition epoch
-     * will always increases as well; there is no case where the partition epoch increases
-     * more slowly than the leader epoch.
+     * Changes that do NOT fall in any of these categories will increase the partition epoch, but
+     * not the leader epoch. Note that if the leader epoch increases, the partition epoch will
+     * always increase as well; there is no case where the partition epoch increases more slowly
+     * than the leader epoch.
      *
      * If the PartitionChangeRecord sets the leader field to something other than
      * NO_LEADER_CHANGE, a leader epoch bump will automatically occur. That takes care of
