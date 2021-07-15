@@ -124,7 +124,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                         groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
                     }
                 } else {
-                    // In responseData V0-V7, there's no group level error, we have to handle partition errors here
+                    // In responseData V0 and V1, there's no top level error, we have to handle errors here
                     handlePartitionError(groupId, topicPartition, error, groupsToUnmap, groupsToRetry);
                 }
             }
