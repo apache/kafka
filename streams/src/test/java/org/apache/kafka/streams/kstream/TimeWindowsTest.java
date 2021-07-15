@@ -29,13 +29,17 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 public class TimeWindowsTest {
 
     private static final long ANY_SIZE = 123L;
+    private static final long ANY_GRACE = 1024L;
 
     @Test
     public void shouldSetWindowSize() {
         assertEquals(ANY_SIZE, TimeWindows.of(ofMillis(ANY_SIZE)).sizeMs);
+        assertEquals(ANY_SIZE, TimeWindows.ofSizeWithNoGrace(ofMillis(ANY_SIZE)).sizeMs);
+        assertEquals(ANY_SIZE, TimeWindows.ofSizeAndGrace(ofMillis(ANY_SIZE), ofMillis(ANY_GRACE)).sizeMs);
     }
 
     @Test
@@ -140,10 +144,27 @@ public class TimeWindowsTest {
             TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)).grace(ofMillis(1)).grace(ofMillis(4)),
             TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)).grace(ofMillis(1)).grace(ofMillis(4))
         );
+
+        verifyEquality(TimeWindows.ofSizeWithNoGrace(ofMillis(3)), TimeWindows.ofSizeWithNoGrace(ofMillis(3)));
+
+        verifyEquality(TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(33)),
+                TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(33))
+        );
     }
 
     @Test
     public void equalsAndHashcodeShouldBeValidForNegativeCases() {
+
+        verifyInEquality(
+                TimeWindows.ofSizeWithNoGrace(ofMillis(9)),
+                TimeWindows.ofSizeWithNoGrace(ofMillis(3))
+        );
+
+        verifyInEquality(
+                TimeWindows.ofSizeAndGrace(ofMillis(9), ofMillis(9)),
+                TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(9))
+        );
+
         verifyInEquality(TimeWindows.of(ofMillis(9)), TimeWindows.of(ofMillis(3)));
 
         verifyInEquality(TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)), TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)));

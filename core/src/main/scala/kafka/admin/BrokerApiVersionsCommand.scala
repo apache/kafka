@@ -180,7 +180,7 @@ object BrokerApiVersionsCommand {
       val errors = response.errors
       if (!errors.isEmpty)
         debug(s"Metadata request contained errors: $errors")
-      response.cluster.nodes.asScala.toList
+      response.buildCluster.nodes.asScala.toList
     }
 
     def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =

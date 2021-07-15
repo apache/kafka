@@ -175,17 +175,22 @@ public interface ReplicatedLog extends AutoCloseable {
     void updateHighWatermark(LogOffsetMetadata offsetMetadata);
 
     /**
-     * Updates the log start offset and delete segments if necessary.
+     * Delete all snapshots prior to the given snapshot
      *
      * The replicated log's start offset can be increased and older segments can be deleted when
      * there is a snapshot greater than the current log start offset.
      */
-    boolean deleteBeforeSnapshot(OffsetAndEpoch logStartSnapshotId);
+    boolean deleteBeforeSnapshot(OffsetAndEpoch snapshotId);
 
     /**
      * Flush the current log to disk.
      */
     void flush();
+
+    /**
+     * Possibly perform cleaning of snapshots and logs
+     */
+    boolean maybeClean();
 
     /**
      * Get the last offset which has been flushed to disk.
@@ -231,17 +236,17 @@ public interface ReplicatedLog extends AutoCloseable {
      *
      * See {@link RawSnapshotWriter} for details on how to use this object. The caller of
      * this method is responsible for invoking {@link RawSnapshotWriter#close()}. If a
-     * snapshot already exists then return an {@link Optional#empty()}.
+     * snapshot already exists or it is less than log start offset then return an
+     * {@link Optional#empty()}.
      *
      * Snapshots created using this method will be validated against the existing snapshots
      * and the replicated log.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot if it doesn't already exists
+     * @return a writable snapshot if it doesn't already exists and greater than the log start
+     *         offset
      * @throws IllegalArgumentException if validate is true and end offset is greater than the
      *         high-watermark
-     * @throws IllegalArgumentException if validate is true and end offset is less than the log
-     *         start offset
      */
     Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId);
 

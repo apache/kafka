@@ -1,10 +1,10 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements. See the NOTICE file distributed with
+ * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * the License.  You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,204 +14,227 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package kafka.server.metadata
 
-import java.util.Properties
+import java.util
+import java.util.concurrent.atomic.AtomicReference
+import java.util.{Collections, Optional}
 
-import kafka.coordinator.group.GroupCoordinator
-import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.LogConfig
-import kafka.server.RaftReplicaManager
-import kafka.utils.Implicits._
-import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.metadata.{ConfigRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
-import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.raft.Batch
-import org.apache.kafka.raft.BatchReader;
-import org.apache.kafka.raft.internals.MemoryBatchReader;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.junit.jupiter.api.Assertions._
+import org.apache.kafka.common.{Endpoint, Uuid}
+import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.image.{MetadataDelta, MetadataImage}
+import org.apache.kafka.metadata.{BrokerRegistration, RecordTestUtils, VersionRange}
+import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers._
-import org.mockito.Mockito._
-import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 
-import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 class BrokerMetadataListenerTest {
-
-  private val leaderEpoch = 5
-  private val brokerId = 1
-  private val time = new MockTime()
-  private val configRepository = new CachedConfigRepository
-  private val metadataCache = new RaftMetadataCache(brokerId)
-  private val groupCoordinator = mock(classOf[GroupCoordinator])
-  private val replicaManager = mock(classOf[RaftReplicaManager])
-  private val txnCoordinator = mock(classOf[TransactionCoordinator])
-  private val clientQuotaManager = mock(classOf[ClientQuotaMetadataManager])
-  private var lastMetadataOffset = 0L
-
-  private val listener = new BrokerMetadataListener(
-    brokerId,
-    time,
-    metadataCache,
-    configRepository,
-    groupCoordinator,
-    replicaManager,
-    txnCoordinator,
-    threadNamePrefix = None,
-    clientQuotaManager
-  )
-
   @Test
-  def testTopicCreationAndDeletion(): Unit = {
-    val topicId = Uuid.randomUuid()
-    val topic = "foo"
-    val numPartitions = 10
-    val config = Map(
-      LogConfig.CleanupPolicyProp -> LogConfig.Compact,
-      LogConfig.MaxCompactionLagMsProp -> "5000"
-    )
-    val localPartitions = createAndAssert(topicId, topic, config, numPartitions, numBrokers = 4)
-    deleteTopic(topicId, topic, numPartitions, localPartitions)
+  def testCreateAndClose(): Unit = {
+    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000000L,
+      snapshotter = None)
+    listener.close()
   }
 
   @Test
-  def testEmptyBatchReader(): Unit = {
-    applyBatch(List.empty);
-  }
-
-  private def deleteTopic(
-    topicId: Uuid,
-    topic: String,
-    numPartitions: Int,
-    localPartitions: Set[TopicPartition]
-  ): Unit = {
-    val deleteRecord = new RemoveTopicRecord()
-      .setTopicId(topicId)
-
-    applyBatch(List[ApiMessageAndVersion](
-      new ApiMessageAndVersion(deleteRecord, 0.toShort),
-    ))
-    assertFalse(metadataCache.contains(topic))
-    assertEquals(new Properties, configRepository.topicConfig(topic))
-
-    verify(groupCoordinator).handleDeletedPartitions(ArgumentMatchers.argThat[Seq[TopicPartition]] { partitions =>
-      partitions.toSet == partitionSet(topic, numPartitions)
-    }, any())
-
-    val deleteImageCapture: ArgumentCaptor[MetadataImageBuilder] =
-      ArgumentCaptor.forClass(classOf[MetadataImageBuilder])
-    verify(replicaManager).handleMetadataRecords(
-      deleteImageCapture.capture(),
-      ArgumentMatchers.eq(lastMetadataOffset),
-      any()
-    )
-
-    val deleteImage = deleteImageCapture.getValue
-    assertTrue(deleteImage.hasPartitionChanges)
-    val localRemoved = deleteImage.partitionsBuilder().localRemoved()
-    assertEquals(localPartitions, localRemoved.map(_.toTopicPartition).toSet)
-  }
-
-  private def applyBatch(
-    records: List[ApiMessageAndVersion]
-  ): Unit = {
-    val baseOffset = lastMetadataOffset + 1
-    // For testing purposes if "records" is empty just assume that there
-    // is one control record in the batch
-    lastMetadataOffset += Math.max(1, records.size)
-
-    val batchReader = if (records.isEmpty) {
-      MemoryBatchReader.empty[ApiMessageAndVersion](baseOffset, baseOffset, _ => ())
-    } else {
-      MemoryBatchReader.of(
-        List(
-          Batch.of(
-            baseOffset,
-            leaderEpoch,
-            records.asJava
-          )
-        ).asJava,
-        (_: BatchReader[ApiMessageAndVersion]) => ()
-      )
+  def testPublish(): Unit = {
+    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000000L,
+      snapshotter = None)
+    try {
+      listener.handleCommit(RecordTestUtils.mockBatchReader(100L,
+        util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+          setBrokerId(0).
+          setBrokerEpoch(100L).
+          setFenced(false).
+          setRack(null).
+          setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CSg")), 0.toShort))))
+      val imageRecords = listener.getImageRecords().get()
+      assertEquals(0, imageRecords.size())
+      assertEquals(100L, listener.highestMetadataOffset())
+      listener.handleCommit(RecordTestUtils.mockBatchReader(200L,
+        util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+          setBrokerId(1).
+          setBrokerEpoch(200L).
+          setFenced(true).
+          setRack(null).
+          setIncarnationId(Uuid.fromString("QkOQtNKVTYatADcaJ28xDg")), 0.toShort))))
+      listener.startPublishing(new MetadataPublisher {
+        override def publish(newHighestMetadataOffset: Long,
+                             delta: MetadataDelta,
+                             newImage: MetadataImage): Unit = {
+          assertEquals(200L, newHighestMetadataOffset)
+          assertEquals(new BrokerRegistration(0, 100L,
+            Uuid.fromString("GFBwlTcpQUuLYQ2ig05CSg"), Collections.emptyList[Endpoint](),
+            Collections.emptyMap[String, VersionRange](), Optional.empty[String](), false),
+            delta.clusterDelta().broker(0))
+          assertEquals(new BrokerRegistration(1, 200L,
+            Uuid.fromString("QkOQtNKVTYatADcaJ28xDg"), Collections.emptyList[Endpoint](),
+            Collections.emptyMap[String, VersionRange](), Optional.empty[String](), true),
+            delta.clusterDelta().broker(1))
+        }
+      }).get()
+    } finally {
+      listener.close()
     }
-
-    listener.execCommits(batchReader)
   }
 
-  private def createAndAssert(
-    topicId: Uuid,
-    topic: String,
-    topicConfig: Map[String, String],
-    numPartitions: Int,
-    numBrokers: Int
-  ): Set[TopicPartition] = {
-    val records = mutable.ListBuffer.empty[ApiMessageAndVersion]
-    records += new ApiMessageAndVersion(new TopicRecord()
-      .setName(topic)
-      .setTopicId(topicId), 0)
+  class MockMetadataSnapshotter extends MetadataSnapshotter {
+    var image = MetadataImage.EMPTY
+    val failure = new AtomicReference[Throwable](null)
+    var activeSnapshotOffset = -1L
+    var prevCommittedOffset = -1L
+    var prevCommittedEpoch = -1
+    var prevLastContainedLogTime = -1L
 
-    val localTopicPartitions = mutable.Set.empty[TopicPartition]
-    (0 until numPartitions).map { partitionId =>
-      val preferredLeaderId = partitionId % numBrokers
-      val replicas = asJavaList(Seq(
-        preferredLeaderId,
-        preferredLeaderId + 1,
-        preferredLeaderId + 2
-      ))
-
-      if (replicas.contains(brokerId)) {
-        localTopicPartitions.add(new TopicPartition(topic, partitionId))
+    override def maybeStartSnapshot(committedOffset: Long,
+                                    committedEpoch: Int,
+                                    lastContainedLogTime: Long,
+                                    newImage: MetadataImage): Boolean = {
+      try {
+        if (activeSnapshotOffset == -1L) {
+          assertTrue(prevCommittedOffset <= committedOffset)
+          assertTrue(prevCommittedEpoch <= committedEpoch)
+          assertTrue(prevLastContainedLogTime <= lastContainedLogTime)
+          prevCommittedOffset = committedOffset
+          prevCommittedEpoch = committedEpoch
+          prevLastContainedLogTime = lastContainedLogTime
+          image = newImage
+          activeSnapshotOffset = committedOffset
+          true
+        } else {
+          false
+        }
+      } catch {
+        case t: Throwable => failure.compareAndSet(null, t)
       }
-
-      records += new ApiMessageAndVersion(new PartitionRecord()
-        .setTopicId(topicId)
-        .setPartitionId(partitionId)
-        .setLeader(preferredLeaderId)
-        .setLeaderEpoch(0)
-        .setPartitionEpoch(0)
-        .setReplicas(replicas)
-        .setIsr(replicas), 0)
     }
+  }
 
-    topicConfig.forKeyValue { (key, value) =>
-      records += new ApiMessageAndVersion(new ConfigRecord()
-        .setResourceName(topic)
-        .setResourceType(ConfigResource.Type.TOPIC.id())
-        .setName(key)
-        .setValue(value), 0)
+  class MockMetadataPublisher extends MetadataPublisher {
+    var image = MetadataImage.EMPTY
+
+    override def publish(newHighestMetadataOffset: Long,
+                         delta: MetadataDelta,
+                         newImage: MetadataImage): Unit = {
+      image = newImage
     }
+  }
 
-    applyBatch(records.toList)
-    assertTrue(metadataCache.contains(topic))
-    assertEquals(Some(numPartitions), metadataCache.numPartitions(topic))
-    assertEquals(topicConfig, configRepository.topicConfig(topic).asScala)
+  private val FOO_ID = Uuid.fromString("jj1G9utnTuCegi_gpnRgYw")
 
-    val imageCapture: ArgumentCaptor[MetadataImageBuilder] =
-      ArgumentCaptor.forClass(classOf[MetadataImageBuilder])
-    verify(replicaManager).handleMetadataRecords(
-      imageCapture.capture(),
-      ArgumentMatchers.eq(lastMetadataOffset),
-      any()
+  private def generateManyRecords(listener: BrokerMetadataListener,
+                                  endOffset: Long): Unit = {
+    (0 to 10000).foreach { _ =>
+      listener.handleCommit(RecordTestUtils.mockBatchReader(endOffset,
+        util.Arrays.asList(new ApiMessageAndVersion(new PartitionChangeRecord().
+          setPartitionId(0).
+          setTopicId(FOO_ID).
+          setRemovingReplicas(Collections.singletonList(1)), 0.toShort),
+          new ApiMessageAndVersion(new PartitionChangeRecord().
+            setPartitionId(0).
+            setTopicId(FOO_ID).
+            setRemovingReplicas(Collections.emptyList()), 0.toShort))))
+    }
+    listener.getImageRecords().get()
+  }
+
+  @Test
+  def testHandleCommitsWithNoSnapshotterDefined(): Unit = {
+    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000L,
+      snapshotter = None)
+    try {
+      val brokerIds = 0 to 3
+
+      registerBrokers(listener, brokerIds, endOffset = 100L)
+      createTopicWithOnePartition(listener, replicas = brokerIds, endOffset = 200L)
+      listener.getImageRecords().get()
+      assertEquals(200L, listener.highestMetadataOffset())
+
+      generateManyRecords(listener, endOffset = 1000L)
+      assertEquals(1000L, listener.highestMetadataOffset())
+    } finally {
+      listener.close()
+    }
+  }
+
+  @Test
+  def testCreateSnapshot(): Unit = {
+    val snapshotter = new MockMetadataSnapshotter()
+    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000L, Some(snapshotter))
+    try {
+      val brokerIds = 0 to 3
+
+      registerBrokers(listener, brokerIds, endOffset = 100L)
+      createTopicWithOnePartition(listener, replicas = brokerIds, endOffset = 200L)
+      listener.getImageRecords().get()
+      assertEquals(200L, listener.highestMetadataOffset())
+
+      // Check that we generate at least one snapshot once we see enough records.
+      assertEquals(-1L, snapshotter.prevCommittedOffset)
+      generateManyRecords(listener, 1000L)
+      assertEquals(1000L, snapshotter.prevCommittedOffset)
+      assertEquals(1000L, snapshotter.activeSnapshotOffset)
+      snapshotter.activeSnapshotOffset = -1L
+
+      // Test creating a new snapshot after publishing it.
+      val publisher = new MockMetadataPublisher()
+      listener.startPublishing(publisher).get()
+      generateManyRecords(listener, 2000L)
+      listener.getImageRecords().get()
+      assertEquals(2000L, snapshotter.activeSnapshotOffset)
+      assertEquals(2000L, snapshotter.prevCommittedOffset)
+
+      // Test how we handle the snapshotter returning false.
+      generateManyRecords(listener, 3000L)
+      assertEquals(2000L, snapshotter.activeSnapshotOffset)
+      generateManyRecords(listener, 4000L)
+      assertEquals(2000L, snapshotter.activeSnapshotOffset)
+      snapshotter.activeSnapshotOffset = -1L
+      generateManyRecords(listener, 5000L)
+      assertEquals(5000L, snapshotter.activeSnapshotOffset)
+      assertEquals(null, snapshotter.failure.get())
+    } finally {
+      listener.close()
+    }
+  }
+
+  private def registerBrokers(
+    listener: BrokerMetadataListener,
+    brokerIds: Iterable[Int],
+    endOffset: Long
+  ): Unit = {
+    brokerIds.foreach { brokerId =>
+      listener.handleCommit(RecordTestUtils.mockBatchReader(endOffset,
+        util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+          setBrokerId(brokerId).
+          setBrokerEpoch(100L).
+          setFenced(false).
+          setRack(null).
+          setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CS" + brokerId)), 0.toShort))))
+    }
+  }
+
+  private def createTopicWithOnePartition(
+    listener: BrokerMetadataListener,
+    replicas: Seq[Int],
+    endOffset: Long
+  ): Unit = {
+    listener.handleCommit(RecordTestUtils.mockBatchReader(endOffset,
+      util.Arrays.asList(
+        new ApiMessageAndVersion(new TopicRecord().
+          setName("foo").
+          setTopicId(FOO_ID), 0.toShort),
+        new ApiMessageAndVersion(new PartitionRecord().
+          setPartitionId(0).
+          setTopicId(FOO_ID).
+          setIsr(replicas.map(Int.box).asJava).
+          setLeader(0).
+          setReplicas(replicas.map(Int.box).asJava), 0.toShort)))
     )
-
-    val createImage = imageCapture.getValue
-    assertTrue(createImage.hasPartitionChanges)
-    val localChanged = createImage.partitionsBuilder().localChanged()
-    assertEquals(localTopicPartitions, localChanged.map(_.toTopicPartition).toSet)
-
-    localTopicPartitions.toSet
-  }
-
-  private def partitionSet(topic: String, numPartitions: Int): Set[TopicPartition] = {
-    (0 until numPartitions).map(new TopicPartition(topic, _)).toSet
-  }
-
-  private def asJavaList(replicas: Iterable[Int]): java.util.List[Integer] = {
-    replicas.map(Int.box).toList.asJava
   }
 
 }

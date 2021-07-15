@@ -103,7 +103,9 @@ public interface ThreadMetadata {
      *             mainConsumerClientId,
      *             restoreConsumerClientId,
      *             producerClientIds,
-     *             adminClientId);
+     *             adminClientId
+     *             );
+     * }
      * </pre>
      *
      * @return a hash code value for this object.

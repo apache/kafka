@@ -17,20 +17,19 @@
 package kafka.server
 
 import java.io.File
-import java.util.{Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Partition
 import kafka.log.{Log, LogManager, LogOffsetSnapshot}
 import kafka.utils._
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import EasyMock._
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.MockConfigRepository
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -43,6 +42,8 @@ class ReplicaManagerQuotasTest {
   val record = new SimpleRecord("some-data-in-a-message".getBytes())
   val topicPartition1 = new TopicPartition("test-topic", 1)
   val topicPartition2 = new TopicPartition("test-topic", 2)
+  val topicId = Uuid.randomUuid()
+  val topicIds = Collections.singletonMap("test-topic", topicId)
   val fetchInfo = Seq(
     topicPartition1 -> new PartitionData(0, 0, 100, Optional.empty()),
     topicPartition2 -> new PartitionData(0, 0, 100, Optional.empty()))
@@ -66,6 +67,7 @@ class ReplicaManagerQuotasTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
+      topicIds = topicIds,
       quota = quota,
       clientMetadata = None)
     assertEquals(1, fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size,
@@ -92,6 +94,7 @@ class ReplicaManagerQuotasTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
+      topicIds = topicIds,
       quota = quota,
       clientMetadata = None)
     assertEquals(0, fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size,
@@ -117,6 +120,7 @@ class ReplicaManagerQuotasTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
+      topicIds = topicIds,
       quota = quota,
       clientMetadata = None)
     assertEquals(1, fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size,
@@ -142,6 +146,7 @@ class ReplicaManagerQuotasTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
+      topicIds = topicIds,
       quota = quota,
       clientMetadata = None)
     assertEquals(1, fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size,
@@ -185,6 +190,7 @@ class ReplicaManagerQuotasTest {
         fetchIsolation = FetchLogEnd,
         isFromFollower = true,
         replicaId = 1,
+        topicIds = topicIds,
         fetchPartitionStatus = List((tp, fetchPartitionStatus))
       )
       new DelayedFetch(delayMs = 600, fetchMetadata = fetchMetadata, replicaManager = replicaManager,
@@ -199,7 +205,6 @@ class ReplicaManagerQuotasTest {
 
   def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record,
                  bothReplicasInSync: Boolean = false): Unit = {
-    val configRepository = new MockConfigRepository()
     val scheduler: KafkaScheduler = createNiceMock(classOf[KafkaScheduler])
 
     //Create log which handles both a regular read and a 0 bytes read
@@ -209,6 +214,7 @@ class ReplicaManagerQuotasTest {
     expect(log.highWatermark).andReturn(5).anyTimes()
     expect(log.lastStableOffset).andReturn(5).anyTimes()
     expect(log.logEndOffsetMetadata).andReturn(LogOffsetMetadata(20L)).anyTimes()
+    expect(log.topicId).andReturn(Some(topicId)).anyTimes()
 
     //if we ask for len 1 return a message
     expect(log.read(anyObject(),
@@ -245,7 +251,7 @@ class ReplicaManagerQuotasTest {
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     replicaManager = new ReplicaManager(configs.head, metrics, time, None, scheduler, logManager,
       new AtomicBoolean(false), quotaManager,
-      new BrokerTopicStats, MetadataCache.zkMetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager, configRepository)
+      new BrokerTopicStats, MetadataCache.zkMetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {

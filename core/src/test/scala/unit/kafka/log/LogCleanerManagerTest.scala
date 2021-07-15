@@ -116,18 +116,18 @@ class LogCleanerManagerTest extends Logging {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager))
+    val localLog = new LocalLog(tpDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, time.scheduler, time, tp, logDirFailureChannel)
     // the exception should be caught and the partition that caused it marked as uncleanable
-    class LogMock(dir: File, config: LogConfig, offsets: LoadedLogOffsets)
-      extends Log(dir, config, segments, offsets.logStartOffset, offsets.recoveryPoint,
-        offsets.nextOffsetMetadata, time.scheduler, new BrokerTopicStats, time,
-        LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
-        producerStateManager, logDirFailureChannel, _topicId = None, keepPartitionMetadataFile = true) {
+    class LogMock extends Log(offsets.logStartOffset, localLog, new BrokerTopicStats,
+        LogManager.ProducerIdExpirationCheckIntervalMs, leaderEpochCache,
+        producerStateManager, _topicId = None, keepPartitionMetadataFile = true) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
       override def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] =
         throw new IllegalStateException("Error!")
     }
 
-    val log: Log = new LogMock(tpDir, config, offsets)
+    val log: Log = new LogMock()
     writeRecords(log = log,
       numBatches = logSegmentsCount * 2,
       recordsPerBatch = 10,
@@ -361,7 +361,7 @@ class LogCleanerManagerTest extends Logging {
     logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
     logProps.put(LogConfig.MinCleanableDirtyRatioProp, 0: Integer)
     val config = LogConfig(logProps)
-    log.config = config
+    log.updateConfig(config)
 
     // log cleanup inprogress, the log is not available for compaction
     val cleanable = cleanerManager.grabFilthiestCompactedLog(time)
@@ -375,7 +375,7 @@ class LogCleanerManagerTest extends Logging {
     // update cleanup policy to delete
     logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
     val config2 = LogConfig(logProps)
-    log.config = config2
+    log.updateConfig(config2)
 
     // compaction in progress, should have 0 log eligible for log cleanup
     val deletableLog2 = cleanerManager.pauseCleaningForNonCompactedPartitions()

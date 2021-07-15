@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -120,8 +121,8 @@ public class MeteredSessionStore<K, V>
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-                WrappingNullableUtils.prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
-                WrappingNullableUtils.prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde())
+                WrappingNullableUtils.prepareKeySerde(keySerde, new SerdeGetter(context)),
+                WrappingNullableUtils.prepareValueSerde(valueSerde, new SerdeGetter(context))
         );
     }
 
@@ -132,8 +133,8 @@ public class MeteredSessionStore<K, V>
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-                WrappingNullableUtils.prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
-                WrappingNullableUtils.prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde())
+                WrappingNullableUtils.prepareKeySerde(keySerde, new SerdeGetter(context)),
+                WrappingNullableUtils.prepareValueSerde(valueSerde, new SerdeGetter(context))
         );
     }
 
