@@ -944,9 +944,6 @@ public class StreamsConfig extends AbstractConfig {
         // This is settable in the main Streams config, but it's a private API for testing
         public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
 
-        // Private API used to disable the fix on left/outer joins (https://issues.apache.org/jira/browse/KAFKA-10847)
-        public static final String ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__enable.kstreams.outer.join.spurious.results.fix__";
-
         // Private API used to control the emit latency for left/outer join results (https://issues.apache.org/jira/browse/KAFKA-10847)
         public static final String EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__emit.interval.ms.kstreams.outer.join.spurious.results.fix__";
 
