@@ -117,8 +117,8 @@ public class PartitionChangeBuilder {
         final boolean unclean;
 
         BestLeader() {
-            for (int replica : targetIsr) {
-                if (isAcceptableLeader.apply(replica)) {
+            for (int replica : targetReplicas) {
+                if (targetIsr.contains(replica) && isAcceptableLeader.apply(replica)) {
                     this.node = replica;
                     this.unclean = false;
                     return;
