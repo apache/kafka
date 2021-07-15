@@ -217,12 +217,11 @@ public class Metadata implements Closeable {
         }
     }
 
+    /**
+     * @return the topic ID for the given topic name or null if the ID does not exist or is not known
+     */
     public synchronized Uuid topicId(String topicName) {
         return cache.topicId(topicName);
-    }
-
-    public synchronized String topicName(Uuid topicId) {
-        return cache.topicName(topicId);
     }
 
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {
@@ -330,11 +329,13 @@ public class Metadata implements Closeable {
             String topicName = metadata.topic();
             Uuid topicId = metadata.topicId();
             topics.add(topicName);
-            // We only update if the current metadata since we can only compare when both topics have valid IDs
+            // We can only reason about topic ID changes when both IDs are valid, so keep oldId null unless the new metadata contains a topic ID
             Uuid oldTopicId = null;
-            if (!topicId.equals(Uuid.ZERO_UUID)) {
+            if (!Uuid.ZERO_UUID.equals(topicId)) {
                 topicIds.put(topicName, topicId);
                 oldTopicId = cache.topicId(topicName);
+            } else {
+                topicId = null;
             }
 
             if (!retainTopic(topicName, metadata.isInternal(), nowMs))
@@ -397,10 +398,10 @@ public class Metadata implements Closeable {
                 log.debug("Updating last seen epoch for partition {} from {} to epoch {} from new metadata", tp, currentEpoch, newEpoch);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
                 return Optional.of(partitionMetadata);
-            // If both topic IDs were valid and the topic ID changed, update the metadata
-            } else if (!topicId.equals(Uuid.ZERO_UUID) && oldTopicId != null && !topicId.equals(oldTopicId)) {
+            } else if (topicId != null && oldTopicId != null && !topicId.equals(oldTopicId)) {
+                // If both topic IDs were valid and the topic ID changed, update the metadata
                 log.debug("Topic ID for partition {} changed from {} to {}, so this topic must have been recreated. " +
-                                "Using the newly updated metadata.", tp, oldTopicId, topicId);
+                                "Resetting the last seen epoch to {}.", tp, oldTopicId, topicId, newEpoch);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
                 return Optional.of(partitionMetadata);
             } else {

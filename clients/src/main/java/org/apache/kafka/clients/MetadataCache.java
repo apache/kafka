@@ -51,7 +51,6 @@ public class MetadataCache {
     private final Node controller;
     private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
     private final Map<String, Uuid> topicIds;
-    private final Map<Uuid, String> topicNames;
 
     private Cluster clusterInstance;
 
@@ -83,11 +82,6 @@ public class MetadataCache {
         this.controller = controller;
         this.topicIds = topicIds;
 
-        this.topicNames = new HashMap<>(topicIds.size());
-        for (Map.Entry<String, Uuid> entry : topicIds.entrySet()) {
-            this.topicNames.put(entry.getValue(), entry.getKey());
-        }
-
         this.metadataByPartition = new HashMap<>(partitions.size());
         for (PartitionMetadata p : partitions) {
             this.metadataByPartition.put(p.topicPartition, p);
@@ -106,9 +100,6 @@ public class MetadataCache {
 
     Uuid topicId(String topicName) {
         return topicIds.get(topicName);
-    }
-    String topicName(Uuid topicId) {
-        return topicNames.get(topicId);
     }
 
     Optional<Node> nodeById(int id) {
@@ -158,13 +149,8 @@ public class MetadataCache {
         Map<String, Uuid> newTopicIds = new HashMap<>(topicIds.size());
 
         // We want the most recent topic ID. We start with the previous ID stored for retained topics and then
-        // update with newest information in the MetadataResponse.
-        // If the newest MetadataResponse:
-        //    - contains a new topic with no ID, add no IDs to newTopicIds
-        //    - contains a new topic and ID, we add it to newTopicIds
-        //    - contains the same ID for an existing topic, we keep it the same in newTopicIds
-        //    - contains a new topic ID for an existing topic, we change it to the new one in newTopicIds
-        //    - has no topic ID for an existing topic, we remove any previous ID from newTopicIds
+        // update with newest information from the MetadataResponse. We always take the latest state, removing existing
+        // topic IDs if the latest state contains the topic name but not a topic ID.
         this.topicIds.forEach((topicName, topicId) -> {
             if (shouldRetainTopic.test(topicName)) {
                 newTopicIds.put(topicName, topicId);
