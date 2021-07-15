@@ -601,6 +601,21 @@ class Log(@volatile private var _dir: File,
     }
   }
 
+  private def maybeFlushMetadataFile(): Unit = {
+    partitionMetadataFile.maybeFlush()
+  }
+
+  /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
+  def assignTopicId(topicId: Uuid): Unit = {
+    if (keepPartitionMetadataFile) {
+      this.topicId = topicId
+      if (!partitionMetadataFile.exists()) {
+        partitionMetadataFile.record(topicId)
+        scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
+      }
+    }
+  }
+
   /**
    * Removes any temporary files found in log directory, and creates a list of all .swap files which could be swapped
    * in place of existing segment(s). For log splitting, we know that any .swap file whose base offset is higher than
@@ -1048,6 +1063,7 @@ class Log(@volatile private var _dir: File,
   def close(): Unit = {
     debug("Closing log")
     lock synchronized {
+      maybeFlushMetadataFile()
       checkIfMemoryMappedBufferClosed()
       producerExpireCheck.cancel(true)
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
@@ -1068,6 +1084,8 @@ class Log(@volatile private var _dir: File,
   def renameDir(name: String): Unit = {
     lock synchronized {
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in log dir ${dir.getParent}") {
+        // Flush partitionMetadata file before initializing again
+        maybeFlushMetadataFile()
         val renamedDir = new File(dir.getParent, name)
         Utils.atomicMoveWithFallback(dir.toPath, renamedDir.toPath)
         if (renamedDir != dir) {
@@ -1152,6 +1170,9 @@ class Log(@volatile private var _dir: File,
                      validateAndAssignOffsets: Boolean,
                      leaderEpoch: Int,
                      ignoreRecordSize: Boolean): LogAppendInfo = {
+    // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
+    // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
+    maybeFlushMetadataFile()
 
     val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, leaderEpoch)
 
