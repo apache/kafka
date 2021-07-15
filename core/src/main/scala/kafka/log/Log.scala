@@ -235,7 +235,6 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  * @param leaderEpochCache The LeaderEpochFileCache instance (if any) containing state associated
  *                         with the provided logStartOffset and nextOffsetMetadata
  * @param producerStateManager The ProducerStateManager instance containing state associated with the provided segments
- * @param logDirFailureChannel The LogDirFailureChannel instance to asynchronously handle log directory failure
  * @param _topicId optional Uuid to specify the topic ID for the topic if it exists. Should only be specified when
  *                first creating the log through Partition.makeLeader or Partition.makeFollower. When reloading a log,
  *                this field will be populated by reading the topic ID value from partition.metadata if it exists.
@@ -321,7 +320,8 @@ class Log(@volatile var logStartOffset: Long,
         }
       }
     } else if (keepPartitionMetadataFile) {
-      _topicId.foreach(partitionMetadataFile.write)
+      _topicId.foreach(partitionMetadataFile.record)
+      scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
     } else {
       // We want to keep the file and the in-memory topic ID in sync.
       _topicId = None
@@ -546,11 +546,18 @@ class Log(@volatile var logStartOffset: Long,
     partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, logDirFailureChannel)
   }
 
+  private def maybeFlushMetadataFile(): Unit = {
+    partitionMetadataFile.maybeFlush()
+  }
+
   /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
   def assignTopicId(topicId: Uuid): Unit = {
     if (keepPartitionMetadataFile) {
-      partitionMetadataFile.write(topicId)
       _topicId = Some(topicId)
+      if (!partitionMetadataFile.exists()) {
+        partitionMetadataFile.record(topicId)
+        scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
+      }
     }
   }
 
@@ -628,6 +635,7 @@ class Log(@volatile var logStartOffset: Long,
   def close(): Unit = {
     debug("Closing log")
     lock synchronized {
+      maybeFlushMetadataFile()
       localLog.checkIfMemoryMappedBufferClosed()
       producerExpireCheck.cancel(true)
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
@@ -648,6 +656,8 @@ class Log(@volatile var logStartOffset: Long,
   def renameDir(name: String): Unit = {
     lock synchronized {
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in log dir ${dir.getParent}") {
+        // Flush partitionMetadata file before initializing again
+        maybeFlushMetadataFile()
         if (localLog.renameDir(name)) {
           producerStateManager.updateParentDir(dir)
           // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
@@ -731,6 +741,9 @@ class Log(@volatile var logStartOffset: Long,
                      leaderEpoch: Int,
                      requestLocal: Option[RequestLocal],
                      ignoreRecordSize: Boolean): LogAppendInfo = {
+    // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
+    // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
+    maybeFlushMetadataFile()
 
     val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, leaderEpoch)
 
