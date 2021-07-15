@@ -18,6 +18,9 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
+import java.time.Duration;
+
+import static java.time.Duration.ofDays;
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
@@ -80,6 +83,21 @@ public class JoinWindowsTest {
         assertEquals(windowSize, windowSpec.grace(ofMillis(windowSize)).gracePeriodMs());
     }
 
+    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
+    @Test
+    public void shouldUseWindowSizeAsRetentionTimeIfWindowSizeIsLargerThanDefaultRetentionTime() {
+        final long windowSize = 2 * JoinWindows.of(ofMillis(1)).maintainMs();
+        assertEquals(2 * windowSize, JoinWindows.of(ofMillis(windowSize)).maintainMs());
+    }
+
+    @SuppressWarnings("deprecation")  // specifically testing deprecated APIs
+    @Test
+    public void shouldUseWindowSizeAndGraceAsRetentionTimeIfBothCombinedAreLargerThanDefaultRetentionTime() {
+        final Duration windowsSize = ofDays(1).minus(ofMillis(1));
+        final Duration gracePeriod = ofMillis(2);
+        assertEquals(2 * windowsSize.toMillis(), JoinWindows.of(windowsSize).grace(gracePeriod).maintainMs());
+    }
+
     @Deprecated
     @Test
     public void retentionTimeMustNoBeSmallerThanWindowSize() {
@@ -93,6 +111,15 @@ public class JoinWindowsTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
+    @Test
+    public void shouldUseDefaultRetentionTimeWithDefaultGracePeriod() {
+        final long windowSize1 = JoinWindows.of(ofMillis(1)).maintainMs();
+        final long windowSize2 = JoinWindows.of(ofMillis(12 * 60 * 60 * 1000L)).maintainMs();
+        assertEquals(windowSize1, 24 * 60 * 60 * 1000L);
+        assertEquals(windowSize2, 24 * 60 * 60 * 1000L);
+    }
+
     @Test
     public void gracePeriodShouldEnforceBoundaries() {
         JoinWindows.of(ofMillis(3L)).grace(ofMillis(0L));
@@ -103,6 +130,14 @@ public class JoinWindowsTest {
         } catch (final IllegalArgumentException e) {
             //expected
         }
+    }
+
+    @Test
+    public void gracePeriodShouldBeDefaultRetentionTimeMinusWindowSize() {
+        final long expectedDefaultRetentionTime = 24 * 60 * 60 * 1000L;
+        assertEquals(expectedDefaultRetentionTime - 3L, TimeWindows.of(ofMillis(3L)).gracePeriodMs());
+        assertEquals(0L, TimeWindows.of(ofMillis(expectedDefaultRetentionTime)).gracePeriodMs());
+        assertEquals(0L, TimeWindows.of(ofMillis(expectedDefaultRetentionTime + 1L)).gracePeriodMs());
     }
 
     @Test
