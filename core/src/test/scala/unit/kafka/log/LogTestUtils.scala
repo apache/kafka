@@ -27,7 +27,6 @@ import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTr
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
-import scala.annotation.nowarn
 import scala.collection.Iterable
 import scala.jdk.CollectionConverters._
 
@@ -47,7 +46,6 @@ object LogTestUtils {
     new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
   }
 
-  @nowarn("cat=deprecation")
   def createLogConfig(segmentMs: Long = Defaults.SegmentMs,
                       segmentBytes: Int = Defaults.SegmentSize,
                       retentionMs: Long = Defaults.RetentionMs,
@@ -57,10 +55,8 @@ object LogTestUtils {
                       maxMessageBytes: Int = Defaults.MaxMessageSize,
                       indexIntervalBytes: Int = Defaults.IndexInterval,
                       segmentIndexBytes: Int = Defaults.MaxIndexSize,
-                      messageFormatVersion: String = Defaults.MessageFormatVersion,
                       fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs): LogConfig = {
     val logProps = new Properties()
-
     logProps.put(LogConfig.SegmentMsProp, segmentMs: java.lang.Long)
     logProps.put(LogConfig.SegmentBytesProp, segmentBytes: Integer)
     logProps.put(LogConfig.RetentionMsProp, retentionMs: java.lang.Long)
@@ -70,7 +66,6 @@ object LogTestUtils {
     logProps.put(LogConfig.MaxMessageBytesProp, maxMessageBytes: Integer)
     logProps.put(LogConfig.IndexIntervalBytesProp, indexIntervalBytes: Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, segmentIndexBytes: Integer)
-    logProps.put(LogConfig.MessageFormatVersionProp, messageFormatVersion)
     logProps.put(LogConfig.FileDeleteDelayMsProp, fileDeleteDelayMs: java.lang.Long)
     LogConfig(logProps)
   }

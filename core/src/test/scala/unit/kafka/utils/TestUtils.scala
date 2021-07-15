@@ -336,8 +336,8 @@ object TestUtils extends Logging {
   @nowarn("cat=deprecation")
   def setIbpAndMessageFormatVersions(config: Properties, version: ApiVersion): Unit = {
     config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, version.version)
-    // the log message format version config is ignored and a warning is logged if the IBP is 3.0 or higher
-    if (version < KAFKA_3_0_IV1)
+    // for clarity, only set the log message format version if it's not ignored
+    if (!LogConfig.shouldIgnoreMessageFormatVersion(version))
       config.setProperty(KafkaConfig.LogMessageFormatVersionProp, version.version)
   }
 
@@ -1090,7 +1090,8 @@ object TestUtils extends Logging {
                        defaultConfig: LogConfig = LogConfig(),
                        configRepository: ConfigRepository = new MockConfigRepository,
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
-                       time: MockTime = new MockTime()): LogManager = {
+                       time: MockTime = new MockTime(),
+                       interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): LogManager = {
     new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
                    configRepository = configRepository,
@@ -1106,7 +1107,8 @@ object TestUtils extends Logging {
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
-                   keepPartitionMetadataFile = true)
+                   keepPartitionMetadataFile = true,
+                   interBrokerProtocolVersion = interBrokerProtocolVersion)
   }
 
   class MockAlterIsrManager extends AlterIsrManager {

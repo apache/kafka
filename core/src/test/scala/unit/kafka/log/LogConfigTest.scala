@@ -17,6 +17,7 @@
 
 package kafka.log
 
+import kafka.api.KAFKA_3_0_IV1
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
@@ -48,6 +49,7 @@ class LogConfigTest {
       })
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testKafkaConfigToProps(): Unit = {
     val millisInHour = 60L * 60L * 1000L
@@ -55,12 +57,15 @@ class LogConfigTest {
     kafkaProps.put(KafkaConfig.LogRollTimeHoursProp, "2")
     kafkaProps.put(KafkaConfig.LogRollTimeJitterHoursProp, "2")
     kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogMessageFormatVersionProp, "0.11.0")
 
     val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
     val logProps = LogConfig.extractLogConfigMap(kafkaConfig)
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentJitterMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.RetentionMsProp))
+    // The message format version should always be 3.0 if the inter-broker protocol version is 3.0 or higher
+    assertEquals(KAFKA_3_0_IV1.version, logProps.get(LogConfig.MessageFormatVersionProp))
   }
 
   @Test

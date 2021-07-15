@@ -20,8 +20,8 @@ package kafka.server
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import DynamicConfig.Broker._
-import kafka.api.{ApiVersion, KAFKA_3_0_IV1}
 import kafka.controller.KafkaController
+import kafka.log.LogConfig.MessageFormatVersion
 import kafka.log.{LogConfig, LogManager}
 import kafka.network.ConnectionQuotas
 import kafka.security.CredentialProvider
@@ -34,7 +34,6 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
-import org.apache.kafka.common.record.RecordVersion
 import org.apache.kafka.common.utils.Sanitizer
 
 import scala.annotation.nowarn
@@ -114,14 +113,12 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
   def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
     // Verify message format version
     Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
-      val messageFormatVersion = ApiVersion(versionString)
-      if (kafkaConfig.interBrokerProtocolVersion >= KAFKA_3_0_IV1) {
-        if (messageFormatVersion.recordVersion.precedes(RecordVersion.V2))
-          warn(s"Topic configuration ${LogConfig.MessageFormatVersionProp} with value `$versionString` is ignored " +
-            s"for `$topic` because the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}` is " +
-            "greater or equal than 3.0")
+      val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.version)
+      if (messageFormatVersion.shouldIgnore) {
+        if (messageFormatVersion.shouldWarn)
+          warn(messageFormatVersion.topicWarningMessage(topic))
         Some(LogConfig.MessageFormatVersionProp)
-      } else if (kafkaConfig.interBrokerProtocolVersion < messageFormatVersion) {
+      } else if (kafkaConfig.interBrokerProtocolVersion < messageFormatVersion.messageFormatVersion) {
         warn(s"Topic configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
           s"is higher than what is allowed by the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
         Some(LogConfig.MessageFormatVersionProp)

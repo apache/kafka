@@ -17,6 +17,7 @@
 
 package org.apache.kafka.jmh.partition;
 
+import kafka.api.ApiVersion;
 import kafka.api.ApiVersion$;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.IsrChangeListener;
@@ -96,6 +97,7 @@ public class UpdateFollowerFetchStateBenchmark {
                 10000L,
                 1000L,
                 60000,
+                ApiVersion.latestVersion(),
                 scheduler,
                 brokerTopicStats,
                 logDirFailureChannel,

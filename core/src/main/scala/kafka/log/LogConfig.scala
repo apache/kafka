@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import kafka.api.{ApiVersion, ApiVersionValidator}
+import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_3_0_IV1}
 import kafka.log.LogConfig.configDef
 import kafka.message.BrokerCompressionCodec
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
@@ -25,7 +25,7 @@ import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
-import org.apache.kafka.common.record.{LegacyRecord, TimestampType}
+import org.apache.kafka.common.record.{LegacyRecord, RecordVersion, TimestampType}
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 
 import java.util.{Collections, Locale, Properties}
@@ -501,4 +501,31 @@ object LogConfig {
     logProps.put(MessageDownConversionEnableProp, kafkaConfig.logMessageDownConversionEnable: java.lang.Boolean)
     logProps
   }
+
+  def shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion: ApiVersion): Boolean =
+    interBrokerProtocolVersion >= KAFKA_3_0_IV1
+
+  class MessageFormatVersion(messageFormatVersionString: String, interBrokerProtocolVersionString: String) {
+    val messageFormatVersion = ApiVersion(messageFormatVersionString)
+    private val interBrokerProtocolVersion = ApiVersion(interBrokerProtocolVersionString)
+
+    def shouldIgnore: Boolean = shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion)
+
+    def shouldWarn: Boolean =
+      interBrokerProtocolVersion >= KAFKA_3_0_IV1 && messageFormatVersion.recordVersion.precedes(RecordVersion.V2)
+
+    @nowarn("cat=deprecation")
+    def topicWarningMessage(topicName: String): String = {
+      s"Topic configuration ${LogConfig.MessageFormatVersionProp} with value `$messageFormatVersionString` is ignored " +
+        s"for `$topicName` because the inter-broker protocol version `$interBrokerProtocolVersionString` is " +
+        "greater or equal than 3.0"
+    }
+
+    @nowarn("cat=deprecation")
+    def brokerWarningMessage: String = {
+      s"Broker configuration ${KafkaConfig.LogMessageFormatVersionProp} with value $messageFormatVersionString is ignored " +
+        s"because the inter-broker protocol version `$interBrokerProtocolVersionString` is greater or equal than 3.0"
+    }
+  }
+
 }

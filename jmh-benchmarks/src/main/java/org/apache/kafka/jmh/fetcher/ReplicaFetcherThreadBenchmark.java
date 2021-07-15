@@ -17,6 +17,7 @@
 
 package org.apache.kafka.jmh.fetcher;
 
+import kafka.api.ApiVersion;
 import kafka.api.ApiVersion$;
 import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
@@ -142,6 +143,7 @@ public class ReplicaFetcherThreadBenchmark {
                 10000L,
                 1000L,
                 60000,
+                ApiVersion.latestVersion(),
                 scheduler,
                 brokerTopicStats,
                 logDirFailureChannel,
