@@ -593,6 +593,15 @@ public class SubscriptionState {
         }
     }
 
+    public synchronized Long partitionEndOffset(TopicPartition tp, IsolationLevel isolationLevel) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+            return topicPartitionState.lastStableOffset;
+        } else {
+            return topicPartitionState.highWatermark;
+        }
+    }
+
     synchronized Long partitionLead(TopicPartition tp) {
         TopicPartitionState topicPartitionState = assignedState(tp);
         return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position.offset - topicPartitionState.logStartOffset;
