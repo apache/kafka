@@ -84,6 +84,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.OptionalInt;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
@@ -376,9 +377,16 @@ public class ReplicationControlManager {
                 }
                 validateManualPartitionAssignment(assignment.brokerIds(), replicationFactor);
                 replicationFactor = OptionalInt.of(assignment.brokerIds().size());
-                int[] replicas = Replicas.toArray(assignment.brokerIds());
+                List<Integer> isr = assignment.brokerIds().stream().
+                    filter(clusterControl::unfenced).collect(Collectors.toList());
+                if (isr.isEmpty()) {
+                    return new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+                        "All brokers specified in the manual partition assignment for " +
+                        "partition " + assignment.partitionIndex() + " are fenced.");
+                }
                 newParts.put(assignment.partitionIndex(), new PartitionRegistration(
-                    replicas, replicas, null, null, replicas[0], 0, 0));
+                    Replicas.toArray(assignment.brokerIds()), Replicas.toArray(isr),
+                    Replicas.NONE, Replicas.NONE, isr.get(0), 0, 0));
             }
         } else if (topic.replicationFactor() < -1 || topic.replicationFactor() == 0) {
             return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
@@ -401,7 +409,7 @@ public class ReplicationControlManager {
                 for (int partitionId = 0; partitionId < replicas.size(); partitionId++) {
                     int[] r = Replicas.toArray(replicas.get(partitionId));
                     newParts.put(partitionId,
-                        new PartitionRegistration(r, r, null, null, r[0], 0, 0));
+                        new PartitionRegistration(r, r, Replicas.NONE, Replicas.NONE, r[0], 0, 0));
                 }
             } catch (InvalidReplicationFactorException e) {
                 return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
@@ -910,27 +918,41 @@ public class ReplicationControlManager {
         int startPartitionId = topicInfo.parts.size();
 
         List<List<Integer>> placements;
+        List<List<Integer>> isrs;
         if (topic.assignments() != null) {
             placements = new ArrayList<>();
-            for (CreatePartitionsAssignment assignment : topic.assignments()) {
+            isrs = new ArrayList<>();
+            for (int i = 0; i < topic.assignments().size(); i++) {
+                CreatePartitionsAssignment assignment = topic.assignments().get(i);
                 validateManualPartitionAssignment(assignment.brokerIds(),
                     OptionalInt.of(replicationFactor));
                 placements.add(assignment.brokerIds());
+                List<Integer> isr = assignment.brokerIds().stream().
+                    filter(clusterControl::unfenced).collect(Collectors.toList());
+                if (isr.isEmpty()) {
+                    throw new InvalidReplicaAssignmentException(
+                        "All brokers specified in the manual partition assignment for " +
+                            "partition " + (startPartitionId + i) + " are fenced.");
+                }
+                isrs.add(isr);
             }
         } else {
             placements = clusterControl.placeReplicas(startPartitionId, additional,
                 replicationFactor);
+            isrs = placements;
         }
         int partitionId = startPartitionId;
-        for (List<Integer> placement : placements) {
+        for (int i = 0; i < placements.size(); i++) {
+            List<Integer> placement = placements.get(i);
+            List<Integer> isr = isrs.get(i);
             records.add(new ApiMessageAndVersion(new PartitionRecord().
                 setPartitionId(partitionId).
                 setTopicId(topicId).
                 setReplicas(placement).
-                setIsr(placement).
-                setRemovingReplicas(null).
-                setAddingReplicas(null).
-                setLeader(placement.get(0)).
+                setIsr(isr).
+                setRemovingReplicas(Collections.emptyList()).
+                setAddingReplicas(Collections.emptyList()).
+                setLeader(isr.get(0)).
                 setLeaderEpoch(0).
                 setPartitionEpoch(0), PARTITION_RECORD.highestSupportedVersion()));
             partitionId++;

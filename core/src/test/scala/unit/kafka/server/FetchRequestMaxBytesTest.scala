@@ -113,10 +113,10 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
   private def expectNextRecords(expected: IndexedSeq[Array[Byte]],
                                 fetchOffset: Long): Unit = {
     val response = sendFetchRequest(0,
-      FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
+      FetchRequest.Builder.forConsumer(3, Int.MaxValue, 0,
         Map(testTopicPartition ->
-          new PartitionData(fetchOffset, 0, Integer.MAX_VALUE, Optional.empty())).asJava).build(3))
-    val records = FetchResponse.recordsOrFail(response.responseData.get(testTopicPartition)).records()
+          new PartitionData(fetchOffset, 0, Integer.MAX_VALUE, Optional.empty())).asJava, getTopicIds().asJava).build(3))
+    val records = FetchResponse.recordsOrFail(response.responseData(getTopicNames().asJava, 3).get(testTopicPartition)).records()
     assertNotNull(records)
     val recordsList = records.asScala.toList
     assertEquals(expected.size, recordsList.size)

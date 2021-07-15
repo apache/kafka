@@ -29,6 +29,7 @@ public final class MockRawSnapshotWriter implements RawSnapshotWriter {
     private final Consumer<ByteBuffer> frozenHandler;
 
     private boolean frozen = false;
+    private boolean closed = false;
 
     public MockRawSnapshotWriter(
         OffsetAndEpoch snapshotId,
@@ -45,19 +46,19 @@ public final class MockRawSnapshotWriter implements RawSnapshotWriter {
 
     @Override
     public long sizeInBytes() {
-        ensureNotFrozen();
+        ensureNotFrozenOrClosed();
         return data.position();
     }
 
     @Override
     public void append(UnalignedMemoryRecords records) {
-        ensureNotFrozen();
+        ensureNotFrozenOrClosed();
         data.write(records.buffer());
     }
 
     @Override
     public void append(MemoryRecords records) {
-        ensureNotFrozen();
+        ensureNotFrozenOrClosed();
         data.write(records.buffer());
     }
 
@@ -68,7 +69,7 @@ public final class MockRawSnapshotWriter implements RawSnapshotWriter {
 
     @Override
     public void freeze() {
-        ensureNotFrozen();
+        ensureNotFrozenOrClosed();
 
         frozen = true;
         ByteBuffer buffer = data.buffer();
@@ -78,16 +79,26 @@ public final class MockRawSnapshotWriter implements RawSnapshotWriter {
     }
 
     @Override
-    public void close() {}
+    public void close() {
+        ensureOpen();
+        closed = true;
+    }
 
     @Override
     public String toString() {
         return String.format("MockRawSnapshotWriter(snapshotId=%s, data=%s)", snapshotId, data.buffer());
     }
 
-    private void ensureNotFrozen() {
+    private void ensureNotFrozenOrClosed() {
         if (frozen) {
             throw new IllegalStateException("Snapshot is already frozen " + snapshotId);
+        }
+        ensureOpen();
+    }
+
+    private void ensureOpen() {
+        if (closed) {
+            throw new IllegalStateException("Snapshot is already closed " + snapshotId);
         }
     }
 }
