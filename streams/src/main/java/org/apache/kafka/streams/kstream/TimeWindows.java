@@ -137,7 +137,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * Tumbling windows are a special case of hopping windows with {@code advance == size}.
      *
      * @param size The size of the window
-     * @return a new window definition without specifying the grace period (uses old default of 24 hours)
+     * @return a new window definition without specifying the grace period (default to 24 hours minus window {@code size})
      * @throws IllegalArgumentException if the specified window size is zero or negative or can't be represented as {@code long milliseconds}
      * @deprecated since 3.0 Use {@link #ofSizeWithNoGrace(Duration)} } instead
      */

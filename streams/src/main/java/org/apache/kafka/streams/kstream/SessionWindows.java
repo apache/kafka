@@ -131,7 +131,7 @@ public final class SessionWindows {
      * Create a new window specification with the specified inactivity gap.
      *
      * @param inactivityGap the gap of inactivity between sessions
-     * @return a new window specification without specifying a grace period (uses old default of 24 hours)
+     * @return a new window specification without specifying a grace period (default to 24 hours minus {@code inactivityGap})
      * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
      * @deprecated since 3.0 Use {@link #ofInactivityGapWithNoGrace(Duration)}  instead
      */
