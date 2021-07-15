@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -86,47 +87,54 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
     ) {
-        DeleteGroupsResponse response = (DeleteGroupsResponse) abstractResponse;
-        Map<CoordinatorKey, Void> completed = new HashMap<>();
-        Map<CoordinatorKey, Throwable> failed = new HashMap<>();
-        List<CoordinatorKey> unmapped = new ArrayList<>();
+        final DeleteGroupsResponse response = (DeleteGroupsResponse) abstractResponse;
+        final Map<CoordinatorKey, Void> completed = new HashMap<>();
+        final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+        final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
 
         for (DeletableGroupResult deletedGroup : response.data().results()) {
             CoordinatorKey groupIdKey = CoordinatorKey.byGroupId(deletedGroup.groupId());
             Errors error = Errors.forCode(deletedGroup.errorCode());
             if (error != Errors.NONE) {
-                handleError(groupIdKey, error, failed, unmapped);
+                handleError(groupIdKey, error, failed, groupsToUnmap);
                 continue;
             }
 
             completed.put(groupIdKey, null);
         }
-        return new ApiResult<>(completed, failed, unmapped);
+
+        return new ApiResult<>(completed, failed, new ArrayList<>(groupsToUnmap));
     }
 
     private void handleError(
         CoordinatorKey groupId,
         Errors error,
         Map<CoordinatorKey, Throwable> failed,
-        List<CoordinatorKey> unmapped
+        Set<CoordinatorKey> groupsToUnmap
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `DeleteConsumerGroups` response", groupId,
-                        error.exception());
+            case INVALID_GROUP_ID:
+            case NON_EMPTY_GROUP:
+            case GROUP_ID_NOT_FOUND:
+                log.debug("`DeleteConsumerGroups` request for group id {} failed due to error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
             case COORDINATOR_LOAD_IN_PROGRESS:
-            case COORDINATOR_NOT_AVAILABLE:
+                // If the coordinator is in the middle of loading, then we just need to retry
+                log.debug("`DeleteConsumerGroups` request for group id {} failed because the coordinator " +
+                    "is still in the process of loading state. Will retry", groupId.idValue);
                 break;
+            case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
-                log.debug("DeleteConsumerGroups request for group {} returned error {}. Will retry",
-                        groupId, error);
-                unmapped.add(groupId);
+                // If the coordinator is unavailable or there was a coordinator change, then we unmap
+                // the key so that we retry the `FindCoordinator` request
+                log.debug("`DeleteConsumerGroups` request for group id {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry", groupId.idValue, error);
+                groupsToUnmap.add(groupId);
                 break;
             default:
-                log.error("Received unexpected error for group {} in `DeleteConsumerGroups` response",
-                        groupId, error.exception());
+                log.error("`DeleteConsumerGroups` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
         }
     }
