@@ -272,7 +272,7 @@
     <suppress checks="ClassDataAbstractionCoupling"
               files="(QuorumControllerTest|ReplicationControlManager|ReplicationControlManagerTest).java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="(QuorumController|ReplicationControlManager).java"/>
+              files="(QuorumController|ReplicationControlManager|ReplicationControlManagerTest).java"/>
     <suppress checks="ParameterNumber"
               files="(QuorumController).java"/>
     <suppress checks="CyclomaticComplexity"
