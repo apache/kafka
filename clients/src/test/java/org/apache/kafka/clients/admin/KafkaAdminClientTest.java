@@ -2688,7 +2688,7 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            //Retriable FindCoordinatorResponse errors should be retried
+            // Retriable FindCoordinatorResponse errors should be retried
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
 
@@ -2707,21 +2707,12 @@ public class KafkaAdminClientTest {
                 Collections.emptySet()));
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
 
-            data = new DescribeGroupsResponseData();
-            data.groups().add(DescribeGroupsResponse.groupMetadata(
-                GROUP_ID,
-                Errors.COORDINATOR_NOT_AVAILABLE,
-                "",
-                "",
-                "",
-                Collections.emptyList(),
-                Collections.emptySet()));
-            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
-
             /*
              * We need to return two responses here, one with NOT_COORDINATOR error when calling describe consumer group
              * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
              * FindCoordinatorResponse.
+             *
+             * And the same reason for COORDINATOR_NOT_AVAILABLE error response
              */
             data = new DescribeGroupsResponseData();
             data.groups().add(DescribeGroupsResponse.groupMetadata(
@@ -2732,6 +2723,18 @@ public class KafkaAdminClientTest {
                     "",
                     Collections.emptyList(),
                     Collections.emptySet()));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            data = new DescribeGroupsResponseData();
+            data.groups().add(DescribeGroupsResponse.groupMetadata(
+                GROUP_ID,
+                Errors.COORDINATOR_NOT_AVAILABLE,
+                "",
+                "",
+                "",
+                Collections.emptyList(),
+                Collections.emptySet()));
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
