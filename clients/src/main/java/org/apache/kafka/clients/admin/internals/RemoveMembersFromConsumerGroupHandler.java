@@ -91,43 +91,29 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
         AbstractResponse abstractResponse
     ) {
         validateKeys(groupIds);
-
         final LeaveGroupResponse response = (LeaveGroupResponse) abstractResponse;
-        final Map<CoordinatorKey, Map<MemberIdentity, Errors>> completed = new HashMap<>();
-        final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
-        final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
-        final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
 
         final Errors error = response.topLevelError();
         if (error != Errors.NONE) {
-            handleGroupError(groupId, error, failed, groupsToUnmap, groupsToRetry);
+            final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+            final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
+
+            handleGroupError(groupId, error, failed, groupsToUnmap);
+
+            return new ApiResult<>(Collections.emptyMap(), failed, new ArrayList<>(groupsToUnmap));
         } else {
             final Map<MemberIdentity, Errors> memberErrors = new HashMap<>();
             for (MemberResponse memberResponse : response.memberResponses()) {
-                Errors memberError = Errors.forCode(memberResponse.errorCode());
-                String memberId = memberResponse.memberId();
-
                 memberErrors.put(new MemberIdentity()
-                                     .setMemberId(memberId)
+                                     .setMemberId(memberResponse.memberId())
                                      .setGroupInstanceId(memberResponse.groupInstanceId()),
-                    memberError);
-
+                                 Errors.forCode(memberResponse.errorCode()));
             }
-            completed.put(groupId, memberErrors);
-        }
 
-        if (groupsToUnmap.isEmpty() && groupsToRetry.isEmpty()) {
             return new ApiResult<>(
-                completed,
-                failed,
+                Collections.singletonMap(groupId, memberErrors),
+                Collections.emptyMap(),
                 Collections.emptyList()
-            );
-        } else {
-            // retry the request, so don't send completed/failed results back
-            return new ApiResult<>(
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                new ArrayList<>(groupsToUnmap)
             );
         }
     }
@@ -136,8 +122,7 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
         CoordinatorKey groupId,
         Errors error,
         Map<CoordinatorKey, Throwable> failed,
-        Set<CoordinatorKey> groupsToUnmap,
-        Set<CoordinatorKey> groupsToRetry
+        Set<CoordinatorKey> groupsToUnmap
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
@@ -149,7 +134,6 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("`LeaveGroup` request for group id {} failed because the coordinator " +
                     "is still in the process of loading state. Will retry", groupId.idValue);
-                groupsToRetry.add(groupId);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
@@ -161,10 +145,8 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
                 break;
 
             default:
-                final String unexpectedErrorMsg =
-                    String.format("`LeaveGroup` request for group id %s failed due to unexpected error %s", groupId.idValue, error);
-                log.error(unexpectedErrorMsg);
-                failed.put(groupId, error.exception(unexpectedErrorMsg));
+                log.error("`LeaveGroup` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
+                failed.put(groupId, error.exception());
         }
     }
 
