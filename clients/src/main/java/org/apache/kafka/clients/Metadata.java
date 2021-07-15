@@ -392,16 +392,16 @@ public class Metadata implements Closeable {
         TopicPartition tp = partitionMetadata.topicPartition;
         if (hasReliableLeaderEpoch && partitionMetadata.leaderEpoch.isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch.get();
-            // If the received leader epoch is at least the same as the previous one, update the metadata
             Integer currentEpoch = lastSeenLeaderEpochs.get(tp);
-            if (currentEpoch == null || newEpoch >= currentEpoch) {
-                log.debug("Updating last seen epoch for partition {} from {} to epoch {} from new metadata", tp, currentEpoch, newEpoch);
-                lastSeenLeaderEpochs.put(tp, newEpoch);
-                return Optional.of(partitionMetadata);
-            } else if (topicId != null && oldTopicId != null && !topicId.equals(oldTopicId)) {
+            if (topicId != null && oldTopicId != null && !topicId.equals(oldTopicId)) {
                 // If both topic IDs were valid and the topic ID changed, update the metadata
                 log.debug("Topic ID for partition {} changed from {} to {}, so this topic must have been recreated. " +
-                                "Resetting the last seen epoch to {}.", tp, oldTopicId, topicId, newEpoch);
+                          "Resetting the last seen epoch to {}.", tp, oldTopicId, topicId, newEpoch);
+                lastSeenLeaderEpochs.put(tp, newEpoch);
+                return Optional.of(partitionMetadata);
+            } else if (currentEpoch == null || newEpoch >= currentEpoch) {
+                // If the received leader epoch is at least the same as the previous one, update the metadata
+                log.debug("Updating last seen epoch for partition {} from {} to epoch {} from new metadata", tp, currentEpoch, newEpoch);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
                 return Optional.of(partitionMetadata);
             } else {
