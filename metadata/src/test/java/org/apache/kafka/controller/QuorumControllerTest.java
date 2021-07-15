@@ -547,7 +547,7 @@ public class QuorumControllerTest {
                             setTopics(Collections.singletonList(new ReassignableTopic())));
                 CompletableFuture<ListPartitionReassignmentsResponseData> listReassignmentsFuture =
                     controller.listPartitionReassignments(
-                        new ListPartitionReassignmentsRequestData().setTimeoutMs(0));
+                        new ListPartitionReassignmentsRequestData().setTopics(null).setTimeoutMs(0));
                 while (controller.time().nanoseconds() == now) {
                     Thread.sleep(0, 10);
                 }
