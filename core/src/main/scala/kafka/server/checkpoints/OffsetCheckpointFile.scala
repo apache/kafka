@@ -16,29 +16,30 @@
   */
 package kafka.server.checkpoints
 
-import java.io._
-import java.util.regex.Pattern
-
 import kafka.server.LogDirFailureChannel
 import kafka.server.epoch.EpochEntry
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.common.SnapshotFile.EntryFormatter
 
+import java.io._
+import java.util.Optional
+import java.util.regex.Pattern
 import scala.collection._
 
 object OffsetCheckpointFile {
   private val WhiteSpacesPattern = Pattern.compile("\\s+")
   private[checkpoints] val CurrentVersion = 0
 
-  object Formatter extends CheckpointFileFormatter[(TopicPartition, Long)] {
-    override def toLine(entry: (TopicPartition, Long)): String = {
+  object Formatter extends EntryFormatter[(TopicPartition, Long)] {
+    override def toString(entry: (TopicPartition, Long)): String = {
       s"${entry._1.topic} ${entry._1.partition} ${entry._2}"
     }
 
-    override def fromLine(line: String): Option[(TopicPartition, Long)] = {
+    override def fromString(line: String): Optional[(TopicPartition, Long)] = {
       WhiteSpacesPattern.split(line) match {
         case Array(topic, partition, offset) =>
-          Some(new TopicPartition(topic, partition.toInt), offset.toLong)
-        case _ => None
+          Optional.of(new TopicPartition(topic, partition.toInt), offset.toLong)
+        case _ => Optional.empty()
       }
     }
   }
