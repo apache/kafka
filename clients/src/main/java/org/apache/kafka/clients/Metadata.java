@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -216,6 +217,13 @@ public class Metadata implements Closeable {
         }
     }
 
+    /**
+     * @return the topic ID for the given topic name or null if the ID does not exist or is not known
+     */
+    public synchronized Uuid topicId(String topicName) {
+        return cache.topicId(topicName);
+    }
+
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {
         Optional<MetadataResponse.PartitionMetadata> maybeMetadata = partitionMetadataIfCurrent(topicPartition);
         if (!maybeMetadata.isPresent())
@@ -316,20 +324,31 @@ public class Metadata implements Closeable {
         Set<String> invalidTopics = new HashSet<>();
 
         List<MetadataResponse.PartitionMetadata> partitions = new ArrayList<>();
+        Map<String, Uuid> topicIds = new HashMap<>();
         for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
-            topics.add(metadata.topic());
+            String topicName = metadata.topic();
+            Uuid topicId = metadata.topicId();
+            topics.add(topicName);
+            // We can only reason about topic ID changes when both IDs are valid, so keep oldId null unless the new metadata contains a topic ID
+            Uuid oldTopicId = null;
+            if (!Uuid.ZERO_UUID.equals(topicId)) {
+                topicIds.put(topicName, topicId);
+                oldTopicId = cache.topicId(topicName);
+            } else {
+                topicId = null;
+            }
 
-            if (!retainTopic(metadata.topic(), metadata.isInternal(), nowMs))
+            if (!retainTopic(topicName, metadata.isInternal(), nowMs))
                 continue;
 
             if (metadata.isInternal())
-                internalTopics.add(metadata.topic());
+                internalTopics.add(topicName);
 
             if (metadata.error() == Errors.NONE) {
                 for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
                     // Even if the partition's metadata includes an error, we need to handle
                     // the update to catch new epochs
-                    updateLatestMetadata(partitionMetadata, metadataResponse.hasReliableLeaderEpochs())
+                    updateLatestMetadata(partitionMetadata, metadataResponse.hasReliableLeaderEpochs(), topicId, oldTopicId)
                         .ifPresent(partitions::add);
 
                     if (partitionMetadata.error.exception() instanceof InvalidMetadataException) {
@@ -340,40 +359,48 @@ public class Metadata implements Closeable {
                 }
             } else {
                 if (metadata.error().exception() instanceof InvalidMetadataException) {
-                    log.debug("Requesting metadata update for topic {} due to error {}", metadata.topic(), metadata.error());
+                    log.debug("Requesting metadata update for topic {} due to error {}", topicName, metadata.error());
                     requestUpdate();
                 }
 
                 if (metadata.error() == Errors.INVALID_TOPIC_EXCEPTION)
-                    invalidTopics.add(metadata.topic());
+                    invalidTopics.add(topicName);
                 else if (metadata.error() == Errors.TOPIC_AUTHORIZATION_FAILED)
-                    unauthorizedTopics.add(metadata.topic());
+                    unauthorizedTopics.add(topicName);
             }
         }
 
         Map<Integer, Node> nodes = metadataResponse.brokersById();
         if (isPartialUpdate)
             return this.cache.mergeWith(metadataResponse.clusterId(), nodes, partitions,
-                unauthorizedTopics, invalidTopics, internalTopics, metadataResponse.controller(),
+                unauthorizedTopics, invalidTopics, internalTopics, metadataResponse.controller(), topicIds,
                 (topic, isInternal) -> !topics.contains(topic) && retainTopic(topic, isInternal, nowMs));
         else
             return new MetadataCache(metadataResponse.clusterId(), nodes, partitions,
-                unauthorizedTopics, invalidTopics, internalTopics, metadataResponse.controller());
+                unauthorizedTopics, invalidTopics, internalTopics, metadataResponse.controller(), topicIds);
     }
 
     /**
      * Compute the latest partition metadata to cache given ordering by leader epochs (if both
-     * available and reliable).
+     * available and reliable) and whether the topic ID changed.
      */
     private Optional<MetadataResponse.PartitionMetadata> updateLatestMetadata(
             MetadataResponse.PartitionMetadata partitionMetadata,
-            boolean hasReliableLeaderEpoch) {
+            boolean hasReliableLeaderEpoch,
+            Uuid topicId,
+            Uuid oldTopicId) {
         TopicPartition tp = partitionMetadata.topicPartition;
         if (hasReliableLeaderEpoch && partitionMetadata.leaderEpoch.isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch.get();
-            // If the received leader epoch is at least the same as the previous one, update the metadata
             Integer currentEpoch = lastSeenLeaderEpochs.get(tp);
-            if (currentEpoch == null || newEpoch >= currentEpoch) {
+            if (topicId != null && oldTopicId != null && !topicId.equals(oldTopicId)) {
+                // If both topic IDs were valid and the topic ID changed, update the metadata
+                log.debug("Topic ID for partition {} changed from {} to {}, so this topic must have been recreated. " +
+                          "Resetting the last seen epoch to {}.", tp, oldTopicId, topicId, newEpoch);
+                lastSeenLeaderEpochs.put(tp, newEpoch);
+                return Optional.of(partitionMetadata);
+            } else if (currentEpoch == null || newEpoch >= currentEpoch) {
+                // If the received leader epoch is at least the same as the previous one, update the metadata
                 log.debug("Updating last seen epoch for partition {} from {} to epoch {} from new metadata", tp, currentEpoch, newEpoch);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
                 return Optional.of(partitionMetadata);

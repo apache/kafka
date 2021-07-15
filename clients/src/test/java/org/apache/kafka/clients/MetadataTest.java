@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -37,12 +38,14 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockClusterResourceListener;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -74,6 +77,11 @@ public class MetadataTest {
                 null,
                 -1,
                 Collections.emptyList());
+    }
+
+    private <T> void assertEqualCollections(Collection<T> expected, Collection<T> actual) {
+        assertTrue(expected.containsAll(actual));
+        assertTrue(actual.containsAll(expected));
     }
 
     @Test
@@ -372,6 +380,49 @@ public class MetadataTest {
     }
 
     @Test
+    public void testEpochUpdateOnChangedTopicIds() {
+        TopicPartition tp = new TopicPartition("topic-1", 0);
+        Map<String, Uuid> topicIds = Collections.singletonMap("topic-1", Uuid.randomUuid());
+
+        MetadataResponse metadataResponse = emptyMetadataResponse();
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 0L);
+
+        // Start with a topic with no topic ID
+        metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 10);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
+        assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
+
+        // We should treat an added topic ID as though it is the same topic. Handle only when epoch increases.
+        // Don't update to an older one
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 1, topicIds);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 2L);
+        assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
+
+        // Don't cause update if it's the same one
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 10, topicIds);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 3L);
+        assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
+
+        // Update if we see newer epoch
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 12, topicIds);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 4L);
+        assertEquals(Optional.of(12), metadata.lastSeenLeaderEpoch(tp));
+
+        // We should also update if we see a new topicId even if the epoch is lower
+        Map<String, Uuid> newTopicIds = Collections.singletonMap("topic-1", Uuid.randomUuid());
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 3, newTopicIds);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 5L);
+        assertEquals(Optional.of(3), metadata.lastSeenLeaderEpoch(tp));
+
+        // Finally, update when the topic ID is new and the epoch is higher
+        Map<String, Uuid> newTopicIds2 = Collections.singletonMap("topic-1", Uuid.randomUuid());
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 20, newTopicIds2);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 6L);
+        assertEquals(Optional.of(20), metadata.lastSeenLeaderEpoch(tp));
+
+    }
+
+    @Test
     public void testRejectOldMetadata() {
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put("topic-1", 1);
@@ -393,7 +444,7 @@ public class MetadataTest {
             MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 99,
                 (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
                         new MetadataResponse.PartitionMetadata(error, partition, leader,
-                            leaderEpoch, replicas, Collections.emptyList(), offlineReplicas), ApiKeys.METADATA.latestVersion());
+                            leaderEpoch, replicas, Collections.emptyList(), offlineReplicas), ApiKeys.METADATA.latestVersion(), Collections.emptyMap());
             metadata.updateWithCurrentRequestVersion(metadataResponse, false, 20L);
             assertEquals(metadata.fetch().partition(tp).inSyncReplicas().length, 1);
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -404,7 +455,7 @@ public class MetadataTest {
             MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 100,
                 (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
                         new MetadataResponse.PartitionMetadata(error, partition, leader,
-                            leaderEpoch, replicas, Collections.emptyList(), offlineReplicas), ApiKeys.METADATA.latestVersion());
+                            leaderEpoch, replicas, Collections.emptyList(), offlineReplicas), ApiKeys.METADATA.latestVersion(), Collections.emptyMap());
             metadata.updateWithCurrentRequestVersion(metadataResponse, false, 20L);
             assertEquals(metadata.fetch().partition(tp).inSyncReplicas().length, 0);
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -712,7 +763,7 @@ public class MetadataTest {
             (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
                 new MetadataResponse.PartitionMetadata(error, partition, Optional.of(node0.id()), leaderEpoch,
                     Collections.singletonList(node0.id()), Collections.emptyList(),
-                        Collections.singletonList(node1.id())), ApiKeys.METADATA.latestVersion());
+                        Collections.singletonList(node1.id())), ApiKeys.METADATA.latestVersion(), Collections.emptyMap());
         metadata.updateWithCurrentRequestVersion(emptyMetadataResponse(), false, 0L);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 10L);
 
@@ -802,6 +853,7 @@ public class MetadataTest {
     @Test
     public void testMetadataMerge() {
         Time time = new MockTime();
+        Map<String, Uuid> topicIds = new HashMap<>();
 
         final AtomicReference<Set<String>> retainTopics = new AtomicReference<>(new HashSet<>());
         metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
@@ -823,17 +875,20 @@ public class MetadataTest {
         oldTopicPartitionCounts.put("oldValidTopic", 2);
         oldTopicPartitionCounts.put("keepValidTopic", 3);
 
-        retainTopics.set(new HashSet<>(Arrays.asList(
+        retainTopics.set(Utils.mkSet(
             "oldInvalidTopic",
             "keepInvalidTopic",
             "oldUnauthorizedTopic",
             "keepUnauthorizedTopic",
             "oldValidTopic",
-            "keepValidTopic")));
+            "keepValidTopic"));
 
+        topicIds.put("oldValidTopic", Uuid.randomUuid());
+        topicIds.put("keepValidTopic", Uuid.randomUuid());
         MetadataResponse metadataResponse =
-                RequestTestUtils.metadataUpdateWith(oldClusterId, oldNodes, oldTopicErrors, oldTopicPartitionCounts, _tp -> 100);
+                RequestTestUtils.metadataUpdateWithIds(oldClusterId, oldNodes, oldTopicErrors, oldTopicPartitionCounts, _tp -> 100, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
+        retainTopics.get().forEach(topic -> assertEquals(metadata.topicId(topic), topicIds.get(topic)));
 
         // Update the metadata to add a new topic variant, "new", which will be retained with "keep". Note this
         // means that all of the "old" topics should be dropped.
@@ -845,6 +900,7 @@ public class MetadataTest {
         assertEquals(cluster.topics(), new HashSet<>(Arrays.asList("oldValidTopic", "keepValidTopic")));
         assertEquals(cluster.partitionsForTopic("oldValidTopic").size(), 2);
         assertEquals(cluster.partitionsForTopic("keepValidTopic").size(), 3);
+        assertEqualCollections(cluster.topicIds(), topicIds.values());
 
         String newClusterId = "newClusterId";
         int newNodes = oldNodes + 1;
@@ -855,16 +911,20 @@ public class MetadataTest {
         newTopicPartitionCounts.put("keepValidTopic", 2);
         newTopicPartitionCounts.put("newValidTopic", 4);
 
-        retainTopics.set(new HashSet<>(Arrays.asList(
+        retainTopics.set(Utils.mkSet(
             "keepInvalidTopic",
             "newInvalidTopic",
             "keepUnauthorizedTopic",
             "newUnauthorizedTopic",
             "keepValidTopic",
-            "newValidTopic")));
+            "newValidTopic"));
 
-        metadataResponse = RequestTestUtils.metadataUpdateWith(newClusterId, newNodes, newTopicErrors, newTopicPartitionCounts, _tp -> 200);
+        topicIds.put("newValidTopic", Uuid.randomUuid());
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds(newClusterId, newNodes, newTopicErrors, newTopicPartitionCounts, _tp -> 200, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
+        topicIds.remove("oldValidTopic");
+        retainTopics.get().forEach(topic -> assertEquals(metadata.topicId(topic), topicIds.get(topic)));
+        assertNull(metadata.topicId("oldValidTopic"));
 
         cluster = metadata.fetch();
         assertEquals(cluster.clusterResource().clusterId(), newClusterId);
@@ -874,12 +934,14 @@ public class MetadataTest {
         assertEquals(cluster.topics(), new HashSet<>(Arrays.asList("keepValidTopic", "newValidTopic")));
         assertEquals(cluster.partitionsForTopic("keepValidTopic").size(), 2);
         assertEquals(cluster.partitionsForTopic("newValidTopic").size(), 4);
+        assertEqualCollections(cluster.topicIds(), topicIds.values());
 
         // Perform another metadata update, but this time all topic metadata should be cleared.
         retainTopics.set(Collections.emptySet());
 
-        metadataResponse = RequestTestUtils.metadataUpdateWith(newClusterId, newNodes, newTopicErrors, newTopicPartitionCounts, _tp -> 300);
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds(newClusterId, newNodes, newTopicErrors, newTopicPartitionCounts, _tp -> 300, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
+        topicIds.forEach((topicName, topicId) -> assertNull(metadata.topicId(topicName)));
 
         cluster = metadata.fetch();
         assertEquals(cluster.clusterResource().clusterId(), newClusterId);
@@ -887,5 +949,52 @@ public class MetadataTest {
         assertEquals(cluster.invalidTopics(), Collections.emptySet());
         assertEquals(cluster.unauthorizedTopics(), Collections.emptySet());
         assertEquals(cluster.topics(), Collections.emptySet());
+        assertTrue(cluster.topicIds().isEmpty());
     }
+
+    @Test
+    public void testMetadataMergeOnIdDowngrade() {
+        Time time = new MockTime();
+        Map<String, Uuid> topicIds = new HashMap<>();
+
+        final AtomicReference<Set<String>> retainTopics = new AtomicReference<>(new HashSet<>());
+        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
+            @Override
+            protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
+                return retainTopics.get().contains(topic);
+            }
+        };
+
+        // Initialize a metadata instance with two topics. Both will be retained.
+        String clusterId = "clusterId";
+        int nodes = 2;
+        Map<String, Integer> topicPartitionCounts = new HashMap<>();
+        topicPartitionCounts.put("validTopic1", 2);
+        topicPartitionCounts.put("validTopic2", 3);
+
+        retainTopics.set(Utils.mkSet(
+                "validTopic1",
+                "validTopic2"));
+
+        topicIds.put("validTopic1", Uuid.randomUuid());
+        topicIds.put("validTopic2", Uuid.randomUuid());
+        MetadataResponse metadataResponse =
+                RequestTestUtils.metadataUpdateWithIds(clusterId, nodes, Collections.emptyMap(), topicPartitionCounts, _tp -> 100, topicIds);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
+        retainTopics.get().forEach(topic -> assertEquals(metadata.topicId(topic), topicIds.get(topic)));
+
+        // Try removing the topic ID from keepValidTopic (simulating receiving a request from a controller with an older IBP)
+        topicIds.remove("validTopic1");
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds(clusterId, nodes, Collections.emptyMap(), topicPartitionCounts, _tp -> 200, topicIds);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
+        retainTopics.get().forEach(topic -> assertEquals(metadata.topicId(topic), topicIds.get(topic)));
+
+        Cluster cluster = metadata.fetch();
+        // We still have the topic, but it just doesn't have an ID.
+        assertEquals(Utils.mkSet("validTopic1", "validTopic2"), cluster.topics());
+        assertEquals(2, cluster.partitionsForTopic("validTopic1").size());
+        assertEqualCollections(topicIds.values(), cluster.topicIds());
+        assertEquals(Uuid.ZERO_UUID, cluster.topicId("validTopic1"));
+    }
+
 }
