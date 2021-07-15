@@ -1828,12 +1828,44 @@ class LogTest {
   }
 
   @Test
+  def testLogFlushesPartitionMetadataOnAppend(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = createLog(logDir, logConfig)
+    val record = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("simpleValue".getBytes))
+
+    val topicId = Uuid.randomUuid()
+    log.partitionMetadataFile.record(topicId)
+
+    // Should trigger a synchronous flush
+    log.appendAsLeader(record, leaderEpoch = 0)
+    assertTrue(log.partitionMetadataFile.exists())
+    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+  }
+
+  @Test
+  def testLogFlushesPartitionMetadataOnClose(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    var log = createLog(logDir, logConfig)
+
+    val topicId = Uuid.randomUuid()
+    log.partitionMetadataFile.record(topicId)
+
+    // Should trigger a synchronous flush
+    log.close()
+
+    // We open the log again, and the partition metadata file should exist with the same ID.
+    log = createLog(logDir, logConfig)
+    assertTrue(log.partitionMetadataFile.exists())
+    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+  }
+
+  @Test
   def testLogRecoversTopicId(): Unit = {
     val logConfig = LogTestUtils.createLogConfig()
     var log = createLog(logDir, logConfig)
 
     val topicId = Uuid.randomUuid()
-    log.partitionMetadataFile.write(topicId)
+    log.assignTopicId(topicId)
     log.close()
 
     // test recovery case
@@ -1869,7 +1901,7 @@ class LogTest {
     var log = createLog(logDir, logConfig)
 
     val topicId = Uuid.randomUuid()
-    log.partitionMetadataFile.write(topicId)
+    log.assignTopicId(topicId)
     log.close()
 
     // test creating a log with a new ID
@@ -2232,6 +2264,26 @@ class LogTest {
     // Check the topic ID remains in memory and was copied correctly.
     assertTrue(log.topicId.isDefined)
     assertEquals(topicId, log.topicId.get)
+    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+  }
+
+  @Test
+  def testTopicIdFlushesBeforeDirectoryRename(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
+    val log = createLog(logDir, logConfig)
+
+    // Write a topic ID to the partition metadata file to ensure it is transferred correctly.
+    val topicId = Uuid.randomUuid()
+    log.partitionMetadataFile.record(topicId)
+
+    // Ensure that after a directory rename, the partition metadata file is written to the right location.
+    val tp = Log.parseTopicPartitionName(log.dir)
+    log.renameDir(Log.logDeleteDirName(tp))
+    assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
+    assertFalse(PartitionMetadataFile.newFile(this.logDir).exists())
+
+    // Check the file holds the correct contents.
+    assertTrue(log.partitionMetadataFile.exists())
     assertEquals(topicId, log.partitionMetadataFile.read().topicId)
   }
 

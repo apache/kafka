@@ -914,13 +914,8 @@ public final class Utils {
      */
     public static void flushDir(Path path) throws IOException {
         if (path != null) {
-            FileChannel dir = null;
-            try {
-                dir = FileChannel.open(path, StandardOpenOption.READ);
+            try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
                 dir.force(true);
-            } finally {
-                if (dir != null)
-                    dir.close();
             }
         }
     }
