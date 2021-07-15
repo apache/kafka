@@ -396,7 +396,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     def waitForRebalance(timeoutMs: Long, future: Future[Any], otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*): Unit = {
       val startMs = System.currentTimeMillis
       while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone)
-          otherConsumers.foreach(consumer => consumer.poll(time.Duration.ofMillis(100L)))
+          otherConsumers.foreach(consumer => consumer.poll(time.Duration.ofMillis(200L)))
       assertTrue(future.isDone, "Rebalance did not complete in time")
     }
 
