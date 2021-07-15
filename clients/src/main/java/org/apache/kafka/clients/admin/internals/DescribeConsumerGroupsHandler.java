@@ -113,15 +113,12 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         final Map<CoordinatorKey, ConsumerGroupDescription> completed = new HashMap<>();
         final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
-        final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
 
-        List<DescribedGroup> describedGroups = response.data().groups();
-
-        for (DescribedGroup describedGroup : describedGroups) {
+        for (DescribedGroup describedGroup : response.data().groups()) {
             CoordinatorKey groupIdKey = CoordinatorKey.byGroupId(describedGroup.groupId());
             Errors error = Errors.forCode(describedGroup.errorCode());
             if (error != Errors.NONE) {
-                handleError(groupIdKey, error, failed, groupsToUnmap, groupsToRetry);
+                handleError(groupIdKey, error, failed, groupsToUnmap);
                 continue;
             }
             final String protocolType = describedGroup.protocolType();
@@ -159,15 +156,14 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
             }
         }
 
-        return new ApiResult<>(completed, failed,  new ArrayList<>(groupsToUnmap));
+        return new ApiResult<>(completed, failed, new ArrayList<>(groupsToUnmap));
     }
 
     private void handleError(
         CoordinatorKey groupId,
         Errors error,
         Map<CoordinatorKey, Throwable> failed,
-        Set<CoordinatorKey> groupsToUnmap,
-        Set<CoordinatorKey> groupsToRetry
+        Set<CoordinatorKey> groupsToUnmap
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
@@ -178,7 +174,6 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("`DescribeGroups` request for group id {} failed because the coordinator " +
                     "is still in the process of loading state. Will retry", groupId.idValue);
-                groupsToRetry.add(groupId);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
@@ -189,10 +184,8 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 groupsToUnmap.add(groupId);
                 break;
             default:
-                final String unexpectedErrorMsg =
-                    String.format("`DescribeGroups` request for group id %s failed due to error %s", groupId.idValue, error);
-                log.error(unexpectedErrorMsg);
-                failed.put(groupId, error.exception(unexpectedErrorMsg));
+                log.error("`DescribeGroups` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
+                failed.put(groupId, error.exception());
         }
     }
 
