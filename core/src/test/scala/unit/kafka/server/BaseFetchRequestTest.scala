@@ -20,6 +20,8 @@ import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.record.Record
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.AfterEach
@@ -93,4 +95,9 @@ class BaseFetchRequestTest extends BaseRequestTest {
     }
     records.map(producer.send(_).get)
   }
+
+  protected def records(partitionData: FetchResponseData.PartitionData): Seq[Record] = {
+    FetchResponse.recordsOrFail(partitionData).records.asScala.toBuffer
+  }
+
 }
