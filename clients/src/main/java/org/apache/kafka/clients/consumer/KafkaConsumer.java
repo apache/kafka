@@ -2237,7 +2237,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             final Long lag = subscriptions.partitionLag(topicPartition, isolationLevel);
-            return lag == null ? OptionalLong.empty() : OptionalLong.of(lag);
+
+            // if the log end offset is not known and hence cannot return lag,
+            // issue a list offset request for that partition so that next time
+            // we may get the answer; we do not need to wait for the return value
+            // since we would not try to poll the network client synchronously
+            if (lag == null) {
+                if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null) {
+                    fetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
+                }
+
+                return OptionalLong.empty();
+            }
+
+            return OptionalLong.of(lag);
         } finally {
             release();
         }
