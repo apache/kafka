@@ -79,10 +79,7 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   def isClosed: Boolean = aclApis.isClosed
 
-  def close(): Unit = {
-    aclApis.close()
-    info("Shutdown complete.")
-  }
+  def close(): Unit = aclApis.close()
 
   override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     try {

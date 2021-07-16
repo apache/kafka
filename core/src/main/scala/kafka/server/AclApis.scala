@@ -51,9 +51,7 @@ class AclApis(authHelper: AuthHelper,
 
   def isClosed: Boolean = alterAclsPurgatory.isShutdown
 
-  def close(): Unit = {
-    alterAclsPurgatory.shutdown()
-  }
+  def close(): Unit = alterAclsPurgatory.shutdown()
 
   def handleDescribeAcls(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, DESCRIBE)
