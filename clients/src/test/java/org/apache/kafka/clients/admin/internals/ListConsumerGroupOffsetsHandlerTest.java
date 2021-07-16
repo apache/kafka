@@ -84,14 +84,11 @@ public class ListConsumerGroupOffsetsHandlerTest {
     public void testUnmappedHandleResponse() {
         assertUnmapped(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE));
         assertUnmapped(handleWithError(Errors.NOT_COORDINATOR));
-        assertUnmapped(handleWithPartitionError(Errors.COORDINATOR_NOT_AVAILABLE));
-        assertUnmapped(handleWithPartitionError(Errors.NOT_COORDINATOR));
     }
 
     @Test
     public void testRetriableHandleResponse() {
         assertRetriable(handleWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
-        assertRetriable(handleWithPartitionError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
     }
 
     @Test

@@ -96,14 +96,16 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         validateKeys(groupIds);
 
         final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
-        final Map<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> completed = new HashMap<>();
-        final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
-        final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
-        final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
 
-        Errors responseError = response.groupLevelError(groupId.idValue);
-        if (responseError != Errors.NONE) {
-            handleGroupError(groupId, responseError, failed, groupsToUnmap, groupsToRetry);
+        // the groupError will contain the group level error for v0-v8 OffsetFetchResponse
+        Errors groupError = response.groupLevelError(groupId.idValue);
+        if (groupError != Errors.NONE) {
+            final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+            final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
+
+            handleGroupError(groupId, groupError, failed, groupsToUnmap);
+
+            return new ApiResult<>(Collections.emptyMap(), failed, new ArrayList<>(groupsToUnmap));
         } else {
             final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
             Map<TopicPartition, OffsetFetchResponse.PartitionData> partitionDataMap =
@@ -124,25 +126,14 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                         groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
                     }
                 } else {
-                    // In responseData V0 and V1, there's no top level error, we have to handle errors here
-                    handlePartitionError(groupId, topicPartition, error, groupsToUnmap, groupsToRetry);
+                    log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
                 }
             }
-            completed.put(groupId, groupOffsetsListing);
-        }
 
-        if (groupsToUnmap.isEmpty() && groupsToRetry.isEmpty()) {
             return new ApiResult<>(
-                completed,
-                failed,
+                Collections.singletonMap(groupId, groupOffsetsListing),
+                Collections.emptyMap(),
                 Collections.emptyList()
-            );
-        } else {
-            // retry the request, so don't send completed/failed results back
-            return new ApiResult<>(
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                new ArrayList<>(groupsToUnmap)
             );
         }
     }
@@ -151,8 +142,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         CoordinatorKey groupId,
         Errors error,
         Map<CoordinatorKey, Throwable> failed,
-        Set<CoordinatorKey> groupsToUnmap,
-        Set<CoordinatorKey> groupsToRetry
+        Set<CoordinatorKey> groupsToUnmap
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
@@ -164,7 +154,6 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("`OffsetFetch` request for group id {} failed because the coordinator " +
                     "is still in the process of loading state. Will retry", groupId.idValue);
-                groupsToRetry.add(groupId);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
@@ -176,45 +165,8 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                 break;
 
             default:
-                final String unexpectedErrorMsg =
-                    String.format("`OffsetFetch` request for group id %s failed due to error %s", groupId.idValue, error);
-                log.error(unexpectedErrorMsg);
-                failed.put(groupId, error.exception(unexpectedErrorMsg));
+                log.error("`OffsetFetch` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
+                failed.put(groupId, error.exception());
         }
     }
-
-    private void handlePartitionError(
-        CoordinatorKey groupId,
-        TopicPartition topicPartition,
-        Errors error,
-        Set<CoordinatorKey> groupsToUnmap,
-        Set<CoordinatorKey> groupsToRetry
-    ) {
-        switch (error) {
-            case COORDINATOR_LOAD_IN_PROGRESS:
-                // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`{}` request for group {} failed because the coordinator " +
-                    "is still in the process of loading state. Will retry", apiName(), groupId);
-                groupsToRetry.add(groupId);
-                break;
-            case COORDINATOR_NOT_AVAILABLE:
-            case NOT_COORDINATOR:
-                // If the coordinator is unavailable or there was a coordinator change, then we unmap
-                // the key so that we retry the `FindCoordinator` request
-                log.debug("`{}` request for group {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry", apiName(), groupId, error);
-                groupsToUnmap.add(groupId);
-                break;
-            case UNKNOWN_TOPIC_OR_PARTITION:
-            case TOPIC_AUTHORIZATION_FAILED:
-            case UNSTABLE_OFFSET_COMMIT:
-                log.warn("`{}` request for group {} returned error {} in partition {}. Skipping return offset for it.",
-                    apiName(), groupId, error, topicPartition);
-                break;
-            default:
-                log.error("`{}` request for group {} returned unexpected error {} in partition {}. Skipping return offset for it.",
-                    apiName(), groupId, error, topicPartition);
-        }
-    }
-
 }
