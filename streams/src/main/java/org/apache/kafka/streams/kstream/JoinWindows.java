@@ -136,7 +136,7 @@ public class JoinWindows extends Windows<Window> {
      * the timestamp of the record from the primary stream.
      *
      * @param timeDifference
-     * @return a new JoinWindows object with the window definition with and grace period (uses old default of 24 hours)
+     * @return a new JoinWindows object with the window definition with and grace period (default to 24 hours minus {@code timeDifference})
      * @throws IllegalArgumentException if {@code timeDifference} is negative or can't be represented as {@code long milliseconds}
      * @deprecated since 3.0 Use {@link #ofTimeDifferenceAndGrace(Duration, Duration)} instead
      */
@@ -144,7 +144,7 @@ public class JoinWindows extends Windows<Window> {
     public static JoinWindows of(final Duration timeDifference) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
         final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefix);
-        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, DEPRECATED_OLD_24_HR_GRACE_PERIOD, false);
+        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, Math.max(DEPRECATED_OLD_24_HR_GRACE_PERIOD - timeDifferenceMs * 2, 0), false);
     }
 
     /**
