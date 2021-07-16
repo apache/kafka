@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Map;
 
 import static java.time.Duration.ofMillis;
@@ -106,6 +107,7 @@ public class TimeWindowsTest {
 
     @Test
     public void oldAPIShouldSetDefaultGracePeriod() {
+        assertEquals(Duration.ofDays(1).toMillis(), DEPRECATED_OLD_24_HR_GRACE_PERIOD);
         assertEquals(DEPRECATED_OLD_24_HR_GRACE_PERIOD - 3L, TimeWindows.of(ofMillis(3L)).gracePeriodMs());
         assertEquals(0L, TimeWindows.of(ofMillis(DEPRECATED_OLD_24_HR_GRACE_PERIOD)).gracePeriodMs());
         assertEquals(0L, TimeWindows.of(ofMillis(DEPRECATED_OLD_24_HR_GRACE_PERIOD + 1L)).gracePeriodMs());
