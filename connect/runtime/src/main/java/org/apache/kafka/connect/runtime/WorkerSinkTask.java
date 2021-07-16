@@ -373,10 +373,11 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void commitOffsets(long now, boolean closing, Collection<TopicPartition> topicPartitions) {
+        log.trace("Committing offsets for partitions {}", topicPartitions);
         if (workerErrantRecordReporter != null) {
-            log.trace("Awaiting reported errors for {} to be completed", topicPartitions);
+            log.trace("Awaiting reported errors to be completed");
             workerErrantRecordReporter.awaitFutures(topicPartitions);
-            log.trace("Completed all reported errors for {}", topicPartitions);
+            log.trace("Completed reported errors");
         }
 
         Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = currentOffsets.entrySet().stream()
@@ -391,7 +392,7 @@ class WorkerSinkTask extends WorkerTask {
         commitStarted = now;
         sinkTaskMetricsGroup.recordOffsetSequenceNumber(commitSeqno);
 
-        Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets = this.lastCommittedOffsets.entrySet().stream()
+        Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsetsForPartitions = this.lastCommittedOffsets.entrySet().stream()
             .filter(e -> offsetsToCommit.containsKey(e.getKey()))
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
@@ -404,11 +405,11 @@ class WorkerSinkTask extends WorkerTask {
                 log.warn("{} Offset commit failed during close", this);
             } else {
                 log.error("{} Offset commit failed, rewinding to last committed offsets", this, t);
-                for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : lastCommittedOffsets.entrySet()) {
+                for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : lastCommittedOffsetsForPartitions.entrySet()) {
                     log.debug("{} Rewinding topic partition {} to offset {}", this, entry.getKey(), entry.getValue().offset());
                     consumer.seek(entry.getKey(), entry.getValue().offset());
                 }
-                currentOffsets.putAll(lastCommittedOffsets);
+                currentOffsets.putAll(lastCommittedOffsetsForPartitions);
             }
             onCommitCompleted(t, commitSeqno, null);
             return;
@@ -426,7 +427,7 @@ class WorkerSinkTask extends WorkerTask {
         }
 
         Collection<TopicPartition> allAssignedTopicPartitions = consumer.assignment();
-        final Map<TopicPartition, OffsetAndMetadata> committableOffsets = new HashMap<>(lastCommittedOffsets);
+        final Map<TopicPartition, OffsetAndMetadata> committableOffsets = new HashMap<>(lastCommittedOffsetsForPartitions);
         for (Map.Entry<TopicPartition, OffsetAndMetadata> taskProvidedOffsetEntry : taskProvidedOffsets.entrySet()) {
             final TopicPartition partition = taskProvidedOffsetEntry.getKey();
             final OffsetAndMetadata taskProvidedOffset = taskProvidedOffsetEntry.getValue();
@@ -443,12 +444,12 @@ class WorkerSinkTask extends WorkerTask {
                 log.warn("{} Ignoring invalid task provided offset {}/{} -- partition not assigned, assignment={}",
                         this, partition, taskProvidedOffset, allAssignedTopicPartitions);
             } else {
-                log.debug("{} Ignoring task provided offset {}/{} -- topic partition not requested, requested={}",
+                log.debug("{} Ignoring task provided offset {}/{} -- partition not requested, requested={}",
                         this, partition, taskProvidedOffset, committableOffsets.keySet());
             }
         }
 
-        if (committableOffsets.equals(lastCommittedOffsets)) {
+        if (committableOffsets.equals(lastCommittedOffsetsForPartitions)) {
             log.debug("{} Skipping offset commit, no change since last commit", this);
             onCommitCompleted(null, commitSeqno, null);
             return;
@@ -775,6 +776,8 @@ class WorkerSinkTask extends WorkerTask {
 
             if (partitions.isEmpty())
                 return;
+
+            partitions.forEach(currentOffsets::remove);
 
             try {
                 closePartitions(partitions, lost);
