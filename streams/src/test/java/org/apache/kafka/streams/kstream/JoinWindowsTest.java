@@ -124,8 +124,8 @@ public class JoinWindowsTest {
     public void oldAPIShouldSetDefaultGracePeriod() {
         assertEquals(Duration.ofDays(1).toMillis(), DEPRECATED_OLD_24_HR_GRACE_PERIOD);
         assertEquals(DEPRECATED_OLD_24_HR_GRACE_PERIOD - 3L, JoinWindows.of(ofMillis(3L)).gracePeriodMs());
-        assertEquals(0L, TimeWindows.of(ofMillis(DEPRECATED_OLD_24_HR_GRACE_PERIOD)).gracePeriodMs());
-        assertEquals(0L, TimeWindows.of(ofMillis(DEPRECATED_OLD_24_HR_GRACE_PERIOD + 1L)).gracePeriodMs());
+        assertEquals(0L, JoinWindows.of(ofMillis(DEPRECATED_OLD_24_HR_GRACE_PERIOD)).gracePeriodMs());
+        assertEquals(0L, JoinWindows.of(ofMillis(DEPRECATED_OLD_24_HR_GRACE_PERIOD + 1L)).gracePeriodMs());
     }
 
     @Test
