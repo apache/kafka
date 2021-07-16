@@ -24,9 +24,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
@@ -67,15 +69,26 @@ public class ListConsumerGroupOffsetsHandlerTest {
         assertCompleted(handleWithError(Errors.NONE), expected);
     }
 
+
+    @Test
+    public void testSuccessfulHandleResponseWithOnePartitionError() {
+        Map<TopicPartition, OffsetAndMetadata> expectedResult = Collections.singletonMap(t0p0, new OffsetAndMetadata(10L));
+
+        // expected that there's only 1 partition result returned because the other partition is skipped with error
+        assertCompleted(handleWithPartitionError(Errors.UNKNOWN_TOPIC_OR_PARTITION), expectedResult);
+        assertCompleted(handleWithPartitionError(Errors.TOPIC_AUTHORIZATION_FAILED), expectedResult);
+        assertCompleted(handleWithPartitionError(Errors.UNSTABLE_OFFSET_COMMIT), expectedResult);
+    }
+
     @Test
     public void testUnmappedHandleResponse() {
+        assertUnmapped(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE));
         assertUnmapped(handleWithError(Errors.NOT_COORDINATOR));
     }
 
     @Test
     public void testRetriableHandleResponse() {
         assertRetriable(handleWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
-        assertRetriable(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE));
     }
 
     @Test
@@ -89,6 +102,24 @@ public class ListConsumerGroupOffsetsHandlerTest {
         Map<TopicPartition, PartitionData> responseData = new HashMap<>();
         OffsetFetchResponse response = new OffsetFetchResponse(error, responseData);
         return response;
+    }
+
+    private OffsetFetchResponse buildResponseWithPartitionError(Errors error) {
+
+        Map<TopicPartition, PartitionData> responseData = new HashMap<>();
+        responseData.put(t0p0, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", Errors.NONE));
+        responseData.put(t0p1, new OffsetFetchResponse.PartitionData(10, Optional.empty(), "", error));
+
+        OffsetFetchResponse response = new OffsetFetchResponse(Errors.NONE, responseData);
+        return response;
+    }
+
+    private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleWithPartitionError(
+        Errors error
+    ) {
+        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(groupId, tps, logContext);
+        OffsetFetchResponse response = buildResponseWithPartitionError(error);
+        return handler.handleResponse(new Node(1, "host", 1234), singleton(CoordinatorKey.byGroupId(groupId)), response);
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleWithError(
