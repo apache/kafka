@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
 import java.util.ArrayList;
@@ -25,15 +26,16 @@ import java.util.List;
 
 /**
  * A wrapper over all of the {@link StateStoreProvider}s in a Topology
+ *
+ * The store providers field is a reference
  */
 public class QueryableStoreProvider {
 
     private final List<StreamThreadStateStoreProvider> storeProviders;
     private final GlobalStateStoreProvider globalStoreProvider;
 
-    public QueryableStoreProvider(final List<StreamThreadStateStoreProvider> storeProviders,
-                                  final GlobalStateStoreProvider globalStateStoreProvider) {
-        this.storeProviders = new ArrayList<>(storeProviders);
+    public QueryableStoreProvider(final GlobalStateStoreProvider globalStateStoreProvider) {
+        this.storeProviders = new ArrayList<>();
         this.globalStoreProvider = globalStateStoreProvider;
     }
 
@@ -61,7 +63,11 @@ public class QueryableStoreProvider {
         );
     }
 
-    public QueryableStoreProvider newWithStoreProviders(final ArrayList<StreamThreadStateStoreProvider> storeProviders) {
-        return new QueryableStoreProvider(storeProviders, globalStoreProvider);
+    public void addStoreProvider(StreamThreadStateStoreProvider streamThreadStateStoreProvider) {
+        this.storeProviders.add(streamThreadStateStoreProvider);
+    }
+
+    public void removeStoreProvider(StreamThreadStateStoreProvider streamThreadStateStoreProvider) {
+        this.storeProviders.remove(streamThreadStateStoreProvider);
     }
 }
