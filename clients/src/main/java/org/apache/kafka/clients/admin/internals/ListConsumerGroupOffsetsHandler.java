@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -69,8 +70,18 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         return lookupStrategy;
     }
 
+    private void validateKeys(
+        Set<CoordinatorKey> groupIds
+    ) {
+        if (!groupIds.equals(Collections.singleton(groupId))) {
+            throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
+                " (expected only " + Collections.singleton(groupId) + ")");
+        }
+    }
+
     @Override
-    public OffsetFetchRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
+    public OffsetFetchRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
+        validateKeys(groupIds);
         // Set the flag to false as for admin client request,
         // we don't need to wait for any pending offset state to clear.
         return new OffsetFetchRequest.Builder(groupId.idValue, false, partitions, false);
@@ -82,14 +93,19 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
     ) {
-        final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
-        Map<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> completed = new HashMap<>();
-        Map<CoordinatorKey, Throwable> failed = new HashMap<>();
-        List<CoordinatorKey> unmapped = new ArrayList<>();
+        validateKeys(groupIds);
 
-        Errors responseError = response.groupLevelError(groupId.idValue);
-        if (responseError != Errors.NONE) {
-            handleError(groupId, responseError, failed, unmapped);
+        final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
+
+        // the groupError will contain the group level error for v0-v8 OffsetFetchResponse
+        Errors groupError = response.groupLevelError(groupId.idValue);
+        if (groupError != Errors.NONE) {
+            final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+            final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
+
+            handleGroupError(groupId, groupError, failed, groupsToUnmap);
+
+            return new ApiResult<>(Collections.emptyMap(), failed, new ArrayList<>(groupsToUnmap));
         } else {
             final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
             Map<TopicPartition, OffsetFetchResponse.PartitionData> partitionDataMap =
@@ -113,38 +129,44 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                     log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
                 }
             }
-            completed.put(groupId, groupOffsetsListing);
+
+            return new ApiResult<>(
+                Collections.singletonMap(groupId, groupOffsetsListing),
+                Collections.emptyMap(),
+                Collections.emptyList()
+            );
         }
-        return new ApiResult<>(completed, failed, unmapped);
     }
 
-    private void handleError(
+    private void handleGroupError(
         CoordinatorKey groupId,
         Errors error,
-        Map<CoordinatorKey,
-        Throwable> failed,
-        List<CoordinatorKey> unmapped
+        Map<CoordinatorKey, Throwable> failed,
+        Set<CoordinatorKey> groupsToUnmap
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `OffsetFetch` response", groupId,
-                        error.exception());
+                log.debug("`OffsetFetch` request for group id {} failed due to error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
+
             case COORDINATOR_LOAD_IN_PROGRESS:
+                // If the coordinator is in the middle of loading, then we just need to retry
+                log.debug("`OffsetFetch` request for group id {} failed because the coordinator " +
+                    "is still in the process of loading state. Will retry", groupId.idValue);
+                break;
             case COORDINATOR_NOT_AVAILABLE:
-                break;
             case NOT_COORDINATOR:
-                log.debug("OffsetFetch request for group {} returned error {}. Will retry",
-                        groupId, error);
-                unmapped.add(groupId);
+                // If the coordinator is unavailable or there was a coordinator change, then we unmap
+                // the key so that we retry the `FindCoordinator` request
+                log.debug("`OffsetFetch` request for group id {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry", groupId.idValue, error);
+                groupsToUnmap.add(groupId);
                 break;
+
             default:
-                log.error("Received unexpected error for group {} in `OffsetFetch` response",
-                        groupId, error.exception());
-                failed.put(groupId, error.exception(
-                        "Received unexpected error for group " + groupId + " in `OffsetFetch` response"));
+                log.error("`OffsetFetch` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
+                failed.put(groupId, error.exception());
         }
     }
-
 }

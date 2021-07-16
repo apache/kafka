@@ -93,7 +93,7 @@ public final class TopicDelta {
     }
 
     /**
-     * Find the partitions that we are now leading, that we were not leading before.
+     * Find the partitions that we are now leading, whose partition epoch has changed.
      *
      * @param brokerId  The broker id.
      * @return          A list of (partition ID, partition registration) entries.
@@ -103,7 +103,8 @@ public final class TopicDelta {
         for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
             if (entry.getValue().leader == brokerId) {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
-                if (prevPartition == null || prevPartition.leader != brokerId) {
+                if (prevPartition == null ||
+                        prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
                     results.add(entry);
                 }
             }
@@ -112,7 +113,7 @@ public final class TopicDelta {
     }
 
     /**
-     * Find the partitions that we are now following, that we were not following before.
+     * Find the partitions that we are now following, whose partition epoch has changed.
      *
      * @param brokerId  The broker id.
      * @return          A list of (partition ID, partition registration) entries.
@@ -123,7 +124,8 @@ public final class TopicDelta {
             if (entry.getValue().leader != brokerId &&
                     Replicas.contains(entry.getValue().replicas, brokerId)) {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
-                if (prevPartition == null || prevPartition.leader == brokerId) {
+                if (prevPartition == null ||
+                        prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
                     results.add(entry);
                 }
             }

@@ -121,29 +121,22 @@ class LogCleanerTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager))
-
-    val log = new Log(dir,
-                      config = config,
-                      segments = logSegments,
-                      logStartOffset = offsets.logStartOffset,
-                      recoveryPoint = offsets.recoveryPoint,
-                      nextOffsetMetadata = offsets.nextOffsetMetadata,
-                      scheduler = time.scheduler,
+    val localLog = new LocalLog(dir, config, logSegments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, time.scheduler, time, topicPartition, logDirFailureChannel)
+    val log = new Log(offsets.logStartOffset,
+                      localLog,
                       brokerTopicStats = new BrokerTopicStats,
-                      time,
                       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-                      topicPartition = topicPartition,
                       leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
-                      logDirFailureChannel = logDirFailureChannel,
                       _topicId = None,
                       keepPartitionMetadataFile = true) {
-      override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
+      override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment]): Unit = {
         deleteStartLatch.countDown()
         if (!deleteCompleteLatch.await(5000, TimeUnit.MILLISECONDS)) {
           throw new IllegalStateException("Log segment deletion timed out")
         }
-        super.replaceSegments(newSegments, oldSegments, isRecoveredSwapFile)
+        super.replaceSegments(newSegments, oldSegments)
       }
     }
 
@@ -802,7 +795,7 @@ class LogCleanerTest {
 
     // Decrease the log's max message size
     logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize / 2: java.lang.Integer)
-    log.config = LogConfig.fromProps(logConfig.originals, logProps)
+    log.updateConfig(LogConfig.fromProps(logConfig.originals, logProps))
 
     // pretend we have the following keys
     val keys = immutable.ListSet(1, 3, 5, 7, 9)
