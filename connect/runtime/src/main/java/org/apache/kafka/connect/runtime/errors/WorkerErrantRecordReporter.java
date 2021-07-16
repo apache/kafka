@@ -32,12 +32,14 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -54,7 +56,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
     private final HeaderConverter headerConverter;
 
     // Visible for testing
-    protected final Map<TopicPartition, Future<Void>> futures;
+    protected final ConcurrentMap<TopicPartition, List<Future<Void>>> futures;
 
     public WorkerErrantRecordReporter(
         RetryWithToleranceOperator retryWithToleranceOperator,
@@ -108,7 +110,8 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
         Future<Void> future = retryWithToleranceOperator.executeFailed(Stage.TASK_PUT, SinkTask.class, consumerRecord, error);
 
         if (!future.isDone()) {
-            futures.put(new TopicPartition(consumerRecord.topic(), consumerRecord.partition()), future);
+            TopicPartition partition = new TopicPartition(consumerRecord.topic(), consumerRecord.partition());
+            futures.computeIfAbsent(partition, p -> new ArrayList<>()).add(future);
         }
         return future;
     }
@@ -148,6 +151,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
         return topicPartitions.stream()
                 .map(futures::remove)
                 .filter(Objects::nonNull)
+                .flatMap(List::stream)
                 .collect(Collectors.toList());
     }
 
