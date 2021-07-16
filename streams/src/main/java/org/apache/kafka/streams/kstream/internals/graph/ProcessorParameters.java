@@ -63,13 +63,10 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
         return oldProcessorSupplier;
     }
 
+    @SuppressWarnings("unchecked")
     KTableSource<KIn, VIn> kTableSourceSupplier() {
         // This cast always works because KTableSource hasn't been converted yet.
-        return oldProcessorSupplier == null
-            ? null
-            : !(oldProcessorSupplier instanceof KTableSource)
-              ? null
-              : (KTableSource<KIn, VIn>) oldProcessorSupplier;
+        return (KTableSource<KIn, VIn>) processorSupplier;
     }
 
     @SuppressWarnings("unchecked")

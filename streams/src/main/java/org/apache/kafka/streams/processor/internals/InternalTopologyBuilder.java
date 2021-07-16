@@ -217,14 +217,6 @@ public class InternalTopologyBuilder {
             this.supplier = supplier;
         }
 
-        @SuppressWarnings("deprecation") // Old PAPI compatibility.
-        ProcessorNodeFactory(final String name,
-                             final String[] predecessors,
-                             final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> supplier) {
-            super(name, predecessors.clone());
-            this.supplier = () -> ProcessorAdapter.adapt(supplier.get());
-        }
-
         public void addStateStore(final String stateStoreName) {
             stateStoreNames.add(stateStoreName);
         }
@@ -558,14 +550,14 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public final <KIn, VIn> void addGlobalStore(final StoreBuilder<?> storeBuilder,
+    public final <KIn, VIn, KOut, VOut> void addGlobalStore(final StoreBuilder<?> storeBuilder,
                                                 final String sourceName,
                                                 final TimestampExtractor timestampExtractor,
                                                 final Deserializer<KIn> keyDeserializer,
                                                 final Deserializer<VIn> valueDeserializer,
                                                 final String topic,
                                                 final String processorName,
-                                                final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+                                                final ProcessorSupplier<KIn, VIn, KOut, VOut> stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "store builder must not be null");
         ApiUtils.checkSupplier(stateUpdateSupplier);
         validateGlobalStoreArguments(sourceName,
@@ -579,7 +571,7 @@ public class InternalTopologyBuilder {
         final String[] topics = {topic};
         final String[] predecessors = {sourceName};
 
-        final ProcessorNodeFactory<KIn, VIn, Void, Void> nodeFactory = new ProcessorNodeFactory<>(
+        final ProcessorNodeFactory<KIn, VIn, KOut, VOut> nodeFactory = new ProcessorNodeFactory<>(
             processorName,
             predecessors,
             stateUpdateSupplier
@@ -704,7 +696,7 @@ public class InternalTopologyBuilder {
     private void validateGlobalStoreArguments(final String sourceName,
                                               final String topic,
                                               final String processorName,
-                                              final ProcessorSupplier<?, ?, Void, Void> stateUpdateSupplier,
+                                              final ProcessorSupplier<?, ?, ?, ?> stateUpdateSupplier,
                                               final String storeName,
                                               final boolean loggingEnabled) {
         Objects.requireNonNull(sourceName, "sourceName must not be null");
