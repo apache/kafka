@@ -63,8 +63,8 @@ public class SessionWindowsTest {
     public void oldAPIShouldSetDefaultGracePeriod() {
         assertEquals(Duration.ofDays(1).toMillis(), DEPRECATED_OLD_24_HR_GRACE_PERIOD);
         assertEquals(DEPRECATED_OLD_24_HR_GRACE_PERIOD - 3L, SessionWindows.with(ofMillis(3L)).gracePeriodMs());
-        assertEquals(0L, SessionWindows.of(ofMillis(DEPRECATED_OLD_24_HR_GRACE_PERIOD)).gracePeriodMs());
-        assertEquals(0L, SessionWindows.of(ofMillis(DEPRECATED_OLD_24_HR_GRACE_PERIOD + 1L)).gracePeriodMs());
+        assertEquals(0L, SessionWindows.with(ofMillis(DEPRECATED_OLD_24_HR_GRACE_PERIOD)).gracePeriodMs());
+        assertEquals(0L, SessionWindows.with(ofMillis(DEPRECATED_OLD_24_HR_GRACE_PERIOD + 1L)).gracePeriodMs());
     }
 
     @Test
