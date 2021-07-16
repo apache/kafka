@@ -670,6 +670,7 @@ class WorkerSinkTask extends WorkerTask {
                 workerErrantRecordReporter.cancelFutures(topicPartitions);
                 log.trace("Cancelled all reported errors for {}", topicPartitions);
             }
+            topicPartitions.forEach(currentOffsets::remove);
         }
         updatePartitionCount();
     }
@@ -776,8 +777,6 @@ class WorkerSinkTask extends WorkerTask {
 
             if (partitions.isEmpty())
                 return;
-
-            partitions.forEach(currentOffsets::remove);
 
             try {
                 closePartitions(partitions, lost);

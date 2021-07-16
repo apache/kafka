@@ -30,6 +30,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertFalse;
@@ -71,7 +72,7 @@ public class WorkerErrantRecordReporterTest {
         for (int i = 0; i < 4; i++) {
             TopicPartition topicPartition = new TopicPartition("topic", i);
             topicPartitions.add(topicPartition);
-            reporter.futures.put(topicPartition, CompletableFuture.completedFuture(null));
+            reporter.futures.put(topicPartition, Collections.singletonList(CompletableFuture.completedFuture(null)));
         }
         assertFalse(reporter.futures.isEmpty());
         reporter.awaitFutures(topicPartitions);
