@@ -41,6 +41,8 @@ import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
+import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
@@ -115,211 +117,136 @@ public class WindowedChangelogRetentionIntegrationTest {
     @Test
     public void timeWindowedChangelogShouldHaveRetentionOfWindowSize() throws Exception {
         final Duration windowSize = Duration.ofDays(2);
-        final String storeName = "windowed-store";
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, windowSize.toMillis());
-        groupedStream.windowedBy(TimeWindows.of(windowSize))
-            .count(Materialized.as(storeName))
-            .toStream()
-            .to(outputTopic, Produced.with(windowedSerde, Serdes.Long()));
-
-        startStreams();
-
-        verifyChangelogRetentionOfWindowedStore(storeName, windowSize);
+        runAndVerifyTimeWindows(TimeWindows.of(windowSize), null, windowSize);
     }
 
     @Test
     public void timeWindowedChangelogShouldHaveDefaultRetentionWithoutGrace() throws Exception {
         final Duration windowSize = Duration.ofMillis(500);
-        final String storeName = "windowed-store";
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, windowSize.toMillis());
-        groupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(500)))
-            .count(Materialized.as(storeName))
-            .toStream()
-            .to(outputTopic, Produced.with(windowedSerde, Serdes.Long()));
-
-        startStreams();
-
-        verifyChangelogRetentionOfWindowedStore(storeName, DEFAULT_RETENTION);
+        runAndVerifyTimeWindows(TimeWindows.of(windowSize), null, DEFAULT_RETENTION);
     }
 
     @Test
     public void timeWindowedChangelogShouldHaveDefaultRetentionWithGrace() throws Exception {
         final Duration windowSize = Duration.ofMillis(500);
         final Duration grace = Duration.ofMillis(1000);
-        final String storeName = "windowed-store";
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, windowSize.toMillis());
-        groupedStream.windowedBy(TimeWindows.of(windowSize).grace(grace))
-            .count(Materialized.as(storeName))
-            .toStream()
-            .to(outputTopic, Produced.with(windowedSerde, Serdes.Long()));
-
-        startStreams();
-
-        verifyChangelogRetentionOfWindowedStore(storeName, DEFAULT_RETENTION);
+        runAndVerifyTimeWindows(TimeWindows.of(windowSize).grace(grace), null, DEFAULT_RETENTION);
     }
 
     @Test
     public void timeWindowedChangelogShouldHaveRetentionOfWindowSizeAndGrace() throws Exception {
         final Duration windowSize = Duration.ofDays(1);
         final Duration grace = Duration.ofHours(12);
-        final String storeName = "windowed-store";
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, windowSize.toMillis());
-        groupedStream.windowedBy(TimeWindows.of(windowSize).grace(grace))
-            .count(Materialized.as(storeName))
-            .toStream()
-            .to(outputTopic, Produced.with(windowedSerde, Serdes.Long()));
-
-        startStreams();
-
-        verifyChangelogRetentionOfWindowedStore(storeName, windowSize.plus(grace));
+        runAndVerifyTimeWindows(TimeWindows.of(windowSize).grace(grace), null, windowSize.plus(grace));
     }
 
     @Test
     public void timeWindowedChangelogShouldHaveUserSpecifiedRetention() throws Exception {
         final Duration windowSize = Duration.ofDays(1);
         final Duration grace = Duration.ofHours(12);
+        runAndVerifyTimeWindows(TimeWindows.of(windowSize).grace(grace), windowSize.multipliedBy(3), windowSize.multipliedBy(3));
+    }
+
+    private void runAndVerifyTimeWindows(final Windows<TimeWindow> window,
+                                         final Duration userSpecifiedRetention,
+                                         final Duration expectedRetention) throws Exception {
         final String storeName = "windowed-store";
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, windowSize.toMillis());
-        groupedStream.windowedBy(TimeWindows.of(windowSize).grace(grace))
-            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as(storeName).withRetention(windowSize.multipliedBy(3)))
+        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, window.size());
+        groupedStream.windowedBy(window)
+            .count(userSpecifiedRetention != null
+                ? Materialized.<String, Long, WindowStore<Bytes, byte[]>>as(storeName).withRetention(userSpecifiedRetention)
+                : Materialized.as(storeName))
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, Serdes.Long()));
 
         startStreams();
 
-        verifyChangelogRetentionOfWindowedStore(storeName, windowSize.multipliedBy(3));
+        verifyChangelogRetentionOfWindowedStore(storeName, expectedRetention);
     }
 
     @Test
     public void sessionWindowedChangelogShouldHaveRetentionOfGap() throws Exception {
         final Duration gap = Duration.ofDays(2);
-        final String storeName = "windowed-store";
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.sessionWindowedSerdeFrom(String.class);
-        groupedStream.windowedBy(SessionWindows.with(gap))
-            .count(Materialized.as(storeName))
-            .toStream()
-            .to(outputTopic, Produced.with(windowedSerde, Serdes.Long()));
-
-        startStreams();
-
-        verifyChangelogRetentionOfWindowedStore(storeName, gap);
+        runAndVerifySessionWindows(SessionWindows.with(gap), null, gap);
     }
 
     @Test
     public void sessionWindowedChangelogShouldHaveDefaultRetentionWithoutGrace() throws Exception {
         final Duration gap = Duration.ofMillis(500);
-        final String storeName = "windowed-store";
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.sessionWindowedSerdeFrom(String.class);
-        groupedStream.windowedBy(SessionWindows.with(gap))
-            .count(Materialized.as(storeName))
-            .toStream()
-            .to(outputTopic, Produced.with(windowedSerde, Serdes.Long()));
-
-        startStreams();
-
-        verifyChangelogRetentionOfWindowedStore(storeName, DEFAULT_RETENTION);
+        runAndVerifySessionWindows(SessionWindows.with(gap), null, DEFAULT_RETENTION);
     }
 
     @Test
     public void sessionWindowedChangelogShouldHaveDefaultRetentionWithGrace() throws Exception {
         final Duration gap = Duration.ofMillis(500);
         final Duration grace = Duration.ofMillis(1000);
-        final String storeName = "windowed-store";
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.sessionWindowedSerdeFrom(String.class);
-        groupedStream.windowedBy(SessionWindows.with(gap).grace(grace))
-            .count(Materialized.as(storeName))
-            .toStream()
-            .to(outputTopic, Produced.with(windowedSerde, Serdes.Long()));
-
-        startStreams();
-
-        verifyChangelogRetentionOfWindowedStore(storeName, DEFAULT_RETENTION);
+        runAndVerifySessionWindows(SessionWindows.with(gap).grace(grace), null, DEFAULT_RETENTION);
     }
 
     @Test
     public void sessionWindowedChangelogShouldHaveUserSpecifiedRetention() throws Exception {
         final Duration gap = Duration.ofDays(2);
         final Duration grace = Duration.ofHours(12);
+        runAndVerifySessionWindows(SessionWindows.with(gap).grace(grace), gap.multipliedBy(3), gap.multipliedBy(3));
+    }
+
+    private void runAndVerifySessionWindows(final SessionWindows window,
+                                             final Duration userSpecifiedRetention,
+                                             final Duration expectedRetention) throws Exception {
         final String storeName = "windowed-store";
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.sessionWindowedSerdeFrom(String.class);
-        groupedStream.windowedBy(SessionWindows.with(gap).grace(grace))
-            .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as(storeName).withRetention(gap.multipliedBy(3)))
+        groupedStream.windowedBy(window)
+            .count(userSpecifiedRetention != null
+                ? Materialized.<String, Long, SessionStore<Bytes, byte[]>>as(storeName).withRetention(userSpecifiedRetention)
+                : Materialized.as(storeName))
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, Serdes.Long()));
 
         startStreams();
 
-        verifyChangelogRetentionOfWindowedStore(storeName, gap.multipliedBy(3));
+        verifyChangelogRetentionOfWindowedStore(storeName, expectedRetention);
     }
 
     @Test
-    public void joinWindowedChangelogShouldHaveRetentionOfDoubleWindowSize() throws Exception {
+    public void joinWindowedChangelogShouldHaveRetentionOfDoubleWindowSizeGreaterThanDefault() throws Exception {
         final Duration windowSize = Duration.ofDays(2);
-        final String joinName = "testjoin";
-        final String thisStoreName = joinName + "-this-join-store";
-        final String otherStoreName = joinName + "-other-join-store";
-        stream1 = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream2 = builder.stream(streamTwoInput, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream1.join(stream2, (left, right) -> left, JoinWindows.of(windowSize), StreamJoined.as(joinName))
-            .to(outputTopic, Produced.with(Serdes.Integer(), Serdes.String()));
-
-        startStreams();
-
-        verifyChangelogRetentionOfWindowedStore(thisStoreName, windowSize.multipliedBy(2));
-        verifyChangelogRetentionOfWindowedStore(otherStoreName, windowSize.multipliedBy(2));
+        runAndVerifyJoinWindows(JoinWindows.of(windowSize), windowSize.multipliedBy(2));
     }
 
     @Test
-    public void joinWindowedChangelogShouldHaveDefaultRetentionWithoutGrace() throws Exception {
+    public void joinWindowedChangelogShouldHaveDefaultRetention() throws Exception {
         final Duration windowSize = Duration.ofHours(6);
-        final String joinName = "testjoin";
-        final String thisStoreName = joinName + "-this-join-store";
-        final String otherStoreName = joinName + "-other-join-store";
-        stream1 = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream2 = builder.stream(streamTwoInput, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream1.join(stream2, (left, right) -> left, JoinWindows.of(windowSize), StreamJoined.as(joinName))
-            .to(outputTopic, Produced.with(Serdes.Integer(), Serdes.String()));
-
-        startStreams();
-
-        verifyChangelogRetentionOfWindowedStore(thisStoreName, DEFAULT_RETENTION);
-        verifyChangelogRetentionOfWindowedStore(otherStoreName, DEFAULT_RETENTION);
+        runAndVerifyJoinWindows(JoinWindows.of(windowSize), DEFAULT_RETENTION);
     }
 
     @Test
     public void joinWindowedChangelogShouldHaveRetentionOfDoubleWindowSizeAndGraceLessThanDefault() throws Exception {
         final Duration windowSize = Duration.ofHours(6);
         final Duration grace = Duration.ofHours(3);
-        final String joinName = "testjoin";
-        final String thisStoreName = joinName + "-this-join-store";
-        final String otherStoreName = joinName + "-other-join-store";
-        stream1 = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream2 = builder.stream(streamTwoInput, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream1.join(stream2, (left, right) -> left, JoinWindows.of(windowSize).grace(grace), StreamJoined.as(joinName))
-            .to(outputTopic, Produced.with(Serdes.Integer(), Serdes.String()));
-
-        startStreams();
-
-        verifyChangelogRetentionOfWindowedStore(thisStoreName, windowSize.multipliedBy(2).plus(grace));
-        verifyChangelogRetentionOfWindowedStore(otherStoreName, windowSize.multipliedBy(2).plus(grace));
+        runAndVerifyJoinWindows(JoinWindows.of(windowSize).grace(grace), windowSize.multipliedBy(2).plus(grace));
     }
 
     @Test
     public void joinWindowedChangelogShouldHaveRetentionOfDoubleWindowSizeAndGraceGreaterThanDefault() throws Exception {
         final Duration windowSize = Duration.ofDays(2);
         final Duration grace = Duration.ofHours(12);
+        runAndVerifyJoinWindows(JoinWindows.of(windowSize).grace(grace), windowSize.multipliedBy(2).plus(grace));
+    }
+
+    private void runAndVerifyJoinWindows(final JoinWindows window,
+                                         final Duration expectedRetention) throws Exception {
         final String joinName = "testjoin";
         final String thisStoreName = joinName + "-this-join-store";
         final String otherStoreName = joinName + "-other-join-store";
         stream1 = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream2 = builder.stream(streamTwoInput, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream1.join(stream2, (left, right) -> left, JoinWindows.of(windowSize).grace(grace), StreamJoined.as(joinName))
+        stream1.join(stream2, (left, right) -> left, window, StreamJoined.as(joinName))
             .to(outputTopic, Produced.with(Serdes.Integer(), Serdes.String()));
 
         startStreams();
 
-        verifyChangelogRetentionOfWindowedStore(thisStoreName, windowSize.multipliedBy(2).plus(grace));
-        verifyChangelogRetentionOfWindowedStore(otherStoreName, windowSize.multipliedBy(2).plus(grace));
+        verifyChangelogRetentionOfWindowedStore(thisStoreName, expectedRetention);
+        verifyChangelogRetentionOfWindowedStore(otherStoreName, expectedRetention);
     }
 
     private void startStreams() throws Exception {
