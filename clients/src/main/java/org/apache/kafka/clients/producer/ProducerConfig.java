@@ -237,21 +237,21 @@ public class ProducerConfig extends AbstractConfig {
     private static final String PARTITIONER_CLASS_DOC = "A class to use to determine which partition to be send to when produce the records. Available options are:" +
         "<ul>" +
             "<li><code>org.apache.kafka.clients.producer.internals.DefaultPartitioner</code>: The default partitioner. " +
-        "This strategy will try sticking to a partition until the batch is full, or linger.ms is up. It works with the strategy:" +
+        "This strategy will try sticking to a partition until the batch is full, or <code>linger.ms</code> is up. It works with the strategy:" +
                 "<ul>" +
                     "<li>If no partition is specified but a key is present, choose a partition based on a hash of the key</li>" +
-                    "<li>If no partition or key is present, choose the sticky partition that changes when the batch is full, or linger.ms is up.</li>" +
+                    "<li>If no partition or key is present, choose the sticky partition that changes when the batch is full, or <code>linger.ms</code> is up.</li>" +
                 "</ul>" +
             "</li>" +
             "<li><code>org.apache.kafka.clients.producer.RoundRobinPartitioner</code>: This partitioning strategy is that " +
-        "each record in a series of consecutive records will be sent to a different partition(no matter the 'key' is provided or not)," +
+        "each record in a series of consecutive records will be sent to a different partition(no matter if the 'key' is provided or not)," +
         " until we run out of partitions and start over again." +
             "</li>" +
             "<li><code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code>: This partitioning strategy will " +
-        "try sticking to a partition(no matter the 'key' is provided or not) until the batch is full, or linger.ms is up." +
+        "try sticking to a partition(no matter if the 'key' is provided or not) until the batch is full, or <code>linger.ms</code> is up." +
             "</li>" +
         "</ul>" +
-        "<p>Implementing the  <code>org.apache.kafka.clients.producer.Partitioner</code> interface allows you to plug in a custom partitioner.";
+        "<p>Implementing the <code>org.apache.kafka.clients.producer.Partitioner</code> interface allows you to plug in a custom partitioner.";
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
