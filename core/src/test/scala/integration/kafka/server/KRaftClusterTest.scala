@@ -17,12 +17,13 @@
 
 package kafka.server
 
+import kafka.metrics.KafkaYammerMetrics
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, NewPartitionReassignment, NewTopic}
-import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo};
+import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
@@ -38,10 +39,11 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
-class RaftClusterTest {
+class KRaftClusterTest {
 
   @Test
   def testCreateClusterAndClose(): Unit = {
+    TestUtils.clearYammerMetrics()
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
@@ -49,6 +51,7 @@ class RaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
+      checkReplicaManagerMetrics()
     } finally {
       cluster.close()
     }
@@ -424,5 +427,18 @@ class RaftClusterTest {
       extraTopics = admin.listTopics().names().get().asScala.filter(expectedAbsent.contains(_))
       topicsNotFound.isEmpty && extraTopics.isEmpty
     }, s"Failed to find topic(s): ${topicsNotFound.asScala} and NOT find topic(s): ${extraTopics}")
+  }
+
+  private def checkReplicaManagerMetrics(): Unit = {
+    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+    val expectedPrefix = "kafka.server:type=ReplicaManager,name"
+    val expectedMetricNames = Set(
+      "LeaderCount", "PartitionCount", "OfflineReplicaCount", "UnderReplicatedPartitions",
+      "UnderMinIsrPartitionCount", "AtMinIsrPartitionCount", "ReassigningPartitions",
+      "IsrExpandsPerSec", "IsrShrinksPerSec", "FailedIsrUpdatesPerSec",
+    )
+    expectedMetricNames.foreach { metricName =>
+      assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName == s"$expectedPrefix=$metricName"))
+    }
   }
 }

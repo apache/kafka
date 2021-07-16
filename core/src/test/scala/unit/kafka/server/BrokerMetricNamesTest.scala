@@ -30,7 +30,7 @@ import scala.jdk.CollectionConverters._
 
 @ClusterTestDefaults(clusterType = Type.BOTH)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-class ReplicaManagerMetricNamesTest(cluster: ClusterInstance) {
+class BrokerMetricNamesTest(cluster: ClusterInstance) {
   @AfterEach
   def tearDown(): Unit = {
     TestUtils.clearYammerMetrics()
@@ -38,6 +38,10 @@ class ReplicaManagerMetricNamesTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testReplicaManagerMetrics(): Unit = {
+    checkReplicaManagerMetrics()
+  }
+
+  def checkReplicaManagerMetrics(): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     val expectedPrefix = "kafka.server:type=ReplicaManager,name"
     val expectedMetricNames = Set(
