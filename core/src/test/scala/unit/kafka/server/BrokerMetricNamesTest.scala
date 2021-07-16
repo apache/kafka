@@ -37,7 +37,7 @@ class BrokerMetricNamesTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest
-  def testReplicaManagerMetrics(): Unit = {
+  def testMetrics(): Unit = {
     checkReplicaManagerMetrics()
   }
 
