@@ -317,6 +317,13 @@ class ControllerApisTest {
   }
 
   @Test
+  def testClose(): Unit = {
+    val apis = createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller]))
+    apis.close()
+    assertTrue(apis.isClosed)
+  }
+
+  @Test
   def testUnauthorizedBrokerRegistration(): Unit = {
     val brokerRegistrationRequest = new BrokerRegistrationRequest.Builder(
       new BrokerRegistrationRequestData()
