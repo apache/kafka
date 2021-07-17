@@ -2252,6 +2252,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     fetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
                 }
 
+                
                 return OptionalLong.empty();
             }
 
