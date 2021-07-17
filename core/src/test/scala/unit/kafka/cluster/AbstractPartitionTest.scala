@@ -111,7 +111,7 @@ class AbstractPartitionTest {
   }
 
   protected def setupPartitionWithMocks(leaderEpoch: Int,
-                                      isLeader: Boolean): Partition = {
+                                        isLeader: Boolean): Partition = {
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
     val controllerEpoch = 0
