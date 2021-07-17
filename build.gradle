@@ -38,7 +38,7 @@ plugins {
   id 'org.nosphere.apache.rat' version "0.7.0"
 
   id "com.github.spotbugs" version '4.7.1' apply false
-  id 'org.gradle.test-retry' version '1.2.1' apply false
+  id 'org.gradle.test-retry' version '1.3.1' apply false
   id 'org.scoverage' version '5.0.0' apply false
   id 'com.github.johnrengelman.shadow' version '7.0.0' apply false
 }
@@ -222,7 +222,8 @@ subprojects {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
     // temporary exclusions until all the warnings are fixed
-    options.compilerArgs << "-Xlint:-rawtypes"
+    if (!project.path.startsWith(":connect"))
+      options.compilerArgs << "-Xlint:-rawtypes"
     options.compilerArgs << "-Xlint:-serial"
     options.compilerArgs << "-Xlint:-try"
     options.compilerArgs << "-Werror"
@@ -823,6 +824,9 @@ project(':core') {
     implementation libs.scalaLogging
     implementation libs.slf4jApi
     implementation(libs.zookeeper) {
+      // Dropwizard Metrics are required by ZooKeeper as of v3.6.0,
+      // but the library should *not* be used in Kafka code
+      implementation libs.dropwizardMetrics
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
     }
@@ -832,6 +836,8 @@ project(':core') {
     compileOnly libs.log4j
 
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':metadata').sourceSets.test.output
+    testImplementation project(':raft').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation libs.easymock
@@ -2199,7 +2205,7 @@ project(':log4j-appender') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.hamcrest
-    testImplementation libs.easymock
+    testImplementation libs.mockitoCore
   }
 
   javadoc {

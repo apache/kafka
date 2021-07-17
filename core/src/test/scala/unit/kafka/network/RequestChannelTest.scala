@@ -22,26 +22,38 @@ import java.io.IOException
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.Collections
-
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.network
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigResource, SaslConfigs, SslConfigs, TopicConfig}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
-import org.apache.kafka.common.network.{ClientInformation, ListenerName}
+import org.apache.kafka.common.network.{ByteBufferSend, ClientInformation, ListenerName}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{AbstractRequest, MetadataRequest, RequestTestUtils}
 import org.apache.kafka.common.requests.AlterConfigsRequest._
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
+import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.easymock.EasyMock._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
+import org.mockito.{ArgumentCaptor, Mockito}
 
+import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
 class RequestChannelTest {
+  private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
+  private val clientId = "id"
+  private val principalSerde = new KafkaPrincipalSerde() {
+    override def serialize(principal: KafkaPrincipal): Array[Byte] = Utils.utf8(principal.toString)
+    override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
+  }
+  private val mockSend: ByteBufferSend = Mockito.mock(classOf[ByteBufferSend])
 
   @Test
   def testAlterRequests(): Unit = {
@@ -177,6 +189,86 @@ class RequestChannelTest {
       new Config(entries.asJavaCollection)), true).build())
 
     assertTrue(isValidJson(RequestConvertToJson.request(alterConfigs.loggableRequest).toString))
+  }
+
+  @Test
+  def testEnvelopeBuildResponseSendShouldReturnNoErrorIfInnerResponseHasNoError(): Unit = {
+    val channelRequest = buildForwardRequestWithEnvelopeRequestAttached(buildMetadataRequest())
+
+    val envelopeResponseArgumentCaptor = ArgumentCaptor.forClass(classOf[EnvelopeResponse])
+
+    Mockito.doAnswer(_ => mockSend)
+      .when(channelRequest.envelope.get.context).buildResponseSend(envelopeResponseArgumentCaptor.capture())
+
+    // create an inner response without error
+    val responseWithoutError = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", 2))
+
+    // build an envelope response
+    channelRequest.buildResponseSend(responseWithoutError)
+
+    // expect the envelopeResponse result without error
+    val capturedValue: EnvelopeResponse = envelopeResponseArgumentCaptor.getValue
+    assertTrue(capturedValue.error().equals(Errors.NONE))
+  }
+
+  @Test
+  def testEnvelopeBuildResponseSendShouldReturnNoErrorIfInnerResponseHasNoNotControllerError(): Unit = {
+    val channelRequest = buildForwardRequestWithEnvelopeRequestAttached(buildMetadataRequest())
+
+    val envelopeResponseArgumentCaptor = ArgumentCaptor.forClass(classOf[EnvelopeResponse])
+
+    Mockito.doAnswer(_ => mockSend)
+      .when(channelRequest.envelope.get.context).buildResponseSend(envelopeResponseArgumentCaptor.capture())
+
+    // create an inner response with REQUEST_TIMED_OUT error
+    val responseWithTimeoutError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
+      Collections.singletonMap("a", Errors.REQUEST_TIMED_OUT),
+      Collections.singletonMap("a", 2))
+
+    // build an envelope response
+    channelRequest.buildResponseSend(responseWithTimeoutError)
+
+    // expect the envelopeResponse result without error
+    val capturedValue: EnvelopeResponse = envelopeResponseArgumentCaptor.getValue
+    assertTrue(capturedValue.error().equals(Errors.NONE))
+  }
+
+  @Test
+  def testEnvelopeBuildResponseSendShouldReturnNotControllerErrorIfInnerResponseHasOne(): Unit = {
+    val channelRequest = buildForwardRequestWithEnvelopeRequestAttached(buildMetadataRequest())
+
+    val envelopeResponseArgumentCaptor = ArgumentCaptor.forClass(classOf[EnvelopeResponse])
+
+    Mockito.doAnswer(_ => mockSend)
+      .when(channelRequest.envelope.get.context).buildResponseSend(envelopeResponseArgumentCaptor.capture())
+
+    // create an inner response with NOT_CONTROLLER error
+    val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
+      Collections.singletonMap("a", Errors.NOT_CONTROLLER),
+      Collections.singletonMap("a", 2))
+
+    // build an envelope response
+    channelRequest.buildResponseSend(responseWithNotControllerError)
+
+    // expect the envelopeResponse result has NOT_CONTROLLER error
+    val capturedValue: EnvelopeResponse = envelopeResponseArgumentCaptor.getValue
+    assertTrue(capturedValue.error().equals(Errors.NOT_CONTROLLER))
+  }
+
+  private def buildMetadataRequest(): AbstractRequest = {
+    val resourceName = "topic-1"
+    val header = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion,
+      clientId, 0)
+
+    new MetadataRequest.Builder(Collections.singletonList(resourceName), true).build(header.apiVersion)
+  }
+
+  private def buildForwardRequestWithEnvelopeRequestAttached(request: AbstractRequest): RequestChannel.Request = {
+    val envelopeRequest = TestUtils.buildRequestWithEnvelope(
+      request, principalSerde, requestChannelMetrics, System.nanoTime(), shouldSpyRequestContext = true)
+
+    TestUtils.buildRequestWithEnvelope(
+      request, principalSerde, requestChannelMetrics, System.nanoTime(), envelope = Option(envelopeRequest))
   }
 
   private def isValidJson(str: String): Boolean = {

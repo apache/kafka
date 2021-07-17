@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.common;
 
 import kafka.network.RequestConvertToJson;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -43,7 +44,6 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -62,6 +62,10 @@ public class FetchRequestBenchmark {
 
     Map<TopicPartition, FetchRequest.PartitionData> fetchData;
 
+    Map<String, Uuid> topicIds;
+
+    Map<Uuid, String> topicNames;
+
     RequestHeader header;
 
     FetchRequest consumerRequest;
@@ -73,8 +77,13 @@ public class FetchRequestBenchmark {
     @Setup(Level.Trial)
     public void setup() {
         this.fetchData = new HashMap<>();
+        this.topicIds = new HashMap<>();
+        this.topicNames = new HashMap<>();
         for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
-            String topic = UUID.randomUUID().toString();
+            String topic = Uuid.randomUuid().toString();
+            Uuid id = Uuid.randomUuid();
+            topicIds.put(topic, id);
+            topicNames.put(id, topic);
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
                 FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(
                     0, 0, 4096, Optional.empty());
@@ -83,9 +92,9 @@ public class FetchRequestBenchmark {
         }
 
         this.header = new RequestHeader(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion(), "jmh-benchmark", 100);
-        this.consumerRequest = FetchRequest.Builder.forConsumer(0, 0, fetchData)
+        this.consumerRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 0, 0, fetchData, topicIds)
             .build(ApiKeys.FETCH.latestVersion());
-        this.replicaRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion(), 1, 0, 0, fetchData)
+        this.replicaRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion(), 1, 0, 0, fetchData, topicIds)
             .build(ApiKeys.FETCH.latestVersion());
         this.requestBuffer = this.consumerRequest.serialize();
 
@@ -98,17 +107,17 @@ public class FetchRequestBenchmark {
 
     @Benchmark
     public int testFetchRequestForConsumer() {
-        FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(0, 0, fetchData)
+        FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 0, 0, fetchData, topicIds)
             .build(ApiKeys.FETCH.latestVersion());
-        return fetchRequest.fetchData().size();
+        return fetchRequest.fetchData(topicNames).size();
     }
 
     @Benchmark
     public int testFetchRequestForReplica() {
         FetchRequest fetchRequest = FetchRequest.Builder.forReplica(
-            ApiKeys.FETCH.latestVersion(), 1, 0, 0, fetchData)
+            ApiKeys.FETCH.latestVersion(), 1, 0, 0, fetchData, topicIds)
                 .build(ApiKeys.FETCH.latestVersion());
-        return fetchRequest.fetchData().size();
+        return fetchRequest.fetchData(topicNames).size();
     }
 
     @Benchmark

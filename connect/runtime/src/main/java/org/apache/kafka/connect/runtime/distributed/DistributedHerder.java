@@ -42,6 +42,8 @@ import org.apache.kafka.connect.runtime.ConnectMetricsRegistry;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
 import org.apache.kafka.connect.runtime.HerderRequest;
+import org.apache.kafka.connect.runtime.RestartPlan;
+import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
@@ -52,6 +54,7 @@ import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -70,12 +73,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -163,7 +168,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private boolean rebalanceResolved;
     private ExtendedAssignment runningAssignment = ExtendedAssignment.empty();
     private Set<ConnectorTaskId> tasksToRestart = new HashSet<>();
-    private ExtendedAssignment assignment;
+    // visible for testing
+    ExtendedAssignment assignment;
     private boolean canReadConfigs;
     // visible for testing
     protected ClusterConfigState configState;
@@ -185,6 +191,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private volatile long keyExpiration;
     private short currentProtocolVersion;
     private short backoffRetries;
+
+    // visible for testing
+    // The latest pending restart request for each named connector
+    final Map<String, RestartRequest> pendingRestartRequests = new HashMap<>();
 
     private final DistributedConfig config;
 
@@ -401,6 +411,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 next.callback().onCompletion(t, null);
             }
         }
+
+        // Process all pending connector restart requests
+        processRestartRequests();
 
         if (scheduledRebalance < Long.MAX_VALUE) {
             nextRequestTimeoutMs = Math.min(nextRequestTimeoutMs, Math.max(scheduledRebalance - now, 0));
@@ -1014,7 +1027,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 } else if (isLeader()) {
                     callback.onCompletion(new NotAssignedException("Cannot restart connector since it is not assigned to this member", member.ownerUrl(connName)), null);
                 } else {
-                    callback.onCompletion(new NotLeaderException("Cannot restart connector since it is not assigned to this member", leaderUrl()), null);
+                    callback.onCompletion(new NotLeaderException("Only the leader can process restart requests.", leaderUrl()), null);
                 }
                 return null;
             },
@@ -1061,6 +1074,127 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     @Override
     public int generation() {
         return generation;
+    }
+
+    @Override
+    public void restartConnectorAndTasks(RestartRequest request, Callback<ConnectorStateInfo> callback) {
+        final String connectorName = request.connectorName();
+        addRequest(
+                () -> {
+                    if (checkRebalanceNeeded(callback)) {
+                        return null;
+                    }
+                    if (!configState.connectors().contains(request.connectorName())) {
+                        callback.onCompletion(new NotFoundException("Unknown connector: " + connectorName), null);
+                        return null;
+                    }
+                    if (isLeader()) {
+                        // Write a restart request to the config backing store, to be executed asynchronously in tick()
+                        configBackingStore.putRestartRequest(request);
+                        // Compute and send the response that this was accepted
+                        Optional<RestartPlan> plan = buildRestartPlan(request);
+                        if (!plan.isPresent()) {
+                            callback.onCompletion(new NotFoundException("Status for connector " + connectorName + " not found", null), null);
+                        } else {
+                            callback.onCompletion(null, plan.get().restartConnectorStateInfo());
+                        }
+                    } else {
+                        callback.onCompletion(new NotLeaderException("Only the leader can process restart requests.", leaderUrl()), null);
+                    }
+                    return null;
+                },
+                forwardErrorCallback(callback)
+        );
+    }
+
+    /**
+     * Process all pending restart requests. There can be at most one request per connector.
+     *
+     * <p>This method is called from within the {@link #tick()} method.
+     */
+    void processRestartRequests() {
+        List<RestartRequest> restartRequests;
+        synchronized (this) {
+            if (pendingRestartRequests.isEmpty()) {
+                return;
+            }
+            //dequeue into a local list to minimize the work being done within the synchronized block
+            restartRequests = new ArrayList<>(pendingRestartRequests.values());
+            pendingRestartRequests.clear();
+        }
+        restartRequests.forEach(restartRequest -> {
+            try {
+                doRestartConnectorAndTasks(restartRequest);
+            } catch (Exception e) {
+                log.warn("Unexpected error while trying to process " + restartRequest + ", the restart request will be skipped.", e);
+            }
+        });
+    }
+
+    /**
+     * Builds and executes a restart plan for the connector and its tasks from <code>request</code>.
+     * Execution of a plan involves triggering the stop of eligible connector/tasks and then queuing the start for eligible connector/tasks.
+     *
+     * @param request the request to restart connector and tasks
+     */
+    protected synchronized void doRestartConnectorAndTasks(RestartRequest request) {
+        String connectorName = request.connectorName();
+        Optional<RestartPlan> maybePlan = buildRestartPlan(request);
+        if (!maybePlan.isPresent()) {
+            log.debug("Skipping restart of connector '{}' since no status is available: {}", connectorName, request);
+            return;
+        }
+        RestartPlan plan = maybePlan.get();
+        log.info("Executing {}", plan);
+
+        // If requested, stop the connector and any tasks, marking each as restarting
+        final ExtendedAssignment currentAssignments = assignment;
+        final Collection<ConnectorTaskId> assignedIdsToRestart = plan.taskIdsToRestart()
+                .stream()
+                .filter(taskId -> currentAssignments.tasks().contains(taskId))
+                .collect(Collectors.toList());
+        final boolean restartConnector = plan.shouldRestartConnector() && currentAssignments.connectors().contains(connectorName);
+        final boolean restartTasks = !assignedIdsToRestart.isEmpty();
+        if (restartConnector) {
+            worker.stopAndAwaitConnector(connectorName);
+            onRestart(connectorName);
+        }
+        if (restartTasks) {
+            // Stop the tasks and mark as restarting
+            worker.stopAndAwaitTasks(assignedIdsToRestart);
+            assignedIdsToRestart.forEach(this::onRestart);
+        }
+
+        // Now restart the connector and tasks
+        if (restartConnector) {
+            try {
+                startConnector(connectorName, (error, targetState) -> {
+                    if (error == null) {
+                        log.info("Connector '{}' restart successful", connectorName);
+                    } else {
+                        log.error("Connector '{}' restart failed", connectorName, error);
+                    }
+                });
+            } catch (Throwable t) {
+                log.error("Connector '{}' restart failed", connectorName, t);
+            }
+        }
+        if (restartTasks) {
+            log.debug("Restarting {} of {} tasks for {}", plan.restartTaskCount(), plan.totalTaskCount(), request);
+            plan.taskIdsToRestart().forEach(taskId -> {
+                try {
+                    if (startTask(taskId)) {
+                        log.info("Task '{}' restart successful", taskId);
+                    } else {
+                        log.error("Task '{}' restart failed", taskId);
+                    }
+                } catch (Throwable t) {
+                    log.error("Task '{}' restart failed", taskId, t);
+                }
+            });
+            log.debug("Restarted {} of {} tasks for {} as requested", plan.restartTaskCount(), plan.totalTaskCount(), request);
+        }
+        log.info("Completed {}", plan);
     }
 
     // Should only be called from work thread, so synchronization should not be needed
@@ -1591,6 +1725,26 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     DistributedHerder.this.keyExpiration = sessionKey.creationTimestamp() + keyRotationIntervalMs;
                 }
             }
+        }
+
+        @Override
+        public void onRestartRequest(RestartRequest request) {
+            log.info("Received and enqueuing {}", request);
+
+            synchronized (DistributedHerder.this) {
+                String connectorName = request.connectorName();
+                //preserve the highest impact request
+                pendingRestartRequests.compute(connectorName, (k, existingRequest) -> {
+                    if (existingRequest == null || request.compareTo(existingRequest) > 0) {
+                        log.debug("Overwriting existing {} and enqueuing the higher impact {}", existingRequest, request);
+                        return request;
+                    } else {
+                        log.debug("Preserving existing higher impact {} and ignoring incoming {}", existingRequest, request);
+                        return existingRequest;
+                    }
+                });
+            }
+            member.wakeup();
         }
     }
 

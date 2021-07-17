@@ -153,7 +153,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
 //    System.err.println("zkcreateTopics:" + toCreate.keySet + "," + timeout)
     // 1. map over topics creating assignment and calling zookeeper
-    val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, Option(b.rack)) }
+    val brokers = metadataCache.getAliveBrokers()
     val metadata = toCreate.values.map(topic =>
       try {
         if (metadataCache.contains(topic.name))

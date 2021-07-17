@@ -38,6 +38,8 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     private OptionalInt claimedEpoch = OptionalInt.empty();
     private long lastOffsetSnapshotted = -1;
 
+    private int handleSnapshotCalls = 0;
+
     public ReplicatedCounter(
         int nodeId,
         RaftClient<Integer> client,
@@ -72,6 +74,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             int initialCommitted = committed;
             long lastCommittedOffset = -1;
             int lastCommittedEpoch = 0;
+            long lastCommittedTimestamp = -1;
 
             while (reader.hasNext()) {
                 Batch<Integer> batch = reader.next();
@@ -96,6 +99,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
 
                 lastCommittedOffset = batch.lastOffset();
                 lastCommittedEpoch = batch.epoch();
+                lastCommittedTimestamp = batch.appendTimestamp();
             }
             log.debug("Counter incremented from {} to {}", initialCommitted, committed);
 
@@ -106,7 +110,10 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     lastCommittedEpoch,
                     lastOffsetSnapshotted
                 );
-                Optional<SnapshotWriter<Integer>> snapshot = client.createSnapshot(lastCommittedOffset, lastCommittedEpoch);
+                Optional<SnapshotWriter<Integer>> snapshot = client.createSnapshot(
+                    lastCommittedOffset,
+                    lastCommittedEpoch,
+                    lastCommittedTimestamp);
                 if (snapshot.isPresent()) {
                     try {
                         snapshot.get().append(singletonList(committed));
@@ -147,6 +154,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                 }
             }
             lastOffsetSnapshotted = reader.lastContainedLogOffset();
+            handleSnapshotCalls += 1;
             log.debug("Finished loading snapshot. Set value: {}", committed);
         } finally {
             reader.close();
@@ -165,5 +173,11 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             uncommitted = -1;
             claimedEpoch = OptionalInt.empty();
         }
+        handleSnapshotCalls = 0;
+    }
+
+    /** Use handleSnapshotCalls to verify leader is never asked to load snapshot */
+    public int handleSnapshotCalls() {
+        return handleSnapshotCalls;
     }
 }

@@ -29,8 +29,11 @@ import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
+import org.mockito.ArgumentMatcher
 
 import scala.jdk.CollectionConverters._
+import org.apache.kafka.clients.admin.internals.CoordinatorKey
+import org.apache.kafka.common.internals.KafkaFutureImpl
 
 class ConsumerGroupServiceTest {
 
@@ -60,6 +63,89 @@ class ConsumerGroupServiceTest {
     verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any())
     verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(group), any())
     verify(admin, times(1)).listOffsets(offsetsArgMatcher, any())
+  }
+
+  @Test
+  def testAdminRequestsForDescribeNegativeOffsets(): Unit = {
+    val args = Array("--bootstrap-server", "localhost:9092", "--group", group, "--describe", "--offsets")
+    val groupService = consumerGroupService(args)
+
+    val testTopicPartition0 = new TopicPartition("testTopic1", 0);
+    val testTopicPartition1 = new TopicPartition("testTopic1", 1);
+    val testTopicPartition2 = new TopicPartition("testTopic1", 2);
+    val testTopicPartition3 = new TopicPartition("testTopic2", 0);
+    val testTopicPartition4 = new TopicPartition("testTopic2", 1);
+    val testTopicPartition5 = new TopicPartition("testTopic2", 2);
+
+    // Some topic's partitions gets valid OffsetAndMetada values, other gets nulls values (negative integers) and others aren't defined
+    val commitedOffsets = Map(
+      testTopicPartition1 -> new OffsetAndMetadata(100),
+      testTopicPartition2 -> null,
+      testTopicPartition3 -> new OffsetAndMetadata(100),
+      testTopicPartition4 -> new OffsetAndMetadata(100),
+      testTopicPartition5 -> null,
+    ).asJava
+
+    val resultInfo = new ListOffsetsResult.ListOffsetsResultInfo(100, System.currentTimeMillis, Optional.of(1))
+    val endOffsets = Map(
+      testTopicPartition0 -> KafkaFuture.completedFuture(resultInfo),
+      testTopicPartition1 -> KafkaFuture.completedFuture(resultInfo),
+      testTopicPartition2 -> KafkaFuture.completedFuture(resultInfo),
+      testTopicPartition3 -> KafkaFuture.completedFuture(resultInfo),
+      testTopicPartition4 -> KafkaFuture.completedFuture(resultInfo),
+      testTopicPartition5 -> KafkaFuture.completedFuture(resultInfo),
+    )
+    val assignedTopicPartitions = Set(testTopicPartition0, testTopicPartition1, testTopicPartition2)
+    val unassignedTopicPartitions = Set(testTopicPartition3, testTopicPartition4, testTopicPartition5)
+
+    val consumerGroupDescription = new ConsumerGroupDescription(group,
+      true,
+      Collections.singleton(new MemberDescription("member1", Optional.of("instance1"), "client1", "host1", new MemberAssignment(assignedTopicPartitions.asJava))),
+      classOf[RangeAssignor].getName,
+      ConsumerGroupState.STABLE,
+      new Node(1, "localhost", 9092))
+
+    def offsetsArgMatcher(expectedPartitions: Set[TopicPartition]): ArgumentMatcher[util.Map[TopicPartition, OffsetSpec]] = {
+      topicPartitionOffsets => topicPartitionOffsets != null && topicPartitionOffsets.keySet.asScala.equals(expectedPartitions)
+    }
+
+    val future = new KafkaFutureImpl[ConsumerGroupDescription]()
+    future.complete(consumerGroupDescription)
+    when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any()))
+      .thenReturn(new DescribeConsumerGroupsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future)))
+    when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(group), any()))
+      .thenReturn(AdminClientTestUtils.listConsumerGroupOffsetsResult(commitedOffsets))
+    when(admin.listOffsets(
+      ArgumentMatchers.argThat(offsetsArgMatcher(assignedTopicPartitions)),
+      any()
+    )).thenReturn(new ListOffsetsResult(endOffsets.filter { case (tp, _) => assignedTopicPartitions.contains(tp) }.asJava))
+    when(admin.listOffsets(
+      ArgumentMatchers.argThat(offsetsArgMatcher(unassignedTopicPartitions)),
+      any()
+    )).thenReturn(new ListOffsetsResult(endOffsets.filter { case (tp, _) => unassignedTopicPartitions.contains(tp) }.asJava))
+
+    val (state, assignments) = groupService.collectGroupOffsets(group)
+    val returnedOffsets = assignments.map { results =>
+      results.map { assignment =>
+        new TopicPartition(assignment.topic.get, assignment.partition.get) -> assignment.offset
+      }.toMap
+    }.getOrElse(Map.empty)
+
+    val expectedOffsets = Map(
+      testTopicPartition0 -> None,
+      testTopicPartition1 -> Some(100),
+      testTopicPartition2 -> None,
+      testTopicPartition3 -> Some(100),
+      testTopicPartition4 -> Some(100),
+      testTopicPartition5 -> None
+    )
+    assertEquals(Some("Stable"), state)
+    assertEquals(expectedOffsets, returnedOffsets)
+
+    verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any())
+    verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(group), any())
+    verify(admin, times(1)).listOffsets(ArgumentMatchers.argThat(offsetsArgMatcher(assignedTopicPartitions)), any())
+    verify(admin, times(1)).listOffsets(ArgumentMatchers.argThat(offsetsArgMatcher(unassignedTopicPartitions)), any())
   }
 
   @Test
@@ -102,7 +188,9 @@ class ConsumerGroupServiceTest {
       classOf[RangeAssignor].getName,
       groupState,
       new Node(1, "localhost", 9092))
-    new DescribeConsumerGroupsResult(Collections.singletonMap(group, KafkaFuture.completedFuture(description)))
+    val future = new KafkaFutureImpl[ConsumerGroupDescription]()
+    future.complete(description)
+    new DescribeConsumerGroupsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future))
   }
 
   private def listGroupOffsetsResult: ListConsumerGroupOffsetsResult = {

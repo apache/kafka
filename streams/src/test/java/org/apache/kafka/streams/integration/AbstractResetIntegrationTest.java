@@ -341,6 +341,7 @@ public abstract class AbstractResetIntegrationTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private Topology setupTopologyWithIntermediateTopic(final boolean useRepartitioned,
                                                         final String outputTopic2) {
         final StreamsBuilder builder = new StreamsBuilder();

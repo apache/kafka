@@ -26,13 +26,13 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 
@@ -137,7 +137,7 @@ public class StreamsStandByReplicaTest {
 
         streams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                final Set<ThreadMetadata> threadMetadata = streams.localThreadsMetadata();
+                final Set<ThreadMetadata> threadMetadata = streams.metadataForLocalThreads();
                 for (final ThreadMetadata threadMetadatum : threadMetadata) {
                     System.out.println(
                         "ACTIVE_TASKS:" + threadMetadatum.activeTasks().size()

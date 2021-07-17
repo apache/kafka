@@ -26,9 +26,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.json.JsonConverter;
-import org.apache.kafka.connect.json.JsonConverterConfig;
-import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,36 +93,6 @@ public class WorkerConfig extends AbstractConfig {
                     " Examples of common formats include JSON and Avro. By default, the SimpleHeaderConverter is used to serialize" +
                     " header values to strings and deserialize them by inferring the schemas.";
     public static final String HEADER_CONVERTER_CLASS_DEFAULT = SimpleHeaderConverter.class.getName();
-
-    /**
-     * @deprecated As of 2.0.0
-     */
-    @Deprecated
-    public static final String INTERNAL_KEY_CONVERTER_CLASS_CONFIG = "internal.key.converter";
-    public static final String INTERNAL_KEY_CONVERTER_CLASS_DOC =
-            "Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
-                    " This controls the format of the keys in messages written to or read from Kafka, and since this is" +
-                    " independent of connectors it allows any connector to work with any serialization format." +
-                    " Examples of common formats include JSON and Avro." +
-                    " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
-                    " configs and offsets, so users can typically use any functioning Converter implementation." +
-                    " Deprecated; will be removed in an upcoming version.";
-
-    /**
-     * @deprecated As of 2.0.0
-     */
-    @Deprecated
-    public static final String INTERNAL_VALUE_CONVERTER_CLASS_CONFIG = "internal.value.converter";
-    public static final String INTERNAL_VALUE_CONVERTER_CLASS_DOC =
-            "Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
-                    " This controls the format of the values in messages written to or read from Kafka, and since this is" +
-                    " independent of connectors it allows any connector to work with any serialization format." +
-                    " Examples of common formats include JSON and Avro." +
-                    " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
-                    " configs and offsets, so users can typically use any functioning Converter implementation." +
-                    " Deprecated; will be removed in an upcoming version.";
-
-    private static final Class<? extends Converter> INTERNAL_CONVERTER_DEFAULT = JsonConverter.class;
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";
@@ -275,10 +242,6 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.HIGH, KEY_CONVERTER_CLASS_DOC)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, VALUE_CONVERTER_CLASS_DOC)
-                .define(INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, INTERNAL_CONVERTER_DEFAULT,
-                        Importance.LOW, INTERNAL_KEY_CONVERTER_CLASS_DOC)
-                .define(INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, INTERNAL_CONVERTER_DEFAULT,
-                        Importance.LOW, INTERNAL_VALUE_CONVERTER_CLASS_DOC)
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DOC)
@@ -341,55 +304,24 @@ public class WorkerConfig extends AbstractConfig {
                 .withClientSslSupport();
     }
 
-    private void logInternalConverterDeprecationWarnings(Map<String, String> props) {
-        String[] deprecatedConfigs = new String[] {
-            INTERNAL_KEY_CONVERTER_CLASS_CONFIG,
-            INTERNAL_VALUE_CONVERTER_CLASS_CONFIG
-        };
-        for (String config : deprecatedConfigs) {
-            if (props.containsKey(config)) {
-                Class<?> internalConverterClass = getClass(config);
-                logDeprecatedProperty(config, internalConverterClass.getCanonicalName(), INTERNAL_CONVERTER_DEFAULT.getCanonicalName(), null);
-                if (internalConverterClass.equals(INTERNAL_CONVERTER_DEFAULT)) {
-                    // log the properties for this converter ...
-                    for (Map.Entry<String, Object> propEntry : originalsWithPrefix(config + ".").entrySet()) {
-                        String prop = propEntry.getKey();
-                        String propValue = propEntry.getValue().toString();
-                        String defaultValue = JsonConverterConfig.SCHEMAS_ENABLE_CONFIG.equals(prop) ? "false" : null;
-                        logDeprecatedProperty(config + "." + prop, propValue, defaultValue, config);
-                    }
-                }
+    private void logInternalConverterRemovalWarnings(Map<String, String> props) {
+        List<String> removedProperties = new ArrayList<>();
+        for (String property : Arrays.asList("internal.key.converter", "internal.value.converter")) {
+            if (props.containsKey(property)) {
+                removedProperties.add(property);
             }
+            removedProperties.addAll(originalsWithPrefix(property + ".").keySet());
         }
-    }
-
-    private void logDeprecatedProperty(String propName, String propValue, String defaultValue, String prefix) {
-        String prefixNotice = prefix != null
-            ? " (along with all configuration for '" + prefix + "')"
-            : "";
-        if (defaultValue != null && defaultValue.equalsIgnoreCase(propValue)) {
-            log.info(
-                "Worker configuration property '{}'{} is deprecated and may be removed in an upcoming release. "
-                    + "The specified value '{}' matches the default, so this property can be safely removed from the worker configuration.",
-                propName,
-                prefixNotice,
-                propValue
-            );
-        } else if (defaultValue != null) {
+        if (!removedProperties.isEmpty()) {
             log.warn(
-                "Worker configuration property '{}'{} is deprecated and may be removed in an upcoming release. "
-                    + "The specified value '{}' does NOT match the default and recommended value '{}'.",
-                propName,
-                prefixNotice,
-                propValue,
-                defaultValue
-            );
-        } else {
-            log.warn(
-                "Worker configuration property '{}'{} is deprecated and may be removed in an upcoming release.",
-                propName,
-                prefixNotice
-            );
+                    "The worker has been configured with one or more internal converter properties ({}). "
+                            + "Support for these properties was deprecated in version 2.0 and removed in version 3.0, "
+                            + "and specifying them will have no effect. "
+                            + "Instead, an instance of the JsonConverter with schemas.enable "
+                            + "set to false will be used. For more information, please visit "
+                            + "http://kafka.apache.org/documentation/#upgrade and consult the upgrade notes"
+                            + "for the 3.0 release.",
+                    removedProperties);
         }
     }
 
@@ -432,7 +364,7 @@ public class WorkerConfig extends AbstractConfig {
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
         super(definition, props);
-        logInternalConverterDeprecationWarnings(props);
+        logInternalConverterRemovalWarnings(props);
         logPluginPathConfigProviderWarning(props);
     }
 
