@@ -393,7 +393,7 @@ object TopicCommand extends Logging {
     if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
       println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
         "This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker or " +
-        "if the inter.broker.protocol.version is 3.0 or newer")
+        "if the inter.broker.protocol.version is 3.0 or newer. This configuration is deprecated and it will be removed in Apache Kafka 4.0.")
     }
     props
   }
