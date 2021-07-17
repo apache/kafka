@@ -577,9 +577,11 @@ public class Fetcher<K, V> implements Closeable {
                                 final long offset = entry.getValue().offset;
                                 if (isolationLevel == IsolationLevel.READ_COMMITTED) {
                                     log.trace("Updating last stable offset for partition {} to {}", partition, offset);
+                                    System.err.println("update lso:" + offset + partition);
                                     subscriptions.updateLastStableOffset(partition, offset);
                                 } else {
                                     log.trace("Updating high watermark for partition {} to {}", partition, offset);
+                                    System.err.println("update hwm:" + offset + partition);
                                     subscriptions.updateHighWatermark(partition, offset);
                                 }
                             }
