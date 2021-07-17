@@ -149,7 +149,7 @@ class LocalLogTest {
     val oldConfig = log.config
     assertEquals(oldConfig, log.config)
 
-    val newConfig = LogTestUtils.createLogConfig(segmentBytes=oldConfig.segmentSize + 1)
+    val newConfig = LogTestUtils.createLogConfig(segmentBytes = oldConfig.segmentSize + 1)
     log.updateConfig(newConfig)
     assertEquals(newConfig, log.config)
   }
