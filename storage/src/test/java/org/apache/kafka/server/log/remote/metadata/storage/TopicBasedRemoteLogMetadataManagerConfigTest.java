@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.AbstractMap;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -40,12 +39,6 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
     private static final  Logger log = LoggerFactory.getLogger(TopicBasedRemoteLogMetadataManagerConfigTest.class);
 
     private static final String BOOTSTRAP_SERVERS = "localhost:9091";
-
-    @Test
-    public void testEmptyConfig() throws Exception {
-        // "bootstrap.servers" config is required, it will throw IllegalArgumentException if it does not exist.
-        Assertions.assertThrows(IllegalArgumentException.class, () -> new TopicBasedRemoteLogMetadataManagerConfig(Collections.emptyMap()));
-    }
 
     @Test
     public void testValidConfig() {

@@ -28,7 +28,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
@@ -74,9 +73,9 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final String REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX = "remote.log.metadata.common.client.";
     public static final String REMOTE_LOG_METADATA_PRODUCER_PREFIX = "remote.log.metadata.producer.";
     public static final String REMOTE_LOG_METADATA_CONSUMER_PREFIX = "remote.log.metadata.consumer.";
+    public static final String BROKER_ID = "broker.id";
 
     private static final String REMOTE_LOG_METADATA_CLIENT_PREFIX = "__remote_log_metadata_client";
-    private static final String BROKER_ID = "broker.id";
 
     private static final ConfigDef CONFIG = new ConfigDef();
     static {
@@ -98,7 +97,6 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     private final String clientIdPrefix;
     private final int metadataTopicPartitionsCount;
-    private final String bootstrapServers;
     private final long consumeWaitMs;
     private final long metadataTopicRetentionMs;
     private final short metadataTopicReplicationFactor;
@@ -112,11 +110,6 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         Objects.requireNonNull(props, "props can not be null");
 
         Map<String, Object> parsedConfigs = CONFIG.parse(props);
-
-        bootstrapServers = (String) props.get(BOOTSTRAP_SERVERS_CONFIG);
-        if (bootstrapServers == null || bootstrapServers.isEmpty()) {
-            throw new IllegalArgumentException(BOOTSTRAP_SERVERS_CONFIG + " config must not be null or empty.");
-        }
 
         metadataTopicPartitionsCount = (int) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP);
         metadataTopicReplicationFactor = (short) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP);
@@ -135,8 +128,6 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     private void initializeProducerConsumerProperties(Map<String, ?> configs) {
         Map<String, Object> commonClientConfigs = new HashMap<>();
-        commonClientConfigs.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-
         Map<String, Object> producerOnlyConfigs = new HashMap<>();
         Map<String, Object> consumerOnlyConfigs = new HashMap<>();
 
@@ -225,7 +216,6 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         return "TopicBasedRemoteLogMetadataManagerConfig{" +
                 "clientIdPrefix='" + clientIdPrefix + '\'' +
                 ", metadataTopicPartitionsCount=" + metadataTopicPartitionsCount +
-                ", bootstrapServers='" + bootstrapServers + '\'' +
                 ", consumeWaitMs=" + consumeWaitMs +
                 ", metadataTopicRetentionMs=" + metadataTopicRetentionMs +
                 ", metadataTopicReplicationFactor=" + metadataTopicReplicationFactor +
