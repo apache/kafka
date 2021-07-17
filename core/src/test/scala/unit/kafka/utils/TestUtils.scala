@@ -72,6 +72,7 @@ import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
 import org.mockito.Mockito
+import org.opentest4j.AssertionFailedError
 
 import java.net.InetAddress
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
