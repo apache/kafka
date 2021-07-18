@@ -23,6 +23,8 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
+import java.lang
+
 import kafka.cluster.Partition
 import kafka.log.Log
 import kafka.metrics.KafkaMetricsGroup
@@ -39,7 +41,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RemoteLogInpu
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, KafkaThread, Time, Utils}
-import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager
+import org.apache.kafka.server.log.remote.metadata.storage.{ClassLoaderAwareRemoteLogMetadataManager, TopicBasedRemoteLogMetadataManagerConfig}
 import org.apache.kafka.server.log.remote.storage.{LogSegmentData, RemoteLogManagerConfig, RemoteLogMetadataManager, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, RemoteStorageManager}
 
 import scala.collection.mutable
@@ -232,7 +234,10 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     // Partitions logs are available when this callback is invoked.
     // Compact topics and internal topics are filtered here as they are not supported with tiered storage.
     def filterPartitions(partitions: Set[Partition]): Set[Partition] = {
-      partitions.filter(partition => !(Topic.isInternal(partition.topic) || partition.log.exists(log => log.config.compact)))
+      partitions.filterNot(partition => Topic.isInternal(partition.topic) ||
+        partition.log.exists(log => log.config.compact || !log.config.remoteStorageEnable) ||
+        partition.topicPartition.topic().equals(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME)
+      )
     }
 
     val followerTopicPartitions = filterPartitions(partitionsBecomeFollower).map(partition =>
@@ -317,42 +322,24 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
     private def isLeader(): Boolean = leaderEpoch >= 0
 
-    // The highest offset that is already there in the remote storage
-    // When looking for new remote segments, we will only look for the remote segments that contains larger offsets
-    // todo-tier no need to call listRemoteSegments but look for epoch and its highest offset that is available in
-    // remote storage by going through the epochs in current leader-epoch cache in binary-search fashion.
-    private var readOffset: Long = loadRemoteLogSegmentEndOffset()
+    // This is found by traversing from the latest leader epoch from leader epoch history and find the highest offset
+    // of a segment with that epoch copied into remote storage. If it can not find an entry then it checks for the
+    // previous leader epoch till it finds an entry, If there are no entries till the earliest leader epoch in leader
+    // epoch cache then it starts copying the segments from the earliest epoch entry’s offset.
+    private var readOffset: Long = -1
 
-    //todo-updating log with remote index highest offset
+    //todo-updating log with remote index highest offset -- should this be required?
     // fetchLog(tp.topicPartition()).foreach { log => log.updateRemoteIndexHighestOffset(readOffset) }
-
-    def loadRemoteLogSegmentEndOffset(): Long = {
-      // This is found by traversing from the latest leader epoch from leader epoch history and find the highest offset
-      // of a segment with that epoch copied into remote storage. If it can not find an entry then it checks for the
-      // previous leader epoch till it finds an entry, If there are no entries till the earliest leader epoch in leader
-      // epoch cache then it starts copying the segments from the earliest epoch entry’s offset.
-      val metadatas = remoteLogMetadataManager.listRemoteLogSegments(tp)
-      if(!metadatas.hasNext) -1 // Corner case when the first segment's base offset is 1 and contains only 1 record.
-      else {
-        metadatas.asScala.max(new Ordering[RemoteLogSegmentMetadata]() {
-          override def compare(x: RemoteLogSegmentMetadata,
-                               y: RemoteLogSegmentMetadata): Int = {
-            // todo-tier double check whether it covers all the cases
-            (x.startOffset() - y.startOffset()).toInt
-          }
-        }).endOffset()
-      }
-    }
-
-    //todo-updating log with remote index highest offset
-//    fetchLog(tp.topicPartition()).foreach { log => log.updateRemoteIndexHighestOffset(readOffset) }
 
     def convertToLeader(leaderEpochVal: Int): Unit = {
       if (leaderEpochVal < 0) {
         throw new KafkaException(s"leaderEpoch value for topic partition $tp can not be negative")
       }
-      leaderEpoch = leaderEpochVal
-      readOffset = loadRemoteLogSegmentEndOffset()
+      if (this.leaderEpoch != leaderEpochVal) {
+        leaderEpoch = leaderEpochVal
+        info(s"Find the highest remote offset for partition: $tp after becoming leader, leaderEpoch: $leaderEpoch")
+        readOffset = findHighestRemoteOffset(tp).get()
+      }
     }
 
     def convertToFollower(): Unit = {
@@ -477,6 +464,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                 readOffset = endOffset
                 //todo-tier-storage
                 log.updateRemoteIndexHighestOffset(readOffset)
+                info(s"Copied $fileName to remote storage.")
               }
             }
           } else {
@@ -588,13 +576,15 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       try {
         if (!isCancelled()) {
           //a. copy log segments to remote store
-          if (isLeader()) copyLogSegmentsToRemote()
-          else fetchLog(tp.topicPartition()).foreach { log =>
-            //todo-tier leader epoch to be computed here
-            val offset = remoteLogMetadataManager.highestOffsetForEpoch(tp, 0)
-            if (offset.isPresent) {
-              // todo-tier update remote index highest offset.
-              log.updateRemoteIndexHighestOffset(offset.get())
+          if (isLeader()) {
+            copyLogSegmentsToRemote()
+          } else {
+            val offset = findHighestRemoteOffset(tp)
+            fetchLog(tp.topicPartition()).foreach { log =>
+              if (offset.isPresent) {
+                // todo-tier update remote index highest offset.
+                log.updateRemoteIndexHighestOffset(offset.get())
+              }
             }
           }
 
@@ -615,6 +605,23 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     }
   }
 
+  def findHighestRemoteOffset(topicIdPartition: TopicIdPartition): Optional[lang.Long] = {
+    var offset: Optional[lang.Long] = Optional.empty()
+    fetchLog(topicIdPartition.topicPartition()).foreach { log =>
+      log.leaderEpochCache.foreach(cache => {
+        var epoch = cache.latestEpoch
+        while (!offset.isPresent && epoch.isDefined) {
+          offset = remoteLogMetadataManager.highestOffsetForEpoch(topicIdPartition, epoch.get)
+          epoch = cache.findPreviousEpoch(epoch.get)
+        }
+      })
+    }
+    if (!offset.isPresent) {
+      offset = Optional.of(-1L)
+    }
+    offset
+  }
+
   def lookupPositionForOffset(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, offset: Long): Int = {
     indexCache.lookupOffset(remoteLogSegmentMetadata, offset)
   }
@@ -631,14 +638,27 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
     // get the epoch for the requested  offset from local leader epoch cache
     // val epoch = fetchLog(tp).map(log => log.leaderEpochCache.map(cache => cache.epochForOffset()))
-    val epochForOffset: Int = 0
-    val rlsMetadata = fetchRemoteLogSegmentMetadata(tp, offset, epochForOffset)
+    var rlsMetadata: Optional[RemoteLogSegmentMetadata] = Optional.empty()
+    fetchLog(tp).foreach { log =>
+      log.leaderEpochCache.foreach(cache => {
+        var epoch = cache.latestEpoch
+        while (!rlsMetadata.isPresent && epoch.isDefined) {
+          rlsMetadata = fetchRemoteLogSegmentMetadata(tp, epoch.get, offset)
+          epoch = cache.findPreviousEpoch(epoch.get)
+        }
+      })
+    }
 
-    val startPos = lookupPositionForOffset(rlsMetadata, offset)
+    if (!rlsMetadata.isPresent) {
+      throw new OffsetOutOfRangeException(
+        s"Received request for offset $offset for partition $tp which does not exist in remote tier. Try again later.")
+    }
+
+    val startPos = lookupPositionForOffset(rlsMetadata.get(), offset)
     var remoteSegInputStream: InputStream = null
     try {
       // Search forward for the position of the last offset that is greater than or equal to the target offset
-      remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(rlsMetadata, startPos)
+      remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(rlsMetadata.get(), startPos)
       val remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream)
 
       def findFirstBatch(): RecordBatch = {
@@ -681,7 +701,11 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       }
       buffer.flip()
 
-      val abortedTxns = if(includeAbortedTxns) Some(collectAbortedTransactions(rlsMetadata, firstBatch.baseOffset(), updatedFetchSize)) else None
+      val abortedTxns = if (includeAbortedTxns) {
+        Some(collectAbortedTransactions(rlsMetadata.get(), firstBatch.baseOffset(), updatedFetchSize))
+      }  else {
+        None
+      }
       FetchDataInfo(LogOffsetMetadata(offset), MemoryRecords.readableRecords(buffer), abortedTransactions = abortedTxns)
     } finally {
       Utils.closeQuietly(remoteSegInputStream, "RemoteLogSegmentInputStream")
@@ -696,21 +720,18 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   }
 
   def fetchRemoteLogSegmentMetadata(tp: TopicPartition,
-                                    offset: Long,
-                                    epochForOffset: Int): RemoteLogSegmentMetadata = {
+                                    epochForOffset: Int,
+                                    offset: Long): Optional[RemoteLogSegmentMetadata] = {
     val topicIdPartition =
       topicIds.get(tp.topic()) match {
         case Some(uuid) => Some(new TopicIdPartition(uuid, tp))
         case None => None
       }
 
-    if (topicIdPartition.isEmpty) throw new KafkaException("No topic id registered for topic partition: " + tp)
-
-    val remoteLogSegmentMetadata = remoteLogMetadataManager.remoteLogSegmentMetadata(topicIdPartition.get, epochForOffset, offset)
-    if (!remoteLogSegmentMetadata.isPresent) throw new OffsetOutOfRangeException(
-      s"Received request for offset $offset for partition $tp, which does not exist in remote tier. Try again later.")
-
-    remoteLogSegmentMetadata.get()
+    if (topicIdPartition.isEmpty) {
+      throw new KafkaException("No topic id registered for topic partition: " + tp)
+    }
+    remoteLogMetadataManager.remoteLogSegmentMetadata(topicIdPartition.get, epochForOffset, offset)
   }
 
   def lookupTimestamp(rlsMetadata: RemoteLogSegmentMetadata, timestamp: Long, startingOffset: Long): Option[TimestampAndOffset] = {

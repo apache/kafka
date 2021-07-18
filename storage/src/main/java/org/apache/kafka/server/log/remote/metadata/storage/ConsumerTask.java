@@ -153,7 +153,7 @@ class ConsumerTask implements Runnable, Closeable {
             while (!closing) {
                 maybeWaitForPartitionsAssignment();
                 ConsumerRecords<byte[], byte[]> consumerRecords = consumer.poll(Duration.ofSeconds(POLL_INTERVAL_MS));
-                log.debug("Processing {} records recieved from remote log metadata topic", consumerRecords.count());
+                log.debug("Processing {} records received from remote log metadata topic", consumerRecords.count());
                 for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {
                     handleRemoteLogMetadata(serde.deserialize(record.value()));
                     partitionToConsumedOffsets.put(record.partition(), record.offset());

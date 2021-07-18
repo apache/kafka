@@ -326,7 +326,7 @@ class Log(@volatile private var _dir: File,
 
   private def remoteLogEnabled(): Boolean = {
     // remote logging is enabled only for non-compact and non-internal topics
-    rlmEnabled && !(config.compact || Topic.isInternal(topicPartition.topic()))
+    rlmEnabled && !(config.compact || Topic.isInternal(topicPartition.topic())) && config.remoteStorageEnable
   }
 
 
