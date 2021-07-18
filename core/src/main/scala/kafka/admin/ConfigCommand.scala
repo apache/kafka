@@ -62,6 +62,17 @@ import scala.collection._
  * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
  * Alternatively, --user-defaults, --client-defaults, --broker-defaults, or --ip-defaults may be specified in place of
  * --entity-type <users|clients|brokers|ips> --entity-default, respectively.
+ *
+ * For most use cases, this script communicates with a kafka cluster (specified via the
+ * `--bootstrap-server` option). There are three exceptions where direct communication with a
+ * ZooKeeper ensemble (specified via the `--zookeeper` option) is allowed:
+ *
+ * 1. Describe/alter user configs where the config is a SCRAM mechanism name (i.e. a SCRAM credential for a user)
+ * 2. Describe/alter broker configs for a particular broker when that broker is down
+ * 3. Describe/alter broker default configs when all brokers are down
+ *
+ * For example, this allows password configs to be stored encrypted in ZK before brokers are started,
+ * avoiding cleartext passwords in `server.properties`.
  */
 object ConfigCommand extends Config {
 
@@ -743,8 +754,8 @@ object ConfigCommand extends Config {
   class ConfigCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
 
     val zkConnectOpt = parser.accepts("zookeeper", "DEPRECATED. The connection string for the zookeeper connection in the form host:port. " +
-      "Multiple URLS can be given to allow fail-over. Replaced by --bootstrap-server except for when configuring SCRAM credentials for users or " +
-      "dynamic broker configs before starting brokers. REQUIRED unless --bootstrap-server is given.")
+      "Multiple URLS can be given to allow fail-over. Required when configuring SCRAM credentials for users or " +
+      "dynamic broker configs when the relevant broker(s) are down. Not allowed otherwise.")
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
@@ -891,8 +902,8 @@ object ConfigCommand extends Config {
 
       if (options.has(zkTlsConfigFile) && options.has(bootstrapServerOpt)) {
         throw new IllegalArgumentException("--bootstrap-server doesn't support --zk-tls-config-file option. " +
-          "If you are trying to update the ZooKeeper TLS configuration, please use --zookeeper option instead. " +
-          "Otherwise, Please remove --zk-tls-config-file option.")
+          "If you intend the command to communicate directly with ZooKeeper, please use the --zookeeper option instead of --bootstrap-server. " +
+          "Otherwise, remove the --zk-tls-config-file option.")
       }
 
       if (hasEntityName && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
