@@ -560,6 +560,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final String CLIENT_ID_METRIC_TAG = "client-id";
     private static final long NO_CURRENT_THREAD = -1L;
+    private static int CURRENT_NULL_COUNT = 0;
     private static final String JMX_PREFIX = "kafka.consumer";
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
@@ -2248,9 +2249,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             // since we would not try to poll the network client synchronously
             if (lag == null) {
                 if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null) {
-                    System.err.println("fetch endOffsets:" + topicPartition);
-                    fetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
+                    if (topicPartition.toString().equals("table2-4")) {
+                        System.err.println("fetch endOffsets:" + topicPartition + CURRENT_NULL_COUNT);
+                    }
+                    if (CURRENT_NULL_COUNT++ < 10) {
+                        fetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
+                    }
                 }
+                
 
                 
                 return OptionalLong.empty();

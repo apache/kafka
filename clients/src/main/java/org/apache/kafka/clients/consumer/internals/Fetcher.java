@@ -581,7 +581,9 @@ public class Fetcher<K, V> implements Closeable {
                                     subscriptions.updateLastStableOffset(partition, offset);
                                 } else {
                                     log.trace("Updating high watermark for partition {} to {}", partition, offset);
-                                    System.err.println("update hwm:" + offset + partition);
+                                    if (partition.toString().equals("table2-4")) {
+                                        System.err.println("update hwm:" + offset + partition);
+                                    }
                                     subscriptions.updateHighWatermark(partition, offset);
                                 }
                             }
