@@ -244,8 +244,9 @@ public class ProducerConfig extends AbstractConfig {
                 "</ul>" +
             "</li>" +
             "<li><code>org.apache.kafka.clients.producer.RoundRobinPartitioner</code>: This partitioning strategy is that " +
-        "each record in a series of consecutive records will be sent to a different partition(no matter if the 'key' is provided or not)," +
-        " until we run out of partitions and start over again." +
+        "each record in a series of consecutive records will be sent to a different partition(no matter if the 'key' is provided or not), " +
+        "until we run out of partitions and start over again. Note: There's a known issue that will cause uneven distribution when new batch is created. " +
+        "Please check KAFKA-9965 for more detail." +
             "</li>" +
             "<li><code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code>: This partitioning strategy will " +
         "try sticking to a partition(no matter if the 'key' is provided or not) until the batch is full, or <code>linger.ms</code> is up." +
