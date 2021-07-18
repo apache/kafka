@@ -2254,8 +2254,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         if (CURRENT_NULL_COUNT > 10) {
                             fetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
                         }
-                    } else {
-                        fetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
                     }
                 }
                 
