@@ -63,8 +63,6 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.st
 import static org.junit.Assert.assertEquals;
 import static org.apache.kafka.clients.consumer.KafkaConsumer.CURRENT_NULL_COUNT;
 
-import static org.apache.kafka.clients.consumer.KafkaConsumer.CURRENT_NULL_COUNT;
-
 @Category({IntegrationTest.class})
 public class KTableKTableForeignKeyInnerJoinMultiIntegration160Test {
     private final static int NUM_BROKERS = 1;

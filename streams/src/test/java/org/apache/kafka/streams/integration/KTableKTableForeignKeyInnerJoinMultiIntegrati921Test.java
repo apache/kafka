@@ -200,6 +200,13 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrati921Test {
         startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(120));
         System.err.println("all running");
 
+        final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+            CONSUMER_CONFIG,
+            OUTPUT,
+            expectedResult.size()));
+
+
+        assertEquals(expectedResult, result);
         if (CURRENT_NULL_COUNT > 8) {
             throw new AssertionError("current count is:" + CURRENT_NULL_COUNT);
         }
