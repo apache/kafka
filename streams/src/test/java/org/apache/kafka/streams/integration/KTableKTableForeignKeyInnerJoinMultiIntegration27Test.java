@@ -62,6 +62,8 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.junit.Assert.assertEquals;
 
+import static org.apache.kafka.clients.consumer.KafkaConsumer.CURRENT_NULL_COUNT;
+
 @Category({IntegrationTest.class})
 public class KTableKTableForeignKeyInnerJoinMultiIntegration27Test {
     private final static int NUM_BROKERS = 1;
@@ -181,7 +183,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration27Test {
     @Test
     public void shouldInnerJoinMultiPartitionQueryable() throws Exception {
         final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
-        expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=wafflee"));
+        expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
 
         verifyKTableKTableJoin(expectedOne);
     }
@@ -205,6 +207,9 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration27Test {
             expectedResult.size()));
 
         assertEquals(expectedResult, result);
+        if (CURRENT_NULL_COUNT > 8) {
+            throw new AssertionError("current count is:" + CURRENT_NULL_COUNT);
+        }
     }
 
     private static Properties getStreamsConfig() {

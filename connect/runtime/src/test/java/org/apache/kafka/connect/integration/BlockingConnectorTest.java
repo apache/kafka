@@ -131,7 +131,7 @@ public class BlockingConnectorTest {
         // request timeout; otherwise, we may get an unexpected 500 with our first real REST request
         // if the worker is still getting on its feet.
         System.err.println("!!! ready");
-        System.out.println("!!! ready");
+//        System.out.println("!!! ready");
         boolean fail = false;
         try {
             waitForCondition(
@@ -142,7 +142,7 @@ public class BlockingConnectorTest {
         } catch (final java.lang.AssertionError e) {
             fail = true;
             System.err.println("!!! Worker did not complete startup in time, try again");
-            System.out.println("!!! Worker did not complete startup in time, try again");
+//            System.out.println("!!! Worker did not complete startup in time, try again");
         }
 
         try {
