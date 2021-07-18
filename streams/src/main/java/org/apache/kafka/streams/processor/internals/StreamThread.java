@@ -609,7 +609,14 @@ public class StreamThread extends Thread {
                 log.warn("Detected the states of tasks " + e.corruptedTasks() + " are corrupted. " +
                          "Will close the task as dirty and re-create and bootstrap from scratch.", e);
                 try {
+                    // check if any active task got corrupted. We will trigger a rebalance in that case.
+                    // once the task corruptions have been handled
+                    Set<Task> corruptedActiveTasks = taskManager.anyActiveTasksCorrupted(e.corruptedTasks());
                     taskManager.handleCorruption(e.corruptedTasks());
+                    if (!corruptedActiveTasks.isEmpty()) {
+                        log.info("Active task(s) got corrupted {}. Triggering a rebalance", corruptedActiveTasks);
+                        mainConsumer.enforceRebalance();
+                    }
                 } catch (final TaskMigratedException taskMigrated) {
                     handleTaskMigrated(taskMigrated);
                 }

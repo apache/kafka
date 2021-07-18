@@ -158,6 +158,10 @@ public class TaskManager {
         rebalanceInProgress = false;
     }
 
+    Set<Task> anyActiveTasksCorrupted(Set<TaskId> corruptedTasks) {
+        return corruptedTasks.stream().map(tasks::task).filter(Task::isActive).collect(Collectors.toSet());
+    }
+
     /**
      * Stop all tasks and consuming after the last named topology is removed to prevent further processing
      */
