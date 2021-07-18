@@ -99,6 +99,11 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
     </Match>
 
+    <Match>
+        <Class name="org.apache.kafka.clients.consumer.KafkaConsumer"/>
+        <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
+    </Match>
+
     <!-- false positive, see https://github.com/spotbugs/spotbugs/issues/1001 -->
     <Match>
         <Class name="org.apache.kafka.common.internals.KafkaFutureImpl"/>
