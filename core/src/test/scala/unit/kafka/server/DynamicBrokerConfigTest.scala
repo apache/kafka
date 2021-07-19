@@ -20,7 +20,6 @@ package kafka.server
 import java.{lang, util}
 import java.util.Properties
 import java.util.concurrent.CompletionStage
-
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
@@ -32,6 +31,7 @@ import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Set
 
@@ -80,6 +80,7 @@ class DynamicBrokerConfigTest {
     }
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testConfigUpdateWithSomeInvalidConfigs(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
@@ -96,6 +97,9 @@ class DynamicBrokerConfigTest {
     // Test update of configs with invalid type
     val invalidProps = Map(KafkaConfig.LogCleanerThreadsProp -> "invalid")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, invalidProps)
+
+    val excludedTopicConfig = Map(KafkaConfig.LogMessageFormatVersionProp -> "0.10.2")
+    verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, excludedTopicConfig)
   }
 
   @Test

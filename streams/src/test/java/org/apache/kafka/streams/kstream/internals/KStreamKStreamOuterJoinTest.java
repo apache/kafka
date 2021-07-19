@@ -156,6 +156,7 @@ public class KStreamKStreamOuterJoinTest {
 
             // this record should expired non-joined records; only null+a0 will be emitted because
             // it did not have a join
+            driver.advanceWallClockTime(Duration.ofMillis(1000L));
             inputTopic2.pipeInput(3, "dummy", 1500L);
 
             processor.checkAndClearProcessResult(
@@ -839,6 +840,7 @@ public class KStreamKStreamOuterJoinTest {
 
         // push a dummy record to produce all left-join non-joined items
         time += 301L;
+        driver.advanceWallClockTime(Duration.ofMillis(1000L));
         inputTopic1.pipeInput(0, "dummy", time);
         processor.checkAndClearProcessResult(
             new KeyValueTimestamp<>(0, "C0+null", 1101L),
