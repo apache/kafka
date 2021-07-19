@@ -31,6 +31,7 @@ import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, ArgumentsProvider, ArgumentsSource}
 
+import scala.annotation.nowarn
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
@@ -128,6 +129,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     assertEquals(toMap(messages), toMap(read), "Contents of the map shouldn't change")
   }
 
+  @nowarn("cat=deprecation")
   @ParameterizedTest
   @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstd])
   def testCleanerWithMessageFormatV0(codec: CompressionType): Unit = {
@@ -179,6 +181,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     checkLogAfterAppendingDups(log, startSize, appends2)
   }
 
+  @nowarn("cat=deprecation")
   @ParameterizedTest
   @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstd])
   def testCleaningNestedMessagesWithV0AndV1(codec: CompressionType): Unit = {

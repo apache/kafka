@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
 import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogConfig, LogManager}
 import kafka.network.SocketServer
@@ -36,6 +35,7 @@ import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 
+import scala.annotation.nowarn
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
@@ -621,6 +621,7 @@ trait BrokerReconfigurable {
 object DynamicLogConfig {
   // Exclude message.format.version for now since we need to check that the version
   // is supported on all brokers in the cluster.
+  @nowarn("cat=deprecation")
   val ExcludedConfigs = Set(KafkaConfig.LogMessageFormatVersionProp)
 
   val ReconfigurableConfigs = LogConfig.TopicConfigSynonyms.values.toSet -- ExcludedConfigs

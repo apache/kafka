@@ -21,7 +21,7 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.util.concurrent.{Callable, Executors}
-import java.util.Optional
+import java.util.{Optional, Properties}
 import kafka.common.{OffsetsOutOfOrderException, RecordValidationException, UnexpectedAppendOffsetException}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
+import scala.annotation.nowarn
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
@@ -2300,6 +2301,7 @@ class LogTest {
     assertEquals(None, log.leaderEpochCache.flatMap(_.latestEpoch))
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testLeaderEpochCacheClearedAfterDynamicMessageFormatDowngrade(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
@@ -2307,8 +2309,12 @@ class LogTest {
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
     assertEquals(Some(5), log.latestEpoch)
 
-    val downgradedLogConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
-      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.shortVersion)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, "1000")
+    logProps.put(LogConfig.IndexIntervalBytesProp, "1")
+    logProps.put(LogConfig.MaxMessageBytesProp, "65536")
+    logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
+    val downgradedLogConfig = LogConfig(logProps)
     log.updateConfig(downgradedLogConfig)
     LogTestUtils.assertLeaderEpochCacheEmpty(log)
 
@@ -2317,17 +2323,22 @@ class LogTest {
     LogTestUtils.assertLeaderEpochCacheEmpty(log)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testLeaderEpochCacheCreatedAfterMessageFormatUpgrade(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
-      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.shortVersion)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, "1000")
+    logProps.put(LogConfig.IndexIntervalBytesProp, "1")
+    logProps.put(LogConfig.MaxMessageBytesProp, "65536")
+    logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
+    val logConfig = LogConfig(logProps)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
       magicValue = RecordVersion.V1.value), leaderEpoch = 5)
     LogTestUtils.assertLeaderEpochCacheEmpty(log)
 
-    val upgradedLogConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
-      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_11_0_IV0.shortVersion)
+    logProps.put(LogConfig.MessageFormatVersionProp, "0.11.0")
+    val upgradedLogConfig = LogConfig(logProps)
     log.updateConfig(upgradedLogConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
     assertEquals(Some(5), log.latestEpoch)

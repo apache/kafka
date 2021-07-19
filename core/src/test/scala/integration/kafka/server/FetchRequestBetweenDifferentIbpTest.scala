@@ -19,7 +19,6 @@ package integration.kafka.server
 
 import java.time.Duration
 import java.util.Arrays.asList
-
 import kafka.api.{ApiVersion, DefaultApiVersion, KAFKA_2_7_IV0, KAFKA_2_8_IV1, KAFKA_3_1_IV0}
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
@@ -144,10 +143,9 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     })
   }
 
-  private def createConfig(nodeId: Int,interBrokerVersion: ApiVersion): KafkaConfig = {
+  private def createConfig(nodeId: Int, interBrokerVersion: ApiVersion): KafkaConfig = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerVersion.version)
-    props.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerVersion.version)
     KafkaConfig.fromProps(props)
   }
 

@@ -16,7 +16,6 @@
  */
 package kafka.raft
 
-import kafka.api.ApiVersion
 import kafka.log.{AppendOrigin, Defaults, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, KafkaConfig, LogDirFailureChannel, RequestLocal}
@@ -554,11 +553,9 @@ object KafkaMetadataLog {
   ): KafkaMetadataLog = {
     val props = new Properties()
     props.put(LogConfig.MaxMessageBytesProp, config.maxBatchSizeInBytes.toString)
-    props.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString)
     props.put(LogConfig.SegmentBytesProp, Int.box(config.logSegmentBytes))
     props.put(LogConfig.SegmentMsProp, Long.box(config.logSegmentMillis))
     props.put(LogConfig.FileDeleteDelayMsProp, Int.box(Defaults.FileDeleteDelayMs))
-
     LogConfig.validateValues(props)
     val defaultLogConfig = LogConfig(props)
 

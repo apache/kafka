@@ -40,6 +40,7 @@ import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable, mutable}
@@ -353,9 +354,9 @@ class Log(@volatile var logStartOffset: Long,
   def updateConfig(newConfig: LogConfig): Unit = {
     val oldConfig = localLog.config
     localLog.updateConfig(newConfig)
-    val oldRecordVersion = oldConfig.messageFormatVersion.recordVersion
-    val newRecordVersion = newConfig.messageFormatVersion.recordVersion
-    if (newRecordVersion.value != oldRecordVersion.value)
+    val oldRecordVersion = oldConfig.recordVersion
+    val newRecordVersion = newConfig.recordVersion
+    if (newRecordVersion != oldRecordVersion)
       initializeLeaderEpochCache()
   }
 
@@ -539,7 +540,7 @@ class Log(@volatile var logStartOffset: Long,
     }
   }, period = producerIdExpirationCheckIntervalMs, delay = producerIdExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
 
-  private def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
+  private def recordVersion: RecordVersion = config.recordVersion
 
   private def initializePartitionMetadata(): Unit = lock synchronized {
     val partitionMetadata = PartitionMetadataFile.newFile(dir)
@@ -772,7 +773,7 @@ class Log(@volatile var logStartOffset: Long,
                 appendInfo.sourceCodec,
                 appendInfo.targetCodec,
                 config.compact,
-                config.messageFormatVersion.recordVersion.value,
+                config.recordVersion.value,
                 config.messageTimestampType,
                 config.messageTimestampDifferenceMaxMs,
                 leaderEpoch,
@@ -1195,6 +1196,7 @@ class Log(@volatile var logStartOffset: Long,
    * @return The offset of the first message whose timestamp is greater than or equals to the given timestamp.
    *         None if no such message is found.
    */
+  @nowarn("cat=deprecation")
   def fetchOffsetByTimestamp(targetTimestamp: Long): Option[TimestampAndOffset] = {
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
@@ -1744,7 +1746,7 @@ object Log extends Logging {
       dir,
       topicPartition,
       logDirFailureChannel,
-      config.messageFormatVersion.recordVersion,
+      config.recordVersion,
       s"[Log partition=$topicPartition, dir=${dir.getParent}] ")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     val offsets = LogLoader.load(LoadLogParams(

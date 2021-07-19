@@ -28,6 +28,11 @@
         or updating the application not to use internal classes.</li>
     <li>The default value for the consumer configuration <code>session.timeout.ms</code> was increased from 10s to 45s. See
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-735%3A+Increase+default+consumer+session+timeout">KIP-735</a> for more details.</li>
+    <li>The broker configuration <code>log.message.format.version</code> and topic configuration <code>message.format.version</code> have been deprecated.
+        The value of both configurations is always assumed to be <code>3.0</code> if <code>inter.broker.protocol.version</code> is <code>3.0</code> or higher.
+        If <code>log.message.format.version</code> or <<code>message.format.version</code> are set, we recommend clearing them at the same time as the
+        <code>inter.broker.protocol.version</code> upgrade to 3.0. This will avoid potential compatibility issues if the <code>inter.broker.protocol.version</code>
+        is downgraded. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-724%3A+Drop+support+for+message+formats+v0+and+v1">KIP-724</a> for more details.</li>
     <li>The Streams API removed all deprecated APIs that were deprecated in version 2.5.0 or earlier.
         For a complete list of removed APIs compare the detailed Kafka Streams upgrade notes.</li>
     <li>Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).

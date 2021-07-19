@@ -137,8 +137,7 @@ class KafkaApisTest {
       TestUtils.createBrokerConfig(brokerId, "zk")
     }
     overrideProperties.foreach( p => properties.put(p._1, p._2))
-    properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
-    properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
+    TestUtils.setIbpAndMessageFormatVersions(properties, interBrokerProtocolVersion)
     val config = new KafkaConfig(properties)
 
     val forwardingManagerOpt = if (enableForwarding)

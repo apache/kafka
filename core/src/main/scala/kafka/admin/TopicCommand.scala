@@ -19,7 +19,6 @@ package kafka.admin
 
 import java.util
 import java.util.{Collections, Properties}
-
 import joptsimple._
 import kafka.common.AdminCommandFailedException
 import kafka.log.LogConfig
@@ -36,6 +35,7 @@ import org.apache.kafka.common.errors.{ClusterAuthorizationException, TopicExist
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.Utils
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.compat.java8.OptionConverters._
@@ -382,7 +382,7 @@ object TopicCommand extends Logging {
     allTopics.filterNot(Topic.isInternal(_) && excludeInternalTopics)
   }
 
-
+  @nowarn("cat=deprecation")
   def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
     val configsToBeAdded = opts.topicConfig.getOrElse(Collections.emptyList()).asScala.map(_.split("""\s*=\s*"""))
     require(configsToBeAdded.forall(config => config.length == 2),
@@ -392,7 +392,8 @@ object TopicCommand extends Logging {
     LogConfig.validate(props)
     if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
       println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
-        s"This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker.")
+        "This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker or " +
+        "if the inter.broker.protocol.version is 3.0 or newer. This configuration is deprecated and it will be removed in Apache Kafka 4.0.")
     }
     props
   }

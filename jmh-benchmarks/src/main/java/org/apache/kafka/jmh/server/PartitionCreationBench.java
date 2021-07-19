@@ -18,6 +18,7 @@ package org.apache.kafka.jmh.server;
 
 import java.util.Properties;
 
+import kafka.api.ApiVersion;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
@@ -132,6 +133,7 @@ public class PartitionCreationBench {
                 10000L,
                 1000L,
                 60000,
+                ApiVersion.latestVersion(),
                 scheduler,
                 brokerTopicStats,
                 failureChannel,
@@ -193,7 +195,6 @@ public class PartitionCreationBench {
         logProps.put(LogConfig.MaxMessageBytesProp(), Defaults.MaxMessageSize());
         logProps.put(LogConfig.IndexIntervalBytesProp(), Defaults.IndexInterval());
         logProps.put(LogConfig.SegmentIndexBytesProp(), Defaults.MaxIndexSize());
-        logProps.put(LogConfig.MessageFormatVersionProp(), Defaults.MessageFormatVersion());
         logProps.put(LogConfig.FileDeleteDelayMsProp(), Defaults.FileDeleteDelayMs());
         return LogConfig.apply(logProps, new scala.collection.immutable.HashSet<>());
     }

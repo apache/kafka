@@ -21,8 +21,7 @@ import java.io.File
 import java.nio.channels.ClosedChannelException
 import java.nio.charset.StandardCharsets
 import java.util.regex.Pattern
-import java.util.{Collections, Properties}
-
+import java.util.Collections
 import kafka.server.{FetchDataInfo, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils.{MockTime, Scheduler, TestUtils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -36,15 +35,13 @@ import scala.jdk.CollectionConverters._
 
 class LocalLogTest {
 
-  import kafka.log.LocalLogTest._
-
   var config: KafkaConfig = null
   val tmpDir: File = TestUtils.tempDir()
   val logDir: File = TestUtils.randomPartitionLogDir(tmpDir)
   val topicPartition = new TopicPartition("test_topic", 1)
   val logDirFailureChannel = new LogDirFailureChannel(10)
   val mockTime = new MockTime()
-  val log: LocalLog = createLocalLogWithActiveSegment(config = createLogConfig())
+  val log: LocalLog = createLocalLogWithActiveSegment(config = LogTestUtils.createLogConfig())
 
   @BeforeEach
   def setUp(): Unit = {
@@ -152,7 +149,7 @@ class LocalLogTest {
     val oldConfig = log.config
     assertEquals(oldConfig, log.config)
 
-    val newConfig = createLogConfig(segmentBytes=oldConfig.segmentSize + 1)
+    val newConfig = LogTestUtils.createLogConfig(segmentBytes = oldConfig.segmentSize + 1)
     log.updateConfig(newConfig)
     assertEquals(newConfig, log.config)
   }
@@ -697,33 +694,5 @@ class LocalLogTest {
                  time = time,
                  topicPartition = topicPartition,
                  logDirFailureChannel = logDirFailureChannel)
-  }
-}
-
-object LocalLogTest {
-  def createLogConfig(segmentMs: Long = Defaults.SegmentMs,
-                      segmentBytes: Int = Defaults.SegmentSize,
-                      retentionMs: Long = Defaults.RetentionMs,
-                      retentionBytes: Long = Defaults.RetentionSize,
-                      segmentJitterMs: Long = Defaults.SegmentJitterMs,
-                      cleanupPolicy: String = Defaults.CleanupPolicy,
-                      maxMessageBytes: Int = Defaults.MaxMessageSize,
-                      indexIntervalBytes: Int = Defaults.IndexInterval,
-                      segmentIndexBytes: Int = Defaults.MaxIndexSize,
-                      messageFormatVersion: String = Defaults.MessageFormatVersion,
-                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs): LogConfig = {
-    val logProps = new Properties()
-    logProps.put(LogConfig.SegmentMsProp, segmentMs: java.lang.Long)
-    logProps.put(LogConfig.SegmentBytesProp, segmentBytes: Integer)
-    logProps.put(LogConfig.RetentionMsProp, retentionMs: java.lang.Long)
-    logProps.put(LogConfig.RetentionBytesProp, retentionBytes: java.lang.Long)
-    logProps.put(LogConfig.SegmentJitterMsProp, segmentJitterMs: java.lang.Long)
-    logProps.put(LogConfig.CleanupPolicyProp, cleanupPolicy)
-    logProps.put(LogConfig.MaxMessageBytesProp, maxMessageBytes: Integer)
-    logProps.put(LogConfig.IndexIntervalBytesProp, indexIntervalBytes: Integer)
-    logProps.put(LogConfig.SegmentIndexBytesProp, segmentIndexBytes: Integer)
-    logProps.put(LogConfig.MessageFormatVersionProp, messageFormatVersion)
-    logProps.put(LogConfig.FileDeleteDelayMsProp, fileDeleteDelayMs: java.lang.Long)
-    LogConfig(logProps)
   }
 }

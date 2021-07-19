@@ -1988,13 +1988,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val logConfig = zkClient.getLogConfigs(Set(topic), Collections.emptyMap[String, AnyRef])._1(topic)
 
       assertEquals(compressionType, logConfig.originals.get(LogConfig.CompressionTypeProp))
-      assertNull(logConfig.originals.get(LogConfig.MessageFormatVersionProp))
-      assertEquals(ApiVersion.latestVersion, logConfig.messageFormatVersion)
+      assertNull(logConfig.originals.get(LogConfig.RetentionBytesProp))
+      assertEquals(Defaults.LogRetentionBytes, logConfig.retentionSize)
     }
 
     client = Admin.create(createConfig)
-    val invalidConfigs = Map[String, String](LogConfig.MessageFormatVersionProp -> null,
-      LogConfig.CompressionTypeProp -> "producer").asJava
+    val invalidConfigs = Map[String, String](
+      LogConfig.RetentionBytesProp -> null,
+      LogConfig.CompressionTypeProp -> "producer"
+    ).asJava
     val newTopic = new NewTopic(topic, 2, brokerCount.toShort)
     val e1 = assertThrows(classOf[ExecutionException],
       () => client.createTopics(Collections.singletonList(newTopic.configs(invalidConfigs))).all.get())
@@ -2008,7 +2010,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
     val alterOps = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.MessageFormatVersionProp, null), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(LogConfig.RetentionBytesProp, null), AlterConfigOp.OpType.SET),
       new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET)
     )
     val e2 = assertThrows(classOf[ExecutionException],
