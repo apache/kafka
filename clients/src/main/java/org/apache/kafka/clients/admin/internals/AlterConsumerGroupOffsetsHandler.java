@@ -75,9 +75,7 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
         return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
 
-    private void validateKeys(
-        Set<CoordinatorKey> groupIds
-    ) {
+    private void validateKeys(Set<CoordinatorKey> groupIds) {
         if (!groupIds.equals(singleton(groupId))) {
             throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
                 " (expected only " + singleton(groupId) + ")");
@@ -146,17 +144,9 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
         }
 
         if (groupsToUnmap.isEmpty() && groupsToRetry.isEmpty()) {
-            return new ApiResult<>(
-                Collections.singletonMap(groupId, partitionResults),
-                Collections.emptyMap(),
-                Collections.emptyList()
-            );
+            return ApiResult.completed(groupId, partitionResults);
         } else {
-            return new ApiResult<>(
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                new ArrayList<>(groupsToUnmap)
-            );
+            return ApiResult.unmapped(new ArrayList<>(groupsToUnmap));
         }
     }
 
