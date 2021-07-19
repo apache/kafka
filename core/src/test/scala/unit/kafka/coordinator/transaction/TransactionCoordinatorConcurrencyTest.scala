@@ -72,7 +72,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
     txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, txnConfig, time,
       new Metrics())
-    txnStateManager.startup(() => zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME).get)
+    txnStateManager.startup(() => zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME).get,
+      enableTransactionalIdExpiration = true)
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 

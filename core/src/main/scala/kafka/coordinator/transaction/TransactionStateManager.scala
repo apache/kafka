@@ -21,6 +21,7 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
+
 import kafka.log.{AppendOrigin, LogConfig}
 import kafka.message.UncompressedCodec
 import kafka.server.{Defaults, FetchLogEnd, ReplicaManager, RequestLocal}
@@ -32,7 +33,7 @@ import org.apache.kafka.common.message.ListTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{FileRecords, MemoryRecords, MemoryRecordsBuilder, Record, SimpleRecord, TimestampType}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -140,79 +141,154 @@ class TransactionStateManager(brokerId: Int,
     }
   }
 
-  def enableTransactionalIdExpiration(): Unit = {
-    scheduler.schedule("transactionalId-expiration", () => {
-      val now = time.milliseconds()
-      inReadLock(stateLock) {
-        val transactionalIdByPartition: Map[Int, mutable.Iterable[TransactionalIdCoordinatorEpochAndMetadata]] =
-          transactionMetadataCache.flatMap { case (_, entry) =>
-            entry.metadataPerTransactionalId.filter { case (_, txnMetadata) => txnMetadata.state match {
-              case Empty | CompleteCommit | CompleteAbort => true
-              case _ => false
-            }
-            }.filter { case (_, txnMetadata) =>
-              txnMetadata.txnLastUpdateTimestamp <= now - config.transactionalIdExpirationMs
-            }.map { case (transactionalId, txnMetadata) =>
-              val txnMetadataTransition = txnMetadata.inLock {
-                txnMetadata.prepareDead()
+  private def collectExpiredTransactionalIds(
+    partitionId: Int,
+    partitionCacheEntry: TxnMetadataCacheEntry
+  ): (Iterable[TransactionalIdCoordinatorEpochAndMetadata], MemoryRecords) = {
+    val currentTimeMs = time.milliseconds()
+
+    inReadLock(stateLock) {
+      val transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
+      replicaManager.getLogConfig(transactionPartition) match {
+        case Some(logConfig) =>
+          val maxBatchSize = logConfig.maxMessageSize
+          val expired = mutable.ListBuffer.empty[TransactionalIdCoordinatorEpochAndMetadata]
+
+          lazy val recordsBuilder = MemoryRecords.builder(
+            ByteBuffer.allocate(math.min(16384, maxBatchSize)),
+            TransactionLog.EnforcedCompressionType,
+            TimestampType.CREATE_TIME,
+            0L,
+            maxBatchSize
+          )
+
+          partitionCacheEntry.metadataPerTransactionalId.foreachWhile { (transactionalId, txnMetadata) =>
+            txnMetadata.inLock {
+              if (!shouldExpire(txnMetadata, currentTimeMs)) {
+                true
+              } else if (maybeAppendExpiration(txnMetadata, recordsBuilder, currentTimeMs, maxBatchSize)) {
+                val transitMetadata = txnMetadata.prepareDead()
+                expired += TransactionalIdCoordinatorEpochAndMetadata(
+                  transactionalId,
+                  partitionCacheEntry.coordinatorEpoch,
+                  transitMetadata
+                )
+                true
+              } else {
+                // If the batch is full, return false to end the search. Any remaining
+                // transactionalIds eligible for expiration can be picked next time.
+                false
               }
-              TransactionalIdCoordinatorEpochAndMetadata(transactionalId, entry.coordinatorEpoch, txnMetadataTransition)
             }
-          }.groupBy { transactionalIdCoordinatorEpochAndMetadata =>
-            partitionFor(transactionalIdCoordinatorEpochAndMetadata.transactionalId)
           }
 
-        val recordsPerPartition = transactionalIdByPartition
-          .map { case (partition, transactionalIdCoordinatorEpochAndMetadatas) =>
-            val deletes: Array[SimpleRecord] = transactionalIdCoordinatorEpochAndMetadatas.map { entry =>
-              new SimpleRecord(now, TransactionLog.keyToBytes(entry.transactionalId), null)
-            }.toArray
-            val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, deletes: _*)
-            val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
-            (topicPartition, records)
+          if (expired.isEmpty) {
+            (Seq.empty, MemoryRecords.EMPTY)
+          } else {
+            (expired, recordsBuilder.build())
           }
 
-        def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
-          responses.forKeyValue { (topicPartition, response) =>
-            inReadLock(stateLock) {
-              val toRemove = transactionalIdByPartition(topicPartition.partition)
-              transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
-                toRemove.foreach { idCoordinatorEpochAndMetadata =>
-                  val transactionalId = idCoordinatorEpochAndMetadata.transactionalId
-                  val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(transactionalId)
-                  txnMetadata.inLock {
-                    if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
-                      && txnMetadata.pendingState.contains(Dead)
-                      && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
-                      && response.error == Errors.NONE) {
-                      txnMetadataCacheEntry.metadataPerTransactionalId.remove(transactionalId)
-                    } else {
-                      warn(s"Failed to remove expired transactionalId: $transactionalId" +
-                        s" from cache. Tombstone append error code: ${response.error}," +
-                        s" pendingState: ${txnMetadata.pendingState}, producerEpoch: ${txnMetadata.producerEpoch}," +
-                        s" expected producerEpoch: ${idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch}," +
-                        s" coordinatorEpoch: ${txnMetadataCacheEntry.coordinatorEpoch}, expected coordinatorEpoch: " +
-                        s"${idCoordinatorEpochAndMetadata.coordinatorEpoch}")
-                      txnMetadata.pendingState = None
-                    }
+        case None =>
+          (Seq.empty, MemoryRecords.EMPTY)
+      }
+    }
+  }
+
+  private def shouldExpire(
+    txnMetadata: TransactionMetadata,
+    currentTimeMs: Long
+  ): Boolean = {
+    val isExpirableState = txnMetadata.state match {
+      case Empty | CompleteCommit | CompleteAbort => true
+      case _ => false
+    }
+
+    isExpirableState && txnMetadata.txnLastUpdateTimestamp <= currentTimeMs - config.transactionalIdExpirationMs
+  }
+
+  private def maybeAppendExpiration(
+    txnMetadata: TransactionMetadata,
+    recordsBuilder: MemoryRecordsBuilder,
+    currentTimeMs: Long,
+    maxBatchSize: Int
+  ): Boolean = {
+    val keyBytes = TransactionLog.keyToBytes(txnMetadata.transactionalId)
+    if (recordsBuilder.hasRoomFor(currentTimeMs, keyBytes, null, Record.EMPTY_HEADERS)) {
+      recordsBuilder.append(currentTimeMs, keyBytes, null, Record.EMPTY_HEADERS)
+      true
+    } else {
+      if (recordsBuilder.numRecords == 0) {
+        warn(s"Failed to write expiration record for transactionalId ${txnMetadata.transactionalId} " +
+          s"because the tombstone record exceeds the max allowed batch size of $maxBatchSize")
+      }
+      false
+    }
+  }
+
+  private[transaction] def removeExpiredTransactionalIds(): Unit = {
+    inReadLock(stateLock) {
+      val expirationRecords = mutable.Map.empty[TopicPartition, MemoryRecords]
+      val expiredTransactionalIds = mutable.Map.empty[TopicPartition, Iterable[TransactionalIdCoordinatorEpochAndMetadata]]
+
+      transactionMetadataCache.forKeyValue { (partitionId, partitionCacheEntry) =>
+        val (expiredForPartition, partitionRecords) = collectExpiredTransactionalIds(partitionId, partitionCacheEntry)
+        if (expiredForPartition.nonEmpty) {
+          val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
+          expirationRecords += topicPartition -> partitionRecords
+          expiredTransactionalIds += topicPartition -> expiredForPartition
+        }
+      }
+
+      def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
+        responses.forKeyValue { (topicPartition, response) =>
+          inReadLock(stateLock) {
+            val toRemove = expiredTransactionalIds(topicPartition)
+            transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
+              toRemove.foreach { idCoordinatorEpochAndMetadata =>
+                val transactionalId = idCoordinatorEpochAndMetadata.transactionalId
+                val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(transactionalId)
+                txnMetadata.inLock {
+                  if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
+                    && txnMetadata.pendingState.contains(Dead)
+                    && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
+                    && response.error == Errors.NONE) {
+                    txnMetadataCacheEntry.metadataPerTransactionalId.remove(transactionalId)
+                  } else {
+                    warn(s"Failed to remove expired transactionalId: $transactionalId" +
+                      s" from cache. Tombstone append error code: ${response.error}," +
+                      s" pendingState: ${txnMetadata.pendingState}, producerEpoch: ${txnMetadata.producerEpoch}," +
+                      s" expected producerEpoch: ${idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch}," +
+                      s" coordinatorEpoch: ${txnMetadataCacheEntry.coordinatorEpoch}, expected coordinatorEpoch: " +
+                      s"${idCoordinatorEpochAndMetadata.coordinatorEpoch}")
+                    txnMetadata.pendingState = None
                   }
                 }
               }
             }
           }
         }
+      }
 
+      if (expirationRecords.nonEmpty) {
         replicaManager.appendRecords(
           config.requestTimeoutMs,
           TransactionLog.EnforcedRequiredAcks,
           internalTopicsAllowed = true,
           origin = AppendOrigin.Coordinator,
-          recordsPerPartition,
+          expirationRecords,
           removeFromCacheCallback,
           requestLocal = RequestLocal.NoCaching)
       }
+    }
+  }
 
-    }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
+  def enableTransactionalIdExpiration(): Unit = {
+    scheduler.schedule(
+      name = "transactionalId-expiration",
+      fun = removeExpiredTransactionalIds,
+      delay = config.removeExpiredTransactionalIdsIntervalMs,
+      period = config.removeExpiredTransactionalIdsIntervalMs
+    )
   }
 
   def getTransactionState(transactionalId: String): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
@@ -689,7 +765,7 @@ class TransactionStateManager(brokerId: Int,
     }
   }
 
-  def startup(retrieveTransactionTopicPartitionCount: () => Int, enableTransactionalIdExpiration: Boolean = true): Unit = {
+  def startup(retrieveTransactionTopicPartitionCount: () => Int, enableTransactionalIdExpiration: Boolean): Unit = {
     this.retrieveTransactionTopicPartitionCount = retrieveTransactionTopicPartitionCount
     transactionTopicPartitionCount = retrieveTransactionTopicPartitionCount()
     if (enableTransactionalIdExpiration)

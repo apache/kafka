@@ -20,8 +20,9 @@ import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.locks.ReentrantLock
+
 import javax.management.ObjectName
-import kafka.log.{AppendOrigin, Log}
+import kafka.log.{AppendOrigin, Defaults, Log, LogConfig}
 import kafka.server.{FetchDataInfo, FetchLogEnd, LogOffsetMetadata, ReplicaManager, RequestLocal}
 import kafka.utils.{MockScheduler, Pool, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -36,6 +37,7 @@ import org.apache.kafka.common.utils.MockTime
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import kafka.utils.Implicits._
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
@@ -78,7 +80,7 @@ class TransactionStateManagerTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    transactionManager.startup(() => numPartitions, false)
+    transactionManager.startup(() => numPartitions, enableTransactionalIdExpiration = false)
     // make sure the transactional id hashes to the assigning partition id
     assertEquals(partitionId, transactionManager.partitionFor(transactionalId1))
     assertEquals(partitionId, transactionManager.partitionFor(transactionalId2))
@@ -581,7 +583,7 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def shouldRemoveCompleteCommmitExpiredTransactionalIds(): Unit = {
+  def shouldRemoveCompleteCommitExpiredTransactionalIds(): Unit = {
     setupAndRunTransactionalIdExpiration(Errors.NONE, CompleteCommit)
     verifyMetadataDoesntExist(transactionalId1)
     verifyMetadataDoesExistAndIsUsable(transactionalId2)
@@ -627,6 +629,62 @@ class TransactionStateManagerTest {
     setupAndRunTransactionalIdExpiration(Errors.NONE, PrepareCommit)
     verifyMetadataDoesExistAndIsUsable(transactionalId1)
     verifyMetadataDoesExistAndIsUsable(transactionalId2)
+  }
+
+  @Test
+  def testTransactionExpirationShouldRespectBatchSize(): Unit = {
+    val partitionIds = 0 until numPartitions
+    val maxBatchSize = 512
+
+    loadTransactionsForPartitions(partitionIds)
+
+    val allTransactionalIds = mutable.Set.empty[String]
+    for (i <- 0 to 1000) {
+      val txnlId = s"id_$i"
+      val producerId = i
+      val txnMetadata = transactionMetadata(txnlId, producerId)
+      txnMetadata.txnLastUpdateTimestamp = time.milliseconds() - txnConfig.transactionalIdExpirationMs
+      transactionManager.putTransactionStateIfNotExists(txnMetadata)
+      allTransactionalIds += txnlId
+    }
+
+    def removeExpiredTransactionalIds(): Map[TopicPartition, MemoryRecords] = {
+      EasyMock.reset(replicaManager)
+      expectLogConfig(partitionIds, maxBatchSize)
+
+      val appendedRecordsCapture = expectTransactionalIdExpiration(Errors.NONE)
+      EasyMock.replay(replicaManager)
+
+      transactionManager.removeExpiredTransactionalIds()
+      EasyMock.verify(replicaManager)
+
+      assertTrue(appendedRecordsCapture.hasCaptured)
+      appendedRecordsCapture.getValue
+    }
+
+    def hasUnexpiredTransactionalIds: Boolean = {
+      val unexpiredTransactions = transactionManager.listTransactionStates(Set.empty, Set.empty)
+        .transactionStates.asScala
+      assertTrue(unexpiredTransactions.forall(txn => txn.transactionState == Empty.name))
+      unexpiredTransactions.nonEmpty
+    }
+
+    var iterations = 0
+    val expiredTransactionalIds = mutable.Set.empty[String]
+    while (hasUnexpiredTransactionalIds) {
+      removeExpiredTransactionalIds().forKeyValue { (_, records) =>
+        assertTrue(records.sizeInBytes() < maxBatchSize)
+        records.records().forEach { record =>
+          val transactionalId = TransactionLog.readTxnRecordKey(record.key).transactionalId
+          expiredTransactionalIds += transactionalId
+          assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
+        }
+      }
+      iterations += 1
+    }
+
+    assertTrue(iterations > 1)
+    assertEquals(allTransactionalIds, expiredTransactionalIds)
   }
 
   @Test
@@ -701,36 +759,59 @@ class TransactionStateManagerTest {
     }
   }
 
-  private def setupAndRunTransactionalIdExpiration(error: Errors, txnState: TransactionState): Unit = {
-    for (partitionId <- 0 until numPartitions) {
+  private def expectTransactionalIdExpiration(
+    appendError: Errors
+  ): Capture[Map[TopicPartition, MemoryRecords]] = {
+    val recordsCapture: Capture[Map[TopicPartition, MemoryRecords]] = EasyMock.newCapture()
+    val callbackCapture: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
+
+    EasyMock.expect(replicaManager.appendRecords(
+      EasyMock.anyLong(),
+      EasyMock.eq((-1).toShort),
+      EasyMock.eq(true),
+      EasyMock.eq(AppendOrigin.Coordinator),
+      EasyMock.capture(recordsCapture),
+      EasyMock.capture(callbackCapture),
+      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
+      EasyMock.anyObject(),
+      EasyMock.anyObject()
+    )).andAnswer(() => callbackCapture.getValue.apply(
+      recordsCapture.getValue.keys.map { topicPartition =>
+        topicPartition -> new PartitionResponse(appendError, 0L, RecordBatch.NO_TIMESTAMP, 0L)
+      }.toMap
+    ))
+
+    recordsCapture
+  }
+
+  private def loadTransactionsForPartitions(
+    partitionIds: Seq[Int],
+  ): Unit = {
+    for (partitionId <- partitionIds) {
       transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
     }
+  }
 
-    val capturedArgument: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
+  private def expectLogConfig(
+    partitionIds: Seq[Int],
+    maxBatchSize: Int
+  ): Unit = {
+    val logConfig: LogConfig = EasyMock.mock(classOf[LogConfig])
+    EasyMock.expect(logConfig.maxMessageSize).andStubReturn(maxBatchSize)
 
-    val partition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, transactionManager.partitionFor(transactionalId1))
-    val recordsByPartition = Map(partition -> MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType,
-      new SimpleRecord(time.milliseconds() + txnConfig.removeExpiredTransactionalIdsIntervalMs, TransactionLog.keyToBytes(transactionalId1), null)))
-
-    txnState match {
-      case Empty | CompleteCommit | CompleteAbort =>
-
-        EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
-          EasyMock.eq((-1).toShort),
-          EasyMock.eq(true),
-          EasyMock.eq(AppendOrigin.Coordinator),
-          EasyMock.eq(recordsByPartition),
-          EasyMock.capture(capturedArgument),
-          EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
-          EasyMock.anyObject(),
-          EasyMock.anyObject()
-        )).andAnswer(() => capturedArgument.getValue.apply(
-          Map(partition -> new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
-        )
-      case _ => // shouldn't append
+    for (partitionId <- partitionIds) {
+      EasyMock.expect(replicaManager.getLogConfig(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)))
+        .andStubReturn(Some(logConfig))
     }
 
-    EasyMock.replay(replicaManager)
+    EasyMock.replay(logConfig)
+  }
+
+  private def setupAndRunTransactionalIdExpiration(error: Errors, txnState: TransactionState): Unit = {
+    val partitionIds = 0 until numPartitions
+
+    loadTransactionsForPartitions(partitionIds)
+    expectLogConfig(partitionIds, Defaults.MaxMessageSize)
 
     txnMetadata1.txnLastUpdateTimestamp = time.milliseconds() - txnConfig.transactionalIdExpirationMs
     txnMetadata1.state = txnState
@@ -739,12 +820,24 @@ class TransactionStateManagerTest {
     txnMetadata2.txnLastUpdateTimestamp = time.milliseconds()
     transactionManager.putTransactionStateIfNotExists(txnMetadata2)
 
-    transactionManager.enableTransactionalIdExpiration()
-    time.sleep(txnConfig.removeExpiredTransactionalIdsIntervalMs)
+    val appendedRecordsCapture = txnState match {
+      case Empty | CompleteCommit | CompleteAbort => Some(expectTransactionalIdExpiration(error))
+      case _ => None
+    }
 
-    scheduler.tick()
+    EasyMock.replay(replicaManager)
+
+    transactionManager.removeExpiredTransactionalIds()
 
     EasyMock.verify(replicaManager)
+
+    appendedRecordsCapture.foreach { capture =>
+      val partitionId = transactionManager.partitionFor(transactionalId1)
+      val topicPartition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)
+      val expectedTombstone = new SimpleRecord(time.milliseconds(), TransactionLog.keyToBytes(transactionalId1), null)
+      val expectedRecords = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, expectedTombstone)
+      assertEquals(Map(topicPartition -> expectedRecords), capture.getValue)
+    }
   }
 
   private def verifyWritesTxnMarkersInPrepareState(state: TransactionState): Unit = {
