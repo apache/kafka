@@ -49,7 +49,8 @@
         <li>The <code>--zookeeper</code> option was removed from the <code>kafka-topics</code> and <code>kafka-reassign-partitions</code> command line tools.
             Please use <code>--bootstrap-server</code> instead.</li>
         <li>In the <code>kafka-configs</code> command line tool, the <code>--zookeeper</code> option is only supported for updating <a href="#security_sasl_scram_credentials">SCRAM Credentials configuration</a>
-            and <a href="#dynamicbrokerconfigs">updating dynamic broker configs before brokers are started</a>.</li>
+            and <a href="#dynamicbrokerconfigs">describing/updating dynamic broker configs when brokers are not running</a>. Please use <code>--bootstrap-server</code>
+            for other configuration operations.</li>
         <li>The <code>ConfigEntry</code> constructor was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12577">KAFKA-12577</a>).
             Please use the remaining public constructor instead.</li>
         <li>The config value <code>default</code> for the client config <code>client.dns.lookup</code> has been removed. In the unlikely

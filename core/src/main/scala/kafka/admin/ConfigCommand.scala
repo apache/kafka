@@ -138,11 +138,11 @@ object ConfigCommand extends Config {
     if (entityType == ConfigType.User) {
       if (!configsToBeAdded.isEmpty || !configsToBeDeleted.isEmpty) {
         val info = "User configuration updates using ZooKeeper are only supported for SCRAM credential updates."
+        val scramMechanismNames = ScramMechanism.values.map(_.mechanismName)
         // make sure every added/deleted configs are SCRAM related, other configs are not supported using zookeeper
-        require(configsToBeAdded.keys().asScala.forall(propertyKey => ScramMechanism.values().map(_.mechanismName()).contains(propertyKey.toString)),
+        require(configsToBeAdded.stringPropertyNames.asScala.forall(scramMechanismNames.contains),
           s"$errorMessage. $info")
-        require(configsToBeDeleted.forall(propertyKey => ScramMechanism.values().map(_.mechanismName()).contains(propertyKey)),
-          s"$errorMessage. $info")
+        require(configsToBeDeleted.forall(scramMechanismNames.contains), s"$errorMessage. $info")
       }
       preProcessScramCredentials(configsToBeAdded)
     } else if (entityType == ConfigType.Broker) {
@@ -176,14 +176,14 @@ object ConfigCommand extends Config {
                                         zkClient: KafkaZkClient,
                                         errorMessage: String): Unit = {
     val perBrokerConfig = entityName != ConfigEntityName.Default
-    val info = "Broker configuration updates/describes using ZooKeeper are supported for bootstrapping before brokers" +
-      " are started to enable encrypted password configs to be stored in ZooKeeper."
+    val info = "Broker configuration operations using ZooKeeper are only supported if the affected broker(s) are not running."
     if (perBrokerConfig) {
       adminZkClient.parseBroker(entityName).foreach { brokerId =>
-        require(zkClient.getBroker(brokerId).isEmpty, s"$errorMessage when broker $entityName is running. $info")
+        require(zkClient.getBroker(brokerId).isEmpty, s"$errorMessage - broker $brokerId is running. $info")
       }
     } else {
-      require(zkClient.getAllBrokersInCluster.isEmpty, s"$errorMessage for default cluster if any broker is running. $info")
+      val runningBrokersCount = zkClient.getAllBrokersInCluster.size
+      require(runningBrokersCount == 0, s"$errorMessage - $runningBrokersCount brokers are running. $info")
     }
   }
 
@@ -877,7 +877,7 @@ object ConfigCommand extends Config {
 
       entityTypeVals.foreach(entityTypeVal =>
         if (!allowedEntityTypes.contains(entityTypeVal))
-          throw new IllegalArgumentException(s"Invalid entity type $entityTypeVal, the entity type must be one of ${allowedEntityTypes.mkString(",")} with the $connectOptString argument")
+          throw new IllegalArgumentException(s"Invalid entity type $entityTypeVal, the entity type must be one of ${allowedEntityTypes.mkString(", ")} with the $connectOptString argument")
       )
       if (entityTypeVals.isEmpty)
         throw new IllegalArgumentException("At least one entity type must be specified")
@@ -902,7 +902,7 @@ object ConfigCommand extends Config {
 
       if (options.has(zkTlsConfigFile) && options.has(bootstrapServerOpt)) {
         throw new IllegalArgumentException("--bootstrap-server doesn't support --zk-tls-config-file option. " +
-          "If you intend the command to communicate directly with ZooKeeper, please use the --zookeeper option instead of --bootstrap-server. " +
+          "If you intend the command to communicate directly with ZooKeeper, please use the option --zookeeper instead of --bootstrap-server. " +
           "Otherwise, remove the --zk-tls-config-file option.")
       }
 
