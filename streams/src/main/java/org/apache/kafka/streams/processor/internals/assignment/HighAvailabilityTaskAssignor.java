@@ -103,13 +103,13 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
     private static void assignActiveStatefulTasks(final SortedMap<UUID, ClientState> clientStates,
                                                   final SortedSet<TaskId> statefulTasks) {
-        Iterator<Map.Entry<UUID, ClientState>> clientStateIterator = null;
+        Iterator<ClientState> clientStateIterator = null;
         for (final TaskId task : statefulTasks) {
             if (clientStateIterator == null || !clientStateIterator.hasNext()) {
-                clientStateIterator = clientStates.entrySet().iterator();
+                clientStateIterator = clientStates.values().iterator();
             }
-            final Map.Entry<UUID, ClientState> clientStateEntry = clientStateIterator.next();
-            clientStateEntry.getValue().assignActive(task);
+            final ClientState clientState = clientStateIterator.next();
+            clientState.assignActive(task);
         }
 
         balanceTasksOverThreads(
