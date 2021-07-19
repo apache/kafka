@@ -43,10 +43,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.TaskMoveme
 public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
 
-    private final StandbyTaskAssignorInitializer standbyTaskAssignorInitializer;
-
     public HighAvailabilityTaskAssignor() {
-        standbyTaskAssignorInitializer = new StandbyTaskAssignorInitializer();
     }
 
     @Override
@@ -57,11 +54,11 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final SortedSet<TaskId> statefulTasks = new TreeSet<>(statefulTaskIds);
         final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
 
-        final Map<TaskId, UUID> statefulTasksClientMappings = assignActiveStatefulTasks(clientStates, statefulTasks);
+        assignActiveStatefulTasks(clientStates, statefulTasks);
 
         assignStandbyReplicaTasks(
             clientStates,
-            statefulTasksClientMappings,
+            statefulTasks,
             configs
         );
 
@@ -99,24 +96,22 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final boolean probingRebalanceNeeded = neededActiveTaskMovements + neededStandbyTaskMovements > 0;
 
         log.info("Decided on assignment: " +
-                     clientStates +
-                     " with" +
-                     (probingRebalanceNeeded ? "" : " no") +
-                     " followup probing rebalance.");
+                 clientStates +
+                 " with" +
+                 (probingRebalanceNeeded ? "" : " no") +
+                 " followup probing rebalance.");
 
         return probingRebalanceNeeded;
     }
 
-    private static Map<TaskId, UUID> assignActiveStatefulTasks(final SortedMap<UUID, ClientState> clientStates,
-                                                               final SortedSet<TaskId> statefulTasks) {
-        final Map<TaskId, UUID> taskAndClients = new HashMap<>();
+    private static void assignActiveStatefulTasks(final SortedMap<UUID, ClientState> clientStates,
+                                                  final SortedSet<TaskId> statefulTasks) {
         Iterator<Map.Entry<UUID, ClientState>> clientStateIterator = null;
         for (final TaskId task : statefulTasks) {
             if (clientStateIterator == null || !clientStateIterator.hasNext()) {
                 clientStateIterator = clientStates.entrySet().iterator();
             }
             final Map.Entry<UUID, ClientState> clientStateEntry = clientStateIterator.next();
-            taskAndClients.put(task, clientStateEntry.getKey());
             clientStateEntry.getValue().assignActive(task);
         }
 
@@ -124,26 +119,21 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             clientStates,
             ClientState::activeTasks,
             ClientState::unassignActive,
-            (uuid, taskId) -> {
-                clientStates.get(uuid).assignActive(taskId);
-                taskAndClients.put(taskId, uuid);
-            },
+            (uuid, taskId) -> clientStates.get(uuid).assignActive(taskId),
             taskMovementAttempt -> true
         );
-
-        return taskAndClients;
     }
 
     private void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
-                                           final Map<TaskId, UUID> statefulTasks,
+                                           final Set<TaskId> statefulTasks,
                                            final AssignmentConfigs configs) {
         if (configs.numStandbyReplicas == 0) {
             return;
         }
 
-        final StandbyTaskAssignor standbyTaskAssignor = standbyTaskAssignorInitializer.initStandbyTaskAssignor(configs);
+        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignor.init(configs);
 
-        standbyTaskAssignor.assignStandbyTasks(statefulTasks, clientStates);
+        standbyTaskAssignor.assignStandbyTasks(clientStates, statefulTasks);
 
         balanceTasksOverThreads(
             clientStates,

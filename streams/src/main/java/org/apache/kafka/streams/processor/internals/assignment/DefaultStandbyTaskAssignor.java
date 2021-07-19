@@ -27,18 +27,18 @@ import java.util.UUID;
 
 import static java.util.stream.Collectors.toMap;
 
-class DefaultStandbyTaskAssignor extends StandbyTaskAssignor {
+class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(DefaultStandbyTaskAssignor.class);
 
+    private final AssignorConfiguration.AssignmentConfigs configs;
+
     public DefaultStandbyTaskAssignor(final AssignorConfiguration.AssignmentConfigs configs) {
-        super(configs);
+        this.configs = configs;
     }
 
     @Override
-    public void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
-                                   final SortedMap<UUID, ClientState> clientStates) {
+    public void assignStandbyTasks(final SortedMap<UUID, ClientState> clientStates, final Set<TaskId> statefulTasks) {
         final int numStandbyReplicas = configs.numStandbyReplicas;
-        final Set<TaskId> statefulTasks = statefulTasksWithClients.keySet();
         final Map<TaskId, Integer> tasksToRemainingStandbys =
             statefulTasks.stream().collect(toMap(task -> task, t -> numStandbyReplicas));
 

@@ -40,18 +40,26 @@ import static java.util.stream.Collectors.toMap;
  * on different tag dimensions compared to an active and corresponding standby task,
  * in that case, the algorithm will fall back to distributing tasks on least-loaded clients.
  */
-class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
+class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(ClientTagAwareStandbyTaskAssignor.class);
 
+    private final AssignmentConfigs configs;
+
     ClientTagAwareStandbyTaskAssignor(final AssignmentConfigs configs) {
-        super(configs);
+        this.configs = configs;
     }
 
     @Override
-    public void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
-                                   final SortedMap<UUID, ClientState> clientStates) {
+    public void assignStandbyTasks(final SortedMap<UUID, ClientState> clientStates, final Set<TaskId> statefulTasks) {
         final int numStandbyReplicas = configs.numStandbyReplicas;
         final Set<String> rackAwareAssignmentTags = new HashSet<>(configs.rackAwareAssignmentTags);
+        final Map<TaskId, UUID> statefulTasksWithClients = new HashMap<>();
+
+        statefulTasks.forEach(statefulTaskId -> clientStates.forEach((uuid, clientState) -> {
+            if (clientState.activeTasks().contains(statefulTaskId)) {
+                statefulTasksWithClients.put(statefulTaskId, uuid);
+            }
+        }));
 
         final StandbyTaskDistributor standbyTaskDistributor = new StandbyTaskDistributor(
             numStandbyReplicas,

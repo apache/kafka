@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -25,24 +24,17 @@ import java.util.List;
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertTrue;
 
-public class StandbyTaskAssignorInitializerTest {
-
-    private StandbyTaskAssignorInitializer standbyTaskAssignorInitializer;
-
-    @Before
-    public void setup() {
-        standbyTaskAssignorInitializer = new StandbyTaskAssignorInitializer();
-    }
+public class StandbyTaskAssignorTest {
 
     @Test
     public void shouldReturnClientTagAwareStandbyTaskAssignorWhenRackAwareAssignmentTagsIsSet() {
-        final StandbyTaskAssignor standbyTaskAssignor = standbyTaskAssignorInitializer.initStandbyTaskAssignor(newAssignmentConfigs(1, singletonList("az")));
+        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignor.init(newAssignmentConfigs(1, singletonList("az")));
         assertTrue(standbyTaskAssignor instanceof ClientTagAwareStandbyTaskAssignor);
     }
 
     @Test
     public void shouldReturnDefaultStandbyTaskAssignorWhenRackAwareAssignmentTagsIsEmpty() {
-        final StandbyTaskAssignor standbyTaskAssignor = standbyTaskAssignorInitializer.initStandbyTaskAssignor(newAssignmentConfigs(1, Collections.emptyList()));
+        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignor.init(newAssignmentConfigs(1, Collections.emptyList()));
         assertTrue(standbyTaskAssignor instanceof DefaultStandbyTaskAssignor);
     }
 

@@ -107,12 +107,12 @@ public class ClientTagAwareStandbyTaskAssignorTest {
             mkEntry(UUID_9, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_3))))
         );
 
-        final Map<TaskId, UUID> allActiveTasks = findAllActiveTasks(clientStates);
+        final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
 
         new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
-            allActiveTasks,
-            new TreeMap<>(clientStates)
+            new TreeMap<>(clientStates),
+            allActiveTasks
         );
 
         assertTrue(clientStates.values().stream().allMatch(ClientState::reachedCapacity));
@@ -191,12 +191,12 @@ public class ClientTagAwareStandbyTaskAssignorTest {
             mkEntry(UUID_9, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_3))))
         );
 
-        final Map<TaskId, UUID> allActiveTasks = findAllActiveTasks(clientStates);
+        final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
 
         new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
-            allActiveTasks,
-            new TreeMap<>(clientStates)
+            new TreeMap<>(clientStates),
+            allActiveTasks
         );
 
         assertTrue(clientStates.values().stream().allMatch(ClientState::reachedCapacity));
@@ -272,12 +272,12 @@ public class ClientTagAwareStandbyTaskAssignorTest {
             mkEntry(UUID_6, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_2))
         );
 
-        final Map<TaskId, UUID> allActiveTasks = findAllActiveTasks(clientStates);
+        final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, ZONE_TAG, CLUSTER_TAG);
 
         new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
-            allActiveTasks,
-            new TreeMap<>(clientStates)
+            new TreeMap<>(clientStates),
+            allActiveTasks
         );
 
         assertTrue(
@@ -348,12 +348,12 @@ public class ClientTagAwareStandbyTaskAssignorTest {
             mkEntry(UUID_4, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1))))
         );
 
-        final Map<TaskId, UUID> allActiveTasks = findAllActiveTasks(clientStates);
+        final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, CLUSTER_TAG);
 
         new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
-            allActiveTasks,
-            new TreeMap<>(clientStates)
+            new TreeMap<>(clientStates),
+            allActiveTasks
         );
 
         assertEquals(3, clientStates.get(UUID_3).standbyTaskCount());
@@ -369,12 +369,12 @@ public class ClientTagAwareStandbyTaskAssignorTest {
             mkEntry(UUID_3, createClientStateWithCapacity(1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2), mkEntry(ZONE_TAG, ZONE_1))))
         );
 
-        final Map<TaskId, UUID> allActiveTasks = findAllActiveTasks(clientStates);
+        final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, CLUSTER_TAG);
 
         new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
-            allActiveTasks,
-            new TreeMap<>(clientStates)
+            new TreeMap<>(clientStates),
+            allActiveTasks
         );
 
         assertEquals(1, clientStates.get(UUID_3).standbyTaskCount());
@@ -417,21 +417,10 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         return clientState;
     }
 
-    private static Map<TaskId, UUID> findAllActiveTasks(final Map<UUID, ClientState> clientStates) {
+    private static Set<TaskId> findAllActiveTasks(final Map<UUID, ClientState> clientStates) {
         return clientStates.entrySet()
                            .stream()
-                           .flatMap(
-                               clientStateEntry -> clientStateEntry.getValue()
-                                                                   .activeTasks()
-                                                                   .stream()
-                                                                   .map(taskId -> mkEntry(taskId,
-                                                                                          clientStateEntry.getKey()))
-                           )
-                           .collect(
-                               Collectors.toMap(
-                                   Map.Entry::getKey,
-                                   Map.Entry::getValue
-                               )
-                           );
+                           .flatMap(clientStateEntry -> clientStateEntry.getValue().activeTasks().stream())
+                           .collect(Collectors.toSet());
     }
 }
