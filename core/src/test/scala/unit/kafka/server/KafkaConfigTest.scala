@@ -265,7 +265,7 @@ class KafkaConfigTest {
     val caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("controller.listener.names cannot be empty if the server has the controller role"))
 
-    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT,SSL,SASL_SSL")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
     assertTrue(isValidKafkaConfig(props))
   }
 
