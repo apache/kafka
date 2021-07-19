@@ -16,23 +16,21 @@
   */
 package kafka.server
 
-import kafka.api.KAFKA_0_11_0_IV2
 import kafka.log.LogConfig
 import kafka.message.{GZIPCompressionCodec, ProducerCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
-import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{Record, RecordBatch}
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.Test
 
 import java.io.DataInputStream
 import java.util
-import java.util.{Optional, Properties}
+import java.util.Optional
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 import scala.util.Random
@@ -41,44 +39,7 @@ import scala.util.Random
   * Subclasses of `BaseConsumerTest` exercise the consumer and fetch request/response. This class
   * complements those classes with tests that require lower-level access to the protocol.
   */
-class FetchRequestTest extends BaseRequestTest {
-
-  private var producer: KafkaProducer[String, String] = null
-
-  override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.FetchMaxBytes, Int.MaxValue.toString)
-  }
-
-  @AfterEach
-  override def tearDown(): Unit = {
-    if (producer != null)
-      producer.close()
-    super.tearDown()
-  }
-
-  private def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
-                                 offsetMap: Map[TopicPartition, Long]): FetchRequest =
-    FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
-      .setMaxBytes(maxResponseBytes).build()
-
-  private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
-                                 offsetMap: Map[TopicPartition, Long] = Map.empty): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
-    val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    topicPartitions.foreach { tp =>
-      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes,
-        Optional.empty()))
-    }
-    partitionMap
-  }
-
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
-    connectAndReceive[FetchResponse](request, destination = brokerSocketServer(leaderId))
-  }
-
-  private def initProducer(): Unit = {
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
-  }
+class FetchRequestTest extends BaseFetchRequestTest {
 
   @Test
   def testBrokerRespectsPartitionsOrderAndSizeLimits(): Unit = {
@@ -157,23 +118,6 @@ class FetchRequestTest extends BaseRequestTest {
     val size4 = records(partitionData4).map(_.sizeInBytes).sum
     assertTrue(size4 > maxResponseBytes, s"Expected $size4 to be larger than $maxResponseBytes")
     assertTrue(maxResponseBytes < FetchResponse.recordsSize(partitionData4))
-  }
-
-  @Test
-  def testFetchRequestV2WithOversizedMessage(): Unit = {
-    initProducer()
-    val maxPartitionBytes = 200
-    val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
-    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
-      "key", new String(new Array[Byte](maxPartitionBytes + 1)))).get
-    val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
-      Seq(topicPartition))).build(2)
-    val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
-    val partitionData = fetchResponse.responseData.get(topicPartition)
-    assertEquals(Errors.NONE.code, partitionData.errorCode)
-    assertTrue(partitionData.highWatermark > 0)
-    assertEquals(maxPartitionBytes, FetchResponse.recordsSize(partitionData))
-    assertEquals(0, records(partitionData).map(_.sizeInBytes).sum)
   }
 
   @Test
@@ -417,8 +361,7 @@ class FetchRequestTest extends BaseRequestTest {
       lingerMs = 30 * 1000,
       deliveryTimeoutMs = 60 * 1000)
 
-    val topicConfig = Map(LogConfig.MessageFormatVersionProp -> KAFKA_0_11_0_IV2.version)
-    val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, topicConfig).head
+    val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
     val topic = topicPartition.topic
 
     val firstBatchFutures = (0 until 10).map(i => producer.send(new ProducerRecord(topic, s"key-$i", s"value-$i")))
@@ -581,8 +524,7 @@ class FetchRequestTest extends BaseRequestTest {
   @Test
   def testZStdCompressedRecords(): Unit = {
     // Producer compressed topic
-    val topicConfig = Map(LogConfig.CompressionTypeProp -> ProducerCompressionCodec.name,
-      LogConfig.MessageFormatVersionProp -> "2.0.0")
+    val topicConfig = Map(LogConfig.CompressionTypeProp -> ProducerCompressionCodec.name)
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, configs = topicConfig).head
 
     // Produce GZIP compressed messages (v2)
@@ -655,10 +597,6 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(3, records(data4).size)
   }
 
-  private def records(partitionData: FetchResponseData.PartitionData): Seq[Record] = {
-    FetchResponse.recordsOrFail(partitionData).records.asScala.toBuffer
-  }
-
   private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse,
                                  maxPartitionBytes: Int, maxResponseBytes: Int, numMessagesPerPartition: Int): Unit = {
     assertEquals(expectedPartitions, fetchResponse.responseData.keySet.asScala.toSeq)
@@ -694,29 +632,6 @@ class FetchRequestTest extends BaseRequestTest {
 
     assertEquals(maxResponseBytes - maxResponseBytes % maxPartitionBytes, responseBufferSize)
     assertTrue(responseSize <= maxResponseBytes)
-  }
-
-  private def createTopics(numTopics: Int, numPartitions: Int, configs: Map[String, String] = Map.empty): Map[TopicPartition, Int] = {
-    val topics = (0 until numTopics).map(t => s"topic$t")
-    val topicConfig = new Properties
-    topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 2.toString)
-    configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }
-    topics.flatMap { topic =>
-      val partitionToLeader = createTopic(topic, numPartitions = numPartitions, replicationFactor = 2,
-        topicConfig = topicConfig)
-      partitionToLeader.map { case (partition, leader) => new TopicPartition(topic, partition) -> leader }
-    }.toMap
-  }
-
-  private def produceData(topicPartitions: Iterable[TopicPartition], numMessagesPerPartition: Int): Seq[RecordMetadata] = {
-    val records = for {
-      tp <- topicPartitions.toSeq
-      messageIndex <- 0 until numMessagesPerPartition
-    } yield {
-      val suffix = s"$tp-$messageIndex"
-      new ProducerRecord(tp.topic, tp.partition, s"key $suffix", s"value $suffix")
-    }
-    records.map(producer.send(_).get)
   }
 
 }

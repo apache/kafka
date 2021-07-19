@@ -43,6 +43,7 @@ import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Seq, immutable, mutable}
@@ -364,11 +365,11 @@ class Log(@volatile private var _dir: File,
   def updateConfig(newConfig: LogConfig): Unit = {
     val oldConfig = this.config
     this.config = newConfig
-    val oldRecordVersion = oldConfig.messageFormatVersion.recordVersion
-    val newRecordVersion = newConfig.messageFormatVersion.recordVersion
+    val oldRecordVersion = oldConfig.recordVersion
+    val newRecordVersion = newConfig.recordVersion
     if (newRecordVersion.precedes(oldRecordVersion))
       warn(s"Record format version has been downgraded from $oldRecordVersion to $newRecordVersion.")
-    if (newRecordVersion.value != oldRecordVersion.value)
+    if (newRecordVersion != oldRecordVersion)
       initializeLeaderEpochCache()
   }
 
@@ -560,7 +561,7 @@ class Log(@volatile private var _dir: File,
   /** The name of this log */
   def name  = dir.getName()
 
-  private def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
+  private def recordVersion: RecordVersion = config.recordVersion
 
   private def initializePartitionMetadata(): Unit = lock synchronized {
     val partitionMetadata = PartitionMetadataFile.newFile(dir)
@@ -805,7 +806,7 @@ class Log(@volatile private var _dir: File,
                 appendInfo.sourceCodec,
                 appendInfo.targetCodec,
                 config.compact,
-                config.messageFormatVersion.recordVersion.value,
+                config.recordVersion.value,
                 config.messageTimestampType,
                 config.messageTimestampDifferenceMaxMs,
                 leaderEpoch,
@@ -1325,6 +1326,7 @@ class Log(@volatile private var _dir: File,
    * @return The offset of the first message whose timestamp is greater than or equals to the given timestamp.
    *         None if no such message is found.
    */
+  @nowarn("cat=deprecation")
   def fetchOffsetByTimestamp(targetTimestamp: Long): Option[TimestampAndOffset] = {
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
@@ -2056,7 +2058,7 @@ object Log extends Logging {
       dir,
       topicPartition,
       logDirFailureChannel,
-      config.messageFormatVersion.recordVersion,
+      config.recordVersion,
       s"[Log partition=$topicPartition, dir=${dir.getParent}] ")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs, time)
     val offsets = LogLoader.load(LoadLogParams(
