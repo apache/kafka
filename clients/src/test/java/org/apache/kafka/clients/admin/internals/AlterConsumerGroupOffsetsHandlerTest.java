@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import static java.util.Collections.emptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.emptyList;
@@ -31,8 +31,6 @@ import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
@@ -72,7 +70,7 @@ public class AlterConsumerGroupOffsetsHandlerTest {
     }
 
     @Test
-    public void testSuccessfulHandleResponse() {
+    public void testHandleSuccessfulResponse() {
         AlterConsumerGroupOffsetsHandler handler = new AlterConsumerGroupOffsetsHandler(groupId, partitions, logContext);
         Map<TopicPartition, Errors> responseData = Collections.singletonMap(t0p0, Errors.NONE);
         OffsetCommitResponse response = new OffsetCommitResponse(0, responseData);
@@ -81,30 +79,98 @@ public class AlterConsumerGroupOffsetsHandlerTest {
     }
 
     @Test
-    public void testRetriableHandleResponse() {
-        assertUnmapped(handleWithError(Errors.NOT_COORDINATOR));
-        assertUnmapped(handleWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
-        assertUnmapped(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE));
+    public void testHandleRetriableResponse() {
+        assertUnmappedKey(partitionErrors(Errors.NOT_COORDINATOR));
+        assertUnmappedKey(partitionErrors(Errors.COORDINATOR_NOT_AVAILABLE));
+        assertRetriableError(partitionErrors(Errors.COORDINATOR_LOAD_IN_PROGRESS));
     }
 
     @Test
-    public void testFailedHandleResponse() {
-        assertFailed(GroupAuthorizationException.class, handleWithError(Errors.GROUP_AUTHORIZATION_FAILED));
-        assertFailed(UnknownServerException.class, handleWithError(Errors.UNKNOWN_SERVER_ERROR));
+    public void testHandleErrorResponse() {
+        assertFatalError(partitionErrors(Errors.TOPIC_AUTHORIZATION_FAILED));
+        assertFatalError(partitionErrors(Errors.GROUP_AUTHORIZATION_FAILED));
+        assertFatalError(partitionErrors(Errors.INVALID_GROUP_ID));
+        assertFatalError(partitionErrors(Errors.UNKNOWN_TOPIC_OR_PARTITION));
+        assertFatalError(partitionErrors(Errors.OFFSET_METADATA_TOO_LARGE));
+        assertFatalError(partitionErrors(Errors.ILLEGAL_GENERATION));
+        assertFatalError(partitionErrors(Errors.UNKNOWN_MEMBER_ID));
+        assertFatalError(partitionErrors(Errors.REBALANCE_IN_PROGRESS));
+        assertFatalError(partitionErrors(Errors.INVALID_COMMIT_OFFSET_SIZE));
+        assertFatalError(partitionErrors(Errors.UNKNOWN_SERVER_ERROR));
     }
 
-    private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleWithError(
+    @Test
+    public void testHandleMultipleErrorsResponse() {
+        Map<TopicPartition, Errors> partitionErrors = new HashMap<>();
+        partitionErrors.put(t0p0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+        partitionErrors.put(t0p1, Errors.INVALID_COMMIT_OFFSET_SIZE);
+        partitionErrors.put(t1p0, Errors.TOPIC_AUTHORIZATION_FAILED);
+        partitionErrors.put(t1p1, Errors.OFFSET_METADATA_TOO_LARGE);
+        assertFatalError(partitionErrors);
+    }
+
+    private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(
+        CoordinatorKey groupKey,
+        Map<TopicPartition, OffsetAndMetadata> partitions,
+        Map<TopicPartition, Errors> partitionResults
+    ) {
+        AlterConsumerGroupOffsetsHandler handler =
+            new AlterConsumerGroupOffsetsHandler(groupKey.idValue, partitions, logContext);
+        OffsetCommitResponse response = new OffsetCommitResponse(0, partitionResults);
+        return handler.handleResponse(node, singleton(groupKey), response);
+    }
+
+    private Map<TopicPartition, Errors> partitionErrors(
         Errors error
     ) {
-        AlterConsumerGroupOffsetsHandler handler = new AlterConsumerGroupOffsetsHandler(groupId, partitions, logContext);
-        Map<TopicPartition, Errors> responseData = Collections.singletonMap(t0p0, error);
-        OffsetCommitResponse response = new OffsetCommitResponse(0, responseData);
-        return handler.handleResponse(node, singleton(CoordinatorKey.byGroupId(groupId)), response);
+        Map<TopicPartition, Errors> partitionErrors = new HashMap<>();
+        partitions.keySet().forEach(partition ->
+            partitionErrors.put(partition, error)
+        );
+        return partitionErrors;
     }
 
-    private void assertUnmapped(
-        AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> result
+    private void assertFatalError(
+        Map<TopicPartition, Errors> partitionResults
     ) {
+        CoordinatorKey groupKey = CoordinatorKey.byGroupId(groupId);
+        AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> result = handleResponse(
+            groupKey,
+            partitions,
+            partitionResults
+        );
+
+        assertEquals(singleton(groupKey), result.completedKeys.keySet());
+        assertEquals(partitionResults, result.completedKeys.get(groupKey));
+        assertEquals(emptyList(), result.unmappedKeys);
+        assertEquals(emptyMap(), result.failedKeys);
+    }
+
+    private void assertRetriableError(
+        Map<TopicPartition, Errors> partitionResults
+    ) {
+        CoordinatorKey groupKey = CoordinatorKey.byGroupId(groupId);
+        AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> result = handleResponse(
+            groupKey,
+            partitions,
+            partitionResults
+        );
+
+        assertEquals(emptySet(), result.completedKeys.keySet());
+        assertEquals(emptyList(), result.unmappedKeys);
+        assertEquals(emptyMap(), result.failedKeys);
+    }
+
+    private void assertUnmappedKey(
+        Map<TopicPartition, Errors> partitionResults
+    ) {
+        CoordinatorKey groupKey = CoordinatorKey.byGroupId(groupId);
+        AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> result = handleResponse(
+            groupKey,
+            partitions,
+            partitionResults
+        );
+
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptySet(), result.failedKeys.keySet());
         assertEquals(singletonList(CoordinatorKey.byGroupId(groupId)), result.unmappedKeys);
@@ -119,16 +185,5 @@ public class AlterConsumerGroupOffsetsHandlerTest {
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(singleton(key), result.completedKeys.keySet());
         assertEquals(expected, result.completedKeys.get(key));
-    }
-
-    private void assertFailed(
-        Class<? extends Throwable> expectedExceptionType,
-        AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> result
-    ) {
-        CoordinatorKey key = CoordinatorKey.byGroupId(groupId);
-        assertEquals(emptySet(), result.completedKeys.keySet());
-        assertEquals(emptyList(), result.unmappedKeys);
-        assertEquals(singleton(key), result.failedKeys.keySet());
-        assertTrue(expectedExceptionType.isInstance(result.failedKeys.get(key)));
     }
 }

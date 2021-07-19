@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import static java.util.Collections.singleton;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -73,29 +75,38 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
         return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
 
+    private void validateKeys(Set<CoordinatorKey> groupIds) {
+        if (!groupIds.equals(singleton(groupId))) {
+            throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
+                " (expected only " + singleton(groupId) + ")");
+        }
+    }
+
     @Override
-    public OffsetCommitRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
-        List<OffsetCommitRequestTopic> topics = new ArrayList<>();
-        Map<String, List<OffsetCommitRequestPartition>> offsetData = new HashMap<>();
-        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
-            String topic = entry.getKey().topic();
-            OffsetAndMetadata oam = entry.getValue();
-            OffsetCommitRequestPartition partition = new OffsetCommitRequestPartition()
-                    .setCommittedOffset(oam.offset())
-                    .setCommittedLeaderEpoch(oam.leaderEpoch().orElse(-1))
-                    .setCommittedMetadata(oam.metadata())
-                    .setPartitionIndex(entry.getKey().partition());
-            offsetData.computeIfAbsent(topic, key -> new ArrayList<>()).add(partition);
-        }
-        for (Map.Entry<String, List<OffsetCommitRequestPartition>> entry : offsetData.entrySet()) {
-            OffsetCommitRequestTopic topic = new OffsetCommitRequestTopic()
-                    .setName(entry.getKey())
-                    .setPartitions(entry.getValue());
-            topics.add(topic);
-        }
+    public OffsetCommitRequest.Builder buildRequest(
+        int coordinatorId,
+        Set<CoordinatorKey> groupIds
+    ) {
+        validateKeys(groupIds);
+
+        Map<String, OffsetCommitRequestTopic> offsetData = new HashMap<>();
+        offsets.forEach((topicPartition, offsetAndMetadata) -> {
+            OffsetCommitRequestTopic topic = offsetData.computeIfAbsent(
+                topicPartition.topic(),
+                key -> new OffsetCommitRequestTopic().setName(topicPartition.topic())
+            );
+
+            topic.partitions().add(new OffsetCommitRequestPartition()
+                .setCommittedOffset(offsetAndMetadata.offset())
+                .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch().orElse(-1))
+                .setCommittedMetadata(offsetAndMetadata.metadata())
+                .setPartitionIndex(topicPartition.partition()));
+        });
+
         OffsetCommitRequestData data = new OffsetCommitRequestData()
             .setGroupId(groupId.idValue)
-            .setTopics(topics);
+            .setTopics(new ArrayList<>(offsetData.values()));
+
         return new OffsetCommitRequest.Builder(data);
     }
 
@@ -105,53 +116,88 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
     ) {
-        final OffsetCommitResponse response = (OffsetCommitResponse) abstractResponse;
-        Map<CoordinatorKey, Map<TopicPartition, Errors>> completed = new HashMap<>();
-        Map<CoordinatorKey, Throwable> failed = new HashMap<>();
-        List<CoordinatorKey> unmapped = new ArrayList<>();
+        validateKeys(groupIds);
 
-        Map<TopicPartition, Errors> partitions = new HashMap<>();
+        final OffsetCommitResponse response = (OffsetCommitResponse) abstractResponse;
+        final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
+        final Set<CoordinatorKey> groupsToRetry = new HashSet<>();
+        final Map<TopicPartition, Errors> partitionResults = new HashMap<>();
+
         for (OffsetCommitResponseTopic topic : response.data().topics()) {
             for (OffsetCommitResponsePartition partition : topic.partitions()) {
-                TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
+                TopicPartition topicPartition = new TopicPartition(topic.name(), partition.partitionIndex());
                 Errors error = Errors.forCode(partition.errorCode());
+
                 if (error != Errors.NONE) {
-                    handleError(groupId, error, failed, unmapped);
+                    handleError(
+                        groupId,
+                        topicPartition,
+                        error,
+                        partitionResults,
+                        groupsToUnmap,
+                        groupsToRetry
+                    );
                 } else {
-                    partitions.put(tp, error);
+                    partitionResults.put(topicPartition, error);
                 }
             }
         }
-        if (failed.isEmpty() && unmapped.isEmpty())
-            completed.put(groupId, partitions);
 
-        return new ApiResult<>(completed, failed, unmapped);
+        if (groupsToUnmap.isEmpty() && groupsToRetry.isEmpty()) {
+            return ApiResult.completed(groupId, partitionResults);
+        } else {
+            return ApiResult.unmapped(new ArrayList<>(groupsToUnmap));
+        }
     }
 
     private void handleError(
         CoordinatorKey groupId,
+        TopicPartition topicPartition,
         Errors error,
-        Map<CoordinatorKey, Throwable> failed,
-        List<CoordinatorKey> unmapped
+        Map<TopicPartition, Errors> partitionResults,
+        Set<CoordinatorKey> groupsToUnmap,
+        Set<CoordinatorKey> groupsToRetry
     ) {
         switch (error) {
-            case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `OffsetCommit` response", groupId,
-                        error.exception());
-                failed.put(groupId, error.exception());
-                break;
+            // If the coordinator is in the middle of loading, then we just need to retry.
             case COORDINATOR_LOAD_IN_PROGRESS:
+                log.debug("OffsetCommit request for group id {} failed because the coordinator" +
+                    " is still in the process of loading state. Will retry.", groupId.idValue);
+                groupsToRetry.add(groupId);
+                break;
+
+            // If the coordinator is not available, then we unmap and retry.
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
-                log.debug("OffsetCommit request for group {} returned error {}. Will retry", groupId, error);
-                unmapped.add(groupId);
+                log.debug("OffsetCommit request for group id {} returned error {}. Will retry.",
+                    groupId.idValue, error);
+                groupsToUnmap.add(groupId);
                 break;
+
+            // Group level errors.
+            case INVALID_GROUP_ID:
+            case REBALANCE_IN_PROGRESS:
+            case INVALID_COMMIT_OFFSET_SIZE:
+            case GROUP_AUTHORIZATION_FAILED:
+                log.debug("OffsetCommit request for group id {} failed due to error {}.",
+                    groupId.idValue, error);
+                partitionResults.put(topicPartition, error);
+                break;
+
+            // TopicPartition level errors.
+            case UNKNOWN_TOPIC_OR_PARTITION:
+            case OFFSET_METADATA_TOO_LARGE:
+            case TOPIC_AUTHORIZATION_FAILED:
+                log.debug("OffsetCommit request for group id {} and partition {} failed due" +
+                    " to error {}.", groupId.idValue, topicPartition, error);
+                partitionResults.put(topicPartition, error);
+                break;
+
+            // Unexpected errors.
             default:
-                log.error("Received unexpected error for group {} in `OffsetCommit` response",
-                        groupId, error.exception());
-                failed.put(groupId, error.exception(
-                        "Received unexpected error for group " + groupId + " in `OffsetCommit` response"));
+                log.error("OffsetCommit request for group id {} and partition {} failed due" +
+                    " to unexpected error {}.", groupId.idValue, topicPartition, error);
+                partitionResults.put(topicPartition, error);
         }
     }
-
 }

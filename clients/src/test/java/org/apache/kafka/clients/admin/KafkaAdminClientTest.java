@@ -2544,6 +2544,39 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testOffsetCommitWithMultipleErrors() throws Exception {
+        final Cluster cluster = mockCluster(3, 0);
+        final Time time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+            AdminClientConfig.RETRIES_CONFIG, "0")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            final TopicPartition foo0 = new TopicPartition("foo", 0);
+            final TopicPartition foo1 = new TopicPartition("foo", 1);
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            Map<TopicPartition, Errors> responseData = new HashMap<>();
+            responseData.put(foo0, Errors.NONE);
+            responseData.put(foo1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+            env.kafkaClient().prepareResponse(new OffsetCommitResponse(0, responseData));
+
+            Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+            offsets.put(foo0, new OffsetAndMetadata(123L));
+            offsets.put(foo1, new OffsetAndMetadata(456L));
+            final AlterConsumerGroupOffsetsResult result = env.adminClient()
+                .alterConsumerGroupOffsets(GROUP_ID, offsets);
+
+            assertNull(result.partitionResult(foo0).get());
+            TestUtils.assertFutureError(result.partitionResult(foo1), UnknownTopicOrPartitionException.class);
+
+            TestUtils.assertFutureError(result.all(), UnknownTopicOrPartitionException.class);
+        }
+    }
+
+    @Test
     public void testOffsetCommitRetryBackoff() throws Exception {
         MockTime time = new MockTime();
         int retryBackoff = 100;
@@ -4133,9 +4166,6 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(
                 prepareOffsetCommitResponse(tp1, Errors.COORDINATOR_LOAD_IN_PROGRESS));
-
-            env.kafkaClient().prepareResponse(
-                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             env.kafkaClient().prepareResponse(
                 prepareOffsetCommitResponse(tp1, Errors.NOT_COORDINATOR));
