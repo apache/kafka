@@ -158,9 +158,13 @@ public class TaskMetadataIntegrationTest {
         }
     }
 
-    private TaskMetadata getTaskMetadata(final KafkaStreams kafkaStreams) {
+    private TaskMetadata getTaskMetadata(final KafkaStreams kafkaStreams) throws InterruptedException {
+        TestUtils.waitForCondition( () -> kafkaStreams
+                .metadataForLocalThreads()
+                .stream()
+                .mapToLong(t -> t.activeTasks().size())
+                .sum() == 1, "only one task");
         final List<TaskMetadata> taskMetadataList = kafkaStreams.metadataForLocalThreads().stream().flatMap(t -> t.activeTasks().stream()).collect(Collectors.toList());
-        assertThat("only one task", taskMetadataList.size() == 1);
         return taskMetadataList.get(0);
     }
 
