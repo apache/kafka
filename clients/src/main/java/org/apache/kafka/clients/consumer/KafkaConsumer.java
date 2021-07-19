@@ -2251,7 +2251,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null) {
                     if (topicPartition.toString().equals("table2-4")) {
                         System.err.println("fetch endOffsets:" + topicPartition + (++currentNullCount));
-                        if (currentNullCount > 500) {
+                        if (currentNullCount > 800) {
                             fetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
                         }
                     }

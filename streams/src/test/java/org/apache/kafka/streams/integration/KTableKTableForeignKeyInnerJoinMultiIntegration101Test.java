@@ -207,7 +207,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration101Test {
             expectedResult.size()));
 
         assertEquals(expectedResult, result);
-        if (currentNullCount > 250) {
+        if (currentNullCount > 500) {
             throw new AssertionError("current count is:" + currentNullCount);
         }
     }
