@@ -144,42 +144,16 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
-        assertEquals(
-            ControllerResult.atomicOf(
-                Collections.singletonList(
-                    new ApiMessageAndVersion(
-                        new ConfigRecord()
-                            .setResourceType(TOPIC.id())
-                            .setResourceName("mytopic")
-                            .setName("abc")
-                            .setValue("123"),
-                        (short) 0
-                    )
-                ),
-                toMap(
-                    entry(
-                        BROKER0,
-                        new ApiError(
-                            Errors.INVALID_REQUEST,
-                            "A DELETE op was given with a non-null value."
-                        )
-                    ),
-                    entry(MYTOPIC, ApiError.NONE)
-                )
-            ),
-            manager.incrementalAlterConfigs(
-                toMap(
-                    entry(
-                        BROKER0,
-                        toMap(
-                            entry("foo.bar", entry(DELETE, "abc")),
-                            entry("quux", entry(SET, "abc"))
-                        )
-                    ),
-                    entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))
-                )
-            )
-        );
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+                new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
+                    setName("abc").setValue("123"), (short) 0)),
+                toMap(entry(BROKER0, new ApiError(Errors.INVALID_REQUEST,
+                            "A DELETE op was given with a non-null value.")),
+                    entry(MYTOPIC, ApiError.NONE))),
+            manager.incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
+                    entry("foo.bar", entry(DELETE, "abc")),
+                    entry("quux", entry(SET, "abc")))),
+                entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123")))))));
     }
 
     @Test

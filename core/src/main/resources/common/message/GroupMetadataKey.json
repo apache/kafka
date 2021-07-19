@@ -17,6 +17,7 @@
   "type": "data",
   "name": "GroupMetadataKey",
   "validVersions": "2",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "group", "type": "string", "versions": "2" }
   ]
