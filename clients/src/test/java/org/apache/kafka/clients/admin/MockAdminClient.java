@@ -583,6 +583,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    @Deprecated
     synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
         // ignoring the groupId and assume one test would only work on one group only
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
@@ -601,6 +602,11 @@ public class MockAdminClient extends AdminClient {
         }
 
         return new ListConsumerGroupOffsetsResult(future);
+    }
+
+    @Override
+    synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final List<String> groupIds, final ListConsumerGroupOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override

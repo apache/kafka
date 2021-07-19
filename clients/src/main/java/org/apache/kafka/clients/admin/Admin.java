@@ -915,21 +915,48 @@ public interface Admin extends AutoCloseable {
 
     /**
      * List the consumer group offsets available in the cluster.
-     *
+     * @deprecated Since 3.1.
+     * Use {@link #listConsumerGroupOffsets(List, ListConsumerGroupOffsetsOptions)}
      * @param options The options to use when listing the consumer group offsets.
      * @return The ListGroupOffsetsResult
      */
+    @Deprecated
     ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options);
 
     /**
+     * List the consumer group offsets available in the cluster for the given list of consumer
+     * groups.
+     * @param groupIds List of consumer group ids to list offsets for.
+     * @param options The options to use when listing the consumer group offsets.
+     * @return The ListGroupOffsetsResult
+     */
+    ListConsumerGroupOffsetsResult listConsumerGroupOffsets(List<String> groupIds, ListConsumerGroupOffsetsOptions options);
+
+    /**
      * List the consumer group offsets available in the cluster with the default options.
-     * <p>
+     * @deprecated Since 3.1.
+     * Use {@link #listConsumerGroupOffsets(List)}
      * This is a convenience method for {@link #listConsumerGroupOffsets(String, ListConsumerGroupOffsetsOptions)} with default options.
      *
      * @return The ListGroupOffsetsResult.
      */
+    @Deprecated
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId) {
         return listConsumerGroupOffsets(groupId, new ListConsumerGroupOffsetsOptions());
+    }
+
+    /**
+     * List the consumer group offsets available in the cluster with the default options.
+     * <p>
+     * This is a convenience method for
+     * {@link #listConsumerGroupOffsets(List, ListConsumerGroupOffsetsOptions)} with
+     * default options.
+     *
+     * @param groupIds List of consumer group ids to list offsets for.
+     * @return The ListGroupOffsetsResult.
+     */
+    default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(List<String> groupIds) {
+        return listConsumerGroupOffsets(groupIds, new ListConsumerGroupOffsetsOptions(groupIds));
     }
 
     /**

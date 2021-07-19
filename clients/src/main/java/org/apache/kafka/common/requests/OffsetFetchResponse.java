@@ -250,7 +250,11 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     public boolean groupHasError(String groupId) {
-        return groupLevelErrors.get(groupId) != Errors.NONE;
+        Errors error = groupLevelErrors.get(groupId);
+        if (error == null) {
+            return this.error != Errors.NONE;
+        }
+        return error != Errors.NONE;
     }
 
     public Errors error() {

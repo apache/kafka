@@ -3400,6 +3400,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    @Deprecated
     public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId,
                                                                    final ListConsumerGroupOffsetsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> future =
@@ -3407,6 +3408,20 @@ public class KafkaAdminClient extends AdminClient {
         ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(groupId, options.topicPartitions(), options.requireStable(), logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListConsumerGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)));
+    }
+
+    @Override
+    public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(List<String> groupIds,
+                                                                   ListConsumerGroupOffsetsOptions options) {
+        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> future =
+            ListConsumerGroupOffsetsHandler.newFuture(groupIds);
+
+        Map<String, List<TopicPartition>> groupToTopicPartitions = options.groupToTopicPartitions().isEmpty() ?
+                groupIds.stream().collect(Collectors.toMap(Function.identity(), g -> options.topicPartitions())) : options.groupToTopicPartitions();
+        ListConsumerGroupOffsetsHandler handler =
+            new ListConsumerGroupOffsetsHandler(groupToTopicPartitions, options.requireStable(), logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new ListConsumerGroupOffsetsResult(future.all());
     }
 
     @Override

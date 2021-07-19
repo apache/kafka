@@ -17,21 +17,41 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.List;
 
 /**
- * Options for {@link Admin#listConsumerGroupOffsets(String)}.
+ * Options for {@link Admin#listConsumerGroupOffsets(List)} and
+ * {@link Admin#listConsumerGroupOffsets(String)}.
  * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class ListConsumerGroupOffsetsOptions extends AbstractOptions<ListConsumerGroupOffsetsOptions> {
 
-    private List<TopicPartition> topicPartitions = null;
     private boolean requireStable = false;
+    private List<TopicPartition> topicPartitions;
+
+    private Map<String, List<TopicPartition>> groupToTopicPartitions = new HashMap<>();
+
+    /**
+     * Default constructor for {@code ListConsumerGroupOffsetsOptions}. Sets the topic partitions
+     * to fetch for each group id to {@code null}, which indicates to fetch all offsets for all
+     * topic partitions for that group.
+     * */
+    public ListConsumerGroupOffsetsOptions(List<String> groupIds) {
+        for (String group : groupIds) {
+            groupToTopicPartitions.put(group, null);
+        }
+    }
+
+    public ListConsumerGroupOffsetsOptions() {
+        topicPartitions = null;
+    }
 
     /**
      * Set the topic partitions to list as part of the result.
@@ -54,6 +74,19 @@ public class ListConsumerGroupOffsetsOptions extends AbstractOptions<ListConsume
     }
 
     /**
+     * Set the topic partitions for each group we want to fetch offsets for as part of the result.
+     * {@code null} mapping for a specific group id means to fetch offsets for all topic
+     * partitions for that specific group.
+     * @param groupToTopicPartitions Map of group id to list of topic partitions to fetch offsets
+     *                              for.
+     * @return This ListGroupOffsetsOptions
+     */
+    public ListConsumerGroupOffsetsOptions groupToTopicPartitions(Map<String, List<TopicPartition>> groupToTopicPartitions) {
+        this.groupToTopicPartitions = groupToTopicPartitions;
+        return this;
+    }
+
+    /**
      * Returns a list of topic partitions to add as part of the result.
      */
     public List<TopicPartition> topicPartitions() {
@@ -62,5 +95,12 @@ public class ListConsumerGroupOffsetsOptions extends AbstractOptions<ListConsume
 
     public boolean requireStable() {
         return requireStable;
+    }
+
+    /**
+     * Returns a map of group id to topic partitions to fetch offsets for.
+     */
+    public Map<String, List<TopicPartition>> groupToTopicPartitions() {
+        return groupToTopicPartitions;
     }
 }

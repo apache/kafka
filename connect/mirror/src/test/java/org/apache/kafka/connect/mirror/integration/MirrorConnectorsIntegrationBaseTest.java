@@ -398,7 +398,10 @@ public class MirrorConnectorsIntegrationBaseTest {
         try (Admin backupClient = backup.kafka().createAdminClient()) {
             // retrieve the consumer group offset from backup cluster
             Map<TopicPartition, OffsetAndMetadata> remoteOffsets =
-                backupClient.listConsumerGroupOffsets(consumerGroupName).partitionsToOffsetAndMetadata().get();
+                backupClient.listConsumerGroupOffsets(Collections.singletonList(consumerGroupName))
+                    .groupIdsToPartitionsAndOffsetAndMetadata()
+                    .get(consumerGroupName)
+                    .get();
 
             // pinpoint the offset of the last partition which does not receive records
             OffsetAndMetadata offset = remoteOffsets.get(new TopicPartition(backupTopic, NUM_PARTITIONS - 1));
@@ -710,7 +713,10 @@ public class MirrorConnectorsIntegrationBaseTest {
 
             waitForCondition(() -> {
                 Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets =
-                    adminClient.listConsumerGroupOffsets(consumerGroupId).partitionsToOffsetAndMetadata().get();
+                    adminClient.listConsumerGroupOffsets(Collections.singletonList(consumerGroupId))
+                        .groupIdsToPartitionsAndOffsetAndMetadata()
+                        .get(consumerGroupId)
+                        .get();
                 long consumerGroupOffsetTotal = consumerGroupOffsets.values().stream()
                     .mapToLong(OffsetAndMetadata::offset).sum();
 

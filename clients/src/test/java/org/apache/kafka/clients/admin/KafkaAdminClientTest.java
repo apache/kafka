@@ -260,15 +260,16 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * A unit test for KafkaAdminClient.
  *
- * See AdminClientIntegrationTest for an integration test.
+ * See AdtestListConsumerGroupOffsetsminClientIntegrationTest for an integration test.
  */
 @Timeout(120)
 public class KafkaAdminClientTest {
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClientTest.class);
     private static final String GROUP_ID = "group-0";
+    private static final int THROTTLE = 10;
 
     @Test
-    public void testDefaultApiTimeoutAndRequestTimeoutConflicts() {
+    public void testDefaultApiTimeoutAndReqtestListConsumerGroupOffsetsuestTimeoutConflicts() {
         final AdminClientConfig config = newConfMap(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "500");
         KafkaException exception = assertThrows(KafkaException.class,
             () -> KafkaAdminClient.createInternal(config, null));
@@ -3069,7 +3070,7 @@ public class KafkaAdminClientTest {
             final TopicPartition tp1 = new TopicPartition("A", 0);
             final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions();
             options.topicPartitions(Collections.singletonList(tp1)).requireStable(true);
-            final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(GROUP_ID, options);
+            final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(Collections.singletonList(GROUP_ID), options);
 
             final MockClient mockClient = env.kafkaClient();
             TestUtils.waitForCondition(() -> {
@@ -3077,8 +3078,8 @@ public class KafkaAdminClientTest {
                 if (clientRequest != null) {
                     OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
                     return data.requireStable() &&
-                        data.topics().get(0).name().equals("A") &&
-                        data.topics().get(0).partitionIndexes().equals(Collections.singletonList(0));
+                        data.groups().get(0).topics().get(0).name().equals("A") &&
+                        data.groups().get(0).topics().get(0).partitionIndexes().equals(Collections.singletonList(0));
                 }
                 return false;
             }, "Failed awaiting ListConsumerGroupOffsets request");
@@ -3095,13 +3096,18 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
-            env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
+            env.kafkaClient().prepareResponse(new OffsetFetchResponse(
+                THROTTLE,
+                Collections.singletonMap(GROUP_ID, Errors.NOT_COORDINATOR),
+                Collections.singletonMap(GROUP_ID, Collections.emptyMap())));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(GROUP_ID);
+            final ListConsumerGroupOffsetsResult result =
+                env.adminClient().listConsumerGroupOffsets(Collections.singletonList(GROUP_ID));
 
 
-            TestUtils.assertFutureError(result.partitionsToOffsetAndMetadata(), TimeoutException.class);
+            TestUtils.assertFutureError(result.groupIdsToPartitionsAndOffsetAndMetadata()
+                .get(GROUP_ID), TimeoutException.class);
         }
     }
 
@@ -3124,16 +3130,25 @@ public class KafkaAdminClientTest {
             mockClient.prepareResponse(body -> {
                 firstAttemptTime.set(time.milliseconds());
                 return true;
-            }, new OffsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
+            }, new OffsetFetchResponse(
+                THROTTLE,
+                Collections.singletonMap(GROUP_ID, Errors.NOT_COORDINATOR),
+                Collections.singletonMap(GROUP_ID, Collections.emptyMap())));
 
             mockClient.prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             mockClient.prepareResponse(body -> {
                 secondAttemptTime.set(time.milliseconds());
                 return true;
-            }, new OffsetFetchResponse(Errors.NONE, Collections.emptyMap()));
+            }, new OffsetFetchResponse(
+                THROTTLE,
+                Collections.singletonMap(GROUP_ID, Errors.NONE),
+                Collections.singletonMap(GROUP_ID, Collections.emptyMap())));
 
-            final KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future = env.adminClient().listConsumerGroupOffsets("group-0").partitionsToOffsetAndMetadata();
+            final KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future =
+                env.adminClient().listConsumerGroupOffsets(Collections.singletonList(GROUP_ID))
+                    .groupIdsToPartitionsAndOffsetAndMetadata()
+                    .get(GROUP_ID);
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting ListConsumerGroupOffsets first request failure");
             TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry ListConsumerGroupOffsets call on first failure");
@@ -3157,7 +3172,11 @@ public class KafkaAdminClientTest {
                 prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             env.kafkaClient().prepareResponse(
-                new OffsetFetchResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Collections.emptyMap()));
+                new OffsetFetchResponse(
+                    THROTTLE,
+                    Collections.singletonMap(GROUP_ID, Errors.COORDINATOR_LOAD_IN_PROGRESS),
+                    Collections.singletonMap(GROUP_ID, Collections.emptyMap())));
+
             /*
              * We need to return two responses here, one for NOT_COORDINATOR call when calling list consumer offsets
              * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
@@ -3166,23 +3185,35 @@ public class KafkaAdminClientTest {
              * And the same reason for the following COORDINATOR_NOT_AVAILABLE error response
              */
             env.kafkaClient().prepareResponse(
-                new OffsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
+                new OffsetFetchResponse(
+                    THROTTLE,
+                    Collections.singletonMap(GROUP_ID, Errors.NOT_COORDINATOR),
+                    Collections.singletonMap(GROUP_ID, Collections.emptyMap())));
 
             env.kafkaClient().prepareResponse(
                 prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             env.kafkaClient().prepareResponse(
-                new OffsetFetchResponse(Errors.COORDINATOR_NOT_AVAILABLE, Collections.emptyMap()));
+                new OffsetFetchResponse(
+                    THROTTLE,
+                    Collections.singletonMap(GROUP_ID, Errors.COORDINATOR_NOT_AVAILABLE),
+                    Collections.singletonMap(GROUP_ID, Collections.emptyMap())));
 
             env.kafkaClient().prepareResponse(
                 prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             env.kafkaClient().prepareResponse(
-                new OffsetFetchResponse(Errors.NONE, Collections.emptyMap()));
+                new OffsetFetchResponse(
+                    THROTTLE,
+                    Collections.singletonMap(GROUP_ID, Errors.NONE),
+                    Collections.singletonMap(GROUP_ID, Collections.emptyMap())));
 
-            final ListConsumerGroupOffsetsResult errorResult1 = env.adminClient().listConsumerGroupOffsets(GROUP_ID);
+            final ListConsumerGroupOffsetsResult errorResult1 =
+                env.adminClient().listConsumerGroupOffsets(Collections.singletonList(GROUP_ID));
 
-            assertEquals(Collections.emptyMap(), errorResult1.partitionsToOffsetAndMetadata().get());
+            assertEquals(Collections.emptyMap(),
+                errorResult1.groupIdsToPartitionsAndOffsetAndMetadata()
+                    .get(GROUP_ID).get());
         }
     }
 
@@ -3200,11 +3231,17 @@ public class KafkaAdminClientTest {
                     prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
                 env.kafkaClient().prepareResponse(
-                    new OffsetFetchResponse(error, Collections.emptyMap()));
+                    new OffsetFetchResponse(
+                        THROTTLE,
+                        Collections.singletonMap(GROUP_ID, error),
+                        Collections.singletonMap(GROUP_ID, Collections.emptyMap())));
 
-                ListConsumerGroupOffsetsResult errorResult = env.adminClient().listConsumerGroupOffsets(GROUP_ID);
+                ListConsumerGroupOffsetsResult errorResult =
+                    env.adminClient().listConsumerGroupOffsets(Collections.singletonList(GROUP_ID));
 
-                TestUtils.assertFutureError(errorResult.partitionsToOffsetAndMetadata(), error.exception().getClass());
+                TestUtils.assertFutureError(errorResult.groupIdsToPartitionsAndOffsetAndMetadata()
+                        .get(GROUP_ID),
+                    error.exception().getClass());
             }
         }
     }
@@ -3229,7 +3266,10 @@ public class KafkaAdminClientTest {
              *
              * And the same reason for the following COORDINATOR_NOT_AVAILABLE error response
              */
-            env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
+            env.kafkaClient().prepareResponse(new OffsetFetchResponse(
+                THROTTLE,
+                Collections.singletonMap(GROUP_ID, Errors.NOT_COORDINATOR),
+                Collections.singletonMap(GROUP_ID, Collections.emptyMap())));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.COORDINATOR_NOT_AVAILABLE, Collections.emptyMap()));
@@ -3249,10 +3289,16 @@ public class KafkaAdminClientTest {
                     Optional.empty(), "", Errors.NONE));
             responseData.put(myTopicPartition3, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
                     Optional.empty(), "", Errors.NONE));
-            env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NONE, responseData));
+            env.kafkaClient().prepareResponse(new OffsetFetchResponse(
+                THROTTLE,
+                Collections.singletonMap(GROUP_ID, Errors.NONE),
+                Collections.singletonMap(GROUP_ID, responseData)));
 
-            final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(GROUP_ID);
-            final Map<TopicPartition, OffsetAndMetadata> partitionToOffsetAndMetadata = result.partitionsToOffsetAndMetadata().get();
+            final ListConsumerGroupOffsetsResult result =
+                env.adminClient().listConsumerGroupOffsets(Collections.singletonList(GROUP_ID));
+            final Map<TopicPartition, OffsetAndMetadata> partitionToOffsetAndMetadata = result
+                .groupIdsToPartitionsAndOffsetAndMetadata()
+                .get(GROUP_ID).get();
 
             assertEquals(4, partitionToOffsetAndMetadata.size());
             assertEquals(10, partitionToOffsetAndMetadata.get(myTopicPartition0).offset());
