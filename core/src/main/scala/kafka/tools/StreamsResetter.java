@@ -39,6 +39,7 @@ import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.text.ParseException;
@@ -58,7 +59,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import scala.jdk.CollectionConverters;
 
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example,
@@ -304,7 +304,7 @@ public class StreamsResetter {
             optionParser,
             options,
             option,
-            CollectionConverters.SetHasAsScala(invalidOptions).asScala());
+            JavaConverters.asScalaSetConverter(invalidOptions).asScala());
     }
 
     private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map<Object, Object> consumerConfig,
