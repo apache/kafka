@@ -62,7 +62,7 @@ public interface RaftClient<T> extends AutoCloseable {
          * when a leader steps down or fails.
          *
          * If this node is the leader, then the notification of leadership will be delayed until
-         * the implementation of this interface has caughup to the high-watermark through calls to
+         * the implementation of this interface has caught up to the high-watermark through calls to
          * {@link #handleSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
          *
          * If this node is not the leader, then this method will be called as soon as possible. In
