@@ -115,7 +115,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             clientStates,
             ClientState::activeTasks,
             ClientState::unassignActive,
-            (uuid, taskId) -> clientStates.get(uuid).assignActive(taskId),
+            ClientState::assignActive,
             taskMovementAttempt -> true
         );
     }
@@ -135,7 +135,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             clientStates,
             ClientState::standbyTasks,
             ClientState::unassignStandby,
-            (uuid, taskId) -> clientStates.get(uuid).assignStandby(taskId),
+            ClientState::assignStandby,
             standbyTaskAssignor::isValidTaskMovement
         );
     }
@@ -143,7 +143,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static void balanceTasksOverThreads(final SortedMap<UUID, ClientState> clientStates,
                                                 final Function<ClientState, Set<TaskId>> currentAssignmentAccessor,
                                                 final BiConsumer<ClientState, TaskId> taskUnassignor,
-                                                final BiConsumer<UUID, TaskId> taskAssignor,
+                                                final BiConsumer<ClientState, TaskId> taskAssignor,
                                                 final Predicate<TaskMovementAttempt> taskMovementAttemptPredicate) {
         boolean keepBalancing = true;
         while (keepBalancing) {
@@ -166,7 +166,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                         final boolean canMove = !destinationClientState.hasAssignedTask(taskToMove);
                         if (canMove && taskMovementAttemptPredicate.test(new TaskMovementAttempt(taskToMove, sourceClientState, destinationClientState))) {
                             taskUnassignor.accept(sourceClientState, taskToMove);
-                            taskAssignor.accept(destinationClient, taskToMove);
+                            taskAssignor.accept(destinationClientState, taskToMove);
                             keepBalancing = true;
                         }
                     }
