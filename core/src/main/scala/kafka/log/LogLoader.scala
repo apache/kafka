@@ -196,7 +196,7 @@ object LogLoader extends Logging {
       params.segments,
       newLogStartOffset,
       nextOffset,
-      params.config.messageFormatVersion.recordVersion,
+      params.config.recordVersion,
       params.time,
       reloadFromCleanShutdown = params.hadCleanShutdown,
       params.logIdentifier)
@@ -361,7 +361,7 @@ object LogLoader extends Logging {
       params.segments,
       params.logStartOffsetCheckpoint,
       segment.baseOffset,
-      params.config.messageFormatVersion.recordVersion,
+      params.config.recordVersion,
       params.time,
       reloadFromCleanShutdown = false,
       params.logIdentifier)

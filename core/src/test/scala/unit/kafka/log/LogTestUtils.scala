@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io.File
 import java.util.Properties
-
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchIsolation, FetchLogEnd, LogDirFailureChannel}
 import kafka.utils.{Scheduler, TestUtils}
@@ -56,10 +55,8 @@ object LogTestUtils {
                       maxMessageBytes: Int = Defaults.MaxMessageSize,
                       indexIntervalBytes: Int = Defaults.IndexInterval,
                       segmentIndexBytes: Int = Defaults.MaxIndexSize,
-                      messageFormatVersion: String = Defaults.MessageFormatVersion,
                       fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs): LogConfig = {
     val logProps = new Properties()
-
     logProps.put(LogConfig.SegmentMsProp, segmentMs: java.lang.Long)
     logProps.put(LogConfig.SegmentBytesProp, segmentBytes: Integer)
     logProps.put(LogConfig.RetentionMsProp, retentionMs: java.lang.Long)
@@ -69,7 +66,6 @@ object LogTestUtils {
     logProps.put(LogConfig.MaxMessageBytesProp, maxMessageBytes: Integer)
     logProps.put(LogConfig.IndexIntervalBytesProp, indexIntervalBytes: Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, segmentIndexBytes: Integer)
-    logProps.put(LogConfig.MessageFormatVersionProp, messageFormatVersion)
     logProps.put(LogConfig.FileDeleteDelayMsProp, fileDeleteDelayMs: java.lang.Long)
     LogConfig(logProps)
   }
