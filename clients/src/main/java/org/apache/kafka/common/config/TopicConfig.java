@@ -171,13 +171,25 @@ public class TopicConfig {
     public static final String PREALLOCATE_DOC = "True if we should preallocate the file on disk when " +
         "creating a new log segment.";
 
+    /**
+     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
+     * for most situations.
+     */
+    @Deprecated
     public static final String MESSAGE_FORMAT_VERSION_CONFIG = "message.format.version";
-    public static final String MESSAGE_FORMAT_VERSION_DOC = "Specify the message format version the broker " +
-        "will use to append messages to the logs. The value should be a valid ApiVersion. Some examples are: " +
-        "0.8.2, 0.9.0.0, 0.10.0, check ApiVersion for more details. By setting a particular message format " +
-        "version, the user is certifying that all the existing messages on disk are smaller or equal than the " +
-        "specified version. Setting this value incorrectly will cause consumers with older versions to break as " +
-        "they will receive messages with a format that they don't understand.";
+
+    /**
+     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
+     * for most situations.
+     */
+    @Deprecated
+    public static final String MESSAGE_FORMAT_VERSION_DOC = "[DEPRECATED] Specify the message format version the broker " +
+        "will use to append messages to the logs. The value of this config is always assumed to be `3.0` if " +
+        "`inter.broker.protocol.version` is 3.0 or higher (the actual config value is ignored). Otherwise, the value should " +
+        "be a valid ApiVersion. Some examples are: 0.10.0, 1.1, 2.8, 3.0. By setting a particular message format version, the " +
+        "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting " +
+        "this value incorrectly will cause consumers with older versions to break as they will receive messages with a format " +
+        "that they don't understand.";
 
     public static final String MESSAGE_TIMESTAMP_TYPE_CONFIG = "message.timestamp.type";
     public static final String MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is " +
