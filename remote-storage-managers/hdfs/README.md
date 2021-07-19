@@ -7,7 +7,6 @@ remote.log.storage.system.enable=true
 retention.ms=259200000
 remote.log.storage.manager.class.name=org.apache.kafka.rsm.hdfs.HDFSRemoteStorageManager
 remote.log.storage.manager.impl.prefix="remote.log.storage."
-remote.log.storage.hdfs.fs.uri=hdfs://localhost:9000
 remote.log.storage.hdfs.base.dir=/kafka-remote-logs
 remote.log.storage.hdfs.user=kafka_user@REALM
 remote.log.storage.hdfs.keytab.path=/etc/security/keytabs/kafka_user.keytab

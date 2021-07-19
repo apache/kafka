@@ -32,9 +32,6 @@ class HDFSRemoteStorageManagerConfig extends AbstractConfig {
 
     private static final String REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "remote.log.storage.";
 
-    public static final String HDFS_URI_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.fs.uri";
-    public static final String HDFS_URI_DOC = "URI of of the HDFS cluster.";
-
     public static final String HDFS_BASE_DIR_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.base.dir";
     public static final String HDFS_BASE_DIR_DOC = "The HDFS directory in which the remote data is stored.";
 
@@ -60,7 +57,6 @@ class HDFSRemoteStorageManagerConfig extends AbstractConfig {
 
     static {
         CONFIG = new ConfigDef()
-            .define(HDFS_URI_PROP, STRING, HIGH, HDFS_URI_DOC)
             .define(HDFS_BASE_DIR_PROP, STRING, HIGH, HDFS_BASE_DIR_DOC)
             .define(HDFS_USER_PROP, STRING, null, new ConfigDef.NonEmptyString(), MEDIUM, HDFS_USER_DOC)
             .define(HDFS_KEYTAB_PATH_PROP, STRING, null, new ConfigDef.NonEmptyString(), MEDIUM, HDFS_KEYTAB_PATH_DOC)

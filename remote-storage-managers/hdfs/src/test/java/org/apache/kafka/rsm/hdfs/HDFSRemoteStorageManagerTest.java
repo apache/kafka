@@ -44,13 +44,13 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -66,6 +66,7 @@ public class HDFSRemoteStorageManagerTest {
 
     private File logDir;
     private File remoteDir;
+    private Configuration hadoopConf;
     private MiniDFSCluster hdfsCluster;
     private FileSystem hdfs;
     private Map<String, String> configs;
@@ -77,20 +78,22 @@ public class HDFSRemoteStorageManagerTest {
         logDir = TestUtils.tempDirectory();
         remoteDir = TestUtils.tempDirectory();
 
-        Configuration conf = new Configuration();
-        conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, remoteDir.getAbsolutePath());
-        MiniDFSCluster.Builder builder = new MiniDFSCluster.Builder(conf);
+        int nameNodePort = new Random().nextInt(5000);
+        hadoopConf = new Configuration();
+        hadoopConf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, remoteDir.getAbsolutePath());
+        hadoopConf.set(FileSystem.FS_DEFAULT_NAME_KEY, "hdfs://localhost:" + nameNodePort);
+
+        MiniDFSCluster.Builder builder = new MiniDFSCluster.Builder(hadoopConf);
         builder.clusterId("test_mini_dfs_cluster");
         hdfsCluster = builder.build();
-        String hdfsURI = "hdfs://localhost:" + hdfsCluster.getNameNodePort() + "/";
-        hdfs = FileSystem.newInstance(new URI(hdfsURI), conf);
 
         configs = new HashMap<>();
-        configs.put(HDFSRemoteStorageManagerConfig.HDFS_URI_PROP, hdfsURI);
         configs.put(HDFSRemoteStorageManagerConfig.HDFS_BASE_DIR_PROP, baseDir);
 
         rsm = new HDFSRemoteStorageManager();
+        ((HDFSRemoteStorageManager) rsm).setHadoopConfiguration(hadoopConf);
         rsm.configure(configs);
+        hdfs = ((HDFSRemoteStorageManager) rsm).getFS();
     }
 
     @AfterEach
@@ -208,6 +211,7 @@ public class HDFSRemoteStorageManagerTest {
                                         int expectedCacheHit) throws Exception {
         configs.put(HDFSRemoteStorageManagerConfig.HDFS_REMOTE_READ_BYTES_PROP, cacheLineSizeInBytes);
         HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
+        rsm.setHadoopConfiguration(hadoopConf);
         rsm.configure(configs);
         rsm.setLRUCache(cache);
 

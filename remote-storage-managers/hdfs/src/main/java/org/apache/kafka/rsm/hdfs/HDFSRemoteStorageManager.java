@@ -37,7 +37,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
@@ -45,7 +44,6 @@ import static org.apache.kafka.rsm.hdfs.HDFSRemoteStorageManagerConfig.HDFS_BASE
 import static org.apache.kafka.rsm.hdfs.HDFSRemoteStorageManagerConfig.HDFS_KEYTAB_PATH_PROP;
 import static org.apache.kafka.rsm.hdfs.HDFSRemoteStorageManagerConfig.HDFS_REMOTE_READ_CACHE_BYTES_PROP;
 import static org.apache.kafka.rsm.hdfs.HDFSRemoteStorageManagerConfig.HDFS_REMOTE_READ_BYTES_PROP;
-import static org.apache.kafka.rsm.hdfs.HDFSRemoteStorageManagerConfig.HDFS_URI_PROP;
 import static org.apache.kafka.rsm.hdfs.HDFSRemoteStorageManagerConfig.HDFS_USER_PROP;
 import static org.apache.kafka.rsm.hdfs.LogSegmentDataHeader.FileType.LEADER_EPOCH_CHECKPOINT;
 import static org.apache.kafka.rsm.hdfs.LogSegmentDataHeader.FileType.OFFSET_INDEX;
@@ -56,7 +54,6 @@ import static org.apache.kafka.rsm.hdfs.LogSegmentDataHeader.FileType.TRANSACTIO
 
 public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
-    private URI fsURI;
     private String baseDir;
     private Configuration hadoopConf;
     private int cacheLineSize;
@@ -72,7 +69,6 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     public void configure(Map<String, ?> configs) {
         HDFSRemoteStorageManagerConfig conf = new HDFSRemoteStorageManagerConfig(configs, true);
 
-        fsURI = URI.create(conf.getString(HDFS_URI_PROP));
         baseDir = conf.getString(HDFS_BASE_DIR_PROP);
         cacheLineSize = conf.getInt(HDFS_REMOTE_READ_BYTES_PROP);
         long cacheSize = conf.getLong(HDFS_REMOTE_READ_CACHE_BYTES_PROP);
@@ -248,9 +244,10 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         }
     }
 
-    private FileSystem getFS() throws IOException {
+    @VisibleForTesting
+    FileSystem getFS() throws IOException {
         if (fs.get() == null) {
-            fs.set(FileSystem.newInstance(fsURI, hadoopConf));
+            fs.set(FileSystem.newInstance(hadoopConf));
         }
         return fs.get();
     }
