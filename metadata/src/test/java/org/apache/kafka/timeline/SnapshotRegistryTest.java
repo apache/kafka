@@ -85,4 +85,14 @@ public class SnapshotRegistryTest {
         registry.deleteSnapshotsUpTo(14);
         assertIteratorContains(registry.iterator(), snapshot14);
     }
+
+    @Test
+    public void testCreateSnapshotOfLatest() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        registry.createSnapshot(10);
+        Snapshot latest = registry.createSnapshot(12);
+        Snapshot duplicate = registry.createSnapshot(12);
+
+        assertEquals(latest, duplicate);
+    }
 }
