@@ -719,10 +719,8 @@ public class StreamThread extends Thread {
 
         final long pollLatency = pollPhase();
 
-        // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
-        // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
-        // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
-        // could affect the task manager state beyond this point within #runOnce().
+        // After transitioning to PENDING_SHUTDOWN/ERROR the StreamThread may continue the runLoop as long as the
+        // TaskManager reports a rebalance in progress
         if (!isRunning()) {
             log.debug("Thread state is already {}, skipping the run once call after poll request", state);
             return;
@@ -885,8 +883,8 @@ public class StreamThread extends Thread {
             records = pollRequests(pollTime);
         } else if (state == State.PENDING_SHUTDOWN) {
             // we are only here because there's rebalance in progress,
-            // just poll with zero to complete it
-            records = pollRequests(Duration.ZERO);
+            // just poll with enough time to complete it
+            records = pollRequests(pollTime);
         } else {
             // any other state should not happen
             log.error("Unexpected state {} during normal iteration", state);

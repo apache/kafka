@@ -994,7 +994,7 @@ public class TaskManager {
             if (activeTask == null) {
                 log.error("Unable to locate active task for received-record partition {}. Current tasks: {}",
                     partition, toString(">"));
-                throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
+                throw new IllegalStateException("Task was unexpectedly missing for partition " + partition);
             }
 
             activeTask.addRecords(partition, records.records(partition));
