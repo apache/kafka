@@ -43,9 +43,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.TaskMoveme
 public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
 
-    public HighAvailabilityTaskAssignor() {
-    }
-
     @Override
     public boolean assign(final Map<UUID, ClientState> clients,
                           final Set<TaskId> allTaskIds,
