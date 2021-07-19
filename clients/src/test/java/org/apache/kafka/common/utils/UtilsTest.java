@@ -870,6 +870,8 @@ public class UtilsTest {
         assertCharacterArraysAreNotEqual("", "abc");
         assertCharacterArraysAreNotEqual("abc", "abC");
         assertCharacterArraysAreNotEqual("abc", "abcd");
+        assertCharacterArraysAreNotEqual("abc", "abcdefg");
+        assertCharacterArraysAreNotEqual("abcdefg", "abc");
         assertCharacterArraysAreEqual("abc", "abc");
         assertCharacterArraysAreEqual("a", "a");
         assertCharacterArraysAreEqual("", "");
@@ -885,8 +887,8 @@ public class UtilsTest {
         } else {
             assertFalse(a.equals(b));
         }
-        assertFalse(Utils.isEqual(first, second));
-        assertFalse(Utils.isEqual(second, first));
+        assertFalse(Utils.isEqualConstantTime(first, second));
+        assertFalse(Utils.isEqualConstantTime(second, first));
     }
 
     private void assertCharacterArraysAreEqual(String a, String b) {
@@ -897,7 +899,7 @@ public class UtilsTest {
         } else {
             assertTrue(a.equals(b));
         }
-        assertTrue(Utils.isEqual(first, second));
-        assertTrue(Utils.isEqual(second, first));
+        assertTrue(Utils.isEqualConstantTime(first, second));
+        assertTrue(Utils.isEqualConstantTime(second, first));
     }
 }

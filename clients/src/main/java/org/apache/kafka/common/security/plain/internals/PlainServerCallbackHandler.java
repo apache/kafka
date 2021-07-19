@@ -65,7 +65,7 @@ public class PlainServerCallbackHandler implements AuthenticateCallbackHandler {
             String expectedPassword = JaasContext.configEntryOption(jaasConfigEntries,
                     JAAS_USER_PREFIX + username,
                     PlainLoginModule.class.getName());
-            return expectedPassword != null && Utils.isEqual(password, expectedPassword.toCharArray());
+            return expectedPassword != null && Utils.isEqualConstantTime(password, expectedPassword.toCharArray());
         }
     }
 
