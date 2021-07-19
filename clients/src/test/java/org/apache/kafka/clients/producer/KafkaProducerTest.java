@@ -193,8 +193,8 @@ public class KafkaProducerTest {
             config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
             "idempotence should be overwritten");
         assertEquals(
-            config.getString(ProducerConfig.ACKS_CONFIG),
             "0",
+            config.getString(ProducerConfig.ACKS_CONFIG),
             "acks should be overwritten");
 
         Properties validProps2 = new Properties() {{
@@ -206,8 +206,8 @@ public class KafkaProducerTest {
             config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
             "idempotence should be set with the default value");
         assertEquals(
-            config.getString(ProducerConfig.ACKS_CONFIG),
             "-1",
+            config.getString(ProducerConfig.ACKS_CONFIG),
             "acks should be set with the default value");
 
         Properties validProps3 = new Properties() {{
@@ -218,8 +218,9 @@ public class KafkaProducerTest {
         config = new ProducerConfig(validProps3);
         assertFalse(config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
             "idempotence should be overwritten");
-        assertEquals(config.getString(ProducerConfig.ACKS_CONFIG),
+        assertEquals(
             "-1",
+            config.getString(ProducerConfig.ACKS_CONFIG),
             "acks should be overwritten");
 
         Properties invalidProps = new Properties() {{
