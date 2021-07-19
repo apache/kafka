@@ -262,6 +262,9 @@ public class ConfigurationControlManager {
                 }
                 return ApiError.NONE;
             case TOPIC:
+                if (configResource.name().isEmpty()) {
+                    return new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "Default configs are not supported for topic entities.");
+                }
                 try {
                     Topic.validate(configResource.name());
                 } catch (Exception e) {
