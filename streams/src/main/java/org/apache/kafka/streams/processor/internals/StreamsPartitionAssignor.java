@@ -859,7 +859,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final List<TopicPartition> activePartitionsList = new ArrayList<>();
             final List<TaskId> assignedActiveList = new ArrayList<>();
 
-            final Set<TaskId> activeTasksRemovedPendingRevokation = populateActiveTaskAndPartitionsLists(
+            final Set<TaskId> activeTasksRemovedPendingRevocation = populateActiveTaskAndPartitionsLists(
                 activePartitionsList,
                 assignedActiveList,
                 consumer,
@@ -872,7 +872,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final Map<TaskId, Set<TopicPartition>> standbyTaskMap = buildStandbyTaskMap(
                     consumer,
                     standbyTaskAssignments.get(consumer),
-                    activeTasksRemovedPendingRevokation,
+                    activeTasksRemovedPendingRevocation,
                     statefulTasks,
                     partitionsForTask,
                     clientMetadata.state
@@ -888,7 +888,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 AssignorError.NONE.code()
             );
 
-            if (!activeTasksRemovedPendingRevokation.isEmpty()) {
+            if (!activeTasksRemovedPendingRevocation.isEmpty()) {
                 // TODO: once KAFKA-10078 is resolved we can leave it to the client to trigger this rebalance
                 log.info("Requesting followup rebalance be scheduled immediately by {} due to tasks changing ownership.", consumer);
                 info.setNextRebalanceTime(0L);
@@ -1372,7 +1372,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     "%sNumber of assigned partitions %d is not equal to "
                         + "the number of active taskIds %d, assignmentInfo=%s",
                     logPrefix, partitions.size(),
-                    info.activeTasks().size(), info.toString()
+                    info.activeTasks().size(), info
                 )
             );
         }

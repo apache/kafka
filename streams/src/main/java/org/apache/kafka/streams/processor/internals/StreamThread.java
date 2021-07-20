@@ -576,7 +576,7 @@ public class StreamThread extends Thread {
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
                 maybeSendShutdown();
-                final Long size = cacheResizeSize.getAndSet(-1L);
+                final long size = cacheResizeSize.getAndSet(-1L);
                 if (size != -1L) {
                     cacheResizer.accept(size);
                 }
@@ -719,8 +719,10 @@ public class StreamThread extends Thread {
 
         final long pollLatency = pollPhase();
 
-        // After transitioning to PENDING_SHUTDOWN/ERROR the StreamThread may continue the runLoop as long as the
-        // TaskManager reports a rebalance in progress
+        // Even after transitioning to PENDING_SHUTDOWN/ERROR we'll continue the runLoop as long as the TaskManager
+        // reports a rebalance still in progress, so we need to keep polling if we want to have any chance
+        // of ever breaking out of this loop and returning to sweet nothingness (ie completing the shutdown)
+        // However the rest of the runOnce loop can and should be skipped
         if (!isRunning()) {
             log.debug("Thread state is already {}, skipping the run once call after poll request", state);
             return;
@@ -867,7 +869,9 @@ public class StreamThread extends Thread {
 
     private long pollPhase() {
         final ConsumerRecords<byte[], byte[]> records;
-        log.debug("Invoking poll on main Consumer");
+        if (isRunning()) {
+            log.debug("Invoking poll on main Consumer");
+        }
 
         if (state == State.PARTITIONS_ASSIGNED) {
             // try to fetch some records with zero poll millis
@@ -883,7 +887,7 @@ public class StreamThread extends Thread {
             records = pollRequests(pollTime);
         } else if (state == State.PENDING_SHUTDOWN) {
             // we are only here because there's rebalance in progress,
-            // just poll with enough time to complete it
+            // just long poll to give it enough time to complete it
             records = pollRequests(pollTime);
         } else {
             // any other state should not happen
