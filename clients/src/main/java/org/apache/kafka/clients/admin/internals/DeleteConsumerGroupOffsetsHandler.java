@@ -130,11 +130,7 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
                 })
             );
 
-            return new ApiResult<>(
-                Collections.singletonMap(groupId, partitionResults),
-                Collections.emptyMap(),
-                Collections.emptyList()
-            );
+            return ApiResult.completed(groupId, partitionResults);
         }
     }
 
@@ -153,9 +149,10 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
                 failed.put(groupId, error.exception());
                 break;
             case COORDINATOR_LOAD_IN_PROGRESS:
-                // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`OffsetDelete` request for group id {} failed because the coordinator" +
-                    " is still in the process of loading state. Will retry.", groupId.idValue);
+            case REBALANCE_IN_PROGRESS:
+                // If the coordinator is in the middle of loading, or rebalance is in progress, then we just need to retry.
+                log.debug("`OffsetDelete` request for group id {} failed because the coordinator " +
+                    "is still in the process of loading state or the group is rebalancing. Will retry.", groupId.idValue);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:

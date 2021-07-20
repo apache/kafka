@@ -159,10 +159,11 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
         Set<CoordinatorKey> groupsToRetry
     ) {
         switch (error) {
-            // If the coordinator is in the middle of loading, then we just need to retry.
+            // If the coordinator is in the middle of loading, or rebalance is in progress, then we just need to retry.
             case COORDINATOR_LOAD_IN_PROGRESS:
+            case REBALANCE_IN_PROGRESS:
                 log.debug("OffsetCommit request for group id {} failed because the coordinator" +
-                    " is still in the process of loading state. Will retry.", groupId.idValue);
+                    " is still in the process of loading state or the group is rebalancing. Will retry.", groupId.idValue);
                 groupsToRetry.add(groupId);
                 break;
 
@@ -176,7 +177,6 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
 
             // Group level errors.
             case INVALID_GROUP_ID:
-            case REBALANCE_IN_PROGRESS:
             case INVALID_COMMIT_OFFSET_SIZE:
             case GROUP_AUTHORIZATION_FAILED:
                 log.debug("OffsetCommit request for group id {} failed due to error {}.",

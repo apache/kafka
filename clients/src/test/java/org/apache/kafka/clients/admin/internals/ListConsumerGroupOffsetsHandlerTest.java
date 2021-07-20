@@ -89,6 +89,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
     @Test
     public void testRetriableHandleResponse() {
         assertRetriable(handleWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
+        assertRetriable(handleWithError(Errors.REBALANCE_IN_PROGRESS));
     }
 
     @Test

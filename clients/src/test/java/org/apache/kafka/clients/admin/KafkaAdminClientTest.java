@@ -2740,6 +2740,16 @@ public class KafkaAdminClientTest {
                 Collections.emptySet()));
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
 
+            data.groups().add(DescribeGroupsResponse.groupMetadata(
+                GROUP_ID,
+                Errors.REBALANCE_IN_PROGRESS,
+                "",
+                "",
+                "",
+                Collections.emptyList(),
+                Collections.emptySet()));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+
             /*
              * We need to return two responses here, one with NOT_COORDINATOR error when calling describe consumer group
              * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
@@ -2998,6 +3008,9 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(
                 new OffsetFetchResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Collections.emptyMap()));
+
+            env.kafkaClient().prepareResponse(
+                new OffsetFetchResponse(Errors.REBALANCE_IN_PROGRESS, Collections.emptyMap()));
             /*
              * We need to return two responses here, one for NOT_COORDINATOR call when calling list consumer offsets
              * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
@@ -3184,8 +3197,111 @@ public class KafkaAdminClientTest {
         }
     }
 
+    // this test is testing retriable errors and non-retriable errors in the new broker
     @Test
-    public void testDeleteConsumerGroupsWithOlderBroker() throws Exception {
+    public void testDeleteConsumerGroupsWithRetriableAndNonretriableErrors() throws Exception {
+        final List<String> groupIds = singletonList(GROUP_ID);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Retriable FindCoordinatorResponse errors should be retried
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+
+            final DeletableGroupResultCollection validResponse = new DeletableGroupResultCollection();
+            validResponse.add(new DeletableGroupResult()
+                .setGroupId(GROUP_ID)
+                .setErrorCode(Errors.NONE.code()));
+
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(validResponse)
+            ));
+
+            final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
+
+            final KafkaFuture<Void> results = result.deletedGroups().get(GROUP_ID);
+            assertNull(results.get());
+
+            // should throw error for non-retriable errors
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode()));
+
+            DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
+            TestUtils.assertFutureError(errorResult.deletedGroups().get(GROUP_ID), GroupAuthorizationException.class);
+
+            // Retriable errors should be retried
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            final DeletableGroupResultCollection errorResponse = new DeletableGroupResultCollection();
+            errorResponse.add(new DeletableGroupResult()
+                .setGroupId(GROUP_ID)
+                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+            );
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(errorResponse)));
+
+            errorResponse.add(new DeletableGroupResult()
+                .setGroupId(GROUP_ID)
+                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())
+            );
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(errorResponse)));
+
+            /*
+             * We need to return two responses here, one for NOT_COORDINATOR call when calling delete a consumer group
+             * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
+             * FindCoordinatorResponse.
+             *
+             * And the same reason for the following COORDINATOR_NOT_AVAILABLE error response
+             */
+
+            DeletableGroupResultCollection coordinatorMoved = new DeletableGroupResultCollection();
+            coordinatorMoved.add(new DeletableGroupResult()
+                .setGroupId(GROUP_ID)
+                .setErrorCode(Errors.NOT_COORDINATOR.code())
+            );
+
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(coordinatorMoved)));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            coordinatorMoved = new DeletableGroupResultCollection();
+            coordinatorMoved.add(new DeletableGroupResult()
+                .setGroupId(GROUP_ID)
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(coordinatorMoved)));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(validResponse)));
+
+            errorResult = env.adminClient().deleteConsumerGroups(groupIds);
+
+            final KafkaFuture<Void> errorResults = errorResult.deletedGroups().get(GROUP_ID);
+            assertNull(errorResults.get());
+        }
+    }
+
+    // this test is testing retriable errors and non-retriable errors in the old broker (only support version 3 of FIND_COORDINATOR)
+    @Test
+    public void testDeleteConsumerGroupsWithOlderBrokerWithRetriableAndNonretriableErrors() throws Exception {
         final List<String> groupIds = singletonList("groupId");
         ApiVersion findCoordinatorV3 = new ApiVersion()
                 .setApiKey(ApiKeys.FIND_COORDINATOR.id)
@@ -3199,7 +3315,7 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Arrays.asList(findCoordinatorV3, describeGroups)));
 
-            //Retriable FindCoordinatorResponse errors should be retried
+            // Retriable FindCoordinatorResponse errors should be retried
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
 
@@ -3219,9 +3335,9 @@ public class KafkaAdminClientTest {
             final KafkaFuture<Void> results = result.deletedGroups().get("groupId");
             assertNull(results.get());
 
-            //should throw error for non-retriable errors
+            // should throw error for non-retriable errors
             env.kafkaClient().prepareResponse(
-                prepareOldFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
+                prepareOldFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode()));
 
             DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
             TestUtils.assertFutureError(errorResult.deletedGroups().get("groupId"), GroupAuthorizationException.class);
@@ -3234,6 +3350,14 @@ public class KafkaAdminClientTest {
             errorResponse.add(new DeletableGroupResult()
                                    .setGroupId("groupId")
                                    .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+            );
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(errorResponse)));
+
+            errorResponse.add(new DeletableGroupResult()
+                                .setGroupId("groupId")
+                                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())
             );
             env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
                 new DeleteGroupsResponseData()
@@ -3454,6 +3578,9 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(
                 prepareOffsetDeleteResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS));
+
+            env.kafkaClient().prepareResponse(
+                prepareOffsetDeleteResponse(Errors.REBALANCE_IN_PROGRESS));
 
             /*
              * We need to return two responses here, one for NOT_COORDINATOR call when calling delete a consumer group
@@ -3700,6 +3827,10 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                     new LeaveGroupResponse(new LeaveGroupResponseData()
                         .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())));
+
+            env.kafkaClient().prepareResponse(
+                new LeaveGroupResponse(new LeaveGroupResponseData()
+                    .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())));
 
             /*
              * We need to return two responses here, one for NOT_COORDINATOR call when calling remove member
@@ -4172,6 +4303,9 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(
                 prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(
+                prepareOffsetCommitResponse(tp1, Errors.REBALANCE_IN_PROGRESS));
 
             env.kafkaClient().prepareResponse(
                 prepareOffsetCommitResponse(tp1, Errors.NONE));

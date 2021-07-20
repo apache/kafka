@@ -75,6 +75,7 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
     @Test
     public void testRetriableHandleResponse() {
         assertRetriable(handleWithGroupError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
+        assertRetriable(handleWithGroupError(Errors.REBALANCE_IN_PROGRESS));
     }
 
     @Test
