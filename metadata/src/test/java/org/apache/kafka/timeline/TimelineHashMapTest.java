@@ -67,7 +67,7 @@ public class TimelineHashMapTest {
         assertTrue(map.containsValue("abc"));
         assertTrue(map.containsKey(456));
         assertFalse(map.isEmpty());
-        registry.createSnapshot(2);
+        registry.getOrCreateSnapshot(2);
         Iterator<Map.Entry<Integer, String>> iter = map.entrySet(2).iterator();
         map.clear();
         List<String> snapshotValues = new ArrayList<>();

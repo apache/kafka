@@ -302,17 +302,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void updateListenersProgress(long highWatermark) {
-        updateListenersProgress(listenerContexts, highWatermark);
-    }
-
-    private void updateListenersProgress(List<ListenerContext> listenerContexts, long highWatermark) {
         for (ListenerContext listenerContext : listenerContexts) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < log.startOffset() && nextExpectedOffset < highWatermark) {
                     SnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> new IllegalStateException(
                         String.format(
                             "Snapshot expected since next offset of %s is %s, log start offset is %s and high-watermark is %s",
-                            listenerContext.listener.getClass().getTypeName(),
+                            listenerContext.listenerName(),
                             nextExpectedOffset,
                             log.startOffset(),
                             highWatermark
@@ -2118,16 +2114,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         // Check listener progress to see if reads are expected
         quorum.highWatermark().ifPresent(highWatermarkMetadata -> {
-            long highWatermark = highWatermarkMetadata.offset;
-
-            List<ListenerContext> listenersToUpdate = listenerContexts.stream()
-                .filter(listenerContext -> {
-                    OptionalLong nextExpectedOffset = listenerContext.nextExpectedOffset();
-                    return nextExpectedOffset.isPresent() && nextExpectedOffset.getAsLong() < highWatermark;
-                })
-                .collect(Collectors.toList());
-
-            updateListenersProgress(listenersToUpdate, highWatermarkMetadata.offset);
+            updateListenersProgress(highWatermarkMetadata.offset);
         });
     }
 
@@ -2447,6 +2434,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 lastSent = null;
             }
 
+            logger.debug("Notifying listener {} of snapshot {}", listenerName(), reader.snapshotId());
             listener.handleSnapshot(reader);
         }
 
@@ -2488,16 +2476,27 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             fireHandleCommit(reader);
         }
 
+        public String listenerName() {
+            return listener.getClass().getTypeName();
+        }
+
         private void fireHandleCommit(BatchReader<T> reader) {
             synchronized (this) {
                 this.lastSent = reader;
             }
+            logger.debug(
+                "Notifying listener {} of batch for baseOffset {} and lastOffset {}",
+                listenerName(),
+                reader.baseOffset(),
+                reader.lastOffset()
+            );
             listener.handleCommit(reader);
         }
 
         void maybeFireLeaderChange(LeaderAndEpoch leaderAndEpoch) {
             if (shouldFireLeaderChange(leaderAndEpoch)) {
                 lastFiredLeaderChange = leaderAndEpoch;
+                logger.debug("Notifying listener {} of leader change {}", listenerName(), leaderAndEpoch);
                 listener.handleLeaderChange(leaderAndEpoch);
             }
         }
