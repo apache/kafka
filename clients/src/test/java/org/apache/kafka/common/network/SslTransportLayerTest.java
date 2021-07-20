@@ -591,7 +591,7 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that connection success with the default TLS version.
+     * Tests that connection succeeds with the default TLS version.
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
@@ -611,12 +611,6 @@ public class SslTransportLayerTest {
         NetworkTestUtils.checkClientConnection(selector, "0", 10, 100);
         server.verifyAuthenticationMetrics(1, 0);
         selector.close();
-
-        checkAuthenticationFailed(args, "1", "TLSv1.1");
-        server.verifyAuthenticationMetrics(1, 1);
-
-        checkAuthenticationFailed(args, "2", "TLSv1");
-        server.verifyAuthenticationMetrics(1, 2);
     }
 
     /** Checks connection failed using the specified {@code tlsVersion}. */
