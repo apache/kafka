@@ -148,6 +148,8 @@ abstract class WorkerTask implements Runnable {
         taskMetricsGroup.close();
     }
 
+    protected abstract void initializeAndStart();
+
     protected abstract void execute();
 
     protected abstract void close();
@@ -179,10 +181,10 @@ abstract class WorkerTask implements Runnable {
                     onPause();
                     if (!awaitUnpause()) return;
                 }
-
-                statusListener.onStartup(id);
             }
 
+            initializeAndStart();
+            statusListener.onStartup(id);
             execute();
         } catch (Throwable t) {
             log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not recover until manually restarted", this, t);

@@ -386,6 +386,7 @@ public class ErrorHandlingTaskWithTopicCreationTest {
         PowerMock.replayAll();
 
         workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
 
         // two records were consumed from Kafka
@@ -451,6 +452,7 @@ public class ErrorHandlingTaskWithTopicCreationTest {
         PowerMock.replayAll();
 
         workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
 
         // two records were consumed from Kafka
