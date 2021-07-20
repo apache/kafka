@@ -71,23 +71,24 @@ import static org.hamcrest.core.Is.is;
 public class WindowedChangelogRetentionIntegrationTest {
     private static final int NUM_BROKERS = 1;
     private static final Duration DEFAULT_RETENTION = Duration.ofDays(1);
+    private static final String STREAM_ONE_INPUT = "stream-one";
+    private static final String STREAM_TWO_INPUT = "stream-two";
+    private static final String OUTPUT_TOPIC = "output";
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private StreamsBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
-    private String streamOneInput;
-    private String streamTwoInput;
-    private String outputTopic;
     private KGroupedStream<String, String> groupedStream;
 
     @Rule
     public TestName testName = new TestName();
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
+        createTopics();
     }
 
     @AfterClass
@@ -98,7 +99,6 @@ public class WindowedChangelogRetentionIntegrationTest {
     @Before
     public void before() throws InterruptedException {
         builder = new StreamsBuilder();
-        createTopics();
         streamsConfiguration = new Properties();
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -111,7 +111,7 @@ public class WindowedChangelogRetentionIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
 
         final KeyValueMapper<Integer, String, String> mapper = MockMapper.selectValueMapper();
-        final KStream<Integer, String> stream = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final KStream<Integer, String> stream = builder.stream(STREAM_ONE_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
         groupedStream = stream.groupBy(mapper, Grouped.with(Serdes.String(), Serdes.String()));
     }
 
@@ -162,6 +162,24 @@ public class WindowedChangelogRetentionIntegrationTest {
         runAndVerifyTimeWindows(TimeWindows.of(windowSize).grace(grace), userSpecifiedRetention, expectedRetention);
     }
 
+    @Test
+    public void joinWindowedChangelogShouldHaveRetentionOfBeforePlusAfterPlusGraceIfBeforePlusAfterPlusGraceGreaterThanDefaultRetention() throws Exception {
+        final Duration before = DEFAULT_RETENTION.plus(Duration.ofHours(1));
+        final Duration after = DEFAULT_RETENTION.minus(Duration.ofHours(1));
+        final Duration grace = Duration.ofHours(3);
+        final Duration expectedRetention = before.plus(after).plus(grace);
+        runAndVerifyJoinWindows(JoinWindows.of(before).after(after).grace(grace), expectedRetention);
+    }
+
+    @Test
+    public void joinWindowedChangelogShouldHaveRetentionOfBeforePlusAfterPlusGraceIfBeforePlusAfterePlusGraceLessThanDefaultRetention() throws Exception {
+        final Duration grace = Duration.ofHours(3);
+        final Duration before = DEFAULT_RETENTION.dividedBy(2).minus(grace).minus(Duration.ofHours(1));
+        final Duration after = DEFAULT_RETENTION.dividedBy(2).minus(grace).minus(Duration.ofHours(4));
+        final Duration expectedRetention = before.plus(after).plus(grace);
+        runAndVerifyJoinWindows(JoinWindows.of(before).after(after).grace(grace), expectedRetention);
+    }
+
     private void runAndVerifyTimeWindows(final Windows<TimeWindow> window,
                                          final Duration userSpecifiedRetention,
                                          final Duration expectedRetention) throws Exception {
@@ -172,7 +190,7 @@ public class WindowedChangelogRetentionIntegrationTest {
                 ? Materialized.<String, Long, WindowStore<Bytes, byte[]>>as(storeName).withRetention(userSpecifiedRetention)
                 : Materialized.as(storeName))
             .toStream()
-            .to(outputTopic, Produced.with(windowedSerde, Serdes.Long()));
+            .to(OUTPUT_TOPIC, Produced.with(windowedSerde, Serdes.Long()));
 
         startStreams();
 
@@ -220,7 +238,7 @@ public class WindowedChangelogRetentionIntegrationTest {
                 ? Materialized.<String, Long, SessionStore<Bytes, byte[]>>as(storeName).withRetention(userSpecifiedRetention)
                 : Materialized.as(storeName))
             .toStream()
-            .to(outputTopic, Produced.with(windowedSerde, Serdes.Long()));
+            .to(OUTPUT_TOPIC, Produced.with(windowedSerde, Serdes.Long()));
 
         startStreams();
 
@@ -262,10 +280,10 @@ public class WindowedChangelogRetentionIntegrationTest {
         final String joinName = "testjoin";
         final String thisStoreName = joinName + "-this-join-store";
         final String otherStoreName = joinName + "-other-join-store";
-        final KStream<Integer, String> stream1 = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
-        final KStream<Integer, String> stream2 = builder.stream(streamTwoInput, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final KStream<Integer, String> stream1 = builder.stream(STREAM_ONE_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final KStream<Integer, String> stream2 = builder.stream(STREAM_TWO_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream1.join(stream2, (left, right) -> left, window, StreamJoined.as(joinName))
-            .to(outputTopic, Produced.with(Serdes.Integer(), Serdes.String()));
+            .to(OUTPUT_TOPIC, Produced.with(Serdes.Integer(), Serdes.String()));
 
         startStreams();
 
@@ -281,14 +299,10 @@ public class WindowedChangelogRetentionIntegrationTest {
         IntegrationTestUtils.waitForApplicationState(Collections.singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
     }
 
-    private void createTopics() throws InterruptedException {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
-        streamOneInput = "stream-one-" + safeTestName;
-        streamTwoInput = "stream-two-" + safeTestName;
-        outputTopic = "output-" + safeTestName;
-        CLUSTER.createTopic(streamOneInput, 3, 1);
-        CLUSTER.createTopic(streamTwoInput, 3, 1);
-        CLUSTER.createTopics(outputTopic);
+    private static void createTopics() throws InterruptedException {
+        CLUSTER.createTopic(STREAM_ONE_INPUT, 3, 1);
+        CLUSTER.createTopic(STREAM_TWO_INPUT, 3, 1);
+        CLUSTER.createTopics(OUTPUT_TOPIC);
     }
 
     private void verifyChangelogRetentionOfWindowedStore(final String storeName, final Duration retention) {
