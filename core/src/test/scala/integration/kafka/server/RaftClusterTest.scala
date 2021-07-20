@@ -21,7 +21,8 @@ import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, NewTopic}
+import org.apache.kafka.clients.admin.{Admin, NewPartitionReassignment, NewTopic}
+import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo};
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
@@ -31,7 +32,8 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
 
 import java.util
-import java.util.Collections
+import java.util.{Arrays, Collections, Optional}
+import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
 
@@ -63,7 +65,7 @@ class RaftClusterTest {
       cluster.startup()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
@@ -89,7 +91,7 @@ class RaftClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
 
       val admin = Admin.create(cluster.clientProperties())
@@ -98,35 +100,14 @@ class RaftClusterTest {
         val newTopic = Collections.singletonList(new NewTopic("test-topic", 1, 3.toShort))
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
-
-        // List created topic
-        TestUtils.waitUntilTrue(() => {
-          val listTopicsResult = admin.listTopics()
-          val result = listTopicsResult.names().get().size() == newTopic.size()
-          if (result) {
-            newTopic forEach(topic => {
-              assertTrue(listTopicsResult.names().get().contains(topic.name()))
-            })
-          }
-          result
-        }, "Topics created were not listed.")
+        waitForTopicListing(admin, Seq("test-topic"), Seq())
 
         // Delete topic
         val deleteResult = admin.deleteTopics(Collections.singletonList("test-topic"))
         deleteResult.all().get()
 
         // List again
-        TestUtils.waitUntilTrue(() => {
-          val listTopicsResult = admin.listTopics()
-          val result = listTopicsResult.names().get().size() != newTopic.size()
-          if (result) {
-            newTopic forEach(topic => {
-              assertFalse(listTopicsResult.names().get().contains(topic.name()))
-            })
-          }
-          result
-        }, "Topic was not removed from list.")
-
+        waitForTopicListing(admin, Seq(), Seq("test-topic"))
       } finally {
         admin.close()
       }
@@ -147,72 +128,20 @@ class RaftClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
         // Create many topics
         val newTopic = new util.ArrayList[NewTopic]()
-        newTopic.add(new NewTopic("test-topic-1", 1, 3.toShort))
-        newTopic.add(new NewTopic("test-topic-2", 1, 3.toShort))
-        newTopic.add(new NewTopic("test-topic-3", 1, 3.toShort))
+        newTopic.add(new NewTopic("test-topic-1", 2, 3.toShort))
+        newTopic.add(new NewTopic("test-topic-2", 2, 3.toShort))
+        newTopic.add(new NewTopic("test-topic-3", 2, 3.toShort))
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
 
-        // List created topic
-        TestUtils.waitUntilTrue(() => {
-          val listTopicsResult = admin.listTopics()
-          val result = listTopicsResult.names().get().size() == newTopic.size()
-          if (result) {
-            newTopic forEach(topic => {
-              assertTrue(listTopicsResult.names().get().contains(topic.name()))
-            })
-          }
-          result
-        }, "Topics created were not listed.")
-      } finally {
-        admin.close()
-      }
-    } finally {
-      cluster.close()
-    }
-  }
-
-  @Test
-  def testCreateClusterAndCreateAndManyTopicsWithManyPartitions(): Unit = {
-    val cluster = new KafkaClusterTestKit.Builder(
-      new TestKitNodes.Builder().
-        setNumBrokerNodes(3).
-        setNumControllerNodes(3).build()).build()
-    try {
-      cluster.format()
-      cluster.startup()
-      cluster.waitForReadyBrokers()
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
-        "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
-        "RaftManager was not initialized.")
-      val admin = Admin.create(cluster.clientProperties())
-      try {
-        // Create many topics
-        val newTopic = new util.ArrayList[NewTopic]()
-        newTopic.add(new NewTopic("test-topic-1", 3, 3.toShort))
-        newTopic.add(new NewTopic("test-topic-2", 3, 3.toShort))
-        newTopic.add(new NewTopic("test-topic-3", 3, 3.toShort))
-        val createTopicResult = admin.createTopics(newTopic)
-        createTopicResult.all().get()
-
-        // List created topic
-        TestUtils.waitUntilTrue(() => {
-          val listTopicsResult = admin.listTopics()
-          val result = listTopicsResult.names().get().size() == newTopic.size()
-          if (result) {
-            newTopic forEach(topic => {
-              assertTrue(listTopicsResult.names().get().contains(topic.name()))
-            })
-          }
-          result
-        }, "Topics created were not listed.")
+        // List created topics
+        waitForTopicListing(admin, Seq("test-topic-1", "test-topic-2", "test-topic-3"), Seq())
       } finally {
         admin.close()
       }
@@ -422,4 +351,78 @@ class RaftClusterTest {
       listenerName = listenerName
     )
 
+  @Test
+  def testCreateClusterAndPerformReassignment(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        // Create the topic.
+        val assignments = new util.HashMap[Integer, util.List[Integer]]
+        assignments.put(0, Arrays.asList(0, 1, 2))
+        assignments.put(1, Arrays.asList(1, 2, 3))
+        assignments.put(2, Arrays.asList(2, 3, 0))
+        assignments.put(3, Arrays.asList(3, 2, 1))
+        val createTopicResult = admin.createTopics(Collections.singletonList(
+          new NewTopic("foo", assignments)))
+        createTopicResult.all().get()
+        waitForTopicListing(admin, Seq("foo"), Seq())
+
+        // Start some reassignments.
+        assertEquals(Collections.emptyMap(), admin.listPartitionReassignments().reassignments().get())
+        val reassignments = new util.HashMap[TopicPartition, Optional[NewPartitionReassignment]]
+        reassignments.put(new TopicPartition("foo", 0),
+          Optional.of(new NewPartitionReassignment(Arrays.asList(2, 1, 0))))
+        reassignments.put(new TopicPartition("foo", 1),
+          Optional.of(new NewPartitionReassignment(Arrays.asList(0, 1, 2))))
+        reassignments.put(new TopicPartition("foo", 2),
+          Optional.of(new NewPartitionReassignment(Arrays.asList(2, 3))))
+        reassignments.put(new TopicPartition("foo", 3),
+          Optional.of(new NewPartitionReassignment(Arrays.asList(3, 2, 0, 1))))
+        admin.alterPartitionReassignments(reassignments).all().get()
+        TestUtils.waitUntilTrue(
+          () => admin.listPartitionReassignments().reassignments().get().isEmpty(),
+          "The reassignment never completed.")
+        var currentMapping: Seq[Seq[Int]] = Seq()
+        val expectedMapping = Seq(Seq(2, 1, 0), Seq(0, 1, 2), Seq(2, 3), Seq(3, 2, 0, 1))
+        TestUtils.waitUntilTrue( () => {
+          val topicInfoMap = admin.describeTopics(Collections.singleton("foo")).all().get()
+          if (topicInfoMap.containsKey("foo")) {
+            currentMapping = translatePartitionInfoToSeq(topicInfoMap.get("foo").partitions())
+            expectedMapping.equals(currentMapping)
+          } else {
+            false
+          }
+        }, "Timed out waiting for replica assignments for topic foo. " +
+          s"Wanted: ${expectedMapping}. Got: ${currentMapping}")
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  private def translatePartitionInfoToSeq(partitions: util.List[TopicPartitionInfo]): Seq[Seq[Int]] = {
+    partitions.asScala.map(partition => partition.replicas().asScala.map(_.id()).toSeq).toSeq
+  }
+
+  private def waitForTopicListing(admin: Admin,
+                                  expectedPresent: Seq[String],
+                                  expectedAbsent: Seq[String]): Unit = {
+    val topicsNotFound = new util.HashSet[String]
+    var extraTopics: mutable.Set[String] = null
+    expectedPresent.foreach(topicsNotFound.add(_))
+    TestUtils.waitUntilTrue(() => {
+      admin.listTopics().names().get().forEach(name => topicsNotFound.remove(name))
+      extraTopics = admin.listTopics().names().get().asScala.filter(expectedAbsent.contains(_))
+      topicsNotFound.isEmpty && extraTopics.isEmpty
+    }, s"Failed to find topic(s): ${topicsNotFound.asScala} and NOT find topic(s): ${extraTopics}")
+  }
 }

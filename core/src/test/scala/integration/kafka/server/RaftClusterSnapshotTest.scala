@@ -17,63 +17,83 @@
 
 package kafka.server
 
-import kafka.raft.KafkaRaftManager;
+import java.util.Collections
 import kafka.testkit.KafkaClusterTestKit
 import kafka.testkit.TestKitNodes
 import kafka.utils.TestUtils
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.snapshot.SnapshotReader
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import scala.jdk.CollectionConverters._
 
-@Timeout(120000)
+@Timeout(120)
 class RaftClusterSnapshotTest {
 
   @Test
-  def testContorllerSnapshotGenerated(): Unit = {
-    val metadataSnapshotMaxNewRecordBytes = 1
-    val cluster = new KafkaClusterTestKit
-      .Builder(
-        new TestKitNodes.Builder()
-          .setNumBrokerNodes(3)
-          .setNumControllerNodes(3)
-          .build()
-      )
-      .setConfigProp(
-        KafkaConfig.MetadataSnapshotMaxNewRecordBytesProp,
-        metadataSnapshotMaxNewRecordBytes.toString
-      )
-      .build()
+  def testSnapshotsGenerated(): Unit = {
+    val numberOfBrokers = 3
+    val numberOfControllers = 3
+    val metadataSnapshotMaxNewRecordBytes = 100
 
-    try {
+    TestUtils.resource(
+      new KafkaClusterTestKit
+        .Builder(
+          new TestKitNodes.Builder()
+            .setNumBrokerNodes(numberOfBrokers)
+            .setNumControllerNodes(numberOfControllers)
+            .build()
+        )
+        .setConfigProp(
+          KafkaConfig.MetadataSnapshotMaxNewRecordBytesProp,
+          metadataSnapshotMaxNewRecordBytes.toString
+        )
+        .build()
+    ) { cluster =>
       cluster.format()
       cluster.startup()
+
+      // Check that every controller and broker has a snapshot
       TestUtils.waitUntilTrue(
-        () => controllerRaftManagers(cluster).forall(_.kafkaRaftClient.leaderAndEpoch.leaderId.isPresent),
-        "Raft leader was never elected"
+        () => {
+          cluster.raftManagers().asScala.forall { case (_, raftManager) =>
+            raftManager.replicatedLog.latestSnapshotId.isPresent
+          }
+        },
+        s"Expected for every controller and broker to generate a snapshot: ${
+          cluster.raftManagers().asScala.map { case (id, raftManager) =>
+            (id, raftManager.replicatedLog.latestSnapshotId)
+          }
+        }"
       )
 
-      TestUtils.waitUntilTrue(
-        () => controllerRaftManagers(cluster).forall(_.replicatedLog.latestSnapshotId.isPresent),
-        s"Expected for every controller to generate a snapshot: ${
-          controllerRaftManagers(cluster).map(_.replicatedLog.latestSnapshotId)
-        }}"
-      )
+      assertEquals(numberOfControllers + numberOfBrokers, cluster.raftManagers.size())
 
-    } finally {
-      cluster.close()
-    }
-  }
+      // For every controller and broker perform some sanity checks against the lastest snapshot
+      for ((_, raftManager) <- cluster.raftManagers().asScala) {
+        TestUtils.resource(
+          SnapshotReader.of(
+            raftManager.replicatedLog.latestSnapshot.get(),
+            new MetadataRecordSerde(),
+            BufferSupplier.create(),
+            1
+          )
+        ) { snapshot =>
+          // Check that the snapshot is non-empty
+          assertTrue(snapshot.hasNext())
 
-  private def controllerRaftManagers(cluster: KafkaClusterTestKit): List[KafkaRaftManager[ApiMessageAndVersion]] = {
-    val controllerIds = cluster.controllers.keySet.asScala
-
-    cluster.raftManagers().asScala.flatMap { case (replicaId, raftManager) =>
-      if (controllerIds.contains(replicaId)) {
-        Some(raftManager)
-      } else {
-        None
+          // Check that we can read the entire snapshot
+          while (snapshot.hasNext()) {
+            val batch = snapshot.next()
+            assertTrue(batch.sizeInBytes > 0)
+            assertNotEquals(Collections.emptyList(), batch.records())
+          }
+        }
       }
-    }.toList
+    }
   }
 }

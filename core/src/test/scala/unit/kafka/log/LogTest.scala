@@ -21,16 +21,14 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.util.concurrent.{Callable, Executors}
-import java.util.regex.Pattern
-import java.util.{Collections, Optional}
+import java.util.{Optional, Properties}
 import kafka.common.{OffsetsOutOfOrderException, RecordValidationException, UnexpectedAppendOffsetException}
-import kafka.log.Log.DeleteDirSuffix
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, LogOffsetMetadata, PartitionMetadataFile}
 import kafka.utils._
-import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.common.{InvalidRecordException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -39,10 +37,10 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
+import scala.annotation.nowarn
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
@@ -463,33 +461,8 @@ class LogTest {
   }
 
   @Test
-  def testLogDeleteDirName(): Unit = {
-    val name1 = Log.logDeleteDirName(new TopicPartition("foo", 3))
-    assertTrue(name1.length <= 255)
-    assertTrue(Pattern.compile("foo-3\\.[0-9a-z]{32}-delete").matcher(name1).matches())
-    assertTrue(Log.DeleteDirPattern.matcher(name1).matches())
-    assertFalse(Log.FutureDirPattern.matcher(name1).matches())
-    val name2 = Log.logDeleteDirName(
-      new TopicPartition("n" + String.join("", Collections.nCopies(248, "o")), 5))
-    assertEquals(255, name2.length)
-    assertTrue(Pattern.compile("n[o]{212}-5\\.[0-9a-z]{32}-delete").matcher(name2).matches())
-    assertTrue(Log.DeleteDirPattern.matcher(name2).matches())
-    assertFalse(Log.FutureDirPattern.matcher(name2).matches())
-  }
-
-  @Test
-  def testOffsetFromFile(): Unit = {
+  def testOffsetFromProducerSnapshotFile(): Unit = {
     val offset = 23423423L
-
-    val logFile = Log.logFile(tmpDir, offset)
-    assertEquals(offset, Log.offsetFromFile(logFile))
-
-    val offsetIndexFile = Log.offsetIndexFile(tmpDir, offset)
-    assertEquals(offset, Log.offsetFromFile(offsetIndexFile))
-
-    val timeIndexFile = Log.timeIndexFile(tmpDir, offset)
-    assertEquals(offset, Log.offsetFromFile(timeIndexFile))
-
     val snapshotFile = Log.producerSnapshotFile(tmpDir, offset)
     assertEquals(offset, Log.offsetFromFile(snapshotFile))
   }
@@ -499,7 +472,7 @@ class LogTest {
    * using the mock clock to force the log to roll and checks the number of segments.
    */
   @Test
-  def testTimeBasedLogRoll(): Unit = {
+  def testTimeBasedLogRollDuringAppend(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
     val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L)
 
@@ -604,28 +577,6 @@ class LogTest {
 
     val nextRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = epoch, sequence = 2)
     assertThrows(classOf[OutOfOrderSequenceException], () => log.appendAsLeader(nextRecords, leaderEpoch = 0))
-  }
-
-  @Test
-  def testTruncateToEmptySegment(): Unit = {
-    val log = createLog(logDir, LogConfig())
-
-    // Force a segment roll by using a large offset. The first segment will be empty
-    val records = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)),
-      baseOffset = Int.MaxValue.toLong + 200)
-    appendAsFollower(log, records)
-    assertEquals(0, log.logSegments.head.size)
-    assertEquals(2, log.logSegments.size)
-
-    // Truncate to an offset before the base offset of the latest segment
-    log.truncateTo(0L)
-    assertEquals(1, log.logSegments.size)
-
-    // Now verify that we can still append to the active segment
-    appendAsFollower(log, TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)),
-      baseOffset = 100L))
-    assertEquals(1, log.logSegments.size)
-    assertEquals(101L, log.logEndOffset)
   }
 
   @Test
@@ -747,63 +698,6 @@ class LogTest {
     assertEquals(500, log.logEndOffset)
   }
 
-  @Test
-  def testNonActiveSegmentsFrom(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig()
-    val log = createLog(logDir, logConfig)
-
-    for (i <- 0 until 5) {
-      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
-      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
-      log.roll()
-    }
-
-    def nonActiveBaseOffsetsFrom(startOffset: Long): Seq[Long] = {
-      log.nonActiveLogSegmentsFrom(startOffset).map(_.baseOffset).toSeq
-    }
-
-    assertEquals(5L, log.activeSegment.baseOffset)
-    assertEquals(0 until 5, nonActiveBaseOffsetsFrom(0L))
-    assertEquals(Seq.empty, nonActiveBaseOffsetsFrom(5L))
-    assertEquals(2 until 5, nonActiveBaseOffsetsFrom(2L))
-    assertEquals(Seq.empty, nonActiveBaseOffsetsFrom(6L))
-  }
-
-  @Test
-  def testInconsistentLogSegmentRange(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig()
-    val log = createLog(logDir, logConfig)
-
-    for (i <- 0 until 5) {
-      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
-      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
-      log.roll()
-    }
-
-    assertThrows(classOf[IllegalArgumentException], () => log.logSegments(5, 1))
-  }
-
-  @Test
-  def testLogDelete(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig()
-    val log = createLog(logDir, logConfig)
-
-    for (i <- 0 to 100) {
-      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
-      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
-      log.roll()
-    }
-
-    assertTrue(log.logSegments.nonEmpty)
-    assertFalse(logDir.listFiles.isEmpty)
-
-    // delete the log
-    log.delete()
-
-    assertEquals(0, log.logSegments.size)
-    assertFalse(logDir.exists)
-  }
-
   /**
    * Test that "PeriodicProducerExpirationCheck" scheduled task gets canceled after log
    * is deleted.
@@ -825,19 +719,6 @@ class LogTest {
     } finally {
       scheduler.shutdown()
     }
-  }
-
-  @Test
-  def testSizeForLargeLogs(): Unit = {
-    val largeSize = Int.MaxValue.toLong * 2
-    val logSegment: LogSegment = EasyMock.createMock(classOf[LogSegment])
-
-    EasyMock.expect(logSegment.size).andReturn(Int.MaxValue).anyTimes
-    EasyMock.replay(logSegment)
-
-    assertEquals(Int.MaxValue, Log.sizeInBytes(Seq(logSegment)))
-    assertEquals(largeSize, Log.sizeInBytes(Seq(logSegment, logSegment)))
-    assertTrue(Log.sizeInBytes(Seq(logSegment, logSegment)) > Int.MaxValue)
   }
 
   @Test
@@ -1948,12 +1829,44 @@ class LogTest {
   }
 
   @Test
+  def testLogFlushesPartitionMetadataOnAppend(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = createLog(logDir, logConfig)
+    val record = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("simpleValue".getBytes))
+
+    val topicId = Uuid.randomUuid()
+    log.partitionMetadataFile.record(topicId)
+
+    // Should trigger a synchronous flush
+    log.appendAsLeader(record, leaderEpoch = 0)
+    assertTrue(log.partitionMetadataFile.exists())
+    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+  }
+
+  @Test
+  def testLogFlushesPartitionMetadataOnClose(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    var log = createLog(logDir, logConfig)
+
+    val topicId = Uuid.randomUuid()
+    log.partitionMetadataFile.record(topicId)
+
+    // Should trigger a synchronous flush
+    log.close()
+
+    // We open the log again, and the partition metadata file should exist with the same ID.
+    log = createLog(logDir, logConfig)
+    assertTrue(log.partitionMetadataFile.exists())
+    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+  }
+
+  @Test
   def testLogRecoversTopicId(): Unit = {
     val logConfig = LogTestUtils.createLogConfig()
     var log = createLog(logDir, logConfig)
 
     val topicId = Uuid.randomUuid()
-    log.partitionMetadataFile.write(topicId)
+    log.assignTopicId(topicId)
     log.close()
 
     // test recovery case
@@ -1989,7 +1902,7 @@ class LogTest {
     var log = createLog(logDir, logConfig)
 
     val topicId = Uuid.randomUuid()
-    log.partitionMetadataFile.write(topicId)
+    log.assignTopicId(topicId)
     log.close()
 
     // test creating a log with a new ID
@@ -2356,6 +2269,26 @@ class LogTest {
   }
 
   @Test
+  def testTopicIdFlushesBeforeDirectoryRename(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
+    val log = createLog(logDir, logConfig)
+
+    // Write a topic ID to the partition metadata file to ensure it is transferred correctly.
+    val topicId = Uuid.randomUuid()
+    log.partitionMetadataFile.record(topicId)
+
+    // Ensure that after a directory rename, the partition metadata file is written to the right location.
+    val tp = Log.parseTopicPartitionName(log.dir)
+    log.renameDir(Log.logDeleteDirName(tp))
+    assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
+    assertFalse(PartitionMetadataFile.newFile(this.logDir).exists())
+
+    // Check the file holds the correct contents.
+    assertTrue(log.partitionMetadataFile.exists())
+    assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+  }
+
+  @Test
   def testLeaderEpochCacheClearedAfterDowngradeInAppendedMessages(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
     val log = createLog(logDir, logConfig)
@@ -2368,6 +2301,7 @@ class LogTest {
     assertEquals(None, log.leaderEpochCache.flatMap(_.latestEpoch))
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testLeaderEpochCacheClearedAfterDynamicMessageFormatDowngrade(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
@@ -2375,8 +2309,12 @@ class LogTest {
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
     assertEquals(Some(5), log.latestEpoch)
 
-    val downgradedLogConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
-      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.shortVersion)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, "1000")
+    logProps.put(LogConfig.IndexIntervalBytesProp, "1")
+    logProps.put(LogConfig.MaxMessageBytesProp, "65536")
+    logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
+    val downgradedLogConfig = LogConfig(logProps)
     log.updateConfig(downgradedLogConfig)
     LogTestUtils.assertLeaderEpochCacheEmpty(log)
 
@@ -2385,23 +2323,26 @@ class LogTest {
     LogTestUtils.assertLeaderEpochCacheEmpty(log)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testLeaderEpochCacheCreatedAfterMessageFormatUpgrade(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
-      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.shortVersion)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, "1000")
+    logProps.put(LogConfig.IndexIntervalBytesProp, "1")
+    logProps.put(LogConfig.MaxMessageBytesProp, "65536")
+    logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
+    val logConfig = LogConfig(logProps)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
       magicValue = RecordVersion.V1.value), leaderEpoch = 5)
     LogTestUtils.assertLeaderEpochCacheEmpty(log)
 
-    val upgradedLogConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
-      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_11_0_IV0.shortVersion)
+    logProps.put(LogConfig.MessageFormatVersionProp, "0.11.0")
+    val upgradedLogConfig = LogConfig(logProps)
     log.updateConfig(upgradedLogConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
     assertEquals(Some(5), log.latestEpoch)
   }
-
-
 
   @Test
   def testSplitOnOffsetOverflow(): Unit = {
@@ -2477,113 +2418,6 @@ class LogTest {
 
     assertFalse(LogTestUtils.hasOffsetOverflow(log))
   }
-
-  @Test
-  def testParseTopicPartitionName(): Unit = {
-    val topic = "test_topic"
-    val partition = "143"
-    val dir = new File(logDir, topicPartitionName(topic, partition))
-    val topicPartition = Log.parseTopicPartitionName(dir)
-    assertEquals(topic, topicPartition.topic)
-    assertEquals(partition.toInt, topicPartition.partition)
-  }
-
-  /**
-   * Tests that log directories with a period in their name that have been marked for deletion
-   * are parsed correctly by `Log.parseTopicPartitionName` (see KAFKA-5232 for details).
-   */
-  @Test
-  def testParseTopicPartitionNameWithPeriodForDeletedTopic(): Unit = {
-    val topic = "foo.bar-testtopic"
-    val partition = "42"
-    val dir = new File(logDir, Log.logDeleteDirName(new TopicPartition(topic, partition.toInt)))
-    val topicPartition = Log.parseTopicPartitionName(dir)
-    assertEquals(topic, topicPartition.topic, "Unexpected topic name parsed")
-    assertEquals(partition.toInt, topicPartition.partition, "Unexpected partition number parsed")
-  }
-
-  @Test
-  def testParseTopicPartitionNameForEmptyName(): Unit = {
-    val dir = new File("")
-    assertThrows(classOf[KafkaException], () => Log.parseTopicPartitionName(dir),
-      () => "KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
-  }
-
-  @Test
-  def testParseTopicPartitionNameForNull(): Unit = {
-    val dir: File = null
-    assertThrows(classOf[KafkaException], () => Log.parseTopicPartitionName(dir),
-      () => "KafkaException should have been thrown for dir: " + dir)
-  }
-
-  @Test
-  def testParseTopicPartitionNameForMissingSeparator(): Unit = {
-    val topic = "test_topic"
-    val partition = "1999"
-    val dir = new File(logDir, topic + partition)
-    assertThrows(classOf[KafkaException], () => Log.parseTopicPartitionName(dir),
-      () => "KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
-    // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, topic + partition + "." + DeleteDirSuffix)
-    assertThrows(classOf[KafkaException], () => Log.parseTopicPartitionName(deleteMarkerDir),
-      () => "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
-  }
-
-  @Test
-  def testParseTopicPartitionNameForMissingTopic(): Unit = {
-    val topic = ""
-    val partition = "1999"
-    val dir = new File(logDir, topicPartitionName(topic, partition))
-    assertThrows(classOf[KafkaException], () => Log.parseTopicPartitionName(dir),
-      () => "KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
-
-    // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(new TopicPartition(topic, partition.toInt)))
-
-    assertThrows(classOf[KafkaException], () => Log.parseTopicPartitionName(deleteMarkerDir),
-      () => "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
-  }
-
-  @Test
-  def testParseTopicPartitionNameForMissingPartition(): Unit = {
-    val topic = "test_topic"
-    val partition = ""
-    val dir = new File(logDir.getPath + topicPartitionName(topic, partition))
-    assertThrows(classOf[KafkaException], () => Log.parseTopicPartitionName(dir),
-      () => "KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
-
-    // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, topicPartitionName(topic, partition) + "." + DeleteDirSuffix)
-    assertThrows(classOf[KafkaException], () => Log.parseTopicPartitionName(deleteMarkerDir),
-      () => "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
-  }
-
-  @Test
-  def testParseTopicPartitionNameForInvalidPartition(): Unit = {
-    val topic = "test_topic"
-    val partition = "1999a"
-    val dir = new File(logDir, topicPartitionName(topic, partition))
-    assertThrows(classOf[KafkaException], () => Log.parseTopicPartitionName(dir),
-      () => "KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
-
-    // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, topic + partition + "." + DeleteDirSuffix)
-    assertThrows(classOf[KafkaException], () => Log.parseTopicPartitionName(deleteMarkerDir),
-      () => "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
-  }
-
-  @Test
-  def testParseTopicPartitionNameForExistingInvalidDir(): Unit = {
-    val dir1 = new File(logDir.getPath + "/non_kafka_dir")
-    assertThrows(classOf[KafkaException], () => Log.parseTopicPartitionName(dir1),
-      () => "KafkaException should have been thrown for dir: " + dir1.getCanonicalPath)
-    val dir2 = new File(logDir.getPath + "/non_kafka_dir-delete")
-    assertThrows(classOf[KafkaException], () => Log.parseTopicPartitionName(dir2),
-      () => "KafkaException should have been thrown for dir: " + dir2.getCanonicalPath)
-  }
-
-  def topicPartitionName(topic: String, partition: String): String =
-    topic + "-" + partition
 
   @Test
   def testDeleteOldSegments(): Unit = {

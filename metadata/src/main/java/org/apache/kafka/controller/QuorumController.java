@@ -1187,19 +1187,19 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("alterPartitionReassignments",
             time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs(), MILLISECONDS),
-            () -> {
-                throw new UnsupportedOperationException();
-            });
+            () -> replicationControl.alterPartitionReassignments(request));
     }
 
     @Override
     public CompletableFuture<ListPartitionReassignmentsResponseData>
             listPartitionReassignments(ListPartitionReassignmentsRequestData request) {
+        if (request.topics() != null && request.topics().isEmpty()) {
+            return CompletableFuture.completedFuture(
+                new ListPartitionReassignmentsResponseData().setErrorMessage(null));
+        }
         return appendReadEvent("listPartitionReassignments",
             time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs(), MILLISECONDS),
-            () -> {
-                throw new UnsupportedOperationException();
-            });
+            () -> replicationControl.listPartitionReassignments(request.topics()));
     }
 
     @Override

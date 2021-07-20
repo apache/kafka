@@ -77,10 +77,15 @@ class ControllerApis(val requestChannel: RequestChannel,
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
 
+  def isClosed: Boolean = aclApis.isClosed
+
+  def close(): Unit = aclApis.close()
+
   override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     try {
       request.header.apiKey match {
         case ApiKeys.FETCH => handleFetch(request)
+        case ApiKeys.FETCH_SNAPSHOT => handleFetchSnapshot(request)
         case ApiKeys.METADATA => handleMetadataRequest(request)
         case ApiKeys.CREATE_TOPICS => handleCreateTopics(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopics(request)
@@ -139,6 +144,11 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleFetch(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     handleRaftRequest(request, response => new FetchResponse(response.asInstanceOf[FetchResponseData]))
+  }
+
+  def handleFetchSnapshot(request: RequestChannel.Request): Unit = {
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    handleRaftRequest(request, response => new FetchSnapshotResponse(response.asInstanceOf[FetchSnapshotResponseData]))
   }
 
   def handleMetadataRequest(request: RequestChannel.Request): Unit = {

@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.api.{ApiVersion, KAFKA_0_8_2}
+import kafka.api.{ApiVersion, KAFKA_0_8_2, KAFKA_3_0_IV1}
 import kafka.cluster.EndPoint
 import kafka.log.LogConfig
 import kafka.message._
@@ -39,6 +39,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.junit.jupiter.api.function.Executable
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 class KafkaConfigTest {
@@ -382,6 +383,7 @@ class KafkaConfigTest {
     assertEquals(conf.advertisedListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testVersionConfiguration(): Unit = {
     val props = new Properties()
@@ -530,6 +532,7 @@ class KafkaConfigTest {
     assertTrue(caught.getMessage.contains("advertised.listeners listener names must be equal to or a subset of the ones defined in listeners"))
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testInterBrokerVersionMessageFormatCompatibility(): Unit = {
     def buildConfig(interBrokerProtocol: ApiVersion, messageFormat: ApiVersion): KafkaConfig = {
@@ -543,8 +546,11 @@ class KafkaConfigTest {
       ApiVersion.allVersions.foreach { messageFormatVersion =>
         if (interBrokerVersion.recordVersion.value >= messageFormatVersion.recordVersion.value) {
           val config = buildConfig(interBrokerVersion, messageFormatVersion)
-          assertEquals(messageFormatVersion, config.logMessageFormatVersion)
           assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
+          if (interBrokerVersion >= KAFKA_3_0_IV1)
+            assertEquals(KAFKA_3_0_IV1, config.logMessageFormatVersion)
+          else
+            assertEquals(messageFormatVersion, config.logMessageFormatVersion)
         } else {
           assertThrows(classOf[IllegalArgumentException], () => buildConfig(interBrokerVersion, messageFormatVersion))
         }
@@ -804,6 +810,7 @@ class KafkaConfigTest {
     }
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testDynamicLogConfigs(): Unit = {
     def baseProperties: Properties = {

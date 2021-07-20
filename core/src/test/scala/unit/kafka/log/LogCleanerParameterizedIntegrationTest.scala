@@ -31,6 +31,7 @@ import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, ArgumentsProvider, ArgumentsSource}
 
+import scala.annotation.nowarn
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
@@ -128,6 +129,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     assertEquals(toMap(messages), toMap(read), "Contents of the map shouldn't change")
   }
 
+  @nowarn("cat=deprecation")
   @ParameterizedTest
   @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstd])
   def testCleanerWithMessageFormatV0(codec: CompressionType): Unit = {
@@ -148,7 +150,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     val log = cleaner.logs.get(topicPartitions(0))
     val props = logConfigProperties(maxMessageSize = maxMessageSize)
     props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_9_0.version)
-    log.config = new LogConfig(props)
+    log.updateConfig(new LogConfig(props))
 
     val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
     val startSize = log.size
@@ -168,7 +170,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
       // also add some messages with version 1 and version 2 to check that we handle mixed format versions correctly
       props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_11_0_IV0.version)
-      log.config = new LogConfig(props)
+      log.updateConfig(new LogConfig(props))
       val dupsV1 = writeDups(startKey = 30, numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
       val dupsV2 = writeDups(startKey = 15, numKeys = 5, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V2)
       appends ++ dupsV0 ++ Seq((largeMessageKey, largeMessageValue, largeMessageOffset)) ++ dupsV1 ++ dupsV2
@@ -179,6 +181,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     checkLogAfterAppendingDups(log, startSize, appends2)
   }
 
+  @nowarn("cat=deprecation")
   @ParameterizedTest
   @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstd])
   def testCleaningNestedMessagesWithV0AndV1(codec: CompressionType): Unit = {
@@ -188,7 +191,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     val log = cleaner.logs.get(topicPartitions(0))
     val props = logConfigProperties(maxMessageSize = maxMessageSize, segmentSize = 256)
     props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_9_0.version)
-    log.config = new LogConfig(props)
+    log.updateConfig(new LogConfig(props))
 
     // with compression enabled, these messages will be written as a single message containing
     // all of the individual messages
@@ -196,7 +199,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     appendsV0 ++= writeDupsSingleMessageSet(numKeys = 2, startKey = 3, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
 
     props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_10_0_IV1.version)
-    log.config = new LogConfig(props)
+    log.updateConfig(new LogConfig(props))
 
     var appendsV1 = writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
     appendsV1 ++= writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
