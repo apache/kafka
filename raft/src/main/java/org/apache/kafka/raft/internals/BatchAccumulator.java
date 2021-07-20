@@ -22,15 +22,20 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.raft.RecordSerde;
+import org.apache.kafka.server.common.serialization.RecordSerde;
 
+import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.function.Function;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -202,6 +207,112 @@ public class BatchAccumulator<T> implements Closeable {
         currentBatch = null;
     }
 
+    private void appendControlMessage(Function<ByteBuffer, MemoryRecords> valueCreator) {
+        appendLock.lock();
+        try {
+            ByteBuffer buffer = memoryPool.tryAllocate(256);
+            if (buffer != null) {
+                try {
+                    forceDrain();
+                    completed.add(
+                        new CompletedBatch<>(
+                            nextOffset,
+                            1,
+                            valueCreator.apply(buffer),
+                            memoryPool,
+                            buffer
+                        )
+                    );
+                    nextOffset += 1;
+                } catch (Exception e) {
+                    // Release the buffer now since the buffer was not stored in completed for a delay release
+                    memoryPool.release(buffer);
+                    throw e;
+                }
+            } else {
+                throw new IllegalStateException("Could not allocate buffer for the control record");
+            }
+        } finally {
+            appendLock.unlock();
+        }
+    }
+
+    /**
+     * Append a {@link LeaderChangeMessage} record to the batch
+     *
+     * @param @LeaderChangeMessage The message to append
+     * @param @currentTimeMs The timestamp of message generation
+     * @throws IllegalStateException on failure to allocate a buffer for the record
+     */
+    public void appendLeaderChangeMessage(
+        LeaderChangeMessage leaderChangeMessage,
+        long currentTimeMs
+    ) {
+        appendControlMessage(buffer -> {
+            return MemoryRecords.withLeaderChangeMessage(
+                this.nextOffset,
+                currentTimeMs,
+                this.epoch,
+                buffer,
+                leaderChangeMessage
+            );
+        });
+    }
+
+
+    /**
+     * Append a {@link SnapshotHeaderRecord} record to the batch
+     *
+     * @param @SnapshotHeaderRecord The message to append
+     * @throws IllegalStateException on failure to allocate a buffer for the record
+     */
+    public void appendSnapshotHeaderMessage(
+        SnapshotHeaderRecord snapshotHeaderRecord,
+        long currentTimeMs
+    ) {
+        appendControlMessage(buffer -> {
+            return MemoryRecords.withSnapshotHeaderRecord(
+                this.nextOffset,
+                currentTimeMs,
+                this.epoch,
+                buffer,
+                snapshotHeaderRecord
+            );
+        });
+    }
+
+    /**
+     * Append a {@link SnapshotFooterRecord} record to the batch
+     *
+     * @param @SnapshotFooterRecord The message to append
+     * @param currentTimeMs
+     * @throws IllegalStateException on failure to allocate a buffer for the record
+     */
+    public void appendSnapshotFooterMessage(
+        SnapshotFooterRecord snapshotFooterRecord,
+        long currentTimeMs
+    ) {
+        appendControlMessage(buffer -> {
+            return MemoryRecords.withSnapshotFooterRecord(
+                this.nextOffset,
+                currentTimeMs,
+                this.epoch,
+                buffer,
+                snapshotFooterRecord
+            );
+        });
+    }
+
+    public void forceDrain() {
+        appendLock.lock();
+        try {
+            drainStatus = DrainStatus.STARTED;
+            maybeCompleteDrain();
+        } finally {
+            appendLock.unlock();
+        }
+    }
+
     private void maybeCompleteDrain() {
         if (drainStatus == DrainStatus.STARTED) {
             if (currentBatch != null && currentBatch.nonEmpty()) {
@@ -339,7 +450,8 @@ public class BatchAccumulator<T> implements Closeable {
 
     public static class CompletedBatch<T> {
         public final long baseOffset;
-        public final List<T> records;
+        public final int numRecords;
+        public final Optional<List<T>> records;
         public final MemoryRecords data;
         private final MemoryPool pool;
         // Buffer that was allocated by the MemoryPool (pool). This may not be the buffer used in
@@ -354,7 +466,23 @@ public class BatchAccumulator<T> implements Closeable {
             ByteBuffer initialBuffer
         ) {
             this.baseOffset = baseOffset;
-            this.records = records;
+            this.records = Optional.of(records);
+            this.numRecords = records.size();
+            this.data = data;
+            this.pool = pool;
+            this.initialBuffer = initialBuffer;
+        }
+
+        private CompletedBatch(
+            long baseOffset,
+            int numRecords,
+            MemoryRecords data,
+            MemoryPool pool,
+            ByteBuffer initialBuffer
+        ) {
+            this.baseOffset = baseOffset;
+            this.records = Optional.empty();
+            this.numRecords = numRecords;
             this.data = data;
             this.pool = pool;
             this.initialBuffer = initialBuffer;

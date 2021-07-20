@@ -17,16 +17,15 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 
 public class TableProcessorNodeTest {
-    private static class TestProcessor extends AbstractProcessor<String, String> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private static class TestProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
         }
 
         @Override

@@ -18,10 +18,9 @@ import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
-
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
-import kafka.security.authorizer.AclEntry
+import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
@@ -144,7 +143,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.AuthorizerClassNameProp, "kafka.security.auth.SimpleAclAuthorizer")
+    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
@@ -163,7 +162,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           .responses.find(topic)
           .partitionResponses.asScala.find(_.index == part).get
           .errorCode
-      )      
+      )
     }),
     ApiKeys.FETCH -> ((resp: requests.FetchResponse) => Errors.forCode(resp.responseData.asScala.find(_._1 == tp).get._2.errorCode)),
     ApiKeys.LIST_OFFSETS -> ((resp: ListOffsetsResponse) => {
@@ -177,7 +176,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => Errors.forCode(
       resp.data.topics().get(0).partitions().get(0).errorCode)),
     ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error),
-    ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => resp.error),
+    ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => {
+      Errors.forCode(resp.data.coordinators.asScala.find(g => group == g.key).head.errorCode)
+    }),
     ApiKeys.UPDATE_METADATA -> ((resp: requests.UpdateMetadataResponse) => resp.error),
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.error),
     ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => Errors.forCode(resp.data.errorCode)),
@@ -355,7 +356,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createListOffsetsRequest = {
-    requests.ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED).setTargetTimes(
+    requests.ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false).setTargetTimes(
       List(new ListOffsetsTopic()
         .setName(tp.topic)
         .setPartitions(List(new ListOffsetsPartition()
@@ -385,7 +386,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     new FindCoordinatorRequest.Builder(
         new FindCoordinatorRequestData()
           .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
-          .setKey(group)).build()
+          .setCoordinatorKeys(Collections.singletonList(group))).build()
   }
 
   private def createUpdateMetadataRequest = {
@@ -1667,7 +1668,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producer.beginTransaction()
 
     assertThrows(classOf[GroupAuthorizationException],
-      () => producer.sendOffsetsToTransaction(Map(tp -> new OffsetAndMetadata(0L)).asJava, group))
+      () => producer.sendOffsetsToTransaction(Map(tp -> new OffsetAndMetadata(0L)).asJava, new ConsumerGroupMetadata(group)))
   }
 
   @Test
@@ -1681,7 +1682,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producer.beginTransaction()
 
     assertThrows(classOf[GroupAuthorizationException],
-      () => producer.sendOffsetsToTransaction(Map(tp -> new OffsetAndMetadata(0L)).asJava, group))
+      () => producer.sendOffsetsToTransaction(Map(tp -> new OffsetAndMetadata(0L)).asJava, new ConsumerGroupMetadata(group)))
   }
 
   @Test
@@ -1895,7 +1896,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     removeAllClientAcls()
     assertThrows(classOf[TransactionalIdAuthorizationException], () => {
       val offsets = Map(tp -> new OffsetAndMetadata(1L)).asJava
-      producer.sendOffsetsToTransaction(offsets, group)
+      producer.sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(group))
       producer.commitTransaction()
     })
   }

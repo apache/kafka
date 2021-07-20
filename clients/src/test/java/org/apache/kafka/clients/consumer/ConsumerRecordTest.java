@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,8 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class ConsumerRecordTest {
 
     @Test
-    @SuppressWarnings("deprecation")
-    public void testOldConstructor() {
+    public void testShortConstructor() {
         String topic = "topic";
         int partition = 0;
         long offset = 23;
@@ -44,7 +44,6 @@ public class ConsumerRecordTest {
         assertEquals(value, record.value());
         assertEquals(TimestampType.NO_TIMESTAMP_TYPE, record.timestampType());
         assertEquals(ConsumerRecord.NO_TIMESTAMP, record.timestamp());
-        assertEquals(ConsumerRecord.NULL_CHECKSUM, record.checksum());
         assertEquals(ConsumerRecord.NULL_SIZE, record.serializedKeySize());
         assertEquals(ConsumerRecord.NULL_SIZE, record.serializedValueSize());
         assertEquals(Optional.empty(), record.leaderEpoch());
@@ -52,14 +51,63 @@ public class ConsumerRecordTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
-    public void testNullChecksumInConstructor() {
+    @Deprecated
+    public void testConstructorsWithChecksum() {
+        String topic = "topic";
+        int partition = 0;
+        long offset = 23;
+        long timestamp = 23434217432432L;
+        TimestampType timestampType = TimestampType.CREATE_TIME;
         String key = "key";
         String value = "value";
-        long timestamp = 242341324L;
-        ConsumerRecord<String, String> record = new ConsumerRecord<>("topic", 0, 23L, timestamp,
-                TimestampType.CREATE_TIME, null, key.length(), value.length(), key, value, new RecordHeaders());
-        assertEquals(DefaultRecord.computePartialChecksum(timestamp, key.length(), value.length()), record.checksum());
+        long checksum = 50L;
+        int serializedKeySize = 100;
+        int serializedValueSize = 1142;
+
+        ConsumerRecord<String, String> record = new ConsumerRecord<>(topic, partition, offset, timestamp, timestampType,
+            checksum, serializedKeySize, serializedValueSize, key, value);
+        assertEquals(topic, record.topic());
+        assertEquals(partition, record.partition());
+        assertEquals(offset, record.offset());
+        assertEquals(key, record.key());
+        assertEquals(value, record.value());
+        assertEquals(timestampType, record.timestampType());
+        assertEquals(timestamp, record.timestamp());
+        assertEquals(serializedKeySize, record.serializedKeySize());
+        assertEquals(serializedValueSize, record.serializedValueSize());
+        assertEquals(Optional.empty(), record.leaderEpoch());
+        assertEquals(new RecordHeaders(), record.headers());
+
+        RecordHeaders headers = new RecordHeaders();
+        headers.add(new RecordHeader("header key", "header value".getBytes(StandardCharsets.UTF_8)));
+        record = new ConsumerRecord<>(topic, partition, offset, timestamp, timestampType,
+                checksum, serializedKeySize, serializedValueSize, key, value, headers);
+        assertEquals(topic, record.topic());
+        assertEquals(partition, record.partition());
+        assertEquals(offset, record.offset());
+        assertEquals(key, record.key());
+        assertEquals(value, record.value());
+        assertEquals(timestampType, record.timestampType());
+        assertEquals(timestamp, record.timestamp());
+        assertEquals(serializedKeySize, record.serializedKeySize());
+        assertEquals(serializedValueSize, record.serializedValueSize());
+        assertEquals(Optional.empty(), record.leaderEpoch());
+        assertEquals(headers, record.headers());
+
+        Optional<Integer> leaderEpoch = Optional.of(10);
+        record = new ConsumerRecord<>(topic, partition, offset, timestamp, timestampType,
+                checksum, serializedKeySize, serializedValueSize, key, value, headers, leaderEpoch);
+        assertEquals(topic, record.topic());
+        assertEquals(partition, record.partition());
+        assertEquals(offset, record.offset());
+        assertEquals(key, record.key());
+        assertEquals(value, record.value());
+        assertEquals(timestampType, record.timestampType());
+        assertEquals(timestamp, record.timestamp());
+        assertEquals(serializedKeySize, record.serializedKeySize());
+        assertEquals(serializedValueSize, record.serializedValueSize());
+        assertEquals(leaderEpoch, record.leaderEpoch());
+        assertEquals(headers, record.headers());
     }
 
 }

@@ -40,6 +40,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -378,7 +379,7 @@ public class Fetcher<K, V> implements Closeable {
 
             if (future.succeeded()) {
                 MetadataResponse response = (MetadataResponse) future.value().responseBody();
-                Cluster cluster = response.cluster();
+                Cluster cluster = response.buildCluster();
 
                 Set<String> unauthorizedTopics = cluster.unauthorizedTopics();
                 if (!unauthorizedTopics.isEmpty())
@@ -977,7 +978,7 @@ public class Fetcher<K, V> implements Closeable {
                                                                   final Map<TopicPartition, ListOffsetsPartition> timestampsToSearch,
                                                                   boolean requireTimestamp) {
         ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamp, isolationLevel)
+                .forConsumer(requireTimestamp, isolationLevel, false)
                 .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch));
 
         log.debug("Sending ListOffsetRequest {} to broker {}", builder, node);
@@ -1385,12 +1386,13 @@ public class Fetcher<K, V> implements Closeable {
             byte[] valueByteArray = valueBytes == null ? null : Utils.toArray(valueBytes);
             V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), headers, valueByteArray);
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
-                                        timestamp, timestampType, record.checksumOrNull(),
+                                        timestamp, timestampType,
                                         keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,
                                         valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
                                         key, value, headers, leaderEpoch);
         } catch (RuntimeException e) {
-            throw new SerializationException("Error deserializing key/value for partition " + partition +
+            throw new RecordDeserializationException(partition, record.offset(),
+                "Error deserializing key/value for partition " + partition +
                     " at offset " + record.offset() + ". If needed, please seek past the record to continue consumption.", e);
         }
     }

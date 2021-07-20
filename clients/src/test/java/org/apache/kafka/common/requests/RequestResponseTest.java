@@ -71,6 +71,7 @@ import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartit
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
@@ -984,6 +985,52 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testSerializeWithHeader() {
+        CreatableTopicCollection topicsToCreate = new CreatableTopicCollection(1);
+        topicsToCreate.add(new CreatableTopic()
+                               .setName("topic")
+                               .setNumPartitions(3)
+                               .setReplicationFactor((short) 2));
+
+        CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest.Builder(
+            new CreateTopicsRequestData()
+                .setTimeoutMs(10)
+                .setTopics(topicsToCreate)
+        ).build();
+
+        short requestVersion = ApiKeys.CREATE_TOPICS.latestVersion();
+        RequestHeader requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS, requestVersion, "client", 2);
+        ByteBuffer serializedRequest = createTopicsRequest.serializeWithHeader(requestHeader);
+
+        RequestHeader parsedHeader = RequestHeader.parse(serializedRequest);
+        assertEquals(requestHeader, parsedHeader);
+
+        RequestAndSize parsedRequest = AbstractRequest.parseRequest(
+            ApiKeys.CREATE_TOPICS, requestVersion, serializedRequest);
+
+        assertEquals(createTopicsRequest.data(), parsedRequest.request.data());
+    }
+
+    @Test
+    public void testSerializeWithInconsistentHeaderApiKey() {
+        CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest.Builder(
+            new CreateTopicsRequestData()
+        ).build();
+        short requestVersion = ApiKeys.CREATE_TOPICS.latestVersion();
+        RequestHeader requestHeader = new RequestHeader(DELETE_TOPICS, requestVersion, "client", 2);
+        assertThrows(IllegalArgumentException.class, () -> createTopicsRequest.serializeWithHeader(requestHeader));
+    }
+
+    @Test
+    public void testSerializeWithInconsistentHeaderVersion() {
+        CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest.Builder(
+            new CreateTopicsRequestData()
+        ).build((short) 2);
+        RequestHeader requestHeader = new RequestHeader(CREATE_TOPICS, (short) 1, "client", 2);
+        assertThrows(IllegalArgumentException.class, () -> createTopicsRequest.serializeWithHeader(requestHeader));
+    }
+
+    @Test
     public void testJoinGroupRequestVersion0RebalanceTimeout() {
         final short version = 0;
         JoinGroupRequest jgr = createJoinGroupRequest(version);
@@ -1145,7 +1192,7 @@ public class RequestResponseTest {
 
     private FindCoordinatorResponse createFindCoordinatorResponse() {
         Node node = new Node(10, "host1", 2014);
-        return FindCoordinatorResponse.prepareResponse(Errors.NONE, node);
+        return FindCoordinatorResponse.prepareOldResponse(Errors.NONE, node);
     }
 
     private FetchRequest createFetchRequest(int version, FetchMetadata metadata, List<TopicPartition> toForget) {
@@ -1407,7 +1454,7 @@ public class RequestResponseTest {
                             .setMaxNumOffsets(10)
                             .setCurrentLeaderEpoch(5)));
             return ListOffsetsRequest.Builder
-                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
         } else if (version == 1) {
@@ -1418,7 +1465,7 @@ public class RequestResponseTest {
                             .setTimestamp(1000000L)
                             .setCurrentLeaderEpoch(5)));
             return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
+                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
         } else if (version >= 2 && version <= LIST_OFFSETS.latestVersion()) {
@@ -1431,7 +1478,7 @@ public class RequestResponseTest {
                     .setName("test")
                     .setPartitions(Arrays.asList(partition));
             return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_COMMITTED)
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
         } else {
@@ -2071,8 +2118,7 @@ public class RequestResponseTest {
                 "groupId",
                 21L,
                 (short) 42,
-                offsets,
-                false).build();
+                offsets).build();
         } else {
             return new TxnOffsetCommitRequest.Builder("transactionalId",
                 "groupId",
@@ -2081,8 +2127,7 @@ public class RequestResponseTest {
                 offsets,
                 "member",
                 2,
-                Optional.of("instance"),
-                false).build();
+                Optional.of("instance")).build();
         }
     }
 
@@ -2100,8 +2145,7 @@ public class RequestResponseTest {
             offsets,
             "member",
             2,
-            Optional.of("instance"),
-            true).build();
+            Optional.of("instance")).build();
     }
 
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {

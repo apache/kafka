@@ -58,6 +58,7 @@ import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.parseType;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
@@ -122,7 +123,9 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  *   <li>{@link ConsumerConfig#PARTITION_ASSIGNMENT_STRATEGY_CONFIG "partition.assignment.strategy"} (<code>StreamsPartitionAssignor</code>) - Streams client will always use its own partition assignor</li>
  * </ul>
  *
- * If {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} is set to {@link #EXACTLY_ONCE "exactly_once"}, Kafka Streams does not allow users to overwrite the following properties (Streams setting shown in parentheses):
+ * If {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} is set to {@link #EXACTLY_ONCE_V2 "exactly_once_v2"},
+ * {@link #EXACTLY_ONCE "exactly_once"} (deprecated), or {@link #EXACTLY_ONCE_BETA "exactly_once_beta"} (deprecated), Kafka Streams does not
+ * allow users to overwrite the following properties (Streams setting shown in parentheses):
  * <ul>
  *   <li>{@link ConsumerConfig#ISOLATION_LEVEL_CONFIG "isolation.level"} (read_committed) - Consumers will always read committed data only</li>
  *   <li>{@link ProducerConfig#ENABLE_IDEMPOTENCE_CONFIG "enable.idempotence"} (true) - Producer will always have idempotency enabled</li>
@@ -132,7 +135,6 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * @see ConsumerConfig
  * @see ProducerConfig
  */
-@SuppressWarnings("deprecation")
 public class StreamsConfig extends AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
@@ -142,6 +144,7 @@ public class StreamsConfig extends AbstractConfig {
     private final boolean eosEnabled;
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
+    private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
 
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
@@ -291,27 +294,34 @@ public class StreamsConfig extends AbstractConfig {
      * <p>
      * Enabling exactly-once processing semantics requires broker version 0.11.0 or higher.
      * If you enable this feature Kafka Streams will use more resources (like broker connections)
-     * compared to the {@link #AT_LEAST_ONCE} case.
+     * compared to {@link #AT_LEAST_ONCE "at_least_once"} and {@link #EXACTLY_ONCE_V2 "exactly_once_v2"}.
      *
-     * @see #EXACTLY_ONCE_BETA
+     * @deprecated Since 3.0.0, will be removed in 4.0. Use {@link #EXACTLY_ONCE_V2 "exactly_once_v2"} instead.
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String EXACTLY_ONCE = "exactly_once";
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
      * <p>
      * Enabling exactly-once (beta) requires broker version 2.5 or higher.
-     * If you enable this feature Kafka Streams will use less resources (like broker connections)
-     * compare to the {@link #EXACTLY_ONCE} case.
+     * If you enable this feature Kafka Streams will use fewer resources (like broker connections)
+     * compared to the {@link #EXACTLY_ONCE} (deprecated) case.
+     *
+     * @deprecated Since 3.0.0, will be removed in 4.0. Use {@link #EXACTLY_ONCE_V2 "exactly_once_v2"} instead.
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String EXACTLY_ONCE_BETA = "exactly_once_beta";
 
     /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics from version 0.10.0. to 2.4
+     * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
+     * <p>
+     * Enabling exactly-once-v2 requires broker version 2.5 or higher.
      */
-    public static final String METRICS_0100_TO_24 = "0.10.0-2.4";
+    @SuppressWarnings("WeakerAccess")
+    public static final String EXACTLY_ONCE_V2 = "exactly_once_v2";
 
     /**
      * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for the latest built-in metrics version.
@@ -361,7 +371,7 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
     private static final String COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds with which to save the position of the processor." +
-        " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE + "</code>, the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
+        " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>, <code>" + EXACTLY_ONCE + "</code>,the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
         " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
 
     /** {@code connections.max.idle.ms} */
@@ -380,15 +390,22 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS = "default.windowed.key.serde.inner";
     private static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed key. Must implement the " +
         "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     /** {@code default.windowed.value.serde.inner} */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS = "default.windowed.value.serde.inner";
     private static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed value. Must implement the " +
         "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
+
+    public static final String WINDOWED_INNER_CLASS_SERDE = "windowed.inner.class.serde";
+    private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the \" +\n" +
+        "        \"<code>org.apache.kafka.common.serialization.Serde</code> interface.. Note that setting this config in KafkaStreams application would result " +
+        "in an error as it is meant to be used only from Plain consumer client.";
 
     /** {@code default key.serde} */
     @SuppressWarnings("WeakerAccess")
@@ -464,8 +481,9 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String PROCESSING_GUARANTEE_CONFIG = "processing.guarantee";
     private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. " +
-        "Possible values are <code>" + AT_LEAST_ONCE + "</code> (default), " +
-        "<code>" + EXACTLY_ONCE + "</code> (requires brokers version 0.11.0 or higher), " +
+        "Possible values are <code>" + AT_LEAST_ONCE + "</code> (default) " +
+        "and <code>" + EXACTLY_ONCE_V2 + "</code> (requires brokers version 2.5 or higher). " +
+        "Deprecated options are <code>" + EXACTLY_ONCE + "</code> (requires brokers version 0.11.0 or higher) " +
         "and <code>" + EXACTLY_ONCE_BETA + "</code> (requires brokers version 2.5 or higher). " +
         "Note that exactly-once processing requires a cluster of at least three brokers by default what is the " +
         "recommended setting for production; for development you can change this, by adjusting broker setting " +
@@ -486,8 +504,8 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code replication.factor} */
     @SuppressWarnings("WeakerAccess")
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
-    private static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the stream processing application." +
-        " If your broker cluster is on version 2.4 or newer, you can set -1 to use the broker default replication factor.";
+    private static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the stream processing application."
+        + " The default of <code>-1</code> (meaning: use broker default replication factor) requires broker version 2.4 or newer";
 
     /** {@code request.timeout.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -561,15 +579,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG = "windowstore.changelog.additional.retention.ms";
     private static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC = "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift. Default is 1 day";
 
-    // deprecated
-
-    /** {@code partition.grouper} */
-    @SuppressWarnings("WeakerAccess")
-    @Deprecated
-    public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
-    private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>org.apache.kafka.streams.processor.PartitionGrouper</code> interface." +
-        " WARNING: This config is deprecated and will be removed in 3.0.0 release.";
-
     /**
      * {@code topology.optimization}
      * @deprecated since 2.7; use {@link #TOPOLOGY_OPTIMIZATION_CONFIG} instead
@@ -602,11 +611,6 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LIST,
                     Importance.HIGH,
                     CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
-            .define(REPLICATION_FACTOR_CONFIG,
-                    Type.INT,
-                    1,
-                    Importance.HIGH,
-                    REPLICATION_FACTOR_DOC)
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
                     System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
@@ -642,6 +646,26 @@ public class StreamsConfig extends AbstractConfig {
                     Serdes.ByteArraySerde.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_KEY_SERDE_CLASS_DOC)
+            .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC)
+            .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC)
+            .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC)
+            .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC)
             .define(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     DefaultProductionExceptionHandler.class.getName(),
@@ -657,16 +681,6 @@ public class StreamsConfig extends AbstractConfig {
                     Serdes.ByteArraySerde.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_VALUE_SERDE_CLASS_DOC)
-            .define(DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS,
-                    Type.CLASS,
-                    null,
-                    Importance.MEDIUM,
-                    DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS_DOC)
-            .define(DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS,
-                    Type.CLASS,
-                    null,
-                    Importance.MEDIUM,
-                    DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
                     0L,
@@ -691,9 +705,14 @@ public class StreamsConfig extends AbstractConfig {
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
-                    in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA),
+                    in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
+            .define(REPLICATION_FACTOR_CONFIG,
+                    Type.INT,
+                    -1,
+                    Importance.MEDIUM,
+                    REPLICATION_FACTOR_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
                     Type.STRING,
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
@@ -728,7 +747,6 @@ public class StreamsConfig extends AbstractConfig {
                     Type.STRING,
                     METRICS_LATEST,
                     in(
-                        METRICS_0100_TO_24,
                         METRICS_LATEST
                     ),
                     Importance.LOW,
@@ -773,11 +791,6 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
-            .define(PARTITION_GROUPER_CLASS_CONFIG,
-                    Type.CLASS,
-                    org.apache.kafka.streams.processor.DefaultPartitionGrouper.class.getName(),
-                    Importance.LOW,
-                    PARTITION_GROUPER_CLASS_DOC)
             .define(POLL_MS_CONFIG,
                     Type.LONG,
                     100L,
@@ -857,6 +870,11 @@ public class StreamsConfig extends AbstractConfig {
                        UPGRADE_FROM_23),
                     Importance.LOW,
                     UPGRADE_FROM_DOC)
+            .define(WINDOWED_INNER_CLASS_SERDE,
+                Type.STRING,
+                null,
+                Importance.LOW,
+                WINDOWED_INNER_CLASS_SERDE_DOC)
             .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
                     Type.LONG,
                     24 * 60 * 60 * 1000L,
@@ -884,7 +902,7 @@ public class StreamsConfig extends AbstractConfig {
         tempProducerDefaultOverrides.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         tempProducerDefaultOverrides.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         // Reduce the transaction timeout for quicker pending offset expiration on broker side.
-        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
+        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, DEFAULT_TRANSACTION_TIMEOUT);
 
         PRODUCER_EOS_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
@@ -916,6 +934,21 @@ public class StreamsConfig extends AbstractConfig {
 
         // This is settable in the main Streams config, but it's a private API for testing
         public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
+
+        // Private API used to disable the fix on left/outer joins (https://issues.apache.org/jira/browse/KAFKA-10847)
+        public static final String ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__enable.kstreams.outer.join.spurious.results.fix__";
+
+        public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
+            final Object value = configs.getOrDefault(key, defaultValue);
+            if (value instanceof Boolean) {
+                return (boolean) value;
+            } else if (value instanceof String) {
+                return Boolean.parseBoolean((String) value);
+            } else {
+                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a true/false value.");
+                return defaultValue;
+            }
+        }
     }
 
     /**
@@ -1025,11 +1058,40 @@ public class StreamsConfig extends AbstractConfig {
                             final boolean doLog) {
         super(CONFIG, props, doLog);
         eosEnabled = StreamThread.eosEnabled(this);
-        if (props.containsKey(PARTITION_GROUPER_CLASS_CONFIG)) {
-            log.warn("Configuration parameter `{}` is deprecated and will be removed in 3.0.0 release.", PARTITION_GROUPER_CLASS_CONFIG);
+
+        final String processingModeConfig = getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG);
+        if (processingModeConfig.equals(EXACTLY_ONCE)) {
+            log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release. " +
+                         "Please use `{}` instead. Note that this requires broker version 2.5+ so you should prepare "
+                         + "to upgrade your brokers if necessary.", EXACTLY_ONCE, EXACTLY_ONCE_V2);
         }
+        if (processingModeConfig.equals(EXACTLY_ONCE_BETA)) {
+            log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release. " +
+                         "Please use `{}` instead.", EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2);
+        }
+
         if (props.containsKey(RETRIES_CONFIG)) {
-            log.warn("Configuration parameter `{}` is deprecated and will be removed in 3.0.0 release.", RETRIES_CONFIG);
+            log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release.", RETRIES_CONFIG);
+        }
+
+        if (eosEnabled) {
+            verifyEOSTransactionTimeoutCompatibility();
+        }
+    }
+
+    private void verifyEOSTransactionTimeoutCompatibility() {
+        final long commitInterval = getLong(COMMIT_INTERVAL_MS_CONFIG);
+        final String transactionTimeoutConfigKey = producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
+        final int transactionTimeout = originals().containsKey(transactionTimeoutConfigKey) ? (int) parseType(
+            transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT) : DEFAULT_TRANSACTION_TIMEOUT;
+
+        if (transactionTimeout < commitInterval) {
+            throw new IllegalArgumentException(String.format("Transaction timeout %d was set lower than " +
+                "streams commit interval %d. This will cause ongoing transaction always timeout due to inactivity " +
+                "caused by long commit interval. Consider reconfiguring commit interval to match " +
+                "transaction timeout by tuning 'commit.interval.ms' config, or increase the transaction timeout to match " +
+                "commit interval by tuning `producer.transaction.timeout.ms` config.",
+                transactionTimeout, commitInterval));
         }
     }
 
@@ -1054,7 +1116,7 @@ public class StreamsConfig extends AbstractConfig {
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
 
         final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
-        if (StreamThread.processingMode(this) == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA) {
+        if (StreamThread.processingMode(this) == StreamThread.ProcessingMode.EXACTLY_ONCE_V2) {
             consumerProps.put("internal.throw.on.fetch.stable.offset.unsupported", true);
         }
         consumerProps.putAll(getClientCustomProps());
@@ -1131,23 +1193,6 @@ public class StreamsConfig extends AbstractConfig {
                 throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsAsInteger, "Can't exceed 5 when exactly-once processing is enabled");
             }
         }
-    }
-
-    /**
-     * Get the configs to the {@link KafkaConsumer consumer}.
-     * Properties using the prefix {@link #CONSUMER_PREFIX} will be used in favor over their non-prefixed versions
-     * except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG} where we always use the non-prefixed
-     * version as we only support reading/writing from/to the same Kafka Cluster.
-     *
-     * @param groupId      consumer groupId
-     * @param clientId     clientId
-     * @return Map of the consumer configuration.
-     * @deprecated use {@link StreamsConfig#getMainConsumerConfigs(String, String, int)}
-     */
-    @SuppressWarnings("WeakerAccess")
-    @Deprecated
-    public Map<String, Object> getConsumerConfigs(final String groupId, final String clientId) {
-        return getMainConsumerConfigs(groupId, clientId, DUMMY_THREAD_INDEX);
     }
 
     /**

@@ -25,9 +25,9 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -1085,39 +1085,6 @@ public interface KStream<K, V> {
 
     /**
      * Group the records of this {@code KStream} on a new key that is selected using the provided {@link KeyValueMapper}
-     * and {@link Serde}s as specified by {@link Serialized}.
-     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
-     * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
-     * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the
-     * original values.
-     * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
-     * <p>
-     * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a
-     * later operator depends on the newly selected key.
-     * This topic will be as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
-     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
-     * <p>
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     * <p>
-     * All data of this stream will be redistributed through the repartitioning topic by writing all records to it,
-     * and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
-     * <p>
-     * This operation is equivalent to calling {@link #selectKey(KeyValueMapper)} followed by {@link #groupByKey()}.
-     *
-     * @param keySelector a {@link KeyValueMapper} that computes a new key for grouping
-     * @param <KR>        the key type of the result {@link KGroupedStream}
-     * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
-     *
-     * @deprecated since 2.1. Use {@link org.apache.kafka.streams.kstream.KStream#groupBy(KeyValueMapper, Grouped)} instead
-     */
-    @Deprecated
-    <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> keySelector,
-                                       final Serialized<KR, V> serialized);
-
-    /**
-     * Group the records of this {@code KStream} on a new key that is selected using the provided {@link KeyValueMapper}
      * and {@link Serde}s as specified by {@link Grouped}.
      * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
@@ -1177,36 +1144,6 @@ public interface KStream<K, V> {
      * @see #groupBy(KeyValueMapper)
      */
     KGroupedStream<K, V> groupByKey();
-
-    /**
-     * Group the records by their current key into a {@link KGroupedStream} while preserving the original values
-     * and using the serializers as defined by {@link Serialized}.
-     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
-     * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
-     * (cf. {@link KGroupedStream}).
-     * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
-     * <p>
-     * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
-     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic may need to be created in
-     * Kafka if a later operator depends on the newly selected key.
-     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
-     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
-     * <p>
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     * <p>
-     * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
-     * records to it, and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
-     * correctly on its key.
-     *
-     * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
-     * @see #groupBy(KeyValueMapper)
-     *
-     * @deprecated since 2.1. Use {@link org.apache.kafka.streams.kstream.KStream#groupByKey(Grouped)} instead
-     */
-    @Deprecated
-    KGroupedStream<K, V> groupByKey(final Serialized<K, V> serialized);
 
     /**
      * Group the records by their current key into a {@link KGroupedStream} while preserving the original values
@@ -1390,89 +1327,6 @@ public interface KStream<K, V> {
     <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
                                  final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
                                  final JoinWindows windows);
-
-
-    /**
-     * Join records of this stream with another {@code KStream}'s records using windowed inner equi join using the
-     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
-     * and {@link Serde the other stream's value serde}.
-     * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
-     * Furthermore, two records are only joined if their timestamps are close to each other as defined by the given
-     * {@link JoinWindows}, i.e., the window defines an additional join predicate on the record timestamps.
-     * <p>
-     * For each pair of records meeting both join predicates the provided {@link ValueJoiner} will be called to compute
-     * a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as for both joining input records.
-     * If an input record key or value is {@code null} the record will not be included in the join operation and thus no
-     * output record will be added to the resulting {@code KStream}.
-     * <p>
-     * Example (assuming all input records belong to the correct windows):
-     * <table border='1'>
-     * <tr>
-     * <th>this</th>
-     * <th>other</th>
-     * <th>result</th>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:A&gt;</td>
-     * <td></td>
-     * <td></td>
-     * </tr>
-     * <tr>
-     * <td>&lt;K2:B&gt;</td>
-     * <td>&lt;K2:b&gt;</td>
-     * <td>&lt;K2:ValueJoiner(B,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td>&lt;K3:c&gt;</td>
-     * <td></td>
-     * </tr>
-     * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
-     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
-     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
-     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
-     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
-     * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
-     * name, and "-repartition" is a fixed suffix.
-     * <p>
-     * Repartitioning can happen for one or both of the joining {@code KStream}s.
-     * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
-     * correctly on its key.
-     * <p>
-     * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names.
-     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
-     * in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is an
-     * internally generated name, and "-changelog" is a fixed suffix.
-     * <p>
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
-     * @param otherStream the {@code KStream} to be joined with this stream
-     * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param windows     the specification of the {@link JoinWindows}
-     * @param joined      a {@link Joined} instance that defines the serdes to
-     *                    be used to serialize/deserialize inputs and outputs of the joined streams
-     * @param <VO>        the value type of the other stream
-     * @param <VR>        the value type of the result stream
-     * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one for each matched record-pair with the same key and within the joining window intervals
-     * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
-     * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
-     * @deprecated since 2.4. Use {@link KStream#join(KStream, ValueJoiner, JoinWindows, StreamJoined)} instead.
-     */
-    @Deprecated
-    <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
-                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                 final JoinWindows windows,
-                                 final Joined<K, V, VO> joined);
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed inner equi join using the
@@ -1793,92 +1647,6 @@ public interface KStream<K, V> {
     <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
                                      final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
                                      final JoinWindows windows);
-
-    /**
-     * Join records of this stream with another {@code KStream}'s records using windowed left equi join using the
-     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
-     * and {@link Serde the other stream's value serde}.
-     * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join}, all records from this stream will
-     * produce at least one output record (cf. below).
-     * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
-     * Furthermore, two records are only joined if their timestamps are close to each other as defined by the given
-     * {@link JoinWindows}, i.e., the window defines an additional join predicate on the record timestamps.
-     * <p>
-     * For each pair of records meeting both join predicates the provided {@link ValueJoiner} will be called to compute
-     * a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as for both joining input records.
-     * Furthermore, for each input record of this {@code KStream} that does not satisfy the join predicate the provided
-     * {@link ValueJoiner} will be called with a {@code null} value for the other stream.
-     * If an input record key or value is {@code null} the record will not be included in the join operation and thus no
-     * output record will be added to the resulting {@code KStream}.
-     * <p>
-     * Example (assuming all input records belong to the correct windows):
-     * <table border='1'>
-     * <tr>
-     * <th>this</th>
-     * <th>other</th>
-     * <th>result</th>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:A&gt;</td>
-     * <td></td>
-     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td>&lt;K2:B&gt;</td>
-     * <td>&lt;K2:b&gt;</td>
-     * <td>&lt;K2:ValueJoiner(B,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td>&lt;K3:c&gt;</td>
-     * <td></td>
-     * </tr>
-     * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
-     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
-     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
-     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
-     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
-     * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
-     * name, and "-repartition" is a fixed suffix.
-     * <p>
-     * Repartitioning can happen for one or both of the joining {@code KStream}s.
-     * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
-     * correctly on its key.
-     * <p>
-     * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names.
-     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
-     * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
-     * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     * <p>
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
-     * @param otherStream the {@code KStream} to be joined with this stream
-     * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param windows     the specification of the {@link JoinWindows}
-     * @param joined      a {@link Joined} instance that defines the serdes to
-     *                    be used to serialize/deserialize inputs and outputs of the joined streams
-     * @param <VO>        the value type of the other stream
-     * @param <VR>        the value type of the result stream
-     * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
-     * this {@code KStream} and within the joining window intervals
-     * @see #join(KStream, ValueJoiner, JoinWindows, Joined)
-     * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
-     * @deprecated since 2.4. Use {@link KStream#leftJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)} instead.
-     */
-    @Deprecated
-    <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
-                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                     final JoinWindows windows,
-                                     final Joined<K, V, VO> joined);
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed left equi join using the
@@ -2209,92 +1977,6 @@ public interface KStream<K, V> {
     <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
                                       final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
                                       final JoinWindows windows);
-    /**
-     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join using the
-     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
-     * and {@link Serde the other stream's value serde}.
-     * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join} or
-     * {@link #leftJoin(KStream, ValueJoiner, JoinWindows) left-join}, all records from both streams will produce at
-     * least one output record (cf. below).
-     * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
-     * Furthermore, two records are only joined if their timestamps are close to each other as defined by the given
-     * {@link JoinWindows}, i.e., the window defines an additional join predicate on the record timestamps.
-     * <p>
-     * For each pair of records meeting both join predicates the provided {@link ValueJoiner} will be called to compute
-     * a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as for both joining input records.
-     * Furthermore, for each input record of both {@code KStream}s that does not satisfy the join predicate the provided
-     * {@link ValueJoiner} will be called with a {@code null} value for this/other stream, respectively.
-     * If an input record key or value is {@code null} the record will not be included in the join operation and thus no
-     * output record will be added to the resulting {@code KStream}.
-     * <p>
-     * Example (assuming all input records belong to the correct windows):
-     * <table border='1'>
-     * <tr>
-     * <th>this</th>
-     * <th>other</th>
-     * <th>result</th>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:A&gt;</td>
-     * <td></td>
-     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td>&lt;K2:B&gt;</td>
-     * <td>&lt;K2:b&gt;</td>
-     * <td>&lt;K2:ValueJoiner(null,b)&gt;<br></br>&lt;K2:ValueJoiner(B,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td>&lt;K3:c&gt;</td>
-     * <td>&lt;K3:ValueJoiner(null,c)&gt;</td>
-     * </tr>
-     * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
-     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
-     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
-     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
-     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
-     * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
-     * name, and "-repartition" is a fixed suffix.
-     * <p>
-     * Repartitioning can happen for one or both of the joining {@code KStream}s.
-     * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
-     * correctly on its key.
-     * <p>
-     * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names.
-     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
-     * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
-     * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     * <p>
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
-     * @param otherStream the {@code KStream} to be joined with this stream
-     * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param windows     the specification of the {@link JoinWindows}
-     * @param joined      a {@link Joined} instance that defines the serdes to
-     *                    be used to serialize/deserialize inputs and outputs of the joined streams
-     * @param <VO>        the value type of the other stream
-     * @param <VR>        the value type of the result stream
-     * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
-     * both {@code KStream} and within the joining window intervals
-     * @see #join(KStream, ValueJoiner, JoinWindows, Joined)
-     * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
-     * @deprecated since 2.4. Use {@link KStream#outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)} instead.
-     */
-    @Deprecated
-    <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                      final JoinWindows windows,
-                                      final Joined<K, V, VO> joined);
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed outer equi join using the
@@ -3491,12 +3173,13 @@ public interface KStream<K, V> {
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()} )
      * <p>
      * Note that it is possible to emit multiple records for each input record by using
-     * {@link ProcessorContext#forward(Object, Object) context#forward()} in
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) context#forward()} in
      * {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
      * detected at runtime.
-     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * To ensure type-safety at compile-time,
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) context#forward()} should
      * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
@@ -3618,12 +3301,13 @@ public interface KStream<K, V> {
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()} )
      * <p>
      * Note that it is possible to emit multiple records for each input record by using
-     * {@link ProcessorContext#forward(Object, Object) context#forward()} in
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) context#forward()} in
      * {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
      * detected at runtime.
-     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * To ensure type-safety at compile-time,
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) context#forward()} should
      * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
@@ -3750,12 +3434,14 @@ public interface KStream<K, V> {
      * or join) is applied to the result {@code KStream}.
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()})
      * <p>
-     * Note that it is possible to emit records by using {@link ProcessorContext#forward(Object, Object)
+     * Note that it is possible to emit records by using
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object)
      * context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
      * detected at runtime.
-     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * To ensure type-safety at compile-time,
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) context#forward()} should
      * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * The supplier should always generate a new instance each time {@link TransformerSupplier#get()} gets called. Creating
@@ -3876,12 +3562,14 @@ public interface KStream<K, V> {
      * or join) is applied to the result {@code KStream}.
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()})
      * <p>
-     * Note that it is possible to emit records by using {@link ProcessorContext#forward(Object, Object)
+     * Note that it is possible to emit records by using
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object)
      * context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
      * detected at runtime.
-     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * To ensure type-safety at compile-time,
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) context#forward()} should
      * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * The supplier should always generate a new instance each time {@link TransformerSupplier#get()} gets called. Creating
@@ -3967,7 +3655,8 @@ public interface KStream<K, V> {
      * a schedule must be registered.
      * The {@link ValueTransformer} must return the new value in {@link ValueTransformer#transform(Object) transform()}.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
-     * pairs can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * pairs can be emitted via
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4075,7 +3764,8 @@ public interface KStream<K, V> {
      * a schedule must be registered.
      * The {@link ValueTransformer} must return the new value in {@link ValueTransformer#transform(Object) transform()}.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
-     * pairs can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * pairs can be emitted via
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4188,7 +3878,8 @@ public interface KStream<K, V> {
      * {@link ValueTransformerWithKey#transform(Object, Object) transform()}.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * can be emitted via
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4300,7 +3991,8 @@ public interface KStream<K, V> {
      * {@link ValueTransformerWithKey#transform(Object, Object) transform()}.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * can be emitted via
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4417,7 +4109,8 @@ public interface KStream<K, V> {
      * {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * can be emitted via
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4539,7 +4232,8 @@ public interface KStream<K, V> {
      * {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * can be emitted via
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4663,7 +4357,8 @@ public interface KStream<K, V> {
      * is an empty {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * can be emitted via
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4786,7 +4481,8 @@ public interface KStream<K, V> {
      * is an empty {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * can be emitted via
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4841,6 +4537,109 @@ public interface KStream<K, V> {
     <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
                                             final Named named,
                                             final String... stateStoreNames);
+
+    /**
+     * Process all records in this stream, one record at a time, by applying a
+     * {@link org.apache.kafka.streams.processor.Processor} (provided by the given
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #foreach(ForeachAction)}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     * Note that this is a terminal operation that returns void.
+     * <p>
+     * In order for the processor to use state stores, the stores must be added to the topology and connected to the
+     * processor using at least one of two strategies (though it's not required to connect global state stores; read-only
+     * access to global state stores is available by default).
+     * <p>
+     * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
+     * and specify the store names via {@code stateStoreNames} so they will be connected to the processor.
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // add store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.processor(new ProcessorSupplier() {
+     *     public Processor get() {
+     *         return new MyProcessor();
+     *     }
+     * }, "myProcessorState");
+     * }</pre>
+     * The second strategy is for the given {@link org.apache.kafka.streams.processor.ProcessorSupplier}
+     * to implement {@link ConnectedStoreProvider#stores()},
+     * which provides the {@link StoreBuilder}s to be automatically added to the topology and connected to the processor.
+     * <pre>{@code
+     * class MyProcessorSupplier implements ProcessorSupplier {
+     *     // supply processor
+     *     Processor get() {
+     *         return new MyProcessor();
+     *     }
+     *
+     *     // provide store(s) that will be added and connected to the associated processor
+     *     // the store name from the builder ("myProcessorState") is used to access the store later via the ProcessorContext
+     *     Set<StoreBuilder> stores() {
+     *         StoreBuilder<KeyValueStore<String, String>> keyValueStoreBuilder =
+     *                   Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                   Serdes.String(),
+     *                   Serdes.String());
+     *         return Collections.singleton(keyValueStoreBuilder);
+     *     }
+     * }
+     *
+     * ...
+     *
+     * KStream outputStream = inputStream.process(new MyProcessorSupplier());
+     * }</pre>
+     * <p>
+     * With either strategy, within the {@link org.apache.kafka.streams.processor.Processor},
+     * the state is obtained via the {@link org.apache.kafka.streams.processor.ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * <pre>{@code
+     * class MyProcessor implements Processor {
+     *     private StateStore state;
+     *
+     *     void init(ProcessorContext context) {
+     *         this.state = context.getStateStore("myProcessorState");
+     *         // punctuate each second, can access this.state
+     *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *     }
+     *
+     *     void process(K key, V value) {
+     *         // can access this.state
+     *     }
+     *
+     *     void close() {
+     *         // can access this.state
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
+     *
+     * @param processorSupplier an instance of {@link org.apache.kafka.streams.processor.ProcessorSupplier}
+     *                          that generates a newly constructed {@link org.apache.kafka.streams.processor.Processor}
+     *                          The supplier should always generate a new instance. Creating a single
+     *                          {@link org.apache.kafka.streams.processor.Processor} object
+     *                          and returning the same object reference in
+     *                          {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} is a
+     *                          violation of the supplier pattern and leads to runtime exceptions.
+     * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
+     *                            implements {@link ConnectedStoreProvider#stores()}
+     * @see #foreach(ForeachAction)
+     * @see #transform(TransformerSupplier, String...)
+     * @deprecated Since 3.0. Use {@link KStream#process(org.apache.kafka.streams.processor.api.ProcessorSupplier, java.lang.String...)} instead.
+     */
+    @Deprecated
+    void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
+                 final String... stateStoreNames);
+
 
     /**
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
@@ -4933,7 +4732,110 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
-    void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
+    void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
+                 final String... stateStoreNames);
+
+    /**
+     * Process all records in this stream, one record at a time, by applying a
+     * {@link org.apache.kafka.streams.processor.Processor} (provided by the given
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #foreach(ForeachAction)}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     * Note that this is a terminal operation that returns void.
+     * <p>
+     * In order for the processor to use state stores, the stores must be added to the topology and connected to the
+     * processor using at least one of two strategies (though it's not required to connect global state stores; read-only
+     * access to global state stores is available by default).
+     * <p>
+     * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
+     * and specify the store names via {@code stateStoreNames} so they will be connected to the processor.
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // add store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.processor(new ProcessorSupplier() {
+     *     public Processor get() {
+     *         return new MyProcessor();
+     *     }
+     * }, "myProcessorState");
+     * }</pre>
+     * The second strategy is for the given {@link org.apache.kafka.streams.processor.ProcessorSupplier}
+     * to implement {@link ConnectedStoreProvider#stores()},
+     * which provides the {@link StoreBuilder}s to be automatically added to the topology and connected to the processor.
+     * <pre>{@code
+     * class MyProcessorSupplier implements ProcessorSupplier {
+     *     // supply processor
+     *     Processor get() {
+     *         return new MyProcessor();
+     *     }
+     *
+     *     // provide store(s) that will be added and connected to the associated processor
+     *     // the store name from the builder ("myProcessorState") is used to access the store later via the ProcessorContext
+     *     Set<StoreBuilder> stores() {
+     *         StoreBuilder<KeyValueStore<String, String>> keyValueStoreBuilder =
+     *                   Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                   Serdes.String(),
+     *                   Serdes.String());
+     *         return Collections.singleton(keyValueStoreBuilder);
+     *     }
+     * }
+     *
+     * ...
+     *
+     * KStream outputStream = inputStream.process(new MyProcessorSupplier());
+     * }</pre>
+     * <p>
+     * With either strategy, within the {@link org.apache.kafka.streams.processor.Processor},
+     * the state is obtained via the {@link org.apache.kafka.streams.processor.ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * <pre>{@code
+     * class MyProcessor implements Processor {
+     *     private StateStore state;
+     *
+     *     void init(ProcessorContext context) {
+     *         this.state = context.getStateStore("myProcessorState");
+     *         // punctuate each second, can access this.state
+     *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *     }
+     *
+     *     void process(K key, V value) {
+     *         // can access this.state
+     *     }
+     *
+     *     void close() {
+     *         // can access this.state
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
+     *
+     * @param processorSupplier an instance of {@link org.apache.kafka.streams.processor.ProcessorSupplier}
+     *                          that generates a newly constructed {@link org.apache.kafka.streams.processor.Processor}
+     *                          The supplier should always generate a new instance. Creating a single
+     *                          {@link org.apache.kafka.streams.processor.Processor} object
+     *                          and returning the same object reference in
+     *                          {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} is a
+     *                          violation of the supplier pattern and leads to runtime exceptions.
+     * @param named             a {@link Named} config used to name the processor in the topology
+     * @param stateStoreNames   the names of the state store used by the processor
+     * @see #foreach(ForeachAction)
+     * @see #transform(TransformerSupplier, String...)
+     * @deprecated Since 3.0. Use {@link KStream#process(org.apache.kafka.streams.processor.api.ProcessorSupplier, org.apache.kafka.streams.kstream.Named, java.lang.String...)} instead.
+     */
+    @Deprecated
+    void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
+                 final Named named,
                  final String... stateStoreNames);
 
     /**
@@ -5027,7 +4929,7 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
-    void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
+    void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
                  final Named named,
                  final String... stateStoreNames);
 }

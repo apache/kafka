@@ -161,7 +161,7 @@ public class MemoryRecordsTest {
 
                 int recordCount = 0;
                 for (Record record : batch) {
-                    assertTrue(record.isValid());
+                    record.ensureValid();
                     assertTrue(record.hasMagic(batch.magic()));
                     assertFalse(record.isCompressed());
                     assertEquals(firstOffset + total, record.offset());
@@ -477,7 +477,7 @@ public class MemoryRecordsTest {
         assertEquals(1, createdRecords.size());
 
         Record record = createdRecords.get(0);
-        assertTrue(record.isValid());
+        record.ensureValid();
         EndTransactionMarker deserializedMarker = EndTransactionMarker.deserialize(record);
         assertEquals(ControlRecordType.COMMIT, deserializedMarker.controlType());
         assertEquals(coordinatorEpoch, deserializedMarker.coordinatorEpoch());
@@ -494,10 +494,12 @@ public class MemoryRecordsTest {
             .setLeaderId(leaderId)
             .setVoters(Collections.singletonList(
                 new Voter().setVoterId(voterId)));
+        ByteBuffer buffer = ByteBuffer.allocate(256);
         MemoryRecords records = MemoryRecords.withLeaderChangeMessage(
             initialOffset,
             System.currentTimeMillis(),
             leaderEpoch,
+            buffer,
             leaderChangeMessage
         );
 
@@ -514,7 +516,7 @@ public class MemoryRecordsTest {
         assertEquals(1, createdRecords.size());
 
         Record record = createdRecords.get(0);
-        assertTrue(record.isValid());
+        record.ensureValid();
         assertEquals(ControlRecordType.LEADER_CHANGE, ControlRecordType.parse(record.key()));
 
         LeaderChangeMessage deserializedMessage = ControlRecordUtils.deserializeLeaderChangeMessage(record);

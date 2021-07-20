@@ -100,7 +100,6 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
       val e = assertThrows(classOf[ExecutionException],
         () => producer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()).getCause
       assertTrue(e.isInstanceOf[InvalidTimestampException])
-      assertEquals("One or more records have been rejected due to invalid timestamp", e.getMessage)
     } finally {
       producer.close()
     }
@@ -111,7 +110,6 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
       val e = assertThrows(classOf[ExecutionException],
         () => compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()).getCause
       assertTrue(e.isInstanceOf[InvalidTimestampException])
-      assertEquals("One or more records have been rejected due to invalid timestamp", e.getMessage)
     } finally {
       compressedProducer.close()
     }

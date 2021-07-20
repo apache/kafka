@@ -37,6 +37,7 @@ import org.apache.kafka.streams.LagInfo;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -119,6 +120,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
 @Category({IntegrationTest.class})
+@SuppressWarnings("deprecation")
 public class QueryableStateIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(QueryableStateIntegrationTest.class);
 
@@ -225,8 +227,9 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         stringComparator = Comparator.comparing((KeyValue<String, String> o) -> o.key).thenComparing(o -> o.value);
         stringLongComparator = Comparator.comparing((KeyValue<String, Long> o) -> o.key).thenComparingLong(o -> o.value);
@@ -470,8 +473,8 @@ public class QueryableStateIntegrationTest {
                 streams.store(fromNameAndType(storeName, keyValueStore()));
             assertThat(store, Matchers.notNullValue());
 
-            final InvalidStateStoreException exception = assertThrows(
-                InvalidStateStoreException.class,
+            final UnknownStateStoreException exception = assertThrows(
+                UnknownStateStoreException.class,
                 () -> streams.store(fromNameAndType("no-table", keyValueStore()))
             );
             assertThat(

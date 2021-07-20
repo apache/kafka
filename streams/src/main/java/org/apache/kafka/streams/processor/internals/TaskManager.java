@@ -36,9 +36,11 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -64,8 +66,9 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.union;
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 
 public class TaskManager {
     // initialize the task list
@@ -490,7 +493,7 @@ public class TaskManager {
      * {@link #handleAssignment(Map, Map)} is called. Note that only active task partitions are passed in from the
      * rebalance listener, so we only need to consider/commit active tasks here
      *
-     * If eos-beta is used, we must commit ALL tasks. Otherwise, we can just commit those (active) tasks which are revoked
+     * If eos-v2 is used, we must commit ALL tasks. Otherwise, we can just commit those (active) tasks which are revoked
      *
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
@@ -629,7 +632,7 @@ public class TaskManager {
             }
         }
 
-        if (processingMode == EXACTLY_ONCE_BETA) {
+        if (processingMode == EXACTLY_ONCE_V2) {
             tasks.reInitializeThreadProducer();
         }
     }
@@ -681,9 +684,11 @@ public class TaskManager {
         // current set of actually-locked tasks.
         lockedTaskDirectories.clear();
 
-        for (final File dir : stateDirectory.listNonEmptyTaskDirectories()) {
+        for (final TaskDirectory taskDir : stateDirectory.listNonEmptyTaskDirectories()) {
+            final File dir = taskDir.file();
+            final String namedTopology = taskDir.namedTopology();
             try {
-                final TaskId id = TaskId.parse(dir.getName());
+                final TaskId id = parseTaskDirectoryName(dir.getName(), namedTopology);
                 if (stateDirectory.lock(id)) {
                     lockedTaskDirectories.add(id);
                     if (!tasks.owned(id)) {
@@ -847,7 +852,7 @@ public class TaskManager {
         }
 
         // If any active tasks can't be committed, none of them can be, and all that need a commit must be closed dirty
-        if (processingMode == EXACTLY_ONCE_BETA && !tasksToCloseDirty.isEmpty()) {
+        if (processingMode == EXACTLY_ONCE_V2 && !tasksToCloseDirty.isEmpty()) {
             tasksToCloseClean.removeAll(tasksToCommit);
             tasksToCloseDirty.addAll(tasksToCommit);
         } else {
@@ -1091,7 +1096,7 @@ public class TaskManager {
                     try {
                         tasks.streamsProducerForTask(task.id())
                             .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
-                        updateTaskMetadata(taskToCommit.getValue());
+                        updateTaskCommitMetadata(taskToCommit.getValue());
                     } catch (final TimeoutException timeoutException) {
                         log.error(
                             String.format("Committing task %s failed.", task.id()),
@@ -1104,10 +1109,10 @@ public class TaskManager {
                 final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
                     .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-                if (processingMode == EXACTLY_ONCE_BETA) {
+                if (processingMode == EXACTLY_ONCE_V2) {
                     try {
                         tasks.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
-                        updateTaskMetadata(allOffsets);
+                        updateTaskCommitMetadata(allOffsets);
                     } catch (final TimeoutException timeoutException) {
                         log.error(
                             String.format("Committing task(s) %s failed.",
@@ -1125,7 +1130,7 @@ public class TaskManager {
                 } else {
                     try {
                         mainConsumer.commitSync(allOffsets);
-                        updateTaskMetadata(allOffsets);
+                        updateTaskCommitMetadata(allOffsets);
                     } catch (final CommitFailedException error) {
                         throw new TaskMigratedException("Consumer committing offsets failed, " +
                                                             "indicating the corresponding thread is no longer part of the group", error);
@@ -1152,11 +1157,23 @@ public class TaskManager {
         }
     }
 
-    private void updateTaskMetadata(final Map<TopicPartition, OffsetAndMetadata> allOffsets) {
+    private void updateTaskCommitMetadata(final Map<TopicPartition, OffsetAndMetadata> allOffsets) {
         for (final Task task: tasks.activeTasks()) {
-            for (final TopicPartition topicPartition: task.inputPartitions()) {
-                if (allOffsets.containsKey(topicPartition)) {
-                    task.updateCommittedOffsets(topicPartition, allOffsets.get(topicPartition).offset());
+            if (task instanceof StreamTask) {
+                for (final TopicPartition topicPartition : task.inputPartitions()) {
+                    if (allOffsets.containsKey(topicPartition)) {
+                        ((StreamTask) task).updateCommittedOffsets(topicPartition, allOffsets.get(topicPartition).offset());
+                    }
+                }
+            }
+        }
+    }
+
+    public void updateTaskEndMetadata(final TopicPartition topicPartition, final Long offset) {
+        for (final Task task: tasks.activeTasks()) {
+            if (task instanceof StreamTask) {
+                if (task.inputPartitions().contains(topicPartition)) {
+                    ((StreamTask) task).updateEndOffsets(topicPartition, offset);
                 }
             }
         }

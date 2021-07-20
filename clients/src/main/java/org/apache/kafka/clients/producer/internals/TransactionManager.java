@@ -58,6 +58,7 @@ import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
@@ -71,6 +72,7 @@ import org.apache.kafka.common.utils.PrimitiveRef;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -97,7 +99,7 @@ public class TransactionManager {
     private final String transactionalId;
     private final int transactionTimeoutMs;
     private final ApiVersions apiVersions;
-    private final boolean autoDowngradeTxnCommit;
+    private boolean batchFindCoordinator = true;
 
     private static class TopicPartitionBookkeeper {
 
@@ -304,8 +306,7 @@ public class TransactionManager {
                               final String transactionalId,
                               final int transactionTimeoutMs,
                               final long retryBackoffMs,
-                              final ApiVersions apiVersions,
-                              final boolean autoDowngradeTxnCommit) {
+                              final ApiVersions apiVersions) {
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
@@ -322,7 +323,6 @@ public class TransactionManager {
         this.retryBackoffMs = retryBackoffMs;
         this.topicPartitionBookkeeper = new TopicPartitionBookkeeper();
         this.apiVersions = apiVersions;
-        this.autoDowngradeTxnCommit = autoDowngradeTxnCommit;
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -1143,10 +1143,14 @@ public class TransactionManager {
                 throw new IllegalStateException("Invalid coordinator type: " + type);
         }
 
-        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(
-                new FindCoordinatorRequestData()
-                    .setKeyType(type.id())
-                    .setKey(coordinatorKey));
+        FindCoordinatorRequestData data = new FindCoordinatorRequestData()
+                .setKeyType(type.id());
+        if (batchFindCoordinator) {
+            data.setCoordinatorKeys(Collections.singletonList(coordinatorKey));
+        } else {
+            data.setKey(coordinatorKey);
+        }
+        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(data);
         enqueueRequest(new FindCoordinatorHandler(builder));
     }
 
@@ -1179,8 +1183,7 @@ public class TransactionManager {
                 pendingTxnOffsetCommits,
                 groupMetadata.memberId(),
                 groupMetadata.generationId(),
-                groupMetadata.groupInstanceId(),
-                autoDowngradeTxnCommit
+                groupMetadata.groupInstanceId()
             );
         return new TxnOffsetCommitHandler(result, builder);
     }
@@ -1280,6 +1283,9 @@ public class TransactionManager {
                     log.debug("Disconnected from {}. Will retry.", response.destination());
                     if (this.needsCoordinator())
                         lookupCoordinator(this.coordinatorType(), this.coordinatorKey());
+                    reenqueue();
+                } else if (response.versionMismatch() instanceof NoBatchedFindCoordinatorsException && response.requestHeader().apiKey() == ApiKeys.FIND_COORDINATOR) {
+                    batchFindCoordinator = false;
                     reenqueue();
                 } else if (response.versionMismatch() != null) {
                     fatalError(response.versionMismatch());
@@ -1528,11 +1534,29 @@ public class TransactionManager {
         @Override
         public void handleResponse(AbstractResponse response) {
             FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) response;
-            Errors error = findCoordinatorResponse.error();
             CoordinatorType coordinatorType = CoordinatorType.forId(builder.data().keyType());
 
+            if (batchFindCoordinator && findCoordinatorResponse.data().coordinators().size() != 1) {
+                log.error("Group coordinator lookup failed: Invalid response containing more than a single coordinator");
+                fatalError(new IllegalStateException("Group coordinator lookup failed: Invalid response containing more than a single coordinator"));
+            }
+            String key = batchFindCoordinator
+                    ? findCoordinatorResponse.data().coordinators().get(0).key()
+                    : builder.data().key();
+            Errors error = batchFindCoordinator
+                    ? Errors.forCode(findCoordinatorResponse.data().coordinators().get(0).errorCode())
+                    : findCoordinatorResponse.error();
             if (error == Errors.NONE) {
-                Node node = findCoordinatorResponse.node();
+                int nodeId = batchFindCoordinator
+                        ? findCoordinatorResponse.data().coordinators().get(0).nodeId()
+                        : findCoordinatorResponse.data().nodeId();
+                String host = batchFindCoordinator
+                        ? findCoordinatorResponse.data().coordinators().get(0).host()
+                        : findCoordinatorResponse.data().host();
+                int port = batchFindCoordinator
+                        ? findCoordinatorResponse.data().coordinators().get(0).port()
+                        : findCoordinatorResponse.data().port();
+                Node node = new Node(nodeId, host, port);
                 switch (coordinatorType) {
                     case GROUP:
                         consumerGroupCoordinator = node;
@@ -1547,12 +1571,15 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
-            } else if (findCoordinatorResponse.error() == Errors.GROUP_AUTHORIZATION_FAILED) {
-                abortableError(GroupAuthorizationException.forGroupId(builder.data().key()));
+            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                abortableError(GroupAuthorizationException.forGroupId(key));
             } else {
+                String errorMessage = batchFindCoordinator
+                        ? findCoordinatorResponse.data().coordinators().get(0).errorMessage()
+                        : findCoordinatorResponse.data().errorMessage();
                 fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to " +
-                        "unexpected error: %s", coordinatorType, builder.data().key(),
-                        findCoordinatorResponse.data().errorMessage())));
+                        "unexpected error: %s", coordinatorType, key,
+                        errorMessage)));
             }
         }
     }

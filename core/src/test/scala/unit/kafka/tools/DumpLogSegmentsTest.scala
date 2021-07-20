@@ -21,8 +21,7 @@ import java.io.{ByteArrayOutputStream, File, PrintWriter}
 import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
-
-import kafka.log.{Log, LogConfig, LogManager, LogTest}
+import kafka.log.{Log, LogConfig, LogManager, LogTestUtils}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
@@ -31,8 +30,8 @@ import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRe
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.ApiMessageAndVersion
-import org.apache.kafka.raft.metadata.MetadataRecordSerde
+import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -61,7 +60,7 @@ class DumpLogSegmentsTest {
     log = Log(logDir, LogConfig(props), logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
       time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
   }
 
   def addSimpleRecords(): Unit = {
@@ -182,8 +181,8 @@ class DumpLogSegmentsTest {
   @Test
   def testDumpMetadataRecords(): Unit = {
     val mockTime = new MockTime
-    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
-    val log = LogTest.createLog(logDir, logConfig, new BrokerTopicStats, mockTime.scheduler, mockTime)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, mockTime.scheduler, mockTime)
 
     val metadataRecords = Seq(
       new ApiMessageAndVersion(

@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -49,6 +49,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThrows;
 
+@SuppressWarnings("deprecation")
 @Category({IntegrationTest.class})
 public class JoinStoreIntegrationTest {
 
@@ -119,9 +120,9 @@ public class JoinStoreIntegrationTest {
 
             kafkaStreams.start();
             latch.await();
-            final InvalidStateStoreException exception =
+            final UnknownStateStoreException exception =
                 assertThrows(
-                    InvalidStateStoreException.class,
+                    UnknownStateStoreException.class,
                     () -> kafkaStreams.store(fromNameAndType("join-store", keyValueStore()))
                 );
             assertThat(

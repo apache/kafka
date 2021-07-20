@@ -42,14 +42,15 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsNotStartedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.errors.UnknownStateStoreException;
+import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
@@ -63,10 +64,8 @@ import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidat
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.HostInfo;
-import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
-import org.apache.kafka.streams.state.internals.RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 import org.slf4j.Logger;
 
@@ -93,6 +92,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
@@ -342,10 +342,16 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private void validateIsRunningOrRebalancing() {
-        if (!isRunningOrRebalancing()) {
-            throw new IllegalStateException("KafkaStreams is not running. State is " + state + ".");
+        synchronized (stateLock) {
+            if (state == State.CREATED) {
+                throw new StreamsNotStartedException("KafkaStreams has not been started, you can retry after calling start()");
+            }
+            if (!isRunningOrRebalancing()) {
+                throw new IllegalStateException("KafkaStreams is not running. State is " + state + ".");
+            }
         }
     }
+
     /**
      * Listen to {@link State} change events.
      */
@@ -744,18 +750,32 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
+     * Create a {@code KafkaStreams} instance.
+     * <p>
+     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
+     * you still must {@link #close()} it to avoid resource leaks.
+     *
+     * @param topology  the topology specifying the computational logic
+     * @param config    configs for Kafka Streams
+     * @throws StreamsException if any fatal error occurs
      */
-    @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config) {
         this(topology, config, new DefaultKafkaClientSupplier());
     }
 
     /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties, KafkaClientSupplier)} instead
+     * Create a {@code KafkaStreams} instance.
+     * <p>
+     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
+     * you still must {@link #close()} it to avoid resource leaks.
+     *
+     * @param topology       the topology specifying the computational logic
+     * @param config         configs for Kafka Streams
+     * @param clientSupplier the Kafka clients supplier which provides underlying producer and consumer clients
+     *                       for the new {@code KafkaStreams} instance
+     * @throws StreamsException if any fatal error occurs
      */
-    @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final KafkaClientSupplier clientSupplier) {
@@ -763,9 +783,16 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties, Time)} instead
+     * Create a {@code KafkaStreams} instance.
+     * <p>
+     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
+     * you still must {@link #close()} it to avoid resource leaks.
+     *
+     * @param topology       the topology specifying the computational logic
+     * @param config         configs for Kafka Streams
+     * @param time           {@code Time} implementation; cannot be null
+     * @throws StreamsException if any fatal error occurs
      */
-    @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final Time time) {
@@ -797,7 +824,7 @@ public class KafkaStreams implements AutoCloseable {
             (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
 
         try {
-            stateDirectory = new StateDirectory(config, time, hasPersistentStores);
+            stateDirectory = new StateDirectory(config, time, hasPersistentStores, internalTopologyBuilder.hasNamedTopologies());
             processId = stateDirectory.initializeProcessId();
         } catch (final ProcessorStateException fatal) {
             throw new StreamsException(fatal);
@@ -884,7 +911,6 @@ public class KafkaStreams implements AutoCloseable {
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
         stateDirCleaner = setupStateDirCleaner();
-        maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
     }
 
@@ -1200,13 +1226,6 @@ public class KafkaStreams implements AutoCloseable {
         return null;
     }
 
-    private static void maybeWarnAboutCodeInRocksDBConfigSetter(final Logger log,
-                                                                final StreamsConfig config) {
-        if (config.getClass(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG) != null) {
-            RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.logWarning(log);
-        }
-    }
-
     private static HostInfo parseHostInfo(final String endPoint) {
         final HostInfo hostInfo = HostInfo.buildFromEndpoint(endPoint);
         if (hostInfo == null) {
@@ -1414,7 +1433,7 @@ public class KafkaStreams implements AutoCloseable {
      * @throws StreamsException if cleanup failed
      */
     public void cleanUp() {
-        if (isRunningOrRebalancing()) {
+        if (!(state == State.CREATED || state == State.NOT_RUNNING || state == State.ERROR)) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
         stateDirectory.clean();
@@ -1428,8 +1447,30 @@ public class KafkaStreams implements AutoCloseable {
      * Note: this is a point in time view and it may change due to partition reassignment.
      *
      * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances of this application
+     * @deprecated since 3.0.0 use {@link KafkaStreams#metadataForAllStreamsClients}
      */
-    public Collection<StreamsMetadata> allMetadata() {
+    @Deprecated
+    public Collection<org.apache.kafka.streams.state.StreamsMetadata> allMetadata() {
+        validateIsRunningOrRebalancing();
+        return streamsMetadataState.getAllMetadata().stream().map(streamsMetadata ->
+                new org.apache.kafka.streams.state.StreamsMetadata(streamsMetadata.hostInfo(),
+                        streamsMetadata.stateStoreNames(),
+                        streamsMetadata.topicPartitions(),
+                        streamsMetadata.standbyStateStoreNames(),
+                        streamsMetadata.standbyTopicPartitions()))
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Find all currently running {@code KafkaStreams} instances (potentially remotely) that use the same
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG application ID} as this instance (i.e., all instances that belong to
+     * the same Kafka Streams application) and return {@link StreamsMetadata} for each discovered instance.
+     * <p>
+     * Note: this is a point in time view and it may change due to partition reassignment.
+     *
+     * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances of this application
+     */
+    public Collection<StreamsMetadata> metadataForAllStreamsClients() {
         validateIsRunningOrRebalancing();
         return streamsMetadataState.getAllMetadata();
     }
@@ -1448,8 +1489,36 @@ public class KafkaStreams implements AutoCloseable {
      * @param storeName the {@code storeName} to find metadata for
      * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances with the provide {@code storeName} of
      * this application
+     * @deprecated since 3.0.0 use {@link KafkaStreams#streamsMetadataForStore} instead
      */
-    public Collection<StreamsMetadata> allMetadataForStore(final String storeName) {
+    @Deprecated
+    public Collection<org.apache.kafka.streams.state.StreamsMetadata> allMetadataForStore(final String storeName) {
+        validateIsRunningOrRebalancing();
+        return streamsMetadataState.getAllMetadataForStore(storeName).stream().map(streamsMetadata ->
+                new org.apache.kafka.streams.state.StreamsMetadata(streamsMetadata.hostInfo(),
+                        streamsMetadata.stateStoreNames(),
+                        streamsMetadata.topicPartitions(),
+                        streamsMetadata.standbyStateStoreNames(),
+                        streamsMetadata.standbyTopicPartitions()))
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Find all currently running {@code KafkaStreams} instances (potentially remotely) that
+     * <ul>
+     *   <li>use the same {@link StreamsConfig#APPLICATION_ID_CONFIG application ID} as this instance (i.e., all
+     *       instances that belong to the same Kafka Streams application)</li>
+     *   <li>and that contain a {@link StateStore} with the given {@code storeName}</li>
+     * </ul>
+     * and return {@link StreamsMetadata} for each discovered instance.
+     * <p>
+     * Note: this is a point in time view and it may change due to partition reassignment.
+     *
+     * @param storeName the {@code storeName} to find metadata for
+     * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances with the provide {@code storeName} of
+     * this application
+     */
+    public Collection<StreamsMetadata> streamsMetadataForStore(final String storeName) {
         validateIsRunningOrRebalancing();
         return streamsMetadataState.getAllMetadataForStore(storeName);
     }
@@ -1494,22 +1563,25 @@ public class KafkaStreams implements AutoCloseable {
      *
      * @param storeQueryParameters   the parameters used to fetch a queryable store
      * @return A facade wrapping the local {@link StateStore} instances
-     * @throws InvalidStateStoreException If the specified store name does not exist in the topology
-     *                                    or if the Streams instance isn't in a queryable state.
+     * @throws StreamsNotStartedException If Streams state is {@link KafkaStreams.State#CREATED CREATED}. Just
+     *         retry and wait until to {@link KafkaStreams.State#RUNNING RUNNING}.
+     * @throws UnknownStateStoreException If the specified store name does not exist in the topology.
+     * @throws InvalidStateStorePartitionException If the specified partition does not exist.
+     * @throws InvalidStateStoreException If the Streams instance isn't in a queryable state.
      *                                    If the store's type does not match the QueryableStoreType,
      *                                    the Streams instance is not in a queryable state with respect
      *                                    to the parameters, or if the store is not available locally, then
      *                                    an InvalidStateStoreException is thrown upon store access.
      */
     public <T> T store(final StoreQueryParameters<T> storeQueryParameters) {
+        validateIsRunningOrRebalancing();
         final String storeName = storeQueryParameters.storeName();
         if ((taskTopology == null || !taskTopology.hasStore(storeName))
             && (globalTaskTopology == null || !globalTaskTopology.hasStore(storeName))) {
-            throw new InvalidStateStoreException(
+            throw new UnknownStateStoreException(
                 "Cannot get state store " + storeName + " because no such store is registered in the topology."
             );
         }
-        validateIsRunningOrRebalancing();
         return queryableStoreProvider.getStore(storeQueryParameters);
     }
 
@@ -1528,9 +1600,42 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Returns runtime information about the local threads of this {@link KafkaStreams} instance.
      *
+     * @return the set of {@link org.apache.kafka.streams.processor.ThreadMetadata}.
+     * @deprecated since 3.0 use {@link #metadataForLocalThreads()}
+     */
+    @Deprecated
+    @SuppressWarnings("deprecation")
+    public Set<org.apache.kafka.streams.processor.ThreadMetadata> localThreadsMetadata() {
+        return metadataForLocalThreads().stream().map(threadMetadata -> new org.apache.kafka.streams.processor.ThreadMetadata(
+                threadMetadata.threadName(),
+                threadMetadata.threadState(),
+                threadMetadata.consumerClientId(),
+                threadMetadata.restoreConsumerClientId(),
+                threadMetadata.producerClientIds(),
+                threadMetadata.adminClientId(),
+                threadMetadata.activeTasks().stream().map(taskMetadata -> new org.apache.kafka.streams.processor.TaskMetadata(
+                        taskMetadata.taskId().toString(),
+                        taskMetadata.topicPartitions(),
+                        taskMetadata.committedOffsets(),
+                        taskMetadata.endOffsets(),
+                        taskMetadata.timeCurrentIdlingStarted())
+                ).collect(Collectors.toSet()),
+                threadMetadata.standbyTasks().stream().map(taskMetadata -> new org.apache.kafka.streams.processor.TaskMetadata(
+                        taskMetadata.taskId().toString(),
+                        taskMetadata.topicPartitions(),
+                        taskMetadata.committedOffsets(),
+                        taskMetadata.endOffsets(),
+                        taskMetadata.timeCurrentIdlingStarted())
+                ).collect(Collectors.toSet())))
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Returns runtime information about the local threads of this {@link KafkaStreams} instance.
+     *
      * @return the set of {@link ThreadMetadata}.
      */
-    public Set<ThreadMetadata> localThreadsMetadata() {
+    public Set<ThreadMetadata> metadataForLocalThreads() {
         final Set<ThreadMetadata> threadMetadata = new HashSet<>();
         processStreamThread(thread -> {
             synchronized (thread.getStateLock()) {

@@ -24,12 +24,16 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeature;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeatureCollection;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
@@ -40,10 +44,15 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+
+import static org.apache.kafka.common.metadata.MetadataRecordType.REGISTER_BROKER_RECORD;
 
 
 /**
@@ -96,9 +105,9 @@ public class ClusterControlManager {
     private final long sessionTimeoutNs;
 
     /**
-     * The replica placement policy to use.
+     * The replica placer to use.
      */
-    private final ReplicaPlacementPolicy placementPolicy;
+    private final ReplicaPlacer replicaPlacer;
 
     /**
      * Maps broker IDs to broker registrations.
@@ -120,12 +129,12 @@ public class ClusterControlManager {
                           Time time,
                           SnapshotRegistry snapshotRegistry,
                           long sessionTimeoutNs,
-                          ReplicaPlacementPolicy placementPolicy) {
+                          ReplicaPlacer replicaPlacer) {
         this.logContext = logContext;
         this.log = logContext.logger(ClusterControlManager.class);
         this.time = time;
         this.sessionTimeoutNs = sessionTimeoutNs;
-        this.placementPolicy = placementPolicy;
+        this.replicaPlacer = replicaPlacer;
         this.brokerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
@@ -184,7 +193,7 @@ public class ClusterControlManager {
             setBrokerEpoch(brokerEpoch).
             setRack(request.rack());
         for (BrokerRegistrationRequestData.Listener listener : request.listeners()) {
-            record.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
+            record.endPoints().add(new BrokerEndpoint().
                 setHost(listener.host()).
                 setName(listener.name()).
                 setPort(listener.port()).
@@ -199,7 +208,7 @@ public class ClusterControlManager {
                         "the broker has an unsupported version of " + feature.name());
                 }
             }
-            record.features().add(new RegisterBrokerRecord.BrokerFeature().
+            record.features().add(new BrokerFeature().
                 setName(feature.name()).
                 setMinSupportedVersion(feature.minSupportedVersion()).
                 setMaxSupportedVersion(feature.maxSupportedVersion()));
@@ -212,37 +221,29 @@ public class ClusterControlManager {
         }
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        records.add(new ApiMessageAndVersion(record, (short) 0));
+        records.add(new ApiMessageAndVersion(record,
+            REGISTER_BROKER_RECORD.highestSupportedVersion()));
         return ControllerResult.of(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
     public void replay(RegisterBrokerRecord record) {
         int brokerId = record.brokerId();
         List<Endpoint> listeners = new ArrayList<>();
-        for (RegisterBrokerRecord.BrokerEndpoint endpoint : record.endPoints()) {
+        for (BrokerEndpoint endpoint : record.endPoints()) {
             listeners.add(new Endpoint(endpoint.name(),
                 SecurityProtocol.forId(endpoint.securityProtocol()),
                 endpoint.host(), endpoint.port()));
         }
         Map<String, VersionRange> features = new HashMap<>();
-        for (RegisterBrokerRecord.BrokerFeature feature : record.features()) {
+        for (BrokerFeature feature : record.features()) {
             features.put(feature.name(), new VersionRange(
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
-        }
-        // Normally, all newly registered brokers start off in the fenced state.
-        // If this registration record is for a broker incarnation that was already
-        // registered, though, we preserve the existing fencing state.
-        boolean fenced = true;
-        BrokerRegistration prevRegistration = brokerRegistrations.get(brokerId);
-        if (prevRegistration != null &&
-                prevRegistration.incarnationId().equals(record.incarnationId())) {
-            fenced = prevRegistration.fenced();
         }
         // Update broker registrations.
         brokerRegistrations.put(brokerId, new BrokerRegistration(brokerId,
             record.brokerEpoch(), record.incarnationId(), listeners, features,
-            Optional.ofNullable(record.rack()), fenced));
-
+            Optional.ofNullable(record.rack()), record.fenced()));
+        BrokerRegistration prevRegistration = brokerRegistrations.get(brokerId);
         if (prevRegistration == null) {
             log.info("Registered new broker: {}", record);
         } else if (prevRegistration.incarnationId().equals(record.incarnationId())) {
@@ -303,12 +304,14 @@ public class ClusterControlManager {
         }
     }
 
-    public List<List<Integer>> placeReplicas(int numPartitions, short numReplicas) {
+    public List<List<Integer>> placeReplicas(int startPartition,
+                                             int numPartitions,
+                                             short numReplicas) {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
-        return heartbeatManager.placeReplicas(numPartitions, numReplicas,
-            id -> brokerRegistrations.get(id).rack(), placementPolicy);
+        return heartbeatManager.placeReplicas(startPartition, numPartitions, numReplicas,
+            id -> brokerRegistrations.get(id).rack(), replicaPlacer);
     }
 
     public boolean unfenced(int brokerId) {
@@ -342,5 +345,54 @@ public class ClusterControlManager {
             readyBrokersFuture.get().future.complete(null);
             readyBrokersFuture = Optional.empty();
         }
+    }
+
+    class ClusterControlIterator implements Iterator<List<ApiMessageAndVersion>> {
+        private final Iterator<Entry<Integer, BrokerRegistration>> iterator;
+
+        ClusterControlIterator(long epoch) {
+            this.iterator = brokerRegistrations.entrySet(epoch).iterator();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iterator.hasNext();
+        }
+
+        @Override
+        public List<ApiMessageAndVersion> next() {
+            if (!hasNext()) throw new NoSuchElementException();
+            Entry<Integer, BrokerRegistration> entry = iterator.next();
+            int brokerId = entry.getKey();
+            BrokerRegistration registration = entry.getValue();
+            BrokerEndpointCollection endpoints = new BrokerEndpointCollection();
+            for (Entry<String, Endpoint> endpointEntry : registration.listeners().entrySet()) {
+                endpoints.add(new BrokerEndpoint().setName(endpointEntry.getKey()).
+                    setHost(endpointEntry.getValue().host()).
+                    setPort(endpointEntry.getValue().port()).
+                    setSecurityProtocol(endpointEntry.getValue().securityProtocol().id));
+            }
+            BrokerFeatureCollection features = new BrokerFeatureCollection();
+            for (Entry<String, VersionRange> featureEntry : registration.supportedFeatures().entrySet()) {
+                features.add(new BrokerFeature().setName(featureEntry.getKey()).
+                    setMaxSupportedVersion(featureEntry.getValue().max()).
+                    setMinSupportedVersion(featureEntry.getValue().min()));
+            }
+            List<ApiMessageAndVersion> batch = new ArrayList<>();
+            batch.add(new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerId(brokerId).
+                setIncarnationId(registration.incarnationId()).
+                setBrokerEpoch(registration.epoch()).
+                setEndPoints(endpoints).
+                setFeatures(features).
+                setRack(registration.rack().orElse(null)).
+                setFenced(registration.fenced()),
+                    REGISTER_BROKER_RECORD.highestSupportedVersion()));
+            return batch;
+        }
+    }
+
+    ClusterControlIterator iterator(long epoch) {
+        return new ClusterControlIterator(epoch);
     }
 }

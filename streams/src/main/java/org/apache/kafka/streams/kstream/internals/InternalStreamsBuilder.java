@@ -74,7 +74,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     protected final GraphNode root = new GraphNode(TOPOLOGY_ROOT) {
         @Override
-        public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+        public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
             // no-op for root node
         }
     };
@@ -102,7 +102,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     public <K, V> KStream<K, V> stream(final Pattern topicPattern,
                                        final ConsumedInternal<K, V> consumed) {
-        final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
+        final String name = new NamedInternal(consumed.name()).orElseGenerateWithPrefix(this, KStreamImpl.SOURCE_NAME);
         final StreamSourceNode<K, V> streamPatternSourceNode = new StreamSourceNode<>(name, topicPattern, consumed);
 
         addGraphNode(root, streamPatternSourceNode);
@@ -290,7 +290,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
 
             if (streamGraphNode.allParentsWrittenToTopology() && !streamGraphNode.hasWrittenToTopology()) {
-                streamGraphNode.writeToTopology(internalTopologyBuilder);
+                streamGraphNode.writeToTopology(internalTopologyBuilder, props);
                 streamGraphNode.setHasWrittenToTopology(true);
             }
 
@@ -314,16 +314,17 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             if (graphNode instanceof StreamSourceNode) {
                 final StreamSourceNode<?, ?> currentSourceNode = (StreamSourceNode<?, ?>) graphNode;
 
-                if (currentSourceNode.topicPattern() != null) {
-                    if (!patternsToSourceNodes.containsKey(currentSourceNode.topicPattern())) {
-                        patternsToSourceNodes.put(currentSourceNode.topicPattern(), currentSourceNode);
+                if (currentSourceNode.topicPattern().isPresent()) {
+                    final Pattern topicPattern = currentSourceNode.topicPattern().get();
+                    if (!patternsToSourceNodes.containsKey(topicPattern)) {
+                        patternsToSourceNodes.put(topicPattern, currentSourceNode);
                     } else {
-                        final StreamSourceNode<?, ?> mainSourceNode = patternsToSourceNodes.get(currentSourceNode.topicPattern());
+                        final StreamSourceNode<?, ?> mainSourceNode = patternsToSourceNodes.get(topicPattern);
                         mainSourceNode.merge(currentSourceNode);
                         root.removeChild(graphNode);
                     }
                 } else {
-                    for (final String topic : currentSourceNode.topicNames()) {
+                    for (final String topic : currentSourceNode.topicNames().get()) {
                         if (!topicsToSourceNodes.containsKey(topic)) {
                             topicsToSourceNodes.put(topic, currentSourceNode);
                         } else {

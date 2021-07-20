@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import java.util.Iterator;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
@@ -29,6 +30,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 import java.util.Collections;
+import java.util.Properties;
 
 /**
  * Used to represent either a KTable source or a GlobalKTable source. A boolean flag is used to indicate if this represents a GlobalKTable a {@link
@@ -81,8 +83,17 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final String topicName = topicNames().iterator().next();
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
+        final String topicName;
+        if (topicNames().isPresent()) {
+            final Iterator<String> topicNames = topicNames().get().iterator();
+            topicName = topicNames.next();
+            if (topicNames.hasNext()) {
+                throw new IllegalStateException("A table source node must have a single topic as input");
+            }
+        } else {
+            throw new IllegalStateException("A table source node must have a single topic as input");
+        }
 
         // TODO: we assume source KTables can only be timestamped-key-value stores for now.
         // should be expanded for other types of stores as well.

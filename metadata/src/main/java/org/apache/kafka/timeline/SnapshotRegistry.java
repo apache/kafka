@@ -33,6 +33,8 @@ import org.slf4j.Logger;
  * Therefore, we use ArrayLists here rather than a data structure with higher overhead.
  */
 public class SnapshotRegistry {
+    public final static long LATEST_EPOCH = Long.MAX_VALUE;
+
     /**
      * Iterate through the list of snapshots in order of creation, such that older
      * snapshots come first.
@@ -103,6 +105,11 @@ public class SnapshotRegistry {
      */
     private final Snapshot head = new Snapshot(Long.MIN_VALUE);
 
+    /**
+     * Collection of all Revertable registered with this registry
+     */
+    private final List<Revertable> revertables = new ArrayList<>();
+
     public SnapshotRegistry(LogContext logContext) {
         this.log = logContext.logger(SnapshotRegistry.class);
     }
@@ -149,6 +156,10 @@ public class SnapshotRegistry {
             result.add(iterator.next().epoch());
         }
         return result;
+    }
+
+    public boolean hasSnapshot(long epoch) {
+        return snapshots.containsKey(epoch);
     }
 
     /**
@@ -247,5 +258,23 @@ public class SnapshotRegistry {
      */
     public long latestEpoch() {
         return head.prev().epoch();
+    }
+
+    /**
+     * Associate with this registry.
+     */
+    public void register(Revertable revertable) {
+        revertables.add(revertable);
+    }
+
+    /**
+     * Delete all snapshots and resets all of the Revertable object registered.
+     */
+    public void reset() {
+        deleteSnapshotsUpTo(LATEST_EPOCH);
+
+        for (Revertable revertable : revertables) {
+            revertable.reset();
+        }
     }
 }

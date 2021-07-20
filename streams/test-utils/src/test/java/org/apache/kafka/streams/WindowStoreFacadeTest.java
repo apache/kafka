@@ -71,17 +71,6 @@ public class WindowStoreFacadeTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
-    public void shouldPutWithUnknownTimestamp() {
-        mockedWindowTimestampStore.put("key", ValueAndTimestamp.make("value", ConsumerRecord.NO_TIMESTAMP));
-        expectLastCall();
-        replay(mockedWindowTimestampStore);
-
-        windowStoreFacade.put("key", "value");
-        verify(mockedWindowTimestampStore);
-    }
-
-    @Test
     public void shouldPutWindowStartTimestampWithUnknownTimestamp() {
         mockedWindowTimestampStore.put("key", ValueAndTimestamp.make("value", ConsumerRecord.NO_TIMESTAMP), 21L);
         expectLastCall();

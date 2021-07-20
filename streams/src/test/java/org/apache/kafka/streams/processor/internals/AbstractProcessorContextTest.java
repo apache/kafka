@@ -92,7 +92,7 @@ public class AbstractProcessorContextTest {
 
     @Test
     public void shouldNotThrowNullPointerExceptionOnTopicIfRecordContextTopicIsNull() {
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, null, null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, null, new RecordHeaders()));
         assertThat(context.topic(), nullValue());
     }
 
@@ -171,7 +171,7 @@ public class AbstractProcessorContextTest {
         );
     }
 
-    private static class TestProcessorContext extends AbstractProcessorContext {
+    private static class TestProcessorContext extends AbstractProcessorContext<Object, Object> {
         static Properties config;
         static {
             config = getStreamsConfig();
@@ -191,14 +191,6 @@ public class AbstractProcessorContextTest {
 
         @Override
         public <S extends StateStore> S getStateStore(final String name) {
-            return null;
-        }
-
-        @Override
-        @Deprecated
-        public Cancellable schedule(final long interval,
-                                    final PunctuationType type,
-                                    final Punctuator callback) {
             return null;
         }
 

@@ -99,7 +99,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         context.logChange(store.name(), key, value, 42);
 
         EasyMock.replay(context);
-        store.put(bytesKey, valueAndTimestamp);
+        store.put(bytesKey, valueAndTimestamp, context.timestamp());
 
         EasyMock.verify(inner, context);
     }
@@ -146,8 +146,8 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
 
         EasyMock.replay(context);
 
-        store.put(bytesKey, valueAndTimestamp);
-        store.put(bytesKey, valueAndTimestamp);
+        store.put(bytesKey, valueAndTimestamp, context.timestamp());
+        store.put(bytesKey, valueAndTimestamp, context.timestamp());
 
         EasyMock.verify(inner, context);
     }

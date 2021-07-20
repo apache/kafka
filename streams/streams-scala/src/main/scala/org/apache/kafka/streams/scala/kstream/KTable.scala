@@ -1,7 +1,4 @@
 /*
- * Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
- * Copyright (C) 2017-2018 Alexis Seigneurin.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -307,7 +304,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     new KStream(inner.toStream[KR](mapper.asKeyValueMapper, named))
 
   /**
-   * Suppress some updates from this changelog stream, determined by the supplied [[Suppressed]] configuration.
+   * Suppress some updates from this changelog stream, determined by the supplied [[org.apache.kafka.streams.kstream.Suppressed]] configuration.
    *
    * This controls what updates downstream table and stream operations will receive.
    *

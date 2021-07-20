@@ -27,7 +27,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
@@ -40,9 +40,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
+import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
+
 
 public class ConfigurationControlManager {
     private final Logger log;
@@ -144,7 +147,7 @@ public class ConfigurationControlManager {
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
                     setName(key).
-                    setValue(newValue), (short) 0));
+                    setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
         outputRecords.addAll(newRecords);
@@ -197,7 +200,7 @@ public class ConfigurationControlManager {
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
                     setName(key).
-                    setValue(newValue), (short) 0));
+                    setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
         for (String key : currentConfigs.keySet()) {
@@ -206,7 +209,7 @@ public class ConfigurationControlManager {
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
                     setName(key).
-                    setValue(null), (short) 0));
+                    setValue(null), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
         outputRecords.addAll(newRecords);
@@ -316,6 +319,9 @@ public class ConfigurationControlManager {
         } else {
             configs.put(record.name(), record.value());
         }
+        if (configs.isEmpty()) {
+            configData.remove(configResource);
+        }
         log.info("{}: set configuration {} to {}", configResource, record.name(), record.value());
     }
 
@@ -367,5 +373,44 @@ public class ConfigurationControlManager {
 
     void deleteTopicConfigs(String name) {
         configData.remove(new ConfigResource(Type.TOPIC, name));
+    }
+
+    boolean uncleanLeaderElectionEnabledForTopic(String name) {
+        return false; // TODO: support configuring unclean leader election.
+    }
+
+    class ConfigurationControlIterator implements Iterator<List<ApiMessageAndVersion>> {
+        private final long epoch;
+        private final Iterator<Entry<ConfigResource, TimelineHashMap<String, String>>> iterator;
+
+        ConfigurationControlIterator(long epoch) {
+            this.epoch = epoch;
+            this.iterator = configData.entrySet(epoch).iterator();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iterator.hasNext();
+        }
+
+        @Override
+        public List<ApiMessageAndVersion> next() {
+            if (!hasNext()) throw new NoSuchElementException();
+            List<ApiMessageAndVersion> records = new ArrayList<>();
+            Entry<ConfigResource, TimelineHashMap<String, String>> entry = iterator.next();
+            ConfigResource resource = entry.getKey();
+            for (Entry<String, String> configEntry : entry.getValue().entrySet(epoch)) {
+                records.add(new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceName(resource.name()).
+                    setResourceType(resource.type().id()).
+                    setName(configEntry.getKey()).
+                    setValue(configEntry.getValue()), CONFIG_RECORD.highestSupportedVersion()));
+            }
+            return records;
+        }
+    }
+
+    ConfigurationControlIterator iterator(long epoch) {
+        return new ConfigurationControlIterator(epoch);
     }
 }

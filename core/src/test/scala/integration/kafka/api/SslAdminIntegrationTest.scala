@@ -14,22 +14,16 @@ package kafka.api
 
 import java.io.File
 import java.util
-import java.util.Collections
 import java.util.concurrent._
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.authorizer.AclAuthorizer
-import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
 import kafka.server.KafkaConfig
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateAclsResult}
 import org.apache.kafka.common.acl._
-import org.apache.kafka.common.acl.AclOperation._
-import org.apache.kafka.common.acl.AclPermissionType._
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
-import org.apache.kafka.common.resource.PatternType._
-import org.apache.kafka.common.resource.ResourceType._
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
@@ -84,8 +78,7 @@ object SslAdminIntegrationTest {
 }
 
 class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
-  override val authorizationAdmin = new AclAuthorizationAdmin
-  val clusterResourcePattern = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+  override val authorizationAdmin = new AclAuthorizationAdmin(classOf[SslAdminIntegrationTest.TestableAclAuthorizer], classOf[AclAuthorizer])
 
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
 
@@ -265,55 +258,5 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     }.values.toList
     assertTrue(metrics.nonEmpty, s"Unable to find metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}")
     metrics.map(_.asInstanceOf[Gauge[Int]].value).sum
-  }
-
-  class AclAuthorizationAdmin extends AuthorizationAdmin {
-
-    override def authorizerClassName: String = classOf[SslAdminIntegrationTest.TestableAclAuthorizer].getName
-
-    override def initializeAcls(): Unit = {
-      val authorizer = CoreUtils.createObject[Authorizer](classOf[AclAuthorizer].getName)
-      try {
-        authorizer.configure(configs.head.originals())
-        val ace = new AccessControlEntry(WildcardPrincipalString, WildcardHost, ALL, ALLOW)
-        authorizer.createAcls(null, List(new AclBinding(new ResourcePattern(TOPIC, "*", LITERAL), ace)).asJava)
-        authorizer.createAcls(null, List(new AclBinding(new ResourcePattern(GROUP, "*", LITERAL), ace)).asJava)
-
-        authorizer.createAcls(null, List(clusterAcl(ALLOW, CREATE),
-          clusterAcl(ALLOW, DELETE),
-          clusterAcl(ALLOW, CLUSTER_ACTION),
-          clusterAcl(ALLOW, ALTER_CONFIGS),
-          clusterAcl(ALLOW, ALTER))
-          .map(ace => new AclBinding(clusterResourcePattern, ace)).asJava)
-      } finally {
-        authorizer.close()
-      }
-    }
-
-    override def addClusterAcl(permissionType: AclPermissionType, operation: AclOperation): Unit = {
-      val ace = clusterAcl(permissionType, operation)
-      val aclBinding = new AclBinding(clusterResourcePattern, ace)
-      val authorizer = servers.head.dataPlaneRequestProcessor.authorizer.get
-      val prevAcls = authorizer.acls(new AclBindingFilter(clusterResourcePattern.toFilter, AccessControlEntryFilter.ANY))
-        .asScala.map(_.entry).toSet
-      authorizer.createAcls(null, Collections.singletonList(aclBinding))
-      TestUtils.waitAndVerifyAcls(prevAcls ++ Set(ace), authorizer, clusterResourcePattern)
-    }
-
-    override def removeClusterAcl(permissionType: AclPermissionType, operation: AclOperation): Unit = {
-      val ace = clusterAcl(permissionType, operation)
-      val authorizer = servers.head.dataPlaneRequestProcessor.authorizer.get
-      val clusterFilter = new AclBindingFilter(clusterResourcePattern.toFilter, AccessControlEntryFilter.ANY)
-      val prevAcls = authorizer.acls(clusterFilter).asScala.map(_.entry).toSet
-      val deleteFilter = new AclBindingFilter(clusterResourcePattern.toFilter, ace.toFilter)
-      assertFalse(authorizer.deleteAcls(null, Collections.singletonList(deleteFilter))
-        .get(0).toCompletableFuture.get.aclBindingDeleteResults().asScala.head.exception.isPresent)
-      TestUtils.waitAndVerifyAcls(prevAcls -- Set(ace), authorizer, clusterResourcePattern)
-    }
-
-    private def clusterAcl(permissionType: AclPermissionType, operation: AclOperation): AccessControlEntry = {
-      new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "*").toString,
-        WildcardHost, operation, permissionType)
-    }
   }
 }

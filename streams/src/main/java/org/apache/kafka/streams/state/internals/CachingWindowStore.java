@@ -58,7 +58,7 @@ class CachingWindowStore
     private StateSerdes<Bytes, byte[]> bytesSerdes;
     private CacheFlushListener<byte[], byte[]> flushListener;
 
-    private AtomicLong maxObservedTimestamp;
+    private final AtomicLong maxObservedTimestamp;
 
     CachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
                        final long windowSize,
@@ -142,12 +142,6 @@ class CachingWindowStore
         return true;
     }
 
-    @Deprecated
-    @Override
-    public synchronized void put(final Bytes key,
-                                 final byte[] value) {
-        put(key, value, context.timestamp());
-    }
 
     @Override
     public synchronized void put(final Bytes key,
@@ -189,7 +183,6 @@ class CachingWindowStore
         }
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key,
                                                           final long timeFrom,
@@ -246,7 +239,6 @@ class CachingWindowStore
         return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator, false);
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                            final Bytes keyTo,
@@ -336,7 +328,6 @@ class CachingWindowStore
         );
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
                                                               final long timeTo) {

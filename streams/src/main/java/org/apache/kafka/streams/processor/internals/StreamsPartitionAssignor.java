@@ -37,6 +37,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
@@ -173,8 +174,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private Admin adminClient;
     private TaskManager taskManager;
     private StreamsMetadataState streamsMetadataState;
-    @SuppressWarnings("deprecation")
-    private org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper;
+    private PartitionGrouper partitionGrouper;
     private AtomicInteger assignmentErrorCode;
     private AtomicLong nextScheduledRebalanceMs;
     private Time time;
@@ -191,7 +191,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
-     * later's cached metadata while sending subscriptions, and the latter needs former's returned assignment when
+     * latter's cached metadata while sending subscriptions, and the latter needs former's returned assignment when
      * adding tasks.
      *
      * @throws KafkaException if the stream thread is not specified
@@ -213,7 +213,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         nextScheduledRebalanceMs = referenceContainer.nextScheduledRebalanceMs;
         time = Objects.requireNonNull(referenceContainer.time, "Time was not specified");
         assignmentConfigs = assignorConfiguration.assignmentConfigs();
-        partitionGrouper = assignorConfiguration.partitionGrouper();
+        partitionGrouper = new PartitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
         internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
@@ -370,10 +370,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // construct the assignment of tasks to clients
 
-            final Map<Integer, TopicsInfo> topicGroups = taskManager.builder().topicGroups();
+            final Map<Subtopology, TopicsInfo> topicGroups = taskManager.builder().topicGroups();
             final Set<String> allSourceTopics = new HashSet<>();
-            final Map<Integer, Set<String>> sourceTopicsByGroup = new HashMap<>();
-            for (final Map.Entry<Integer, TopicsInfo> entry : topicGroups.entrySet()) {
+            final Map<Subtopology, Set<String>> sourceTopicsByGroup = new HashMap<>();
+            for (final Map.Entry<Subtopology, TopicsInfo> entry : topicGroups.entrySet()) {
                 allSourceTopics.addAll(entry.getValue().sourceTopics);
                 sourceTopicsByGroup.put(entry.getKey(), entry.getValue().sourceTopics);
             }
@@ -385,7 +385,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final Set<TaskId> statefulTasks = new HashSet<>();
 
             final boolean probingRebalanceNeeded = assignTasksToClients(fullMetadata, allSourceTopics, topicGroups, clientMetadataMap, partitionsForTask, statefulTasks);
-
 
             // ---------------- Step Three ---------------- //
 
@@ -498,7 +497,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * @param fullMetadata the cluster metadata
      */
     private void populateTasksForMaps(final Map<TopicPartition, TaskId> taskForPartition,
-                                      final Map<Integer, Set<TaskId>> tasksForTopicGroup,
+                                      final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
                                       final Set<String> allSourceTopics,
                                       final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                       final Cluster fullMetadata) {
@@ -516,7 +515,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
             allAssignedPartitions.addAll(partitions);
 
-            tasksForTopicGroup.computeIfAbsent(id.topicGroupId, k -> new HashSet<>()).add(id);
+            tasksForTopicGroup.computeIfAbsent(new Subtopology(id.subtopology(), id.namedTopology()), k -> new HashSet<>()).add(id);
         }
 
         checkAllPartitions(allSourceTopics, partitionsForTask, allAssignedPartitions, fullMetadata);
@@ -555,7 +554,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      */
     private boolean assignTasksToClients(final Cluster fullMetadata,
                                          final Set<String> allSourceTopics,
-                                         final Map<Integer, TopicsInfo> topicGroups,
+                                         final Map<Subtopology, TopicsInfo> topicGroups,
                                          final Map<UUID, ClientMetadata> clientMetadataMap,
                                          final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                          final Set<TaskId> statefulTasks) {
@@ -564,7 +563,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         final Map<TopicPartition, TaskId> taskForPartition = new HashMap<>();
-        final Map<Integer, Set<TaskId>> tasksForTopicGroup = new HashMap<>();
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = new HashMap<>();
         populateTasksForMaps(taskForPartition, tasksForTopicGroup, allSourceTopics, partitionsForTask, fullMetadata);
 
         final ChangelogTopics changelogTopics = new ChangelogTopics(
@@ -1256,6 +1255,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             case 7:
             case 8:
             case 9:
+            case 10:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);

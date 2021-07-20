@@ -27,7 +27,9 @@ import java.util.Set;
 
 /**
  * Represents the state of a single task running within a {@link KafkaStreams} application.
+ * @deprecated since 3.0, use {@link org.apache.kafka.streams.TaskMetadata} instead.
  */
+@Deprecated
 public class TaskMetadata {
 
     private final String taskId;
@@ -52,6 +54,9 @@ public class TaskMetadata {
         this.timeCurrentIdlingStarted = timeCurrentIdlingStarted;
     }
 
+    /**
+     * @return the basic task metadata such as subtopology and partition id
+     */
     public String taskId() {
         return taskId;
     }
@@ -60,14 +65,23 @@ public class TaskMetadata {
         return topicPartitions;
     }
 
+    /**
+     * This function will return a map of TopicPartitions and the highest committed offset seen so far
+     */
     public Map<TopicPartition, Long> committedOffsets() {
         return committedOffsets;
     }
 
+    /**
+     * This function will return a map of TopicPartitions and the highest offset seen so far in the Topic
+     */
     public Map<TopicPartition, Long> endOffsets() {
         return endOffsets;
     }
 
+    /**
+     * This function will return the time task idling started, if the task is not currently idling it will return empty
+     */
     public Optional<Long> timeCurrentIdlingStarted() {
         return timeCurrentIdlingStarted;
     }

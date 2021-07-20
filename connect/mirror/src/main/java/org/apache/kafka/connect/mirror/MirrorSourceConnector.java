@@ -304,7 +304,7 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     private void createOffsetSyncsTopic() {
-        MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(), config.offsetSyncsTopicReplicationFactor(), config.sourceAdminConfig());
+        MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(), config.offsetSyncsTopicReplicationFactor(), config.offsetSyncsTopicAdminConfig());
     }
 
     void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {
@@ -409,8 +409,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     @SuppressWarnings("deprecation")
     // use deprecated alterConfigs API for broker compatibility back to 0.11.0
-    private void updateTopicConfigs(Map<String, Config> topicConfigs)
-            throws InterruptedException, ExecutionException {
+    private void updateTopicConfigs(Map<String, Config> topicConfigs) {
         Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()
             .collect(Collectors.toMap(x ->
                 new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), Entry::getValue));
@@ -422,8 +421,7 @@ public class MirrorSourceConnector extends SourceConnector {
         }));
     }
 
-    private void updateTopicAcls(List<AclBinding> bindings)
-            throws InterruptedException, ExecutionException {
+    private void updateTopicAcls(List<AclBinding> bindings) {
         log.trace("Syncing {} topic ACL bindings.", bindings.size());
         targetAdminClient.createAcls(bindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
@@ -494,7 +492,12 @@ public class MirrorSourceConnector extends SourceConnector {
         } else if (source.equals(sourceAndTarget.target())) {
             return true;
         } else {
-            return isCycle(replicationPolicy.upstreamTopic(topic));
+            String upstreamTopic = replicationPolicy.upstreamTopic(topic);
+            if (upstreamTopic.equals(topic)) {
+                // Extra check for IdentityReplicationPolicy and similar impls that don't prevent cycles.
+                return false;
+            }
+            return isCycle(upstreamTopic);
         }
     }
 

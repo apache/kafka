@@ -22,7 +22,7 @@ import kafka.server.ConfigEntityName
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.common.config.internals.QuotaConfigs
-import org.apache.kafka.common.metadata.QuotaRecord
+import org.apache.kafka.common.metadata.ClientQuotaRecord
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.utils.Sanitizer
@@ -51,7 +51,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
                                  private[metadata] val connectionQuotas: ConnectionQuotas,
                                  private[metadata] val quotaCache: ClientQuotaCache) extends Logging {
 
-  def handleQuotaRecord(quotaRecord: QuotaRecord): Unit = {
+  def handleQuotaRecord(quotaRecord: ClientQuotaRecord): Unit = {
     val entityMap = mutable.Map[String, String]()
     quotaRecord.entity().forEach { entityData =>
       entityMap.put(entityData.entityType(), entityData.entityName())
@@ -103,7 +103,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     }
   }
 
-  def handleIpQuota(ipEntity: QuotaEntity, quotaRecord: QuotaRecord): Unit = {
+  def handleIpQuota(ipEntity: QuotaEntity, quotaRecord: ClientQuotaRecord): Unit = {
     val inetAddress = ipEntity match {
       case IpEntity(ip) =>
         try {
@@ -121,19 +121,23 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       return
     }
 
-    // Update the cache
-    quotaCache.updateQuotaCache(ipEntity, quotaRecord.key, quotaRecord.value, quotaRecord.remove)
-
     // Convert the value to an appropriate Option for the quota manager
     val newValue = if (quotaRecord.remove()) {
       None
     } else {
       Some(quotaRecord.value).map(_.toInt)
     }
-    connectionQuotas.updateIpConnectionRateQuota(inetAddress, newValue)
+    try {
+      connectionQuotas.updateIpConnectionRateQuota(inetAddress, newValue)
+    } catch {
+      case t: Throwable => error(s"Failed to update IP quota $ipEntity", t)
+    }
+
+    // Update the cache
+    quotaCache.updateQuotaCache(ipEntity, quotaRecord.key, quotaRecord.value, quotaRecord.remove)
   }
 
-  def handleUserClientQuota(quotaEntity: QuotaEntity, quotaRecord: QuotaRecord): Unit = {
+  def handleUserClientQuota(quotaEntity: QuotaEntity, quotaRecord: ClientQuotaRecord): Unit = {
     val manager = quotaRecord.key() match {
       case QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.fetch
       case QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.produce
@@ -163,11 +167,15 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       Some(new Quota(quotaRecord.value(), true))
     }
 
-    manager.updateQuota(
-      sanitizedUser = sanitizedUser,
-      clientId = sanitizedClientId.map(Sanitizer.desanitize),
-      sanitizedClientId = sanitizedClientId,
-      quota = quotaValue)
+    try {
+      manager.updateQuota(
+        sanitizedUser = sanitizedUser,
+        clientId = sanitizedClientId.map(Sanitizer.desanitize),
+        sanitizedClientId = sanitizedClientId,
+        quota = quotaValue)
+    } catch {
+      case t: Throwable => error(s"Failed to update user-client quota $quotaEntity", t)
+    }
 
     quotaCache.updateQuotaCache(quotaEntity, quotaRecord.key, quotaRecord.value, quotaRecord.remove)
   }

@@ -43,11 +43,14 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+
+import java.util.ArrayList;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -69,7 +72,6 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -211,7 +213,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotLockAnythingIfStateDirIsEmpty() {
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new File[0]).once();
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new ArrayList<>()).once();
 
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
@@ -572,12 +574,12 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldReInitializeThreadProducerOnHandleLostAllIfEosBetaEnabled() {
+    public void shouldReInitializeThreadProducerOnHandleLostAllIfEosV2Enabled() {
         activeTaskCreator.reInitializeThreadProducer();
         expectLastCall();
         replay(activeTaskCreator);
 
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
 
         taskManager.handleLostAll();
 
@@ -824,7 +826,7 @@ public class TaskManagerTest {
     @Test
     public void shouldNotAttemptToCommitInHandleCorruptedDuringARebalance() {
         final ProcessorStateManager stateManager = EasyMock.createNiceMock(ProcessorStateManager.class);
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andStubReturn(new File[0]);
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andStubReturn(new ArrayList<>());
 
         final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
 
@@ -938,7 +940,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringHandleCorruptedWithEOS() {
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer()).andStubReturn(producer);
         final ProcessorStateManager stateManager = EasyMock.createMock(ProcessorStateManager.class);
@@ -1076,7 +1078,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithEOS() {
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer()).andStubReturn(producer);
         final ProcessorStateManager stateManager = EasyMock.createMock(ProcessorStateManager.class);
@@ -1352,9 +1354,9 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCommitAllActiveTasksThatNeedCommittingOnHandleRevocationWithEosBeta() {
+    public void shouldCommitAllActiveTasksThatNeedCommittingOnHandleRevocationWithEosV2() {
         final StreamsProducer producer = mock(StreamsProducer.class);
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
 
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
@@ -2033,7 +2035,7 @@ public class TaskManagerTest {
         expect(consumer.assignment()).andReturn(assignment);
         consumer.pause(assignment);
         expectLastCall();
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new File[0]);
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new ArrayList<>());
         replay(consumer, stateDirectory);
         assertThat(taskManager.isRebalanceInProgress(), is(false));
         taskManager.handleRebalanceStart(emptySet());
@@ -2218,7 +2220,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCommitViaProducerIfEosBetaEnabled() {
+    public void shouldCommitViaProducerIfEosV2Enabled() {
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer()).andReturn(producer);
 
@@ -2231,7 +2233,7 @@ public class TaskManagerTest {
         producer.commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
         expectLastCall();
 
-        shouldCommitViaProducerIfEosEnabled(StreamThread.ProcessingMode.EXACTLY_ONCE_BETA, producer, offsetsT01, offsetsT02);
+        shouldCommitViaProducerIfEosEnabled(StreamThread.ProcessingMode.EXACTLY_ONCE_V2, producer, offsetsT01, offsetsT02);
     }
 
     private void shouldCommitViaProducerIfEosEnabled(final StreamThread.ProcessingMode processingMode,
@@ -3056,8 +3058,8 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldThrowTaskCorruptedExceptionForTimeoutExceptionOnCommitWithEosBeta() {
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
+    public void shouldThrowTaskCorruptedExceptionForTimeoutExceptionOnCommitWithEosV2() {
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
 
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer())
@@ -3245,9 +3247,9 @@ public class TaskManagerTest {
     }
 
     private void makeTaskFolders(final String... names) throws Exception {
-        final File[] taskFolders = new File[names.length];
+        final ArrayList<TaskDirectory> taskFolders = new ArrayList<>(names.length);
         for (int i = 0; i < names.length; ++i) {
-            taskFolders[i] = testFolder.newFolder(names[i]);
+            taskFolders.add(new TaskDirectory(testFolder.newFolder(names[i]), null));
         }
         expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(taskFolders).once();
     }
@@ -3464,12 +3466,6 @@ public class TaskManagerTest {
         @Override
         public Optional<Long> timeCurrentIdlingStarted() {
             return Optional.empty();
-        }
-
-        @Override
-        public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
-            Objects.requireNonNull(topicPartition);
-            assertThat("It must be from an owned topic", inputPartitions.contains(topicPartition));
         }
 
         @Override

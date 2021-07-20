@@ -2094,7 +2094,7 @@ public class FetcherTest {
         Cluster cluster = TestUtils.singletonCluster("test", 1);
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000, ClientDnsLookup.USE_ALL_DNS_IPS,
+                1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
                 time, true, new ApiVersions(), throttleTimeSensor, new LogContext());
 
         ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(
@@ -2539,8 +2539,8 @@ public class FetcherTest {
         MetadataResponse updatedMetadata = RequestTestUtils.metadataUpdateWith("dummy", 3,
             singletonMap(topicName, Errors.NONE), singletonMap(topicName, 4), tp -> newLeaderEpoch);
 
-        Node originalLeader = initialUpdateResponse.cluster().leaderFor(tp1);
-        Node newLeader = updatedMetadata.cluster().leaderFor(tp1);
+        Node originalLeader = initialUpdateResponse.buildCluster().leaderFor(tp1);
+        Node newLeader = updatedMetadata.buildCluster().leaderFor(tp1);
         assertNotEquals(originalLeader, newLeader);
 
         for (Errors retriableError : retriableErrors) {
@@ -3615,7 +3615,7 @@ public class FetcherTest {
         partitionNumByTopic.put(topicName, 2);
         partitionNumByTopic.put(topicName2, 1);
         MetadataResponse updateMetadataResponse = RequestTestUtils.metadataUpdateWith(2, partitionNumByTopic);
-        Cluster updatedCluster = updateMetadataResponse.cluster();
+        Cluster updatedCluster = updateMetadataResponse.buildCluster();
 
         // The metadata refresh should contain all the topics.
         client.prepareMetadataUpdate(updateMetadataResponse, true);

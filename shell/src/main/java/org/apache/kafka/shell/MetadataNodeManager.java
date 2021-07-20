@@ -36,19 +36,19 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
-import org.apache.kafka.metalog.MetaLogLeader;
-import org.apache.kafka.metalog.MetaLogListener;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.shell.MetadataNode.DirectoryNode;
 import org.apache.kafka.shell.MetadataNode.FileNode;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -77,13 +77,15 @@ public final class MetadataNodeManager implements AutoCloseable {
         }
     }
 
-    class LogListener implements MetaLogListener, RaftClient.Listener<ApiMessageAndVersion> {
+    class LogListener implements RaftClient.Listener<ApiMessageAndVersion> {
         @Override
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
             try {
-                // TODO: handle lastOffset
                 while (reader.hasNext()) {
-                    BatchReader.Batch<ApiMessageAndVersion> batch = reader.next();
+                    Batch<ApiMessageAndVersion> batch = reader.next();
+                    log.debug("handleCommits " + batch.records() + " at offset " + batch.lastOffset());
+                    DirectoryNode dir = data.root.mkdirs("metadataQuorum");
+                    dir.create("offset").setContents(String.valueOf(batch.lastOffset()));
                     for (ApiMessageAndVersion messageAndVersion : batch.records()) {
                         handleMessage(messageAndVersion.message());
                     }
@@ -94,19 +96,21 @@ public final class MetadataNodeManager implements AutoCloseable {
         }
 
         @Override
-        public void handleCommits(long lastOffset, List<ApiMessage> messages) {
-            appendEvent("handleCommits", () -> {
-                log.debug("handleCommits " + messages + " at offset " + lastOffset);
-                DirectoryNode dir = data.root.mkdirs("metadataQuorum");
-                dir.create("offset").setContents(String.valueOf(lastOffset));
-                for (ApiMessage message : messages) {
-                    handleMessage(message);
+        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+            try {
+                while (reader.hasNext()) {
+                    Batch<ApiMessageAndVersion> batch = reader.next();
+                    for (ApiMessageAndVersion messageAndVersion : batch) {
+                        handleMessage(messageAndVersion.message());
+                    }
                 }
-            }, null);
+            } finally {
+                reader.close();
+            }
         }
 
         @Override
-        public void handleNewLeader(MetaLogLeader leader) {
+        public void handleLeaderChange(LeaderAndEpoch leader) {
             appendEvent("handleNewLeader", () -> {
                 log.debug("handleNewLeader " + leader);
                 DirectoryNode dir = data.root.mkdirs("metadataQuorum");
@@ -115,20 +119,8 @@ public final class MetadataNodeManager implements AutoCloseable {
         }
 
         @Override
-        public void handleClaim(int epoch) {
-            // This shouldn't happen because we should never be the leader.
-            log.debug("RaftClient.Listener sent handleClaim(epoch=" + epoch + ")");
-        }
-
-        @Override
-        public void handleRenounce(long epoch) {
-            // This shouldn't happen because we should never be the leader.
-            log.debug("MetaLogListener sent handleRenounce(epoch=" + epoch + ")");
-        }
-
-        @Override
         public void beginShutdown() {
-            log.debug("MetaLogListener sent beginShutdown");
+            log.debug("Metadata log listener sent beginShutdown");
         }
     }
 

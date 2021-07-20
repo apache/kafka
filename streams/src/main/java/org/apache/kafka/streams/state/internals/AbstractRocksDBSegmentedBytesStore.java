@@ -197,6 +197,15 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     @Override
+    public void remove(final Bytes key, final long timestamp) {
+        final Bytes keyBytes = keySchema.toStoreBinaryKeyPrefix(key, timestamp);
+        final S segment = segments.getSegmentForTimestamp(timestamp);
+        if (segment != null) {
+            segment.deleteRange(keyBytes, keyBytes);
+        }
+    }
+
+    @Override
     public void put(final Bytes key,
                     final byte[] value) {
         final long timestamp = keySchema.segmentTimestamp(key);
@@ -235,11 +244,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
 
-        expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
+        expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
             threadId,
             taskName,
-            metricScope,
-            name(),
             metrics
         );
 

@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -26,6 +23,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final KTableProcessorSupplier<K, ?, V> parent1;
@@ -46,7 +44,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public org.apache.kafka.streams.processor.Processor<K, Change<V>> get() {
         return new KTableKTableJoinMergeProcessor();
     }
 
@@ -96,13 +94,13 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         return new KTableKTableJoinMerger<>(parent1, parent2, queryableName);
     }
 
-    private class KTableKTableJoinMergeProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTableKTableJoinMergeProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, Change<V>> {
         private TimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
                 store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);

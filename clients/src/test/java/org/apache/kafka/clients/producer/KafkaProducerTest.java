@@ -641,13 +641,6 @@ public class KafkaProducerTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    @Deprecated
-    public void testHeadersWithExtendedClasses() {
-        doTestHeaders(org.apache.kafka.common.serialization.ExtendedSerializer.class);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
     public void testHeaders() {
         doTestHeaders(Serializer.class);
     }
@@ -808,14 +801,14 @@ public class KafkaProducerTest {
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
-                FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", host1));
 
             assertThrows(TimeoutException.class, producer::initTransactions);
 
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
                                ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
-                FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", host1));
 
             client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
@@ -841,7 +834,7 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
@@ -863,7 +856,7 @@ public class KafkaProducerTest {
         MockClient client = new MockClient(time, metadata);
         client.updateMetadata(initialUpdateResponse);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
@@ -892,10 +885,10 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
         client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         String groupId = "group";
         client.prepareResponse(request ->
             ((TxnOffsetCommitRequest) request).data().groupId().equals(groupId),
@@ -907,27 +900,18 @@ public class KafkaProducerTest {
             new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions();
             producer.beginTransaction();
-            producer.sendOffsetsToTransaction(Collections.emptyMap(), groupId);
+            producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata(groupId));
             producer.commitTransaction();
         }
     }
 
     @Test
     public void testSendTxnOffsetsWithGroupMetadata() {
-        sendOffsetsWithGroupMetadata((short) 3);
-    }
-
-    @Test
-    public void testSendTxnOffsetsWithGroupMetadataDowngrade() {
-        sendOffsetsWithGroupMetadata((short) 2);
-    }
-
-    private void sendOffsetsWithGroupMetadata(final short maxVersion) {
+        final short maxVersion = (short) 3;
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        configs.put(ProducerConfig.AUTO_DOWNGRADE_TXN_COMMIT, true);
 
         Time time = new MockTime(1);
         MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
@@ -940,33 +924,26 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
         client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         String groupId = "group";
         String memberId = "member";
         int generationId = 5;
         String groupInstanceId = "instance";
         client.prepareResponse(request -> {
             TxnOffsetCommitRequestData data = ((TxnOffsetCommitRequest) request).data();
-            if (maxVersion < 3) {
-                return data.groupId().equals(groupId) &&
-                           data.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) &&
-                           data.generationId() == JoinGroupRequest.UNKNOWN_GENERATION_ID &&
-                           data.groupInstanceId() == null;
-            } else {
-                return data.groupId().equals(groupId) &&
-                           data.memberId().equals(memberId) &&
-                           data.generationId() == generationId &&
-                           data.groupInstanceId().equals(groupInstanceId);
-            }
+            return data.groupId().equals(groupId) &&
+                data.memberId().equals(memberId) &&
+                data.generationId() == generationId &&
+                data.groupInstanceId().equals(groupInstanceId);
         }, txnOffsetsCommitResponse(Collections.singletonMap(
             new TopicPartition("topic", 0), Errors.NONE)));
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
-            new StringSerializer(), metadata, client, null, time)) {
+                                                               new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions();
             producer.beginTransaction();
             ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId,
@@ -1003,7 +980,7 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
@@ -1214,7 +1191,7 @@ public class KafkaProducerTest {
 
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         CountDownLatch assertionDoneLatch = new CountDownLatch(1);
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "this-is-a-transactional-id", host1));
         executorService.submit(() -> {
             assertThrows(KafkaException.class, producer::initTransactions);
             assertionDoneLatch.countDown();
@@ -1243,7 +1220,7 @@ public class KafkaProducerTest {
 
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         CountDownLatch assertionDoneLatch = new CountDownLatch(1);
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "this-is-a-transactional-id", host1));
         executorService.submit(() -> {
             assertThrows(KafkaException.class, producer::initTransactions);
             assertionDoneLatch.countDown();

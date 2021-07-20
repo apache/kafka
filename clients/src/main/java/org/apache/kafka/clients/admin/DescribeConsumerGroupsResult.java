@@ -17,10 +17,11 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -34,9 +35,9 @@ import java.util.concurrent.ExecutionException;
 @InterfaceStability.Evolving
 public class DescribeConsumerGroupsResult {
 
-    private final Map<String, KafkaFuture<ConsumerGroupDescription>> futures;
+    private final Map<CoordinatorKey, KafkaFutureImpl<ConsumerGroupDescription>> futures;
 
-    public DescribeConsumerGroupsResult(final Map<String, KafkaFuture<ConsumerGroupDescription>> futures) {
+    public DescribeConsumerGroupsResult(final Map<CoordinatorKey, KafkaFutureImpl<ConsumerGroupDescription>> futures) {
         this.futures = futures;
     }
 
@@ -44,7 +45,9 @@ public class DescribeConsumerGroupsResult {
      * Return a map from group id to futures which yield group descriptions.
      */
     public Map<String, KafkaFuture<ConsumerGroupDescription>> describedGroups() {
-        return futures;
+        Map<String, KafkaFuture<ConsumerGroupDescription>> describedGroups = new HashMap<>();
+        futures.forEach((key, future) -> describedGroups.put(key.idValue, future));
+        return describedGroups;
     }
 
     /**
@@ -52,21 +55,18 @@ public class DescribeConsumerGroupsResult {
      */
     public KafkaFuture<Map<String, ConsumerGroupDescription>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
-            new KafkaFuture.BaseFunction<Void, Map<String, ConsumerGroupDescription>>() {
-                @Override
-                public Map<String, ConsumerGroupDescription> apply(Void v) {
+            nil -> {
+                Map<String, ConsumerGroupDescription> descriptions = new HashMap<>(futures.size());
+                futures.forEach((key, future) -> {
                     try {
-                        Map<String, ConsumerGroupDescription> descriptions = new HashMap<>(futures.size());
-                        for (Map.Entry<String, KafkaFuture<ConsumerGroupDescription>> entry : futures.entrySet()) {
-                            descriptions.put(entry.getKey(), entry.getValue().get());
-                        }
-                        return descriptions;
+                        descriptions.put(key.idValue, future.get());
                     } catch (InterruptedException | ExecutionException e) {
                         // This should be unreachable, since the KafkaFuture#allOf already ensured
                         // that all of the futures completed successfully.
                         throw new RuntimeException(e);
                     }
-                }
+                });
+                return descriptions;
             });
     }
 }

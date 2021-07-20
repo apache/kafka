@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Arrays;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -78,7 +79,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
     }
 
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
 
         final String processorName = processorParameters().processorName();
         final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters().processorSupplier();
@@ -100,6 +101,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
         }
 
         // temporary hack until KIP-478 is fully implemented
+        @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
         final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> oldProcessorSupplier =
             processorParameters().oldProcessorSupplier();
         if (oldProcessorSupplier != null && oldProcessorSupplier.stores() != null) {

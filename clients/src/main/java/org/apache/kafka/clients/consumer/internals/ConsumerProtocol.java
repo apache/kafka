@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.nio.BufferUnderflowException;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
@@ -27,7 +26,10 @@ import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.SchemaException;
 
 import java.nio.ByteBuffer;
+import java.nio.BufferUnderflowException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -70,16 +72,24 @@ public class ConsumerProtocol {
         version = checkSubscriptionVersion(version);
 
         ConsumerProtocolSubscription data = new ConsumerProtocolSubscription();
-        data.setTopics(subscription.topics());
+
+        List<String> topics = new ArrayList<>(subscription.topics());
+        Collections.sort(topics);
+        data.setTopics(topics);
+
         data.setUserData(subscription.userData() != null ? subscription.userData().duplicate() : null);
-        subscription.ownedPartitions().forEach(tp -> {
-            ConsumerProtocolSubscription.TopicPartition partition = data.ownedPartitions().find(tp.topic());
-            if (partition == null) {
+
+        List<TopicPartition> ownedPartitions = new ArrayList<>(subscription.ownedPartitions());
+        ownedPartitions.sort(Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition));
+        ConsumerProtocolSubscription.TopicPartition partition = null;
+        for (TopicPartition tp : ownedPartitions) {
+            if (partition == null || !partition.topic().equals(tp.topic())) {
                 partition = new ConsumerProtocolSubscription.TopicPartition().setTopic(tp.topic());
                 data.ownedPartitions().add(partition);
             }
             partition.partitions().add(tp.partition());
-        });
+        }
+
         return MessageUtil.toVersionPrefixedByteBuffer(version, data);
     }
 

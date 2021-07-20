@@ -111,8 +111,6 @@ public class NetworkClient implements KafkaClient {
     /* time in ms to wait before retrying to create connection to a server */
     private final long reconnectBackoffMs;
 
-    private final ClientDnsLookup clientDnsLookup;
-
     private final Time time;
 
     /**
@@ -141,7 +139,6 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
-                         ClientDnsLookup clientDnsLookup,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -157,7 +154,6 @@ public class NetworkClient implements KafkaClient {
              defaultRequestTimeoutMs,
              connectionSetupTimeoutMs,
              connectionSetupTimeoutMaxMs,
-             clientDnsLookup,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -176,7 +172,6 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
-                         ClientDnsLookup clientDnsLookup,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -194,7 +189,6 @@ public class NetworkClient implements KafkaClient {
              defaultRequestTimeoutMs,
              connectionSetupTimeoutMs,
              connectionSetupTimeoutMaxMs,
-             clientDnsLookup,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -214,7 +208,6 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
-                         ClientDnsLookup clientDnsLookup,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -231,7 +224,6 @@ public class NetworkClient implements KafkaClient {
              defaultRequestTimeoutMs,
              connectionSetupTimeoutMs,
              connectionSetupTimeoutMaxMs,
-             clientDnsLookup,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -252,7 +244,6 @@ public class NetworkClient implements KafkaClient {
                          int defaultRequestTimeoutMs,
                          long connectionSetupTimeoutMs,
                          long connectionSetupTimeoutMaxMs,
-                         ClientDnsLookup clientDnsLookup,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -287,7 +278,6 @@ public class NetworkClient implements KafkaClient {
         this.apiVersions = apiVersions;
         this.throttleTimeSensor = throttleTimeSensor;
         this.log = logContext.logger(NetworkClient.class);
-        this.clientDnsLookup = clientDnsLookup;
         this.state = new AtomicReference<>(State.ACTIVE);
     }
 
@@ -981,7 +971,7 @@ public class NetworkClient implements KafkaClient {
     private void initiateConnect(Node node, long now) {
         String nodeConnectionId = node.idString();
         try {
-            connectionStates.connecting(nodeConnectionId, now, node.host(), clientDnsLookup);
+            connectionStates.connecting(nodeConnectionId, now, node.host());
             InetAddress address = connectionStates.currentAddress(nodeConnectionId);
             log.debug("Initiating connection to node {} using address {}", node, address);
             selector.connect(nodeConnectionId,
@@ -1099,8 +1089,8 @@ public class NetworkClient implements KafkaClient {
             if (!errors.isEmpty())
                 log.warn("Error while fetching metadata with correlation id {} : {}", requestHeader.correlationId(), errors);
 
-            // Don't update the cluster if there are no valid nodes...the topic we want may still be in the process of being
-            // created which means we will get errors and no nodes until it exists
+            // When talking to the startup phase of a broker, it is possible to receive an empty metadata set, which
+            // we should retry later.
             if (response.brokers().isEmpty()) {
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
                 this.metadata.failedUpdate(now);

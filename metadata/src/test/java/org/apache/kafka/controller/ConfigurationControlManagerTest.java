@@ -23,7 +23,8 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
@@ -81,7 +82,7 @@ public class ConfigurationControlManagerTest {
     }
 
     @Test
-    public void testReplay() {
+    public void testReplay() throws Exception {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
@@ -103,6 +104,14 @@ public class ConfigurationControlManagerTest {
             setName("def").setValue("blah"));
         assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
             manager.getConfigs(MYTOPIC));
+        RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
+            Arrays.asList(new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(TOPIC.id()).setResourceName("mytopic").
+                    setName("abc").setValue("x,y,z"), (short) 1),
+                new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(TOPIC.id()).setResourceName("mytopic").
+                    setName("def").setValue("blah"), (short) 1))),
+            manager.iterator(Long.MAX_VALUE));
     }
 
     @Test
@@ -135,42 +144,16 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
-        assertEquals(
-            ControllerResult.atomicOf(
-                Collections.singletonList(
-                    new ApiMessageAndVersion(
-                        new ConfigRecord()
-                            .setResourceType(TOPIC.id())
-                            .setResourceName("mytopic")
-                            .setName("abc")
-                            .setValue("123"),
-                        (short) 0
-                    )
-                ),
-                toMap(
-                    entry(
-                        BROKER0,
-                        new ApiError(
-                            Errors.INVALID_REQUEST,
-                            "A DELETE op was given with a non-null value."
-                        )
-                    ),
-                    entry(MYTOPIC, ApiError.NONE)
-                )
-            ),
-            manager.incrementalAlterConfigs(
-                toMap(
-                    entry(
-                        BROKER0,
-                        toMap(
-                            entry("foo.bar", entry(DELETE, "abc")),
-                            entry("quux", entry(SET, "abc"))
-                        )
-                    ),
-                    entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))
-                )
-            )
-        );
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+                new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
+                    setName("abc").setValue("123"), (short) 1)),
+                toMap(entry(BROKER0, new ApiError(Errors.INVALID_REQUEST,
+                            "A DELETE op was given with a non-null value.")),
+                    entry(MYTOPIC, ApiError.NONE))),
+            manager.incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
+                    entry("foo.bar", entry(DELETE, "abc")),
+                    entry("quux", entry(SET, "abc")))),
+                entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123")))))));
     }
 
     @Test
@@ -204,10 +187,10 @@ public class ConfigurationControlManagerTest {
         List<ApiMessageAndVersion> expectedRecords1 = Arrays.asList(
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").
-                setName("abc").setValue("456"), (short) 0),
+                setName("abc").setValue("456"), (short) 1),
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").
-                setName("def").setValue("901"), (short) 0));
+                setName("def").setValue("901"), (short) 1));
         assertEquals(
             ControllerResult.atomicOf(
                 expectedRecords1,
@@ -229,7 +212,7 @@ public class ConfigurationControlManagerTest {
                             .setResourceName("mytopic")
                             .setName("abc")
                             .setValue(null),
-                        (short) 0
+                        (short) 1
                     )
                 ),
                 toMap(entry(MYTOPIC, ApiError.NONE))
