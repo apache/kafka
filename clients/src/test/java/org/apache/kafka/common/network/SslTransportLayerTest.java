@@ -552,7 +552,7 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that connection success with the default TLS version.
+     * Tests that connection succeeds with the default TLS version.
      */
     @Test
     public void testTLSDefaults() throws Exception {
@@ -571,12 +571,6 @@ public class SslTransportLayerTest {
         NetworkTestUtils.checkClientConnection(selector, "0", 10, 100);
         server.verifyAuthenticationMetrics(1, 0);
         selector.close();
-
-        checkAuthentiationFailed("1", "TLSv1.1");
-        server.verifyAuthenticationMetrics(1, 1);
-
-        checkAuthentiationFailed("2", "TLSv1");
-        server.verifyAuthenticationMetrics(1, 2);
     }
 
     /** Checks connection failed using the specified {@code tlsVersion}. */
