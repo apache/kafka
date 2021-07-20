@@ -97,7 +97,7 @@ public class WindowedChangelogRetentionIntegrationTest {
     }
 
     @Before
-    public void before() throws InterruptedException {
+    public void before() {
         builder = new StreamsBuilder();
         streamsConfiguration = new Properties();
         final String safeTestName = safeUniqueTestName(getClass(), testName);
@@ -146,10 +146,10 @@ public class WindowedChangelogRetentionIntegrationTest {
     }
 
     @Test
-    public void timeWindowedChangelogShouldHaveDefaultRetentionIfWindowSizePlusGraceLessThanDefaultRetention() throws Exception {
+    public void timeWindowedChangelogShouldHaveRetentionOfWindowSizePlusGraceIfWindowSizePlusGraceLessThanDefaultRetention() throws Exception {
         final Duration grace = Duration.ofMillis(1000);
         final Duration windowSize = DEFAULT_RETENTION.minus(grace).minus(Duration.ofMillis(500));
-        final Duration expectedRetention = DEFAULT_RETENTION;
+        final Duration expectedRetention = windowSize.plus(grace);
         runAndVerifyTimeWindows(TimeWindows.of(windowSize).grace(grace), null, expectedRetention);
     }
 
@@ -160,24 +160,6 @@ public class WindowedChangelogRetentionIntegrationTest {
         final Duration userSpecifiedRetention = windowSize.plus(grace).plus(Duration.ofHours(1));
         final Duration expectedRetention = userSpecifiedRetention;
         runAndVerifyTimeWindows(TimeWindows.of(windowSize).grace(grace), userSpecifiedRetention, expectedRetention);
-    }
-
-    @Test
-    public void joinWindowedChangelogShouldHaveRetentionOfBeforePlusAfterPlusGraceIfBeforePlusAfterPlusGraceGreaterThanDefaultRetention() throws Exception {
-        final Duration before = DEFAULT_RETENTION.plus(Duration.ofHours(1));
-        final Duration after = DEFAULT_RETENTION.minus(Duration.ofHours(1));
-        final Duration grace = Duration.ofHours(3);
-        final Duration expectedRetention = before.plus(after).plus(grace);
-        runAndVerifyJoinWindows(JoinWindows.of(before).after(after).grace(grace), expectedRetention);
-    }
-
-    @Test
-    public void joinWindowedChangelogShouldHaveRetentionOfBeforePlusAfterPlusGraceIfBeforePlusAfterePlusGraceLessThanDefaultRetention() throws Exception {
-        final Duration grace = Duration.ofHours(3);
-        final Duration before = DEFAULT_RETENTION.dividedBy(2).minus(grace).minus(Duration.ofHours(1));
-        final Duration after = DEFAULT_RETENTION.dividedBy(2).minus(grace).minus(Duration.ofHours(4));
-        final Duration expectedRetention = before.plus(after).plus(grace);
-        runAndVerifyJoinWindows(JoinWindows.of(before).after(after).grace(grace), expectedRetention);
     }
 
     private void runAndVerifyTimeWindows(final Windows<TimeWindow> window,
@@ -212,10 +194,18 @@ public class WindowedChangelogRetentionIntegrationTest {
     }
 
     @Test
-    public void sessionWindowedChangelogShouldHaveDefaultRetentionIfGapPlusGraceLessThanDefaultRetention() throws Exception {
+    public void sessionWindowedChangelogShouldHaveRetentionOfGapPlusGraceIfGapPlusGraceLessThanDefaultRetention() throws Exception {
         final Duration grace = Duration.ofHours(1);
         final Duration gap = DEFAULT_RETENTION.minus(grace).minus(Duration.ofHours(1));
-        final Duration expectedRetention = DEFAULT_RETENTION;
+        final Duration expectedRetention = gap.plus(grace);
+        runAndVerifySessionWindows(SessionWindows.with(gap).grace(grace), null, expectedRetention);
+    }
+
+    @Test
+    public void sessionWindowedChangelogShouldHaveRetentionOfGapPlusGraceIfGapPlusGraceGreaterThanDefaultRetention() throws Exception {
+        final Duration gap = DEFAULT_RETENTION;
+        final Duration grace = Duration.ofHours(1);
+        final Duration expectedRetention = gap.plus(grace);
         runAndVerifySessionWindows(SessionWindows.with(gap).grace(grace), null, expectedRetention);
     }
 
@@ -273,6 +263,24 @@ public class WindowedChangelogRetentionIntegrationTest {
         final Duration grace = Duration.ofHours(3);
         final Duration expectedRetention = windowSize.multipliedBy(2).plus(grace);
         runAndVerifyJoinWindows(JoinWindows.of(windowSize).grace(grace), expectedRetention);
+    }
+
+    @Test
+    public void joinWindowedChangelogShouldHaveRetentionOfBeforePlusAfterPlusGraceIfBeforePlusAfterPlusGraceGreaterThanDefaultRetention() throws Exception {
+        final Duration before = DEFAULT_RETENTION.plus(Duration.ofHours(1));
+        final Duration after = DEFAULT_RETENTION.minus(Duration.ofHours(1));
+        final Duration grace = Duration.ofHours(3);
+        final Duration expectedRetention = before.plus(after).plus(grace);
+        runAndVerifyJoinWindows(JoinWindows.of(before).after(after).grace(grace), expectedRetention);
+    }
+
+    @Test
+    public void joinWindowedChangelogShouldHaveRetentionOfBeforePlusAfterPlusGraceIfBeforePlusAfterePlusGraceLessThanDefaultRetention() throws Exception {
+        final Duration grace = Duration.ofHours(3);
+        final Duration before = DEFAULT_RETENTION.dividedBy(2).minus(grace).minus(Duration.ofHours(1));
+        final Duration after = DEFAULT_RETENTION.dividedBy(2).minus(grace).minus(Duration.ofHours(4));
+        final Duration expectedRetention = before.plus(after).plus(grace);
+        runAndVerifyJoinWindows(JoinWindows.of(before).after(after).grace(grace), expectedRetention);
     }
 
     private void runAndVerifyJoinWindows(final JoinWindows window,
