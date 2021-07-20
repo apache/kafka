@@ -45,6 +45,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -159,13 +160,12 @@ public class TaskMetadataIntegrationTest {
     }
 
     private TaskMetadata getTaskMetadata(final KafkaStreams kafkaStreams) throws InterruptedException {
-        TestUtils.waitForCondition( () -> kafkaStreams
-                .metadataForLocalThreads()
-                .stream()
-                .mapToLong(t -> t.activeTasks().size())
-                .sum() == 1, "only one task");
-        final List<TaskMetadata> taskMetadataList = kafkaStreams.metadataForLocalThreads().stream().flatMap(t -> t.activeTasks().stream()).collect(Collectors.toList());
-        return taskMetadataList.get(0);
+        AtomicReference<List<TaskMetadata>> taskMetadataList = new AtomicReference<>();
+        TestUtils.waitForCondition( () -> {
+            taskMetadataList.set(kafkaStreams.metadataForLocalThreads().stream().flatMap(t -> t.activeTasks().stream()).collect(Collectors.toList()));
+            return taskMetadataList.get().size() == 1;
+        }, "The active tasks returned was not one in the allotted time.");
+        return taskMetadataList.get().get(0);
     }
 
     @After
