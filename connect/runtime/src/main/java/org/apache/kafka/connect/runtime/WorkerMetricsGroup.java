@@ -147,6 +147,11 @@ class WorkerMetricsGroup {
         }
 
         @Override
+        public void onRestart(String connector) {
+            delegateListener.onRestart(connector);
+        }
+
+        @Override
         public void onShutdown(final String connector) {
             delegateListener.onShutdown(connector);
         }
@@ -188,6 +193,11 @@ class WorkerMetricsGroup {
                 recordTaskFailure();
             }
             delegatedListener.onFailure(id, cause);
+        }
+
+        @Override
+        public void onRestart(ConnectorTaskId id) {
+            delegatedListener.onRestart(id);
         }
 
         @Override
