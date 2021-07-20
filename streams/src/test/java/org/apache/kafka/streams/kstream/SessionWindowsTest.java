@@ -18,12 +18,15 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
+import static java.time.Duration.ofDays;
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
+
+import java.time.Duration;
 
 @SuppressWarnings("deprecation")
 public class SessionWindowsTest {
@@ -84,7 +87,7 @@ public class SessionWindowsTest {
     @Test
     public void retentionTimeShouldBeGapIfGapIsLargerThanDefaultRetentionTime() {
         final long windowGap = 2 * SessionWindows.with(ofMillis(1)).maintainMs();
-        assertEquals(windowGap, SessionWindows.with(ofMillis(windowGap)).maintainMs());
+        assertEquals(windowGap - 1, SessionWindows.with(ofMillis(windowGap)).maintainMs());
     }
 
     @Deprecated
@@ -122,4 +125,14 @@ public class SessionWindowsTest {
 
         verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(0)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
     }
+
+    @Test
+    public void shouldUseGapAndGraceAsRetentionTimeIfBothCombinedAreLargerThanDefaultRetentionTime() {
+        final Duration gapSize = ofDays(1L);
+        final Duration gracePeriod = ofMillis(2);
+        assertEquals(
+            gapSize.toMillis() + gracePeriod.toMillis(), 
+            SessionWindows.with(gapSize).grace(gracePeriod).maintainMs()
+        );
+    }    
 }
