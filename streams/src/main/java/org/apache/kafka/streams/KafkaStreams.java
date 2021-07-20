@@ -933,7 +933,7 @@ public class KafkaStreams implements AutoCloseable {
         streamThread.setStateListener(streamStateListener);
         threads.add(streamThread);
         threadState.put(streamThread.getId(), streamThread.state());
-        queryableStoreProvider.addStoreProvider(new StreamThreadStateStoreProvider(streamThread));
+        queryableStoreProvider.addStoreProviderForThread(streamThread.getName(), new StreamThreadStateStoreProvider(streamThread));
         return streamThread;
     }
 
@@ -1079,7 +1079,7 @@ public class KafkaStreams implements AutoCloseable {
                             } else {
                                 log.info("Successfully removed {} in {}ms", streamThread.getName(), time.milliseconds() - startMs);
                                 threads.remove(streamThread);
-                                queryableStoreProvider.removeStoreProvider(new StreamThreadStateStoreProvider(streamThread));
+                                queryableStoreProvider.removeStoreProviderForThread(streamThread.getName());
                             }
                         } else {
                             log.info("{} is the last remaining thread and must remove itself, therefore we cannot wait "

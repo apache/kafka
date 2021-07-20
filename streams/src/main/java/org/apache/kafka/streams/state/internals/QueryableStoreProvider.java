@@ -18,11 +18,12 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A wrapper over all of the {@link StateStoreProvider}s in a Topology
@@ -31,11 +32,12 @@ import java.util.List;
  */
 public class QueryableStoreProvider {
 
-    private final List<StreamThreadStateStoreProvider> storeProviders;
+    // map of StreamThread.name to StreamThreadStateStoreProvider
+    private final Map<String, StreamThreadStateStoreProvider> storeProviders;
     private final GlobalStateStoreProvider globalStoreProvider;
 
     public QueryableStoreProvider(final GlobalStateStoreProvider globalStateStoreProvider) {
-        this.storeProviders = new ArrayList<>();
+        this.storeProviders = new HashMap<>();
         this.globalStoreProvider = globalStateStoreProvider;
     }
 
@@ -58,16 +60,16 @@ public class QueryableStoreProvider {
             return queryableStoreType.create(globalStoreProvider, storeName);
         }
         return queryableStoreType.create(
-            new WrappingStoreProvider(storeProviders, storeQueryParameters),
+            new WrappingStoreProvider(new ArrayList<>(storeProviders.values()), storeQueryParameters),
             storeName
         );
     }
 
-    public void addStoreProvider(StreamThreadStateStoreProvider streamThreadStateStoreProvider) {
-        this.storeProviders.add(streamThreadStateStoreProvider);
+    public void addStoreProviderForThread(final String threadName, final StreamThreadStateStoreProvider streamThreadStateStoreProvider) {
+        this.storeProviders.put(threadName, streamThreadStateStoreProvider);
     }
 
-    public void removeStoreProvider(StreamThreadStateStoreProvider streamThreadStateStoreProvider) {
-        this.storeProviders.remove(streamThreadStateStoreProvider);
+    public void removeStoreProviderForThread(final String threadName) {
+        this.storeProviders.remove(threadName);
     }
 }

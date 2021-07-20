@@ -111,17 +111,4 @@ public class StreamThreadStateStoreProvider {
             );
         }
     }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        StreamThreadStateStoreProvider that = (StreamThreadStateStoreProvider) o;
-        return Objects.equals(streamThread, that.streamThread);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(streamThread);
-    }
 }

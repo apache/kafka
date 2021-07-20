@@ -54,7 +54,7 @@ public class QueryableStoreProviderTest {
             new QueryableStoreProvider(
                 new GlobalStateStoreProvider(globalStateStores)
             );
-        storeProvider.addStoreProvider(theStoreProvider);
+        storeProvider.addStoreProviderForThread("thread1", theStoreProvider);
     }
 
     @Test
