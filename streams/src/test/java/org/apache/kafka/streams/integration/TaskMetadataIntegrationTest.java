@@ -164,7 +164,7 @@ public class TaskMetadataIntegrationTest {
         TestUtils.waitForCondition( () -> {
             taskMetadataList.set(kafkaStreams.metadataForLocalThreads().stream().flatMap(t -> t.activeTasks().stream()).collect(Collectors.toList()));
             return taskMetadataList.get().size() == 1;
-        }, "The active tasks returned was not one in the allotted time.");
+        }, "The number of active tasks returned in the allotted time was not one.");
         return taskMetadataList.get().get(0);
     }
 
