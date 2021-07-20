@@ -383,6 +383,11 @@ public final class QuorumController implements Controller {
             log.error("Cancelling snapshot {}", generator.lastContainedLogOffset());
             generator.writer().close();
             generator = null;
+
+            // Delete every in-memory snapshot up to the committed offset. They are not needed since this
+            // snapshot generation was canceled.
+            snapshotRegistry.deleteSnapshotsUpTo(lastCommittedOffset);
+
             queue.cancelDeferred(GENERATE_SNAPSHOT);
         }
 
@@ -411,16 +416,20 @@ public final class QuorumController implements Controller {
                 log.info("Finished generating snapshot {}.", generator.lastContainedLogOffset());
                 generator.writer().close();
                 generator = null;
+
+                // Delete every in-memory snapshot up to the committed offset. They are not needed since this
+                // snapshot generation finished.
+                snapshotRegistry.deleteSnapshotsUpTo(lastCommittedOffset);
                 return;
             }
             reschedule(nextDelay.getAsLong());
         }
 
-        long snapshotLastOffsetFromLog() {
+        OptionalLong snapshotLastOffsetFromLog() {
             if (generator == null) {
-                return Long.MAX_VALUE;
+                return OptionalLong.empty();
             }
-            return generator.lastContainedLogOffset();
+            return OptionalLong.of(generator.lastContainedLogOffset());
         }
     }
 
@@ -582,7 +591,7 @@ public final class QuorumController implements Controller {
                 for (ApiMessageAndVersion message : result.records()) {
                     replay(message.message(), Optional.empty(), offset);
                 }
-                snapshotRegistry.createSnapshot(offset);
+                snapshotRegistry.getOrCreateSnapshot(offset);
                 log.debug("Read-write operation {} will be completed when the log " +
                     "reaches offset {}.", this, resultAndOffset.offset());
             }
@@ -637,12 +646,13 @@ public final class QuorumController implements Controller {
                     while (reader.hasNext()) {
                         Batch<ApiMessageAndVersion> batch = reader.next();
                         long offset = batch.lastOffset();
+                        int epoch = batch.epoch();
                         List<ApiMessageAndVersion> messages = batch.records();
 
                         if (isActiveController) {
                             // If the controller is active, the records were already replayed,
                             // so we don't need to do it here.
-                            log.debug("Completing purgatory items up to offset {}.", offset);
+                            log.debug("Completing purgatory items up to offset {} and epoch {}.", offset, epoch);
 
                             // Complete any events in the purgatory that were waiting for this offset.
                             purgatory.completeUpTo(offset);
@@ -651,7 +661,7 @@ public final class QuorumController implements Controller {
                             // If we are writing a new snapshot, then we need to keep that around;
                             // otherwise, we should delete up to the current committed offset.
                             snapshotRegistry.deleteSnapshotsUpTo(
-                                Math.min(offset, snapshotGeneratorManager.snapshotLastOffsetFromLog()));
+                                snapshotGeneratorManager.snapshotLastOffsetFromLog().orElse(offset));
 
                         } else {
                             // If the controller is a standby, replay the records that were
@@ -659,12 +669,12 @@ public final class QuorumController implements Controller {
                             if (log.isDebugEnabled()) {
                                 if (log.isTraceEnabled()) {
                                     log.trace("Replaying commits from the active node up to " +
-                                        "offset {}: {}.", offset, messages.stream()
+                                        "offset {} and epoch {}: {}.", offset, epoch, messages.stream()
                                         .map(ApiMessageAndVersion::toString)
                                         .collect(Collectors.joining(", ")));
                                 } else {
                                     log.debug("Replaying commits from the active node up to " +
-                                        "offset {}.", offset);
+                                        "offset {} and epoch {}.", offset, epoch);
                                 }
                             }
                             for (ApiMessageAndVersion messageAndVersion : messages) {
@@ -673,12 +683,12 @@ public final class QuorumController implements Controller {
                         }
 
                         lastCommittedOffset = offset;
-                        lastCommittedEpoch = batch.epoch();
+                        lastCommittedEpoch = epoch;
                         lastCommittedTimestamp = batch.appendTimestamp();
                         processedRecordsSize += batch.sizeInBytes();
                     }
 
-                    checkSnapshotGeneration(processedRecordsSize);
+                    maybeGenerateSnapshot(processedRecordsSize);
                 } finally {
                     reader.close();
                 }
@@ -737,7 +747,7 @@ public final class QuorumController implements Controller {
                     lastCommittedOffset = reader.lastContainedLogOffset();
                     lastCommittedEpoch = reader.lastContainedLogEpoch();
                     lastCommittedTimestamp = reader.lastContainedLogTimestamp();
-                    snapshotRegistry.createSnapshot(lastCommittedOffset);
+                    snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
                 } finally {
                     reader.close();
                 }
@@ -755,11 +765,20 @@ public final class QuorumController implements Controller {
                             newEpoch + ", but we never renounced controller epoch " +
                             curEpoch);
                     }
-                    log.warn("Becoming active at controller epoch {}.", newEpoch);
+                    log.info(
+                        "Becoming the active controller at epoch {}, committed offset {} and committed epoch {}.",
+                        newEpoch, lastCommittedOffset, lastCommittedEpoch
+                    );
+
                     curClaimEpoch = newEpoch;
                     controllerMetrics.setActive(true);
                     writeOffset = lastCommittedOffset;
                     clusterControl.activate();
+
+                    // Before switching to active, create an in-memory snapshot at the last committed offset. This is
+                    // required because the active controller assumes that there is always an in-memory snapshot at the
+                    // last committed offset.
+                    snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
                 });
             } else if (curClaimEpoch != -1) {
                 appendControlEvent("handleRenounce[" + curClaimEpoch + "]", () -> {
@@ -782,7 +801,6 @@ public final class QuorumController implements Controller {
         controllerMetrics.setActive(false);
         purgatory.failAll(newNotControllerException());
         snapshotRegistry.revertToSnapshot(lastCommittedOffset);
-        snapshotRegistry.deleteSnapshotsUpTo(lastCommittedOffset);
         writeOffset = -1;
         clusterControl.deactivate();
         cancelMaybeFenceReplicas();
@@ -885,7 +903,7 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private void checkSnapshotGeneration(long batchSizeInBytes) {
+    private void maybeGenerateSnapshot(long batchSizeInBytes) {
         newBytesSinceLastSnapshot += batchSizeInBytes;
         if (newBytesSinceLastSnapshot >= snapshotMaxNewRecordBytes &&
             snapshotGeneratorManager.generator == null
@@ -895,7 +913,7 @@ public final class QuorumController implements Controller {
                 // The active controller creates in-memory snapshot every time an uncommitted
                 // batch gets appended. The in-active controller can be more efficient and only
                 // create an in-memory snapshot when needed.
-                snapshotRegistry.createSnapshot(lastCommittedOffset);
+                snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
             }
 
             log.info("Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot.",
@@ -913,8 +931,6 @@ public final class QuorumController implements Controller {
         newBytesSinceLastSnapshot = 0;
         lastCommittedOffset = -1;
         lastCommittedEpoch = -1;
-
-        snapshotRegistry.createSnapshot(lastCommittedOffset);
     }
 
     private final LogContext logContext;
