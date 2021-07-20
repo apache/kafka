@@ -918,13 +918,14 @@ class LogManager(logDirs: Seq[File],
    */
   private def deleteLogs(): Unit = {
     var nextDelayMs = 0L
+    val fileDeleteDelayMs = currentDefaultConfig.fileDeleteDelayMs
     try {
       def nextDeleteDelayMs: Long = {
         if (!logsToBeDeleted.isEmpty) {
           val (_, scheduleTimeMs) = logsToBeDeleted.peek()
-          scheduleTimeMs + currentDefaultConfig.fileDeleteDelayMs - time.milliseconds()
+          scheduleTimeMs + fileDeleteDelayMs - time.milliseconds()
         } else
-          currentDefaultConfig.fileDeleteDelayMs
+          fileDeleteDelayMs
       }
 
       while ({nextDelayMs = nextDeleteDelayMs; nextDelayMs <= 0}) {
