@@ -50,6 +50,7 @@ import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
@@ -75,18 +76,27 @@ public class WindowedChangelogRetentionIntegrationTest {
     private StreamsBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
-    private String streamOneInput;
-    private String streamTwoInput;
-    private String outputTopic;
+    private static String streamOneInput;
+    private static String streamTwoInput;
+    private static String outputTopic;
     private KGroupedStream<String, String> groupedStream;
 
     @Rule
     public TestName testName = new TestName();
 
+    @BeforeClass
+    public static void createTopics() throws InterruptedException {
+        streamOneInput = "stream-one";
+        streamTwoInput = "stream-two";
+        outputTopic = "output";
+        CLUSTER.createTopic(streamOneInput, 3, 1);
+        CLUSTER.createTopic(streamTwoInput, 3, 1);
+        CLUSTER.createTopics(outputTopic);
+    }
+
     @Before
-    public void before() throws InterruptedException {
+    public void before() {
         builder = new StreamsBuilder();
-        createTopics();
         streamsConfiguration = new Properties();
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -246,6 +256,24 @@ public class WindowedChangelogRetentionIntegrationTest {
         runAndVerifyJoinWindows(JoinWindows.of(windowSize).grace(grace), expectedRetention);
     }
 
+    @Test
+    public void joinWindowedChangelogShouldHaveRetentionOfBeforePlusAfterPlusGraceIfBeforePlusAfterPlusGraceGreaterThanDefaultRetention() throws Exception {
+        final Duration before = DEFAULT_RETENTION.plus(Duration.ofHours(1));
+        final Duration after = DEFAULT_RETENTION.minus(Duration.ofHours(1));
+        final Duration grace = Duration.ofHours(3);
+        final Duration expectedRetention = before.plus(after).plus(grace);
+        runAndVerifyJoinWindows(JoinWindows.of(before).after(after).grace(grace), expectedRetention);
+    }
+
+    @Test
+    public void joinWindowedChangelogShouldHaveRetentionOfBeforePlusAfterPlusGraceIfBeforePlusAfterePlusGraceLessThanDefaultRetention() throws Exception {
+        final Duration grace = Duration.ofHours(3);
+        final Duration before = DEFAULT_RETENTION.dividedBy(2).minus(grace).minus(Duration.ofHours(1));
+        final Duration after = DEFAULT_RETENTION.dividedBy(2).minus(grace).minus(Duration.ofHours(4));
+        final Duration expectedRetention = before.plus(after).plus(grace);
+        runAndVerifyJoinWindows(JoinWindows.of(before).after(after).grace(grace), expectedRetention);
+    }
+
     private void runAndVerifyJoinWindows(final JoinWindows window,
                                          final Duration expectedRetention) throws Exception {
         final String joinName = "testjoin";
@@ -268,16 +296,6 @@ public class WindowedChangelogRetentionIntegrationTest {
         kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
         kafkaStreams.start();
         IntegrationTestUtils.waitForApplicationState(Collections.singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
-    }
-
-    private void createTopics() throws InterruptedException {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
-        streamOneInput = "stream-one-" + safeTestName;
-        streamTwoInput = "stream-two-" + safeTestName;
-        outputTopic = "output-" + safeTestName;
-        CLUSTER.createTopic(streamOneInput, 3, 1);
-        CLUSTER.createTopic(streamTwoInput, 3, 1);
-        CLUSTER.createTopics(outputTopic);
     }
 
     private void verifyChangelogRetentionOfWindowedStore(final String storeName, final Duration retention) {
