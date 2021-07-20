@@ -160,7 +160,7 @@ public class TaskMetadataIntegrationTest {
     }
 
     private TaskMetadata getTaskMetadata(final KafkaStreams kafkaStreams) throws InterruptedException {
-        AtomicReference<List<TaskMetadata>> taskMetadataList = new AtomicReference<>();
+        final AtomicReference<List<TaskMetadata>> taskMetadataList = new AtomicReference<>();
         TestUtils.waitForCondition( () -> {
             taskMetadataList.set(kafkaStreams.metadataForLocalThreads().stream().flatMap(t -> t.activeTasks().stream()).collect(Collectors.toList()));
             return taskMetadataList.get().size() == 1;
