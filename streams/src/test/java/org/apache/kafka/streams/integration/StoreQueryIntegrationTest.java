@@ -471,7 +471,7 @@ public class StoreQueryIntegrationTest {
             }
         });
 
-        Optional<String> removedThreadName = kafkaStreams1.removeStreamThread();
+        final Optional<String> removedThreadName = kafkaStreams1.removeStreamThread();
         assertThat(removedThreadName.isPresent(), is(true));
 
         until(() -> {
