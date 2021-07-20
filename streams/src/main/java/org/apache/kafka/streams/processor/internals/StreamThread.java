@@ -884,9 +884,9 @@ public class StreamThread extends Thread {
             // in order to get long polling
             records = pollRequests(pollTime);
         } else if (state == State.PENDING_SHUTDOWN) {
-            // we are only here because there's rebalance in progress,
-            // just long poll to give it enough time to complete it
-            records = pollRequests(pollTime);
+            // we are only here because there's a rebalance still in progress, just
+            // wait in poll until it's completed since there's nothing more to do
+            records = pollRequests(Duration.ofMillis(Long.MAX_VALUE));
         } else {
             // any other state should not happen
             log.error("Unexpected state {} during normal iteration", state);
