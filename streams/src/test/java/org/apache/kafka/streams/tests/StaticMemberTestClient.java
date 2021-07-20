@@ -53,14 +53,14 @@ public class StaticMemberTestClient {
         final StreamsBuilder builder = new StreamsBuilder();
         final String inputTopic = (String) (Objects.requireNonNull(streamsProperties.remove("input.topic")));
 
-        final KStream dataStream = builder.stream(inputTopic);
+        final KStream<String, String> dataStream = builder.stream(inputTopic);
         dataStream.peek((k, v) ->  System.out.println(String.format("PROCESSED key=%s value=%s", k, v)));
 
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, testName);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
-        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
-        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
         config.putAll(streamsProperties);
 
