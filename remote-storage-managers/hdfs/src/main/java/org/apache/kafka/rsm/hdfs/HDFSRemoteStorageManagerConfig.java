@@ -30,23 +30,21 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
 class HDFSRemoteStorageManagerConfig extends AbstractConfig {
 
-    private static final String REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "remote.log.storage.";
-
-    public static final String HDFS_BASE_DIR_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.base.dir";
+    public static final String HDFS_BASE_DIR_PROP = "hdfs.base.dir";
     public static final String HDFS_BASE_DIR_DOC = "The HDFS directory in which the remote data is stored.";
 
-    public static final String HDFS_REMOTE_READ_BYTES_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.remote.read.bytes";
+    public static final String HDFS_REMOTE_READ_BYTES_PROP = "hdfs.remote.read.bytes";
     public static final String HDFS_REMOTE_READ_BYTES_DOC = "HDFS read buffer size in bytes.";
     public static final int DEFAULT_HDFS_REMOTE_READ_BYTES = 16 * 1024 * 1024;
 
-    public static final String HDFS_REMOTE_READ_CACHE_BYTES_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.remote.read.cache.bytes";
+    public static final String HDFS_REMOTE_READ_CACHE_BYTES_PROP = "hdfs.remote.read.cache.bytes";
     public static final String HDFS_REMOTE_READ_CACHE_BYTES_DOC = "Read cache size in bytes. " +
             "The maximum amount of remote data will be cached in broker's memory. " +
             "This value must be larger than " + HDFS_REMOTE_READ_BYTES_PROP;
     public static final long DEFAULT_HDFS_REMOTE_READ_CACHE_BYTES = 1024 * 1024 * 1024L;
 
-    public static final String HDFS_USER_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.user";
-    public static final String HDFS_KEYTAB_PATH_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "hdfs.keytab.path";
+    public static final String HDFS_USER_PROP = "hdfs.user";
+    public static final String HDFS_KEYTAB_PATH_PROP = "hdfs.keytab.path";
 
     public static final String HDFS_USER_DOC = "The principal name to load from the keytab. " +
             "This property should be used with " + HDFS_KEYTAB_PATH_PROP;

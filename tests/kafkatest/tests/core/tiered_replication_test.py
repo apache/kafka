@@ -84,11 +84,14 @@ class TieredReplicationTest(ReplicationTest):
              "/mnt/hadoop/config/etc/hadoop:/opt/kafka-dev/remote-storage-managers/hdfs/build/libs/*"
              + ":/opt/kafka-dev/remote-storage-managers/hdfs/build/dependant-libs/*"],
             [config_property.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME, security_protocol],
+
+            [config_property.REMOTE_LOG_METADATA_MANAGER_IMPL_PREFIX, config_property.REMOTE_LOG_METADATA_MANAGER_PREFIX_CONFIG]
             [config_property.REMOTE_LOG_METADATA_TOPIC_NUM_PARTITIONS, "5"],
-            [config_property.REMOTE_LOG_STORAGE_HDFS_FS_URI, self.hadoop.namenode_uri()],
-            [config_property.REMOTE_LOG_STORAGE_HDFS_BASE_DIR, "/test"],
-            [config_property.REMOTE_LOG_STORAGE_HDFS_REMOTE_READ_CACHE_BYTES, "8388608"],
-            [config_property.REMOTE_LOG_STORAGE_HDFS_REMOTE_READ_BYTES, "1048576"],
+
+            [config_property.REMOTE_LOG_STORAGE_MANAGER_IMPL_PREFIX, config_property.REMOTE_LOG_STORAGE_MANAGER_PREFIX_CONFIG],
+            [config_property.HDFS_BASE_DIR, "/test"],
+            [config_property.HDFS_REMOTE_READ_CACHE_BYTES, "8388608"],
+            [config_property.HDFS_REMOTE_READ_BYTES, "1048576"],
             # the `sasl.mechanism` is used by the kafka clients which gets invoked by the metadata manager.
             [config_property.SASL_MECHANISM, client_sasl_mechanism]
         ]
