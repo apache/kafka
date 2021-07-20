@@ -126,10 +126,9 @@ public class RemoveMembersFromConsumerGroupHandler implements AdminApiHandler<Co
                 failed.put(groupId, error.exception());
                 break;
             case COORDINATOR_LOAD_IN_PROGRESS:
-            case REBALANCE_IN_PROGRESS:
-                // If the coordinator is in the middle of loading, or rebalance is in progress, then we just need to retry.
+                // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("`LeaveGroup` request for group id {} failed because the coordinator " +
-                    "is still in the process of loading state or the group is rebalancing. Will retry.", groupId.idValue);
+                    "is still in the process of loading state. Will retry", groupId.idValue);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
