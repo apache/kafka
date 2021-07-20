@@ -178,14 +178,18 @@ public class SnapshotRegistry {
     /**
      * Creates a new snapshot at the given epoch.
      *
+     * If {@code epoch} already exists and it is the last snapshot then just return that snapshot.
+     *
      * @param epoch             The epoch to create the snapshot at.  The current epoch
      *                          will be advanced to one past this epoch.
      */
-    public Snapshot createSnapshot(long epoch) {
+    public Snapshot getOrCreateSnapshot(long epoch) {
         Snapshot last = head.prev();
-        if (last.epoch() >= epoch) {
+        if (last.epoch() > epoch) {
             throw new RuntimeException("Can't create a new snapshot at epoch " + epoch +
                 " because there is already a snapshot with epoch " + last.epoch());
+        } else if (last.epoch() == epoch) {
+            return last;
         }
         Snapshot snapshot = new Snapshot(epoch);
         last.appendNext(snapshot);

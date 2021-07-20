@@ -399,7 +399,7 @@ public final class RaftClientTestContext {
         return localId.orElseThrow(() -> new AssertionError("Required local id is not defined"));
     }
 
-    void expectBeginEpoch(
+    private void expectBeginEpoch(
         int epoch
     ) throws Exception {
         pollUntilRequest();
@@ -1175,11 +1175,9 @@ public final class RaftClientTestContext {
             this.currentLeaderAndEpoch = leaderAndEpoch;
 
             currentClaimedEpoch().ifPresent(claimedEpoch -> {
-                if (claimedEpoch == leaderAndEpoch.epoch()) {
-                    long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
-                        lastCommitOffset().getAsLong() + 1 : 0L;
-                    this.claimedEpochStartOffsets.put(leaderAndEpoch.epoch(), claimedEpochStartOffset);
-                }
+                long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
+                    lastCommitOffset().getAsLong() + 1 : 0L;
+                this.claimedEpochStartOffsets.put(leaderAndEpoch.epoch(), claimedEpochStartOffset);
             });
         }
 
