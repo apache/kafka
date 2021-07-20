@@ -93,11 +93,15 @@ public class WorkerTaskTest {
                 .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics,
                         retryWithToleranceOperator, Time.SYSTEM, statusBackingStore)
                 .addMockedMethod("initialize")
+                .addMockedMethod("initializeAndStart")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
                 .createStrictMock();
 
         workerTask.initialize(TASK_CONFIG);
+        expectLastCall();
+
+        workerTask.initializeAndStart();
         expectLastCall();
 
         workerTask.execute();
@@ -180,6 +184,7 @@ public class WorkerTaskTest {
                 .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics,
                         retryWithToleranceOperator, Time.SYSTEM, statusBackingStore)
                 .addMockedMethod("initialize")
+                .addMockedMethod("initializeAndStart")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
                 .createStrictMock();
@@ -196,6 +201,9 @@ public class WorkerTaskTest {
         };
 
         workerTask.initialize(TASK_CONFIG);
+        EasyMock.expectLastCall();
+
+        workerTask.initializeAndStart();
         EasyMock.expectLastCall();
 
         workerTask.execute();
