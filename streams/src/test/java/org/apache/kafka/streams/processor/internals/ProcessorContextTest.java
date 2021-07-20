@@ -28,12 +28,11 @@ import org.junit.Test;
 
 import java.time.Duration;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 
 public class ProcessorContextTest {
     private ProcessorContext context;
@@ -41,14 +40,12 @@ public class ProcessorContextTest {
     @Before
     public void prepare() {
         final StreamsConfig streamsConfig = mock(StreamsConfig.class);
-        expect(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("add-id");
-        expect(streamsConfig.defaultValueSerde()).andReturn(Serdes.ByteArray());
-        expect(streamsConfig.defaultKeySerde()).andReturn(Serdes.ByteArray());
+        doReturn("add-id").when(streamsConfig).getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        doReturn(Serdes.ByteArray()).when(streamsConfig).defaultValueSerde();
+        doReturn(Serdes.ByteArray()).when(streamsConfig).defaultKeySerde();
 
         final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
-        expect(stateManager.taskType()).andStubReturn(TaskType.ACTIVE);
-
-        replay(streamsConfig, stateManager);
+        doReturn(TaskType.ACTIVE).when(stateManager).taskType();
 
         context = new ProcessorContextImpl(
             mock(TaskId.class),
