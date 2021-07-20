@@ -155,7 +155,7 @@ public class TaskManager {
     }
 
     /**
-     * @throws TaskMigratedException
+     * @throws TaskMigratedException if committing offsets fails
      */
     void handleCorruption(final Set<TaskId> corruptedTasks) {
         final Set<Task> corruptedActiveTasks = new HashSet<>();
@@ -341,7 +341,7 @@ public class TaskManager {
             throw new IllegalArgumentException("Tasks to close-dirty should be empty");
         }
 
-        // for all tasks to close or recycle, we should first right a checkpoint as in post-commit
+        // for all tasks to close or recycle, we should first write a checkpoint as in post-commit
         final List<Task> tasksToCheckpoint = new ArrayList<>(tasksToCloseClean);
         tasksToCheckpoint.addAll(tasksToRecycle);
         for (final Task task : tasksToCheckpoint) {
