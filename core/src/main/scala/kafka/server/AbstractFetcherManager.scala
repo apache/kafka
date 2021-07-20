@@ -21,7 +21,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.{Map, Set, mutable}
@@ -67,7 +67,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         if (id.fetcherId >= newSize)
           thread.shutdown()
         val fetchStates = partitionStates.map { case (topicPartition, currentFetchState) =>
-          val initialFetchState = InitialFetchState(thread.sourceBroker,
+          val initialFetchState = InitialFetchState(currentFetchState.topicId, thread.sourceBroker,
             currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
             initOffset = currentFetchState.fetchOffset)
           topicPartition -> initialFetchState
@@ -235,6 +235,6 @@ class FailedPartitions {
 
 case class BrokerAndFetcherId(broker: BrokerEndPoint, fetcherId: Int)
 
-case class InitialFetchState(leader: BrokerEndPoint, currentLeaderEpoch: Int, initOffset: Long)
+case class InitialFetchState(topicId: Option[Uuid], leader: BrokerEndPoint, currentLeaderEpoch: Int, initOffset: Long)
 
 case class BrokerIdAndFetcherId(brokerId: Int, fetcherId: Int)

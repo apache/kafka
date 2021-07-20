@@ -20,7 +20,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
@@ -51,7 +51,9 @@ class AbstractFetcherManagerTest {
     val fetchOffset = 10L
     val leaderEpoch = 15
     val tp = new TopicPartition("topic", 0)
+    val topicId = Some(Uuid.randomUuid())
     val initialFetchState = InitialFetchState(
+      topicId = topicId,
       leader = new BrokerEndPoint(0, "localhost", 9092),
       currentLeaderEpoch = leaderEpoch,
       initOffset = fetchOffset)
@@ -60,7 +62,7 @@ class AbstractFetcherManagerTest {
     EasyMock.expect(fetcher.addPartitions(Map(tp -> initialFetchState)))
         .andReturn(Set(tp))
     EasyMock.expect(fetcher.fetchState(tp))
-      .andReturn(Some(PartitionFetchState(fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
+      .andReturn(Some(PartitionFetchState(topicId, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
     EasyMock.expect(fetcher.removePartitions(Set(tp))).andReturn(Map.empty)
     EasyMock.expect(fetcher.fetchState(tp)).andReturn(None)
     EasyMock.replay(fetcher)
@@ -110,7 +112,9 @@ class AbstractFetcherManagerTest {
     val fetchOffset = 10L
     val leaderEpoch = 15
     val tp = new TopicPartition("topic", 0)
+    val topicId = Some(Uuid.randomUuid())
     val initialFetchState = InitialFetchState(
+      topicId = topicId,
       leader = new BrokerEndPoint(0, "localhost", 9092),
       currentLeaderEpoch = leaderEpoch,
       initOffset = fetchOffset)

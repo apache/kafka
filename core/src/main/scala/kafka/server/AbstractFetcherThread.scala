@@ -33,8 +33,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
-
+import org.apache.kafka.common.{InvalidRecordException, TopicPartition, Uuid}
 import java.nio.ByteBuffer
 import java.util
 import java.util.Optional
@@ -320,7 +319,7 @@ abstract class AbstractFetcherThread(name: String,
             // there is an error occurred while fetching partitions, sleep a while
             // note that `AbstractFetcherThread.handlePartitionsWithError` will also introduce the same delay for every
             // partition with error effectively doubling the delay. It would be good to improve this.
-            partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
+            // partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
           }
         }
     }
@@ -352,7 +351,7 @@ abstract class AbstractFetcherThread(name: String,
                       // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
                       if (validBytes > 0 && partitionStates.contains(topicPartition)) {
                         // Update partitionStates only if there is no exception during processPartitionData
-                        val newFetchState = PartitionFetchState(nextOffset, Some(lag),
+                        val newFetchState = PartitionFetchState(currentFetchState.topicId, nextOffset, Some(lag),
                           currentFetchState.currentLeaderEpoch, state = Fetching,
                           logAppendInfo.lastLeaderEpoch)
                         partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
@@ -437,7 +436,7 @@ abstract class AbstractFetcherThread(name: String,
     partitionMapLock.lockInterruptibly()
     try {
       Option(partitionStates.stateValue(topicPartition)).foreach { state =>
-        val newState = PartitionFetchState(math.min(truncationOffset, state.fetchOffset),
+        val newState = PartitionFetchState(state.topicId, math.min(truncationOffset, state.fetchOffset),
           state.lag, state.currentLeaderEpoch, state.delay, state = Truncating,
           lastFetchedEpoch = None)
         partitionStates.updateAndMoveToEnd(topicPartition, newState)
@@ -464,16 +463,16 @@ abstract class AbstractFetcherThread(name: String,
     if (currentState != null && currentState.currentLeaderEpoch == initialFetchState.currentLeaderEpoch) {
       currentState
     } else if (initialFetchState.initOffset < 0) {
-      fetchOffsetAndTruncate(tp, initialFetchState.currentLeaderEpoch)
+      fetchOffsetAndTruncate(tp, initialFetchState.topicId, initialFetchState.currentLeaderEpoch)
     } else if (isTruncationOnFetchSupported) {
       // With old message format, `latestEpoch` will be empty and we use Truncating state
       // to truncate to high watermark.
       val lastFetchedEpoch = latestEpoch(tp)
       val state = if (lastFetchedEpoch.nonEmpty) Fetching else Truncating
-      PartitionFetchState(initialFetchState.initOffset, None, initialFetchState.currentLeaderEpoch,
+      PartitionFetchState(initialFetchState.topicId, initialFetchState.initOffset, None, initialFetchState.currentLeaderEpoch,
           state, lastFetchedEpoch)
     } else {
-      PartitionFetchState(initialFetchState.initOffset, None, initialFetchState.currentLeaderEpoch,
+      PartitionFetchState(initialFetchState.topicId, initialFetchState.initOffset, None, initialFetchState.currentLeaderEpoch,
         state = Truncating, lastFetchedEpoch = None)
     }
   }
@@ -510,7 +509,7 @@ abstract class AbstractFetcherThread(name: String,
               Fetching
             else
               Truncating
-            PartitionFetchState(offsetTruncationState.offset, currentFetchState.lag,
+            PartitionFetchState(currentFetchState.topicId, offsetTruncationState.offset, currentFetchState.lag,
               currentFetchState.currentLeaderEpoch, currentFetchState.delay, state, lastFetchedEpoch)
           case None => currentFetchState
         }
@@ -601,7 +600,7 @@ abstract class AbstractFetcherThread(name: String,
                                     fetchState: PartitionFetchState,
                                     requestEpoch: Optional[Integer]): Boolean = {
     try {
-      val newFetchState = fetchOffsetAndTruncate(topicPartition, fetchState.currentLeaderEpoch)
+      val newFetchState = fetchOffsetAndTruncate(topicPartition, fetchState.topicId, fetchState.currentLeaderEpoch)
       partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
       info(s"Current offset ${fetchState.fetchOffset} for partition $topicPartition is " +
         s"out of range, which typically implies a leader change. Reset fetch offset to ${newFetchState.fetchOffset}")
@@ -625,7 +624,7 @@ abstract class AbstractFetcherThread(name: String,
   /**
    * Handle a partition whose offset is out of range and return a new fetch offset.
    */
-  protected def fetchOffsetAndTruncate(topicPartition: TopicPartition, currentLeaderEpoch: Int): PartitionFetchState = {
+  protected def fetchOffsetAndTruncate(topicPartition: TopicPartition, topicId: Option[Uuid], currentLeaderEpoch: Int): PartitionFetchState = {
     val replicaEndOffset = logEndOffset(topicPartition)
 
     /**
@@ -645,7 +644,7 @@ abstract class AbstractFetcherThread(name: String,
       truncate(topicPartition, OffsetTruncationState(leaderEndOffset, truncationCompleted = true))
 
       fetcherLagStats.getAndMaybePut(topicPartition).lag = 0
-      PartitionFetchState(leaderEndOffset, Some(0), currentLeaderEpoch,
+      PartitionFetchState(topicId, leaderEndOffset, Some(0), currentLeaderEpoch,
         state = Fetching, lastFetchedEpoch = latestEpoch(topicPartition))
     } else {
       /**
@@ -679,7 +678,7 @@ abstract class AbstractFetcherThread(name: String,
 
       val initialLag = leaderEndOffset - offsetToFetch
       fetcherLagStats.getAndMaybePut(topicPartition).lag = initialLag
-      PartitionFetchState(offsetToFetch, Some(initialLag), currentLeaderEpoch,
+      PartitionFetchState(topicId, offsetToFetch, Some(initialLag), currentLeaderEpoch,
         state = Fetching, lastFetchedEpoch = latestEpoch(topicPartition))
     }
   }
@@ -690,7 +689,7 @@ abstract class AbstractFetcherThread(name: String,
       for (partition <- partitions) {
         Option(partitionStates.stateValue(partition)).foreach { currentFetchState =>
           if (!currentFetchState.isDelayed) {
-            partitionStates.updateAndMoveToEnd(partition, PartitionFetchState(currentFetchState.fetchOffset,
+            partitionStates.updateAndMoveToEnd(partition, PartitionFetchState(currentFetchState.topicId, currentFetchState.fetchOffset,
               currentFetchState.lag, currentFetchState.currentLeaderEpoch, Some(new DelayedItem(delay)),
               currentFetchState.state, currentFetchState.lastFetchedEpoch))
           }
@@ -819,9 +818,9 @@ case object Truncating extends ReplicaState
 case object Fetching extends ReplicaState
 
 object PartitionFetchState {
-  def apply(offset: Long, lag: Option[Long], currentLeaderEpoch: Int, state: ReplicaState,
+  def apply(topicId: Option[Uuid], offset: Long, lag: Option[Long], currentLeaderEpoch: Int, state: ReplicaState,
             lastFetchedEpoch: Option[Int]): PartitionFetchState = {
-    PartitionFetchState(offset, lag, currentLeaderEpoch, None, state, lastFetchedEpoch)
+    PartitionFetchState(topicId, offset, lag, currentLeaderEpoch, None, state, lastFetchedEpoch)
   }
 }
 
@@ -833,7 +832,8 @@ object PartitionFetchState {
  * (2) Delayed, for example due to an error, where we subsequently back off a bit
  * (3) ReadyForFetch, the is the active state where the thread is actively fetching data.
  */
-case class PartitionFetchState(fetchOffset: Long,
+case class PartitionFetchState(topicId: Option[Uuid],
+                               fetchOffset: Long,
                                lag: Option[Long],
                                currentLeaderEpoch: Int,
                                delay: Option[DelayedItem],

@@ -741,7 +741,8 @@ class ReplicaManager(val config: KafkaConfig,
 
           // throw NotLeaderOrFollowerException if replica does not exist for the given partition
           val partition = getPartitionOrException(topicPartition)
-          partition.localLogOrException
+          val log = partition.localLogOrException
+          val topicId = log.topicId
 
           // If the destinationLDir is different from the current log directory of the replica:
           // - If there is no offline log directory, create the future log in the destinationDir (if it does not exist) and
@@ -753,7 +754,7 @@ class ReplicaManager(val config: KafkaConfig,
             val futureLog = futureLocalLogOrException(topicPartition)
             logManager.abortAndPauseCleaning(topicPartition)
 
-            val initialFetchState = InitialFetchState(BrokerEndPoint(config.brokerId, "localhost", -1),
+            val initialFetchState = InitialFetchState(topicId, BrokerEndPoint(config.brokerId, "localhost", -1),
               partition.getLeaderEpoch, futureLog.highWatermark)
             replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> initialFetchState))
           }
@@ -1530,7 +1531,7 @@ class ReplicaManager(val config: KafkaConfig,
           // replica from source dir to destination dir
           logManager.abortAndPauseCleaning(topicPartition)
 
-          futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(leader,
+          futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(topicIds(topicPartition.topic()), leader,
             partition.getLeaderEpoch, log.highWatermark))
         }
       }
@@ -1718,7 +1719,7 @@ class ReplicaManager(val config: KafkaConfig,
           val leader = new BrokerEndPoint(leaderNode.id(), leaderNode.host(), leaderNode.port())
           val log = partition.localLogOrException
           val fetchOffset = initialFetchOffset(log)
-          partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)
+          partition.topicPartition -> InitialFetchState(topicIds(partition.topic), leader, partition.getLeaderEpoch, fetchOffset)
         }.toMap
 
         replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
@@ -2205,7 +2206,7 @@ class ReplicaManager(val config: KafkaConfig,
                 val log = partition.localLogOrException
                 val fetchOffset = initialFetchOffset(log)
                 partitionsToMakeFollower.put(tp,
-                  InitialFetchState(leaderEndPoint, partition.getLeaderEpoch, fetchOffset))
+                  InitialFetchState(Some(info.topicId), leaderEndPoint, partition.getLeaderEpoch, fetchOffset))
             }
           }
           changedPartitions.add(partition)

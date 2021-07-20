@@ -78,8 +78,8 @@ class ReplicaFetcherThreadTest {
   private val metadataCache = new ZkMetadataCache(0)
   metadataCache.updateMetadata(0, updateMetadataRequest)
 
-  private def initialFetchState(fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
-    InitialFetchState(leader = new BrokerEndPoint(0, "localhost", 9092),
+  private def initialFetchState(topicId: Option[Uuid], fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
+    InitialFetchState(topicId = topicId, leader = new BrokerEndPoint(0, "localhost", 9092),
       initOffset = fetchOffset, currentLeaderEpoch = leaderEpoch)
   }
 
@@ -157,9 +157,9 @@ class ReplicaFetcherThreadTest {
 
     // topic 1 supports epoch, t2 doesn't.
     thread.addPartitions(Map(
-      t1p0 -> initialFetchState(0L),
-      t1p1 -> initialFetchState(0L),
-      t2p1 -> initialFetchState(0L)))
+      t1p0 -> initialFetchState(Some(topicId1), 0L),
+      t1p1 -> initialFetchState(Some(topicId2), 0L),
+      t2p1 -> initialFetchState(Some(topicId2), 0L)))
 
     assertPartitionStates(thread, shouldBeReadyForFetch = false, shouldBeTruncatingLog = true, shouldBeDelayed = false)
     //Loop 1
@@ -300,7 +300,7 @@ class ReplicaFetcherThreadTest {
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, brokerEndPoint, new SystemTime())
     val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions, replicaManager,
       new Metrics, new SystemTime, UnboundedQuota, Some(mockNetwork))
-    thread.addPartitions(Map(t1p0 -> initialFetchState(0L), t1p1 -> initialFetchState(0L)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
     //Loop 1
     thread.doWork()
@@ -365,7 +365,7 @@ class ReplicaFetcherThreadTest {
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsetsReply, brokerEndPoint, new SystemTime())
     val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions, replicaManager,
       new Metrics(), new SystemTime(), quota, Some(mockNetwork))
-    thread.addPartitions(Map(t1p0 -> initialFetchState(0L), t2p1 -> initialFetchState(0L)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t2p1 -> initialFetchState(Some(topicId2), 0L)))
 
     //Run it
     thread.doWork()
@@ -420,7 +420,7 @@ class ReplicaFetcherThreadTest {
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsetsReply, brokerEndPoint, new SystemTime())
     val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions,
       replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
-    thread.addPartitions(Map(t1p0 -> initialFetchState(0L), t2p1 -> initialFetchState(0L)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t2p1 -> initialFetchState(Some(topicId2), 0L)))
 
     //Run it
     thread.doWork()
@@ -477,7 +477,7 @@ class ReplicaFetcherThreadTest {
     // Create the fetcher thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, brokerEndPoint, new SystemTime())
     val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
-    thread.addPartitions(Map(t1p0 -> initialFetchState(0L), t1p1 -> initialFetchState(0L)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
     // Loop 1 -- both topic partitions will need to fetch another leader epoch
     thread.doWork()
@@ -552,7 +552,7 @@ class ReplicaFetcherThreadTest {
     val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork)) {
       override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = None
     }
-    thread.addPartitions(Map(t1p0 -> initialFetchState(initialLEO), t1p1 -> initialFetchState(initialLEO)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), initialLEO), t1p1 -> initialFetchState(Some(topicId1), initialLEO)))
     val partitions = Set(t1p0, t1p1)
 
     // Loop 1 -- both topic partitions skip epoch fetch and send fetch request since we can truncate
@@ -665,7 +665,7 @@ class ReplicaFetcherThreadTest {
     // Create the fetcher thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, brokerEndPoint, new SystemTime())
     val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
-    thread.addPartitions(Map(t1p0 -> initialFetchState(0L), t1p1 -> initialFetchState(0L)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
     // Loop 1 -- both topic partitions will truncate to leader offset even though they don't know
     // about leader epoch
@@ -722,7 +722,7 @@ class ReplicaFetcherThreadTest {
     //Create the thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsetsReply, brokerEndPoint, new SystemTime())
     val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
-    thread.addPartitions(Map(t1p0 -> initialFetchState(initialFetchOffset)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), initialFetchOffset)))
 
     //Run it
     thread.doWork()
@@ -776,7 +776,7 @@ class ReplicaFetcherThreadTest {
     //Create the thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsetsReply, brokerEndPoint, new SystemTime())
     val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
-    thread.addPartitions(Map(t1p0 -> initialFetchState(0L), t1p1 -> initialFetchState(0L)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
     //Run thread 3 times
     (0 to 3).foreach { _ =>
@@ -834,7 +834,7 @@ class ReplicaFetcherThreadTest {
     val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
 
     //When
-    thread.addPartitions(Map(t1p0 -> initialFetchState(0L), t1p1 -> initialFetchState(0L)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
     //Then all partitions should start in an TruncatingLog state
     assertEquals(Option(Truncating), thread.fetchState(t1p0).map(_.state))
@@ -889,7 +889,7 @@ class ReplicaFetcherThreadTest {
       new SystemTime(), quota, Some(mockNetwork))
 
     //When
-    thread.addPartitions(Map(t1p0 -> initialFetchState(0L), t1p1 -> initialFetchState(0L)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
     //When the epoch request is outstanding, remove one of the partitions to simulate a leader change. We do this via a callback passed to the mock thread
     val partitionThatBecameLeader = t1p0
