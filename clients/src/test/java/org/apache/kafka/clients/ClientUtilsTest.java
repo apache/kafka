@@ -19,10 +19,11 @@ package org.apache.kafka.clients;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.config.ConfigException;
+
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
@@ -31,7 +32,7 @@ import org.junit.Test;
 
 public class ClientUtilsTest {
 
-    private HostResolver hostResolver = new DefaultHostResolver();
+    private final HostResolver hostResolver = new DefaultHostResolver();
 
     @Test
     public void testParseAndValidateAddresses() throws UnknownHostException {
@@ -55,18 +56,18 @@ public class ClientUtilsTest {
 
         // With lookup of example.com, either one or two addresses are expected depending on
         // whether ipv4 and ipv6 are enabled
-        List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("example.com:10000"));
+        List<InetSocketAddress> validatedAddresses = checkWithLookup(asList("example.com:10000"));
         assertTrue("Unexpected addresses " + validatedAddresses, validatedAddresses.size() >= 1);
         List<String> validatedHostNames = validatedAddresses.stream().map(InetSocketAddress::getHostName)
                 .collect(Collectors.toList());
-        List<String> expectedHostNames = Arrays.asList("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946");
+        List<String> expectedHostNames = asList("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946");
         assertTrue("Unexpected addresses " + validatedHostNames, expectedHostNames.containsAll(validatedHostNames));
         validatedAddresses.forEach(address -> assertEquals(10000, address.getPort()));
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testInvalidConfig() {
-        ClientUtils.parseAndValidateAddresses(Arrays.asList("localhost:10000"), "random.value");
+        ClientUtils.parseAndValidateAddresses(asList("localhost:10000"), "random.value");
     }
 
     @Test(expected = ConfigException.class)
@@ -105,24 +106,29 @@ public class ClientUtilsTest {
 
     @Test
     public void testResolveDnsLookup() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to at least 2 IP addresses
-        assertEquals(1, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.DEFAULT, hostResolver).size());
+        assertEquals(1, resolveToTwoIps(ClientDnsLookup.DEFAULT).size());
     }
 
     @Test
     public void testResolveDnsLookupAllIps() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to at least 2 IP addresses
-        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS, hostResolver).size() > 1);
+        assertEquals(2, resolveToTwoIps(ClientDnsLookup.USE_ALL_DNS_IPS).size());
     }
 
     @Test
     public void testResolveDnsLookupResolveCanonicalBootstrapServers() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to at least 2 IP addresses
-        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY, hostResolver).size() > 1);
+        assertEquals(2, resolveToTwoIps(ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY).size());
+    }
+
+    private List<InetAddress> resolveToTwoIps(ClientDnsLookup dnsLookup) throws UnknownHostException {
+        InetAddress[] addresses = new InetAddress[] {
+            InetAddress.getByName("198.51.100.0"), InetAddress.getByName("198.51.100.5")
+        };
+        HostResolver hostResolver = new AddressChangeHostResolver(addresses, addresses);
+        return ClientUtils.resolve("kafka.apache.org", dnsLookup, hostResolver);
     }
 
     private List<InetSocketAddress> checkWithoutLookup(String... url) {
-        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url), ClientDnsLookup.USE_ALL_DNS_IPS);
+        return ClientUtils.parseAndValidateAddresses(asList(url), ClientDnsLookup.USE_ALL_DNS_IPS);
     }
 
     private List<InetSocketAddress> checkWithLookup(List<String> url) {
