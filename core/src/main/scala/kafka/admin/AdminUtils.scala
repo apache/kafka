@@ -155,7 +155,6 @@ object AdminUtils extends Logging {
     }.toMap
     val numRacks = brokerRackMap.values.toSet.size
     val arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap)
-    val numBrokers = arrangedBrokerList.size
     val ret = mutable.Map[Int, Seq[Int]]()
     val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(arrangedBrokerList.size)
     var currentPartitionId = math.max(0, startPartitionId)
@@ -179,7 +178,7 @@ object AdminUtils extends Logging {
           //    that do not have any replica, or
           // 2. the broker has already assigned a replica AND there is one or more brokers that do not have replica assigned
           if ((!racksWithReplicas.contains(rack) || racksWithReplicas.size == numRacks)
-              && (!brokersWithReplicas.contains(broker) || brokersWithReplicas.size == numBrokers)) {
+              && !brokersWithReplicas.contains(broker)) {
             replicaBuffer += broker
             racksWithReplicas += rack
             brokersWithReplicas += broker
