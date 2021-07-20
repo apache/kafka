@@ -284,6 +284,7 @@ public final class QuorumController implements Controller {
             "Reverting to last committed offset {}.",
             this, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
             lastCommittedOffset, exception);
+        raftClient.resign(curClaimEpoch);
         renounce();
         return new UnknownServerException(exception);
     }
