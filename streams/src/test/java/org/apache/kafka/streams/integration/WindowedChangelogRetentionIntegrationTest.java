@@ -154,7 +154,7 @@ public class WindowedChangelogRetentionIntegrationTest {
     }
 
     @Test
-    public void timeWindowedChangelogShouldHaveUserSpecifiedRetentionIfUserSpecifiedRetentionEvenIfLessThanDefaultRetention() throws Exception {
+    public void timeWindowedChangelogShouldHaveUserSpecifiedRetentionIfUserSpecifiedRetentionLessThanDefaultRetention() throws Exception {
         final Duration grace = Duration.ofHours(6);
         final Duration windowSize = DEFAULT_RETENTION.minus(grace).minus(Duration.ofHours(1));
         final Duration userSpecifiedRetention = windowSize.plus(grace).plus(Duration.ofHours(1));
@@ -210,7 +210,7 @@ public class WindowedChangelogRetentionIntegrationTest {
     }
 
     @Test
-    public void sessionWindowedChangelogShouldHaveUserSpecifiedRetentionIfUserSpecifiedRetentionEvenIfLessThanDefaultRetention() throws Exception {
+    public void sessionWindowedChangelogShouldHaveUserSpecifiedRetentionIfUserSpecifiedRetentionLessThanDefaultRetention() throws Exception {
         final Duration grace = Duration.ofHours(6);
         final Duration gap = DEFAULT_RETENTION.minus(grace).minus(Duration.ofHours(1));
         final Duration userSpecifiedRetention = gap.plus(grace).plus(Duration.ofHours(1));
