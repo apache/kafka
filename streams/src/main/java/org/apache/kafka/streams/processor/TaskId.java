@@ -100,10 +100,11 @@ public class TaskId implements Comparable<TaskId> {
 
                 return new TaskId(topicGroupId, partition);
             } else {
-                final int subtopologyPartitionDelimiterIndex = taskIdStr.indexOf('_', namedTopologyDelimiterIndex + 1);
+                final int topicGroupIdIndex = namedTopologyDelimiterIndex + 2;
+                final int subtopologyPartitionDelimiterIndex = taskIdStr.indexOf('_', topicGroupIdIndex);
 
                 final String namedTopology = taskIdStr.substring(0, namedTopologyDelimiterIndex);
-                final int topicGroupId = Integer.parseInt(taskIdStr.substring(namedTopologyDelimiterIndex + 1, subtopologyPartitionDelimiterIndex));
+                final int topicGroupId = Integer.parseInt(taskIdStr.substring(topicGroupIdIndex, subtopologyPartitionDelimiterIndex));
                 final int partition = Integer.parseInt(taskIdStr.substring(subtopologyPartitionDelimiterIndex + 1));
 
                 return new TaskId(topicGroupId, partition, namedTopology);
