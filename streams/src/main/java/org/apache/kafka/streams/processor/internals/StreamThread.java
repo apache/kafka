@@ -869,9 +869,7 @@ public class StreamThread extends Thread {
 
     private long pollPhase() {
         final ConsumerRecords<byte[], byte[]> records;
-        if (isRunning()) {
-            log.debug("Invoking poll on main Consumer");
-        }
+        log.debug("Invoking poll on main Consumer");
 
         if (state == State.PARTITIONS_ASSIGNED) {
             // try to fetch some records with zero poll millis
