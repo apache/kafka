@@ -271,7 +271,7 @@ object DumpLogSegments {
             var prefix = s"$RecordIndent "
             if (!skipRecordMetadata) {
               print(s"${prefix}offset: ${record.offset} ${batch.timestampType}: ${record.timestamp} " +
-                s"keysize: ${record.keySize} valuesize: ${record.valueSize}")
+                s"keySize: ${record.keySize} valueSize: ${record.valueSize}")
               prefix = " "
 
               if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
