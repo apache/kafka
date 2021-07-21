@@ -550,14 +550,14 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public final <KIn, VIn, KOut, VOut> void addGlobalStore(final StoreBuilder<?> storeBuilder,
+    public final <KIn, VIn> void addGlobalStore(final StoreBuilder<?> storeBuilder,
                                                 final String sourceName,
                                                 final TimestampExtractor timestampExtractor,
                                                 final Deserializer<KIn> keyDeserializer,
                                                 final Deserializer<VIn> valueDeserializer,
                                                 final String topic,
                                                 final String processorName,
-                                                final ProcessorSupplier<KIn, VIn, KOut, VOut> stateUpdateSupplier) {
+                                                final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "store builder must not be null");
         ApiUtils.checkSupplier(stateUpdateSupplier);
         validateGlobalStoreArguments(sourceName,
@@ -571,7 +571,7 @@ public class InternalTopologyBuilder {
         final String[] topics = {topic};
         final String[] predecessors = {sourceName};
 
-        final ProcessorNodeFactory<KIn, VIn, KOut, VOut> nodeFactory = new ProcessorNodeFactory<>(
+        final ProcessorNodeFactory<KIn, VIn, Void, Void> nodeFactory = new ProcessorNodeFactory<>(
             processorName,
             predecessors,
             stateUpdateSupplier
