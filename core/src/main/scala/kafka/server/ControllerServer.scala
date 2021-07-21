@@ -42,7 +42,7 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.zookeeper.server.quorum.QuorumPeerConfig.ConfigException
+import org.apache.kafka.common.config.ConfigException
 
 import scala.jdk.CollectionConverters._
 
