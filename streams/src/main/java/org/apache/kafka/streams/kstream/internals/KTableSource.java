@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -100,10 +101,21 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
         public void process(final Record<KIn, VIn> record) {
             // if the key is null, then ignore the record
             if (record.key() == null) {
-                context.recordMetadata().ifPresent(recordMetadata -> LOG.warn(
-                    "Skipping record due to null key. topic=[{}] partition=[{}] offset=[{}]",
-                    recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-                ));
+                if (context.recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context.recordMetadata().get();
+                    LOG.warn(
+                        "Skipping record due to null key. "
+                            + "value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                        record.value(),
+                        recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
+                    );
+                } else {
+                    LOG.warn(
+                        "Skipping record due to null key. "
+                            + "value=[{}]. Topic, partition, and offset not known.",
+                        record.value()
+                    );
+                }
                 droppedRecordsSensor.record();
                 return;
             }
@@ -114,11 +126,26 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                 if (oldValueAndTimestamp != null) {
                     oldValue = oldValueAndTimestamp.value();
                     if (record.timestamp() < oldValueAndTimestamp.timestamp()) {
-                        context.recordMetadata().ifPresent(recordMetadata ->
+                        if (context.recordMetadata().isPresent()) {
+                            final RecordMetadata recordMetadata = context.recordMetadata().get();
                             LOG.warn(
-                                "Detected out-of-order KTable update for {} at offset {}, partition {}.",
-                                store.name(), recordMetadata.offset(), recordMetadata.partition())
-                        );
+                                "Detected out-of-order KTable update for {}, "
+                                    + "old timestamp=[{}] new timestamp=[{}]. "
+                                    + "value=[{}] topic=[{}] partition=[{}] offset=[{}].",
+                                store.name(),
+                                oldValueAndTimestamp.timestamp(), record.timestamp(),
+                                record.value(),
+                                recordMetadata.topic(), recordMetadata.offset(), recordMetadata.partition()
+                            );
+                        } else {
+                            LOG.warn(
+                                "Detected out-of-order KTable update for {}, "
+                                    + "old timestamp=[{}] new timestamp=[{}]. "
+                                    + "value=[{}]. Topic, partition and offset not known.",
+                                store.name(), record.value(),
+                                oldValueAndTimestamp.timestamp(), record.timestamp()
+                            );
+                        }
                     }
                 } else {
                     oldValue = null;
