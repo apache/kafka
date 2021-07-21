@@ -42,6 +42,7 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.common.config.ConfigException
 
 import scala.jdk.CollectionConverters._
 
@@ -137,8 +138,13 @@ class ControllerServer(
         credentialProvider,
         apiVersionManager)
       socketServer.startup(startProcessingRequests = false, controlPlaneListener = None, config.controllerListeners)
-      socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
-        config.controllerListeners.head.listenerName))
+
+      if (config.controllerListeners.nonEmpty) {
+        socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
+          config.controllerListeners.head.listenerName))
+      } else {
+        throw new ConfigException("No controller.listener.names defined for controller");
+      }
 
       val configDefs = Map(ConfigResource.Type.BROKER -> KafkaConfig.configDef,
         ConfigResource.Type.TOPIC -> LogConfig.configDefCopy).asJava

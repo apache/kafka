@@ -1134,6 +1134,7 @@ class SocketServerTest {
   def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend(): Unit = {
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
+    props.put(KafkaConfig.ControllerListenerNamesProp, "SASL_SSL")
     val overrideServer = new SocketServer(
       KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider, apiVersionManager
     ) {
