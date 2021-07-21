@@ -650,7 +650,7 @@ CogroupedKStream&lt;byte[], String&gt; cogroupedStream = groupedStream.cogroup(a
 
 KTable&lt;byte[], String&gt; table = cogroupedStream.aggregate(initializer);
 
-KTable&lt;byte[], String&gt; table2 = cogroupedStream.windowedBy(TimeWindows.duration(500ms)).aggregate(initializer);</code></pre>
+KTable&lt;byte[], String&gt; table2 = cogroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(500))).aggregate(initializer);</code></pre>
                         </td>
                     </tr>
                     <tr class="row-odd"><td><p class="first"><strong>Map</strong></p>
@@ -1064,7 +1064,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupe
         .withValueSerde(Serdes.Long())); /* serde for aggregate value */
 
 // Aggregating with time-based windowing (here: with 5-minute sliding windows and 30-minute grace period)
-KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(SlidingWindows.withTimeDifferenceAndGrace(Duration.ofMinutes(5),Duration.ofMinutes(30)))
+KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(30)))
     .aggregate(
         () -&gt; 0L, /* initializer */
         (aggKey, newValue, aggValue) -&gt; aggValue + newValue, /* adder */
@@ -1072,7 +1072,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupe
         .withValueSerde(Serdes.Long())); /* serde for aggregate value */
 
 // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
-KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.windowedBy(SessionWindows.with(Duration.ofMinutes(5)).
+KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)).
     aggregate(
     	() -&gt; 0L, /* initializer */
     	(aggKey, newValue, aggValue) -&gt; aggValue + newValue, /* adder */
@@ -1101,7 +1101,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupe
           .withValueSerde(Serdes.Long()));
 
 // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
-KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.windowedBy(SessionWindows.with(Duration.ofMinutes(5)).
+KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)).
     aggregate(
         new Initializer&lt;Long&gt;() { /* initializer */
             @Override
@@ -1182,17 +1182,17 @@ KGroupedStream&lt;String, Long&gt; groupedStream = ...;
 
 // Counting a KGroupedStream with time-based windowing (here: with 5-minute tumbling windows)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; aggregatedStream = groupedStream.windowedBy(
-    TimeWindows.of(Duration.ofMinutes(5))) /* time-based window */
+    TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5))) /* time-based window */
     .count();
 
 // Counting a KGroupedStream with time-based windowing (here: with 5-minute sliding windows and 30-minute grace period)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; aggregatedStream = groupedStream.windowedBy(
-    SlidingWindows.withTimeDifferenceAndGrace(Duration.ofMinutes(5),Duration.ofMinutes(30))) /* time-based window */
+    SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(30))) /* time-based window */
     .count();
 
 // Counting a KGroupedStream with session-based windowing (here: with 5-minute inactivity gaps)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; aggregatedStream = groupedStream.windowedBy(
-    SessionWindows.with(Duration.ofMinutes(5))) /* session window */
+    SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5))) /* session window */
     .count();</code></pre>
                                 <p>Detailed behavior:</p>
                                 <ul class="last simple">
@@ -1303,21 +1303,21 @@ KGroupedStream&lt;String, Long&gt; groupedStream = ...;
 
 // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(
-  TimeWindows.of(Duration.ofMinutes(5)) /* time-based window */)
+  TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5)) /* time-based window */)
   .reduce(
     (aggValue, newValue) -&gt; aggValue + newValue /* adder */
   );
 
 // Aggregating with time-based windowing (here: with 5-minute sliding windows and 30-minute grace)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(
-  SlidingWindows.withTimeDifferenceAndGrace(Duration.ofMinutes(5),Duration.ofMinutes(30))) /* time-based window */)
+  SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(30))) /* time-based window */)
   .reduce(
     (aggValue, newValue) -&gt; aggValue + newValue /* adder */
   );
 
 // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionzedAggregatedStream = groupedStream.windowedBy(
-  SessionWindows.with(Duration.ofMinutes(5))) /* session window */
+  SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5))) /* session window */
   .reduce(
     (aggValue, newValue) -&gt; aggValue + newValue /* adder */
   );
@@ -1327,7 +1327,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionzedAggregatedStream = groupedS
 
 // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream..windowedBy(
-  TimeWindows.of(Duration.ofMinutes(5)) /* time-based window */)
+  TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5)) /* time-based window */)
   .reduce(
     new Reducer&lt;Long&gt;() { /* adder */
       @Override
@@ -1338,7 +1338,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupe
 
 // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(
-  SessionWindows.with(Duration.ofMinutes(5))) /* session window */
+  SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5))) /* session window */
   .reduce(
     new Reducer&lt;Long&gt;() { /* adder */
       @Override
@@ -1799,7 +1799,7 @@ KStream&lt;String, Double&gt; right = ...;
 // Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.join(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
-    JoinWindows.of(Duration.ofMinutes(5)),
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
     Joined.with(
       Serdes.String(), /* key */
       Serdes.Long(),   /* left value */
@@ -1814,7 +1814,7 @@ KStream&lt;String, String&gt; joined = left.join(right,
         return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
       }
     },
-    JoinWindows.of(Duration.ofMinutes(5)),
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
     Joined.with(
       Serdes.String(), /* key */
       Serdes.Long(),   /* left value */
@@ -1856,7 +1856,7 @@ KStream&lt;String, Double&gt; right = ...;
 // Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.leftJoin(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
-    JoinWindows.of(Duration.ofMinutes(5)),
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
     Joined.with(
       Serdes.String(), /* key */
       Serdes.Long(),   /* left value */
@@ -1871,7 +1871,7 @@ KStream&lt;String, String&gt; joined = left.leftJoin(right,
         return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
       }
     },
-    JoinWindows.of(Duration.ofMinutes(5)),
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
     Joined.with(
       Serdes.String(), /* key */
       Serdes.Long(),   /* left value */
@@ -1916,7 +1916,7 @@ KStream&lt;String, Double&gt; right = ...;
 // Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.outerJoin(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
-    JoinWindows.of(Duration.ofMinutes(5)),
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
     Joined.with(
       Serdes.String(), /* key */
       Serdes.Long(),   /* left value */
@@ -1931,7 +1931,7 @@ KStream&lt;String, String&gt; joined = left.outerJoin(right,
         return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
       }
     },
-    JoinWindows.of(Duration.ofMinutes(5)),
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
     Joined.with(
       Serdes.String(), /* key */
       Serdes.Long(),   /* left value */
@@ -3164,9 +3164,9 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 
 // A hopping time window with a size of 5 minutes and an advance interval of 1 minute.
 // The window&#39;s name -- the string parameter -- is used to e.g. name the backing state store.
-Duration windowSizeMs = Duration.ofMinutes(5);
-Duration advanceMs = Duration.ofMinutes(1);
-TimeWindows.of(windowSizeMs).advanceBy(advanceMs);</code></pre>
+Duration windowSize = Duration.ofMinutes(5);
+Duration advance = Duration.ofMinutes(1);
+TimeWindows.ofSizeWithNoGrace(windowSize).advanceBy(advance);</code></pre>
                         <div class="figure align-center" id="id4">
                             <img class="centered" src="/{{version}}/images/streams-time-windows-hopping.png">
                             <p class="caption"><span class="caption-text">This diagram shows windowing a stream of data records with hopping windows.  In this diagram the time numbers
@@ -3208,14 +3208,13 @@ become t=300,000).</span></p>
 import org.apache.kafka.streams.kstream.TimeWindows;
 
 // A tumbling time window with a size of 5 minutes (and, by definition, an implicit
-// advance interval of 5 minutes). Note the explicit grace period, as the current
-// default value is 24 hours, which may be larger than needed for smaller windows.
-Duration windowSizeMs = Duration.ofMinutes(5);
-Duration gracePeriodMs = Duration.ofMinutes(1);
-TimeWindows.of(windowSizeMs).grace(gracePeriodMs);
+// advance interval of 5 minutes), and grace period of 1 minute.
+Duration windowSize = Duration.ofMinutes(5);
+Duration gracePeriod = Duration.ofMinutes(1);
+TimeWindows.ofSizeAndGrace(windowSize, gracePeriod);
 
 // The above is equivalent to the following code:
-TimeWindows.of(windowSizeMs).advanceBy(windowSizeMs).grace(gracePeriodMs);</code></pre>
+TimeWindows.ofSizeAndGrace(windowSize, gracePeriod).advanceBy(windowSize);</code></pre>
                     </div>
                     <div class="section" id="sliding-time-windows">
                         <span id="windowing-sliding"></span><h5><a class="toc-backref" href="#id22">Sliding time windows</a><a class="headerlink" href="#sliding-time-windows" title="Permalink to this headline"></a></h5>
@@ -3230,14 +3229,9 @@ TimeWindows.of(windowSizeMs).advanceBy(windowSizeMs).grace(gracePeriodMs);</code
                         <pre class="line-numbers"><code class="language-java">import org.apache.kafka.streams.kstream.SlidingWindows;
 
 // A sliding time window with a time difference of 10 minutes and grace period of 30 minutes
-Duration timeDifferenceMs = Duration.ofMinutes(10);
-Duration gracePeriodMs = Duration.ofMinutes(30);
-SlidingWindows.withTimeDifferenceAndGrace(timeDifferenceMs,gracePeriodMs);</code></pre>
-                         <div class="admonition note">
-                             <p><b>Note</b></p>
-                             <p>Sliding windows <em>require</em> that you set a grace period, as shown above. For time windows and session windows,
-                                 setting the grace period is optional and defaults to 24 hours.</p>
-                         </div>
+Duration timeDifference = Duration.ofMinutes(10);
+Duration gracePeriod = Duration.ofMinutes(30);
+SlidingWindows.ofTimeDifferenceAndGrace(timeDifference, gracePeriod);</code></pre>
                          <div class="figure align-center" id="id35">
                              <img class="centered" src="/{{version}}/images/streams-sliding-windows.png">
                              <p class="caption"><span class="caption-text">This diagram shows windowing a stream of data records with sliding windows. The overlap of
@@ -3267,7 +3261,7 @@ SlidingWindows.withTimeDifferenceAndGrace(timeDifferenceMs,gracePeriodMs);</code
 import org.apache.kafka.streams.kstream.SessionWindows;
 
 // A session window with an inactivity gap of 5 minutes.
-SessionWindows.with(Duration.ofMinutes(5));</code></pre>
+SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5));</code></pre>
                         <p>Given the previous session window example, here&#8217;s what would happen on an input stream of six records.
                             When the first three records arrive (upper part of in the diagram below), we&#8217;d have three sessions (see lower part)
                             after having processed those records: two for the green record key, with one session starting and ending at the
@@ -3313,7 +3307,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
 			    <p>For example:</p>
                 <pre class="line-numbers"><code class="language-java">KGroupedStream&lt;UserId, Event&gt; grouped = ...;
 grouped
-    .windowedBy(TimeWindows.of(Duration.ofHours(1)).grace(ofMinutes(10)))
+    .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofHours(1), Duration.ofMinutes(10)))
     .count()
     .suppress(Suppressed.untilWindowCloses(unbounded()))
     .filter((windowedUserId, count) -&gt; count &lt; 3)
@@ -3322,8 +3316,8 @@ grouped
 			    </div></div>
 			    <p>The key parts of this program are:
 			    <dl>
-				    <dt><code>grace(ofMinutes(10))</code></dt>
-				    <dd>This allows us to bound the lateness of events the window will accept.
+				    <dt><code>ofSizeAndGrace(Duration.ofHours(1), Duration.ofMinutes(10))</code></dt>
+				    <dd>The specified grace period of 10 minutes (i.e., the <code>Duration.ofMinutes(10)</code> argument) allows us to bound the lateness of events the window will accept.
 				        For example, the 09:00 to 10:00 window will accept out-of-order records until 10:10, at which point, the window is <strong>closed</strong>.
 				    </dd>
 				    <dt><code>.suppress(Suppressed.untilWindowCloses(...))</code></dt>
