@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -71,6 +72,7 @@ public class StreamsProducer {
     private Producer<byte[], byte[]> producer;
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
+    private double oldProducerTotalBlockedTime;
 
     public StreamsProducer(final StreamsConfig config,
                            final String threadId,
@@ -178,10 +180,36 @@ public class StreamsProducer {
             throw new IllegalStateException("Expected eos-v2 to be enabled, but the processing mode was " + processingMode);
         }
 
+        final long start = Time.SYSTEM.nanoseconds();
         producer.close();
+        final long closeTime = Time.SYSTEM.nanoseconds() - start;
+
+        oldProducerTotalBlockedTime += closeTime + totalBlockedTime(producer);
 
         producer = clientSupplier.getProducer(eosV2ProducerConfigs);
         transactionInitialized = false;
+    }
+
+    private static double getMetricValue(Map<MetricName, ? extends Metric> metrics, String name) {
+        return metrics.keySet().stream()
+            .filter(n -> n.name().equals(name))
+            .findFirst()
+            .map(n -> (Double) metrics.get(n).metricValue())
+            .orElse(0.0);
+    }
+
+    private static double totalBlockedTime(final Producer<?, ?> producer) {
+        return getMetricValue(producer.metrics(), "bufferpool-wait-time-total")
+            + getMetricValue(producer.metrics(), "flush-time-total")
+            + getMetricValue(producer.metrics(), "txn-init-time-total")
+            + getMetricValue(producer.metrics(), "txn-begin-time-total")
+            + getMetricValue(producer.metrics(), "txn-send-offsets-time-total")
+            + getMetricValue(producer.metrics(), "txn-commit-time-total")
+            + getMetricValue(producer.metrics(), "txn-abort-time-total");
+    }
+
+    public double totalBlockedTime() {
+        return oldProducerTotalBlockedTime + totalBlockedTime(producer);
     }
 
     private void maybeBeginTransaction() {

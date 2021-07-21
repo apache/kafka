@@ -24,6 +24,8 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -57,6 +59,8 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.sameInstance;
 import static org.junit.Assert.assertSame;
@@ -1121,4 +1125,62 @@ public class StreamsProducerTest {
         verify(mockedProducer);
     }
 
+    @Test
+    public void shouldComputeTotalBlockedTime() {
+        setProducerMetrics(nonEosMockProducer, 1, 2, 3, 4, 5, 6, 7);
+
+        final double expectedTotalBlocked = 1 + 2 + 3 + 4 + 5 + 6 + 7;
+        assertThat(nonEosStreamsProducer.totalBlockedTime(), equalTo(expectedTotalBlocked));
+    }
+
+    @Test
+    public void shouldComputeTotalBlockedTimeAfterReset() {
+        setProducerMetrics(nonEosMockProducer, 1, 2, 3, 4, 5, 6, 7);
+        nonEosStreamsProducer.resetProducer();
+
+        final double expectedTotalBlocked = 1 + 2 + 3 + 4 + 5 + 6 + 7;
+        assertThat(nonEosStreamsProducer.totalBlockedTime(), greaterThan(2 * expectedTotalBlocked));
+    }
+
+    private MetricName metricName(final String name) {
+        return new MetricName(name, "", "", Collections.emptyMap());
+    }
+
+    private void addMetric(
+        MockProducer<?, ?> producer,
+        final String name,
+        final double value
+    ) {
+        final MetricName metricName = metricName(name);
+        producer.setMockMetrics(metricName, new Metric() {
+            @Override
+            public MetricName metricName() {
+                return metricName;
+            }
+
+            @Override
+            public Object metricValue() {
+                return value;
+            }
+        });
+    }
+
+    private void setProducerMetrics(
+        MockProducer<?, ?> producer,
+        double bufferPoolWaitTime,
+        double flushTime,
+        double txnInitTime,
+        double txnBeginTime,
+        double txnSendOffsetsTime,
+        double txnCommitTime,
+        double txnAbortTime
+    ) {
+        addMetric(producer, "bufferpool-wait-time-total", bufferPoolWaitTime);
+        addMetric(producer, "flush-time-total", flushTime);
+        addMetric(producer, "txn-init-time-total", txnInitTime);
+        addMetric(producer, "txn-begin-time-total", txnBeginTime);
+        addMetric(producer, "txn-send-offsets-time-total", txnSendOffsetsTime);
+        addMetric(producer, "txn-commit-time-total", txnCommitTime);
+        addMetric(producer, "txn-abort-time-total", txnAbortTime);
+    }
 }

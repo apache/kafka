@@ -26,6 +26,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 
 public class ProducerMetrics {
+    public static final String GROUP = "producer-metrics";
 
     public final SenderMetricsRegistry senderMetrics;
     private final Metrics metrics;

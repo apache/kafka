@@ -512,6 +512,21 @@ public class StreamThread extends Thread {
         ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
         ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
 
+        ThreadMetrics.addThreadStartTimeMetric(
+            threadId,
+            streamsMetrics,
+            time.nanoseconds()
+        );
+        ThreadMetrics.addThreadBlockedTimeMetric(
+            threadId,
+            new StreamsThreadTotalBlockedTime(
+                mainConsumer,
+                restoreConsumer,
+                taskManager::totalProducerBlockedTime
+            ),
+            streamsMetrics
+        );
+
         this.time = time;
         this.topologyMetadata = topologyMetadata;
         this.logPrefix = logContext.logPrefix();

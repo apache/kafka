@@ -99,6 +99,9 @@ class Tasks {
             activeTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies),
             standbyTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies)
         );
+
+    double totalProducerBlockedTime() {
+        return activeTaskCreator.totalProducerBlockedTime();
     }
 
     void createTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,

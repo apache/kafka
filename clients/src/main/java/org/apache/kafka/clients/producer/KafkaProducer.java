@@ -60,6 +60,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -241,6 +242,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final String clientId;
     // Visible for testing
     final Metrics metrics;
+    private final KafkaProducerMetrics producerMetrics;
     private final Partitioner partitioner;
     private final int maxRequestSize;
     private final long totalMemorySize;
@@ -356,6 +358,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
+            this.producerMetrics = new KafkaProducerMetrics(metrics);
             this.partitioner = config.getConfiguredInstance(
                     ProducerConfig.PARTITIONER_CLASS_CONFIG,
                     Partitioner.class,
@@ -590,9 +593,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void initTransactions() {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        long now = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        producerMetrics.recordInit(time.nanoseconds() - now);
     }
 
     /**
@@ -613,7 +618,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void beginTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        long now = time.nanoseconds();
         transactionManager.beginTransaction();
+        producerMetrics.recordBegin(time.nanoseconds() - now);
     }
 
     /**
@@ -699,7 +706,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
         sender.wakeup();
+        long awaitStart = time.nanoseconds();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        producerMetrics.recordSendOffsets(time.nanoseconds() - awaitStart);
     }
 
     /**
@@ -730,9 +739,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void commitTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        long commitStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        producerMetrics.recordCommit(time.nanoseconds() - commitStart);
     }
 
     /**
@@ -761,9 +772,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         log.info("Aborting incomplete transaction");
+        long abortStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        producerMetrics.recordAbort(time.nanoseconds() - abortStart);
     }
 
     /**
@@ -1124,12 +1137,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @Override
     public void flush() {
         log.trace("Flushing accumulated records in producer.");
+        long start = time.nanoseconds();
         this.accumulator.beginFlush();
         this.sender.wakeup();
         try {
             this.accumulator.awaitFlushCompletion();
         } catch (InterruptedException e) {
             throw new InterruptException("Flush interrupted.", e);
+        } finally {
+            producerMetrics.recordFlush(time.nanoseconds() - start);
         }
     }
 
@@ -1367,6 +1383,69 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.interceptors.onAcknowledgement(metadata, exception);
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
+        }
+    }
+
+    private static class KafkaProducerMetrics {
+        private static final String FLUSH = "flush";
+        private static final String TXN_INIT = "txn-init";
+        private static final String TXN_BEGIN = "txn-begin";
+        private static final String TXN_SEND_OFFSETS = "txn-send-offsets";
+        private static final String TXN_COMMIT = "txn-commit";
+        private static final String TXN_ABORT = "txn-abort";
+        private static final String TOTAL_TIME_SUFFIX = "-time-total";
+
+        final Map<String, String> tags;
+        final Metrics metrics;
+        final Sensor initTimeSensor;
+        final Sensor beginTimeSensor;
+        final Sensor flushTimeSensor;
+        final Sensor sendOffsetsSensor;
+        final Sensor commitSensor;
+        final Sensor abortSensor;
+
+        private KafkaProducerMetrics(Metrics metrics) {
+            this.metrics = metrics;
+            this.tags = this.metrics.config().tags();
+            this.flushTimeSensor = newLatencySensor(FLUSH);
+            this.initTimeSensor = newLatencySensor(TXN_INIT);
+            this.beginTimeSensor = newLatencySensor(TXN_BEGIN);
+            this.sendOffsetsSensor = newLatencySensor(TXN_SEND_OFFSETS);
+            this.commitSensor = newLatencySensor(TXN_COMMIT);
+            this.abortSensor = newLatencySensor(TXN_ABORT);
+        }
+
+        private Sensor newLatencySensor(String name) {
+            Sensor sensor = metrics.sensor(name + TOTAL_TIME_SUFFIX);
+            sensor.add(
+                metrics.metricName(name + TOTAL_TIME_SUFFIX, ProducerMetrics.GROUP, tags),
+                new CumulativeSum()
+            );
+            return sensor;
+        }
+
+        private void recordFlush(long duration) {
+            flushTimeSensor.record(duration);
+        }
+
+        private void recordInit(long duration) {
+            initTimeSensor.record(duration);
+        }
+
+        private void recordBegin(long duration) {
+            beginTimeSensor.record(duration);
+        }
+
+        private void recordSendOffsets(long duration) {
+            sendOffsetsSensor.record(duration);
+        }
+
+        private void recordCommit(long duration) {
+            commitSensor.record(duration);
+        }
+
+        private void recordAbort(long duration) {
+            abortSensor.record(duration);
         }
     }
 }
