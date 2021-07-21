@@ -157,7 +157,6 @@ public class KafkaStreams implements AutoCloseable {
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
-    private final QueryableStoreProvider queryableStoreProvider;
     private final Admin adminClient;
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology taskTopology;
@@ -166,10 +165,10 @@ public class KafkaStreams implements AutoCloseable {
     private final StreamStateListener streamStateListener;
     private final StateRestoreListener delegatingStateRestoreListener;
     private final Map<Long, StreamThread.State> threadState;
-    private final ArrayList<StreamThreadStateStoreProvider> storeProviders;
     private final UUID processId;
     private final KafkaClientSupplier clientSupplier;
     private final InternalTopologyBuilder internalTopologyBuilder;
+    private final QueryableStoreProvider queryableStoreProvider;
 
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
@@ -904,11 +903,10 @@ public class KafkaStreams implements AutoCloseable {
             globalStreamThread.setStateListener(streamStateListener);
         }
 
-        storeProviders = new ArrayList<>();
+        queryableStoreProvider = new QueryableStoreProvider(globalStateStoreProvider);
         for (int i = 1; i <= numStreamThreads; i++) {
             createAndAddStreamThread(cacheSizePerThread, i);
         }
-        queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
         stateDirCleaner = setupStateDirCleaner();
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
@@ -935,7 +933,7 @@ public class KafkaStreams implements AutoCloseable {
         streamThread.setStateListener(streamStateListener);
         threads.add(streamThread);
         threadState.put(streamThread.getId(), streamThread.state());
-        storeProviders.add(new StreamThreadStateStoreProvider(streamThread));
+        queryableStoreProvider.addStoreProviderForThread(streamThread.getName(), new StreamThreadStateStoreProvider(streamThread));
         return streamThread;
     }
 
@@ -1081,6 +1079,7 @@ public class KafkaStreams implements AutoCloseable {
                             } else {
                                 log.info("Successfully removed {} in {}ms", streamThread.getName(), time.milliseconds() - startMs);
                                 threads.remove(streamThread);
+                                queryableStoreProvider.removeStoreProviderForThread(streamThread.getName());
                             }
                         } else {
                             log.info("{} is the last remaining thread and must remove itself, therefore we cannot wait "
