@@ -673,8 +673,8 @@ class TransactionStateManagerTest {
     val expiredTransactionalIds = mutable.Set.empty[String]
     while (hasUnexpiredTransactionalIds) {
       removeExpiredTransactionalIds().forKeyValue { (_, records) =>
-        assertTrue(records.sizeInBytes() < maxBatchSize)
-        records.records().forEach { record =>
+        assertTrue(records.sizeInBytes < maxBatchSize)
+        records.records.forEach { record =>
           val transactionalId = TransactionLog.readTxnRecordKey(record.key).transactionalId
           expiredTransactionalIds += transactionalId
           assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))

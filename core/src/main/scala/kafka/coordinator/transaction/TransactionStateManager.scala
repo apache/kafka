@@ -142,13 +142,12 @@ class TransactionStateManager(brokerId: Int,
   }
 
   private def collectExpiredTransactionalIds(
-    partitionId: Int,
+    transactionPartition: TopicPartition,
     partitionCacheEntry: TxnMetadataCacheEntry
   ): (Iterable[TransactionalIdCoordinatorEpochAndMetadata], MemoryRecords) = {
     val currentTimeMs = time.milliseconds()
 
     inReadLock(stateLock) {
-      val transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
       replicaManager.getLogConfig(transactionPartition) match {
         case Some(logConfig) =>
           val maxBatchSize = logConfig.maxMessageSize
@@ -189,6 +188,8 @@ class TransactionStateManager(brokerId: Int,
           }
 
         case None =>
+          warn(s"Transaction expiration for partition $transactionPartition failed because the log " +
+            "config was not available, which likely means the partition is not online or is no longer local.")
           (Seq.empty, MemoryRecords.EMPTY)
       }
     }
@@ -231,9 +232,9 @@ class TransactionStateManager(brokerId: Int,
       val expiredTransactionalIds = mutable.Map.empty[TopicPartition, Iterable[TransactionalIdCoordinatorEpochAndMetadata]]
 
       transactionMetadataCache.forKeyValue { (partitionId, partitionCacheEntry) =>
-        val (expiredForPartition, partitionRecords) = collectExpiredTransactionalIds(partitionId, partitionCacheEntry)
+        val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
+        val (expiredForPartition, partitionRecords) = collectExpiredTransactionalIds(topicPartition, partitionCacheEntry)
         if (expiredForPartition.nonEmpty) {
-          val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
           expirationRecords += topicPartition -> partitionRecords
           expiredTransactionalIds += topicPartition -> expiredForPartition
         }
