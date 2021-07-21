@@ -20,7 +20,6 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +59,7 @@ public class QueryableStoreProvider {
             return queryableStoreType.create(globalStoreProvider, storeName);
         }
         return queryableStoreType.create(
-            new WrappingStoreProvider(new ArrayList<>(storeProviders.values()), storeQueryParameters),
+            new WrappingStoreProvider(storeProviders.values(), storeQueryParameters),
             storeName
         );
     }
