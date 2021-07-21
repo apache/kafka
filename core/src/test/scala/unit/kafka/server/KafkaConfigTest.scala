@@ -257,6 +257,20 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testControllerListenerDefined(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "controller")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    props.put(KafkaConfig.NodeIdProp, "1")
+    assertFalse(isValidKafkaConfig(props))
+    val caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("controller.listener.names cannot be empty if the server has the controller role"))
+
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
   def testBadListenerProtocol(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
