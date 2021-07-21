@@ -1521,7 +1521,7 @@ class LogTest {
   @Test
   def testSegmentDeletionDisabledBeforeUploadToRemoteTier(): Unit = {
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, segmentIndexBytes = 12, retentionBytes = 1,
-      fileDeleteDelayMs = 0)
+      fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
     val log = createLog(logDir, logConfig, remoteLogEnable = true)
     val pid = 1L
     val epoch = 0.toShort
@@ -1542,7 +1542,7 @@ class LogTest {
   @Test
   def testSegmentDeletionEnabledAfterUploadToRemoteTier(): Unit = {
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, segmentIndexBytes = 12,
-      retentionBytes = 1, fileDeleteDelayMs = 0)
+      retentionBytes = 1, fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
     val log = createLog(logDir, logConfig, remoteLogEnable = true)
     val pid = 1L
     val epoch = 0.toShort
@@ -4936,7 +4936,8 @@ object LogTest {
                       indexIntervalBytes: Int = Defaults.IndexInterval,
                       segmentIndexBytes: Int = Defaults.MaxIndexSize,
                       messageFormatVersion: String = Defaults.MessageFormatVersion,
-                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs): LogConfig = {
+                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs,
+                      remoteLogStorageEnable: Boolean = Defaults.RemoteLogStorageEnable): LogConfig = {
     val logProps = new Properties()
 
     logProps.put(LogConfig.SegmentMsProp, segmentMs: java.lang.Long)
@@ -4950,6 +4951,7 @@ object LogTest {
     logProps.put(LogConfig.SegmentIndexBytesProp, segmentIndexBytes: Integer)
     logProps.put(LogConfig.MessageFormatVersionProp, messageFormatVersion)
     logProps.put(LogConfig.FileDeleteDelayMsProp, fileDeleteDelayMs: java.lang.Long)
+    logProps.put(LogConfig.RemoteLogStorageEnableProp, remoteLogStorageEnable: java.lang.Boolean)
     LogConfig(logProps)
   }
 
