@@ -77,7 +77,7 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
     ) {
         List<String> groupIds = keys.stream().map(key -> key.idValue).collect(Collectors.toList());
         DeleteGroupsRequestData data = new DeleteGroupsRequestData()
-                .setGroupsNames(groupIds);
+            .setGroupsNames(groupIds);
         return new DeleteGroupsRequest.Builder(data);
     }
 
@@ -120,11 +120,13 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
                 log.debug("`DeleteConsumerGroups` request for group id {} failed due to error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
+
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("`DeleteConsumerGroups` request for group id {} failed because the coordinator " +
                     "is still in the process of loading state. Will retry", groupId.idValue);
                 break;
+
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
@@ -133,6 +135,7 @@ public class DeleteConsumerGroupsHandler implements AdminApiHandler<CoordinatorK
                     "Will attempt to find the coordinator again and retry", groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
+
             default:
                 log.error("`DeleteConsumerGroups` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());

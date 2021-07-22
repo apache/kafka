@@ -72,9 +72,7 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
 
-    private void validateKeys(
-        Set<CoordinatorKey> groupIds
-    ) {
+    private void validateKeys(Set<CoordinatorKey> groupIds) {
         if (!groupIds.equals(Collections.singleton(groupId))) {
             throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
                 " (expected only " + Collections.singleton(groupId) + ")");
@@ -123,18 +121,15 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         } else {
             final Map<TopicPartition, Errors> partitionResults = new HashMap<>();
             response.data().topics().forEach(topic ->
-                topic.partitions().forEach(partition -> {
-                    Errors partitionError = Errors.forCode(partition.errorCode());
-
-                    partitionResults.put(new TopicPartition(topic.name(), partition.partitionIndex()), partitionError);
-                })
+                topic.partitions().forEach(partition ->
+                    partitionResults.put(
+                        new TopicPartition(topic.name(), partition.partitionIndex()),
+                        Errors.forCode(partition.errorCode())
+                    )
+                )
             );
 
-            return new ApiResult<>(
-                Collections.singletonMap(groupId, partitionResults),
-                Collections.emptyMap(),
-                Collections.emptyList()
-            );
+            return ApiResult.completed(groupId, partitionResults);
         }
     }
 
@@ -152,11 +147,13 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
                 log.debug("`OffsetDelete` request for group id {} failed due to error {}.", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
+
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("`OffsetDelete` request for group id {} failed because the coordinator" +
                     " is still in the process of loading state. Will retry.", groupId.idValue);
                 break;
+
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
@@ -165,6 +162,7 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
                     "Will attempt to find the coordinator again and retry.", groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
+
             default:
                 log.error("`OffsetDelete` request for group id {} failed due to unexpected error {}.", groupId.idValue, error);
                 failed.put(groupId, error.exception());

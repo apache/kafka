@@ -98,8 +98,8 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
             return key.idValue;
         }).collect(Collectors.toList());
         DescribeGroupsRequestData data = new DescribeGroupsRequestData()
-                .setGroups(groupIds)
-                .setIncludeAuthorizedOperations(includeAuthorizedOperations);
+            .setGroups(groupIds)
+            .setIncludeAuthorizedOperations(includeAuthorizedOperations);
         return new DescribeGroupsRequest.Builder(data);
     }
 
@@ -133,13 +133,12 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                             deserializeAssignment(ByteBuffer.wrap(groupMember.memberAssignment()));
                         partitions = new HashSet<>(assignment.partitions());
                     }
-                    final MemberDescription memberDescription = new MemberDescription(
-                            groupMember.memberId(),
-                            Optional.ofNullable(groupMember.groupInstanceId()),
-                            groupMember.clientId(),
-                            groupMember.clientHost(),
-                            new MemberAssignment(partitions));
-                    memberDescriptions.add(memberDescription);
+                    memberDescriptions.add(new MemberDescription(
+                        groupMember.memberId(),
+                        Optional.ofNullable(groupMember.groupInstanceId()),
+                        groupMember.clientId(),
+                        groupMember.clientHost(),
+                        new MemberAssignment(partitions)));
                 }
                 final ConsumerGroupDescription consumerGroupDescription =
                     new ConsumerGroupDescription(groupIdKey.idValue, protocolType.isEmpty(),
@@ -170,11 +169,13 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 log.debug("`DescribeGroups` request for group id {} failed due to error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
+
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("`DescribeGroups` request for group id {} failed because the coordinator " +
                     "is still in the process of loading state. Will retry", groupId.idValue);
                 break;
+
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
@@ -183,6 +184,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                     "Will attempt to find the coordinator again and retry", groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
+
             default:
                 log.error("`DescribeGroups` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
