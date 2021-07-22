@@ -32,7 +32,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ListOffsetsRequest
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
@@ -41,10 +40,10 @@ import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
+
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
-
 import kafka.server.epoch.LeaderEpochFileCache
 
 import scala.jdk.CollectionConverters._
@@ -157,36 +156,8 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(leaderEpoch, epochEndOffset.leaderEpoch)
   }
 
-  @Test
-  def testMakeLeaderDoesNotUpdateEpochCacheForOldFormats(): Unit = {
-    val leaderEpoch = 8
-    configRepository.setTopicConfig(topicPartition.topic(),
-      LogConfig.MessageFormatVersionProp, kafka.api.KAFKA_0_10_2_IV0.shortVersion)
-    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
-    log.appendAsLeader(TestUtils.records(List(
-      new SimpleRecord("k1".getBytes, "v1".getBytes),
-      new SimpleRecord("k2".getBytes, "v2".getBytes)),
-      magicValue = RecordVersion.V1.value
-    ), leaderEpoch = 0)
-    log.appendAsLeader(TestUtils.records(List(
-      new SimpleRecord("k3".getBytes, "v3".getBytes),
-      new SimpleRecord("k4".getBytes, "v4".getBytes)),
-      magicValue = RecordVersion.V1.value
-    ), leaderEpoch = 5)
-    assertEquals(4, log.logEndOffset)
-
-    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true)
-    assertEquals(Some(4), partition.leaderLogIfLocal.map(_.logEndOffset))
-    assertEquals(None, log.latestEpoch)
-
-    val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of(leaderEpoch),
-      leaderEpoch = leaderEpoch, fetchOnlyFromLeader = true)
-    assertEquals(UNDEFINED_EPOCH_OFFSET, epochEndOffset.endOffset)
-    assertEquals(UNDEFINED_EPOCH, epochEndOffset.leaderEpoch)
-  }
-
-  @Test
   // Verify that partition.removeFutureLocalReplica() and partition.maybeReplaceCurrentWithFutureReplica() can run concurrently
+  @Test
   def testMaybeReplaceCurrentWithFutureReplica(): Unit = {
     val latch = new CountDownLatch(1)
 
@@ -240,7 +211,7 @@ class PartitionTest extends AbstractPartitionTest {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.messageFormatVersion.recordVersion, "")
+        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxProducerIdExpirationMs = 60 * 60 * 1000
         val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, maxProducerIdExpirationMs)
         val offsets = LogLoader.load(LoadLogParams(
@@ -738,40 +709,6 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Now we see None instead of an error for out of range timestamp
     assertEquals(Right(None), fetchOffsetsForTimestamp(100, Some(IsolationLevel.READ_UNCOMMITTED)))
-  }
-
-  private def setupPartitionWithMocks(leaderEpoch: Int,
-                                      isLeader: Boolean): Partition = {
-    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-
-    val controllerEpoch = 0
-    val replicas = List[Integer](brokerId, brokerId + 1).asJava
-    val isr = replicas
-
-    if (isLeader) {
-      assertTrue(partition.makeLeader(new LeaderAndIsrPartitionState()
-          .setControllerEpoch(controllerEpoch)
-          .setLeader(brokerId)
-          .setLeaderEpoch(leaderEpoch)
-          .setIsr(isr)
-          .setZkVersion(1)
-          .setReplicas(replicas)
-          .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
-      assertEquals(leaderEpoch, partition.getLeaderEpoch)
-    } else {
-      assertTrue(partition.makeFollower(new LeaderAndIsrPartitionState()
-          .setControllerEpoch(controllerEpoch)
-          .setLeader(brokerId + 1)
-          .setLeaderEpoch(leaderEpoch)
-          .setIsr(isr)
-          .setZkVersion(1)
-          .setReplicas(replicas)
-          .setIsNew(true), offsetCheckpoints, None), "Expected become follower transition to succeed")
-      assertEquals(leaderEpoch, partition.getLeaderEpoch)
-      assertEquals(None, partition.leaderLogIfLocal)
-    }
-
-    partition
   }
 
   @Test

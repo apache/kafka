@@ -171,13 +171,19 @@ class DefaultAutoTopicCreationManager(
 
     val requestCompletionHandler = new ControllerRequestCompletionHandler {
       override def onTimeout(): Unit = {
-        debug(s"Auto topic creation timed out for ${creatableTopics.keys}.")
         clearInflightRequests(creatableTopics)
+        debug(s"Auto topic creation timed out for ${creatableTopics.keys}.")
       }
 
       override def onComplete(response: ClientResponse): Unit = {
-        debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody.toString}.")
         clearInflightRequests(creatableTopics)
+        if (response.authenticationException() != null) {
+          warn(s"Auto topic creation failed for ${creatableTopics.keys} with authentication exception")
+        } else if (response.versionMismatch() != null) {
+          warn(s"Auto topic creation failed for ${creatableTopics.keys} with invalid version exception")
+        } else {
+          debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
+        }
       }
     }
 

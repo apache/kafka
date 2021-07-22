@@ -19,7 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -72,8 +72,19 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
 
+    private void validateKeys(
+        Set<CoordinatorKey> groupIds
+    ) {
+        if (!groupIds.equals(Collections.singleton(groupId))) {
+            throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
+                " (expected only " + Collections.singleton(groupId) + ")");
+        }
+    }
+
     @Override
-    public OffsetDeleteRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
+    public OffsetDeleteRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
+        validateKeys(groupIds);
+
         final OffsetDeleteRequestTopicCollection topics = new OffsetDeleteRequestTopicCollection();
         partitions.stream().collect(Collectors.groupingBy(TopicPartition::topic)).forEach((topic, topicPartitions) -> topics.add(
             new OffsetDeleteRequestTopic()
@@ -97,54 +108,67 @@ public class DeleteConsumerGroupOffsetsHandler implements AdminApiHandler<Coordi
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
     ) {
-        final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
-        Map<CoordinatorKey, Map<TopicPartition, Errors>> completed = new HashMap<>();
-        Map<CoordinatorKey, Throwable> failed = new HashMap<>();
-        List<CoordinatorKey> unmapped = new ArrayList<>();
+        validateKeys(groupIds);
 
+        final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
         final Errors error = Errors.forCode(response.data().errorCode());
+
         if (error != Errors.NONE) {
-            handleError(groupId, error, failed, unmapped);
+            final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+            final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
+
+            handleGroupError(groupId, error, failed, groupsToUnmap);
+
+            return new ApiResult<>(Collections.emptyMap(), failed, new ArrayList<>(groupsToUnmap));
         } else {
-            final Map<TopicPartition, Errors> partitions = new HashMap<>();
-            response.data().topics().forEach(topic -> 
+            final Map<TopicPartition, Errors> partitionResults = new HashMap<>();
+            response.data().topics().forEach(topic ->
                 topic.partitions().forEach(partition -> {
                     Errors partitionError = Errors.forCode(partition.errorCode());
-                    if (!handleError(groupId, partitionError, failed, unmapped)) {
-                        partitions.put(new TopicPartition(topic.name(), partition.partitionIndex()), partitionError);
-                    }
+
+                    partitionResults.put(new TopicPartition(topic.name(), partition.partitionIndex()), partitionError);
                 })
             );
-            if (!partitions.isEmpty())
-                completed.put(groupId, partitions);
+
+            return new ApiResult<>(
+                Collections.singletonMap(groupId, partitionResults),
+                Collections.emptyMap(),
+                Collections.emptyList()
+            );
         }
-        return new ApiResult<>(completed, failed, unmapped);
     }
 
-    private boolean handleError(
+    private void handleGroupError(
         CoordinatorKey groupId,
         Errors error,
         Map<CoordinatorKey, Throwable> failed,
-        List<CoordinatorKey> unmapped
+        Set<CoordinatorKey> groupsToUnmap
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
             case GROUP_ID_NOT_FOUND:
             case INVALID_GROUP_ID:
-                log.error("Received non retriable error for group {} in `DeleteConsumerGroupOffsets` response", groupId,
-                        error.exception());
+            case NON_EMPTY_GROUP:
+                log.debug("`OffsetDelete` request for group id {} failed due to error {}.", groupId.idValue, error);
                 failed.put(groupId, error.exception());
-                return true;
+                break;
             case COORDINATOR_LOAD_IN_PROGRESS:
+                // If the coordinator is in the middle of loading, then we just need to retry
+                log.debug("`OffsetDelete` request for group id {} failed because the coordinator" +
+                    " is still in the process of loading state. Will retry.", groupId.idValue);
+                break;
             case COORDINATOR_NOT_AVAILABLE:
-                return true;
             case NOT_COORDINATOR:
-                log.debug("DeleteConsumerGroupOffsets request for group {} returned error {}. Will retry",
-                        groupId, error);
-                unmapped.add(groupId);
-                return true;
+                // If the coordinator is unavailable or there was a coordinator change, then we unmap
+                // the key so that we retry the `FindCoordinator` request
+                log.debug("`OffsetDelete` request for group id {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry.", groupId.idValue, error);
+                groupsToUnmap.add(groupId);
+                break;
             default:
-                return false;
+                log.error("`OffsetDelete` request for group id {} failed due to unexpected error {}.", groupId.idValue, error);
+                failed.put(groupId, error.exception());
+                break;
         }
     }
 

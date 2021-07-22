@@ -40,6 +40,7 @@ import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable, mutable}
@@ -235,7 +236,6 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  * @param leaderEpochCache The LeaderEpochFileCache instance (if any) containing state associated
  *                         with the provided logStartOffset and nextOffsetMetadata
  * @param producerStateManager The ProducerStateManager instance containing state associated with the provided segments
- * @param logDirFailureChannel The LogDirFailureChannel instance to asynchronously handle log directory failure
  * @param _topicId optional Uuid to specify the topic ID for the topic if it exists. Should only be specified when
  *                first creating the log through Partition.makeLeader or Partition.makeFollower. When reloading a log,
  *                this field will be populated by reading the topic ID value from partition.metadata if it exists.
@@ -321,7 +321,8 @@ class Log(@volatile var logStartOffset: Long,
         }
       }
     } else if (keepPartitionMetadataFile) {
-      _topicId.foreach(partitionMetadataFile.write)
+      _topicId.foreach(partitionMetadataFile.record)
+      scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
     } else {
       // We want to keep the file and the in-memory topic ID in sync.
       _topicId = None
@@ -353,9 +354,9 @@ class Log(@volatile var logStartOffset: Long,
   def updateConfig(newConfig: LogConfig): Unit = {
     val oldConfig = localLog.config
     localLog.updateConfig(newConfig)
-    val oldRecordVersion = oldConfig.messageFormatVersion.recordVersion
-    val newRecordVersion = newConfig.messageFormatVersion.recordVersion
-    if (newRecordVersion.value != oldRecordVersion.value)
+    val oldRecordVersion = oldConfig.recordVersion
+    val newRecordVersion = newConfig.recordVersion
+    if (newRecordVersion != oldRecordVersion)
       initializeLeaderEpochCache()
   }
 
@@ -539,18 +540,25 @@ class Log(@volatile var logStartOffset: Long,
     }
   }, period = producerIdExpirationCheckIntervalMs, delay = producerIdExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
 
-  private def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
+  private def recordVersion: RecordVersion = config.recordVersion
 
   private def initializePartitionMetadata(): Unit = lock synchronized {
     val partitionMetadata = PartitionMetadataFile.newFile(dir)
     partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, logDirFailureChannel)
   }
 
+  private def maybeFlushMetadataFile(): Unit = {
+    partitionMetadataFile.maybeFlush()
+  }
+
   /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
   def assignTopicId(topicId: Uuid): Unit = {
     if (keepPartitionMetadataFile) {
-      partitionMetadataFile.write(topicId)
       _topicId = Some(topicId)
+      if (!partitionMetadataFile.exists()) {
+        partitionMetadataFile.record(topicId)
+        scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
+      }
     }
   }
 
@@ -628,6 +636,7 @@ class Log(@volatile var logStartOffset: Long,
   def close(): Unit = {
     debug("Closing log")
     lock synchronized {
+      maybeFlushMetadataFile()
       localLog.checkIfMemoryMappedBufferClosed()
       producerExpireCheck.cancel(true)
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
@@ -648,6 +657,8 @@ class Log(@volatile var logStartOffset: Long,
   def renameDir(name: String): Unit = {
     lock synchronized {
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in log dir ${dir.getParent}") {
+        // Flush partitionMetadata file before initializing again
+        maybeFlushMetadataFile()
         if (localLog.renameDir(name)) {
           producerStateManager.updateParentDir(dir)
           // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
@@ -731,6 +742,9 @@ class Log(@volatile var logStartOffset: Long,
                      leaderEpoch: Int,
                      requestLocal: Option[RequestLocal],
                      ignoreRecordSize: Boolean): LogAppendInfo = {
+    // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
+    // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
+    maybeFlushMetadataFile()
 
     val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, leaderEpoch)
 
@@ -759,7 +773,7 @@ class Log(@volatile var logStartOffset: Long,
                 appendInfo.sourceCodec,
                 appendInfo.targetCodec,
                 config.compact,
-                config.messageFormatVersion.recordVersion.value,
+                config.recordVersion.value,
                 config.messageTimestampType,
                 config.messageTimestampDifferenceMaxMs,
                 leaderEpoch,
@@ -1182,6 +1196,7 @@ class Log(@volatile var logStartOffset: Long,
    * @return The offset of the first message whose timestamp is greater than or equals to the given timestamp.
    *         None if no such message is found.
    */
+  @nowarn("cat=deprecation")
   def fetchOffsetByTimestamp(targetTimestamp: Long): Option[TimestampAndOffset] = {
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
@@ -1731,7 +1746,7 @@ object Log extends Logging {
       dir,
       topicPartition,
       logDirFailureChannel,
-      config.messageFormatVersion.recordVersion,
+      config.recordVersion,
       s"[Log partition=$topicPartition, dir=${dir.getParent}] ")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     val offsets = LogLoader.load(LoadLogParams(

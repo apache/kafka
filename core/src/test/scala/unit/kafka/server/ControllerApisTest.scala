@@ -95,6 +95,7 @@ class ControllerApisTest {
                                    props: Properties = new Properties()): ControllerApis = {
     props.put(KafkaConfig.NodeIdProp, nodeId: java.lang.Integer)
     props.put(KafkaConfig.ProcessRolesProp, "controller")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
     new ControllerApis(
       requestChannel,
       authorizer,
@@ -314,6 +315,13 @@ class ControllerApisTest {
       Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
         handleUnregisterBroker(buildRequest(new UnregisterBrokerRequest.Builder(
           new UnregisterBrokerRequestData()).build(0))))
+  }
+
+  @Test
+  def testClose(): Unit = {
+    val apis = createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller]))
+    apis.close()
+    assertTrue(apis.isClosed)
   }
 
   @Test
