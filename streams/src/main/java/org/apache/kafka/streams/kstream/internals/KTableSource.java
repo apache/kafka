@@ -111,9 +111,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                     );
                 } else {
                     LOG.warn(
-                        "Skipping record due to null key. "
-                            + "value=[{}]. Topic, partition, and offset not known.",
-                        record.value()
+                        "Skipping record due to null key. Topic, partition, and offset not known."
                     );
                 }
                 droppedRecordsSensor.record();
@@ -131,18 +129,17 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                             LOG.warn(
                                 "Detected out-of-order KTable update for {}, "
                                     + "old timestamp=[{}] new timestamp=[{}]. "
-                                    + "value=[{}] topic=[{}] partition=[{}] offset=[{}].",
+                                    + "topic=[{}] partition=[{}] offset=[{}].",
                                 store.name(),
                                 oldValueAndTimestamp.timestamp(), record.timestamp(),
-                                record.value(),
                                 recordMetadata.topic(), recordMetadata.offset(), recordMetadata.partition()
                             );
                         } else {
                             LOG.warn(
                                 "Detected out-of-order KTable update for {}, "
                                     + "old timestamp=[{}] new timestamp=[{}]. "
-                                    + "value=[{}]. Topic, partition and offset not known.",
-                                store.name(), record.value(),
+                                    + "Topic, partition and offset not known.",
+                                store.name(),
                                 oldValueAndTimestamp.timestamp(), record.timestamp()
                             );
                         }
