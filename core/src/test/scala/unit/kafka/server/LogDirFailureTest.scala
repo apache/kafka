@@ -19,7 +19,6 @@ package kafka.server
 import java.io.File
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
-
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll}
@@ -32,6 +31,7 @@ import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -65,8 +65,9 @@ class LogDirFailureTest extends IntegrationTestHarness {
     testProduceAfterLogDirFailureOnLeader(Roll)
   }
 
-  @Test
   // Broker should halt on any log directory failure if inter-broker protocol < 1.0
+  @nowarn("cat=deprecation")
+  @Test
   def brokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(): Unit = {
     @volatile var statusCodeOption: Option[Int] = None
     Exit.setHaltProcedure { (statusCode, _) =>
