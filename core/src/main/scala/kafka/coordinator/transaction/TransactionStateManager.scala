@@ -165,7 +165,7 @@ class TransactionStateManager(brokerId: Int,
             txnMetadata.inLock {
               if (!shouldExpire(txnMetadata, currentTimeMs)) {
                 true
-              } else if (maybeAppendExpiration(txnMetadata, recordsBuilder, currentTimeMs, maxBatchSize)) {
+              } else if (maybeAppendExpiration(txnMetadata, recordsBuilder, currentTimeMs)) {
                 val transitMetadata = txnMetadata.prepareDead()
                 expired += TransactionalIdCoordinatorEpochAndMetadata(
                   transactionalId,
@@ -211,7 +211,6 @@ class TransactionStateManager(brokerId: Int,
     txnMetadata: TransactionMetadata,
     recordsBuilder: MemoryRecordsBuilder,
     currentTimeMs: Long,
-    maxBatchSize: Int
   ): Boolean = {
     val keyBytes = TransactionLog.keyToBytes(txnMetadata.transactionalId)
     if (recordsBuilder.hasRoomFor(currentTimeMs, keyBytes, null, Record.EMPTY_HEADERS)) {
