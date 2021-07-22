@@ -324,7 +324,7 @@ object DumpLogSegments {
 
     println(" position: " + accumulativeBytes + " " + batch.timestampType + ": " + batch.maxTimestamp +
       " size: " + batch.sizeInBytes + " magic: " + batch.magic +
-      " compresscodec: " + batch.compressionType + " crc: " + batch.checksum + " isvalid: " + batch.isValid)
+      " compresscodec: " + batch.compressionType.name + " crc: " + batch.checksum + " isvalid: " + batch.isValid)
   }
 
   class TimeIndexDumpErrors {
