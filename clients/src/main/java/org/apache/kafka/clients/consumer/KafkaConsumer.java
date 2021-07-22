@@ -2244,6 +2244,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             // since we would not try to poll the network client synchronously
             if (lag == null) {
                 if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null) {
+                    log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
                     fetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
                 }
 
