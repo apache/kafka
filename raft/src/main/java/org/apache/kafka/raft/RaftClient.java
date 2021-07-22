@@ -41,9 +41,10 @@ public interface RaftClient<T> extends AutoCloseable {
          * {@link #scheduleAppend(int, List)} are guaranteed to be in the same order but
          * they can map to any number of batches provided by the {@link BatchReader}.
          *
+         * @param context listener context associated with this listener
          * @param reader reader instance which must be iterated and closed
          */
-        void handleCommit(BatchReader<T> reader);
+        void handleCommit(ListenerContext context, BatchReader<T> reader);
 
         /**
          * Callback which is invoked when the Listener needs to load a snapshot.
@@ -53,9 +54,10 @@ public interface RaftClient<T> extends AutoCloseable {
          * When handling this call, the implementation must assume that all previous calls
          * to {@link #handleCommit} contain invalid data.
          *
+         * @param context listener context associated with this listener
          * @param reader snapshot reader instance which must be iterated and closed
          */
-        void handleSnapshot(SnapshotReader<T> reader);
+        void handleSnapshot(ListenerContext context, SnapshotReader<T> reader);
 
         /**
          * Called on any change to leadership. This includes both when a leader is elected and
@@ -76,11 +78,15 @@ public interface RaftClient<T> extends AutoCloseable {
          * epoch changed but the leader is not known and once when the leader is known for the current
          * epoch.
          *
+         * @param context listener context associated with this listener
          * @param leader the current leader and epoch
          */
-        default void handleLeaderChange(LeaderAndEpoch leader) {}
+        default void handleLeaderChange(ListenerContext context, LeaderAndEpoch leader) {}
 
-        default void beginShutdown() {}
+        default void beginShutdown(ListenerContext context) {}
+    }
+
+    interface ListenerContext extends AutoCloseable {
     }
 
     /**
@@ -89,14 +95,20 @@ public interface RaftClient<T> extends AutoCloseable {
     void initialize();
 
     /**
-     * Register a listener to get commit/leader notifications.
+     * Register a listener to get commit, snapshot and leader notifications.
+     *
+     * Returns the listener context associated wit this registration. The {@code ListenerContext} returned
+     * will be equal to the {@code ListenerContext} sent in all of the methods of {@code Listener}. Closing
+     * the returned listener context will unregister the listener from the Raft client.
      *
      * @param listener the listener
+     * @return the listener context
      */
-    void register(Listener<T> listener);
+    ListenerContext register(Listener<T> listener);
 
     /**
      * Return the current {@link LeaderAndEpoch}.
+     *
      * @return the current {@link LeaderAndEpoch}
      */
     LeaderAndEpoch leaderAndEpoch();

@@ -24,6 +24,7 @@ import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
+import org.apache.kafka.raft.RaftClient.ListenerContext
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotReader
@@ -106,7 +107,7 @@ class BrokerMetadataListener(
   /**
    * Handle new metadata records.
    */
-  override def handleCommit(reader: BatchReader[ApiMessageAndVersion]): Unit =
+  override def handleCommit(context: ListenerContext, reader: BatchReader[ApiMessageAndVersion]): Unit =
     eventQueue.append(new HandleCommitsEvent(reader))
 
   class HandleCommitsEvent(reader: BatchReader[ApiMessageAndVersion])
@@ -144,7 +145,7 @@ class BrokerMetadataListener(
   /**
    * Handle metadata snapshots
    */
-  override def handleSnapshot(reader: SnapshotReader[ApiMessageAndVersion]): Unit =
+  override def handleSnapshot(context: ListenerContext, reader: SnapshotReader[ApiMessageAndVersion]): Unit =
     eventQueue.append(new HandleSnapshotEvent(reader))
 
   class HandleSnapshotEvent(reader: SnapshotReader[ApiMessageAndVersion])
@@ -245,11 +246,15 @@ class BrokerMetadataListener(
     publisher.publish(newHighestMetadataOffset, delta, _image)
   }
 
-  override def handleLeaderChange(leaderAndEpoch: LeaderAndEpoch): Unit = {
+  override def handleLeaderChange(context: ListenerContext, leaderAndEpoch: LeaderAndEpoch): Unit = {
     // Nothing to do.
   }
 
-  override def beginShutdown(): Unit = {
+  override def beginShutdown(context: ListenerContext): Unit = {
+    beginShutdown()
+  }
+
+  def beginShutdown(): Unit = {
     eventQueue.beginShutdown("beginShutdown", new ShutdownEvent())
   }
 

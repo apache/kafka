@@ -41,6 +41,7 @@ import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.raft.RaftClient.ListenerContext;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.shell.MetadataNode.DirectoryNode;
@@ -79,7 +80,7 @@ public final class MetadataNodeManager implements AutoCloseable {
 
     class LogListener implements RaftClient.Listener<ApiMessageAndVersion> {
         @Override
-        public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
+        public void handleCommit(ListenerContext context, BatchReader<ApiMessageAndVersion> reader) {
             try {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
@@ -96,7 +97,7 @@ public final class MetadataNodeManager implements AutoCloseable {
         }
 
         @Override
-        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+        public void handleSnapshot(ListenerContext context, SnapshotReader<ApiMessageAndVersion> reader) {
             try {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
@@ -110,7 +111,7 @@ public final class MetadataNodeManager implements AutoCloseable {
         }
 
         @Override
-        public void handleLeaderChange(LeaderAndEpoch leader) {
+        public void handleLeaderChange(ListenerContext context, LeaderAndEpoch leader) {
             appendEvent("handleNewLeader", () -> {
                 log.debug("handleNewLeader " + leader);
                 DirectoryNode dir = data.root.mkdirs("metadataQuorum");
@@ -119,7 +120,7 @@ public final class MetadataNodeManager implements AutoCloseable {
         }
 
         @Override
-        public void beginShutdown() {
+        public void beginShutdown(ListenerContext context) {
             log.debug("Metadata log listener sent beginShutdown");
         }
     }

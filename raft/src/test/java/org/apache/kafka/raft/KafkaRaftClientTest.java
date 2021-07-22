@@ -34,6 +34,7 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.RaftClient.ListenerContext;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -2492,6 +2493,47 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testReregistrationChangesListenerContext() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        List<String> batch1 = Arrays.asList("1", "2", "3");
+        List<String> batch2 = Arrays.asList("4", "5", "6");
+        List<String> batch3 = Arrays.asList("7", "8", "9");
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(1, batch1)
+            .appendToLog(1, batch2)
+            .appendToLog(2, batch3)
+            .withUnknownLeader(epoch - 1)
+            .build();
+
+        context.becomeLeader();
+        context.client.poll();
+        assertEquals(10L, context.log.endOffset().offset);
+
+        // Let the initial listener catch up
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 10L, epoch, 0));
+        context.pollUntil(() -> OptionalLong.of(8).equals(context.listener.lastCommitOffset()));
+
+        // Register a second listener
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
+        try (ListenerContext listenerContext = context.client.register(secondListener)) {
+            context.pollUntil(() -> OptionalLong.of(8).equals(secondListener.lastCommitOffset()));
+            assertEquals(Collections.singleton(listenerContext), secondListener.seenListenerContexts());
+        }
+
+        // Write to the log and show that default listener gets updated...
+        assertEquals(10L, context.client.scheduleAppend(epoch, singletonList("a")));
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 11L, epoch, 0));
+        context.pollUntil(() -> OptionalLong.of(10).equals(context.listener.lastCommitOffset()));
+        // ... but unregister listener doesn't
+        assertEquals(OptionalLong.of(8), secondListener.lastCommitOffset());
+    }
+
+    @Test
     public void testHandleCommitCallbackFiresAfterFollowerHighWatermarkAdvances() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
@@ -2677,5 +2719,4 @@ public class KafkaRaftClientTest {
     private static KafkaMetric getMetric(final Metrics metrics, final String name) {
         return metrics.metrics().get(metrics.metricName(name, "raft-metrics"));
     }
-
 }
