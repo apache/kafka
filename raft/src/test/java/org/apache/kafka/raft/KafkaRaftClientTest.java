@@ -2515,7 +2515,7 @@ public class KafkaRaftClientTest {
         assertEquals(10L, context.log.endOffset().offset);
 
         // Let the initial listener catch up
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 10L, epoch, 0));
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
         context.pollUntil(() -> OptionalLong.of(8).equals(context.listener.lastCommitOffset()));
 
         // Register a second listener
@@ -2527,7 +2527,8 @@ public class KafkaRaftClientTest {
 
         // Write to the log and show that default listener gets updated...
         assertEquals(10L, context.client.scheduleAppend(epoch, singletonList("a")));
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 11L, epoch, 0));
+        context.client.poll();
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
         context.pollUntil(() -> OptionalLong.of(10).equals(context.listener.lastCommitOffset()));
         // ... but unregister listener doesn't
         assertEquals(OptionalLong.of(8), secondListener.lastCommitOffset());

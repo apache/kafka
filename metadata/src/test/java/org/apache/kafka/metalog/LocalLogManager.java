@@ -44,9 +44,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
@@ -54,6 +54,7 @@ import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -422,7 +423,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     /**
      * The listener objects attached to this local log manager.
      */
-    private final List<MetaLogListenerData> listeners = new ArrayList<>();
+    private final Set<MetaLogListenerData> listeners = new HashSet<>();
 
     /**
      * The current leader, as seen by this log manager.
@@ -611,6 +612,16 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         } catch (ExecutionException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private void unregister(MetaLogListenerData context) {
+        eventQueue.append(() -> {
+            if (shutdown) {
+                log.info("Node {}: can't unregister because local log manager is shutdown", nodeId);
+            } else {
+                listeners.remove(context);
+            }
+        });
     }
 
     @Override

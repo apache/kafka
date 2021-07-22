@@ -97,7 +97,7 @@ public interface RaftClient<T> extends AutoCloseable {
     /**
      * Register a listener to get commit, snapshot and leader notifications.
      *
-     * Returns the listener context associated wit this registration. The {@code ListenerContext} returned
+     * Returns the listener context associated with this registration. The {@code ListenerContext} returned
      * will be equal to the {@code ListenerContext} sent in all of the methods of {@code Listener}. Closing
      * the returned listener context will unregister the listener from the Raft client.
      *
