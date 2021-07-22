@@ -293,13 +293,15 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
         final int compressedLength = compressor.compress(source, 0, source.length, compressed, 0,
                                                          compressed.length);
 
-        // allocate an array-backed ByteBuffer with non-zero array-offset
+        // allocate an array-backed ByteBuffer with non-zero array-offset containing the compressed data
+        // a buggy decompressor will read the data from the beginning of the underlying array instead of
+        // the beginning of the ByteBuffer, failing to decompress the invalid data.
         final byte[] zeroes = {0, 0, 0, 0, 0};
         ByteBuffer nonZeroOffsetBuffer = ByteBuffer
-            .allocate(zeroes.length + compressed.length)
-            .put(zeroes)
-            .slice()
-            .put(compressed);
+            .allocate(zeroes.length + compressed.length) // allocates the backing array with extra space to offset the data
+            .put(zeroes) // prepend invalid bytes (zeros) before the compressed data in the array
+            .slice() // create a new ByteBuffer sharing the underlying array, offset to start on the compressed data
+            .put(compressed); // write the compressed data at the beginning of this new buffer
 
         ByteBuffer dest = ByteBuffer.allocate(source.length);
         try {
