@@ -54,7 +54,7 @@ class TestRaftServer(
   import kafka.tools.TestRaftServer._
 
   private val partition = new TopicPartition("__raft_performance_test", 0)
-  // The topic ID must be constant. This value was chosen as to not conflict with the topic ID used for @metadata.
+  // The topic ID must be constant. This value was chosen as to not conflict with the topic ID used for __cluster_metadata.
   private val topicId = new Uuid(0L, 2L)
   private val time = Time.SYSTEM
   private val metrics = new Metrics(time)

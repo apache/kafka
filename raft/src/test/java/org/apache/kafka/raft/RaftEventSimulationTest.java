@@ -95,7 +95,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 @Tag("integration")
 public class RaftEventSimulationTest {
-    private static final TopicPartition METADATA_PARTITION = new TopicPartition("@metadata", 0);
+    private static final TopicPartition METADATA_PARTITION = new TopicPartition("__cluster_metadata", 0);
     private static final int ELECTION_TIMEOUT_MS = 1000;
     private static final int ELECTION_JITTER_MS = 100;
     private static final int FETCH_TIMEOUT_MS = 3000;
