@@ -156,7 +156,7 @@ public class KTableSourceTest {
                     .filter(e -> e.getLevel().equals("WARN"))
                     .map(Event::getMessage)
                     .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key. value=[value] topic=[topic] partition=[0] offset=[0]")
+                hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
             );
         }
     }
