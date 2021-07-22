@@ -147,6 +147,7 @@ class AbstractFetcherThreadTest {
   @Test
   def testDelay(): Unit = {
     val partition = new TopicPartition("topic", 0)
+    val fetchBackOffMs = 250
 
     class ErrorMockFetcherThread(fetchBackOffMs: Int)
       extends MockFetcherThread(fetchBackOffMs =  fetchBackOffMs) {
@@ -155,7 +156,7 @@ class AbstractFetcherThreadTest {
          throw new UnknownTopicIdException("Topic ID was unknown as expected for this test")
       }
     }
-    val fetcher = new ErrorMockFetcherThread(fetchBackOffMs = 1000)
+    val fetcher = new ErrorMockFetcherThread(fetchBackOffMs = fetchBackOffMs)
 
     fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
     fetcher.addPartitions(Map(partition -> initialFetchState(0L, leaderEpoch = 0)))
@@ -169,17 +170,18 @@ class AbstractFetcherThreadTest {
     val timeBeforeFirst = System.currentTimeMillis()
     fetcher.doWork()
     val timeAfterFirst = System.currentTimeMillis()
-    val firstWork = timeAfterFirst - timeBeforeFirst
+    val firstWorkDuration = timeAfterFirst - timeBeforeFirst
 
     // The second doWork will pause for fetchBackOffMs since all partitions will be delayed
     val timeBeforeSecond = System.currentTimeMillis()
     fetcher.doWork()
     val timeAfterSecond = System.currentTimeMillis()
-    val secondWork = timeAfterSecond - timeBeforeSecond
+    val secondWorkDuration = timeAfterSecond - timeBeforeSecond
 
-    assertTrue(firstWork < secondWork)
+    assertTrue(firstWorkDuration < secondWorkDuration)
     // The second call should have taken more than fetchBackOffMs
-    assertTrue(1000 < secondWork)
+    assertTrue(fetchBackOffMs <= secondWorkDuration,
+      "secondWorkDuration: " + secondWorkDuration + " was not greater than or equal to fetchBackOffMs: " + fetchBackOffMs)
   }
 
   @Test
