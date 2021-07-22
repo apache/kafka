@@ -218,10 +218,6 @@ class TransactionStateManager(brokerId: Int,
       recordsBuilder.append(currentTimeMs, keyBytes, null, Record.EMPTY_HEADERS)
       true
     } else {
-      if (recordsBuilder.numRecords == 0) {
-        warn(s"Failed to write expiration record for transactionalId ${txnMetadata.transactionalId} " +
-          s"because the tombstone record exceeds the max allowed batch size of $maxBatchSize")
-      }
       false
     }
   }
