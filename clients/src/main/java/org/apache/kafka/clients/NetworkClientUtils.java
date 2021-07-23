@@ -70,7 +70,7 @@ public final class NetworkClientUtils {
                 throw new IOException("Connection to " + node + " failed.");
             }
             long pollTimeout = timeoutMs - (attemptStartTime - startTime); // initialize in this order to avoid overflow
-                client.poll(pollTimeout, attemptStartTime);
+            client.poll(pollTimeout, attemptStartTime);
             if (client.authenticationException(node) != null)
                 throw client.authenticationException(node);
             attemptStartTime = time.milliseconds();
