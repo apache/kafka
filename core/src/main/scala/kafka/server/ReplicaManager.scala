@@ -2220,15 +2220,15 @@ class ReplicaManager(val config: KafkaConfig,
     replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollower)
   }
 
-  def deleteGhostReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {
+  def deleteStrayReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {
     stopPartitions(topicPartitions.map { tp => tp -> true }.toMap).foreach {
       case (topicPartition, e) =>
         if (e.isInstanceOf[KafkaStorageException]) {
-          stateChangeLogger.error(s"Unable to delete ghost replica ${topicPartition} because " +
+          stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
             "the local replica for the partition is in an offline log directory")
         } else {
-          stateChangeLogger.error(s"Unable to delete ghost replica ${topicPartition} because " +
-            s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}")
+          stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
+            s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}", e)
         }
     }
   }
