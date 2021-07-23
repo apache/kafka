@@ -588,10 +588,11 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 future.complete(null);
             } else if (initialized) {
                 int id = System.identityHashCode(listener);
-                if (listeners.putIfAbsent(listener, new MetaLogListenerData(listener)) == null) {
+                if (listeners.putIfAbsent(listener, new MetaLogListenerData(listener)) != null) {
                     log.error("Node {}: can't register because listener {} already exists", nodeId, id);
+                } else {
+                    log.info("Node {}: registered MetaLogListener {}", nodeId, id);
                 }
-                log.info("Node {}: registered MetaLogListener {}", nodeId, id);
                 shared.electLeaderIfNeeded();
                 scheduleLogCheck();
                 future.complete(null);
@@ -621,8 +622,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 int id = System.identityHashCode(listener);
                 if (listeners.remove(listener) == null) {
                     log.error("Node {}: can't unregister because the listener {} doesn't exists", nodeId, id);
+                } else {
+                    log.info("Node {}: unregistered MetaLogListener {}", nodeId, id);
                 }
-                log.info("Node {}: unregistered MetaLogListener {}", nodeId, id);
             }
         });
     }

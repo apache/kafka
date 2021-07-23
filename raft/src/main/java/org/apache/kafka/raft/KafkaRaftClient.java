@@ -2411,7 +2411,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         private void update(Map<Listener<T>, KafkaListenerContext> contexts) {
             if (ops == RegistrationOps.REGISTER) {
-                if (contexts.putIfAbsent(listener, new KafkaListenerContext(listener)) == null) {
+                if (contexts.putIfAbsent(listener, new KafkaListenerContext(listener)) != null) {
                     logger.error("Attempting to add a listener that already exists: {}", listenerName(listener));
                 }
             } else {
