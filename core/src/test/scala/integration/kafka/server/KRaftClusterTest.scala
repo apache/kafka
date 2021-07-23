@@ -29,15 +29,16 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{Test, Timeout}
-
+import org.junit.jupiter.api.{Tag, Test, Timeout}
 import java.util
 import java.util.{Arrays, Collections, Optional}
+
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
+@Tag("integration")
 class KRaftClusterTest {
 
   @Test

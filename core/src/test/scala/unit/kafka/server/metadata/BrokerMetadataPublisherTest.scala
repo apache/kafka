@@ -17,9 +17,17 @@
 
 package unit.kafka.server.metadata
 
+import kafka.log.Log
 import kafka.server.metadata.BrokerMetadataPublisher
-import org.apache.kafka.image.MetadataImageTest
+import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.image.{MetadataImageTest, TopicImage, TopicsImage}
+import org.apache.kafka.metadata.PartitionRegistration
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+
+import org.mockito.Mockito
+
+import scala.jdk.CollectionConverters._
 
 class BrokerMetadataPublisherTest {
   @Test
@@ -39,4 +47,99 @@ class BrokerMetadataPublisherTest {
       MetadataImageTest.IMAGE1,
       MetadataImageTest.DELTA1).isDefined, "Expected to see delta for changed topic")
   }
+
+  @Test
+  def testFindStrayReplicas(): Unit = {
+    val brokerId = 0
+
+    // Topic has been deleted
+    val deletedTopic = "a"
+    val deletedTopicId = Uuid.randomUuid()
+    val deletedTopicPartition1 = new TopicPartition(deletedTopic, 0)
+    val deletedTopicLog1 = mockLog(deletedTopicId, deletedTopicPartition1)
+    val deletedTopicPartition2 = new TopicPartition(deletedTopic, 1)
+    val deletedTopicLog2 = mockLog(deletedTopicId, deletedTopicPartition2)
+
+    // Topic was deleted and recreated
+    val recreatedTopic = "b"
+    val recreatedTopicPartition = new TopicPartition(recreatedTopic, 0)
+    val recreatedTopicLog = mockLog(Uuid.randomUuid(), recreatedTopicPartition)
+    val recreatedTopicImage = topicImage(Uuid.randomUuid(), recreatedTopic, Map(
+      recreatedTopicPartition.partition -> Seq(0, 1, 2)
+    ))
+
+    // Topic exists, but some partitions were reassigned
+    val reassignedTopic = "c"
+    val reassignedTopicId = Uuid.randomUuid()
+    val reassignedTopicPartition = new TopicPartition(reassignedTopic, 0)
+    val reassignedTopicLog = mockLog(reassignedTopicId, reassignedTopicPartition)
+    val retainedTopicPartition = new TopicPartition(reassignedTopic, 1)
+    val retainedTopicLog = mockLog(reassignedTopicId, retainedTopicPartition)
+
+    val reassignedTopicImage = topicImage(reassignedTopicId, reassignedTopic, Map(
+      reassignedTopicPartition.partition -> Seq(1, 2, 3),
+      retainedTopicPartition.partition -> Seq(0, 2, 3)
+    ))
+
+    val logs = Seq(
+      deletedTopicLog1,
+      deletedTopicLog2,
+      recreatedTopicLog,
+      reassignedTopicLog,
+      retainedTopicLog
+    )
+
+    val image = topicsImage(Seq(
+      recreatedTopicImage,
+      reassignedTopicImage
+    ))
+
+    val expectedStrayPartitions = Set(
+      deletedTopicPartition1,
+      deletedTopicPartition2,
+      recreatedTopicPartition,
+      reassignedTopicPartition
+    )
+
+    val strayPartitions = BrokerMetadataPublisher.findStrayPartitions(brokerId, image, logs).toSet
+    assertEquals(expectedStrayPartitions, strayPartitions)
+  }
+
+  private def mockLog(
+    topicId: Uuid,
+    topicPartition: TopicPartition
+  ): Log = {
+    val log = Mockito.mock(classOf[Log])
+    Mockito.when(log.topicId).thenReturn(Some(topicId))
+    Mockito.when(log.topicPartition).thenReturn(topicPartition)
+    log
+  }
+
+  private def topicImage(
+    topicId: Uuid,
+    topic: String,
+    partitions: Map[Int, Seq[Int]]
+  ): TopicImage = {
+    val partitionRegistrations = partitions.map { case (partitionId, replicas) =>
+      Int.box(partitionId) -> new PartitionRegistration(
+        replicas.toArray,
+        replicas.toArray,
+        Array.empty[Int],
+        Array.empty[Int],
+        replicas.head,
+        0,
+        0
+      )
+    }
+    new TopicImage(topic, topicId, partitionRegistrations.asJava)
+  }
+
+  private def topicsImage(
+    topics: Seq[TopicImage]
+  ): TopicsImage = {
+    val idsMap = topics.map(t => t.id -> t).toMap
+    val namesMap = topics.map(t => t.name -> t).toMap
+    new TopicsImage(idsMap.asJava, namesMap.asJava)
+  }
+
 }

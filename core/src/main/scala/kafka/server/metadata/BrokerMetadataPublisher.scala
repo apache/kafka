@@ -26,12 +26,12 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 
 import scala.collection.mutable
 
 
-object BrokerMetadataPublisher {
+object BrokerMetadataPublisher extends Logging {
   /**
    * Given a topic name, find out if it changed. Note: if a topic named X was deleted and
    * then re-created, this method will return just the re-creation. The deletion will show
@@ -56,29 +56,35 @@ object BrokerMetadataPublisher {
   /**
    * Find logs which should not be on the current broker, according to the metadata image.
    *
-   * @param brokerId  The ID of the current broker.
-   * @param newImage  The metadata image.
-   * @param logs      A collection of Log objects.
+   * @param brokerId        The ID of the current broker.
+   * @param newTopicsImage  The new topics image after broker has been reloaded
+   * @param logs            A collection of Log objects.
    *
    * @return          The topic partitions which are no longer needed on this broker.
    */
-  def findGhostReplicas(brokerId: Int,
-                        newImage: MetadataImage,
-                        logs: Iterable[Log]): Iterable[TopicPartition] = {
+  def findStrayPartitions(brokerId: Int,
+                          newTopicsImage: TopicsImage,
+                          logs: Iterable[Log]): Iterable[TopicPartition] = {
     logs.flatMap { log =>
-      log.topicId match {
-        case None => throw new RuntimeException(s"Topic ${log.name} does not have a topic ID, " +
+      val topicId = log.topicId.getOrElse {
+        throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
           "which is not allowed when running in KRaft mode.")
-        case Some(topicId) =>
-          val partitionId = log.topicPartition.partition()
-          Option(newImage.topics().getPartition(topicId, partitionId)) match {
-            case None => None
-            case Some(partition) => if (partition.replicas.contains(brokerId)) {
-              Some(log.topicPartition)
-            } else {
-              None
-            }
+      }
+
+      val partitionId = log.topicPartition.partition()
+      Option(newTopicsImage.getPartition(topicId, partitionId)) match {
+        case Some(partition) =>
+          if (!partition.replicas.contains(brokerId)) {
+            info(s"Found stray log dir $log: the current replica assignment ${partition.replicas} " +
+              s"does not contain the local brokerId $brokerId.")
+            Some(log.topicPartition)
+          } else {
+            None
           }
+
+        case None =>
+          info(s"Found stray log dir $log: the topicId $topicId does not exist in the metadata image")
+          Some(log.topicPartition)
       }
     }
   }
@@ -239,9 +245,9 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
     // Delete log directories which we're not supposed to have, according to the
     // latest metadata. This is only necessary to do when we're first starting up. If
     // we have to load a snapshot later, these topics will appear in deletedTopicIds.
-    val ghostReplicas = findGhostReplicas(brokerId, newImage, logManager.allLogs)
-    if (ghostReplicas.nonEmpty) {
-      replicaManager.deleteGhostReplicas(ghostReplicas)
+    val strayPartitions = findStrayPartitions(brokerId, newImage.topics, logManager.allLogs)
+    if (strayPartitions.nonEmpty) {
+      replicaManager.deleteStrayReplicas(strayPartitions)
     }
 
     // Make sure that the high water mark checkpoint thread is running for the replica
