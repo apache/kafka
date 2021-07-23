@@ -24,7 +24,7 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
 from kafkatest.utils.remote_account import java_version
-from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, V_0_11_0_0, V_2_8_0, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, V_0_11_0_0, V_2_8_0, V_3_0_0, DEV_BRANCH, KafkaVersion
 from kafkatest.services.kafka.util import new_jdk_not_supported
 
 class TestUpgrade(ProduceConsumeValidateTest):
@@ -83,6 +83,9 @@ class TestUpgrade(ProduceConsumeValidateTest):
             if to_message_format_version is None:
                 del node.config[config_property.MESSAGE_FORMAT_VERSION]
             else:
+                # older message formats are not supported with IBP 3.0 or higher
+                if to_message_format_version < V_0_11_0_0:
+                    node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = str(V_2_8_0)
                 node.config[config_property.MESSAGE_FORMAT_VERSION] = to_message_format_version
             self.kafka.start_node(node)
             self.wait_until_rejoin()
