@@ -163,7 +163,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final RaftMetadataLogCleanerManager snapshotCleaner;
 
     private final Map<Listener<T>, KafkaListenerContext> listenerContexts = new IdentityHashMap<>();
-    private final ConcurrentLinkedQueue<Registration> pendingRegistrations = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<Registration<T>> pendingRegistrations = new ConcurrentLinkedQueue<>();
 
     /**
      * Create a new instance.
@@ -380,13 +380,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public void register(Listener<T> listener) {
-        pendingRegistrations.add(new Registration(RegistrationOps.REGISTER, listener));
+        pendingRegistrations.add(Registration.register(listener));
         wakeup();
     }
 
     @Override
     public void unregister(Listener<T> listener) {
-        pendingRegistrations.add(new Registration(RegistrationOps.UNREGISTER, listener));
+        pendingRegistrations.add(Registration.unregister(listener));
         // No need to wakeup the polling thread. It is a removal so the updates can be
         // delayed until the polling thread wakes up for other reasons.
     }
@@ -2119,18 +2119,37 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private void pollListeners() {
         // Apply all of the pending registration
         while (true) {
-            Registration registration = pendingRegistrations.poll();
+            Registration<T> registration = pendingRegistrations.poll();
             if (registration == null) {
                 break;
             }
 
-            registration.update(listenerContexts);
+            processRegistration(registration);
         }
 
         // Check listener progress to see if reads are expected
         quorum.highWatermark().ifPresent(highWatermarkMetadata -> {
             updateListenersProgress(highWatermarkMetadata.offset);
         });
+    }
+
+    private void processRegistration(Registration<T> registration) {
+        Listener<T> listener = registration.listener();
+        Registration.Ops ops = registration.ops();
+
+        if (ops == Registration.Ops.REGISTER) {
+            if (listenerContexts.putIfAbsent(listener, new KafkaListenerContext(listener)) != null) {
+                logger.error("Attempting to add a listener that already exists: {}", listenerName(listener));
+            } else {
+                logger.info("Registered the listener {}", listenerName(listener));
+            }
+        } else {
+            if (listenerContexts.remove(listener) == null) {
+                logger.error("Attempting to remove a listener that doesn't exists: {}", listenerName(listener));
+            } else {
+                logger.info("Unregistered the listener {}", listenerName(listener));
+            }
+        }
     }
 
     private boolean maybeCompleteShutdown(long currentTimeMs) {
@@ -2396,33 +2415,33 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private static enum RegistrationOps {
-        REGISTER, UNREGISTER
-    }
-
-    private final class Registration {
-        private final RegistrationOps ops;
+    private static final class Registration<T> {
+        private final Ops ops;
         private final Listener<T> listener;
 
-        private Registration(RegistrationOps ops, Listener<T> listener) {
+        private Registration(Ops ops, Listener<T> listener) {
             this.ops = ops;
             this.listener = listener;
         }
 
-        private void update(Map<Listener<T>, KafkaListenerContext> contexts) {
-            if (ops == RegistrationOps.REGISTER) {
-                if (contexts.putIfAbsent(listener, new KafkaListenerContext(listener)) != null) {
-                    logger.error("Attempting to add a listener that already exists: {}", listenerName(listener));
-                } else {
-                    logger.info("Registered the listener {}", listenerName(listener));
-                }
-            } else {
-                if (contexts.remove(listener) == null) {
-                    logger.error("Attempting to remove a listener context that doesn't exists: {}", listenerName(listener));
-                } else {
-                    logger.info("Unregistered the listener {}", listenerName(listener));
-                }
-            }
+        private Ops ops() {
+            return ops;
+        }
+
+        private Listener<T> listener() {
+            return listener;
+        }
+
+        private static enum Ops {
+            REGISTER, UNREGISTER
+        }
+
+        private static <T> Registration<T> register(Listener<T> listener) {
+            return new Registration<>(Ops.REGISTER, listener);
+        }
+
+        private static <T> Registration<T> unregister(Listener<T> listener) {
+            return new Registration<>(Ops.UNREGISTER, listener);
         }
     }
 
