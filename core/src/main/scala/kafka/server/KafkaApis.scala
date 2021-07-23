@@ -769,8 +769,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         // supported by the fetch request version.
         // If the inter-broker protocol version is `3.0` or higher, the log config message format version is
         // always `3.0` (i.e. magic value is `v2`). As a result, we always go through the down-conversion
-        // path if the fetch version is 3 or lower (in rare cases the down-conversion may not be needed,
-        // but it's not worth optimizing for them).
+        // path if the fetch version is 3 or lower (in rare cases the down-conversion may not be needed, but
+        // it's not worth optimizing for them).
         // If the inter-broker protocol version is lower than `3.0`, we rely on the log config message format
         // version as a proxy for the on-disk magic value to maintain the long-standing behavior originally
         // introduced in Kafka 0.10.0. An important implication is that it's unsafe to downgrade the message
