@@ -2198,7 +2198,6 @@ public class KafkaConsumerTest {
         // poll once again, which should return the list-offset response
         // and hence next call would return correct lag result
         client.respond(listOffsetsResponse(singletonMap(tp0, 90L)));
-        client.prepareResponse(listOffsetsResponse(singletonMap(tp0, 90L)));
         consumer.poll(Duration.ofMillis(0));
 
         assertEquals(OptionalLong.of(40L), consumer.currentLag(tp0));
