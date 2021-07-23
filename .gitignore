@@ -56,3 +56,4 @@ jmh-benchmarks/src/main/generated
 raft/.jqwik-database
 **/src/generated
 **/src/generated-test
+storage/kafka-tiered-storage/

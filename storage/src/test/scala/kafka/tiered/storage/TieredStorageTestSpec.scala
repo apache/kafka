@@ -413,7 +413,7 @@ final class ExpectLeaderAction(val topicPartition: TopicPartition, val replicaId
       } else {
         false
       }
-    }, s"Broker $replicaId is out of sync. Cannot be elected as leader.", 60_000)
+    }, msg = s"Broker $replicaId is out of sync. Cannot be elected as leader.", waitTimeMs = 60000L)
 
     reassignPartition(context)
     if (electLeader) {
@@ -425,11 +425,10 @@ final class ExpectLeaderAction(val topicPartition: TopicPartition, val replicaId
         val topicResult = context.admin().describeTopics(List(topic).asJava).all.get.get(topic)
         actualLeader = Option(topicResult.partitions.get(partition).leader()).map(_.id).getOrElse(-1)
         replicaId == actualLeader
-
       } catch {
         case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
       }
-    }, s"Leader of $topicPartition was not $replicaId. Actual leader: $actualLeader")
+    }, msg = s"Leader of $topicPartition was not $replicaId. Actual leader: $actualLeader")
   }
 
   override def describe(output: PrintStream): Unit = {
