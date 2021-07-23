@@ -785,7 +785,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               Some(RecordBatch.MAGIC_VALUE_V1)
             else
               None
-          }.filter(_ => unconvertedRecords.batchIterator.hasNext)
+          }
 
         downConvertMagic match {
           case Some(magic) =>
