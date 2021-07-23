@@ -237,7 +237,8 @@ class TestSnapshots(ProduceConsumeValidateTest):
 
         # Scenario -- Re-init controllers with a clean kafka dir and
         # make metadata changes while they are down.
-        # Restart the controller and let it catch up
+        # This will force the entire quorum to load from snapshots
+        # and verify the quorum's ability to catch up to the latest metadata
         self.logger.debug("Scenario: kill-clean-create_topics-start on controller node %s")
         for node in self.controller_nodes:
             self.logger.debug("Restarting node: %s", self.kafka.controller_quorum.who_am_i(node))
@@ -245,14 +246,6 @@ class TestSnapshots(ProduceConsumeValidateTest):
             # Now modify the cluster to create more metadata changes
             self.topics_created += self.create_n_topics(topic_count=5)
             self.kafka.controller_quorum.start_node(node)
-
-        # Scenario -- stop all controller nodes and restart.
-        # This will force the entire quorum to load from snapshots
-        # and verify the quorum's ability to catch up to the latest metadata
-        self.logger.debug("Scenario: kill-start all controller nodes")
-        for node in self.controller_nodes:
-            self.logger.debug("Restarting node: %s", self.kafka.controller_quorum.who_am_i(node))
-            self.kafka.controller_quorum.restart_node(node, False)
 
         # Produce to a newly created topic and make sure it works.
         self.validate_success()
