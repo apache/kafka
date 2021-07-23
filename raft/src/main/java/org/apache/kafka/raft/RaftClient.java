@@ -41,7 +41,6 @@ public interface RaftClient<T> extends AutoCloseable {
          * {@link #scheduleAppend(int, List)} are guaranteed to be in the same order but
          * they can map to any number of batches provided by the {@link BatchReader}.
          *
-         * @param context listener context associated with this listener
          * @param reader reader instance which must be iterated and closed
          */
         void handleCommit(BatchReader<T> reader);
@@ -54,7 +53,6 @@ public interface RaftClient<T> extends AutoCloseable {
          * When handling this call, the implementation must assume that all previous calls
          * to {@link #handleCommit} contain invalid data.
          *
-         * @param context listener context associated with this listener
          * @param reader snapshot reader instance which must be iterated and closed
          */
         void handleSnapshot(SnapshotReader<T> reader);
@@ -78,7 +76,6 @@ public interface RaftClient<T> extends AutoCloseable {
          * epoch changed but the leader is not known and once when the leader is known for the current
          * epoch.
          *
-         * @param context listener context associated with this listener
          * @param leader the current leader and epoch
          */
         default void handleLeaderChange(LeaderAndEpoch leader) {}

@@ -2416,7 +2416,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 }
             } else {
                 if (contexts.remove(listener) == null) {
-                    logger.error("Attempting to remove a listener context that doesn't exists: {}", KafkaRaftClient.listenerName(listener));
+                    logger.error("Attempting to remove a listener context that doesn't exists: {}", listenerName(listener));
                 }
             }
         }
