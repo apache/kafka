@@ -2220,7 +2220,7 @@ class ReplicaManager(val config: KafkaConfig,
     replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollower)
   }
 
-  def deleteGhostReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {
+  def deleteStrayReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {
     stopPartitions(topicPartitions.map { tp => tp -> true }.toMap).foreach {
       case (topicPartition, e) =>
         if (e.isInstanceOf[KafkaStorageException]) {

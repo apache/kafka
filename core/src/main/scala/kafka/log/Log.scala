@@ -259,7 +259,7 @@ class Log(@volatile var logStartOffset: Long,
 
   import kafka.log.Log._
 
-  this.logIdent = s"[Log partition=$topicPartition, dir=$parentDir] "
+  this.logIdent = s"[Log partition=$topicPartition, dir=${parentDir}${topicId.map(id => s", topicId=$id").getOrElse("")}] "
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
@@ -1635,6 +1635,7 @@ class Log(@volatile var logStartOffset: Long,
   override def toString: String = {
     val logString = new StringBuilder
     logString.append(s"Log(dir=$dir")
+    topicId.foreach(id => logString.append(s", topicId=$id"))
     logString.append(s", topic=${topicPartition.topic}")
     logString.append(s", partition=${topicPartition.partition}")
     logString.append(s", highWatermark=$highWatermark")
