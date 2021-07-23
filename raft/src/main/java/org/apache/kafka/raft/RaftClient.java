@@ -103,7 +103,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * Unregisters a listener.
      *
      * To distinguish from events that happend before the call to {@code unregister} and a future
-     * call to {@code register}, then different {@code Listener} instances must be used.
+     * call to {@code register}, different {@code Listener} instances must be used.
      *
      * If the {@code Listener} provided was never registered then the unregistration is ignored. 
      *

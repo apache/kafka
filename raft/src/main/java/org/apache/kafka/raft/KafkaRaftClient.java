@@ -2413,10 +2413,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             if (ops == RegistrationOps.REGISTER) {
                 if (contexts.putIfAbsent(listener, new KafkaListenerContext(listener)) != null) {
                     logger.error("Attempting to add a listener that already exists: {}", listenerName(listener));
+                } else {
+                    logger.info("Registered the listener {}", listenerName(listener));
                 }
             } else {
                 if (contexts.remove(listener) == null) {
                     logger.error("Attempting to remove a listener context that doesn't exists: {}", listenerName(listener));
+                } else {
+                    logger.info("Unregistered the listener {}", listenerName(listener));
                 }
             }
         }
