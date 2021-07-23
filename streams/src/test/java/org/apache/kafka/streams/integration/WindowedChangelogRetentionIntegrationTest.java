@@ -178,7 +178,7 @@ public class WindowedChangelogRetentionIntegrationTest {
     @Test
     public void sessionWindowedChangelogShouldHaveRetentionOfGapIfGapLargerThanDefaultRetention() throws Exception {
         final Duration gap = DEFAULT_RETENTION.plus(Duration.ofHours(1));
-        final Duration expectedRetention = gap;
+        final Duration expectedRetention = gap.plus(Duration.ofMillis(-1L));
         runAndVerifySessionWindows(SessionWindows.with(gap), null, expectedRetention);
     }
 
