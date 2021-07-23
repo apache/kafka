@@ -557,6 +557,16 @@ public class SubscriptionState {
         }
     }
 
+    public synchronized void requestPartitionEndOffset(TopicPartition tp) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        topicPartitionState.requestEndOffset();
+    }
+
+    public synchronized boolean partitionEndOffsetRequested(TopicPartition tp) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        return topicPartitionState.endOffsetRequested();
+    }
+
     synchronized Long partitionLead(TopicPartition tp) {
         TopicPartitionState topicPartitionState = assignedState(tp);
         return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position.offset - topicPartitionState.logStartOffset;
@@ -762,9 +772,13 @@ public class SubscriptionState {
         private Long nextRetryTimeMs;
         private Integer preferredReadReplica;
         private Long preferredReadReplicaExpireTimeMs;
+        private boolean endOffsetRequested;
+
+        private RequestFuture<Fetcher.ListOffsetResult> listOffsetResultFuture;
 
         TopicPartitionState() {
             this.paused = false;
+            this.endOffsetRequested = false;
             this.fetchState = FetchStates.INITIALIZING;
             this.position = null;
             this.highWatermark = null;
@@ -773,6 +787,14 @@ public class SubscriptionState {
             this.resetStrategy = null;
             this.nextRetryTimeMs = null;
             this.preferredReadReplica = null;
+        }
+
+        public boolean endOffsetRequested() {
+            return endOffsetRequested;
+        }
+
+        public void requestEndOffset() {
+            endOffsetRequested = true;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {
@@ -955,6 +977,7 @@ public class SubscriptionState {
 
         private void highWatermark(Long highWatermark) {
             this.highWatermark = highWatermark;
+            this.endOffsetRequested = false;
         }
 
         private void logStartOffset(Long logStartOffset) {
@@ -963,6 +986,7 @@ public class SubscriptionState {
 
         private void lastStableOffset(Long lastStableOffset) {
             this.lastStableOffset = lastStableOffset;
+            this.endOffsetRequested = false;
         }
 
         private OffsetResetStrategy resetStrategy() {

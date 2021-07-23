@@ -103,7 +103,6 @@ import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -162,7 +161,6 @@ public class Fetcher<K, V> implements Closeable {
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
     private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
-    private final Map<Map.Entry<Node, Map<TopicPartition, ListOffsetsPartition>>, RequestFuture<ListOffsetResult>> listOffsetResults;
 
     private CompletedFetch nextInLineFetch = null;
 
@@ -210,7 +208,6 @@ public class Fetcher<K, V> implements Closeable {
         this.sessionHandlers = new HashMap<>();
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
         this.nodesWithPendingFetchRequests = new HashSet<>();
-        this.listOffsetResults = new ConcurrentHashMap<>();
     }
 
     /**
@@ -946,21 +943,13 @@ public class Fetcher<K, V> implements Closeable {
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
             // we skip sending the list off request only if there's already one with the exact
             // requested offsets for the destination node
-            RequestFuture<ListOffsetResult> future;
-            if (listOffsetResults.containsKey(entry)) {
-                future = listOffsetResults.get(entry);
-            } else {
-                future = sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
-                listOffsetResults.put(entry, future);
-            }
-
+            RequestFuture<ListOffsetResult> future = sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
                 @Override
                 public void onSuccess(ListOffsetResult partialResult) {
                     synchronized (listOffsetRequestsFuture) {
                         fetchedTimestampOffsets.putAll(partialResult.fetchedOffsets);
                         partitionsToRetry.addAll(partialResult.partitionsToRetry);
-                        listOffsetResults.remove(entry);
 
                         if (remainingResponses.decrementAndGet() == 0 && !listOffsetRequestsFuture.isDone()) {
                             ListOffsetResult result = new ListOffsetResult(fetchedTimestampOffsets, partitionsToRetry);
@@ -972,7 +961,6 @@ public class Fetcher<K, V> implements Closeable {
                 @Override
                 public void onFailure(RuntimeException e) {
                     synchronized (listOffsetRequestsFuture) {
-                        listOffsetResults.remove(entry);
                         if (!listOffsetRequestsFuture.isDone())
                             listOffsetRequestsFuture.raise(e);
                     }
