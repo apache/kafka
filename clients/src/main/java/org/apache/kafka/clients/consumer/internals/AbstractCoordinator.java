@@ -984,6 +984,12 @@ public abstract class AbstractCoordinator implements Closeable {
         resetStateAndRejoin("consumer pro-actively leaving the group");
     }
 
+    public synchronized void requestRejoinIfNecessary(final String reason) {
+        if (!this.rejoinNeeded) {
+            requestRejoin(reason);
+        }
+    }
+
     public synchronized void requestRejoin(final String reason) {
         log.info("Request joining group due to: {}", reason);
         this.rejoinNeeded = true;
