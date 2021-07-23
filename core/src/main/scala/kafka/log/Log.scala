@@ -1890,6 +1890,7 @@ class Log(@volatile private var _dir: File,
   override def toString: String = {
     val logString = new StringBuilder
     logString.append(s"Log(dir=$dir")
+    topicId.foreach(id => logString.append(s", topicId=$id"))
     logString.append(s", topic=${topicPartition.topic}")
     logString.append(s", partition=${topicPartition.partition}")
     logString.append(s", highWatermark=$highWatermark")
