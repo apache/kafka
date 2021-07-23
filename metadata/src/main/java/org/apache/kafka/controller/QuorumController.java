@@ -74,7 +74,6 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.raft.RaftClient.ListenerContext;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
@@ -640,7 +639,7 @@ public final class QuorumController implements Controller {
     class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {
 
         @Override
-        public void handleCommit(ListenerContext context, BatchReader<ApiMessageAndVersion> reader) {
+        public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
             appendControlEvent("handleCommits[baseOffset=" + reader.baseOffset() + "]", () -> {
                 try {
                     boolean isActiveController = curClaimEpoch != -1;
@@ -698,7 +697,7 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public void handleSnapshot(ListenerContext context, SnapshotReader<ApiMessageAndVersion> reader) {
+        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
             appendControlEvent(String.format("handleSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
                 try {
                     boolean isActiveController = curClaimEpoch != -1;
@@ -757,7 +756,7 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public void handleLeaderChange(ListenerContext context, LeaderAndEpoch newLeader) {
+        public void handleLeaderChange(LeaderAndEpoch newLeader) {
             if (newLeader.isLeader(nodeId)) {
                 final int newEpoch = newLeader.epoch();
                 appendControlEvent("handleClaim[" + newEpoch + "]", () -> {
@@ -793,7 +792,7 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public void beginShutdown(ListenerContext context) {
+        public void beginShutdown() {
             queue.beginShutdown("MetaLogManager.Listener");
         }
     }

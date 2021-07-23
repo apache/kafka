@@ -21,22 +21,18 @@ import java.util
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Optional}
 
+import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{BrokerRegistration, RecordTestUtils, VersionRange}
-import org.apache.kafka.raft.RaftClient.ListenerContext
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito._
 
 import scala.jdk.CollectionConverters._
 
 class BrokerMetadataListenerTest {
-  val listenerContext = mock(classOf[ListenerContext])
-
   @Test
   def testCreateAndClose(): Unit = {
     val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000000L,
@@ -49,27 +45,23 @@ class BrokerMetadataListenerTest {
     val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000000L,
       snapshotter = None)
     try {
-      listener.handleCommit(
-        listenerContext,
-        RecordTestUtils.mockBatchReader(100L,
-          util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
-            setBrokerId(0).
-            setBrokerEpoch(100L).
-            setFenced(false).
-            setRack(null).
-            setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CSg")), 0.toShort))))
+      listener.handleCommit(RecordTestUtils.mockBatchReader(100L,
+        util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+          setBrokerId(0).
+          setBrokerEpoch(100L).
+          setFenced(false).
+          setRack(null).
+          setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CSg")), 0.toShort))))
       val imageRecords = listener.getImageRecords().get()
       assertEquals(0, imageRecords.size())
       assertEquals(100L, listener.highestMetadataOffset())
-      listener.handleCommit(
-        listenerContext,
-        RecordTestUtils.mockBatchReader(200L,
-          util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
-            setBrokerId(1).
-            setBrokerEpoch(200L).
-            setFenced(true).
-            setRack(null).
-            setIncarnationId(Uuid.fromString("QkOQtNKVTYatADcaJ28xDg")), 0.toShort))))
+      listener.handleCommit(RecordTestUtils.mockBatchReader(200L,
+        util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+          setBrokerId(1).
+          setBrokerEpoch(200L).
+          setFenced(true).
+          setRack(null).
+          setIncarnationId(Uuid.fromString("QkOQtNKVTYatADcaJ28xDg")), 0.toShort))))
       listener.startPublishing(new MetadataPublisher {
         override def publish(newHighestMetadataOffset: Long,
                              delta: MetadataDelta,
@@ -137,13 +129,11 @@ class BrokerMetadataListenerTest {
   private def generateManyRecords(listener: BrokerMetadataListener,
                                   endOffset: Long): Unit = {
     (0 to 10000).foreach { _ =>
-      listener.handleCommit(
-        listenerContext,
-        RecordTestUtils.mockBatchReader(endOffset,
-          util.Arrays.asList(new ApiMessageAndVersion(new PartitionChangeRecord().
-            setPartitionId(0).
-            setTopicId(FOO_ID).
-            setRemovingReplicas(Collections.singletonList(1)), 0.toShort),
+      listener.handleCommit(RecordTestUtils.mockBatchReader(endOffset,
+        util.Arrays.asList(new ApiMessageAndVersion(new PartitionChangeRecord().
+          setPartitionId(0).
+          setTopicId(FOO_ID).
+          setRemovingReplicas(Collections.singletonList(1)), 0.toShort),
           new ApiMessageAndVersion(new PartitionChangeRecord().
             setPartitionId(0).
             setTopicId(FOO_ID).
@@ -218,15 +208,13 @@ class BrokerMetadataListenerTest {
     endOffset: Long
   ): Unit = {
     brokerIds.foreach { brokerId =>
-      listener.handleCommit(
-        listenerContext,
-        RecordTestUtils.mockBatchReader(endOffset,
-          util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
-            setBrokerId(brokerId).
-            setBrokerEpoch(100L).
-            setFenced(false).
-            setRack(null).
-            setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CS" + brokerId)), 0.toShort))))
+      listener.handleCommit(RecordTestUtils.mockBatchReader(endOffset,
+        util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+          setBrokerId(brokerId).
+          setBrokerEpoch(100L).
+          setFenced(false).
+          setRack(null).
+          setIncarnationId(Uuid.fromString("GFBwlTcpQUuLYQ2ig05CS" + brokerId)), 0.toShort))))
     }
   }
 
@@ -235,19 +223,17 @@ class BrokerMetadataListenerTest {
     replicas: Seq[Int],
     endOffset: Long
   ): Unit = {
-    listener.handleCommit(
-      listenerContext,
-      RecordTestUtils.mockBatchReader(endOffset,
-        util.Arrays.asList(
-          new ApiMessageAndVersion(new TopicRecord().
-            setName("foo").
-            setTopicId(FOO_ID), 0.toShort),
-          new ApiMessageAndVersion(new PartitionRecord().
-            setPartitionId(0).
-            setTopicId(FOO_ID).
-            setIsr(replicas.map(Int.box).asJava).
-            setLeader(0).
-            setReplicas(replicas.map(Int.box).asJava), 0.toShort)))
+    listener.handleCommit(RecordTestUtils.mockBatchReader(endOffset,
+      util.Arrays.asList(
+        new ApiMessageAndVersion(new TopicRecord().
+          setName("foo").
+          setTopicId(FOO_ID), 0.toShort),
+        new ApiMessageAndVersion(new PartitionRecord().
+          setPartitionId(0).
+          setTopicId(FOO_ID).
+          setIsr(replicas.map(Int.box).asJava).
+          setLeader(0).
+          setReplicas(replicas.map(Int.box).asJava), 0.toShort)))
     )
   }
 

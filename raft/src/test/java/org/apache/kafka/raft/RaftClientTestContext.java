@@ -55,7 +55,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
-import org.apache.kafka.raft.RaftClient.ListenerContext;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -1075,7 +1074,6 @@ public final class RaftClientTestContext {
         private final OptionalInt localId;
         private Optional<SnapshotReader<String>> snapshot = Optional.empty();
         private boolean readCommit = true;
-        private Set<ListenerContext> seenListenerContexts = new HashSet<>();
 
         MockListener(OptionalInt localId) {
             this.localId = localId;
@@ -1139,10 +1137,6 @@ public final class RaftClientTestContext {
             return temp;
         }
 
-        Set<ListenerContext> seenListenerContexts() {
-            return seenListenerContexts;
-        }
-
         void updateReadCommit(boolean readCommit) {
             this.readCommit = readCommit;
 
@@ -1174,9 +1168,7 @@ public final class RaftClientTestContext {
         }
 
         @Override
-        public void handleLeaderChange(ListenerContext context, LeaderAndEpoch leaderAndEpoch) {
-            validateListenerContext(context);
-
+        public void handleLeaderChange(LeaderAndEpoch leaderAndEpoch) {
             // We record the next expected offset as the claimed epoch's start
             // offset. This is useful to verify that the `handleLeaderChange` callback
             // was not received early.
@@ -1190,9 +1182,7 @@ public final class RaftClientTestContext {
         }
 
         @Override
-        public void handleCommit(ListenerContext context, BatchReader<String> reader) {
-            validateListenerContext(context);
-
+        public void handleCommit(BatchReader<String> reader) {
             if (readCommit) {
                 readBatch(reader);
             } else {
@@ -1201,22 +1191,11 @@ public final class RaftClientTestContext {
         }
 
         @Override
-        public void handleSnapshot(ListenerContext context, SnapshotReader<String> reader) {
-            validateListenerContext(context);
-
+        public void handleSnapshot(SnapshotReader<String> reader) {
             snapshot.ifPresent(snapshot -> assertDoesNotThrow(snapshot::close));
             commits.clear();
             savedBatches.clear();
             snapshot = Optional.of(reader);
-        }
-
-        private void validateListenerContext(ListenerContext context) {
-            seenListenerContexts.add(context);
-            assertEquals(
-                1,
-                seenListenerContexts.size(),
-                String.format("Duplicate listener context %s: %s:", context, seenListenerContexts)
-            );
         }
     }
 }

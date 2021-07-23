@@ -30,7 +30,6 @@ import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.raft.RaftClient.ListenerContext;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -46,15 +45,15 @@ import org.slf4j.LoggerFactory;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -345,7 +344,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
     }
 
-    private static class MetaLogListenerData implements ListenerContext {
+    private static class MetaLogListenerData {
         private long offset = -1;
         private LeaderAndEpoch notifiedLeader = new LeaderAndEpoch(OptionalInt.empty(), 0);
 
@@ -364,27 +363,24 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         void handleCommit(MemoryBatchReader<ApiMessageAndVersion> reader) {
-            listener.handleCommit(this, reader);
+            listener.handleCommit(reader);
             offset = reader.lastOffset().getAsLong();
         }
 
         void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-            listener.handleSnapshot(this, reader);
+            listener.handleSnapshot(reader);
             offset = reader.lastContainedLogOffset();
         }
 
         void handleLeaderChange(long offset, LeaderAndEpoch leader) {
-            listener.handleLeaderChange(this, leader);
+            listener.handleLeaderChange(leader);
             notifiedLeader = leader;
             this.offset = offset;
         }
 
         void beginShutdown() {
-            listener.beginShutdown(this);
+            listener.beginShutdown();
         }
-
-        @Override
-        public void close() {}
     }
 
     private final Logger log;
@@ -423,7 +419,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     /**
      * The listener objects attached to this local log manager.
      */
-    private final Set<MetaLogListenerData> listeners = new HashSet<>();
+    private final Map<Listener<ApiMessageAndVersion>, MetaLogListenerData> listeners = new IdentityHashMap<>();
 
     /**
      * The current leader, as seen by this log manager.
@@ -446,7 +442,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             try {
                 log.debug("Node {}: running log check.", nodeId);
                 int numEntriesFound = 0;
-                for (MetaLogListenerData listenerData : listeners) {
+                for (MetaLogListenerData listenerData : listeners.values()) {
                     while (true) {
                         // Load the snapshot if needed and we are not the leader
                         LeaderAndEpoch notifiedLeader = listenerData.notifiedLeader();
@@ -531,7 +527,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 if (initialized && !shutdown) {
                     log.debug("Node {}: beginning shutdown.", nodeId);
                     resign(leader.epoch());
-                    for (MetaLogListenerData listenerData : listeners) {
+                    for (MetaLogListenerData listenerData : listeners.values()) {
                         listenerData.beginShutdown();
                     }
                     shared.unregisterLogManager(this);
@@ -583,20 +579,22 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public ListenerContext register(RaftClient.Listener<ApiMessageAndVersion> listener) {
-        CompletableFuture<ListenerContext> future = new CompletableFuture<>();
+    public void register(RaftClient.Listener<ApiMessageAndVersion> listener) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
         eventQueue.append(() -> {
             if (shutdown) {
                 log.info("Node {}: can't register because local log manager has " +
                     "already been shut down.", nodeId);
                 future.complete(null);
             } else if (initialized) {
-                log.info("Node {}: registered MetaLogListener.", nodeId);
-                MetaLogListenerData context = new MetaLogListenerData(listener);
-                listeners.add(context);
+                int id = System.identityHashCode(listener);
+                if (listeners.putIfAbsent(listener, new MetaLogListenerData(listener)) == null) {
+                    log.error("Node {}: can't register because listener {} already exists", nodeId, id);
+                }
+                log.info("Node {}: registered MetaLogListener {}", nodeId, id);
                 shared.electLeaderIfNeeded();
                 scheduleLogCheck();
-                future.complete(context);
+                future.complete(null);
             } else {
                 log.info("Node {}: can't register because local log manager has not " +
                     "been initialized.", nodeId);
@@ -605,7 +603,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             }
         });
         try {
-            return future.get();
+            future.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
@@ -614,12 +612,17 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
     }
 
-    private void unregister(MetaLogListenerData context) {
+    @Override
+    public void unregister(RaftClient.Listener<ApiMessageAndVersion> listener) {
         eventQueue.append(() -> {
             if (shutdown) {
                 log.info("Node {}: can't unregister because local log manager is shutdown", nodeId);
             } else {
-                listeners.remove(context);
+                int id = System.identityHashCode(listener);
+                if (listeners.remove(listener) == null) {
+                    log.error("Node {}: can't unregister because the listener {} doesn't exists", nodeId, id);
+                }
+                log.info("Node {}: unregistered MetaLogListener {}", nodeId, id);
             }
         });
     }
@@ -680,7 +683,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     public List<RaftClient.Listener<ApiMessageAndVersion>> listeners() {
         final CompletableFuture<List<RaftClient.Listener<ApiMessageAndVersion>>> future = new CompletableFuture<>();
         eventQueue.append(() -> {
-            future.complete(listeners.stream().map(l -> l.listener).collect(Collectors.toList()));
+            future.complete(listeners.values().stream().map(l -> l.listener).collect(Collectors.toList()));
         });
         try {
             return future.get();

@@ -21,7 +21,6 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
-import org.apache.kafka.raft.RaftClient.ListenerContext;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -47,7 +46,7 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
     }
 
     @Override
-    public synchronized void handleCommit(ListenerContext context, BatchReader<ApiMessageAndVersion> reader) {
+    public synchronized void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
         try {
             while (reader.hasNext()) {
                 Batch<ApiMessageAndVersion> batch = reader.next();
@@ -69,7 +68,7 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
     }
 
     @Override
-    public synchronized void handleSnapshot(ListenerContext context, SnapshotReader<ApiMessageAndVersion> reader) {
+    public synchronized void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
         long lastCommittedOffset = reader.lastContainedLogOffset();
         try {
             while (reader.hasNext()) {
@@ -91,7 +90,7 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
     }
 
     @Override
-    public synchronized void handleLeaderChange(ListenerContext context, LeaderAndEpoch newLeaderAndEpoch) {
+    public synchronized void handleLeaderChange(LeaderAndEpoch newLeaderAndEpoch) {
         LeaderAndEpoch oldLeaderAndEpoch = this.leaderAndEpoch;
         this.leaderAndEpoch = newLeaderAndEpoch;
 
@@ -108,7 +107,7 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
     }
 
     @Override
-    public void beginShutdown(ListenerContext context) {
+    public void beginShutdown() {
         StringBuilder bld = new StringBuilder();
         bld.append(SHUTDOWN);
         synchronized (this) {

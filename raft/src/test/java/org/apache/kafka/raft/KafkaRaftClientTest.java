@@ -34,7 +34,6 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.RaftClient.ListenerContext;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -2520,12 +2519,11 @@ public class KafkaRaftClientTest {
 
         // Register a second listener
         RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
-        try (ListenerContext listenerContext = context.client.register(secondListener)) {
-            context.pollUntil(() -> OptionalLong.of(8).equals(secondListener.lastCommitOffset()));
-            assertEquals(Collections.singleton(listenerContext), secondListener.seenListenerContexts());
-        }
+        context.client.register(secondListener);
+        context.pollUntil(() -> OptionalLong.of(8).equals(secondListener.lastCommitOffset()));
+        context.client.unregister(secondListener);
 
-        // Write to the log and show that default listener gets updated...
+        // Write to the log and show that the default listener gets updated...
         assertEquals(10L, context.client.scheduleAppend(epoch, singletonList("a")));
         context.client.poll();
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();

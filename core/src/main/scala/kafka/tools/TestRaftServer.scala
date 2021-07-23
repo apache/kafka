@@ -37,7 +37,6 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
-import org.apache.kafka.raft.RaftClient.ListenerContext
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.snapshot.SnapshotReader
 
@@ -167,7 +166,7 @@ class TestRaftServer(
 
     raftManager.register(this)
 
-    override def handleLeaderChange(context: ListenerContext, newLeaderAndEpoch: LeaderAndEpoch): Unit = {
+    override def handleLeaderChange(newLeaderAndEpoch: LeaderAndEpoch): Unit = {
       if (newLeaderAndEpoch.isLeader(config.nodeId)) {
         eventQueue.offer(HandleClaim(newLeaderAndEpoch.epoch))
       } else if (claimedEpoch.isDefined) {
@@ -175,11 +174,11 @@ class TestRaftServer(
       }
     }
 
-    override def handleCommit(context: ListenerContext, reader: BatchReader[Array[Byte]]): Unit = {
+    override def handleCommit(reader: BatchReader[Array[Byte]]): Unit = {
       eventQueue.offer(HandleCommit(reader))
     }
 
-    override def handleSnapshot(context: ListenerContext, reader: SnapshotReader[Array[Byte]]): Unit = {
+    override def handleSnapshot(reader: SnapshotReader[Array[Byte]]): Unit = {
       eventQueue.offer(HandleSnapshot(reader))
     }
 

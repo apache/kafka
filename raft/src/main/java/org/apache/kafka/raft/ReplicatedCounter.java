@@ -18,7 +18,6 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.raft.RaftClient.ListenerContext;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
@@ -70,7 +69,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     }
 
     @Override
-    public synchronized void handleCommit(ListenerContext conext, BatchReader<Integer> reader) {
+    public synchronized void handleCommit(BatchReader<Integer> reader) {
         try {
             int initialCommitted = committed;
             long lastCommittedOffset = -1;
@@ -133,7 +132,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     }
 
     @Override
-    public synchronized void handleSnapshot(ListenerContext conext, SnapshotReader<Integer> reader) {
+    public synchronized void handleSnapshot(SnapshotReader<Integer> reader) {
         try {
             log.debug("Loading snapshot {}", reader.snapshotId());
             while (reader.hasNext()) {
@@ -163,7 +162,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     }
 
     @Override
-    public synchronized void handleLeaderChange(ListenerContext conext, LeaderAndEpoch newLeader) {
+    public synchronized void handleLeaderChange(LeaderAndEpoch newLeader) {
         if (newLeader.isLeader(nodeId)) {
             log.debug("Counter uncommitted value initialized to {} after claiming leadership in epoch {}",
                 committed, newLeader);

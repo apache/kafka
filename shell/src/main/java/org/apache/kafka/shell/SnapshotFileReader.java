@@ -30,7 +30,6 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
-import org.apache.kafka.raft.RaftClient.ListenerContext;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -49,7 +48,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Reads Kafka metadata snapshots.
  */
-public final class SnapshotFileReader implements ListenerContext {
+public final class SnapshotFileReader implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(SnapshotFileReader.class);
 
     private final String snapshotPath;
@@ -127,10 +126,10 @@ public final class SnapshotFileReader implements ListenerContext {
                     case LEADER_CHANGE:
                         LeaderChangeMessage message = new LeaderChangeMessage();
                         message.read(new ByteBufferAccessor(record.value()), (short) 0);
-                        listener.handleLeaderChange(
-                            this,
-                            new LeaderAndEpoch(OptionalInt.of(message.leaderId()), batch.partitionLeaderEpoch())
-                        );
+                        listener.handleLeaderChange(new LeaderAndEpoch(
+                            OptionalInt.of(message.leaderId()),
+                            batch.partitionLeaderEpoch()
+                        ));
                         break;
                     default:
                         log.error("Ignoring control record with type {} at offset {}",
@@ -154,7 +153,6 @@ public final class SnapshotFileReader implements ListenerContext {
             }
         }
         listener.handleCommit(
-            this,
             MemoryBatchReader.of(
                 Collections.singletonList(
                     Batch.data(
@@ -179,7 +177,7 @@ public final class SnapshotFileReader implements ListenerContext {
         queue.beginShutdown(reason, new EventQueue.Event() {
             @Override
             public void run() throws Exception {
-                listener.beginShutdown(SnapshotFileReader.this);
+                listener.beginShutdown();
                 if (fileRecords != null) {
                     fileRecords.close();
                     fileRecords = null;

@@ -44,7 +44,7 @@ public interface RaftClient<T> extends AutoCloseable {
          * @param context listener context associated with this listener
          * @param reader reader instance which must be iterated and closed
          */
-        void handleCommit(ListenerContext context, BatchReader<T> reader);
+        void handleCommit(BatchReader<T> reader);
 
         /**
          * Callback which is invoked when the Listener needs to load a snapshot.
@@ -57,7 +57,7 @@ public interface RaftClient<T> extends AutoCloseable {
          * @param context listener context associated with this listener
          * @param reader snapshot reader instance which must be iterated and closed
          */
-        void handleSnapshot(ListenerContext context, SnapshotReader<T> reader);
+        void handleSnapshot(SnapshotReader<T> reader);
 
         /**
          * Called on any change to leadership. This includes both when a leader is elected and
@@ -81,12 +81,9 @@ public interface RaftClient<T> extends AutoCloseable {
          * @param context listener context associated with this listener
          * @param leader the current leader and epoch
          */
-        default void handleLeaderChange(ListenerContext context, LeaderAndEpoch leader) {}
+        default void handleLeaderChange(LeaderAndEpoch leader) {}
 
-        default void beginShutdown(ListenerContext context) {}
-    }
-
-    interface ListenerContext extends AutoCloseable {
+        default void beginShutdown() {}
     }
 
     /**
@@ -97,19 +94,30 @@ public interface RaftClient<T> extends AutoCloseable {
     /**
      * Register a listener to get commit, snapshot and leader notifications.
      *
-     * Returns the listener context associated with this registration. The {@code ListenerContext} returned
-     * will be equal to the {@code ListenerContext} sent in all of the methods of {@code Listener}. Closing
-     * the returned listener context will unregister the listener from the Raft client.
+     * The implementation of this interface assumes that each call to {@code register} uses
+     * a different {@code Listener} instance. If the same instance is used for multiple calls
+     * to this method, then only one {@code Listener} will be registered.
      *
-     * @param listener the listener
-     * @return the listener context
+     * @param listener the listener to register
      */
-    ListenerContext register(Listener<T> listener);
+    void register(Listener<T> listener);
+
+    /**
+     * Unregisters a listener.
+     *
+     * To distinguish from events that happend before the call to {@code unregister} and a future
+     * call to {@code register}, then different {@code Listener} instances must be used.
+     *
+     * If the {@code Listener} provided was never registered then the unregistration is ignored. 
+     *
+     * @param listener the listener to unregister
+     */
+    void unregister(Listener<T> listener);
 
     /**
      * Return the current {@link LeaderAndEpoch}.
      *
-     * @return the current {@link LeaderAndEpoch}
+     * @return the current leader and epoch
      */
     LeaderAndEpoch leaderAndEpoch();
 

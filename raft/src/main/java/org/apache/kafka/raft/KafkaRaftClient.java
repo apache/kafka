@@ -75,8 +75,8 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
-import java.util.HashSet;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -162,7 +162,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final RequestManager requestManager;
     private final RaftMetadataLogCleanerManager snapshotCleaner;
 
-    private final Set<KafkaListenerContext> listenerContexts = new HashSet<>();
+    private final Map<Listener<T>, KafkaListenerContext> listenerContexts = new IdentityHashMap<>();
     private final ConcurrentLinkedQueue<Registration> pendingRegistrations = new ConcurrentLinkedQueue<>();
 
     /**
@@ -302,7 +302,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void updateListenersProgress(long highWatermark) {
-        for (KafkaListenerContext listenerContext : listenerContexts) {
+        for (KafkaListenerContext listenerContext : listenerContexts.values()) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < log.startOffset() && nextExpectedOffset < highWatermark) {
                     SnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> new IllegalStateException(
@@ -335,7 +335,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void maybeFireHandleCommit(long baseOffset, int epoch, long appendTimestamp, int sizeInBytes, List<T> records) {
-        for (KafkaListenerContext listenerContext : listenerContexts) {
+        for (KafkaListenerContext listenerContext : listenerContexts.values()) {
             listenerContext.nextExpectedOffset().ifPresent(nextOffset -> {
                 if (nextOffset == baseOffset) {
                     listenerContext.fireHandleCommit(baseOffset, epoch, appendTimestamp, sizeInBytes, records);
@@ -345,13 +345,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void maybeFireLeaderChange(LeaderState<T> state) {
-        for (KafkaListenerContext listenerContext : listenerContexts) {
+        for (KafkaListenerContext listenerContext : listenerContexts.values()) {
             listenerContext.maybeFireLeaderChange(quorum.leaderAndEpoch(), state.epochStartOffset());
         }
     }
 
     private void maybeFireLeaderChange() {
-        for (KafkaListenerContext listenerContext : listenerContexts) {
+        for (KafkaListenerContext listenerContext : listenerContexts.values()) {
             listenerContext.maybeFireLeaderChange(quorum.leaderAndEpoch());
         }
     }
@@ -379,12 +379,16 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public ListenerContext register(Listener<T> listener) {
-        KafkaListenerContext context = new KafkaListenerContext(listener);
-        pendingRegistrations.add(new Registration(RegistrationOps.REGISTRATION, context));
+    public void register(Listener<T> listener) {
+        pendingRegistrations.add(new Registration(RegistrationOps.REGISTER, listener));
         wakeup();
+    }
 
-        return context;
+    @Override
+    public void unregister(Listener<T> listener) {
+        pendingRegistrations.add(new Registration(RegistrationOps.UNREGISTER, listener));
+        // No need to wakeup the polling thread. It is a removal so the updates can be
+        // delayed until the polling thread wakes up for other reasons.
     }
 
     @Override
@@ -395,10 +399,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     @Override
     public OptionalInt nodeId() {
         return quorum.localId();
-    }
-
-    private void unregister(KafkaListenerContext context) {
-        pendingRegistrations.add(new Registration(RegistrationOps.UNREGISTRATION, context));
     }
 
     private OffsetAndEpoch endOffset() {
@@ -1028,6 +1028,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (leaderIdOrNil < 0)
             return OptionalInt.empty();
         return OptionalInt.of(leaderIdOrNil);
+    }
+
+    private static String listenerName(Listener<?> listener) {
+        return String.format("%s@%s", listener.getClass().getTypeName(), System.identityHashCode(listener));
     }
 
     private boolean handleFetchResponse(
@@ -2120,7 +2124,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 break;
             }
 
-            registration.apply(listenerContexts);
+            registration.update(listenerContexts);
         }
 
         // Check listener progress to see if reads are expected
@@ -2393,32 +2397,32 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private static enum RegistrationOps {
-        REGISTRATION, UNREGISTRATION
+        REGISTER, UNREGISTER
     }
 
     private final class Registration {
         private final RegistrationOps ops;
-        private final KafkaListenerContext context;
+        private final Listener<T> listener;
 
-        private Registration(RegistrationOps ops, KafkaListenerContext context) {
+        private Registration(RegistrationOps ops, Listener<T> listener) {
             this.ops = ops;
-            this.context = context;
+            this.listener = listener;
         }
 
-        private void apply(Set<KafkaListenerContext> contexts) {
-            if (ops == RegistrationOps.REGISTRATION) {
-                if (!contexts.add(context)) {
-                    logger.error("Attempting to add a listener context that already exists: {}", context.listenerName());
+        private void update(Map<Listener<T>, KafkaListenerContext> contexts) {
+            if (ops == RegistrationOps.REGISTER) {
+                if (contexts.putIfAbsent(listener, new KafkaListenerContext(listener)) == null) {
+                    logger.error("Attempting to add a listener that already exists: {}", listenerName(listener));
                 }
             } else {
-                if (!contexts.remove(context)) {
-                    logger.error("Attempting to remove a listener context that doesn't exists: {}", context.listenerName());
+                if (contexts.remove(listener) == null) {
+                    logger.error("Attempting to remove a listener context that doesn't exists: {}", KafkaRaftClient.listenerName(listener));
                 }
             }
         }
     }
 
-    private final class KafkaListenerContext implements ListenerContext, CloseListener<BatchReader<T>> {
+    private final class KafkaListenerContext implements CloseListener<BatchReader<T>> {
         private final RaftClient.Listener<T> listener;
         // This field is used only by the Raft IO thread
         private LeaderAndEpoch lastFiredLeaderChange = new LeaderAndEpoch(OptionalInt.empty(), 0);
@@ -2472,7 +2476,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             }
 
             logger.debug("Notifying listener {} of snapshot {}", listenerName(), reader.snapshotId());
-            listener.handleSnapshot(this, reader);
+            listener.handleSnapshot(reader);
         }
 
         /**
@@ -2514,7 +2518,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         private String listenerName() {
-            return listener.getClass().getTypeName();
+            return KafkaRaftClient.listenerName(listener);
         }
 
         private void fireHandleCommit(BatchReader<T> reader) {
@@ -2527,14 +2531,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 reader.baseOffset(),
                 reader.lastOffset()
             );
-            listener.handleCommit(this, reader);
+            listener.handleCommit(reader);
         }
 
         private void maybeFireLeaderChange(LeaderAndEpoch leaderAndEpoch) {
             if (shouldFireLeaderChange(leaderAndEpoch)) {
                 lastFiredLeaderChange = leaderAndEpoch;
                 logger.debug("Notifying listener {} of leader change {}", listenerName(), leaderAndEpoch);
-                listener.handleLeaderChange(this, leaderAndEpoch);
+                listener.handleLeaderChange(leaderAndEpoch);
             }
         }
 
@@ -2556,7 +2560,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // leader and begins writing to the log.
             if (shouldFireLeaderChange(leaderAndEpoch) && nextOffset() >= epochStartOffset) {
                 lastFiredLeaderChange = leaderAndEpoch;
-                listener.handleLeaderChange(this, leaderAndEpoch);
+                listener.handleLeaderChange(leaderAndEpoch);
             }
         }
 
@@ -2571,11 +2575,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 lastSent = null;
                 wakeup();
             }
-        }
-
-        @Override
-        public void close() {
-            unregister(this);
         }
     }
 }
