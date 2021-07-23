@@ -58,7 +58,7 @@ public class MockSourceTask extends SourceTask {
     public List<SourceRecord> poll() throws InterruptedException {
         if (MockConnector.TASK_FAILURE.equals(mockMode)) {
             long now = System.currentTimeMillis();
-            if (now > startTimeMs + failureDelayMs) {
+            if (now - startTimeMs > failureDelayMs) {
                 log.debug("Triggering source task failure");
                 throw new RuntimeException();
             }
