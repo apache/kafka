@@ -30,9 +30,9 @@ import java.util.List;
 
 public class DescribeClientQuotasRequest extends AbstractRequest {
     // These values must not change.
-    private static final byte MATCH_TYPE_EXACT = 0;
-    private static final byte MATCH_TYPE_DEFAULT = 1;
-    private static final byte MATCH_TYPE_SPECIFIED = 2;
+    public static final byte MATCH_TYPE_EXACT = 0;
+    public static final byte MATCH_TYPE_DEFAULT = 1;
+    public static final byte MATCH_TYPE_SPECIFIED = 2;
 
     public static class Builder extends AbstractRequest.Builder<DescribeClientQuotasRequest> {
 

@@ -88,7 +88,7 @@ public class ConnectorPluginsResource {
         herder.validateConnectorConfig(connectorConfig, validationCallback, false);
 
         try {
-            return validationCallback.get(ConnectorsResource.REQUEST_TIMEOUT_MS, TimeUnit.SECONDS);
+            return validationCallback.get(ConnectorsResource.REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option
