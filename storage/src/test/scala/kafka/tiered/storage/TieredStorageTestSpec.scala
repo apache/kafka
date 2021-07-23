@@ -148,7 +148,7 @@ final class CreateTopicAction(val spec: TopicSpec) extends TieredStorageTestActi
     // segment is not eligible for deletion until it has been offloaded, which guarantees all segments
     // should be offloaded before deletion, and their consumption is possible thereafter.
     //
-    spec.properties.put(TopicConfig.RETENTION_BYTES_CONFIG, 1.toString)
+    spec.properties.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, 1.toString)
 
     context.createTopic(spec)
   }

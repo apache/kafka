@@ -115,7 +115,7 @@ class TransactionsTestWithTieredStore extends TransactionsTest {
     // segment is not eligible for deletion until it has been offloaded, which guarantees all segments
     // should be offloaded before deletion, and their consumption is possible thereafter.
     //
-    overridingProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 1.toString)
+    overridingProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, 1.toString)
     overridingProps
   }
 }

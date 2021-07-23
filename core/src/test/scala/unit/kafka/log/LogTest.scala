@@ -1562,6 +1562,37 @@ class LogTest {
   }
 
   @Test
+  def testSegmentDeletionWithLocalRetention(): Unit = {
+    val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, segmentIndexBytes = 12,
+      retentionBytes = 3, localRetentionBytes = 1, fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
+    val log = createLog(logDir, logConfig, remoteLogEnable = true)
+    val pid = 1L
+    val epoch = 0.toShort
+
+    // Append 3 messages and roll the segments
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 1), leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("c".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 2), leaderEpoch = 0)
+
+    // Update the highWatermark so that these segments will be eligible for deletion.
+    log.updateHighWatermark(log.logEndOffset)
+    assertEquals(3, log.logSegments.size)
+
+    // Update remoteIndexHighestOffset to 2, that means all the segments are copied. But the local retention bytes
+    // is set as 1, which means one/active segment should exist in the local log.
+    log.updateRemoteIndexHighestOffset(2L)
+    log.deleteOldSegments()
+    mockTime.sleep(1)
+    // It should have deleted earlier two segments as they are eligible because of localRetentionBytes is 1.
+    assertEquals(1, log.logSegments.size)
+  }
+
+  @Test
   def testLogStartOffsetMovementDeletesSnapshots(): Unit = {
     val logConfig = LogTest.createLogConfig(segmentBytes = 2048 * 5, retentionBytes = -1, fileDeleteDelayMs = 0)
     val log = createLog(logDir, logConfig)
@@ -4930,6 +4961,8 @@ object LogTest {
                       segmentBytes: Int = Defaults.SegmentSize,
                       retentionMs: Long = Defaults.RetentionMs,
                       retentionBytes: Long = Defaults.RetentionSize,
+                      localRetentionMs: Long = Defaults.LocalRetentionMs,
+                      localRetentionBytes: Long = Defaults.LocalRetentionBytes,
                       segmentJitterMs: Long = Defaults.SegmentJitterMs,
                       cleanupPolicy: String = Defaults.CleanupPolicy,
                       maxMessageBytes: Int = Defaults.MaxMessageSize,
@@ -4952,6 +4985,8 @@ object LogTest {
     logProps.put(LogConfig.MessageFormatVersionProp, messageFormatVersion)
     logProps.put(LogConfig.FileDeleteDelayMsProp, fileDeleteDelayMs: java.lang.Long)
     logProps.put(LogConfig.RemoteLogStorageEnableProp, remoteLogStorageEnable: java.lang.Boolean)
+    logProps.put(LogConfig.LocalLogRetentionMsProp, localRetentionMs)
+    logProps.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes)
     LogConfig(logProps)
   }
 
