@@ -640,7 +640,12 @@ public final class QuorumController implements Controller {
 
         @Override
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
-            appendControlEvent("handleCommits[baseOffset=" + reader.baseOffset() + "]", () -> {
+            appendControlEvent("handleCommit[baseOffset=" + reader.baseOffset() + "]", () -> {
+                if (this != metaLogListener) {
+                    log.debug("Ignoring handleCommit from an old registration");
+                    return;
+                }
+
                 try {
                     boolean isActiveController = curClaimEpoch != -1;
                     long processedRecordsSize = 0;
@@ -699,6 +704,11 @@ public final class QuorumController implements Controller {
         @Override
         public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
             appendControlEvent(String.format("handleSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
+                if (this != metaLogListener) {
+                    log.debug("Ignoring handleSnapshot from an old registration");
+                    return;
+                }
+
                 try {
                     boolean isActiveController = curClaimEpoch != -1;
                     if (isActiveController) {
@@ -759,7 +769,12 @@ public final class QuorumController implements Controller {
         public void handleLeaderChange(LeaderAndEpoch newLeader) {
             if (newLeader.isLeader(nodeId)) {
                 final int newEpoch = newLeader.epoch();
-                appendControlEvent("handleClaim[" + newEpoch + "]", () -> {
+                appendControlEvent("handleLeaderChange[" + newEpoch + "]", () -> {
+                    if (this != metaLogListener) {
+                        log.debug("Ignoring handleLeaderChange from an old registration");
+                        return;
+                    }
+
                     int curEpoch = curClaimEpoch;
                     if (curEpoch != -1) {
                         throw new RuntimeException("Tried to claim controller epoch " +
@@ -783,6 +798,11 @@ public final class QuorumController implements Controller {
                 });
             } else if (curClaimEpoch != -1) {
                 appendControlEvent("handleRenounce[" + curClaimEpoch + "]", () -> {
+                    if (this != metaLogListener) {
+                        log.debug("Ignoring handleRenounce from an old registration");
+                        return;
+                    }
+
                     log.warn("Renouncing the leadership at oldEpoch {} due to a metadata " +
                             "log event. Reverting to last committed offset {}.", curClaimEpoch,
                         lastCommittedOffset);
@@ -801,7 +821,16 @@ public final class QuorumController implements Controller {
         curClaimEpoch = -1;
         controllerMetrics.setActive(false);
         purgatory.failAll(newNotControllerException());
-        snapshotRegistry.revertToSnapshot(lastCommittedOffset);
+
+        if (snapshotRegistry.hasSnapshot(lastCommittedOffset)) {
+            snapshotRegistry.revertToSnapshot(lastCommittedOffset);
+        } else {
+            resetState();
+            raftClient.unregister(metaLogListener);
+            metaLogListener = new QuorumMetaLogListener();
+            raftClient.register(metaLogListener);
+        }
+
         writeOffset = -1;
         clusterControl.deactivate();
         cancelMaybeFenceReplicas();
@@ -932,6 +961,7 @@ public final class QuorumController implements Controller {
         newBytesSinceLastSnapshot = 0;
         lastCommittedOffset = -1;
         lastCommittedEpoch = -1;
+        lastCommittedTimestamp = -1;
     }
 
     private final LogContext logContext;
@@ -1018,9 +1048,11 @@ public final class QuorumController implements Controller {
 
     /**
      * The interface that receives callbacks from the Raft log.  These callbacks are
-     * invoked from the Raft thread(s), not from the controller thread.
+     * invoked from the Raft thread(s), not from the controller thread. Control events
+     * from this callbacks need to compare against this value to verify that the event
+     * was not from a previous registration.
      */
-    private final QuorumMetaLogListener metaLogListener;
+    private QuorumMetaLogListener metaLogListener;
 
     /**
      * If this controller is active, this is the non-negative controller epoch.
@@ -1048,7 +1080,6 @@ public final class QuorumController implements Controller {
      * If we have called scheduleWrite, this is the last offset we got back from it.
      */
     private long writeOffset;
-
 
     /**
      * Maximum number of bytes processed through handling commits before generating a snapshot.
