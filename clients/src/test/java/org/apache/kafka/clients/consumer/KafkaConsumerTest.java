@@ -2178,16 +2178,35 @@ public class KafkaConsumerTest {
 
         consumer.assign(singleton(tp0));
 
+        // poll once to update with the current metadata
+        consumer.poll(Duration.ofMillis(0));
+        client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, metadata.fetch().nodes().get(0)));
+
         // no error for no current position
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+        assertEquals(0, client.inFlightRequestCount());
 
+        // poll once again, which should send the list-offset request
         consumer.seek(tp0, 50L);
+        consumer.poll(Duration.ofMillis(0));
+        // requests: list-offset, fetch
+        assertEquals(2, client.inFlightRequestCount());
 
         // no error for no end offset (so unknown lag)
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
 
+        // poll once again, which should return the list-offset response
+        // and hence next call would return correct lag result
+        client.respond(listOffsetsResponse(singletonMap(tp0, 90L)));
+        consumer.poll(Duration.ofMillis(0));
+
+        assertEquals(OptionalLong.of(40L), consumer.currentLag(tp0));
+        // requests: fetch
+        assertEquals(1, client.inFlightRequestCount());
+
+        // one successful fetch should update the log end offset and the position
         final FetchInfo fetchInfo = new FetchInfo(1L, 99L, 50L, 5);
-        client.prepareResponse(fetchResponse(singletonMap(tp0, fetchInfo)));
+        client.respond(fetchResponse(singletonMap(tp0, fetchInfo)));
 
         final ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
         assertEquals(5, records.count());
@@ -2195,6 +2214,35 @@ public class KafkaConsumerTest {
 
         // correct lag result
         assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
+
+        consumer.close(Duration.ZERO);
+    }
+
+    @Test
+    public void testListOffsetShouldUpateSubscriptions() {
+        final Time time = new MockTime();
+        final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        final ConsumerMetadata metadata = createMetadata(subscription);
+        final MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, singletonMap(topic, 1));
+        final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer =
+                newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+
+        consumer.assign(singleton(tp0));
+
+        // poll once to update with the current metadata
+        consumer.poll(Duration.ofMillis(0));
+        client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, metadata.fetch().nodes().get(0)));
+
+        consumer.seek(tp0, 50L);
+        client.prepareResponse(listOffsetsResponse(singletonMap(tp0, 90L)));
+
+        assertEquals(singletonMap(tp0, 90L), consumer.endOffsets(Collections.singleton(tp0)));
+        // correct lag result should be returned as well
+        assertEquals(OptionalLong.of(40L), consumer.currentLag(tp0));
 
         consumer.close(Duration.ZERO);
     }
