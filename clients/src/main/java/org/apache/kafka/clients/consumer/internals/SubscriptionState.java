@@ -773,9 +773,7 @@ public class SubscriptionState {
         private Integer preferredReadReplica;
         private Long preferredReadReplicaExpireTimeMs;
         private boolean endOffsetRequested;
-
-        private RequestFuture<Fetcher.ListOffsetResult> listOffsetResultFuture;
-
+        
         TopicPartitionState() {
             this.paused = false;
             this.endOffsetRequested = false;
