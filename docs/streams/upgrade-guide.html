@@ -135,25 +135,32 @@
         We removed the default implementation of <code>RocksDBConfigSetter#close()</code>.
     </p>
     <p>
-        We dropped the default 24 hours grace period for windowed operations such as Window or Session aggregates, or stream-stream joins.
-        This period determines how long after a window ends any out-of-order records will still be processed.
-        Records coming in after the grace period has elapsed will be dropped from those windows.
-        With a long grace period, though Kafka Streams can handle out-of-order data up to that amount of time, it will also incur a high and confusing latency for users,
-        e.g. suppression operators with the default won't emit results up for 24 hours, while in practice out-of-order data usually has a much smaller time-skewness.
-        Instead of abstracting this config from users with a long default value, we introduced new constructs such as <code>TimeWindows#ofSizeAndGrace</code> to let callers always set it upon constructing the windows;
-        the other setters such as <code>TimeWindows#grace</code> are deprecated and will be removed in the future.
+        We dropped the default 24 hours grace period for windowed operations such as Window or Session aggregates, or
+        stream-stream joins. This period determines how long after a window ends any out-of-order records will still
+        be processed. Records coming in after the grace period has elapsed are considered late and will be dropped.
+        But in operators such as suppression, a large grace period has the drawback of incurring an equally large
+        output latency. The current API made it all too easy to miss the grace period config completely, leading you
+        to wonder why your application seems to produce no output -- it actually is, but not for 24 hours.
+        <p>
+        To prevent accidentally or unknowingly falling back to the default 24hr grace period, we deprecated all of the
+        existing static constructors for the <code>Windows</code> classes (such as <code>TimeWindows#of</code>). These
+        are replaced by new static constructors of two flavors: <code>#ofSizeAndGrace</code> and <code>#ofSizeWithNoGrace</code>
+        (these are for the <code>TimeWindows</code> class; analogous APIs exist for the <code>JoinWindows</code>,
+        <code>SessionWindows</code>, and SlidingWindows classes). With these new APIs you are forced to set the grace
+        period explicitly, or else consciously choose to opt out by selecting the <code>WithNoGrace</code> flavor which
+        sets it to 0 for situations where you really don't care about the grace period, for example during testing or
+        when playing around with Kafka Streams for the first time. Note that using the new APIs for the
+        <code>JoinWindows</code> class will also enable a fix for spurious left/outer join results, as described in
+        the following paragraph. For more details on the grace period and new static constructors, see
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-633%3A+Drop+24+hour+default+of+grace+period+in+Streams">KIP-633</a>
     </p>
     <p>
         Additionally, in older versions Kafka Streams emitted stream-stream left/outer join results eagerly. This behavior may lead to spurious left/outer join result records.
         In this release, we changed the behavior to avoid spurious results and left/outer join result are only emitted after the join window is closed, i.e., after the grace period elapsed.
         To maintain backward compatibility, the old API <code>JoinWindows#of(timeDifference)</code> preserves the old eager-emit behavior and only the new
-        APIs <code>JoinWindows#ofTimeDifferenceAndGrace()</code> and <code>JoinsWindows#ofTimeDifferenceNoGrace</code> enable the new behavior.
+        APIs <code>JoinWindows#ofTimeDifferenceAndGrace()</code> and <code>JoinsWindows#ofTimeDifferenceNoGrace</code> enable the new behavior. Check out
+        <a href="https://issues.apache.org/jira/browse/KAFKA-10847">KAFKA-10847</a> for more information.
     </p>
-    <ul>
-        <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-633%3A+Drop+24+hour+default+of+grace+period+in+Streams">KIP-633</a>: Drop 24 hour default of grace period in Streams</li>
-        <li><a href="https://issues.apache.org/jira/browse/KAFKA-10847">KAFKA-10847</a>: Avoid spurious left/outer join results in stream-stream join</li>
-    </ul>
-
     <p>
         The public <code>topicGroupId</code> and <code>partition</code> fields on TaskId have been deprecated and replaced with getters. Please migrate to using the new <code>TaskId.subtopology()</code>
         (which replaces <code>topicGroupId</code>) and <code>TaskId.partition()</code> APIs instead. Also, the <code>TaskId#readFrom</code> and <code>TaskId#writeTo</code> methods have been deprecated
