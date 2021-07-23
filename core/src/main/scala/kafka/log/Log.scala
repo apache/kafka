@@ -259,7 +259,7 @@ class Log(@volatile var logStartOffset: Long,
 
   import kafka.log.Log._
 
-  this.logIdent = s"[Log partition=$topicPartition, dir=${parentDir}${topicId.map(id => s", topicId=$id").getOrElse("")}] "
+  this.logIdent = s"[Log partition=$topicPartition, dir=$parentDir] "
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
