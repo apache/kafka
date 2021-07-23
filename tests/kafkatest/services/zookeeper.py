@@ -220,16 +220,15 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         output = self.nodes[0].account.ssh_output(cmd)
         self.logger.debug(output)
 
-    def describe(self, topic):
+    def describeUsers(self):
         """
-        Describe the given topic using the ConfigCommand CLI
+        Describe the default user using the ConfigCommand CLI
         """
 
         kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
-        cmd = "%s kafka.admin.ConfigCommand --zookeeper %s %s --describe --topic %s" % \
+        cmd = "%s kafka.admin.ConfigCommand --zookeeper %s %s --describe --entity-type users --entity-default" % \
               (kafka_run_class, self.connect_setting(force_tls=self.zk_client_secure_port),
-               self.zkTlsConfigFileOption(),
-               topic)
+               self.zkTlsConfigFileOption())
         self.logger.debug(cmd)
         output = self.nodes[0].account.ssh_output(cmd)
         self.logger.debug(output)
