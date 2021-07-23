@@ -143,13 +143,15 @@
         to wonder why your application seems to produce no output -- it actually is, but not for 24 hours.
         <p>
         To prevent accidentally or unknowingly falling back to the default 24hr grace period, we deprecated all of the
-        existing static constructors for the <code>indows</code> classes (such as <code>TimeWindows#of</code>). These
+        existing static constructors for the <code>Windows</code> classes (such as <code>TimeWindows#of</code>). These
         are replaced by new static constructors of two flavors: <code>#ofSizeAndGrace</code> and <code>#ofSizeWithNoGrace</code>
         (these are for the <code>TimeWindows</code> class; analogous APIs exist for the <code>JoinWindows</code>,
         <code>SessionWindows</code>, and SlidingWindows classes). With these new APIs you are forced to set the grace
         period explicitly, or else consciously choose to opt out by selecting the <code>WithNoGrace</code> flavor which
         sets it to 0 for situations where you really don't care about the grace period, for example during testing or
-        when playing around with Kafka Streams for the first time. For more details, see
+        when playing around with Kafka Streams for the first time. Note that using the new APIs for the
+        <code>JoinWindows</code> class will also enable a fix for spurious left/outer join results, as described in
+        the following paragraph. For more details on the grace period and new static constructors, see
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-633%3A+Drop+24+hour+default+of+grace+period+in+Streams">KIP-633</a>
     </p>
     <p>
