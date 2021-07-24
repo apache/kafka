@@ -52,6 +52,7 @@ import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
@@ -89,7 +90,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.powermock.api.easymock.PowerMock.replay;
 import static org.powermock.api.easymock.PowerMock.verify;
 
@@ -911,33 +911,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
             store.close();
 
-            try {
-                iteratorOne.hasNext();
-                fail("should have thrown InvalidStateStoreException on closed store");
-            } catch (final InvalidStateStoreException e) {
-                // ok
-            }
-
-            try {
-                iteratorOne.next();
-                fail("should have thrown InvalidStateStoreException on closed store");
-            } catch (final InvalidStateStoreException e) {
-                // ok
-            }
-
-            try {
-                iteratorTwo.hasNext();
-                fail("should have thrown InvalidStateStoreException on closed store");
-            } catch (final InvalidStateStoreException e) {
-                // ok
-            }
-
-            try {
-                iteratorTwo.next();
-                fail("should have thrown InvalidStateStoreException on closed store");
-            } catch (final InvalidStateStoreException e) {
-                // ok
-            }
+            Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorOne.hasNext());
+            Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorOne.next());
+            Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorTwo.hasNext());
+            Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorTwo.next());
         }
     }
         
