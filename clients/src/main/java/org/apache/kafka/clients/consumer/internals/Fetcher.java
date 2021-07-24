@@ -928,8 +928,6 @@ public class Fetcher<K, V> implements Closeable {
         final AtomicInteger remainingResponses = new AtomicInteger(timestampsToSearchByNode.size());
 
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
-            // we skip sending the list off request only if there's already one with the exact
-            // requested offsets for the destination node
             RequestFuture<ListOffsetResult> future = sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
                 @Override
