@@ -162,7 +162,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final RequestManager requestManager;
     private final RaftMetadataLogCleanerManager snapshotCleaner;
 
-    private final Map<Listener<T>, KafkaListenerContext> listenerContexts = new IdentityHashMap<>();
+    private final Map<Listener<T>, ListenerContext> listenerContexts = new IdentityHashMap<>();
     private final ConcurrentLinkedQueue<Registration<T>> pendingRegistrations = new ConcurrentLinkedQueue<>();
 
     /**
@@ -302,7 +302,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void updateListenersProgress(long highWatermark) {
-        for (KafkaListenerContext listenerContext : listenerContexts.values()) {
+        for (ListenerContext listenerContext : listenerContexts.values()) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < log.startOffset() && nextExpectedOffset < highWatermark) {
                     SnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> new IllegalStateException(
@@ -335,7 +335,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void maybeFireHandleCommit(long baseOffset, int epoch, long appendTimestamp, int sizeInBytes, List<T> records) {
-        for (KafkaListenerContext listenerContext : listenerContexts.values()) {
+        for (ListenerContext listenerContext : listenerContexts.values()) {
             listenerContext.nextExpectedOffset().ifPresent(nextOffset -> {
                 if (nextOffset == baseOffset) {
                     listenerContext.fireHandleCommit(baseOffset, epoch, appendTimestamp, sizeInBytes, records);
@@ -345,13 +345,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void maybeFireLeaderChange(LeaderState<T> state) {
-        for (KafkaListenerContext listenerContext : listenerContexts.values()) {
+        for (ListenerContext listenerContext : listenerContexts.values()) {
             listenerContext.maybeFireLeaderChange(quorum.leaderAndEpoch(), state.epochStartOffset());
         }
     }
 
     private void maybeFireLeaderChange() {
-        for (KafkaListenerContext listenerContext : listenerContexts.values()) {
+        for (ListenerContext listenerContext : listenerContexts.values()) {
             listenerContext.maybeFireLeaderChange(quorum.leaderAndEpoch());
         }
     }
@@ -2138,7 +2138,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Registration.Ops ops = registration.ops();
 
         if (ops == Registration.Ops.REGISTER) {
-            if (listenerContexts.putIfAbsent(listener, new KafkaListenerContext(listener)) != null) {
+            if (listenerContexts.putIfAbsent(listener, new ListenerContext(listener)) != null) {
                 logger.error("Attempting to add a listener that already exists: {}", listenerName(listener));
             } else {
                 logger.info("Registered the listener {}", listenerName(listener));
@@ -2445,17 +2445,17 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private final class KafkaListenerContext implements CloseListener<BatchReader<T>> {
+    private final class ListenerContext implements CloseListener<BatchReader<T>> {
         private final RaftClient.Listener<T> listener;
         // This field is used only by the Raft IO thread
         private LeaderAndEpoch lastFiredLeaderChange = new LeaderAndEpoch(OptionalInt.empty(), 0);
 
         // These fields are visible to both the Raft IO thread and the listener
-        // and are protected through synchronization on this KafkaListenerContext instance
+        // and are protected through synchronization on this ListenerContext instance
         private BatchReader<T> lastSent = null;
         private long nextOffset = 0;
 
-        private KafkaListenerContext(Listener<T> listener) {
+        private ListenerContext(Listener<T> listener) {
             this.listener = listener;
         }
 
