@@ -20,12 +20,16 @@ import org.apache.kafka.streams.kstream.Window;
 
 /**
  * A session window covers a closed time interval with its start and end timestamp both being an inclusive boundary.
+ * It is a fixed size window, i.e., all instances (of a single {@link org.apache.kafka.streams.kstream.TimeWindows
+ * window specification}) will have the same size.
+ *
  * <p>
  * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
  *
  * @see TimeWindow
  * @see UnlimitedWindow
  * @see org.apache.kafka.streams.kstream.SessionWindows
+ * @see org.apache.kafka.streams.kstream.SlidingWindows
  * @see org.apache.kafka.streams.processor.TimestampExtractor
  */
 public final class SessionWindow extends Window {
@@ -33,8 +37,8 @@ public final class SessionWindow extends Window {
     /**
      * Create a new window for the given start time and end time (both inclusive).
      *
-     * @param startMs the start timestamp of the window
-     * @param endMs   the end timestamp of the window
+     * @param startMs the start timestamp of the window (inclusive)
+     * @param endMs   the end timestamp of the window (inclusive)
      * @throws IllegalArgumentException if {@code startMs} is negative or if {@code endMs} is smaller than {@code startMs}
      */
     public SessionWindow(final long startMs, final long endMs) throws IllegalArgumentException {

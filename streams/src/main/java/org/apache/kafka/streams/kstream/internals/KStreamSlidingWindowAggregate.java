@@ -351,7 +351,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             }
 
             if (combinedWindow == null) {
-                final TimeWindow window = new TimeWindow(0, windows.timeDifferenceMs());
+                final SessionWindow window = new SessionWindow(0, windows.timeDifferenceMs());
                 final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), inputRecordTimestamp);
                 updateWindowAndForward(window, valueAndTime, key, value, closeTime, inputRecordTimestamp);
 
@@ -388,7 +388,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 } else {
                     valueAndTime = ValueAndTimestamp.make(initializer.apply(), inputRecordTimestamp);
                 }
-                final TimeWindow window = new TimeWindow(inputRecordTimestamp - windows.timeDifferenceMs(), inputRecordTimestamp);
+                final SessionWindow window = new SessionWindow(inputRecordTimestamp - windows.timeDifferenceMs(), inputRecordTimestamp);
                 updateWindowAndForward(window, valueAndTime, key, value, closeTime, inputRecordTimestamp);
             }
 
@@ -401,7 +401,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         private void createCurrentRecordRightWindow(final long inputRecordTimestamp,
                                                     final ValueAndTimestamp<Agg> rightWinAgg,
                                                     final K key) {
-            final TimeWindow window = new TimeWindow(inputRecordTimestamp + 1, inputRecordTimestamp + 1 + windows.timeDifferenceMs());
+            final SessionWindow window = new SessionWindow(inputRecordTimestamp + 1, inputRecordTimestamp + 1 + windows.timeDifferenceMs());
             windowStore.put(
                 key,
                 rightWinAgg,
@@ -418,7 +418,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                                                      final K key,
                                                      final V value,
                                                      final long closeTime) {
-            final TimeWindow window = new TimeWindow(windowStart, windowStart + windows.timeDifferenceMs());
+            final SessionWindow window = new SessionWindow(windowStart, windowStart + windows.timeDifferenceMs());
             final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), inputRecordTimestamp);
             updateWindowAndForward(window, valueAndTime, key, value, closeTime, inputRecordTimestamp);
         }
