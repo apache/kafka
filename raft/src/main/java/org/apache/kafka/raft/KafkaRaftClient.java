@@ -2315,7 +2315,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         return SnapshotWriter.createWithHeader(
                 () -> log.createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, committedEpoch)),
-                raftConfig.replicaFetchResponseMaxBytes(),
+                MAX_BATCH_SIZE_BYTES,
                 memoryPool,
                 time,
                 lastContainedLogTime,
