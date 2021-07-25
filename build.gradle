@@ -370,7 +370,7 @@ subprojects {
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
       "**/SourceTaskOffsetCommitterTest.*", "**/WorkerConfigTransformerTest.*", "**/WorkerGroupMemberTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*", "**/WorkerSourceTaskTest.*",
-      "**/WorkerTaskTest.*", "**/WorkerTest.*", "**/RestServerTest.*",
+      "**/WorkerTaskTest.*", "**/WorkerTest.*",
       // streams tests
       "**/KafkaStreamsTest.*", "**/RepartitionTopicsTest.*", "**/RocksDBMetricsRecorderTest.*",
       "**/StreamsMetricsImplTest.*", "**/StateManagerUtilTest.*", "**/TableSourceNodeTest.*"
