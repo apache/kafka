@@ -2474,6 +2474,47 @@ class ReplicaManagerTest {
   }
 
   @Test
+  def testPartitionMetadataFileCreatedAfterPreviousRequestWithoutIds(): Unit = {
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
+    try {
+      val brokerList = Seq[Integer](0, 1).asJava
+      val topicPartition = new TopicPartition(topic, 0)
+
+      def leaderAndIsrRequest(topicIds: util.Map[String, Uuid], version: Short): LeaderAndIsrRequest =
+        new LeaderAndIsrRequest.Builder(version, 0, 0, brokerEpoch,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(topic)
+          .setPartitionIndex(0)
+          .setControllerEpoch(0)
+          .setLeader(0)
+          .setLeaderEpoch(0)
+          .setIsr(brokerList)
+          .setZkVersion(0)
+          .setReplicas(brokerList)
+          .setIsNew(true)).asJava,
+        topicIds,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+
+      // Send a request without a topic ID so that we have a log without a topic ID associated to the partition.
+      val response = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(Collections.emptyMap(), 4), (_, _) => ())
+      assertEquals(Errors.NONE, response.partitionErrors(Collections.emptyMap()).get(topicPartition))
+      assertTrue(replicaManager.localLog(topicPartition).isDefined)
+      val log = replicaManager.localLog(topicPartition).get
+      assertFalse(log.partitionMetadataFile.exists())
+      assertTrue(log.topicId.isEmpty)
+
+      val response2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(topicIds.asJava, ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
+      assertEquals(Errors.NONE, response2.partitionErrors(topicNames.asJava).get(topicPartition))
+      assertTrue(replicaManager.localLog(topicPartition).isDefined)
+      assertTrue(log.partitionMetadataFile.exists())
+      assertTrue(log.topicId.isDefined)
+      assertEquals(topicId, log.topicId.get)
+
+      assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+    } finally replicaManager.shutdown(checkpointHW = false)
+  }
+
+  @Test
   def testInconsistentIdReturnsError(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
     try {
