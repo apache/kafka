@@ -2999,7 +2999,8 @@ public class RequestResponseTest {
         assertEquals(Integer.valueOf(1), createListGroupsResponse(LIST_GROUPS.latestVersion()).errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createListOffsetResponse(LIST_OFFSETS.latestVersion()).errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createListPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
-        assertEquals(Integer.valueOf(3), createMetadataResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createMetadataResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createMetadataResponse().errorCounts().get(Errors.LEADER_NOT_AVAILABLE));
         assertEquals(Integer.valueOf(1), createOffsetCommitResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(2), createOffsetDeleteResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(3), createOffsetFetchResponse(OFFSET_FETCH.latestVersion()).errorCounts().get(Errors.NONE));
