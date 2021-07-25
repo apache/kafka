@@ -17,9 +17,10 @@
 package kafka.raft
 
 import kafka.log.{Defaults, Log, SegmentDeletion}
-import kafka.server.KafkaRaftServer
+import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMillisProp, MetadataLogSegmentMinBytesProp, NodeIdProp, ProcessRolesProp}
+import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.{MockTime, TestUtils}
-import org.apache.kafka.common.errors.RecordTooLargeException
+import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
 import org.apache.kafka.common.protocol
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
@@ -36,7 +37,8 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
-import java.util.{Collections, Optional}
+import java.util
+import java.util.{Collections, Optional, Properties}
 
 final class KafkaMetadataLogTest {
   import KafkaMetadataLogTest._
@@ -52,6 +54,25 @@ final class KafkaMetadataLogTest {
   @AfterEach
   def tearDown(): Unit = {
     Utils.delete(tempDir)
+  }
+
+  @Test
+  def testConfig(): Unit = {
+    val props = new Properties()
+    props.put(ProcessRolesProp, util.Arrays.asList("broker"))
+    props.put(NodeIdProp, Int.box(1))
+    props.put(MetadataLogSegmentBytesProp, Int.box(10240))
+    props.put(MetadataLogSegmentMillisProp, Int.box(10 * 1024))
+    assertThrows(classOf[InvalidConfigurationException], () => {
+      val kafkaConfig = KafkaConfig.fromProps(props)
+      val metadataConfig = MetadataLogConfig.apply(kafkaConfig, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES)
+      buildMetadataLog(tempDir, mockTime, metadataConfig)
+    })
+
+    props.put(MetadataLogSegmentMinBytesProp, Int.box(10240))
+    val kafkaConfig = KafkaConfig.fromProps(props)
+    val metadataConfig = MetadataLogConfig.apply(kafkaConfig, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES)
+    buildMetadataLog(tempDir, mockTime, metadataConfig)
   }
 
   @Test
@@ -173,10 +194,7 @@ final class KafkaMetadataLogTest {
     // Simulate log cleanup that advances the LSO
     log.log.maybeIncrementLogStartOffset(snapshotId.offset - 1, SegmentDeletion)
 
-    assertThrows(
-      classOf[IllegalArgumentException],
-      () => log.createNewSnapshot(new OffsetAndEpoch(snapshotId.offset - 2, snapshotId.epoch))
-    )
+    assertEquals(Optional.empty(), log.createNewSnapshot(new OffsetAndEpoch(snapshotId.offset - 2, snapshotId.epoch)))
   }
 
   @Test
@@ -733,6 +751,7 @@ final class KafkaMetadataLogTest {
   def testAdvanceLogStartOffsetAfterCleaning(): Unit = {
     val config = MetadataLogConfig(
       logSegmentBytes = 512,
+      logSegmentMinBytes = 512,
       logSegmentMillis = 10 * 1000,
       retentionMaxBytes = 256,
       retentionMillis = 60 * 1000,
@@ -777,6 +796,7 @@ final class KafkaMetadataLogTest {
     // Generate some logs and a few snapshots, set retention low and verify that cleaning occurs
     val config = DefaultMetadataLogConfig.copy(
       logSegmentBytes = 1024,
+      logSegmentMinBytes = 1024,
       logSegmentMillis = 10 * 1000,
       retentionMaxBytes = 1024,
       retentionMillis = 60 * 1000,
@@ -811,6 +831,7 @@ final class KafkaMetadataLogTest {
     // Set retention equal to the segment size and generate slightly more than one segment of logs
     val config = DefaultMetadataLogConfig.copy(
       logSegmentBytes = 10240,
+      logSegmentMinBytes = 10240,
       logSegmentMillis = 10 * 1000,
       retentionMaxBytes = 10240,
       retentionMillis = 60 * 1000,
@@ -867,10 +888,11 @@ object KafkaMetadataLogTest {
 
   val DefaultMetadataLogConfig = MetadataLogConfig(
     logSegmentBytes = 100 * 1024,
+    logSegmentMinBytes = 100 * 1024,
     logSegmentMillis = 10 * 1000,
     retentionMaxBytes = 100 * 1024,
     retentionMillis = 60 * 1000,
-    maxBatchSizeInBytes = RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES,
+    maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
     maxFetchSizeInBytes = RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES,
     fileDeleteDelayMs = Defaults.FileDeleteDelayMs,
     nodeId = 1

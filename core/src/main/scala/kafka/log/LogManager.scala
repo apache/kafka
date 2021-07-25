@@ -17,18 +17,20 @@
 
 package kafka.log
 
+import kafka.api.ApiVersion
+import kafka.log.LogConfig.MessageFormatVersion
+
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
 
 import scala.jdk.CollectionConverters._
@@ -36,6 +38,9 @@ import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 import kafka.utils.Implicits._
+
+import java.util.Properties
+import scala.annotation.nowarn
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
@@ -59,6 +64,7 @@ class LogManager(logDirs: Seq[File],
                  val flushStartOffsetCheckpointMs: Long,
                  val retentionCheckMs: Long,
                  val maxPidExpirationMs: Int,
+                 interBrokerProtocolVersion: ApiVersion,
                  scheduler: Scheduler,
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
@@ -253,9 +259,10 @@ class LogManager(logDirs: Seq[File],
                            hadCleanShutdown: Boolean,
                            recoveryPoints: Map[TopicPartition, Long],
                            logStartOffsets: Map[TopicPartition, Long],
+                           defaultConfig: LogConfig,
                            topicConfigOverrides: Map[String, LogConfig]): Log = {
     val topicPartition = Log.parseTopicPartitionName(logDir)
-    val config = topicConfigOverrides.getOrElse(topicPartition.topic, currentDefaultConfig)
+    val config = topicConfigOverrides.getOrElse(topicPartition.topic, defaultConfig)
     val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
     val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
 
@@ -300,7 +307,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Recover and load all logs in the given data directories
    */
-  private[log] def loadLogs(topicConfigOverrides: Map[String, LogConfig]): Unit = {
+  private[log] def loadLogs(defaultConfig: LogConfig, topicConfigOverrides: Map[String, LogConfig]): Unit = {
     info(s"Loading logs from log dirs $liveLogDirs")
     val startMs = time.hiResClockMs()
     val threadPools = ArrayBuffer.empty[ExecutorService]
@@ -312,10 +319,11 @@ class LogManager(logDirs: Seq[File],
       val logDirAbsolutePath = dir.getAbsolutePath
       var hadCleanShutdown: Boolean = false
       try {
-        val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
+        val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir,
+          KafkaThread.nonDaemon(s"log-recovery-$logDirAbsolutePath", _))
         threadPools.append(pool)
 
-        val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
+        val cleanShutdownFile = new File(dir, LogLoader.CleanShutdownFile)
         if (cleanShutdownFile.exists) {
           info(s"Skipping recovery for all logs in $logDirAbsolutePath since clean shutdown file was found")
           // Cache the clean shutdown status and use that for rest of log loading workflow. Delete the CleanShutdownFile
@@ -356,7 +364,8 @@ class LogManager(logDirs: Seq[File],
               debug(s"Loading log $logDir")
 
               val logLoadStartMs = time.hiResClockMs()
-              val log = loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets, topicConfigOverrides)
+              val log = loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets,
+                defaultConfig, topicConfigOverrides)
               val logLoadDurationMs = time.hiResClockMs() - logLoadStartMs
               val currentNumLoaded = numLogsLoaded.incrementAndGet()
 
@@ -402,17 +411,33 @@ class LogManager(logDirs: Seq[File],
    *  Start the background threads to flush logs and do log cleanup
    */
   def startup(topicNames: Set[String]): Unit = {
-    startupWithConfigOverrides(fetchTopicConfigOverrides(topicNames))
+    // ensure consistency between default config and overrides
+    val defaultConfig = currentDefaultConfig
+    startupWithConfigOverrides(defaultConfig, fetchTopicConfigOverrides(defaultConfig, topicNames))
   }
 
   // visible for testing
-  private[log] def fetchTopicConfigOverrides(topicNames: Set[String]): Map[String, LogConfig] = {
+  @nowarn("cat=deprecation")
+  private[log] def fetchTopicConfigOverrides(defaultConfig: LogConfig, topicNames: Set[String]): Map[String, LogConfig] = {
     val topicConfigOverrides = mutable.Map[String, LogConfig]()
-    val defaultProps = currentDefaultConfig.originals()
+    val defaultProps = defaultConfig.originals()
     topicNames.foreach { topicName =>
-      val overrides = configRepository.topicConfig(topicName)
+      var overrides = configRepository.topicConfig(topicName)
       // save memory by only including configs for topics with overrides
       if (!overrides.isEmpty) {
+        Option(overrides.getProperty(LogConfig.MessageFormatVersionProp)).foreach { versionString =>
+          val messageFormatVersion = new MessageFormatVersion(versionString, interBrokerProtocolVersion.version)
+          if (messageFormatVersion.shouldIgnore) {
+            val copy = new Properties()
+            copy.putAll(overrides)
+            copy.remove(LogConfig.MessageFormatVersionProp)
+            overrides = copy
+
+            if (messageFormatVersion.shouldWarn)
+              warn(messageFormatVersion.topicWarningMessage(topicName))
+          }
+        }
+
         val logConfig = LogConfig.fromProps(defaultProps, overrides)
         topicConfigOverrides(topicName) = logConfig
       }
@@ -420,9 +445,15 @@ class LogManager(logDirs: Seq[File],
     topicConfigOverrides
   }
 
+  private def fetchLogConfig(topicName: String): LogConfig = {
+    // ensure consistency between default config and overrides
+    val defaultConfig = currentDefaultConfig
+    fetchTopicConfigOverrides(defaultConfig, Set(topicName)).values.headOption.getOrElse(defaultConfig)
+  }
+
   // visible for testing
-  private[log] def startupWithConfigOverrides(topicConfigOverrides: Map[String, LogConfig]): Unit = {
-    loadLogs(topicConfigOverrides) // this could take a while if shutdown was not clean
+  private[log] def startupWithConfigOverrides(defaultConfig: LogConfig, topicConfigOverrides: Map[String, LogConfig]): Unit = {
+    loadLogs(defaultConfig, topicConfigOverrides) // this could take a while if shutdown was not clean
 
     /* Schedule the cleanup task to delete old logs */
     if (scheduler != null) {
@@ -484,7 +515,8 @@ class LogManager(logDirs: Seq[File],
     for (dir <- liveLogDirs) {
       debug(s"Flushing and closing logs at $dir")
 
-      val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
+      val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir,
+        KafkaThread.nonDaemon(s"log-closing-${dir.getAbsolutePath}", _))
       threadPools.append(pool)
 
       val logs = logsInDir(localLogsByDir, dir).values
@@ -516,7 +548,7 @@ class LogManager(logDirs: Seq[File],
 
           // mark that the shutdown was clean by creating marker file
           debug(s"Writing clean shutdown marker at $dir")
-          CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath), this)
+          CoreUtils.swallow(Files.createFile(new File(dir, LogLoader.CleanShutdownFile).toPath), this)
         }
       }
     } finally {
@@ -766,11 +798,6 @@ class LogManager(logDirs: Seq[File],
       maybeLog.foreach(_.updateConfig(fetchLogConfig(topicPartition.topic)))
   }
 
-  private def fetchLogConfig(topicName: String): LogConfig = {
-    val props = configRepository.topicConfig(topicName)
-    LogConfig.fromProps(currentDefaultConfig.originals, props)
-  }
-
   /**
    * If the log already exists, just return a copy of the existing log
    * Otherwise if isNew=true or if there is no offline log directory, create a log for the given topic and the given partition
@@ -891,13 +918,14 @@ class LogManager(logDirs: Seq[File],
    */
   private def deleteLogs(): Unit = {
     var nextDelayMs = 0L
+    val fileDeleteDelayMs = currentDefaultConfig.fileDeleteDelayMs
     try {
       def nextDeleteDelayMs: Long = {
         if (!logsToBeDeleted.isEmpty) {
           val (_, scheduleTimeMs) = logsToBeDeleted.peek()
-          scheduleTimeMs + currentDefaultConfig.fileDeleteDelayMs - time.milliseconds()
+          scheduleTimeMs + fileDeleteDelayMs - time.milliseconds()
         } else
-          currentDefaultConfig.fileDeleteDelayMs
+          fileDeleteDelayMs
       }
 
       while ({nextDelayMs = nextDeleteDelayMs; nextDelayMs <= 0}) {
@@ -1255,7 +1283,8 @@ object LogManager {
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
       time = time,
-      keepPartitionMetadataFile = keepPartitionMetadataFile)
+      keepPartitionMetadataFile = keepPartitionMetadataFile,
+      interBrokerProtocolVersion = config.interBrokerProtocolVersion)
   }
 
 }

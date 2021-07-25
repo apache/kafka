@@ -96,6 +96,23 @@
 
     <h3><a id="streams_api_changes_300" href="#streams_api_changes_300">Streams API changes in 3.0.0</a></h3>
     <p>
+      We improved the semantics of
+      <a href="/documentation/streams/developer-guide/config-streams.html#max-task-idle-ms">task idling (<code>max.task.idle.ms</code>)</a>.
+      Now Streams provides stronger in-order join and merge processing semantics.
+      Streams's new default pauses processing on tasks with multiple input partitions
+      when one of the partitions has no data buffered locally but has a non-zero lag. In other
+      words, Streams will wait to fetch records that are already available on the broker. This
+      results in improved join semantics, since it allows Streams to interleave the two input
+      partitions in timestamp order instead of just processing whichever partition happens to be
+      buffered. There is an option to disable this new behavior, and there is also an option to
+      make Streams wait even longer for new records to be <em>produced</em> to the input partitions,
+      which you can use to get stronger time semantics when you know some of your producers may be
+      slow. See the
+      <a href="/documentation/streams/developer-guide/config-streams.html#max-task-idle-ms">config reference</a>
+      for more information, and <a href="https://cwiki.apache.org/confluence/x/JSXZCQ">KIP-695</a>
+      for the larger context of this change.
+    </p>
+    <p>
         Interactive Queries may throw new exceptions for different errors:
     </p>
     <ul>
@@ -117,6 +134,25 @@
     <p>
         We removed the default implementation of <code>RocksDBConfigSetter#close()</code>.
     </p>
+    <p>
+        We dropped the default 24 hours grace period for windowed operations such as Window or Session aggregates, or stream-stream joins.
+        This period determines how long after a window ends any out-of-order records will still be processed.
+        Records coming in after the grace period has elapsed will be dropped from those windows.
+        With a long grace period, though Kafka Streams can handle out-of-order data up to that amount of time, it will also incur a high and confusing latency for users,
+        e.g. suppression operators with the default won't emit results up for 24 hours, while in practice out-of-order data usually has a much smaller time-skewness.
+        Instead of abstracting this config from users with a long default value, we introduced new constructs such as <code>TimeWindows#ofSizeAndGrace</code> to let callers always set it upon constructing the windows;
+        the other setters such as <code>TimeWindows#grace</code> are deprecated and will be removed in the future.
+    </p>
+    <p>
+        Additionally, in older versions Kafka Streams emitted stream-stream left/outer join results eagerly. This behavior may lead to spurious left/outer join result records.
+        In this release, we changed the behavior to avoid spurious results and left/outer join result are only emitted after the join window is closed, i.e., after the grace period elapsed.
+        To maintain backward compatibility, the old API <code>JoinWindows#of(timeDifference)</code> preserves the old eager-emit behavior and only the new
+        APIs <code>JoinWindows#ofTimeDifferenceAndGrace()</code> and <code>JoinsWindows#ofTimeDifferenceNoGrace</code> enable the new behavior.
+    </p>
+    <ul>
+        <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-633%3A+Drop+24+hour+default+of+grace+period+in+Streams">KIP-633</a>: Drop 24 hour default of grace period in Streams</li>
+        <li><a href="https://issues.apache.org/jira/browse/KAFKA-10847">KAFKA-10847</a>: Avoid spurious left/outer join results in stream-stream join</li>
+    </ul>
 
     <p>
         The public <code>topicGroupId</code> and <code>partition</code> fields on TaskId have been deprecated and replaced with getters. Please migrate to using the new <code>TaskId.subtopology()</code>
