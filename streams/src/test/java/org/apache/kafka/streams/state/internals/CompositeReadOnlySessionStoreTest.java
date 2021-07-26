@@ -76,8 +76,9 @@ public class CompositeReadOnlySessionStoreTest {
 
     @Test
     public void shouldReturnEmptyIteratorIfNoData() {
-        final KeyValueIterator<Windowed<String>, Long> result = sessionStore.fetch("b");
-        assertFalse(result.hasNext());
+        try (final KeyValueIterator<Windowed<String>, Long> result = sessionStore.fetch("b")) {
+            assertFalse(result.hasNext());
+        }
     }
 
     @Test
@@ -104,9 +105,10 @@ public class CompositeReadOnlySessionStoreTest {
         otherUnderlyingStore.put(new Windowed<>("foo", new SessionWindow(10, 10)), 10L);
         underlyingSessionStore.put(expectedKey, 1L);
 
-        final KeyValueIterator<Windowed<String>, Long> result = sessionStore.fetch("foo");
-        assertEquals(KeyValue.pair(expectedKey, 1L), result.next());
-        assertFalse(result.hasNext());
+        try (final KeyValueIterator<Windowed<String>, Long> result = sessionStore.fetch("foo")) {
+            assertEquals(KeyValue.pair(expectedKey, 1L), result.next());
+            assertFalse(result.hasNext());
+        }
     }
 
     @Test

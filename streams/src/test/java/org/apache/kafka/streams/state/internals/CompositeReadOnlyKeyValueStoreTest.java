@@ -148,63 +148,71 @@ public class CompositeReadOnlyKeyValueStoreTest {
     @Test
     public void shouldThrowNoSuchElementExceptionWhileNext() {
         stubOneUnderlying.put("a", "1");
-        final KeyValueIterator<String, String> keyValueIterator = theStore.range("a", "b");
-        keyValueIterator.next();
-        assertThrows(NoSuchElementException.class, keyValueIterator::next);
+        try (final KeyValueIterator<String, String> keyValueIterator = theStore.range("a", "b")) {
+            keyValueIterator.next();
+            assertThrows(NoSuchElementException.class, keyValueIterator::next);
+        }
     }
 
     @Test
     public void shouldThrowNoSuchElementExceptionWhilePeekNext() {
         stubOneUnderlying.put("a", "1");
-        final KeyValueIterator<String, String> keyValueIterator = theStore.range("a", "b");
-        keyValueIterator.next();
-        assertThrows(NoSuchElementException.class, keyValueIterator::peekNextKey);
+        try (final KeyValueIterator<String, String> keyValueIterator = theStore.range("a", "b")) {
+            keyValueIterator.next();
+            assertThrows(NoSuchElementException.class, keyValueIterator::peekNextKey);
+        }
     }
 
     @Test
     public void shouldThrowNoSuchElementExceptionWhileNextForPrefixScan() {
         stubOneUnderlying.put("a", "1");
-        final KeyValueIterator<String, String> keyValueIterator = theStore.prefixScan("a", new StringSerializer());
-        keyValueIterator.next();
-        assertThrows(NoSuchElementException.class, keyValueIterator::next);
+        try (final KeyValueIterator<String, String> keyValueIterator = theStore.prefixScan("a", new StringSerializer())) {
+            keyValueIterator.next();
+            assertThrows(NoSuchElementException.class, keyValueIterator::next);
+        }
     }
 
     @Test
     public void shouldThrowNoSuchElementExceptionWhilePeekNextForPrefixScan() {
         stubOneUnderlying.put("a", "1");
-        final KeyValueIterator<String, String> keyValueIterator = theStore.prefixScan("a", new StringSerializer());
-        keyValueIterator.next();
-        assertThrows(NoSuchElementException.class, keyValueIterator::peekNextKey);
+        try (final KeyValueIterator<String, String> keyValueIterator = theStore.prefixScan("a", new StringSerializer())) {
+            keyValueIterator.next();
+            assertThrows(NoSuchElementException.class, keyValueIterator::peekNextKey);
+        }
     }
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionWhileRemove() {
-        final KeyValueIterator<String, String> keyValueIterator = theStore.all();
-        assertThrows(UnsupportedOperationException.class, keyValueIterator::remove);
+        try (final KeyValueIterator<String, String> keyValueIterator = theStore.all()) {
+            assertThrows(UnsupportedOperationException.class, keyValueIterator::remove);
+        }
     }
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionWhileReverseRange() {
         stubOneUnderlying.put("a", "1");
         stubOneUnderlying.put("b", "1");
-        final KeyValueIterator<String, String> keyValueIterator = theStore.reverseRange("a", "b");
-        assertThrows(UnsupportedOperationException.class, keyValueIterator::remove);
+        try (final KeyValueIterator<String, String> keyValueIterator = theStore.reverseRange("a", "b")) {
+            assertThrows(UnsupportedOperationException.class, keyValueIterator::remove);
+        }
     }
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionWhileRange() {
         stubOneUnderlying.put("a", "1");
         stubOneUnderlying.put("b", "1");
-        final KeyValueIterator<String, String> keyValueIterator = theStore.range("a", "b");
-        assertThrows(UnsupportedOperationException.class, keyValueIterator::remove);
+        try (final KeyValueIterator<String, String> keyValueIterator = theStore.range("a", "b")) {
+            assertThrows(UnsupportedOperationException.class, keyValueIterator::remove);
+        }
     }
 
     @Test
     public void shouldThrowUnsupportedOperationExceptionWhilePrefixScan() {
         stubOneUnderlying.put("a", "1");
         stubOneUnderlying.put("b", "1");
-        final KeyValueIterator<String, String> keyValueIterator = theStore.prefixScan("a", new StringSerializer());
-        assertThrows(UnsupportedOperationException.class, keyValueIterator::remove);
+        try (final KeyValueIterator<String, String> keyValueIterator = theStore.prefixScan("a", new StringSerializer())) {
+            assertThrows(UnsupportedOperationException.class, keyValueIterator::remove);
+        }
     }
 
     @Test

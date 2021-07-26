@@ -80,13 +80,14 @@ public class CompositeReadOnlyWindowStoreTest {
         underlyingWindowStore.put("my-key", "my-value", 0L);
         underlyingWindowStore.put("my-key", "my-later-value", 10L);
 
-        final WindowStoreIterator<String> iterator =
-            windowStore.fetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L));
-        final List<KeyValue<Long, String>> results = StreamsTestUtils.toList(iterator);
+        try (final WindowStoreIterator<String> iterator =
+                 windowStore.fetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L))) {
+            final List<KeyValue<Long, String>> results = StreamsTestUtils.toList(iterator);
 
-        assertEquals(
-            asList(new KeyValue<>(0L, "my-value"), new KeyValue<>(10L, "my-later-value")),
-            results);
+            assertEquals(
+                asList(new KeyValue<>(0L, "my-value"), new KeyValue<>(10L, "my-later-value")),
+                results);
+        }
     }
 
     @Test
@@ -94,27 +95,30 @@ public class CompositeReadOnlyWindowStoreTest {
         underlyingWindowStore.put("my-key", "my-value", 0L);
         underlyingWindowStore.put("my-key", "my-later-value", 10L);
 
-        final WindowStoreIterator<String> iterator =
-            windowStore.backwardFetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L));
-        final List<KeyValue<Long, String>> results = StreamsTestUtils.toList(iterator);
+        try (final WindowStoreIterator<String> iterator =
+                 windowStore.backwardFetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L))) {
+            final List<KeyValue<Long, String>> results = StreamsTestUtils.toList(iterator);
 
-        assertEquals(
-            asList(new KeyValue<>(10L, "my-later-value"), new KeyValue<>(0L, "my-value")),
-            results);
+            assertEquals(
+                asList(new KeyValue<>(10L, "my-later-value"), new KeyValue<>(0L, "my-value")),
+                results);
+        }
     }
 
     @Test
     public void shouldReturnEmptyIteratorIfNoData() {
-        final WindowStoreIterator<String> iterator =
-            windowStore.fetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L));
-        assertFalse(iterator.hasNext());
+        try (final WindowStoreIterator<String> iterator =
+                 windowStore.fetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L))) {
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
     public void shouldReturnBackwardEmptyIteratorIfNoData() {
-        final WindowStoreIterator<String> iterator =
-            windowStore.backwardFetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L));
-        assertFalse(iterator.hasNext());
+        try (final WindowStoreIterator<String> iterator =
+                 windowStore.backwardFetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L))) {
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -251,10 +255,11 @@ public class CompositeReadOnlyWindowStoreTest {
             QueryableStoreTypes.windowStore(),
             "foo"
         );
-        final WindowStoreIterator<Object> windowStoreIterator =
-            store.backwardFetch("key", ofEpochMilli(1), ofEpochMilli(10));
+        try (final WindowStoreIterator<Object> windowStoreIterator =
+                 store.backwardFetch("key", ofEpochMilli(1), ofEpochMilli(10))) {
 
-        Assert.assertFalse(windowStoreIterator.hasNext());
+            Assert.assertFalse(windowStoreIterator.hasNext());
+        }
     }
 
     @Test
@@ -268,10 +273,11 @@ public class CompositeReadOnlyWindowStoreTest {
             QueryableStoreTypes.windowStore(),
             "foo"
         );
-        final WindowStoreIterator<Object> windowStoreIterator =
-            store.fetch("key", ofEpochMilli(1), ofEpochMilli(10));
+        try (final WindowStoreIterator<Object> windowStoreIterator =
+                 store.fetch("key", ofEpochMilli(1), ofEpochMilli(10))) {
 
-        Assert.assertFalse(windowStoreIterator.hasNext());
+            Assert.assertFalse(windowStoreIterator.hasNext());
+        }
     }
 
     @Test
@@ -285,8 +291,9 @@ public class CompositeReadOnlyWindowStoreTest {
             QueryableStoreTypes.windowStore(),
             "foo"
         );
-        final WindowStoreIterator<Object> windowStoreIterator = store.backwardFetch("key", ofEpochMilli(1), ofEpochMilli(10));
-        assertThrows(NoSuchElementException.class, windowStoreIterator::peekNextKey);
+        try (final WindowStoreIterator<Object> windowStoreIterator = store.backwardFetch("key", ofEpochMilli(1), ofEpochMilli(10))) {
+            assertThrows(NoSuchElementException.class, windowStoreIterator::peekNextKey);
+        }
     }
 
 
@@ -301,9 +308,10 @@ public class CompositeReadOnlyWindowStoreTest {
             QueryableStoreTypes.windowStore(),
             "foo"
         );
-        final WindowStoreIterator<Object> windowStoreIterator =
-            store.fetch("key", ofEpochMilli(1), ofEpochMilli(10));
-        assertThrows(NoSuchElementException.class, windowStoreIterator::peekNextKey);
+        try (final WindowStoreIterator<Object> windowStoreIterator =
+                 store.fetch("key", ofEpochMilli(1), ofEpochMilli(10))) {
+            assertThrows(NoSuchElementException.class, windowStoreIterator::peekNextKey);
+        }
     }
 
     @Test
@@ -317,9 +325,10 @@ public class CompositeReadOnlyWindowStoreTest {
             QueryableStoreTypes.windowStore(),
             "foo"
         );
-        final WindowStoreIterator<Object> windowStoreIterator =
-            store.fetch("key", ofEpochMilli(1), ofEpochMilli(10));
-        assertThrows(NoSuchElementException.class, windowStoreIterator::next);
+        try (final WindowStoreIterator<Object> windowStoreIterator =
+                 store.fetch("key", ofEpochMilli(1), ofEpochMilli(10))) {
+            assertThrows(NoSuchElementException.class, windowStoreIterator::next);
+        }
     }
 
     @Test
@@ -333,9 +342,10 @@ public class CompositeReadOnlyWindowStoreTest {
             QueryableStoreTypes.windowStore(),
             "foo"
         );
-        final WindowStoreIterator<Object> windowStoreIterator =
-            store.backwardFetch("key", ofEpochMilli(1), ofEpochMilli(10));
-        assertThrows(NoSuchElementException.class, windowStoreIterator::next);
+        try (final WindowStoreIterator<Object> windowStoreIterator =
+                 store.backwardFetch("key", ofEpochMilli(1), ofEpochMilli(10))) {
+            assertThrows(NoSuchElementException.class, windowStoreIterator::next);
+        }
     }
 
     @Test
