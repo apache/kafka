@@ -207,7 +207,7 @@ class ControllerContext {
     liveBrokerEpochs ++= brokerAndEpochs.map { case (broker, brokerEpoch) => (broker.id, brokerEpoch) }
 
     shuttingDownBrokerIds.retain((brokerId, epoch) =>
-      liveBrokerEpochs.contains(brokerId) && epoch < liveBrokerEpochs(brokerId))
+      liveBrokerEpochs.contains(brokerId) && epoch >= liveBrokerEpochs(brokerId))
   }
 
   def removeLiveBrokers(brokerIds: Set[Int]): Unit = {
