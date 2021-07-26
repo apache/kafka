@@ -255,6 +255,7 @@ public class ClusterConnectionStatesTest {
         assertSame(currAddress, connectionStates.currentAddress(nodeId1));
     }
 
+    @Ignore
     @Test
     public void testMultipleIPsWithDefault() throws UnknownHostException {
         assertTrue(ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
@@ -281,6 +282,7 @@ public class ClusterConnectionStatesTest {
         assertNotSame(addr1, addr3);
     }
 
+    @Ignore
     @Test
     public void testHostResolveChange() throws UnknownHostException, ReflectiveOperationException {
         assertTrue(ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
