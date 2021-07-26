@@ -255,7 +255,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         public boolean hasStartedOrFinishedShuttingDown() {
-            return equals(PENDING_SHUTDOWN) || equals(PENDING_ERROR) || equals(NOT_RUNNING) || equals(ERROR);
+            return isShuttingDown() || hasCompletedShutdown();
         }
 
         public boolean isValidTransition(final State newState) {
@@ -1452,7 +1452,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public void cleanUp() {
         if (!(state.hasNotStarted() || state.hasCompletedShutdown())) {
-            throw new IllegalStateException("Cannot clean up while stream threads are running.");
+            throw new IllegalStateException("Cannot clean up while running.");
         }
         stateDirectory.clean();
     }
