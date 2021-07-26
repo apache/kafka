@@ -389,6 +389,9 @@ class BrokerServer(
       // a potentially lengthy recovery-from-unclean-shutdown operation here, if required.
       metadataListener.startPublishing(metadataPublisher).get()
 
+      // Log static broker configurations.
+      new KafkaConfig(config.originals(), true)
+
       // Enable inbound TCP connections.
       socketServer.startProcessingRequests(authorizerFutures)
 

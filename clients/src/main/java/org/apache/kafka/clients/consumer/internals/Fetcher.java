@@ -162,7 +162,6 @@ public class Fetcher<K, V> implements Closeable {
     private final ApiVersions apiVersions;
     private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
 
-
     private CompletedFetch nextInLineFetch = null;
 
     public Fetcher(LogContext logContext,
@@ -553,19 +552,54 @@ public class Fetcher<K, V> implements Closeable {
         Map<TopicPartition, Long> remainingToSearch = new HashMap<>(timestampsToSearch);
         do {
             RequestFuture<ListOffsetResult> future = sendListOffsetsRequests(remainingToSearch, requireTimestamps);
+
+            future.addListener(new RequestFutureListener<ListOffsetResult>() {
+                @Override
+                public void onSuccess(ListOffsetResult value) {
+                    synchronized (future) {
+                        result.fetchedOffsets.putAll(value.fetchedOffsets);
+                        remainingToSearch.keySet().retainAll(value.partitionsToRetry);
+
+                        for (final Map.Entry<TopicPartition, ListOffsetData> entry: value.fetchedOffsets.entrySet()) {
+                            final TopicPartition partition = entry.getKey();
+
+                            // if the interested partitions are part of the subscriptions, use the returned offset to update
+                            // the subscription state as well:
+                            //   * with read-committed, the returned offset would be LSO;
+                            //   * with read-uncommitted, the returned offset would be HW;
+                            if (subscriptions.isAssigned(partition)) {
+                                final long offset = entry.getValue().offset;
+                                if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+                                    log.trace("Updating last stable offset for partition {} to {}", partition, offset);
+                                    subscriptions.updateLastStableOffset(partition, offset);
+                                } else {
+                                    log.trace("Updating high watermark for partition {} to {}", partition, offset);
+                                    subscriptions.updateHighWatermark(partition, offset);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                @Override
+                public void onFailure(RuntimeException e) {
+                    if (!(e instanceof RetriableException)) {
+                        throw future.exception();
+                    }
+                }
+            });
+
+            // if timeout is set to zero, do not try to poll the network client at all
+            // and return empty immediately; otherwise try to get the results synchronously
+            // and throw timeout exception if cannot complete in time
+            if (timer.timeoutMs() == 0L)
+                return result;
+
             client.poll(future, timer);
 
             if (!future.isDone()) {
                 break;
-            } else if (future.succeeded()) {
-                ListOffsetResult value = future.value();
-                result.fetchedOffsets.putAll(value.fetchedOffsets);
-                remainingToSearch.keySet().retainAll(value.partitionsToRetry);
-            } else if (!future.isRetriable()) {
-                throw future.exception();
-            }
-
-            if (remainingToSearch.isEmpty()) {
+            } else if (remainingToSearch.isEmpty()) {
                 return result;
             } else {
                 client.awaitMetadataUpdate(timer);
@@ -907,8 +941,7 @@ public class Fetcher<K, V> implements Closeable {
         final AtomicInteger remainingResponses = new AtomicInteger(timestampsToSearchByNode.size());
 
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
-            RequestFuture<ListOffsetResult> future =
-                sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
+            RequestFuture<ListOffsetResult> future = sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
                 @Override
                 public void onSuccess(ListOffsetResult partialResult) {

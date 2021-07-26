@@ -22,23 +22,24 @@ import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, NewPartitionReassignment, NewTopic}
-import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo};
+import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{Test, Timeout}
-
+import org.junit.jupiter.api.{Tag, Test, Timeout}
 import java.util
 import java.util.{Arrays, Collections, Optional}
+
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
-class RaftClusterTest {
+@Tag("integration")
+class KRaftClusterTest {
 
   @Test
   def testCreateClusterAndClose(): Unit = {
@@ -65,7 +66,7 @@ class RaftClusterTest {
       cluster.startup()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
@@ -91,7 +92,7 @@ class RaftClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
 
       val admin = Admin.create(cluster.clientProperties())
@@ -128,7 +129,7 @@ class RaftClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
@@ -140,7 +141,7 @@ class RaftClusterTest {
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
 
-        // List created topic
+        // List created topics
         waitForTopicListing(admin, Seq("test-topic-1", "test-topic-2", "test-topic-3"), Seq())
       } finally {
         admin.close()
