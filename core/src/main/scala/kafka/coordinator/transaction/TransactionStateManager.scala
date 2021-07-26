@@ -143,7 +143,8 @@ class TransactionStateManager(brokerId: Int,
 
   private def collectExpiredTransactionalIds(
     transactionPartition: TopicPartition,
-    partitionCacheEntry: TxnMetadataCacheEntry
+    stateEntries: collection.BufferedIterator[TransactionMetadata],
+    coordinatorEpoch: Int
   ): (Iterable[TransactionalIdCoordinatorEpochAndMetadata], MemoryRecords) = {
     val currentTimeMs = time.milliseconds()
 
@@ -161,22 +162,26 @@ class TransactionStateManager(brokerId: Int,
             maxBatchSize
           )
 
-          partitionCacheEntry.metadataPerTransactionalId.foreachWhile { (transactionalId, txnMetadata) =>
+          var breakIteration = false
+          while (stateEntries.hasNext && !breakIteration) {
+            val txnMetadata = stateEntries.head
+            val transactionalId = txnMetadata.transactionalId
             txnMetadata.inLock {
-              if (!shouldExpire(txnMetadata, currentTimeMs)) {
-                true
-              } else if (maybeAppendExpiration(txnMetadata, recordsBuilder, currentTimeMs)) {
-                val transitMetadata = txnMetadata.prepareDead()
-                expired += TransactionalIdCoordinatorEpochAndMetadata(
-                  transactionalId,
-                  partitionCacheEntry.coordinatorEpoch,
-                  transitMetadata
-                )
-                true
-              } else {
-                // If the batch is full, return false to end the search. Any remaining
-                // transactionalIds eligible for expiration can be picked next time.
-                false
+              if (txnMetadata.pendingState.isEmpty && shouldExpire(txnMetadata, currentTimeMs)) {
+                if (maybeAppendExpiration(txnMetadata, recordsBuilder, currentTimeMs)) {
+                  val transitMetadata = txnMetadata.prepareDead()
+                  expired += TransactionalIdCoordinatorEpochAndMetadata(
+                    transactionalId,
+                    coordinatorEpoch,
+                    transitMetadata
+                  )
+                } else {
+                  breakIteration = true
+                }
+              }
+
+              if (!breakIteration) {
+                stateEntries.next()
               }
             }
           }
@@ -223,58 +228,77 @@ class TransactionStateManager(brokerId: Int,
 
   private[transaction] def removeExpiredTransactionalIds(): Unit = {
     inReadLock(stateLock) {
-      val expirationRecords = mutable.Map.empty[TopicPartition, MemoryRecords]
-      val expiredTransactionalIds = mutable.Map.empty[TopicPartition, Iterable[TransactionalIdCoordinatorEpochAndMetadata]]
-
       transactionMetadataCache.forKeyValue { (partitionId, partitionCacheEntry) =>
-        val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
-        val (expiredForPartition, partitionRecords) = collectExpiredTransactionalIds(topicPartition, partitionCacheEntry)
-        if (expiredForPartition.nonEmpty) {
-          expirationRecords += topicPartition -> partitionRecords
-          expiredTransactionalIds += topicPartition -> expiredForPartition
+        val transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
+        val stateEntries = partitionCacheEntry.metadataPerTransactionalId.values.iterator.buffered
+        var breakIteration = false
+
+        while (stateEntries.hasNext && !breakIteration) {
+          val (expiredForPartition, tombstoneRecords) = collectExpiredTransactionalIds(
+            transactionPartition,
+            stateEntries,
+            partitionCacheEntry.coordinatorEpoch
+          )
+
+          if (expiredForPartition.nonEmpty) {
+            writeTombstonesForExpiredTransactionalIds(
+              transactionPartition,
+              expiredForPartition,
+              tombstoneRecords
+            )
+          } else {
+            // We may fail to append entries if the log was taken offline. The iterator
+            // won't advance in this case, so we need to break iteration directly.
+            breakIteration = true
+          }
         }
       }
+    }
+  }
 
-      def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
-        responses.forKeyValue { (topicPartition, response) =>
-          inReadLock(stateLock) {
-            val toRemove = expiredTransactionalIds(topicPartition)
-            transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
-              toRemove.foreach { idCoordinatorEpochAndMetadata =>
-                val transactionalId = idCoordinatorEpochAndMetadata.transactionalId
-                val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(transactionalId)
-                txnMetadata.inLock {
-                  if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
-                    && txnMetadata.pendingState.contains(Dead)
-                    && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
-                    && response.error == Errors.NONE) {
-                    txnMetadataCacheEntry.metadataPerTransactionalId.remove(transactionalId)
-                  } else {
-                    warn(s"Failed to remove expired transactionalId: $transactionalId" +
-                      s" from cache. Tombstone append error code: ${response.error}," +
-                      s" pendingState: ${txnMetadata.pendingState}, producerEpoch: ${txnMetadata.producerEpoch}," +
-                      s" expected producerEpoch: ${idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch}," +
-                      s" coordinatorEpoch: ${txnMetadataCacheEntry.coordinatorEpoch}, expected coordinatorEpoch: " +
-                      s"${idCoordinatorEpochAndMetadata.coordinatorEpoch}")
-                    txnMetadata.pendingState = None
-                  }
+  private def writeTombstonesForExpiredTransactionalIds(
+    transactionPartition: TopicPartition,
+    expiredForPartition: Iterable[TransactionalIdCoordinatorEpochAndMetadata],
+    tombstoneRecords: MemoryRecords
+  ): Unit = {
+    def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
+      responses.forKeyValue { (topicPartition, response) =>
+        inReadLock(stateLock) {
+          transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
+            expiredForPartition.foreach { idCoordinatorEpochAndMetadata =>
+              val transactionalId = idCoordinatorEpochAndMetadata.transactionalId
+              val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(transactionalId)
+              txnMetadata.inLock {
+                if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
+                  && txnMetadata.pendingState.contains(Dead)
+                  && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
+                  && response.error == Errors.NONE) {
+                  txnMetadataCacheEntry.metadataPerTransactionalId.remove(transactionalId)
+                } else {
+                  warn(s"Failed to remove expired transactionalId: $transactionalId" +
+                    s" from cache. Tombstone append error code: ${response.error}," +
+                    s" pendingState: ${txnMetadata.pendingState}, producerEpoch: ${txnMetadata.producerEpoch}," +
+                    s" expected producerEpoch: ${idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch}," +
+                    s" coordinatorEpoch: ${txnMetadataCacheEntry.coordinatorEpoch}, expected coordinatorEpoch: " +
+                    s"${idCoordinatorEpochAndMetadata.coordinatorEpoch}")
+                  txnMetadata.pendingState = None
                 }
               }
             }
           }
         }
       }
+    }
 
-      if (expirationRecords.nonEmpty) {
-        replicaManager.appendRecords(
-          config.requestTimeoutMs,
-          TransactionLog.EnforcedRequiredAcks,
-          internalTopicsAllowed = true,
-          origin = AppendOrigin.Coordinator,
-          expirationRecords,
-          removeFromCacheCallback,
-          requestLocal = RequestLocal.NoCaching)
-      }
+    inReadLock(stateLock) {
+      replicaManager.appendRecords(
+        config.requestTimeoutMs,
+        TransactionLog.EnforcedRequiredAcks,
+        internalTopicsAllowed = true,
+        origin = AppendOrigin.Coordinator,
+        entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
+        removeFromCacheCallback,
+        requestLocal = RequestLocal.NoCaching)
     }
   }
 

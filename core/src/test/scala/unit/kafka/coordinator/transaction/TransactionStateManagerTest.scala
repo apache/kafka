@@ -37,10 +37,9 @@ import org.apache.kafka.common.utils.MockTime
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import kafka.utils.Implicits._
 
-import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
+import scala.jdk.CollectionConverters._
 
 class TransactionStateManagerTest {
 
@@ -632,14 +631,95 @@ class TransactionStateManagerTest {
   }
 
   @Test
+  def testTransactionalExpirationWithOfflineLogDir(): Unit = {
+    val onlinePartitionId = 0
+    val offlinePartitionId = 1
+
+    val partitionIds = Seq(onlinePartitionId, offlinePartitionId)
+    val maxBatchSize = 512
+
+    loadTransactionsForPartitions(partitionIds)
+    val allTransactionalIds = loadExpiredTransactionalIds(numTransactionalIds = 20)
+
+    EasyMock.reset(replicaManager)
+
+    // Partition 0 returns log config as normal
+    expectLogConfig(Seq(onlinePartitionId), maxBatchSize)
+    // No log config returned for partition 0 since it is offline
+    EasyMock.expect(replicaManager.getLogConfig(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, offlinePartitionId)))
+      .andStubReturn(None)
+
+    val appendedRecords = mutable.Map.empty[TopicPartition, mutable.Buffer[MemoryRecords]]
+    expectTransactionalIdExpiration(Errors.NONE, appendedRecords)
+    EasyMock.replay(replicaManager)
+
+    assertTrue(hasUnexpiredTransactionalIds)
+    transactionManager.removeExpiredTransactionalIds()
+    EasyMock.verify(replicaManager)
+
+    assertTrue(hasUnexpiredTransactionalIds)
+    assertEquals(Set(onlinePartitionId), appendedRecords.keySet.map(_.partition))
+
+    val transactionalIdsForOnlinePartition = allTransactionalIds.filter { transactionalId =>
+      transactionManager.partitionFor(transactionalId) == onlinePartitionId
+    }
+    val expiredTransactionalIds = collectTransactionalIdsFromTombstones(appendedRecords)
+    assertEquals(transactionalIdsForOnlinePartition, expiredTransactionalIds)
+  }
+
+  @Test
   def testTransactionExpirationShouldRespectBatchSize(): Unit = {
     val partitionIds = 0 until numPartitions
     val maxBatchSize = 512
 
     loadTransactionsForPartitions(partitionIds)
+    val allTransactionalIds = loadExpiredTransactionalIds(numTransactionalIds = 1000)
 
+    EasyMock.reset(replicaManager)
+    expectLogConfig(partitionIds, maxBatchSize)
+
+    val appendedRecords = mutable.Map.empty[TopicPartition, mutable.Buffer[MemoryRecords]]
+    expectTransactionalIdExpiration(Errors.NONE, appendedRecords)
+    EasyMock.replay(replicaManager)
+
+    assertTrue(hasUnexpiredTransactionalIds)
+    transactionManager.removeExpiredTransactionalIds()
+    EasyMock.verify(replicaManager)
+
+    assertFalse(hasUnexpiredTransactionalIds)
+    assertEquals(partitionIds.toSet, appendedRecords.keys.map(_.partition))
+
+    appendedRecords.values.foreach { batches =>
+      assertTrue(batches.size > 1) // Ensure a non-trivial test case
+      assertTrue(batches.forall(_.sizeInBytes() < maxBatchSize))
+    }
+
+    val expiredTransactionalIds = collectTransactionalIdsFromTombstones(appendedRecords)
+    assertEquals(allTransactionalIds, expiredTransactionalIds)
+  }
+
+  private def collectTransactionalIdsFromTombstones(
+    appendedRecords: mutable.Map[TopicPartition, mutable.Buffer[MemoryRecords]]
+  ): Set[String] = {
+    val expiredTransactionalIds = mutable.Set.empty[String]
+    appendedRecords.values.foreach { batches =>
+      batches.foreach { records =>
+        records.records.forEach { record =>
+          val transactionalId = TransactionLog.readTxnRecordKey(record.key).transactionalId
+          assertNull(record.value)
+          expiredTransactionalIds += transactionalId
+          assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
+        }
+      }
+    }
+    expiredTransactionalIds.toSet
+  }
+
+  private def loadExpiredTransactionalIds(
+    numTransactionalIds: Int
+  ): Set[String] = {
     val allTransactionalIds = mutable.Set.empty[String]
-    for (i <- 0 to 1000) {
+    for (i <- 0 to numTransactionalIds) {
       val txnlId = s"id_$i"
       val producerId = i
       val txnMetadata = transactionMetadata(txnlId, producerId)
@@ -647,44 +727,14 @@ class TransactionStateManagerTest {
       transactionManager.putTransactionStateIfNotExists(txnMetadata)
       allTransactionalIds += txnlId
     }
+    allTransactionalIds.toSet
+  }
 
-    def removeExpiredTransactionalIds(): Map[TopicPartition, MemoryRecords] = {
-      EasyMock.reset(replicaManager)
-      expectLogConfig(partitionIds, maxBatchSize)
-
-      val appendedRecordsCapture = expectTransactionalIdExpiration(Errors.NONE)
-      EasyMock.replay(replicaManager)
-
-      transactionManager.removeExpiredTransactionalIds()
-      EasyMock.verify(replicaManager)
-
-      assertTrue(appendedRecordsCapture.hasCaptured)
-      appendedRecordsCapture.getValue
-    }
-
-    def hasUnexpiredTransactionalIds: Boolean = {
-      val unexpiredTransactions = transactionManager.listTransactionStates(Set.empty, Set.empty)
-        .transactionStates.asScala
-      assertTrue(unexpiredTransactions.forall(txn => txn.transactionState == Empty.name))
-      unexpiredTransactions.nonEmpty
-    }
-
-    var iterations = 0
-    val expiredTransactionalIds = mutable.Set.empty[String]
-    while (hasUnexpiredTransactionalIds) {
-      removeExpiredTransactionalIds().forKeyValue { (_, records) =>
-        assertTrue(records.sizeInBytes < maxBatchSize)
-        records.records.forEach { record =>
-          val transactionalId = TransactionLog.readTxnRecordKey(record.key).transactionalId
-          expiredTransactionalIds += transactionalId
-          assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
-        }
-      }
-      iterations += 1
-    }
-
-    assertTrue(iterations > 1)
-    assertEquals(allTransactionalIds, expiredTransactionalIds)
+  private def hasUnexpiredTransactionalIds: Boolean = {
+    val unexpiredTransactions = transactionManager.listTransactionStates(Set.empty, Set.empty)
+      .transactionStates.asScala
+    assertTrue(unexpiredTransactions.forall(txn => txn.transactionState == Empty.name))
+    unexpiredTransactions.nonEmpty
   }
 
   @Test
@@ -760,8 +810,9 @@ class TransactionStateManagerTest {
   }
 
   private def expectTransactionalIdExpiration(
-    appendError: Errors
-  ): Capture[Map[TopicPartition, MemoryRecords]] = {
+    appendError: Errors,
+    capturedAppends: mutable.Map[TopicPartition, mutable.Buffer[MemoryRecords]]
+  ): Unit = {
     val recordsCapture: Capture[Map[TopicPartition, MemoryRecords]] = EasyMock.newCapture()
     val callbackCapture: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
 
@@ -776,12 +827,18 @@ class TransactionStateManagerTest {
       EasyMock.anyObject(),
       EasyMock.anyObject()
     )).andAnswer(() => callbackCapture.getValue.apply(
-      recordsCapture.getValue.keys.map { topicPartition =>
+      recordsCapture.getValue.map { case (topicPartition, records) =>
+        val batches = capturedAppends.getOrElse(topicPartition, {
+          val batches = mutable.Buffer.empty[MemoryRecords]
+          capturedAppends += topicPartition -> batches
+          batches
+        })
+
+        batches += records
+
         topicPartition -> new PartitionResponse(appendError, 0L, RecordBatch.NO_TIMESTAMP, 0L)
       }.toMap
-    ))
-
-    recordsCapture
+    )).anyTimes()
   }
 
   private def loadTransactionsForPartitions(
@@ -820,23 +877,27 @@ class TransactionStateManagerTest {
     txnMetadata2.txnLastUpdateTimestamp = time.milliseconds()
     transactionManager.putTransactionStateIfNotExists(txnMetadata2)
 
-    val appendedRecordsCapture = txnState match {
-      case Empty | CompleteCommit | CompleteAbort => Some(expectTransactionalIdExpiration(error))
-      case _ => None
-    }
+    val appendedRecords = mutable.Map.empty[TopicPartition, mutable.Buffer[MemoryRecords]]
+    expectTransactionalIdExpiration(error, appendedRecords)
 
     EasyMock.replay(replicaManager)
-
     transactionManager.removeExpiredTransactionalIds()
-
     EasyMock.verify(replicaManager)
 
-    appendedRecordsCapture.foreach { capture =>
+    val stateAllowsExpiration = txnState match {
+      case Empty | CompleteCommit | CompleteAbort => true
+      case _ => false
+    }
+
+    if (stateAllowsExpiration) {
       val partitionId = transactionManager.partitionFor(transactionalId1)
       val topicPartition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)
       val expectedTombstone = new SimpleRecord(time.milliseconds(), TransactionLog.keyToBytes(transactionalId1), null)
       val expectedRecords = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, expectedTombstone)
-      assertEquals(Map(topicPartition -> expectedRecords), capture.getValue)
+      assertEquals(Set(topicPartition), appendedRecords.keySet)
+      assertEquals(Seq(expectedRecords), appendedRecords(topicPartition).toSeq)
+    } else {
+      assertEquals(Map.empty, appendedRecords)
     }
   }
 
