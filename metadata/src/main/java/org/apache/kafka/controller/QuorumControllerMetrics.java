@@ -34,7 +34,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final static MetricName GLOBAL_PARTITION_COUNT = getMetricName(
         "KafkaController", "GlobalPartitionCount");
     private final static MetricName OFFLINE_PARTITION_COUNT = getMetricName(
-        "KafkaController", "OfflinePartitionCount");
+        "KafkaController", "OfflinePartitionsCount");
     private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
         "KafkaController", "PreferredReplicaImbalanceCount");
     

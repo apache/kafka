@@ -38,7 +38,7 @@ public class QuorumControllerMetricsTest {
             "ActiveControllerCount",
             "GlobalTopicCount",
             "GlobalPartitionCount",
-            "OfflinePartitionCount",
+            "OfflinePartitionsCount",
             "PreferredReplicaImbalanceCount");
         Set<String> missingMetrics = getMissingMetricNames(expectedMetricNames, expectedGroup, expectedType);
         assertEquals(Collections.emptySet(), missingMetrics, "Expected metrics did not exist");
