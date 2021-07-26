@@ -485,18 +485,20 @@ public abstract class AbstractKeyValueStoreTest {
     public void shouldNotThrowConcurrentModificationException() {
         store.put(0, "zero");
 
-        final KeyValueIterator<Integer, String> results = store.range(0, 2);
+        try (final KeyValueIterator<Integer, String> results = store.range(0, 2)) {
 
-        store.put(1, "one");
+            store.put(1, "one");
 
-        assertEquals(new KeyValue<>(0, "zero"), results.next());
+            assertEquals(new KeyValue<>(0, "zero"), results.next());
+        }
     }
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            final KeyValueIterator<Integer, String> iterator = store.range(-1, 1);
-            assertFalse(iterator.hasNext());
+            try (final KeyValueIterator<Integer, String> iterator = store.range(-1, 1)) {
+                assertFalse(iterator.hasNext());
+            }
 
             final List<String> messages = appender.getMessages();
             assertThat(
@@ -512,8 +514,9 @@ public abstract class AbstractKeyValueStoreTest {
     @Test
     public void shouldNotThrowInvalidReverseRangeExceptionWithNegativeFromKey() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            final KeyValueIterator<Integer, String> iterator = store.reverseRange(-1, 1);
-            assertFalse(iterator.hasNext());
+            try (final KeyValueIterator<Integer, String> iterator = store.reverseRange(-1, 1)) {
+                assertFalse(iterator.hasNext());
+            }
 
             final List<String> messages = appender.getMessages();
             assertThat(
@@ -529,8 +532,9 @@ public abstract class AbstractKeyValueStoreTest {
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithFromLargerThanTo() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            final KeyValueIterator<Integer, String> iterator = store.range(2, 1);
-            assertFalse(iterator.hasNext());
+            try (final KeyValueIterator<Integer, String> iterator = store.range(2, 1)) {
+                assertFalse(iterator.hasNext());
+            }
 
             final List<String> messages = appender.getMessages();
             assertThat(
@@ -546,8 +550,9 @@ public abstract class AbstractKeyValueStoreTest {
     @Test
     public void shouldNotThrowInvalidReverseRangeExceptionWithFromLargerThanTo() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            final KeyValueIterator<Integer, String> iterator = store.reverseRange(2, 1);
-            assertFalse(iterator.hasNext());
+            try (final KeyValueIterator<Integer, String> iterator = store.reverseRange(2, 1)) {
+                assertFalse(iterator.hasNext());
+            }
 
             final List<String> messages = appender.getMessages();
             assertThat(

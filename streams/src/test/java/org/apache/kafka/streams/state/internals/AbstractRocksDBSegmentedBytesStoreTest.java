@@ -150,14 +150,15 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(50));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(100));
 
-        final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 500);
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 500)) {
 
-        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
-            KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
-            KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
-        );
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
+                KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
+            );
 
-        assertEquals(expected, toList(values));
+            assertEquals(expected, toList(values));
+        }
     }
 
     @Test
@@ -166,13 +167,14 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(10));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(50));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(100));
-        final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(Bytes.wrap(key.getBytes()), 1, 999);
-        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
-            KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
-            KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
-        );
+        try (final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(Bytes.wrap(key.getBytes()), 1, 999)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
+                KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
+            );
 
-        assertEquals(expected, toList(results));
+            assertEquals(expected, toList(results));
+        }
     }
 
     @Test
@@ -181,8 +183,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>("a", windows[1])), serializeValue(50));
 
         bytesStore.remove(serializeKey(new Windowed<>("a", windows[0])));
-        final KeyValueIterator<Bytes, byte[]> value = bytesStore.fetch(Bytes.wrap("a".getBytes()), 0, 100);
-        assertFalse(value.hasNext());
+        try (final KeyValueIterator<Bytes, byte[]> value = bytesStore.fetch(Bytes.wrap("a".getBytes()), 0, 100)) {
+            assertFalse(value.hasNext());
+        }
     }
 
     @Test
