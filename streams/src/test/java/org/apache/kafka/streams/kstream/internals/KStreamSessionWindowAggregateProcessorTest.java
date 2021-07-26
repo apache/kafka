@@ -157,10 +157,11 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setTime(500);
         processor.process("john", "second");
 
-        final KeyValueIterator<Windowed<String>, Long> values =
-            sessionStore.findSessions("john", 0, 2000);
-        assertTrue(values.hasNext());
-        assertEquals(Long.valueOf(2), values.next().value);
+        try (final KeyValueIterator<Windowed<String>, Long> values =
+                 sessionStore.findSessions("john", 0, 2000)) {
+            assertTrue(values.hasNext());
+            assertEquals(Long.valueOf(2), values.next().value);
+        }
     }
 
     @Test
@@ -180,12 +181,13 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setTime(GAP_MS / 2);
         processor.process(sessionId, "third");
 
-        final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.findSessions(sessionId, 0, GAP_MS + 1);
-        final KeyValue<Windowed<String>, Long> kv = iterator.next();
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                 sessionStore.findSessions(sessionId, 0, GAP_MS + 1)) {
+            final KeyValue<Windowed<String>, Long> kv = iterator.next();
 
-        assertEquals(Long.valueOf(3), kv.value);
-        assertFalse(iterator.hasNext());
+            assertEquals(Long.valueOf(3), kv.value);
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -193,10 +195,11 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setTime(0);
         processor.process("mel", "first");
         processor.process("mel", "second");
-        final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.findSessions("mel", 0, 0);
-        assertEquals(Long.valueOf(2L), iterator.next().value);
-        assertFalse(iterator.hasNext());
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                 sessionStore.findSessions("mel", 0, 0)) {
+            assertEquals(Long.valueOf(2L), iterator.next().value);
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -240,18 +243,21 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process("a", "1");
 
         // first ensure it is in the store
-        final KeyValueIterator<Windowed<String>, Long> a1 =
-            sessionStore.findSessions("a", 0, 0);
-        assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L), a1.next());
+        try (final KeyValueIterator<Windowed<String>, Long> a1 =
+                 sessionStore.findSessions("a", 0, 0)) {
+            assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L), a1.next());
+        }
+
 
         context.setTime(100);
         processor.process("a", "2");
         // a1 from above should have been removed
         // should have merged session in store
-        final KeyValueIterator<Windowed<String>, Long> a2 =
-            sessionStore.findSessions("a", 0, 100);
-        assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 100)), 2L), a2.next());
-        assertFalse(a2.hasNext());
+        try (final KeyValueIterator<Windowed<String>, Long> a2 =
+                 sessionStore.findSessions("a", 0, 100)) {
+            assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 100)), 2L), a2.next());
+            assertFalse(a2.hasNext());
+        }
     }
 
     @Test

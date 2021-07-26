@@ -79,16 +79,17 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
         windowStore.put(1, "three", currentTime);
 
-        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, currentTime);
+        try (final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, currentTime)) {
 
-        // roll to the next segment that will close the first
-        currentTime = currentTime + SEGMENT_INTERVAL;
-        windowStore.put(1, "four", currentTime);
+            // roll to the next segment that will close the first
+            currentTime = currentTime + SEGMENT_INTERVAL;
+            windowStore.put(1, "four", currentTime);
 
-        // should only have 2 values as the first segment is no longer open
-        assertEquals(new KeyValue<>(SEGMENT_INTERVAL, "two"), iterator.next());
-        assertEquals(new KeyValue<>(2 * SEGMENT_INTERVAL, "three"), iterator.next());
-        assertFalse(iterator.hasNext());
+            // should only have 2 values as the first segment is no longer open
+            assertEquals(new KeyValue<>(SEGMENT_INTERVAL, "two"), iterator.next());
+            assertEquals(new KeyValue<>(2 * SEGMENT_INTERVAL, "three"), iterator.next());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test

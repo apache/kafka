@@ -993,11 +993,12 @@ public class EosIntegrationTest {
             .getStore(300_000L, storeName, streams, QueryableStoreTypes.keyValueStore());
         assertNotNull(store);
 
-        final KeyValueIterator<Long, Long> it = store.all();
-        while (it.hasNext()) {
-            assertTrue(reason, expectedStoreContent.remove(it.next()));
-        }
+        try (final KeyValueIterator<Long, Long> it = store.all()) {
+            while (it.hasNext()) {
+                assertTrue(reason, expectedStoreContent.remove(it.next()));
+            }
 
-        assertTrue(reason, expectedStoreContent.isEmpty());
+            assertTrue(reason, expectedStoreContent.isEmpty());
+        }
     }
 }

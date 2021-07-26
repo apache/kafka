@@ -923,10 +923,11 @@ public class KStreamAggregationIntegrationTest {
         final ReadOnlySessionStore<String, String> sessionStore =
             IntegrationTestUtils.getStore(userSessionsStore, kafkaStreams, QueryableStoreTypes.sessionStore());
 
-        final KeyValueIterator<Windowed<String>, String> bob = sessionStore.fetch("bob");
-        assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t1, t1)), "start")));
-        assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t3, t4)), "pause:resume")));
-        assertFalse(bob.hasNext());
+        try (final KeyValueIterator<Windowed<String>, String> bob = sessionStore.fetch("bob")) {
+            assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t1, t1)), "start")));
+            assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t3, t4)), "pause:resume")));
+            assertFalse(bob.hasNext());
+        }
     }
 
     @Test
