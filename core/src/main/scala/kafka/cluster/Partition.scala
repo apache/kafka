@@ -320,14 +320,7 @@ class Partition(val topicPartition: TopicPartition,
       case false if log.isEmpty =>
         val log = createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
         this.log = Option(log)
-      case _ => {
-        trace(s"${if (isFutureReplica) "Future Log" else "Log"} already exists.")
-        log.foreach(log =>
-          // When running a ZK controller, we may get a log that does not have a topic ID. Assign it here.
-          if (log.topicId.isEmpty) {
-            topicId.foreach(log.assignTopicId)
-          })
-      }
+      case _ => trace(s"${if (isFutureReplica) "Future Log" else "Log"} already exists.")
     }
   }
 

@@ -1369,13 +1369,11 @@ class ReplicaManager(val config: KafkaConfig,
               val requestTopicId = topicIdFromRequest(topicPartition.topic)
               val logTopicId = partition.topicId
 
-              // We propagate the partition state down if:
-              // 1. The leader epoch is higher than the current leader epoch of the partition
-              // 2. The leader epoch is same as the current leader epoch but a new topic id is being assigned. This is
-              //    needed to handle the case where a topic id is assigned for the first time after upgrade.
-              def propagatePartitionState(requestLeaderEpoch: Int, currentLeaderEpoch: Int): Boolean = {
-                requestLeaderEpoch > currentLeaderEpoch ||
-                  (requestLeaderEpoch == currentLeaderEpoch && logTopicId.isEmpty && requestTopicId.isDefined)
+              // When running a ZK controller and upgrading to topic IDs we may receive a request with leader epoch
+              // that is equal to the current leader epoch. In this case, we want to assign topic ID to the log.
+              def isUpgradingToTopicIdWithExistingLog: Boolean = {
+                requestLeaderEpoch == currentLeaderEpoch &&
+                  partition.log.isDefined && logTopicId.isEmpty && requestTopicId.isDefined
               }
 
               if (!hasConsistentTopicId(requestTopicId, logTopicId)) {
@@ -1383,7 +1381,12 @@ class ReplicaManager(val config: KafkaConfig,
                   s" match the topic ID for partition $topicPartition received: " +
                   s"${requestTopicId.get}.")
                 responseMap.put(topicPartition, Errors.INCONSISTENT_TOPIC_ID)
-              } else if (propagatePartitionState(requestLeaderEpoch, currentLeaderEpoch)) {
+              } else if (isUpgradingToTopicIdWithExistingLog) {
+                partition.log.foreach(log =>
+                  requestTopicId.foreach(log.assignTopicId)
+                )
+                responseMap.put(topicPartition, Errors.NONE)
+              } else if (requestLeaderEpoch > currentLeaderEpoch) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
                 if (partitionState.replicas.contains(localBrokerId))
