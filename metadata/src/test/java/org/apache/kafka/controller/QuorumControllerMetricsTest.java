@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -33,12 +34,12 @@ public class QuorumControllerMetricsTest {
     public void testKafkaControllerMetricNames() {
         String expectedGroup = "kafka.controller";
         String expectedType = "KafkaController";
-        Set<String> expectedMetricNames = new HashSet<>(Arrays.asList(
+        Set<String> expectedMetricNames = Utils.mkSet(
             "ActiveControllerCount",
             "GlobalTopicCount",
             "GlobalPartitionCount",
             "OfflinePartitionCount",
-            "PreferredReplicaImbalanceCount"));
+            "PreferredReplicaImbalanceCount");
         Set<String> missingMetrics = getMissingMetricNames(expectedMetricNames, expectedGroup, expectedType);
         assertEquals(Collections.emptySet(), missingMetrics, "Expected metrics did not exist");
     }
@@ -71,12 +72,8 @@ public class QuorumControllerMetricsTest {
                     return false; // this one didn't match
                 }
             })).collect(Collectors.toSet());
-        if (foundMetricNames.size() == expectedMetricNames.size()) {
-            return Collections.emptySet(); // nothing missing
-        } else {
-            Set<String> missingMetricNames = new HashSet<>(expectedMetricNames);
-            missingMetricNames.removeAll(foundMetricNames);
-            return missingMetricNames;
-        }
+        Set<String> missingMetricNames = new HashSet<>(expectedMetricNames);
+        missingMetricNames.removeAll(foundMetricNames);
+        return missingMetricNames;
     }
 }
