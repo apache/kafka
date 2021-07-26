@@ -22,22 +22,21 @@ import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
-
 public final class QuorumControllerMetrics implements ControllerMetrics {
-    private final static MetricName ACTIVE_CONTROLLER_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "ActiveControllerCount", null);
-    private final static MetricName EVENT_QUEUE_TIME_MS = new MetricName(
-        "kafka.controller", "ControllerEventManager", "EventQueueTimeMs", null);
-    private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = new MetricName(
-        "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs", null);
-    private final static MetricName GLOBAL_TOPIC_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "GlobalTopicCount", null);
-    private final static MetricName GLOBAL_PARTITION_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "GlobalPartitionCount", null);
-    private final static MetricName OFFLINE_PARTITION_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "OfflinePartitionCount", null);
-    private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "PreferredReplicaImbalanceCount", null);
+    private final static MetricName ACTIVE_CONTROLLER_COUNT = getMetricName(
+        "kafka.controller", "KafkaController", "ActiveControllerCount");
+    private final static MetricName EVENT_QUEUE_TIME_MS = getMetricName(
+        "kafka.controller", "ControllerEventManager", "EventQueueTimeMs");
+    private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
+        "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs");
+    private final static MetricName GLOBAL_TOPIC_COUNT = getMetricName(
+        "kafka.controller", "KafkaController", "GlobalTopicCount");
+    private final static MetricName GLOBAL_PARTITION_COUNT = getMetricName(
+        "kafka.controller", "KafkaController", "GlobalPartitionCount");
+    private final static MetricName OFFLINE_PARTITION_COUNT = getMetricName(
+        "kafka.controller", "KafkaController", "OfflinePartitionCount");
+    private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
+        "kafka.controller", "KafkaController", "PreferredReplicaImbalanceCount");
     
     private volatile boolean active;
     private volatile int globalTopicCount;
@@ -150,5 +149,11 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     @Override
     public int preferredReplicaImbalanceCount() {
         return this.preferredReplicaImbalanceCount;
+    }
+
+    private static MetricName getMetricName(String group, String type, String name) {
+        final StringBuilder mbeanNameBuilder = new StringBuilder();
+        mbeanNameBuilder.append(group).append(":type=").append(type).append(",name=").append(name);
+        return new MetricName(group, type, name, null, mbeanNameBuilder.toString());
     }
 }
