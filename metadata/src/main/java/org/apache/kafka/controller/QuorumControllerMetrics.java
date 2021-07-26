@@ -24,19 +24,19 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 public final class QuorumControllerMetrics implements ControllerMetrics {
     private final static MetricName ACTIVE_CONTROLLER_COUNT = getMetricName(
-        "kafka.controller", "KafkaController", "ActiveControllerCount");
+        "KafkaController", "ActiveControllerCount");
     private final static MetricName EVENT_QUEUE_TIME_MS = getMetricName(
-        "kafka.controller", "ControllerEventManager", "EventQueueTimeMs");
+        "ControllerEventManager", "EventQueueTimeMs");
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
-        "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs");
+        "ControllerEventManager", "EventQueueProcessingTimeMs");
     private final static MetricName GLOBAL_TOPIC_COUNT = getMetricName(
-        "kafka.controller", "KafkaController", "GlobalTopicCount");
+        "KafkaController", "GlobalTopicCount");
     private final static MetricName GLOBAL_PARTITION_COUNT = getMetricName(
-        "kafka.controller", "KafkaController", "GlobalPartitionCount");
+        "KafkaController", "GlobalPartitionCount");
     private final static MetricName OFFLINE_PARTITION_COUNT = getMetricName(
-        "kafka.controller", "KafkaController", "OfflinePartitionCount");
+        "KafkaController", "OfflinePartitionCount");
     private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
-        "kafka.controller", "KafkaController", "PreferredReplicaImbalanceCount");
+        "KafkaController", "PreferredReplicaImbalanceCount");
     
     private volatile boolean active;
     private volatile int globalTopicCount;
@@ -151,7 +151,8 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         return this.preferredReplicaImbalanceCount;
     }
 
-    private static MetricName getMetricName(String group, String type, String name) {
+    private static MetricName getMetricName(String type, String name) {
+        final String group = "kafka.controller";
         final StringBuilder mbeanNameBuilder = new StringBuilder();
         mbeanNameBuilder.append(group).append(":type=").append(type).append(",name=").append(name);
         return new MetricName(group, type, name, null, mbeanNameBuilder.toString());
