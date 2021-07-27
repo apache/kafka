@@ -41,7 +41,7 @@ public class QuorumControllerMetricsTest {
             "OfflinePartitionsCount",
             "PreferredReplicaImbalanceCount");
         Set<String> missingMetrics = getMissingMetricNames(expectedMetricNames, expectedGroup, expectedType);
-        assertEquals(Collections.emptySet(), missingMetrics, "Expected metrics did not exist");
+        assertEquals(Collections.emptySet(), missingMetrics, "Expect no missing metrics");
     }
 
     @Test
@@ -52,7 +52,7 @@ public class QuorumControllerMetricsTest {
             "EventQueueTimeMs",
             "EventQueueProcessingTimeMs"));
         Set<String> missingMetrics = getMissingMetricNames(expectedMetricNames, expectedGroup, expectedType);
-        assertEquals(Collections.emptySet(), missingMetrics, "Expected metrics did not exist");
+        assertEquals(Collections.emptySet(), missingMetrics, "Expect no missing metrics");
     }
 
     private static Set<String> getMissingMetricNames(
