@@ -26,6 +26,7 @@ import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.controller.QuorumControllerMetrics
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -100,6 +101,9 @@ class KafkaRaftServer(
       controllerQuorumVotersFuture
     ))
   } else {
+    // we need to register the various kafka.controller metrics
+    // for backwards compatibility with the ZooKeeper-based case
+    new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())
     None
   }
 

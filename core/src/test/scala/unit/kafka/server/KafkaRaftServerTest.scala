@@ -21,14 +21,23 @@ import java.nio.file.Files
 import java.util.Properties
 import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdException, KafkaException}
 import kafka.log.Log
+import kafka.metrics.KafkaYammerMetrics
+import kafka.utils.MockTime
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, Test}
+
+import scala.jdk.CollectionConverters._
 
 class KafkaRaftServerTest {
   private val clusterIdBase64 = "H3KKO4NTRPaCWtEmm3vW7A"
+
+  @AfterEach
+  def tearDown(): Unit = {
+    kafka.utils.TestUtils.clearYammerMetrics()
+  }
 
   @Test
   def testSuccessfulLoadMetaProperties(): Unit = {
@@ -202,4 +211,39 @@ class KafkaRaftServerTest {
       () => KafkaRaftServer.initializeLogDirs(config))
   }
 
+  @Test
+  def testKafkaControllerMetricsExistForNonController(): Unit = {
+    val clusterId = clusterIdBase64
+    val nodeId = 0
+    val metaProperties = MetaProperties(clusterId, nodeId)
+
+    val configProperties = new Properties
+    configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
+    configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+
+    val tempLogDir = TestUtils.tempDirectory()
+    try {
+      writeMetaProperties(tempLogDir, metaProperties)
+
+      configProperties.put(KafkaConfig.LogDirProp, tempLogDir.getAbsolutePath)
+      val config = KafkaConfig.fromProps(configProperties)
+      new KafkaRaftServer(config, new MockTime(), None)
+      val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+      val expectedPrefix = "kafka.controller:type=KafkaController,name"
+      val expectedMetricNames = Set(
+        "ActiveControllerCount",
+        "GlobalTopicCount",
+        "GlobalPartitionCount",
+        "OfflinePartitionsCount",
+        "PreferredReplicaImbalanceCount",
+      )
+      expectedMetricNames.foreach { metricName =>
+        assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName == s"$expectedPrefix=$metricName"))
+      }
+    } finally {
+      Utils.delete(tempLogDir)
+    }
+  }
 }
