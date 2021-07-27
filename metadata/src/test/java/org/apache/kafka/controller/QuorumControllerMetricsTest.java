@@ -21,18 +21,14 @@ import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class QuorumControllerMetricsTest {
     @Test
     public void testKafkaControllerMetricNames() {
-        String expectedGroup = "kafka.controller";
         String expectedType = "KafkaController";
         Set<String> expectedMetricNames = Utils.mkSet(
             "ActiveControllerCount",
@@ -40,40 +36,35 @@ public class QuorumControllerMetricsTest {
             "GlobalPartitionCount",
             "OfflinePartitionsCount",
             "PreferredReplicaImbalanceCount");
-        Set<String> missingMetrics = getMissingMetricNames(expectedMetricNames, expectedGroup, expectedType);
-        assertEquals(Collections.emptySet(), missingMetrics, "Expect no missing metrics");
+        assertExpectedMetrics(expectedMetricNames, expectedType);
     }
 
     @Test
     public void testControllerEventManagerMetricNames() {
-        String expectedGroup = "kafka.controller";
         String expectedType = "ControllerEventManager";
-        Set<String> expectedMetricNames = new HashSet<>(Arrays.asList(
+        Set<String> expectedMetricNames = Utils.mkSet(
             "EventQueueTimeMs",
-            "EventQueueProcessingTimeMs"));
-        Set<String> missingMetrics = getMissingMetricNames(expectedMetricNames, expectedGroup, expectedType);
-        assertEquals(Collections.emptySet(), missingMetrics, "Expect no missing metrics");
+            "EventQueueProcessingTimeMs");
+        assertExpectedMetrics(expectedMetricNames, expectedType);
     }
 
-    private static Set<String> getMissingMetricNames(
-        Set<String> expectedMetricNames, String expectedGroup, String expectedType) {
+    private static void assertExpectedMetrics(Set<String> expectedMetricNames, String expectedType) {
+        String expectedGroup = "kafka.controller";
         MetricsRegistry registry = new MetricsRegistry();
         new QuorumControllerMetrics(registry); // populates the registry
-        Set<String> foundMetricNames = expectedMetricNames.stream().filter(expectedMetricName ->
+        expectedMetricNames.stream().forEach(expectedMetricName -> assertTrue(
             registry.allMetrics().keySet().stream().anyMatch(metricName -> {
                 if (metricName.getGroup().equals(expectedGroup) && metricName.getType().equals(expectedType)
                     && metricName.getScope() == null && metricName.getName().equals(expectedMetricName)) {
                     // It has to exist AND the MBean name has to be correct;
                     // fail right here if the MBean name doesn't match
                     String expectedMBeanPrefix = expectedGroup + ":type=" + expectedType + ",name=";
-                    assertEquals(expectedMBeanPrefix + expectedMetricName, metricName.getMBeanName());
+                    assertEquals(expectedMBeanPrefix + expectedMetricName, metricName.getMBeanName(),
+                        "Incorrect MBean name");
                     return true; // the expected metric name exists and the associated MBean name matches
                 } else {
                     return false; // this one didn't match
                 }
-            })).collect(Collectors.toSet());
-        Set<String> missingMetricNames = new HashSet<>(expectedMetricNames);
-        missingMetricNames.removeAll(foundMetricNames);
-        return missingMetricNames;
+            }), "Missing metric: " + expectedMetricName));
     }
 }
