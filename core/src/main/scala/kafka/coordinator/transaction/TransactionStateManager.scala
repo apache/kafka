@@ -167,7 +167,7 @@ class TransactionStateManager(brokerId: Int,
           while (stateEntries.hasNext) {
             val txnMetadata = stateEntries.head
             val transactionalId = txnMetadata.transactionalId
-            var retryAppend = false
+            var fullBatch = false
 
             txnMetadata.inLock {
               if (txnMetadata.pendingState.isEmpty && shouldExpire(txnMetadata, currentTimeMs)) {
@@ -189,12 +189,12 @@ class TransactionStateManager(brokerId: Int,
                     transitMetadata
                   )
                 } else {
-                  retryAppend = true
+                  fullBatch = true
                 }
               }
             }
 
-            if (retryAppend) {
+            if (fullBatch) {
               flushRecordsBuilder()
             } else {
               // Advance the iterator if we do not need to retry the append
