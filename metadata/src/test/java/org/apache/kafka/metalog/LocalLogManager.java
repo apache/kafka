@@ -39,6 +39,8 @@ import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotReaderImpl;
+import org.apache.kafka.snapshot.SnapshotWriterImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -451,7 +453,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             if (snapshot.isPresent()) {
                                 log.trace("Node {}: handling snapshot with id {}.", nodeId, snapshot.get().snapshotId());
                                 listenerData.handleSnapshot(
-                                    SnapshotReader.of(
+                                    SnapshotReaderImpl.of(
                                         snapshot.get(),
                                         new  MetadataRecordSerde(),
                                         BufferSupplier.create(),
@@ -653,7 +655,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         long lastContainedLogTimestamp
     ) {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, committedEpoch);
-        return SnapshotWriter.createWithHeader(
+        return SnapshotWriterImpl.createWithHeader(
             () -> createNewSnapshot(snapshotId),
             1024,
             MemoryPool.NONE,

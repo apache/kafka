@@ -33,6 +33,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotWriterImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -94,7 +95,7 @@ public class SnapshotGeneratorTest {
         long committedOffset,
         long lastContainedLogTime
     ) {
-        return SnapshotWriter.createWithHeader(
+        return SnapshotWriterImpl.createWithHeader(
             () -> createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, 1)),
             1024,
             MemoryPool.NONE,
