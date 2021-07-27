@@ -431,6 +431,16 @@ public class FileRecordsTest {
     }
 
     @Test
+    public void testFormatConversionWithNoMessages() throws IOException {
+        TopicPartition tp = new TopicPartition("topic-1", 0);
+        LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, MemoryRecords.EMPTY, RecordBatch.MAGIC_VALUE_V0,
+            0, Time.SYSTEM);
+        assertEquals(0, lazyRecords.sizeInBytes());
+        Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(16 * 1024L);
+        assertFalse(it.hasNext(), "No messages should be returned");
+    }
+
+    @Test
     public void testSearchForTimestamp() throws IOException {
         for (RecordVersion version : RecordVersion.values()) {
             testSearchForTimestamp(version);

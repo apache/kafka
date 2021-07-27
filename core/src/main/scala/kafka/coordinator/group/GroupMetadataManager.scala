@@ -21,9 +21,10 @@ import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.Optional
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0}
 import kafka.common.OffsetAndMetadata
@@ -37,7 +38,7 @@ import kafka.utils._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.{Metrics, Sensor}
 import org.apache.kafka.common.metrics.stats.{Avg, Max, Meter}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, Errors, MessageUtil}
 import org.apache.kafka.common.record._
@@ -85,6 +86,9 @@ class GroupMetadataManager(brokerId: Int,
    * We use this structure to quickly find the groups which need to be updated by the commit/abort marker. */
   private val openGroupsForProducer = mutable.HashMap[Long, mutable.Set[String]]()
 
+  /* Track the epoch in which we (un)loaded group state to detect racing LeaderAndIsr requests */
+  private [group] val epochForPartitionId = new ConcurrentHashMap[Int, java.lang.Integer]()
+
   /* setup metrics*/
   private val partitionLoadSensor = metrics.sensor(GroupMetadataManager.LoadTimeSensor)
 
@@ -95,7 +99,7 @@ class GroupMetadataManager(brokerId: Int,
     GroupMetadataManager.MetricsGroup,
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
 
-  val offsetCommitsSensor = metrics.sensor("OffsetCommits")
+  val offsetCommitsSensor: Sensor = metrics.sensor("OffsetCommits")
 
   offsetCommitsSensor.add(new Meter(
     metrics.metricName("offset-commit-rate",
@@ -105,7 +109,7 @@ class GroupMetadataManager(brokerId: Int,
       "group-coordinator-metrics",
       "The total number of committed offsets")))
 
-  val offsetExpiredSensor = metrics.sensor("OffsetExpired")
+  val offsetExpiredSensor: Sensor = metrics.sensor("OffsetExpired")
 
   offsetExpiredSensor.add(new Meter(
     metrics.metricName("offset-expiration-rate",
@@ -180,9 +184,9 @@ class GroupMetadataManager(brokerId: Int,
 
   def currentGroups: Iterable[GroupMetadata] = groupMetadataCache.values
 
-  def isPartitionOwned(partition: Int) = inLock(partitionLock) { ownedPartitions.contains(partition) }
+  def isPartitionOwned(partition: Int): Boolean = inLock(partitionLock) { ownedPartitions.contains(partition) }
 
-  def isPartitionLoading(partition: Int) = inLock(partitionLock) { loadingPartitions.contains(partition) }
+  def isPartitionLoading(partition: Int): Boolean = inLock(partitionLock) { loadingPartitions.contains(partition) }
 
   def partitionFor(groupId: String): Int = Utils.abs(groupId.hashCode) % groupMetadataTopicPartitionCount
 
@@ -193,7 +197,7 @@ class GroupMetadataManager(brokerId: Int,
   def isLoading: Boolean = inLock(partitionLock) { loadingPartitions.nonEmpty }
 
   // return true iff group is owned and the group doesn't exist
-  def groupNotExists(groupId: String) = inLock(partitionLock) {
+  def groupNotExists(groupId: String): Boolean = inLock(partitionLock) {
     isGroupLocal(groupId) && getGroup(groupId).forall { group =>
       group.inLock(group.is(Dead))
     }
@@ -393,9 +397,6 @@ class GroupMetadataManager(brokerId: Int,
               throw new IllegalStateException("Append status %s should only have one partition %s"
                 .format(responseStatus, offsetTopicPartition))
 
-            // record the number of offsets committed to the log
-            offsetCommitsSensor.record(records.size)
-
             // construct the commit response status and insert
             // the offset and metadata to cache if the append status has no error
             val status = responseStatus(offsetTopicPartition)
@@ -410,6 +411,10 @@ class GroupMetadataManager(brokerId: Int,
                       group.onOffsetCommitAppend(topicPartition, CommitRecordMetadataAndOffset(Some(status.baseOffset), offsetAndMetadata))
                   }
                 }
+
+                // Record the number of offsets committed to the log
+                offsetCommitsSensor.record(records.size)
+
                 Errors.NONE
               } else {
                 if (!group.is(Dead)) {
@@ -529,34 +534,42 @@ class GroupMetadataManager(brokerId: Int,
   /**
    * Asynchronously read the partition from the offsets topic and populate the cache
    */
-  def scheduleLoadGroupAndOffsets(offsetsPartition: Int, onGroupLoaded: GroupMetadata => Unit): Unit = {
+  def scheduleLoadGroupAndOffsets(offsetsPartition: Int, coordinatorEpoch: Int, onGroupLoaded: GroupMetadata => Unit): Unit = {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
-    if (addLoadingPartition(offsetsPartition)) {
-      info(s"Scheduling loading of offsets and group metadata from $topicPartition")
-      val startTimeMs = time.milliseconds()
-      scheduler.schedule(topicPartition.toString, () => loadGroupsAndOffsets(topicPartition, onGroupLoaded, startTimeMs))
-    } else {
-      info(s"Already loading offsets and group metadata from $topicPartition")
-    }
+    info(s"Scheduling loading of offsets and group metadata from $topicPartition for epoch $coordinatorEpoch")
+    val startTimeMs = time.milliseconds()
+    scheduler.schedule(topicPartition.toString, () => loadGroupsAndOffsets(topicPartition, coordinatorEpoch, onGroupLoaded, startTimeMs))
   }
 
-  private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit, startTimeMs: java.lang.Long): Unit = {
-    try {
-      val schedulerTimeMs = time.milliseconds() - startTimeMs
-      debug(s"Started loading offsets and group metadata from $topicPartition")
-      doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
-      val endTimeMs = time.milliseconds()
-      val totalLoadingTimeMs = endTimeMs - startTimeMs
-      partitionLoadSensor.record(totalLoadingTimeMs.toDouble, endTimeMs, false)
-      info(s"Finished loading offsets and group metadata from $topicPartition "
-        + s"in $totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds"
-        + s" was spent in the scheduler.")
-    } catch {
-      case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
-    } finally {
-      inLock(partitionLock) {
-        ownedPartitions.add(topicPartition.partition)
-        loadingPartitions.remove(topicPartition.partition)
+  private[group] def loadGroupsAndOffsets(
+    topicPartition: TopicPartition,
+    coordinatorEpoch: Int,
+    onGroupLoaded: GroupMetadata => Unit,
+    startTimeMs: java.lang.Long
+  ): Unit = {
+    if (!maybeUpdateCoordinatorEpoch(topicPartition.partition, Some(coordinatorEpoch))) {
+      info(s"Not loading offsets and group metadata for $topicPartition " +
+        s"in epoch $coordinatorEpoch since current epoch is ${epochForPartitionId.get(topicPartition.partition)}")
+    } else if (!addLoadingPartition(topicPartition.partition)) {
+      info(s"Already loading offsets and group metadata from $topicPartition")
+    } else {
+      try {
+        val schedulerTimeMs = time.milliseconds() - startTimeMs
+        debug(s"Started loading offsets and group metadata from $topicPartition for epoch $coordinatorEpoch")
+        doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
+        val endTimeMs = time.milliseconds()
+        val totalLoadingTimeMs = endTimeMs - startTimeMs
+        partitionLoadSensor.record(totalLoadingTimeMs.toDouble, endTimeMs, false)
+        info(s"Finished loading offsets and group metadata from $topicPartition "
+          + s"in $totalLoadingTimeMs milliseconds for epoch $coordinatorEpoch, of which " +
+          s"$schedulerTimeMs milliseconds was spent in the scheduler.")
+      } catch {
+        case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
+      } finally {
+        inLock(partitionLock) {
+          ownedPartitions.add(topicPartition.partition)
+          loadingPartitions.remove(topicPartition.partition)
+        }
       }
     }
   }
@@ -750,20 +763,28 @@ class GroupMetadataManager(brokerId: Int,
    * @param offsetsPartition Groups belonging to this partition of the offsets topic will be deleted from the cache.
    */
   def removeGroupsForPartition(offsetsPartition: Int,
+                               coordinatorEpoch: Option[Int],
                                onGroupUnloaded: GroupMetadata => Unit): Unit = {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     info(s"Scheduling unloading of offsets and group metadata from $topicPartition")
-    scheduler.schedule(topicPartition.toString, () => removeGroupsAndOffsets())
+    scheduler.schedule(topicPartition.toString, () => removeGroupsAndOffsets(topicPartition, coordinatorEpoch, onGroupUnloaded))
+  }
 
-    def removeGroupsAndOffsets(): Unit = {
+  private [group] def removeGroupsAndOffsets(topicPartition: TopicPartition,
+                                             coordinatorEpoch: Option[Int],
+                                             onGroupUnloaded: GroupMetadata => Unit): Unit = {
+    val offsetsPartition = topicPartition.partition
+    if (maybeUpdateCoordinatorEpoch(offsetsPartition, coordinatorEpoch)) {
       var numOffsetsRemoved = 0
       var numGroupsRemoved = 0
 
-      debug(s"Started unloading offsets and group metadata for $topicPartition")
+      debug(s"Started unloading offsets and group metadata for $topicPartition for " +
+        s"coordinator epoch $coordinatorEpoch")
       inLock(partitionLock) {
         // we need to guard the group removal in cache in the loading partition lock
         // to prevent coordinator's check-and-get-group race condition
         ownedPartitions.remove(offsetsPartition)
+        loadingPartitions.remove(offsetsPartition)
 
         for (group <- groupMetadataCache.values) {
           if (partitionFor(group.groupId) == offsetsPartition) {
@@ -775,10 +796,33 @@ class GroupMetadataManager(brokerId: Int,
           }
         }
       }
-
-      info(s"Finished unloading $topicPartition. Removed $numOffsetsRemoved cached offsets " +
-        s"and $numGroupsRemoved cached groups.")
+      info(s"Finished unloading $topicPartition for coordinator epoch $coordinatorEpoch. " +
+        s"Removed $numOffsetsRemoved cached offsets and $numGroupsRemoved cached groups.")
+    } else {
+      info(s"Not removing offsets and group metadata for $topicPartition " +
+        s"in epoch $coordinatorEpoch since current epoch is ${epochForPartitionId.get(topicPartition.partition)}")
     }
+  }
+
+  /**
+   * Update the cached coordinator epoch if the new value is larger than the old value.
+   * @return true if `epochOpt` is either empty or contains a value greater than or equal to the current epoch
+   */
+  private def maybeUpdateCoordinatorEpoch(
+    partitionId: Int,
+    epochOpt: Option[Int]
+  ): Boolean = {
+    val updatedEpoch = epochForPartitionId.compute(partitionId, (_, currentEpoch) => {
+      if (currentEpoch == null) {
+        epochOpt.map(Int.box).orNull
+      } else {
+        epochOpt match {
+          case Some(epoch) if epoch > currentEpoch => epoch
+          case _ => currentEpoch
+        }
+      }
+    })
+    epochOpt.forall(_ == updatedEpoch)
   }
 
   // visible for testing
@@ -911,11 +955,11 @@ class GroupMetadataManager(brokerId: Int,
 
   private def groupsBelongingToPartitions(producerId: Long, partitions: Set[Int]) = openGroupsForProducer synchronized {
     val (ownedGroups, _) = openGroupsForProducer.getOrElse(producerId, mutable.Set.empty[String])
-      .partition { case (group) => partitions.contains(partitionFor(group)) }
+      .partition(group => partitions.contains(partitionFor(group)))
     ownedGroups
   }
 
-  private def removeGroupFromAllProducers(groupId: String) = openGroupsForProducer synchronized {
+  private def removeGroupFromAllProducers(groupId: String): Unit = openGroupsForProducer synchronized {
     openGroupsForProducer.forKeyValue { (_, groups) =>
       groups.remove(groupId)
     }
@@ -965,7 +1009,11 @@ class GroupMetadataManager(brokerId: Int,
    */
   private[group] def addLoadingPartition(partition: Int): Boolean = {
     inLock(partitionLock) {
-      loadingPartitions.add(partition)
+      if (ownedPartitions.contains(partition)) {
+        false
+      } else {
+        loadingPartitions.add(partition)
+      }
     }
   }
 

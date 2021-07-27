@@ -23,8 +23,9 @@ import java.util.Objects;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
-import static org.apache.kafka.streams.kstream.Windows.DEFAULT_GRACE_PERIOD_MS;
-
+import static org.apache.kafka.streams.kstream.Windows.DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD;
+import static org.apache.kafka.streams.kstream.Windows.NO_GRACE_PERIOD;
+import static java.time.Duration.ofMillis;
 
 /**
  * A session based window specification used for aggregating events into sessions.
@@ -78,23 +79,76 @@ public final class SessionWindows {
     private SessionWindows(final long gapMs, final long graceMs) {
         this.gapMs = gapMs;
         this.graceMs = graceMs;
+
+        if (gapMs <= 0) {
+            throw new IllegalArgumentException("Gap time cannot be zero or negative.");
+        }
+
+        if (graceMs < 0) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
+        }
+    }
+
+    /**
+     * Creates a new window specification with the specified inactivity gap.
+     * <p>
+     * Note that new events may change the boundaries of session windows, so aggressive
+     * close times can lead to surprising results in which an out-of-order event is rejected and then
+     * a subsequent event moves the window boundary forward.
+     * <p>
+     * CAUTION: Using this method implicitly sets the grace period to zero, which means that any out-of-order
+     * records arriving after the window ends are considered late and will be dropped.
+     *
+     * @param inactivityGap the gap of inactivity between sessions
+     * @return a window definition with the window size and no grace period. Note that this means out-of-order records arriving after the window end will be dropped
+     * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
+     */
+    public static SessionWindows ofInactivityGapWithNoGrace(final Duration inactivityGap) {
+        return ofInactivityGapAndGrace(inactivityGap, ofMillis(NO_GRACE_PERIOD));
+    }
+
+    /**
+     * Creates a new window specification with the specified inactivity gap.
+     * <p>
+     * Note that new events may change the boundaries of session windows, so aggressive
+     * close times can lead to surprising results in which an out-of-order event is rejected and then
+     * a subsequent event moves the window boundary forward.
+     * <p>
+     * Using this method explicitly sets the grace period to the duration specified by {@code afterWindowEnd}, which
+     * means that only out-of-order records arriving more than the grace period after the window end will be dropped.
+     * The window close, after which any incoming records are considered late and will be rejected, is defined as
+     * {@code windowEnd + afterWindowEnd}
+     *
+     * @param inactivityGap the gap of inactivity between sessions
+     * @param afterWindowEnd The grace period to admit out-of-order events to a window.
+     * @return A SessionWindows object with the specified inactivity gap and grace period
+     * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
+     *                                  if the {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
+     */
+    public static SessionWindows ofInactivityGapAndGrace(final Duration inactivityGap, final Duration afterWindowEnd) {
+        final String inactivityGapMsgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
+        final long inactivityGapMs = validateMillisecondDuration(inactivityGap, inactivityGapMsgPrefix);
+
+        final String afterWindowEndMsgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
+        final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, afterWindowEndMsgPrefix);
+
+        return new SessionWindows(inactivityGapMs, afterWindowEndMs);
     }
 
     /**
      * Create a new window specification with the specified inactivity gap.
      *
      * @param inactivityGap the gap of inactivity between sessions
-     * @return a new window specification with default maintain duration of 1 day
-     *
+     * @return a new window specification without specifying a grace period (default to 24 hours minus {@code inactivityGap})
      * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
+     * @deprecated since 3.0. Use {@link #ofInactivityGapWithNoGrace(Duration)} instead
      */
+    @Deprecated
     public static SessionWindows with(final Duration inactivityGap) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
         final long inactivityGapMs = validateMillisecondDuration(inactivityGap, msgPrefix);
-        if (inactivityGapMs <= 0) {
-            throw new IllegalArgumentException("Gap time (inactivityGapMs) cannot be zero or negative.");
-        }
-        return new SessionWindows(inactivityGapMs, DEFAULT_GRACE_PERIOD_MS);
+
+        return new SessionWindows(inactivityGapMs, Math.max(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD - inactivityGapMs, 0));
     }
 
     /**
@@ -107,14 +161,14 @@ public final class SessionWindows {
      *
      * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return this updated builder
-     * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
+     * @deprecated since 3.0. Use {@link #ofInactivityGapAndGrace(Duration, Duration)} instead
      */
+    @Deprecated
     public SessionWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
+        //TODO KAFKA-13021: disallow calling grace() if it was already set via ofTimeDifferenceAndGrace/WithNoGrace()
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
         final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, msgPrefix);
-        if (afterWindowEndMs < 0) {
-            throw new IllegalArgumentException("Grace period must not be negative.");
-        }
 
         return new SessionWindows(gapMs, afterWindowEndMs);
     }

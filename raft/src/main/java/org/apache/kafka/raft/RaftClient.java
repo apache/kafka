@@ -20,6 +20,7 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 
@@ -61,7 +62,7 @@ public interface RaftClient<T> extends AutoCloseable {
          * when a leader steps down or fails.
          *
          * If this node is the leader, then the notification of leadership will be delayed until
-         * the implementation of this interface has caughup to the high-watermark through calls to
+         * the implementation of this interface has caught up to the high-watermark through calls to
          * {@link #handleSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
          *
          * If this node is not the leader, then this method will be called as soon as possible. In
@@ -88,15 +89,32 @@ public interface RaftClient<T> extends AutoCloseable {
     void initialize();
 
     /**
-     * Register a listener to get commit/leader notifications.
+     * Register a listener to get commit, snapshot and leader notifications.
      *
-     * @param listener the listener
+     * The implementation of this interface assumes that each call to {@code register} uses
+     * a different {@code Listener} instance. If the same instance is used for multiple calls
+     * to this method, then only one {@code Listener} will be registered.
+     *
+     * @param listener the listener to register
      */
     void register(Listener<T> listener);
 
     /**
+     * Unregisters a listener.
+     *
+     * To distinguish from events that happend before the call to {@code unregister} and a future
+     * call to {@code register}, different {@code Listener} instances must be used.
+     *
+     * If the {@code Listener} provided was never registered then the unregistration is ignored. 
+     *
+     * @param listener the listener to unregister
+     */
+    void unregister(Listener<T> listener);
+
+    /**
      * Return the current {@link LeaderAndEpoch}.
-     * @return the current {@link LeaderAndEpoch}
+     *
+     * @return the current leader and epoch
      */
     LeaderAndEpoch leaderAndEpoch();
 
@@ -126,7 +144,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * @param records the list of records to append
      * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
      *         be committed; null if no memory could be allocated for the batch at this time
-     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
      */
@@ -148,7 +166,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * @param records the list of records to append
      * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
      *         be committed; null if no memory could be allocated for the batch at this time
-     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
      */
@@ -170,9 +188,12 @@ public interface RaftClient<T> extends AutoCloseable {
     CompletableFuture<Void> shutdown(int timeoutMs);
 
     /**
-     * Resign the leadership. The leader will give up its leadership in the current epoch,
-     * and a new election will be held. Note that nothing prevents this leader from getting
-     * reelected.
+     * Resign the leadership. The leader will give up its leadership in the passed epoch
+     * (if it matches the current epoch), and a new election will be held. Note that nothing
+     * prevents this node from being reelected as the leader.
+     *
+     * Notification of successful resignation can be observed through
+     * {@link Listener#handleLeaderChange(LeaderAndEpoch)}.
      *
      * @param epoch the epoch to resign from. If this does not match the current epoch, this
      *              call will be ignored.
@@ -180,14 +201,19 @@ public interface RaftClient<T> extends AutoCloseable {
     void resign(int epoch);
 
     /**
-     * Create a writable snapshot file for a given offset and epoch.
+     * Create a writable snapshot file for a committed offset and epoch.
      *
-     * The RaftClient assumes that the snapshot return will contain the records up to but
-     * not including the end offset in the snapshot id. See {@link SnapshotWriter} for
-     * details on how to use this object.
+     * The RaftClient assumes that the snapshot returned will contain the records up to and
+     * including the committed offset and epoch. See {@link SnapshotWriter} for details on
+     * how to use this object. If a snapshot already exists then returns an
+     * {@link Optional#empty()}.
      *
-     * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot
+     * @param committedEpoch the epoch of the committed offset
+     * @param committedOffset the last committed offset that will be included in the snapshot
+     * @param lastContainedLogTime The append time of the highest record contained in this snapshot
+     * @return a writable snapshot if it doesn't already exists
+     * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
+     *         or less than the log start offset.
      */
-    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId);
+    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime);
 }

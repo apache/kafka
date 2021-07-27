@@ -44,7 +44,6 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
@@ -67,6 +66,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class RepartitionOptimizingTest {
 
     private final Logger log = LoggerFactory.getLogger(RepartitionOptimizingTest.class);
@@ -135,6 +135,7 @@ public class RepartitionOptimizingTest {
     }
 
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private void runTest(final String optimizationConfig, final int expectedNumberRepartitionTopics) {
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -185,12 +186,12 @@ public class RepartitionOptimizingTest {
             .filter((k, v) -> k.equals("A"), Named.as("join-filter"))
             .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
                   JoinWindows.of(ofMillis(5000)),
-                  StreamJoined.<String, String, Long>with(Stores.inMemoryWindowStore("join-store", ofDays(1).plus(ofMillis(10000)), ofMillis(10000), true),
-                                                          Stores.inMemoryWindowStore("other-join-store", ofDays(1).plus(ofMillis(10000)), ofMillis(10000), true))
-                                                    .withName("join")
-                                                    .withKeySerde(Serdes.String())
-                                                    .withValueSerde(Serdes.String())
-                                                    .withOtherValueSerde(Serdes.Long()))
+                  StreamJoined.<String, String, Long>with(Stores.inMemoryWindowStore("join-store", ofDays(1), ofMillis(10000), true),
+                                       Stores.inMemoryWindowStore("other-join-store", ofDays(1), ofMillis(10000), true))
+                          .withName("join")
+                          .withKeySerde(Serdes.String())
+                          .withValueSerde(Serdes.String())
+                          .withOtherValueSerde(Serdes.Long()))
             .to(JOINED_TOPIC, Produced.as("join-to"));
 
         streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizationConfig);
@@ -257,7 +258,8 @@ public class RepartitionOptimizingTest {
         return keyValueList;
     }
 
-    private static class SimpleProcessor extends AbstractProcessor<String, String> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private static class SimpleProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
 
         final List<String> valueList;
 

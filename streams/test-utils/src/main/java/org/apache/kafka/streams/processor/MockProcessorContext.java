@@ -56,6 +56,7 @@ import java.util.Properties;
  * If you require more automated tests, we recommend wrapping your {@link Processor} in a minimal source-processor-sink
  * {@link Topology} and using the {@link TopologyTestDriver}.
  */
+@SuppressWarnings("deprecation") // not deprecating old PAPI Context, since it is still in use by Transformers.
 public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
     // Immutable fields ================================================
     private final StreamsMetricsImpl metrics;
@@ -423,6 +424,18 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return offset;
     }
 
+    /**
+     * Returns the headers of the current input record; could be {@code null} if it is not
+     * available.
+     *
+     * <p> Note, that headers should never be {@code null} in the actual Kafka Streams runtime,
+     * even if they could be empty. However, this mock does not guarantee non-{@code null} headers.
+     * Thus, you either need to add a {@code null} check to your production code to use this mock
+     * for testing or you always need to set headers manually via {@link #setHeaders(Headers)} to
+     * avoid a {@link NullPointerException} from your {@link Processor} implementation.
+     *
+     * @return the headers
+     */
     @Override
     public Headers headers() {
         return headers;

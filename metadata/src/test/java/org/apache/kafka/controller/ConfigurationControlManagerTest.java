@@ -23,6 +23,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -103,7 +104,7 @@ public class ConfigurationControlManagerTest {
             setName("def").setValue("blah"));
         assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
             manager.getConfigs(MYTOPIC));
-        ControllerTestUtils.assertBatchIteratorContains(Arrays.asList(
+        RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
             Arrays.asList(new ApiMessageAndVersion(new ConfigRecord().
                     setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("x,y,z"), (short) 0),
@@ -143,42 +144,16 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
-        assertEquals(
-            ControllerResult.atomicOf(
-                Collections.singletonList(
-                    new ApiMessageAndVersion(
-                        new ConfigRecord()
-                            .setResourceType(TOPIC.id())
-                            .setResourceName("mytopic")
-                            .setName("abc")
-                            .setValue("123"),
-                        (short) 0
-                    )
-                ),
-                toMap(
-                    entry(
-                        BROKER0,
-                        new ApiError(
-                            Errors.INVALID_REQUEST,
-                            "A DELETE op was given with a non-null value."
-                        )
-                    ),
-                    entry(MYTOPIC, ApiError.NONE)
-                )
-            ),
-            manager.incrementalAlterConfigs(
-                toMap(
-                    entry(
-                        BROKER0,
-                        toMap(
-                            entry("foo.bar", entry(DELETE, "abc")),
-                            entry("quux", entry(SET, "abc"))
-                        )
-                    ),
-                    entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))
-                )
-            )
-        );
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+                new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
+                    setName("abc").setValue("123"), (short) 0)),
+                toMap(entry(BROKER0, new ApiError(Errors.INVALID_REQUEST,
+                            "A DELETE op was given with a non-null value.")),
+                    entry(MYTOPIC, ApiError.NONE))),
+            manager.incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
+                    entry("foo.bar", entry(DELETE, "abc")),
+                    entry("quux", entry(SET, "abc")))),
+                entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123")))))));
     }
 
     @Test

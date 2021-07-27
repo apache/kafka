@@ -89,8 +89,6 @@ public class RestServerTest {
         workerProps.put(DistributedConfig.GROUP_ID_CONFIG, "connect-test-group");
         workerProps.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
         workerProps.put(WorkerConfig.LISTENERS_CONFIG, "HTTP://localhost:0");
 
@@ -107,28 +105,6 @@ public class RestServerTest {
         checkCORSRequest("", "http://bar.com", null, null);
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testParseListeners() {
-        // Use listeners field
-        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
-        configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
-        DistributedConfig config = new DistributedConfig(configMap);
-
-        server = new RestServer(config);
-        Assert.assertArrayEquals(new String[] {"http://localhost:8080", "https://localhost:8443"}, server.parseListeners().toArray());
-
-        // Build listener from hostname and port
-        configMap = new HashMap<>(baseWorkerProps());
-        configMap.remove(WorkerConfig.LISTENERS_CONFIG);
-        configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
-        configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
-        config = new DistributedConfig(configMap);
-        server = new RestServer(config);
-        Assert.assertArrayEquals(new String[] {"http://my-hostname:8080"}, server.parseListeners().toArray());
-    }
-
-    @SuppressWarnings("deprecation")
     @Test
     public void testAdvertisedUri() {
         // Advertised URI from listeners without protocol
@@ -166,15 +142,6 @@ public class RestServerTest {
 
         server = new RestServer(config);
         Assert.assertEquals("http://somehost:10000/", server.advertisedUrl().toString());
-
-        // listener from hostname and port
-        configMap = new HashMap<>(baseWorkerProps());
-        configMap.remove(WorkerConfig.LISTENERS_CONFIG);
-        configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
-        configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
-        config = new DistributedConfig(configMap);
-        server = new RestServer(config);
-        Assert.assertEquals("http://my-hostname:8080/", server.advertisedUrl().toString());
 
         // correct listener is chosen when https listener is configured before http listener and advertised listener is http
         configMap = new HashMap<>(baseWorkerProps());

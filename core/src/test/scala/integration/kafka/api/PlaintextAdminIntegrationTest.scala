@@ -40,7 +40,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
+import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.slf4j.LoggerFactory
@@ -130,7 +130,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     waitForTopics(client, topics, List())
     val topicIds = getTopicIds().values.toSet
 
-    client.deleteTopicsWithIds(topicIds.asJava).all.get()
+    client.deleteTopics(TopicCollection.ofTopicIds(topicIds.asJava)).all.get()
     waitForTopics(client, List(), topics)
   }
 
@@ -583,7 +583,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // finally, try to add partitions to a topic queued for deletion
     val deleteResult = client.deleteTopics(asList(topic1))
-    deleteResult.values.get(topic1).get
+    deleteResult.topicNameValues.get(topic1).get
     alterResult = client.createPartitions(Map(topic1 ->
       NewPartitions.increaseTo(4)).asJava, validateOnly)
     e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
@@ -1988,13 +1988,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val logConfig = zkClient.getLogConfigs(Set(topic), Collections.emptyMap[String, AnyRef])._1(topic)
 
       assertEquals(compressionType, logConfig.originals.get(LogConfig.CompressionTypeProp))
-      assertNull(logConfig.originals.get(LogConfig.MessageFormatVersionProp))
-      assertEquals(ApiVersion.latestVersion, logConfig.messageFormatVersion)
+      assertNull(logConfig.originals.get(LogConfig.RetentionBytesProp))
+      assertEquals(Defaults.LogRetentionBytes, logConfig.retentionSize)
     }
 
     client = Admin.create(createConfig)
-    val invalidConfigs = Map[String, String](LogConfig.MessageFormatVersionProp -> null,
-      LogConfig.CompressionTypeProp -> "producer").asJava
+    val invalidConfigs = Map[String, String](
+      LogConfig.RetentionBytesProp -> null,
+      LogConfig.CompressionTypeProp -> "producer"
+    ).asJava
     val newTopic = new NewTopic(topic, 2, brokerCount.toShort)
     val e1 = assertThrows(classOf[ExecutionException],
       () => client.createTopics(Collections.singletonList(newTopic.configs(invalidConfigs))).all.get())
@@ -2008,7 +2010,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
     val alterOps = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.MessageFormatVersionProp, null), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(LogConfig.RetentionBytesProp, null), AlterConfigOp.OpType.SET),
       new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET)
     )
     val e2 = assertThrows(classOf[ExecutionException],

@@ -223,7 +223,7 @@ public abstract class AbstractResetIntegrationTest {
         streams.cleanUp();
 
         final List<String> internalTopics = cluster.getAllTopicsInCluster().stream()
-                .filter(topic -> StreamsResetter.matchesInternalTopicFormat(topic))
+                .filter(StreamsResetter::matchesInternalTopicFormat)
                 .collect(Collectors.toList());
         cleanGlobal(false,
                 "--internal-topics",
@@ -341,6 +341,7 @@ public abstract class AbstractResetIntegrationTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private Topology setupTopologyWithIntermediateTopic(final boolean useRepartitioned,
                                                         final String outputTopic2) {
         final StreamsBuilder builder = new StreamsBuilder();

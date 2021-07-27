@@ -18,19 +18,27 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
+import java.time.Duration;
+
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
+import static org.apache.kafka.streams.kstream.Windows.DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 public class SessionWindowsTest {
 
     @Test
     public void shouldSetWindowGap() {
         final long anyGap = 42L;
+        final long anyGrace = 1024L;
+
         assertEquals(anyGap, SessionWindows.with(ofMillis(anyGap)).inactivityGap());
+        assertEquals(anyGap, SessionWindows.ofInactivityGapWithNoGrace(ofMillis(anyGap)).inactivityGap());
+        assertEquals(anyGap, SessionWindows.ofInactivityGapAndGrace(ofMillis(anyGap), ofMillis(anyGrace)).inactivityGap());
     }
 
     @Test
@@ -38,7 +46,6 @@ public class SessionWindowsTest {
         final long anyRetentionTime = 42L;
         assertEquals(anyRetentionTime, SessionWindows.with(ofMillis(1)).grace(ofMillis(anyRetentionTime)).gracePeriodMs());
     }
-
 
     @Test
     public void gracePeriodShouldEnforceBoundaries() {
@@ -50,6 +57,14 @@ public class SessionWindowsTest {
         } catch (final IllegalArgumentException e) {
             //expected
         }
+    }
+
+    @Test
+    public void oldAPIShouldSetDefaultGracePeriod() {
+        assertEquals(Duration.ofDays(1).toMillis(), DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD);
+        assertEquals(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD - 3L, SessionWindows.with(ofMillis(3L)).gracePeriodMs());
+        assertEquals(0L, SessionWindows.with(ofMillis(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD)).gracePeriodMs());
+        assertEquals(0L, SessionWindows.with(ofMillis(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD + 1L)).gracePeriodMs());
     }
 
     @Test
@@ -66,6 +81,15 @@ public class SessionWindowsTest {
     public void equalsAndHashcodeShouldBeValidForPositiveCases() {
         verifyEquality(SessionWindows.with(ofMillis(1)), SessionWindows.with(ofMillis(1)));
 
+        verifyEquality(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)),
+                SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1))
+        );
+
+        verifyEquality(
+                SessionWindows.ofInactivityGapAndGrace(ofMillis(1), ofMillis(11)),
+                SessionWindows.ofInactivityGapAndGrace(ofMillis(1), ofMillis(11))
+        );
+
         verifyEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(6)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
 
         verifyEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(7)));
@@ -75,6 +99,15 @@ public class SessionWindowsTest {
 
     @Test
     public void equalsAndHashcodeShouldBeValidForNegativeCases() {
+
+        verifyInEquality(
+                SessionWindows.ofInactivityGapWithNoGrace(ofMillis(9)),
+                SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)));
+
+        verifyInEquality(
+                SessionWindows.ofInactivityGapAndGrace(ofMillis(9), ofMillis(9)),
+                SessionWindows.ofInactivityGapAndGrace(ofMillis(1), ofMillis(9)));
+
         verifyInEquality(SessionWindows.with(ofMillis(9)), SessionWindows.with(ofMillis(1)));
 
         verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(9)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));

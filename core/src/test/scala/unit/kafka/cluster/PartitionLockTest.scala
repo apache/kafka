@@ -20,11 +20,13 @@ package kafka.cluster
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent._
+
 import kafka.api.ApiVersion
 import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.epoch.LeaderEpochFileCache
+import kafka.server.metadata.MockConfigRepository
 import kafka.utils._
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -68,7 +70,7 @@ class PartitionLockTest extends Logging {
   @BeforeEach
   def setUp(): Unit = {
     val logConfig = new LogConfig(new Properties)
-    val configRepository = TestUtils.createConfigRepository(topicPartition.topic, createLogProperties(Map.empty))
+    val configRepository = MockConfigRepository.forTopic(topicPartition.topic, createLogProperties(Map.empty))
     logManager = TestUtils.createLogManager(Seq(logDir), logConfig, configRepository,
       CleanerConfig(enableCleaner = false), mockTime)
     partition = setupPartitionWithMocks(logManager)
@@ -282,7 +284,7 @@ class PartitionLockTest extends Logging {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.messageFormatVersion.recordVersion, "")
+        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxProducerIdExpirationMs = 60 * 60 * 1000
         val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, maxProducerIdExpirationMs)
         val offsets = LogLoader.load(LoadLogParams(
@@ -299,7 +301,10 @@ class PartitionLockTest extends Logging {
           maxProducerIdExpirationMs,
           leaderEpochCache,
           producerStateManager))
-        new SlowLog(log, segments, offsets, leaderEpochCache, producerStateManager, mockTime, logDirFailureChannel, appendSemaphore)
+        val localLog = new LocalLog(log.dir, log.config, segments, offsets.recoveryPoint,
+          offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, log.topicPartition,
+          logDirFailureChannel)
+        new SlowLog(log, offsets.logStartOffset, localLog, leaderEpochCache, producerStateManager, appendSemaphore)
       }
     }
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
@@ -363,28 +368,18 @@ class PartitionLockTest extends Logging {
 
   private class SlowLog(
     log: Log,
-    segments: LogSegments,
-    offsets: LoadedLogOffsets,
+    logStartOffset: Long,
+    localLog: LocalLog,
     leaderEpochCache: Option[LeaderEpochFileCache],
     producerStateManager: ProducerStateManager,
-    mockTime: MockTime,
-    logDirFailureChannel: LogDirFailureChannel,
     appendSemaphore: Semaphore
   ) extends Log(
-    log.dir,
-    log.config,
-    segments,
-    offsets.logStartOffset,
-    offsets.recoveryPoint,
-    offsets.nextOffsetMetadata,
-    mockTime.scheduler,
+    logStartOffset,
+    localLog,
     new BrokerTopicStats,
-    mockTime,
     log.producerIdExpirationCheckIntervalMs,
-    log.topicPartition,
     leaderEpochCache,
     producerStateManager,
-    logDirFailureChannel,
     _topicId = None,
     keepPartitionMetadataFile = true) {
 
