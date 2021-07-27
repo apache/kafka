@@ -171,7 +171,7 @@ public class LeaderState<T> implements EpochState {
                         || (highWatermarkUpdateOffset == currentHighWatermarkMetadata.offset &&
                             !highWatermarkUpdateMetadata.metadata.equals(currentHighWatermarkMetadata.metadata))) {
                         highWatermark = highWatermarkUpdateOpt;
-                        log.debug(
+                        log.trace(
                             "High watermark updated to {} based on indexOfHw {} and voters {}",
                             highWatermark,
                             indexOfHw,
@@ -189,7 +189,7 @@ public class LeaderState<T> implements EpochState {
                     }
                 } else {
                     highWatermark = highWatermarkUpdateOpt;
-                    log.debug(
+                    log.trace(
                         "High watermark set to {} based on indexOfHw {} and voters {}",
                         highWatermark,
                         indexOfHw,
