@@ -17,6 +17,7 @@
 
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 
@@ -67,11 +68,16 @@ public interface SnapshotWriter<T> extends AutoCloseable {
     void freeze();
 
     /**
-     * Freezes the snapshot by flushing all pending writes and marking it as immutable.
-     * <p>
-     * Also adds a {@link SnapshotFooterRecord} to the end of the snapshot
+     * Closes the snapshot writer.
+     *
+     * If close is called without first calling freeze the snapshot is aborted.
+     */
+    void close();
+
+    /**
+     * Adds a {@link SnapshotHeaderRecord} to snapshot
+     *
+     * @throws IllegalStateException if the snapshot is not empty
      */
     void initializeSnapshotWithHeader();
-
-    void close();
 }
