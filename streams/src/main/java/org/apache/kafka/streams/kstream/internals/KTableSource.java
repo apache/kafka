@@ -105,8 +105,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                     final RecordMetadata recordMetadata = context.recordMetadata().get();
                     LOG.warn(
                         "Skipping record due to null key. "
-                            + "value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                        record.value(),
+                            + "topic=[{}] partition=[{}] offset=[{}]",
                         recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
                     );
                 } else {
