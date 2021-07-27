@@ -631,6 +631,36 @@ class TransactionStateManagerTest {
   }
 
   @Test
+  def testTransactionalExpirationWithTooSmallBatchSize(): Unit = {
+    // The batch size is too small, but we nevertheless expect the
+    // coordinator to attempt the append. This test mainly ensures
+    // that the expiration task does not get stuck.
+
+    val partitionIds = 0 until numPartitions
+    val maxBatchSize = 16
+
+    loadTransactionsForPartitions(partitionIds)
+    val allTransactionalIds = loadExpiredTransactionalIds(numTransactionalIds = 20)
+
+    EasyMock.reset(replicaManager)
+    expectLogConfig(partitionIds, maxBatchSize)
+
+    val attemptedAppends = mutable.Map.empty[TopicPartition, mutable.Buffer[MemoryRecords]]
+    expectTransactionalIdExpiration(Errors.MESSAGE_TOO_LARGE, attemptedAppends)
+    EasyMock.replay(replicaManager)
+
+    assertEquals(allTransactionalIds, listExpirableTransactionalIds())
+    transactionManager.removeExpiredTransactionalIds()
+    EasyMock.verify(replicaManager)
+
+    for (batches <- attemptedAppends.values; batch <- batches) {
+      assertTrue(batch.sizeInBytes() > maxBatchSize)
+    }
+
+    assertEquals(allTransactionalIds, listExpirableTransactionalIds())
+  }
+
+  @Test
   def testTransactionalExpirationWithOfflineLogDir(): Unit = {
     val onlinePartitionId = 0
     val offlinePartitionId = 1
@@ -653,18 +683,20 @@ class TransactionStateManagerTest {
     expectTransactionalIdExpiration(Errors.NONE, appendedRecords)
     EasyMock.replay(replicaManager)
 
-    assertTrue(hasUnexpiredTransactionalIds)
+    assertEquals(allTransactionalIds, listExpirableTransactionalIds())
     transactionManager.removeExpiredTransactionalIds()
     EasyMock.verify(replicaManager)
 
-    assertTrue(hasUnexpiredTransactionalIds)
     assertEquals(Set(onlinePartitionId), appendedRecords.keySet.map(_.partition))
 
-    val transactionalIdsForOnlinePartition = allTransactionalIds.filter { transactionalId =>
-      transactionManager.partitionFor(transactionalId) == onlinePartitionId
-    }
+    val (transactionalIdsForOnlinePartition, transactionalIdsForOfflinePartition) =
+      allTransactionalIds.partition { transactionalId =>
+        transactionManager.partitionFor(transactionalId) == onlinePartitionId
+      }
+
     val expiredTransactionalIds = collectTransactionalIdsFromTombstones(appendedRecords)
     assertEquals(transactionalIdsForOnlinePartition, expiredTransactionalIds)
+    assertEquals(transactionalIdsForOfflinePartition, listExpirableTransactionalIds())
   }
 
   @Test
@@ -682,11 +714,11 @@ class TransactionStateManagerTest {
     expectTransactionalIdExpiration(Errors.NONE, appendedRecords)
     EasyMock.replay(replicaManager)
 
-    assertTrue(hasUnexpiredTransactionalIds)
+    assertEquals(allTransactionalIds, listExpirableTransactionalIds())
     transactionManager.removeExpiredTransactionalIds()
     EasyMock.verify(replicaManager)
 
-    assertFalse(hasUnexpiredTransactionalIds)
+    assertEquals(Set.empty, listExpirableTransactionalIds())
     assertEquals(partitionIds.toSet, appendedRecords.keys.map(_.partition))
 
     appendedRecords.values.foreach { batches =>
@@ -730,11 +762,23 @@ class TransactionStateManagerTest {
     allTransactionalIds.toSet
   }
 
-  private def hasUnexpiredTransactionalIds: Boolean = {
-    val unexpiredTransactions = transactionManager.listTransactionStates(Set.empty, Set.empty)
-      .transactionStates.asScala
-    assertTrue(unexpiredTransactions.forall(txn => txn.transactionState == Empty.name))
-    unexpiredTransactions.nonEmpty
+  private def listExpirableTransactionalIds(): Set[String] = {
+    val activeTransactionalIds = transactionManager.listTransactionStates(Set.empty, Set.empty)
+      .transactionStates
+      .asScala
+      .map(_.transactionalId)
+
+    activeTransactionalIds.filter { transactionalId =>
+      transactionManager.getTransactionState(transactionalId) match {
+        case Right(Some(epochAndMetadata)) =>
+          val txnMetadata = epochAndMetadata.transactionMetadata
+          val timeSinceLastUpdate = time.milliseconds() - txnMetadata.txnLastUpdateTimestamp
+          timeSinceLastUpdate >= txnConfig.transactionalIdExpirationMs &&
+            txnMetadata.state.isExpirationAllowed &&
+            txnMetadata.pendingState.isEmpty
+        case _ => false
+      }
+    }.toSet
   }
 
   @Test

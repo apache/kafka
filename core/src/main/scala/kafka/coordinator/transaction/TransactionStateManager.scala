@@ -141,61 +141,73 @@ class TransactionStateManager(brokerId: Int,
     }
   }
 
-  private def collectExpiredTransactionalIds(
+  private def removeExpiredTransactionalIds(
     transactionPartition: TopicPartition,
-    stateEntries: collection.BufferedIterator[TransactionMetadata],
-    coordinatorEpoch: Int
-  ): (Iterable[TransactionalIdCoordinatorEpochAndMetadata], MemoryRecords) = {
-    val currentTimeMs = time.milliseconds()
-
+    txnMetadataCacheEntry: TxnMetadataCacheEntry,
+  ): Unit = {
     inReadLock(stateLock) {
       replicaManager.getLogConfig(transactionPartition) match {
         case Some(logConfig) =>
+          val currentTimeMs = time.milliseconds()
           val maxBatchSize = logConfig.maxMessageSize
           val expired = mutable.ListBuffer.empty[TransactionalIdCoordinatorEpochAndMetadata]
+          var recordsBuilder: MemoryRecordsBuilder = null
+          val stateEntries = txnMetadataCacheEntry.metadataPerTransactionalId.values.iterator.buffered
 
-          lazy val recordsBuilder = MemoryRecords.builder(
-            ByteBuffer.allocate(math.min(16384, maxBatchSize)),
-            TransactionLog.EnforcedCompressionType,
-            TimestampType.CREATE_TIME,
-            0L,
-            maxBatchSize
-          )
+          def flushRecordsBuilder(): Unit = {
+            writeTombstonesForExpiredTransactionalIds(
+              transactionPartition,
+              expired.toSeq,
+              recordsBuilder.build()
+            )
+            expired.clear()
+            recordsBuilder = null
+          }
 
-          var breakIteration = false
-          while (stateEntries.hasNext && !breakIteration) {
+          while (stateEntries.hasNext) {
             val txnMetadata = stateEntries.head
             val transactionalId = txnMetadata.transactionalId
+            var retryAppend = false
+
             txnMetadata.inLock {
               if (txnMetadata.pendingState.isEmpty && shouldExpire(txnMetadata, currentTimeMs)) {
+                if (recordsBuilder == null) {
+                  recordsBuilder = MemoryRecords.builder(
+                    ByteBuffer.allocate(math.min(16384, maxBatchSize)),
+                    TransactionLog.EnforcedCompressionType,
+                    TimestampType.CREATE_TIME,
+                    0L,
+                    maxBatchSize
+                  )
+                }
+
                 if (maybeAppendExpiration(txnMetadata, recordsBuilder, currentTimeMs)) {
                   val transitMetadata = txnMetadata.prepareDead()
                   expired += TransactionalIdCoordinatorEpochAndMetadata(
                     transactionalId,
-                    coordinatorEpoch,
+                    txnMetadataCacheEntry.coordinatorEpoch,
                     transitMetadata
                   )
                 } else {
-                  breakIteration = true
+                  flushRecordsBuilder()
+                  retryAppend = true
                 }
               }
+            }
 
-              if (!breakIteration) {
-                stateEntries.next()
-              }
+            if (!retryAppend) {
+              // Advance the iterator if we do not need to retry the append
+              stateEntries.next()
             }
           }
 
-          if (expired.isEmpty) {
-            (Seq.empty, MemoryRecords.EMPTY)
-          } else {
-            (expired, recordsBuilder.build())
+          if (expired.nonEmpty) {
+            flushRecordsBuilder()
           }
 
         case None =>
           warn(s"Transaction expiration for partition $transactionPartition failed because the log " +
             "config was not available, which likely means the partition is not online or is no longer local.")
-          (Seq.empty, MemoryRecords.EMPTY)
       }
     }
   }
@@ -204,12 +216,8 @@ class TransactionStateManager(brokerId: Int,
     txnMetadata: TransactionMetadata,
     currentTimeMs: Long
   ): Boolean = {
-    val isExpirableState = txnMetadata.state match {
-      case Empty | CompleteCommit | CompleteAbort => true
-      case _ => false
-    }
-
-    isExpirableState && txnMetadata.txnLastUpdateTimestamp <= currentTimeMs - config.transactionalIdExpirationMs
+    txnMetadata.state.isExpirationAllowed &&
+      txnMetadata.txnLastUpdateTimestamp <= currentTimeMs - config.transactionalIdExpirationMs
   }
 
   private def maybeAppendExpiration(
@@ -230,28 +238,7 @@ class TransactionStateManager(brokerId: Int,
     inReadLock(stateLock) {
       transactionMetadataCache.forKeyValue { (partitionId, partitionCacheEntry) =>
         val transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
-        val stateEntries = partitionCacheEntry.metadataPerTransactionalId.values.iterator.buffered
-        var breakIteration = false
-
-        while (stateEntries.hasNext && !breakIteration) {
-          val (expiredForPartition, tombstoneRecords) = collectExpiredTransactionalIds(
-            transactionPartition,
-            stateEntries,
-            partitionCacheEntry.coordinatorEpoch
-          )
-
-          if (expiredForPartition.nonEmpty) {
-            writeTombstonesForExpiredTransactionalIds(
-              transactionPartition,
-              expiredForPartition,
-              tombstoneRecords
-            )
-          } else {
-            // We may fail to append entries if the log was taken offline. The iterator
-            // won't advance in this case, so we need to break iteration directly.
-            breakIteration = true
-          }
-        }
+        removeExpiredTransactionalIds(transactionPartition, partitionCacheEntry)
       }
     }
   }
