@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.jmh.server;
 
+import kafka.api.ApiVersion;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
@@ -88,7 +89,6 @@ public class CheckpointBench {
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
     private AlterIsrManager alterIsrManager;
-    private final MockConfigRepository configRepository = new MockConfigRepository();
 
 
     @SuppressWarnings("deprecation")
@@ -107,7 +107,7 @@ public class CheckpointBench {
         this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
                 LogConfig.apply(), new MockConfigRepository(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024,
-                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
+                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time, ApiVersion.latestVersion());
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final MetadataCache metadataCache =
@@ -131,7 +131,6 @@ public class CheckpointBench {
                 metadataCache,
                 this.failureChannel,
                 alterIsrManager,
-                configRepository,
                 Option.empty());
         replicaManager.startup();
 

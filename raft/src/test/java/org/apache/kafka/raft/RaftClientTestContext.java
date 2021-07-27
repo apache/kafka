@@ -88,6 +88,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public final class RaftClientTestContext {
     public final RecordSerde<String> serde = Builder.SERDE;
     final TopicPartition metadataPartition = Builder.METADATA_PARTITION;
+    final Uuid metadataTopicId = Uuid.METADATA_TOPIC_ID;
     final int electionBackoffMaxMs = Builder.ELECTION_BACKOFF_MAX_MS;
     final int fetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
@@ -128,7 +129,8 @@ public final class RaftClientTestContext {
         private final MockTime time = new MockTime();
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final Random random = Mockito.spy(new Random(1));
-        private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID);
+        private final LogContext logContext = new LogContext();
+        private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID, logContext);
         private final Set<Integer> voters;
         private final OptionalInt localId;
 
@@ -222,7 +224,6 @@ public final class RaftClientTestContext {
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel(voters);
-            LogContext logContext = new LogContext();
             MockListener listener = new MockListener(localId);
             Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
                 .collect(Collectors.toMap(id -> id, RaftClientTestContext::mockAddress));
@@ -398,7 +399,7 @@ public final class RaftClientTestContext {
         return localId.orElseThrow(() -> new AssertionError("Required local id is not defined"));
     }
 
-    void expectBeginEpoch(
+    private void expectBeginEpoch(
         int epoch
     ) throws Exception {
         pollUntilRequest();
@@ -997,7 +998,7 @@ public final class RaftClientTestContext {
         int lastFetchedEpoch,
         int maxWaitTimeMs
     ) {
-        FetchRequestData request = RaftUtil.singletonFetchRequest(metadataPartition, fetchPartition -> {
+        FetchRequestData request = RaftUtil.singletonFetchRequest(metadataPartition, metadataTopicId, fetchPartition -> {
             fetchPartition
                 .setCurrentLeaderEpoch(epoch)
                 .setLastFetchedEpoch(lastFetchedEpoch)
@@ -1016,7 +1017,7 @@ public final class RaftClientTestContext {
         long highWatermark,
         Errors error
     ) {
-        return RaftUtil.singletonFetchResponse(metadataPartition, Errors.NONE, partitionData -> {
+        return RaftUtil.singletonFetchResponse(metadataPartition, metadataTopicId, Errors.NONE, partitionData -> {
             partitionData
                 .setRecords(records)
                 .setErrorCode(error.code())
@@ -1035,7 +1036,7 @@ public final class RaftClientTestContext {
         int divergingEpoch,
         long highWatermark
     ) {
-        return RaftUtil.singletonFetchResponse(metadataPartition, Errors.NONE, partitionData -> {
+        return RaftUtil.singletonFetchResponse(metadataPartition, metadataTopicId, Errors.NONE, partitionData -> {
             partitionData.setHighWatermark(highWatermark);
 
             partitionData.currentLeader()
@@ -1174,11 +1175,9 @@ public final class RaftClientTestContext {
             this.currentLeaderAndEpoch = leaderAndEpoch;
 
             currentClaimedEpoch().ifPresent(claimedEpoch -> {
-                if (claimedEpoch == leaderAndEpoch.epoch()) {
-                    long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
-                        lastCommitOffset().getAsLong() + 1 : 0L;
-                    this.claimedEpochStartOffsets.put(leaderAndEpoch.epoch(), claimedEpochStartOffset);
-                }
+                long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
+                    lastCommitOffset().getAsLong() + 1 : 0L;
+                this.claimedEpochStartOffsets.put(leaderAndEpoch.epoch(), claimedEpochStartOffset);
             });
         }
 

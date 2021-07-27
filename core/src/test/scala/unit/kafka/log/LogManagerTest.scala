@@ -125,8 +125,8 @@ class LogManagerTest {
 
       logManagerForTest.get.shutdown()
 
-      assertFalse(Files.exists(new File(logDir1, Log.CleanShutdownFile).toPath))
-      assertTrue(Files.exists(new File(logDir2, Log.CleanShutdownFile).toPath))
+      assertFalse(Files.exists(new File(logDir1, LogLoader.CleanShutdownFile).toPath))
+      assertTrue(Files.exists(new File(logDir2, LogLoader.CleanShutdownFile).toPath))
     } finally {
       logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
     }

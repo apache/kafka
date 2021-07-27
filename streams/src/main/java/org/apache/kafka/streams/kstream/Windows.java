@@ -43,7 +43,7 @@ public abstract class Windows<W extends Window> {
      * This behavior is now deprecated and additional details are available in the motivation for the KIP
      * Check out <a href="https://cwiki.apache.org/confluence/x/Ho2NCg">KIP-633</a> for more details
      */
-    protected static final long DEPRECATED_OLD_24_HR_GRACE_PERIOD = 24 * 60 * 60 * 1000L;
+    protected static final long DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD = 24 * 60 * 60 * 1000L;
 
     /**
      * This constant is used as the specified grace period where we do not have any grace periods instead of magic constants

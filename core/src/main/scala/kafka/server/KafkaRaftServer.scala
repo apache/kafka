@@ -128,7 +128,7 @@ class KafkaRaftServer(
 }
 
 object KafkaRaftServer {
-  val MetadataTopic = "@metadata"
+  val MetadataTopic = "__cluster_metadata"
   val MetadataPartition = new TopicPartition(MetadataTopic, 0)
   val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 

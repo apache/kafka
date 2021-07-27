@@ -105,7 +105,7 @@ class LogCleanerTest {
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val maxProducerIdExpirationMs = 60 * 60 * 1000
     val logSegments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs, time)
     val offsets = LogLoader.load(LoadLogParams(
       dir,
@@ -121,29 +121,22 @@ class LogCleanerTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager))
-
-    val log = new Log(dir,
-                      config = config,
-                      segments = logSegments,
-                      logStartOffset = offsets.logStartOffset,
-                      recoveryPoint = offsets.recoveryPoint,
-                      nextOffsetMetadata = offsets.nextOffsetMetadata,
-                      scheduler = time.scheduler,
+    val localLog = new LocalLog(dir, config, logSegments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, time.scheduler, time, topicPartition, logDirFailureChannel)
+    val log = new Log(offsets.logStartOffset,
+                      localLog,
                       brokerTopicStats = new BrokerTopicStats,
-                      time,
                       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-                      topicPartition = topicPartition,
                       leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
-                      logDirFailureChannel = logDirFailureChannel,
                       _topicId = None,
                       keepPartitionMetadataFile = true) {
-      override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
+      override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment]): Unit = {
         deleteStartLatch.countDown()
         if (!deleteCompleteLatch.await(5000, TimeUnit.MILLISECONDS)) {
           throw new IllegalStateException("Log segment deletion timed out")
         }
-        super.replaceSegments(newSegments, oldSegments, isRecoveredSwapFile)
+        super.replaceSegments(newSegments, oldSegments)
       }
     }
 
@@ -802,7 +795,7 @@ class LogCleanerTest {
 
     // Decrease the log's max message size
     logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize / 2: java.lang.Integer)
-    log.config = LogConfig.fromProps(logConfig.originals, logProps)
+    log.updateConfig(LogConfig.fromProps(logConfig.originals, logProps))
 
     // pretend we have the following keys
     val keys = immutable.ListSet(1, 3, 5, 7, 9)
@@ -1451,7 +1444,7 @@ class LogCleanerTest {
     cleanedKeys = LogTestUtils.keysInLog(log)
     log.close()
 
-    // 2) Simulate recovery just after .cleaned file is created, and a subset of them are rename to .swap
+    // 2) Simulate recovery just after .cleaned file is created, and a subset of them are renamed to .swap
     //    On recovery, clean operation is aborted. All messages should be present in the log
     log.logSegments.head.changeFileSuffixes("", Log.CleanedFileSuffix)
     log.logSegments.head.log.renameTo(new File(CoreUtils.replaceSuffix(log.logSegments.head.log.file.getPath, Log.CleanedFileSuffix, Log.SwapFileSuffix)))

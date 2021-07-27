@@ -28,7 +28,8 @@ from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATES
     LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, DEV_BRANCH, DEV_VERSION, KafkaVersion
 
 # broker 0.10.0 is not compatible with newer Kafka Streams versions
-broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), \
+# broker 0.10.1 and 0.10.2 do not support headers, as required by suppress() (since v2.2.1)
+broker_upgrade_versions = [str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), \
                            str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), \
                            str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7), str(DEV_BRANCH)]
 
@@ -474,8 +475,9 @@ class StreamsUpgradeTest(Test):
                     monitors[first_other_processor] = first_other_monitor
                     monitors[second_other_processor] = second_other_monitor
 
-                    version_probing_message = "Sent a version 10 subscription and got version 10 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 10 and trigger new rebalance.",
-                    end_of_upgrade_message = "Sent a version 10 subscription and group.s latest commonly supported version is 11 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 11 for next rebalance."
+                    highest_version = 10
+                    version_probing_message = "Sent a version " + str(highest_version + 1) + " subscription and got version " + str(highest_version) + " assignment back (successful version probing). Downgrade subscription metadata to commonly supported version " + str(highest_version) + " and trigger new rebalance."
+                    end_of_upgrade_message = "Sent a version " + str(highest_version) + " subscription and group.s latest commonly supported version is " + str(highest_version + 1) + " (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to " + str(highest_version + 1) + " for next rebalance."
                     end_of_upgrade_error_message = "Could not detect 'successful version probing and end of rolling upgrade' at upgraded node "
                     followup_rebalance_message = "Triggering the followup rebalance scheduled for 0 ms."
                     followup_rebalance_error_message = "Could not detect 'Triggering followup rebalance' at node "
