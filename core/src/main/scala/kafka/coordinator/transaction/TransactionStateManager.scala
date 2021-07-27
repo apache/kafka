@@ -189,13 +189,14 @@ class TransactionStateManager(brokerId: Int,
                     transitMetadata
                   )
                 } else {
-                  flushRecordsBuilder()
                   retryAppend = true
                 }
               }
             }
 
-            if (!retryAppend) {
+            if (retryAppend) {
+              flushRecordsBuilder()
+            } else {
               // Advance the iterator if we do not need to retry the append
               stateEntries.next()
             }
