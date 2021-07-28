@@ -22,8 +22,11 @@ import java.util.{Collections, Properties}
 import kafka.log.LogConfig
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.{Log4jController, Logging}
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, InvalidRequestException}
+import org.apache.kafka.clients.admin.AlterConfigOp
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
+import org.apache.kafka.common.config.ConfigDef.ConfigKey
+import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
 import org.apache.kafka.common.message.DescribeConfigsResponseData
@@ -32,7 +35,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ApiError, DescribeConfigsResponse}
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 
-import scala.collection.{Map, mutable}
+import scala.collection.{Map, mutable, Seq}
 import scala.jdk.CollectionConverters._
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
@@ -79,6 +82,73 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     }
 
     resource -> ApiError.NONE
+  }
+
+  def prepareIncrementalConfigs(alterConfigOps: Seq[AlterConfigOp], configProps: Properties, configKeys: Map[String, ConfigKey]): Unit = {
+
+    def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
+      val configKey = configKeys(configName)
+      if (configKey == null)
+        throw new InvalidConfigurationException(s"Unknown topic config name: $configName")
+      configKey.`type` == ConfigDef.Type.LIST
+    }
+
+    alterConfigOps.foreach { alterConfigOp =>
+      val configPropName = alterConfigOp.configEntry.name
+      alterConfigOp.opType() match {
+        case OpType.SET => configProps.setProperty(alterConfigOp.configEntry.name, alterConfigOp.configEntry.value)
+        case OpType.DELETE => configProps.remove(alterConfigOp.configEntry.name)
+        case OpType.APPEND => {
+          if (!listType(alterConfigOp.configEntry.name, configKeys))
+            throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry.name}")
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
+          val newValueList = oldValueList ::: alterConfigOp.configEntry.value.split(",").toList
+          configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
+        }
+        case OpType.SUBTRACT => {
+          if (!listType(alterConfigOp.configEntry.name, configKeys))
+            throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry.name}")
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
+          val newValueList = oldValueList.diff(alterConfigOp.configEntry.value.split(",").toList)
+          configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
+        }
+      }
+    }
+  }
+
+  def validateLogLevelConfigs(alterConfigOps: Seq[AlterConfigOp]): Unit = {
+    def validateLoggerNameExists(loggerName: String): Unit = {
+      if (!Log4jController.loggerExists(loggerName))
+        throw new ConfigException(s"Logger $loggerName does not exist!")
+    }
+
+    alterConfigOps.foreach { alterConfigOp =>
+      val loggerName = alterConfigOp.configEntry.name
+      alterConfigOp.opType() match {
+        case OpType.SET =>
+          validateLoggerNameExists(loggerName)
+          val logLevel = alterConfigOp.configEntry.value
+          if (!LogLevelConfig.VALID_LOG_LEVELS.contains(logLevel)) {
+            val validLevelsStr = LogLevelConfig.VALID_LOG_LEVELS.asScala.mkString(", ")
+            throw new ConfigException(
+              s"Cannot set the log level of $loggerName to $logLevel as it is not a supported log level. " +
+              s"Valid log levels are $validLevelsStr"
+            )
+          }
+        case OpType.DELETE =>
+          validateLoggerNameExists(loggerName)
+          if (loggerName == Log4jController.ROOT_LOGGER)
+            throw new InvalidRequestException(s"Removing the log level of the ${Log4jController.ROOT_LOGGER} logger is not allowed")
+        case OpType.APPEND => throw new InvalidRequestException(s"${OpType.APPEND} operation is not allowed for the ${ConfigResource.Type.BROKER_LOGGER} resource")
+        case OpType.SUBTRACT => throw new InvalidRequestException(s"${OpType.SUBTRACT} operation is not allowed for the ${ConfigResource.Type.BROKER_LOGGER} resource")
+      }
+    }
   }
 
   def toLoggableProps(resource: ConfigResource, configProps: Properties): Map[String, String] = {

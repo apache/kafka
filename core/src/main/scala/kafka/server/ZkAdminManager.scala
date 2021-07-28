@@ -32,8 +32,7 @@ import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.config.ConfigDef.ConfigKey
-import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
+import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedVersionException}
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult
@@ -514,7 +513,7 @@ class ZkAdminManager(val config: KafkaConfig,
         resource.`type` match {
           case ConfigResource.Type.TOPIC =>
             val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
-            prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys)
+            configHelper.prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys)
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER =>
@@ -525,12 +524,12 @@ class ZkAdminManager(val config: KafkaConfig,
             else adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default)
 
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
-            prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
+            configHelper.prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
             alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER_LOGGER =>
             configHelper.getAndValidateBrokerId(resource)
-            validateLogLevelConfigs(alterConfigOps)
+            configHelper.validateLogLevelConfigs(alterConfigOps)
 
             if (!validateOnly)
               alterLogLevelConfigs(alterConfigOps)
@@ -553,73 +552,6 @@ class ZkAdminManager(val config: KafkaConfig,
           resource -> ApiError.fromThrowable(e)
       }
     }.toMap
-  }
-
-  private def validateLogLevelConfigs(alterConfigOps: Seq[AlterConfigOp]): Unit = {
-    def validateLoggerNameExists(loggerName: String): Unit = {
-      if (!Log4jController.loggerExists(loggerName))
-        throw new ConfigException(s"Logger $loggerName does not exist!")
-    }
-
-    alterConfigOps.foreach { alterConfigOp =>
-      val loggerName = alterConfigOp.configEntry.name
-      alterConfigOp.opType() match {
-        case OpType.SET =>
-          validateLoggerNameExists(loggerName)
-          val logLevel = alterConfigOp.configEntry.value
-          if (!LogLevelConfig.VALID_LOG_LEVELS.contains(logLevel)) {
-            val validLevelsStr = LogLevelConfig.VALID_LOG_LEVELS.asScala.mkString(", ")
-            throw new ConfigException(
-              s"Cannot set the log level of $loggerName to $logLevel as it is not a supported log level. " +
-              s"Valid log levels are $validLevelsStr"
-            )
-          }
-        case OpType.DELETE =>
-          validateLoggerNameExists(loggerName)
-          if (loggerName == Log4jController.ROOT_LOGGER)
-            throw new InvalidRequestException(s"Removing the log level of the ${Log4jController.ROOT_LOGGER} logger is not allowed")
-        case OpType.APPEND => throw new InvalidRequestException(s"${OpType.APPEND} operation is not allowed for the ${ConfigResource.Type.BROKER_LOGGER} resource")
-        case OpType.SUBTRACT => throw new InvalidRequestException(s"${OpType.SUBTRACT} operation is not allowed for the ${ConfigResource.Type.BROKER_LOGGER} resource")
-      }
-    }
-  }
-
-  private def prepareIncrementalConfigs(alterConfigOps: Seq[AlterConfigOp], configProps: Properties, configKeys: Map[String, ConfigKey]): Unit = {
-
-    def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
-      val configKey = configKeys(configName)
-      if (configKey == null)
-        throw new InvalidConfigurationException(s"Unknown topic config name: $configName")
-      configKey.`type` == ConfigDef.Type.LIST
-    }
-
-    alterConfigOps.foreach { alterConfigOp =>
-      val configPropName = alterConfigOp.configEntry.name
-      alterConfigOp.opType() match {
-        case OpType.SET => configProps.setProperty(alterConfigOp.configEntry.name, alterConfigOp.configEntry.value)
-        case OpType.DELETE => configProps.remove(alterConfigOp.configEntry.name)
-        case OpType.APPEND => {
-          if (!listType(alterConfigOp.configEntry.name, configKeys))
-            throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry.name}")
-          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
-            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
-            .getOrElse("")
-            .split(",").toList
-          val newValueList = oldValueList ::: alterConfigOp.configEntry.value.split(",").toList
-          configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
-        }
-        case OpType.SUBTRACT => {
-          if (!listType(alterConfigOp.configEntry.name, configKeys))
-            throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry.name}")
-          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
-            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
-            .getOrElse("")
-            .split(",").toList
-          val newValueList = oldValueList.diff(alterConfigOp.configEntry.value.split(",").toList)
-          configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
-        }
-      }
-    }
   }
 
   def shutdown(): Unit = {
