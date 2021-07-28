@@ -47,6 +47,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory
 import org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
@@ -188,12 +189,14 @@ public class TaskManagerTest {
             new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST, time),
             activeTaskCreator,
             standbyTaskCreator,
-            topologyBuilder,
+            new TopologyMetadata(topologyBuilder, new DummyStreamsConfig()),
             adminClient,
             stateDirectory,
             processingMode
         );
         taskManager.setMainConsumer(consumer);
+        reset(topologyBuilder);
+        expect(topologyBuilder.hasNamedTopology()).andStubReturn(false);
     }
 
     @Test
@@ -202,8 +205,10 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(mkEntry(taskId01, mkSet(t1p1, newTopicPartition)));
 
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(emptyList());
+
         topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p1, newTopicPartition)), anyString());
         expectLastCall();
+
         replay(activeTaskCreator, topologyBuilder);
 
         taskManager.handleAssignment(assignment, emptyMap());
