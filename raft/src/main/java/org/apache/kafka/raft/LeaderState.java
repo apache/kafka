@@ -171,6 +171,12 @@ public class LeaderState<T> implements EpochState {
                         || (highWatermarkUpdateOffset == currentHighWatermarkMetadata.offset &&
                             !highWatermarkUpdateMetadata.metadata.equals(currentHighWatermarkMetadata.metadata))) {
                         highWatermark = highWatermarkUpdateOpt;
+                        log.trace(
+                            "High watermark updated to {} based on indexOfHw {} and voters {}",
+                            highWatermark,
+                            indexOfHw,
+                            followersByDescendingFetchOffset
+                        );
                         return true;
                     } else if (highWatermarkUpdateOffset < currentHighWatermarkMetadata.offset) {
                         log.error("The latest computed high watermark {} is smaller than the current " +
@@ -183,6 +189,12 @@ public class LeaderState<T> implements EpochState {
                     }
                 } else {
                     highWatermark = highWatermarkUpdateOpt;
+                    log.trace(
+                        "High watermark set to {} based on indexOfHw {} and voters {}",
+                        highWatermark,
+                        indexOfHw,
+                        followersByDescendingFetchOffset
+                    );
                     return true;
                 }
             }

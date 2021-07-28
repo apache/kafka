@@ -256,12 +256,20 @@ public class RaftEventSimulationTest {
         router.filter(3, new DropOutboundRequestsFrom(Utils.mkSet(0, 1)));
         router.filter(4, new DropOutboundRequestsFrom(Utils.mkSet(0, 1)));
 
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(20));
+        long partitionLogEndOffset = cluster.maxLogEndOffset();
+        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(2 * partitionLogEndOffset));
 
         long minorityHighWatermark = cluster.maxHighWatermarkReached(Utils.mkSet(0, 1));
         long majorityHighWatermark = cluster.maxHighWatermarkReached(Utils.mkSet(2, 3, 4));
 
-        assertTrue(majorityHighWatermark > minorityHighWatermark);
+        assertTrue(
+            majorityHighWatermark > minorityHighWatermark,
+            String.format(
+                "majorityHighWatermark = %s, minorityHighWatermark = %s",
+                majorityHighWatermark,
+                minorityHighWatermark
+            )
+        );
 
         // Now restore the partition and verify everyone catches up
         router.filter(0, new PermitAllTraffic());
@@ -270,7 +278,8 @@ public class RaftEventSimulationTest {
         router.filter(3, new PermitAllTraffic());
         router.filter(4, new PermitAllTraffic());
 
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(30));
+        long restoredLogEndOffset = cluster.maxLogEndOffset();
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(2 * restoredLogEndOffset));
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -541,9 +550,21 @@ public class RaftEventSimulationTest {
             return voters.size() / 2 + 1;
         }
 
+        long maxLogEndOffset() {
+            return running
+                .values()
+                .stream()
+                .mapToLong(RaftNode::logEndOffset)
+                .max()
+                .orElse(0L);
+        }
+
         OptionalLong leaderHighWatermark() {
-            Optional<RaftNode> leaderWithMaxEpoch = running.values().stream().filter(node -> node.client.quorum().isLeader())
-                    .max((node1, node2) -> Integer.compare(node2.client.quorum().epoch(), node1.client.quorum().epoch()));
+            Optional<RaftNode> leaderWithMaxEpoch = running
+                .values()
+                .stream()
+                .filter(node -> node.client.quorum().isLeader())
+                .max((node1, node2) -> Integer.compare(node2.client.quorum().epoch(), node1.client.quorum().epoch()));
             if (leaderWithMaxEpoch.isPresent()) {
                 return leaderWithMaxEpoch.get().client.highWatermark();
             } else {
@@ -558,27 +579,27 @@ public class RaftEventSimulationTest {
 
         long maxHighWatermarkReached() {
             return running.values().stream()
-                .map(RaftNode::highWatermark)
-                .max(Long::compareTo)
+                .mapToLong(RaftNode::highWatermark)
+                .max()
                 .orElse(0L);
         }
 
         long maxHighWatermarkReached(Set<Integer> nodeIds) {
             return running.values().stream()
                 .filter(node -> nodeIds.contains(node.nodeId))
-                .map(RaftNode::highWatermark)
-                .max(Long::compareTo)
+                .mapToLong(RaftNode::highWatermark)
+                .max()
                 .orElse(0L);
         }
 
         boolean allReachedHighWatermark(long offset, Set<Integer> nodeIds) {
             return nodeIds.stream()
-                .allMatch(nodeId -> running.get(nodeId).highWatermark() > offset);
+                .allMatch(nodeId -> running.get(nodeId).highWatermark() >= offset);
         }
 
         boolean allReachedHighWatermark(long offset) {
             return running.values().stream()
-                .allMatch(node -> node.highWatermark() > offset);
+                .allMatch(node -> node.highWatermark() >= offset);
         }
 
         boolean hasLeader(int nodeId) {
@@ -799,9 +820,18 @@ public class RaftEventSimulationTest {
                 .orElse(0L);
         }
 
+        long logEndOffset() {
+            return log.endOffset().offset;
+        }
+
         @Override
         public String toString() {
-            return "Node(id=" + nodeId + ", hw=" + highWatermark() + ")";
+            return String.format(
+                "Node(id=%s, hw=%s, logEndOffset=%s)",
+                nodeId,
+                highWatermark(),
+                logEndOffset()
+            );
         }
     }
 
