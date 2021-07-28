@@ -24,7 +24,7 @@ import org.apache.kafka.common.message.SnapshotFooterRecord;
 import java.util.List;
 
 /**
- * Interface for writing snapshot as a sequence of records.
+ * Interface of the snapshot writer
  */
 public interface SnapshotWriter<T> extends AutoCloseable {
 

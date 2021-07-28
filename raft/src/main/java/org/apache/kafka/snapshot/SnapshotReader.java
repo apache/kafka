@@ -22,19 +22,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 /**
- * A type for reading an immutable snapshot.
- *
- * A snapshot reader can be used to scan through all of the objects T in a snapshot. It
- * is assumed that the content of the snapshot represents all of the objects T for the topic
- * partition from offset 0 up to but not including the end offset in the snapshot id.
- *
- * The offsets ({@code baseOffset()} and {@code lastOffset()} stored in {@code Batch<T>}
- * objects returned by this iterator are independent of the offset of the records in the
- * log used to generate this batch.
- *
- * Use {@code lastContainedLogOffset()} and {@code lastContainedLogEpoch()} to query which
- * offsets and epoch from the log are included in this snapshot. Both of these values are
- * inclusive.
+ * Interface of the snapshot reader
  */
 public interface  SnapshotReader<T> extends AutoCloseable, Iterator<Batch<T>> {
     /**
