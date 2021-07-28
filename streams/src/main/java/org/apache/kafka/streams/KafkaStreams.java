@@ -483,6 +483,7 @@ public class KafkaStreams implements AutoCloseable {
         }
         switch (action) {
             case REPLACE_THREAD:
+                log.error("Replacing thread in the streams uncaught exception handler", throwable);
                 replaceStreamThread(throwable);
                 break;
             case SHUTDOWN_CLIENT:
