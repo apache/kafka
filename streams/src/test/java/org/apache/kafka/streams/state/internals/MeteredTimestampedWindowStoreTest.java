@@ -31,6 +31,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -67,6 +68,7 @@ public class MeteredTimestampedWindowStoreTest {
     private static final int WINDOW_SIZE_MS = 10;
 
     private InternalMockProcessorContext context;
+    private final TaskId taskId = new TaskId(0, 0, "My-Topology");
     private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
     private MeteredTimestampedWindowStore<String, String> store = new MeteredTimestampedWindowStore<>(
@@ -95,7 +97,8 @@ public class MeteredTimestampedWindowStoreTest {
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             MockRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics),
-            Time.SYSTEM
+            Time.SYSTEM,
+            taskId
         );
     }
 
@@ -147,7 +150,7 @@ public class MeteredTimestampedWindowStoreTest {
     @Test
     public void shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled() {
         final String defaultChangelogTopicName =
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), STORE_NAME);
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), STORE_NAME, taskId.namedTopology());
         doShouldPassChangelogTopicNameToStateStoreSerde(defaultChangelogTopicName);
     }
 

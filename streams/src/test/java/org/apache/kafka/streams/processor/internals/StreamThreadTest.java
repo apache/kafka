@@ -150,7 +150,7 @@ public class StreamThreadTest {
     private final StreamsConfig config = new StreamsConfig(configProps(false));
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
     private final ChangelogReader changelogReader = new MockChangelogReader();
-    private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true);
+    private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true, false);
     private final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
 
@@ -169,7 +169,7 @@ public class StreamThreadTest {
     public void setUp() {
         Thread.currentThread().setName(CLIENT_ID + "-StreamThread-" + threadIdx);
         internalTopologyBuilder.setApplicationId(APPLICATION_ID);
-        streamsMetadataState = new StreamsMetadataState(internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST);
+        streamsMetadataState = new StreamsMetadataState(new TopologyMetadata(internalTopologyBuilder, config), StreamsMetadataState.UNKNOWN_HOST);
     }
 
     private final String topic1 = "topic1";
@@ -228,7 +228,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.buildTopology();
 
         return StreamThread.create(
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             config,
             clientSupplier,
             clientSupplier.getAdmin(config.getAdminConfigs(clientId)),
@@ -451,7 +451,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -491,7 +491,7 @@ public class StreamThreadTest {
         mockClientSupplier.setCluster(createCluster());
         EasyMock.replay(mockConsumer);
         final StreamThread thread = StreamThread.create(
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             config,
             mockClientSupplier,
             mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
@@ -700,7 +700,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -770,7 +770,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -827,7 +827,7 @@ public class StreamThreadTest {
             null,
             activeTaskCreator,
             null,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             null,
             null,
             null
@@ -850,7 +850,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -1123,6 +1123,8 @@ public class StreamThreadTest {
 
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -1133,7 +1135,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            topologyMetadata,
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -1195,7 +1197,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -1240,7 +1242,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -1278,7 +1280,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -1607,7 +1609,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.buildTopology();
 
         final StreamThread thread = StreamThread.create(
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             config,
             clientSupplier,
             clientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
@@ -2185,7 +2187,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -2233,7 +2235,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -2284,6 +2286,8 @@ public class StreamThreadTest {
 
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -2294,7 +2298,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            topologyMetadata,
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -2348,6 +2352,8 @@ public class StreamThreadTest {
 
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -2358,7 +2364,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            topologyMetadata,
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -2420,6 +2426,8 @@ public class StreamThreadTest {
 
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -2430,7 +2438,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            topologyMetadata,
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -2496,7 +2504,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -2638,7 +2646,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -2679,7 +2687,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -2723,6 +2731,8 @@ public class StreamThreadTest {
         expect(taskManager.producerClientIds()).andStubReturn(Collections.emptySet());
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -2733,7 +2743,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            topologyMetadata,
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -2791,7 +2801,7 @@ public class StreamThreadTest {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             config,
             streamsMetrics,
             stateDirectory,

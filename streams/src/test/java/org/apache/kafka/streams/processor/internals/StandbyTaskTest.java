@@ -77,13 +77,13 @@ public class StandbyTaskTest {
 
     private final String threadName = "threadName";
     private final String threadId = Thread.currentThread().getName();
-    private final TaskId taskId = new TaskId(0, 0);
+    private final TaskId taskId = new TaskId(0, 0, "My-Topology");
 
     private final String storeName1 = "store1";
     private final String storeName2 = "store2";
     private final String applicationId = "test-application";
-    private final String storeChangelogTopicName1 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName1);
-    private final String storeChangelogTopicName2 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName2);
+    private final String storeChangelogTopicName1 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName1, taskId.namedTopology());
+    private final String storeChangelogTopicName2 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName2, taskId.namedTopology());
 
     private final TopicPartition partition = new TopicPartition(storeChangelogTopicName1, 0);
     private final MockKeyValueStore store1 = (MockKeyValueStore) new MockKeyValueStoreBuilder(storeName1, false).build();
@@ -138,7 +138,7 @@ public class StandbyTaskTest {
         ));
         baseDir = TestUtils.tempDirectory();
         config = createConfig(baseDir);
-        stateDirectory = new StateDirectory(config, new MockTime(), true);
+        stateDirectory = new StateDirectory(config, new MockTime(), true, true);
     }
 
     @After

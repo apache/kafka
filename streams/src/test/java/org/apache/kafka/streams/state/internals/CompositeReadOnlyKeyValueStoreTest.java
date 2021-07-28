@@ -80,7 +80,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         @SuppressWarnings("rawtypes") final InternalMockProcessorContext context =
             new InternalMockProcessorContext<>(
                 new StateSerdes<>(
-                    ProcessorStateManager.storeChangelogTopic("appId", storeName),
+                    ProcessorStateManager.storeChangelogTopic("appId", storeName, null),
                     Serdes.String(),
                     Serdes.String()
                 ),

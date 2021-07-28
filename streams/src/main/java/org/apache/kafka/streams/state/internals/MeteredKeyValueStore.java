@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
@@ -77,8 +78,7 @@ public class MeteredKeyValueStore<K, V>
     private Sensor e2eLatencySensor;
     private InternalProcessorContext context;
     private StreamsMetricsImpl streamsMetrics;
-    private final String threadId;
-    private String taskId;
+    private TaskId taskId;
 
     MeteredKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
                          final String metricsScope,
@@ -87,7 +87,6 @@ public class MeteredKeyValueStore<K, V>
                          final Serde<V> valueSerde) {
         super(inner);
         this.metricsScope = metricsScope;
-        threadId = Thread.currentThread().getName();
         this.time = time != null ? time : Time.SYSTEM;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -98,13 +97,13 @@ public class MeteredKeyValueStore<K, V>
     public void init(final ProcessorContext context,
                      final StateStore root) {
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
-        taskId = context.taskId().toString();
+        taskId = context.taskId();
         initStoreSerde(context);
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
 
         registerMetrics();
         final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(taskId, metricsScope, name(), streamsMetrics);
+            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
@@ -114,29 +113,29 @@ public class MeteredKeyValueStore<K, V>
     public void init(final StateStoreContext context,
                      final StateStore root) {
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
-        taskId = context.taskId().toString();
+        taskId = context.taskId();
         initStoreSerde(context);
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
 
         registerMetrics();
         final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(taskId, metricsScope, name(), streamsMetrics);
+            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
     }
 
     private void registerMetrics() {
-        putSensor = StateStoreMetrics.putSensor(taskId, metricsScope, name(), streamsMetrics);
-        putIfAbsentSensor = StateStoreMetrics.putIfAbsentSensor(taskId, metricsScope, name(), streamsMetrics);
-        putAllSensor = StateStoreMetrics.putAllSensor(taskId, metricsScope, name(), streamsMetrics);
-        getSensor = StateStoreMetrics.getSensor(taskId, metricsScope, name(), streamsMetrics);
-        allSensor = StateStoreMetrics.allSensor(taskId, metricsScope, name(), streamsMetrics);
-        rangeSensor = StateStoreMetrics.rangeSensor(taskId, metricsScope, name(), streamsMetrics);
-        prefixScanSensor = StateStoreMetrics.prefixScanSensor(taskId, metricsScope, name(), streamsMetrics);
-        flushSensor = StateStoreMetrics.flushSensor(taskId, metricsScope, name(), streamsMetrics);
-        deleteSensor = StateStoreMetrics.deleteSensor(taskId, metricsScope, name(), streamsMetrics);
-        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
+        putSensor = StateStoreMetrics.putSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        putIfAbsentSensor = StateStoreMetrics.putIfAbsentSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        putAllSensor = StateStoreMetrics.putAllSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        getSensor = StateStoreMetrics.getSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        allSensor = StateStoreMetrics.allSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        rangeSensor = StateStoreMetrics.rangeSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        prefixScanSensor = StateStoreMetrics.prefixScanSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        deleteSensor = StateStoreMetrics.deleteSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
     }
 
     protected Serde<V> prepareValueSerdeForStore(final Serde<V> valueSerde, final SerdeGetter getter) {
@@ -151,7 +150,7 @@ public class MeteredKeyValueStore<K, V>
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.namedTopology()),
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
         );
@@ -163,7 +162,7 @@ public class MeteredKeyValueStore<K, V>
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.namedTopology()),
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
         );
@@ -311,7 +310,7 @@ public class MeteredKeyValueStore<K, V>
         try {
             wrapped().close();
         } finally {
-            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId, name());
+            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId.toString(), name());
         }
     }
 

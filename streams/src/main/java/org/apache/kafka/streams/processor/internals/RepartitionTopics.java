@@ -40,18 +40,18 @@ import java.util.stream.Collectors;
 public class RepartitionTopics {
 
     private final InternalTopicManager internalTopicManager;
-    private final InternalTopologyBuilder internalTopologyBuilder;
+    private final TopologyMetadata topologyMetadata;
     private final Cluster clusterMetadata;
     private final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private final Logger log;
     private final Map<TopicPartition, PartitionInfo> topicPartitionInfos = new HashMap<>();
 
-    public RepartitionTopics(final InternalTopologyBuilder internalTopologyBuilder,
+    public RepartitionTopics(final TopologyMetadata topologyMetadata,
                              final InternalTopicManager internalTopicManager,
                              final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer,
                              final Cluster clusterMetadata,
                              final String logPrefix) {
-        this.internalTopologyBuilder = internalTopologyBuilder;
+        this.topologyMetadata = topologyMetadata;
         this.internalTopicManager = internalTopicManager;
         this.clusterMetadata = clusterMetadata;
         this.copartitionedTopicsEnforcer = copartitionedTopicsEnforcer;
@@ -60,13 +60,13 @@ public class RepartitionTopics {
     }
 
     public void setup() {
-        final Map<Subtopology, TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();
+        final Map<Subtopology, TopicsInfo> topicGroups = topologyMetadata.topicGroups();
         final Map<String, InternalTopicConfig> repartitionTopicMetadata = computeRepartitionTopicConfig(topicGroups, clusterMetadata);
 
         // ensure the co-partitioning topics within the group have the same number of partitions,
         // and enforce the number of partitions for those repartition topics to be the same if they
         // are co-partitioned as well.
-        ensureCopartitioning(internalTopologyBuilder.copartitionGroups(), repartitionTopicMetadata, clusterMetadata);
+        ensureCopartitioning(topologyMetadata.copartitionGroups(), repartitionTopicMetadata, clusterMetadata);
 
         // make sure the repartition source topics exist with the right number of partitions,
         // create these topics if necessary

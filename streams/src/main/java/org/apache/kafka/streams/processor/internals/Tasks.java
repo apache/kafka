@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
 
 class Tasks {
     private final Logger log;
-    private final InternalTopologyBuilder builder;
+    private final TopologyMetadata topologyMetadata;
     private final StreamsMetricsImpl streamsMetrics;
 
     private final Map<TaskId, Task> allTasksPerId = new TreeMap<>();
@@ -66,7 +66,7 @@ class Tasks {
     private Consumer<byte[], byte[]> mainConsumer;
 
     Tasks(final String logPrefix,
-          final InternalTopologyBuilder builder,
+          final TopologyMetadata topologyMetadata,
           final StreamsMetricsImpl streamsMetrics,
           final ActiveTaskCreator activeTaskCreator,
           final StandbyTaskCreator standbyTaskCreator) {
@@ -74,7 +74,7 @@ class Tasks {
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
-        this.builder = builder;
+        this.topologyMetadata = topologyMetadata;
         this.streamsMetrics = streamsMetrics;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
@@ -168,7 +168,7 @@ class Tasks {
                     activeTasksPerPartition.put(topicPartition, task);
                 }
             }
-            task.updateInputPartitions(topicPartitions, builder.nodeToSourceTopics());
+            task.updateInputPartitions(topicPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
         }
         task.resume();
     }

@@ -49,7 +49,7 @@ import static org.apache.kafka.streams.processor.internals.StreamThread.Processi
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 
 class ActiveTaskCreator {
-    private final InternalTopologyBuilder builder;
+    private final TopologyMetadata topologyMetadata;
     private final StreamsConfig config;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
@@ -64,7 +64,7 @@ class ActiveTaskCreator {
     private final Map<TaskId, StreamsProducer> taskProducers;
     private final StreamThread.ProcessingMode processingMode;
 
-    ActiveTaskCreator(final InternalTopologyBuilder builder,
+    ActiveTaskCreator(final TopologyMetadata topologyMetadata,
                       final StreamsConfig config,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
@@ -75,7 +75,7 @@ class ActiveTaskCreator {
                       final String threadId,
                       final UUID processId,
                       final Logger log) {
-        this.builder = builder;
+        this.topologyMetadata = topologyMetadata;
         this.config = config;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
@@ -143,7 +143,7 @@ class ActiveTaskCreator {
 
             final LogContext logContext = getLogContext(taskId);
 
-            final ProcessorTopology topology = builder.buildSubtopology(taskId.subtopology());
+            final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
@@ -194,7 +194,7 @@ class ActiveTaskCreator {
             inputPartitions,
             consumer,
             logContext,
-            builder.buildSubtopology(standbyTask.id.subtopology()),
+            topologyMetadata.buildSubtopology(standbyTask.id),
             stateManager,
             context
         );
