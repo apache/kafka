@@ -1395,14 +1395,10 @@ class ReplicaManager(val config: KafkaConfig,
               } else {
                 // The controller may send LeaderAndIsr to upgrade to using topic IDs without bumping the epoch.
                 val error = requestTopicId match {
-                  case Some(topicId) if partition.log.isEmpty =>
-                    // We wanted to assign the topic ID to the log, but the log was unavailable.
-                    stateChangeLogger.info(s"Tried to update log for $topicPartition to assign topic ID " +
-                      s"$topicId from LeaderAndIsr request from controller $controllerId with correlation" +
-                      s" id $correlationId epoch $controllerEpoch")
-                    Errors.KAFKA_STORAGE_ERROR
                   case Some(topicId) if logTopicId.isEmpty =>
-                    partition.log.get.assignTopicId(topicId)
+                    // If we have a matching epoch, we expect the log to be defined.
+                    val log = localLogOrException(partition.topicPartition)
+                    log.assignTopicId(topicId)
                     stateChangeLogger.info(s"Updating log for $topicPartition to assign topic ID " +
                       s"$topicId from LeaderAndIsr request from controller $controllerId with correlation" +
                       s" id $correlationId epoch $controllerEpoch")
