@@ -265,6 +265,7 @@ abstract class AbstractFetcherThread(name: String,
       Errors.forCode(leaderEpochOffset.errorCode) match {
         case Errors.NONE =>
           val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
+          info(s"Truncating partition $tp to leader epoch and offset $leaderEpochOffset")
           if (doTruncate(tp, offsetTruncationState))
             fetchOffsets.put(tp, offsetTruncationState)
 
