@@ -1369,23 +1369,11 @@ class ReplicaManager(val config: KafkaConfig,
               val requestTopicId = topicIdFromRequest(topicPartition.topic)
               val logTopicId = partition.topicId
 
-              // When running a ZK controller and upgrading to topic IDs we may receive a request with leader epoch
-              // that is equal to the current leader epoch. In this case, we want to assign topic ID to the log.
-              def isUpgradingToTopicIdWithExistingLog: Boolean = {
-                requestLeaderEpoch == currentLeaderEpoch &&
-                  partition.log.isDefined && logTopicId.isEmpty && requestTopicId.isDefined
-              }
-
               if (!hasConsistentTopicId(requestTopicId, logTopicId)) {
                 stateChangeLogger.error(s"Topic ID in memory: ${logTopicId.get} does not" +
                   s" match the topic ID for partition $topicPartition received: " +
                   s"${requestTopicId.get}.")
                 responseMap.put(topicPartition, Errors.INCONSISTENT_TOPIC_ID)
-              } else if (isUpgradingToTopicIdWithExistingLog) {
-                partition.log.foreach(log =>
-                  requestTopicId.foreach(log.assignTopicId)
-                )
-                responseMap.put(topicPartition, Errors.NONE)
               } else if (requestLeaderEpoch > currentLeaderEpoch) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
@@ -1405,11 +1393,28 @@ class ReplicaManager(val config: KafkaConfig,
                   s"leader epoch $currentLeaderEpoch")
                 responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
               } else {
-                stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
-                  s"controller $controllerId with correlation id $correlationId " +
-                  s"epoch $controllerEpoch for partition $topicPartition since its associated " +
-                  s"leader epoch $requestLeaderEpoch matches the current leader epoch")
-                responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
+                // The controller may send LeaderAndIsr to upgrade to using topic IDs without bumping the epoch.
+                val error = requestTopicId match {
+                  case Some(topicId) if partition.log.isEmpty =>
+                    // We wanted to assign the topic ID to the log, but the log was unavailable.
+                    stateChangeLogger.info(s"Tried to update log for $topicPartition to assign topic ID " +
+                      s"$topicId from LeaderAndIsr request from controller $controllerId with correlation" +
+                      s" id $correlationId epoch $controllerEpoch")
+                    Errors.KAFKA_STORAGE_ERROR
+                  case Some(topicId) if logTopicId.isEmpty =>
+                    partition.log.get.assignTopicId(topicId)
+                    stateChangeLogger.info(s"Updating log for $topicPartition to assign topic ID " +
+                      s"$topicId from LeaderAndIsr request from controller $controllerId with correlation" +
+                      s" id $correlationId epoch $controllerEpoch")
+                    Errors.NONE
+                  case _ =>
+                    stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
+                      s"controller $controllerId with correlation id $correlationId " +
+                      s"epoch $controllerEpoch for partition $topicPartition since its associated " +
+                      s"leader epoch $requestLeaderEpoch matches the current leader epoch")
+                    Errors.STALE_CONTROLLER_EPOCH
+                }
+                responseMap.put(topicPartition, error)
               }
             }
           }

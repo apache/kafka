@@ -1129,7 +1129,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   def testTopicIdCreatedOnUpgradeMultiBrokerScenario(): Unit = {
     // Simulate an upgrade scenario where the controller is still on a pre-topic ID IBP, but the other two brokers are upgraded.
     servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
-    servers = servers ++ makeServers(2, startingIdNumber = 1)
+    servers = servers ++ makeServers(3, startingIdNumber = 1)
     val originalControllerId = TestUtils.waitUntilControllerElected(zkClient)
     assertEquals(0, originalControllerId)
     val controller = getController().kafkaController
@@ -1154,7 +1154,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     // Shut down the controller to transfer the controller to a new IBP broker.
     servers(originalControllerId).shutdown()
     servers(originalControllerId).awaitShutdown()
-    // If we were upgrading, this server would be IBP 3.0, but it doesn't matter in this test scenario
+    // If we were upgrading, this server would be the latest IBP, but it doesn't matter in this test scenario
     servers(originalControllerId).startup()
     TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
     val topicIdAfterUpgrade = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
