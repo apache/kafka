@@ -17,14 +17,15 @@
 package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
+import java.util.Collections
 
 import kafka.api.KAFKA_2_4_IV1
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
-import kafka.log.Log
 import kafka.server.{DelayedOperationPurgatory, FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
 import kafka.utils.timer.MockTimer
+import kafka.log.{Log, LogConfig}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -442,8 +443,9 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   }
 
   private def prepareTxnLog(partitionId: Int): Unit = {
-
     val logMock: Log =  EasyMock.mock(classOf[Log])
+    EasyMock.expect(logMock.config).andStubReturn(new LogConfig(Collections.emptyMap()))
+
     val fileRecordsMock: FileRecords = EasyMock.mock(classOf[FileRecords])
 
     val topicPartition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)

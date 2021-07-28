@@ -74,7 +74,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
   def values: Iterable[V] = pool.values.asScala
 
   def clear(): Unit = { pool.clear() }
-  
+
   override def size: Int = pool.size
   
   override def iterator: Iterator[(K, V)] = new Iterator[(K,V)]() {
