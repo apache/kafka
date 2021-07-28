@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
-import kafka.log.{AppendOrigin, Log}
+import kafka.log.{AppendOrigin, Log, LogConfig}
 import kafka.server._
 import kafka.utils._
 import kafka.utils.timer.MockTimer
@@ -216,6 +216,11 @@ object AbstractCoordinatorConcurrencyTest {
     def updateLog(topicPartition: TopicPartition, log: Log, endOffset: Long): Unit = {
       getOrCreateLogs().put(topicPartition, (log, endOffset))
     }
+
+    override def getLogConfig(topicPartition: TopicPartition): Option[LogConfig] = {
+      getOrCreateLogs().get(topicPartition).map(_._1.config)
+    }
+
     override def getLog(topicPartition: TopicPartition): Option[Log] =
       getOrCreateLogs().get(topicPartition).map(l => l._1)
     override def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =

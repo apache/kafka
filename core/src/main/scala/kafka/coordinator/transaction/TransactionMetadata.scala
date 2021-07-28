@@ -25,7 +25,10 @@ import org.apache.kafka.common.record.RecordBatch
 
 import scala.collection.{immutable, mutable}
 
-private[transaction] sealed trait TransactionState { def byte: Byte }
+private[transaction] sealed trait TransactionState {
+  def byte: Byte
+  def isExpirationAllowed: Boolean = false
+}
 
 /**
  * Transaction has not existed yet
@@ -33,7 +36,10 @@ private[transaction] sealed trait TransactionState { def byte: Byte }
  * transition: received AddPartitionsToTxnRequest => Ongoing
  *             received AddOffsetsToTxnRequest => Ongoing
  */
-private[transaction] case object Empty extends TransactionState { val byte: Byte = 0 }
+private[transaction] case object Empty extends TransactionState {
+  val byte: Byte = 0
+  override def isExpirationAllowed: Boolean = true
+}
 
 /**
  * Transaction has started and ongoing
@@ -64,14 +70,20 @@ private[transaction] case object PrepareAbort extends TransactionState { val byt
  *
  * Will soon be removed from the ongoing transaction cache
  */
-private[transaction] case object CompleteCommit extends TransactionState { val byte: Byte = 4 }
+private[transaction] case object CompleteCommit extends TransactionState {
+  val byte: Byte = 4
+  override def isExpirationAllowed: Boolean = true
+}
 
 /**
  * Group has completed abort
  *
  * Will soon be removed from the ongoing transaction cache
  */
-private[transaction] case object CompleteAbort extends TransactionState { val byte: Byte = 5 }
+private[transaction] case object CompleteAbort extends TransactionState {
+  val byte: Byte = 5
+  override def isExpirationAllowed: Boolean = true
+}
 
 /**
   * TransactionalId has expired and is about to be removed from the transaction cache
