@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.{ApiException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
 import org.apache.kafka.common.message.DescribeConfigsResponseData
+import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ApiError, DescribeConfigsResponse}
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
@@ -35,6 +36,36 @@ import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
+
+  val alterConfigPolicy =
+    Option(config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
+
+  def validateConfigPolicy(resource: ConfigResource, configEntriesMap: Map[String, String]): Unit = {
+    this.alterConfigPolicy match {
+      case Some(policy) =>
+        policy.validate(new AlterConfigPolicy.RequestMetadata(
+          new ConfigResource(resource.`type`(), resource.name), configEntriesMap.asJava))
+      case None =>
+    }
+  }
+
+  def getAndValidateBrokerId(resource: ConfigResource) = {
+    if (resource.name == null || resource.name.isEmpty)
+      None
+    else {
+      val id = resourceNameToBrokerId(resource.name)
+      if (id != this.config.brokerId)
+        throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received ${resource.name}")
+      Some(id)
+    }
+  }
+
+  def toLoggableProps(resource: ConfigResource, configProps: Properties): Map[String, String] = {
+    configProps.asScala.map {
+      case (key, value) => (key, KafkaConfig.loggableValue(resource.`type`, key, value))
+    }
+  }
+
 
   def describeConfigs(resourceToConfigNames: List[DescribeConfigsResource],
                       includeSynonyms: Boolean,

@@ -34,7 +34,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclOperation
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
@@ -75,6 +75,7 @@ import org.apache.kafka.server.authorizer._
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util
+import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
@@ -2599,36 +2600,100 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-    val alterConfigsRequest = request.body[AlterConfigsRequest]
-    val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.toMap.partition { case (resource, _) =>
-      resource.`type` match {
-        case ConfigResource.Type.BROKER_LOGGER =>
-          throw new InvalidRequestException(s"AlterConfigs is deprecated and does not support the resource type ${ConfigResource.Type.BROKER_LOGGER}")
-        case ConfigResource.Type.BROKER =>
-          authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
-        case ConfigResource.Type.TOPIC =>
-          authHelper.authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
-        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+    if (!request.isForwarded && config.usesSelfManagedQuorum) {
+      // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller
+      val alterConfigsRequest = request.body[AlterConfigsRequest]
+      val brokerConfigs = alterConfigsRequest.configs.asScala.filter(entry => entry._1.`type` == ConfigResource.Type.BROKER)
+
+      // Validate per-broker dynamic configs
+      val results = brokerConfigs.map { case (resource, config) =>
+        try {
+          val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
+          val configProps = new Properties
+          config.entries.asScala.filter(_.value != null).foreach { configEntry =>
+            configProps.setProperty(configEntry.name, configEntry.value)
+          }
+          val brokerId = configHelper.getAndValidateBrokerId(resource)
+          // Check that there are no static configs being altered
+          DynamicConfig.Broker.validate(configProps)
+          // Validate and process the reconfiguration
+          this.config.dynamicConfig.validate(configProps, brokerId.nonEmpty)
+          // AlterConfigPolicy implements AutoCloseable. In the ZkAdminManager this gets closed when the broker shutsdown 
+          // The AlterConfigPolicy used for KRaft in the ConfigHelper is not being closed
+          configHelper.validateConfigPolicy(resource, configEntriesMap)
+          resource -> ApiError.NONE
+        } catch {
+          case e @ (_: ConfigException | _: IllegalArgumentException) =>
+            val message = s"Invalid config value for resource $resource: ${e.getMessage}"
+            info(message)
+            resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
+          case e: Throwable =>
+            val configProps = new Properties
+            config.entries.asScala.filter(_.value != null).foreach { configEntry =>
+              configProps.setProperty(configEntry.name, configEntry.value)
+            }
+            // Log client errors at a lower level than unexpected exceptions
+            val message = s"Error processing alter configs request for resource $resource, config ${configHelper.toLoggableProps(resource, configProps).mkString(",")}"
+            if (e.isInstanceOf[ApiException])
+              info(message, e)
+            else
+              error(message, e)
+            resource -> ApiError.fromThrowable(e)
+        }
+      }.toMap
+
+      if (results.filterNot(_._2 == ApiError.NONE).nonEmpty) {
+        // If validation fails for any reason, send response back to the client and don't forward the request to the controller.
+        def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
+          val data = new AlterConfigsResponseData()
+            .setThrottleTimeMs(requestThrottleMs)
+          results.foreach{ case (resource, error) =>
+            data.responses().add(new AlterConfigsResourceResponse()
+              .setErrorCode(error.error.code)
+              .setErrorMessage(error.message)
+              .setResourceName(resource.name)
+              .setResourceType(resource.`type`.id))
+          }
+          new AlterConfigsResponse(data)
+        }
+        requestHelper.sendResponseMaybeThrottle(request, responseCallback)
+      } else {
+        // Now forward the request to the controller so that the configs are persisted to the metadata quorum.
+        // This will never fail since this request has not already been forwarded and this is a KRaft broker.
+        forwardToControllerOrFail(request)
       }
-    }
-    val authorizedResult = zkSupport.adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
-    val unauthorizedResult = unauthorizedResources.keys.map { resource =>
-      resource -> configsAuthorizationApiError(resource)
-    }
-    def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
-      val data = new AlterConfigsResponseData()
-        .setThrottleTimeMs(requestThrottleMs)
-      (authorizedResult ++ unauthorizedResult).foreach{ case (resource, error) =>
-        data.responses().add(new AlterConfigsResourceResponse()
-          .setErrorCode(error.error.code)
-          .setErrorMessage(error.message)
-          .setResourceName(resource.name)
-          .setResourceType(resource.`type`.id))
+    } else if (config.requiresZookeeper) {
+      val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
+      val alterConfigsRequest = request.body[AlterConfigsRequest]
+      val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.toMap.partition { case (resource, _) =>
+        resource.`type` match {
+          case ConfigResource.Type.BROKER_LOGGER =>
+            throw new InvalidRequestException(s"AlterConfigs is deprecated and does not support the resource type ${ConfigResource.Type.BROKER_LOGGER}")
+          case ConfigResource.Type.BROKER =>
+            authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
+          case ConfigResource.Type.TOPIC =>
+            authHelper.authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
+          case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+        }
       }
-      new AlterConfigsResponse(data)
+      val authorizedResult = zkSupport.adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
+      val unauthorizedResult = unauthorizedResources.keys.map { resource =>
+        resource -> configsAuthorizationApiError(resource)
+      }
+      def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
+        val data = new AlterConfigsResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+        (authorizedResult ++ unauthorizedResult).foreach{ case (resource, error) =>
+          data.responses().add(new AlterConfigsResourceResponse()
+            .setErrorCode(error.error.code)
+            .setErrorMessage(error.message)
+            .setResourceName(resource.name)
+            .setResourceType(resource.`type`.id))
+        }
+        new AlterConfigsResponse(data)
+      }
+      requestHelper.sendResponseMaybeThrottle(request, responseCallback)
     }
-    requestHelper.sendResponseMaybeThrottle(request, responseCallback)
   }
 
   def handleAlterPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {

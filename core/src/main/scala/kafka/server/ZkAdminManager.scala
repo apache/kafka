@@ -420,7 +420,7 @@ class ZkAdminManager(val config: KafkaConfig,
             configProps.setProperty(configEntry.name, configEntry.value)
           }
           // Log client errors at a lower level than unexpected exceptions
-          val message = s"Error processing alter configs request for resource $resource, config ${toLoggableProps(resource, configProps).mkString(",")}"
+          val message = s"Error processing alter configs request for resource $resource, config ${configHelper.toLoggableProps(resource, configProps).mkString(",")}"
           if (e.isInstanceOf[ApiException])
             info(message, e)
           else
@@ -439,7 +439,7 @@ class ZkAdminManager(val config: KafkaConfig,
     adminZkClient.validateTopicConfig(topic, configProps)
     validateConfigPolicy(resource, configEntriesMap)
     if (!validateOnly) {
-      info(s"Updating topic $topic with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
+      info(s"Updating topic $topic with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
       adminZkClient.changeTopicConfig(topic, configProps)
     }
 
@@ -448,7 +448,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
   private def alterBrokerConfigs(resource: ConfigResource, validateOnly: Boolean,
                                  configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
-    val brokerId = getBrokerId(resource)
+    val brokerId = configHelper.getAndValidateBrokerId(resource)
     val perBrokerConfig = brokerId.nonEmpty
     this.config.dynamicConfig.validate(configProps, perBrokerConfig)
     validateConfigPolicy(resource, configEntriesMap)
@@ -457,21 +457,15 @@ class ZkAdminManager(val config: KafkaConfig,
         this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
 
       if (perBrokerConfig)
-        info(s"Updating broker ${brokerId.get} with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
+        info(s"Updating broker ${brokerId.get} with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
       else
-        info(s"Updating brokers with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
+        info(s"Updating brokers with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
 
       adminZkClient.changeBrokerConfig(brokerId,
         this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
     }
 
     resource -> ApiError.NONE
-  }
-
-  private def toLoggableProps(resource: ConfigResource, configProps: Properties): Map[String, String] = {
-    configProps.asScala.map {
-      case (key, value) => (key, KafkaConfig.loggableValue(resource.`type`, key, value))
-    }
   }
 
   private def alterLogLevelConfigs(alterConfigOps: Seq[AlterConfigOp]): Unit = {
@@ -488,17 +482,6 @@ class ZkAdminManager(val config: KafkaConfig,
         case _ => throw new IllegalArgumentException(
           s"Log level cannot be changed for OpType: ${alterConfigOp.opType()}")
       }
-    }
-  }
-
-  private def getBrokerId(resource: ConfigResource) = {
-    if (resource.name == null || resource.name.isEmpty)
-      None
-    else {
-      val id = resourceNameToBrokerId(resource.name)
-      if (id != this.config.brokerId)
-        throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received ${resource.name}")
-      Some(id)
     }
   }
 
@@ -535,7 +518,7 @@ class ZkAdminManager(val config: KafkaConfig,
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER =>
-            val brokerId = getBrokerId(resource)
+            val brokerId = configHelper.getAndValidateBrokerId(resource)
             val perBrokerConfig = brokerId.nonEmpty
 
             val persistentProps = if (perBrokerConfig) adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.get.toString)
@@ -546,7 +529,7 @@ class ZkAdminManager(val config: KafkaConfig,
             alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER_LOGGER =>
-            getBrokerId(resource)
+            configHelper.getAndValidateBrokerId(resource)
             validateLogLevelConfigs(alterConfigOps)
 
             if (!validateOnly)
@@ -643,13 +626,6 @@ class ZkAdminManager(val config: KafkaConfig,
     topicPurgatory.shutdown()
     CoreUtils.swallow(createTopicPolicy.foreach(_.close()), this)
     CoreUtils.swallow(alterConfigPolicy.foreach(_.close()), this)
-  }
-
-  private def resourceNameToBrokerId(resourceName: String): Int = {
-    try resourceName.toInt catch {
-      case _: NumberFormatException =>
-        throw new InvalidRequestException(s"Broker id must be an integer, but it is: $resourceName")
-    }
   }
 
   private def sanitizeEntityName(entityName: String): String =
