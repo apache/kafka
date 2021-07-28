@@ -2656,34 +2656,38 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     } else if (config.requiresZookeeper) {
       val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-      val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.toMap.partition { case (resource, _) =>
-        resource.`type` match {
-          case ConfigResource.Type.BROKER_LOGGER =>
-            throw new InvalidRequestException(s"AlterConfigs is deprecated and does not support the resource type ${ConfigResource.Type.BROKER_LOGGER}")
-          case ConfigResource.Type.BROKER =>
-            authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
-          case ConfigResource.Type.TOPIC =>
-            authHelper.authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
-          case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+      if (!request.isForwarded && isForwardingEnabled(request) && !zkSupport.controller.isActive) {
+        forwardToControllerOrFail(request)
+      } else {
+        val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.toMap.partition { case (resource, _) =>
+          resource.`type` match {
+            case ConfigResource.Type.BROKER_LOGGER =>
+              throw new InvalidRequestException(s"AlterConfigs is deprecated and does not support the resource type ${ConfigResource.Type.BROKER_LOGGER}")
+            case ConfigResource.Type.BROKER =>
+              authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
+            case ConfigResource.Type.TOPIC =>
+              authHelper.authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
+            case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+          }
         }
-      }
-      val authorizedResult = zkSupport.adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
-      val unauthorizedResult = unauthorizedResources.keys.map { resource =>
-        resource -> configsAuthorizationApiError(resource)
-      }
-      def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
-        val data = new AlterConfigsResponseData()
-          .setThrottleTimeMs(requestThrottleMs)
-        (authorizedResult ++ unauthorizedResult).foreach{ case (resource, error) =>
-          data.responses().add(new AlterConfigsResourceResponse()
-            .setErrorCode(error.error.code)
-            .setErrorMessage(error.message)
-            .setResourceName(resource.name)
-            .setResourceType(resource.`type`.id))
+        val authorizedResult = zkSupport.adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
+        val unauthorizedResult = unauthorizedResources.keys.map { resource =>
+          resource -> configsAuthorizationApiError(resource)
         }
-        new AlterConfigsResponse(data)
+        def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
+          val data = new AlterConfigsResponseData()
+            .setThrottleTimeMs(requestThrottleMs)
+          (authorizedResult ++ unauthorizedResult).foreach{ case (resource, error) =>
+            data.responses().add(new AlterConfigsResourceResponse()
+              .setErrorCode(error.error.code)
+              .setErrorMessage(error.message)
+              .setResourceName(resource.name)
+              .setResourceType(resource.`type`.id))
+          }
+          new AlterConfigsResponse(data)
+        }
+        requestHelper.sendResponseMaybeThrottle(request, responseCallback)
       }
-      requestHelper.sendResponseMaybeThrottle(request, responseCallback)
     }
   }
 
@@ -2844,24 +2848,27 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     } else if (config.requiresZookeeper) {
       val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-
-      val (authorizedResources, unauthorizedResources) = configs.partition { case (resource, _) =>
-        resource.`type` match {
-          case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER =>
-            authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
-          case ConfigResource.Type.TOPIC =>
-            authHelper.authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
-          case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+      if (!request.isForwarded && isForwardingEnabled(request) && !zkSupport.controller.isActive) {
+        forwardToControllerOrFail(request)
+      } else {
+        val (authorizedResources, unauthorizedResources) = configs.partition { case (resource, _) =>
+          resource.`type` match {
+            case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER =>
+              authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
+            case ConfigResource.Type.TOPIC =>
+              authHelper.authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
+            case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+          }
         }
-      }
 
-      val authorizedResult = zkSupport.adminManager.incrementalAlterConfigs(authorizedResources, alterConfigsRequest.data.validateOnly)
-      val unauthorizedResult = unauthorizedResources.keys.map { resource =>
-        resource -> configsAuthorizationApiError(resource)
-      }
+        val authorizedResult = zkSupport.adminManager.incrementalAlterConfigs(authorizedResources, alterConfigsRequest.data.validateOnly)
+        val unauthorizedResult = unauthorizedResources.keys.map { resource =>
+          resource -> configsAuthorizationApiError(resource)
+        }
 
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
-        requestThrottleMs, (authorizedResult ++ unauthorizedResult).asJava))
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
+          requestThrottleMs, (authorizedResult ++ unauthorizedResult).asJava))
+      }
     }
   }
 
