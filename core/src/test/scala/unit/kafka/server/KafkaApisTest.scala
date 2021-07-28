@@ -3879,6 +3879,12 @@ class KafkaApisTest {
     assertEquals(KafkaApis.shouldAlwaysForward(request).getMessage, e.getMessage)
   }
 
+  private def verifyShouldVerifyBeforeForwarding(handler: RequestChannel.Request => Unit): Unit = {
+    val request = createMockRequest()
+    val e = assertThrows(classOf[NullPointerException], () => handler(request))
+    assertNotEquals(KafkaApis.shouldAlwaysForward(request).getMessage, e.getMessage)
+  }
+
   @Test
   def testRaftShouldNeverHandleLeaderAndIsrRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
@@ -3946,9 +3952,9 @@ class KafkaApisTest {
   }
 
   @Test
-  def testRaftShouldAlwaysForwardAlterConfigsRequest(): Unit = {
+  def testRaftShouldVerifyBeforeForwardingAlterConfigsRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterConfigsRequest)
+    verifyShouldVerifyBeforeForwarding(createKafkaApis(raftSupport = true).handleAlterConfigsRequest)
   }
 
   @Test
@@ -3958,9 +3964,9 @@ class KafkaApisTest {
   }
 
   @Test
-  def testRaftShouldAlwaysForwardIncrementalAlterConfigsRequest(): Unit = {
+  def testRaftShouldVerifyBeforeForwardingIncrementalAlterConfigsRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest)
+    verifyShouldVerifyBeforeForwarding(createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest)
   }
 
   @Test
