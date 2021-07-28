@@ -580,12 +580,26 @@ public final class QuorumController implements Controller {
                 // written before we can return our result to the user.  Here, we hand off
                 // the batch of records to the raft client.  They will be written out
                 // asynchronously.
-                final long offset;
+                final Long offset;
                 if (result.isAtomic()) {
                     offset = raftClient.scheduleAtomicAppend(controllerEpoch, result.records());
                 } else {
                     offset = raftClient.scheduleAppend(controllerEpoch, result.records());
                 }
+
+                if (offset == null || offset == Long.MAX_VALUE) {
+                   // We have failed the append to the log.
+                    // This can happen either because we are not the leader anymore
+                    // or because we were unable to append the records due to e.g. memory
+                    // exhaustion. In either case we will clean up the controllers in memory
+                    // state and renounce the leadership.
+                    log.error("Could not append records to the metadata log. Recouncing leadership " +
+                        "currentControllerEpoch {} offset {}", controllerEpoch, offset);
+                    renounce();
+                    raftClient.resign(controllerEpoch);
+                    return;
+                }
+
                 op.processBatchEndOffset(offset);
                 writeOffset = offset;
                 resultAndOffset = ControllerResultAndOffset.of(offset, result);
