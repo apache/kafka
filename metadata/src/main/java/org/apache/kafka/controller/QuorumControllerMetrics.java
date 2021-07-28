@@ -22,6 +22,9 @@ import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
+import java.util.Arrays;
+import java.util.Objects;
+
 public final class QuorumControllerMetrics implements ControllerMetrics {
     private final static MetricName ACTIVE_CONTROLLER_COUNT = getMetricName(
         "KafkaController", "ActiveControllerCount");
@@ -37,7 +40,8 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "KafkaController", "OfflinePartitionsCount");
     private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
         "KafkaController", "PreferredReplicaImbalanceCount");
-    
+
+    private final MetricsRegistry registry;
     private volatile boolean active;
     private volatile int globalTopicCount;
     private volatile int globalPartitionCount;
@@ -52,6 +56,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final Histogram eventQueueProcessingTime;
 
     public QuorumControllerMetrics(MetricsRegistry registry) {
+        this.registry = Objects.requireNonNull(registry);
         this.active = false;
         this.globalTopicCount = 0;
         this.globalPartitionCount = 0;
@@ -149,6 +154,18 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     @Override
     public int preferredReplicaImbalanceCount() {
         return this.preferredReplicaImbalanceCount;
+    }
+
+    @Override
+    public void close() {
+        Arrays.asList(
+            ACTIVE_CONTROLLER_COUNT,
+            EVENT_QUEUE_TIME_MS,
+            EVENT_QUEUE_PROCESSING_TIME_MS,
+            GLOBAL_TOPIC_COUNT,
+            GLOBAL_PARTITION_COUNT,
+            OFFLINE_PARTITION_COUNT,
+            PREFERRED_REPLICA_IMBALANCE_COUNT).forEach(this.registry::removeMetric);
     }
 
     private static MetricName getMetricName(String type, String name) {

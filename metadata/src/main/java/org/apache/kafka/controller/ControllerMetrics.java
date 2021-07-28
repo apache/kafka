@@ -42,4 +42,6 @@ public interface ControllerMetrics {
     void setPreferredReplicaImbalanceCount(int replicaImbalances);
 
     int preferredReplicaImbalanceCount();
+
+    void close();
 }
