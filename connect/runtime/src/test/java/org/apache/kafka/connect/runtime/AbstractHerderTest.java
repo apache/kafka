@@ -48,15 +48,10 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.easymock.Capture;
-import org.easymock.EasyMock;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.api.easymock.annotation.MockStrict;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -72,20 +67,22 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.AbstractHerder.keysWithVariableValues;
-import static org.easymock.EasyMock.anyString;
-import static org.easymock.EasyMock.partialMockBuilder;
-import static org.easymock.EasyMock.strictMock;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.withSettings;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.powermock.api.easymock.PowerMock.replayAll;
-import static org.powermock.api.easymock.PowerMock.verifyAll;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({AbstractHerder.class})
 public class AbstractHerderTest {
 
     private static final String CONN1 = "sourceA";
@@ -140,90 +137,88 @@ public class AbstractHerderTest {
     private final int generation = 5;
     private final String connector = "connector";
     private final ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
+    private Connector insConnector;
 
-    @MockStrict private Worker worker;
-    @MockStrict private WorkerConfigTransformer transformer;
-    @MockStrict private ConfigBackingStore configStore;
-    @MockStrict private StatusBackingStore statusStore;
-    @MockStrict private ClassLoader classLoader;
-    @Mock private Plugins plugins;
+    final private Worker worker = mock(Worker.class);
+    final private WorkerConfigTransformer transformer = mock(WorkerConfigTransformer.class);
+    final private Plugins plugins = mock(Plugins.class);
+    final private ClassLoader classLoader = mock(ClassLoader.class);
+    final private ConfigBackingStore configStore = mock(ConfigBackingStore.class);
+    final private StatusBackingStore statusStore = mock(StatusBackingStore.class);
+    private ClassLoader loader;
+
+    @Before
+    public void before() {
+        loader = Utils.getContextOrKafkaClassLoader();
+    }
+
+    @After
+    public void tearDown() {
+        if (loader != null) Plugins.compareAndSwapLoaders(loader);
+    }
 
     @Test
     public void testConnectors() {
-        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-            .withConstructor(
-                Worker.class,
-                String.class,
-                String.class,
-                StatusBackingStore.class,
-                ConfigBackingStore.class,
-                ConnectorClientConfigOverridePolicy.class
-            )
-            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
-            .addMockedMethod("generation")
-            .createMock();
+//        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
+//            .withConstructor(
+//                Worker.class,
+//                String.class,
+//                String.class,
+//                StatusBackingStore.class,
+//                ConfigBackingStore.class,
+//                ConnectorClientConfigOverridePolicy.class
+//            )
+//            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+//            .addMockedMethod("generation")
+//            .createMock();
 
-        EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
-        EasyMock.expect(configStore.snapshot()).andReturn(SNAPSHOT);
-        replayAll();
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
+
+        when(herder.generation()).thenReturn(generation);
+        when(herder.rawConfig(connector)).thenReturn(null);
+        when(configStore.snapshot()).thenReturn(SNAPSHOT);
         assertEquals(Collections.singleton(CONN1), new HashSet<>(herder.connectors()));
-        PowerMock.verifyAll();
     }
 
     @Test
     public void testConnectorStatus() {
         ConnectorTaskId taskId = new ConnectorTaskId(connector, 0);
-        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-            .withConstructor(
-                Worker.class,
-                String.class,
-                String.class,
-                StatusBackingStore.class,
-                ConfigBackingStore.class,
-                ConnectorClientConfigOverridePolicy.class
-            )
-            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
-            .addMockedMethod("generation")
-            .createMock();
 
-        EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
-        EasyMock.expect(statusStore.get(connector))
-            .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
-        EasyMock.expect(statusStore.getAll(connector))
-            .andReturn(Collections.singletonList(
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
+
+        when(herder.generation()).thenReturn(generation);
+        when(herder.rawConfig(connector)).thenReturn(null);
+        when(statusStore.get(connector))
+            .thenReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
+        when(statusStore.getAll(connector))
+            .thenReturn(Collections.singletonList(
                 new TaskStatus(taskId, AbstractStatus.State.UNASSIGNED, workerId, generation)));
 
-        replayAll();
         ConnectorStateInfo csi = herder.connectorStatus(connector);
-        PowerMock.verifyAll();
     }
 
     @Test
     public void connectorStatus() {
         ConnectorTaskId taskId = new ConnectorTaskId(connector, 0);
 
-        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                                 ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
-                .addMockedMethod("generation")
-                .createMock();
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
 
-        EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
+        when(herder.generation()).thenReturn(generation);
+        when(herder.rawConfig(connector)).thenReturn(null);
 
-        EasyMock.expect(statusStore.get(connector))
-                .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
+        when(statusStore.get(connector))
+                .thenReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
 
-        EasyMock.expect(statusStore.getAll(connector))
-                .andReturn(Collections.singletonList(
+        when(statusStore.getAll(connector))
+                .thenReturn(Collections.singletonList(
                         new TaskStatus(taskId, AbstractStatus.State.UNASSIGNED, workerId, generation)));
-        EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
-
-        replayAll();
-
+        when(worker.getPlugins()).thenReturn(plugins);
 
         ConnectorStateInfo state = herder.connectorStatus(connector);
 
@@ -236,8 +231,6 @@ public class AbstractHerderTest {
         assertEquals(0, taskState.id());
         assertEquals("UNASSIGNED", taskState.state());
         assertEquals(workerId, taskState.workerId());
-
-        PowerMock.verifyAll();
     }
 
     @Test
@@ -245,22 +238,16 @@ public class AbstractHerderTest {
         ConnectorTaskId taskId = new ConnectorTaskId("connector", 0);
         String workerId = "workerId";
 
-        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                                 ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
-                .addMockedMethod("generation")
-                .createMock();
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
 
-        EasyMock.expect(herder.generation()).andStubReturn(5);
+        when(herder.generation()).thenReturn(5);
 
-        final Capture<TaskStatus> statusCapture = EasyMock.newCapture();
-        statusStore.putSafe(EasyMock.capture(statusCapture));
-        EasyMock.expectLastCall();
+        final ArgumentCaptor<TaskStatus> taskStatusArgumentCaptor = ArgumentCaptor.forClass(TaskStatus.class);
+        doNothing().when(statusStore).putSafe(taskStatusArgumentCaptor.capture());
 
-        EasyMock.expect(statusStore.get(taskId)).andAnswer(statusCapture::getValue);
-
-        replayAll();
+        when(statusStore.get(taskId)).thenAnswer(invocation -> taskStatusArgumentCaptor.getValue());
 
         herder.onFailure(taskId, new RuntimeException());
 
@@ -269,25 +256,19 @@ public class AbstractHerderTest {
         assertEquals("FAILED", taskState.state());
         assertEquals(0, taskState.id());
         assertNotNull(taskState.trace());
-
-        verifyAll();
     }
 
     @Test
     public void testBuildRestartPlanForUnknownConnector() {
         String connectorName = "UnknownConnector";
         RestartRequest restartRequest = new RestartRequest(connectorName, false, true);
-        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                        ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
-                .addMockedMethod("generation")
-                .createMock();
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
 
-        EasyMock.expect(herder.generation()).andStubReturn(generation);
+        when(herder.generation()).thenReturn(generation);
 
-        EasyMock.expect(statusStore.get(connectorName)).andReturn(null);
-        replayAll();
+        when(statusStore.get(connectorName)).thenReturn(null);
 
         Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
 
@@ -344,24 +325,20 @@ public class AbstractHerderTest {
         taskStatuses.add(new TaskStatus(taskId1, AbstractStatus.State.RUNNING, workerId, generation));
         taskStatuses.add(new TaskStatus(taskId2, AbstractStatus.State.FAILED, workerId, generation));
 
-        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                        ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
-                .addMockedMethod("generation")
-                .createMock();
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
 
-        EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
+        when(herder.generation()).thenReturn(generation);
+        when(herder.rawConfig(connector)).thenReturn(null);
 
-        EasyMock.expect(statusStore.get(connector))
-                .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
+        when(statusStore.get(connector))
+                .thenReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
 
-        EasyMock.expect(statusStore.getAll(connector))
-                .andReturn(taskStatuses);
-        EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
+        when(statusStore.getAll(connector))
+                .thenReturn(taskStatuses);
+        when(worker.getPlugins()).thenReturn(plugins);
 
-        replayAll();
 
         Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
 
@@ -372,8 +349,6 @@ public class AbstractHerderTest {
         assertEquals(2, restartPlan.taskIdsToRestart().size());
         assertTrue(restartPlan.taskIdsToRestart().contains(taskId1));
         assertTrue(restartPlan.taskIdsToRestart().contains(taskId2));
-
-        PowerMock.verifyAll();
     }
 
     @Test
@@ -386,24 +361,19 @@ public class AbstractHerderTest {
         taskStatuses.add(new TaskStatus(taskId1, AbstractStatus.State.RUNNING, workerId, generation));
         taskStatuses.add(new TaskStatus(taskId2, AbstractStatus.State.FAILED, workerId, generation));
 
-        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                        ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
-                .addMockedMethod("generation")
-                .createMock();
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
 
-        EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
+        when(herder.generation()).thenReturn(generation);
+        when(herder.rawConfig(connector)).thenReturn(null);
 
-        EasyMock.expect(statusStore.get(connector))
-                .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
+        when(statusStore.get(connector))
+                .thenReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
 
-        EasyMock.expect(statusStore.getAll(connector))
-                .andReturn(taskStatuses);
-        EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
-
-        replayAll();
+        when(statusStore.getAll(connector))
+                .thenReturn(taskStatuses);
+        when(worker.getPlugins()).thenReturn(plugins);
 
         Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
 
@@ -412,38 +382,30 @@ public class AbstractHerderTest {
         assertFalse(restartPlan.shouldRestartConnector());
         assertFalse(restartPlan.shouldRestartTasks());
         assertTrue(restartPlan.taskIdsToRestart().isEmpty());
-
-        PowerMock.verifyAll();
     }
 
     @Test
     public void testConfigValidationEmptyConfig() {
-        AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, noneConnectorClientConfigOverridePolicy, 0);
-        replayAll();
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy, 0);
 
         assertThrows(BadRequestException.class, () -> herder.validateConnectorConfig(Collections.emptyMap(), false));
+        verify(worker, times(2)).configTransformer();
 
-        verifyAll();
     }
 
     @Test()
     public void testConfigValidationMissingName() {
-        AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, noneConnectorClientConfigOverridePolicy);
-        replayAll();
+        final Class<? extends Connector> connectorClass = TestSourceConnector.class;
+        AbstractHerder herder = createConfigValidationHerder(connectorClass, noneConnectorClientConfigOverridePolicy);
 
-        Map<String, String> config = Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
+        Map<String, String> config = Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
         ConfigInfos result = herder.validateConnectorConfig(config, false);
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
-        assertEquals(SampleSourceConnector.class.getName(), result.name());
-        assertEquals(
-                Arrays.asList(
-                        ConnectorConfig.COMMON_GROUP, ConnectorConfig.TRANSFORMS_GROUP,
-                        ConnectorConfig.PREDICATES_GROUP, ConnectorConfig.ERROR_GROUP,
-                        SourceConnectorConfig.TOPIC_CREATION_GROUP, SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_GROUP,
-                        SourceConnectorConfig.OFFSETS_TOPIC_GROUP),
-                result.groups());
+        assertEquals(connectorClass.getName(), result.name());
+        assertEquals(Arrays.asList(ConnectorConfig.COMMON_GROUP, ConnectorConfig.TRANSFORMS_GROUP,
+                ConnectorConfig.PREDICATES_GROUP, ConnectorConfig.ERROR_GROUP, SourceConnectorConfig.TOPIC_CREATION_GROUP), result.groups());
         assertEquals(2, result.errorCount());
         Map<String, ConfigInfo> infos = result.values().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
@@ -457,69 +419,72 @@ public class AbstractHerderTest {
         assertEquals("required", infos.get("required").configValue().name());
         assertEquals(1, infos.get("required").configValue().errors().size());
 
-        verifyAll();
+        verify(plugins).newConnector(connectorClass.getName());
+        verify(plugins).compareAndSwapLoaders(insConnector);
     }
 
     @Test
     public void testConfigValidationInvalidTopics() {
-        AbstractHerder herder = createConfigValidationHerder(SampleSinkConnector.class, noneConnectorClientConfigOverridePolicy);
-        replayAll();
+        final Class<? extends Connector> connectorClass = TestSinkConnector.class;
+        AbstractHerder herder = createConfigValidationHerder(connectorClass, noneConnectorClientConfigOverridePolicy);
 
         Map<String, String> config = new HashMap<>();
-        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
         config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1,topic2");
         config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
 
         assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
-        verifyAll();
+        verify(plugins).newConnector(connectorClass.getName());
+        verify(plugins).compareAndSwapLoaders(insConnector);
     }
 
     @Test
     public void testConfigValidationTopicsWithDlq() {
-        AbstractHerder herder = createConfigValidationHerder(SampleSinkConnector.class, noneConnectorClientConfigOverridePolicy);
-        replayAll();
+        final Class<? extends Connector> connectorClass = TestSinkConnector.class;
+        AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, noneConnectorClientConfigOverridePolicy);
 
         Map<String, String> config = new HashMap<>();
-        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
         config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1");
         config.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, "topic1");
 
         assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
-        verifyAll();
+        verify(plugins).newConnector(connectorClass.getName());
+        verify(plugins).compareAndSwapLoaders(insConnector);
     }
 
     @Test
     public void testConfigValidationTopicsRegexWithDlq() {
-        AbstractHerder herder = createConfigValidationHerder(SampleSinkConnector.class, noneConnectorClientConfigOverridePolicy);
-        replayAll();
+        final Class<? extends Connector> connectorClass = TestSinkConnector.class;
+        AbstractHerder herder = createConfigValidationHerder(connectorClass, noneConnectorClientConfigOverridePolicy);
 
         Map<String, String> config = new HashMap<>();
-        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
         config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
         config.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, "topic1");
 
         assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
-        verifyAll();
+        verify(plugins).newConnector(connectorClass.getName());
+        verify(plugins).compareAndSwapLoaders(insConnector);
     }
 
     @Test()
     public void testConfigValidationTransformsExtendResults() {
-        AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, noneConnectorClientConfigOverridePolicy);
+        final Class<? extends Connector> connectorClass = TestSourceConnector.class;
+        AbstractHerder herder = createConfigValidationHerder(connectorClass, noneConnectorClientConfigOverridePolicy);
 
         // 2 transform aliases defined -> 2 plugin lookups
         Set<PluginDesc<Transformation<?>>> transformations = new HashSet<>();
         transformations.add(transformationPluginDesc());
-        EasyMock.expect(plugins.transformations()).andReturn(transformations).times(2);
-
-        replayAll();
+        when(plugins.transformations()).thenReturn(transformations);
 
         // Define 2 transformations. One has a class defined and so can get embedded configs, the other is missing
         // class info that should generate an error.
         Map<String, String> config = new HashMap<>();
-        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
         config.put(ConnectorConfig.NAME_CONFIG, "connector-name");
         config.put(ConnectorConfig.TRANSFORMS_CONFIG, "xformA,xformB");
         config.put(ConnectorConfig.TRANSFORMS_CONFIG + ".xformA.type", SampleTransformation.class.getName());
@@ -529,7 +494,7 @@ public class AbstractHerderTest {
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
-        assertEquals(SampleSourceConnector.class.getName(), result.name());
+        assertEquals(connectorClass.getName(), result.name());
         // Each transform also gets its own group
         List<String> expectedGroups = Arrays.asList(
                 ConnectorConfig.COMMON_GROUP,
@@ -556,28 +521,29 @@ public class AbstractHerderTest {
         assertEquals("transforms.xformB.type", infos.get("transforms.xformB.type").configValue().name());
         assertFalse(infos.get("transforms.xformB.type").configValue().errors().isEmpty());
 
-        verifyAll();
+        verify(plugins, times(2)).transformations();
+        verify(plugins).newConnector(connectorClass.getName());
+        verify(plugins).compareAndSwapLoaders(insConnector);
     }
 
     @Test()
     public void testConfigValidationPredicatesExtendResults() {
-        AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, noneConnectorClientConfigOverridePolicy);
+        final Class<? extends Connector> connectorClass = TestSourceConnector.class;
+        AbstractHerder herder = createConfigValidationHerder(connectorClass, noneConnectorClientConfigOverridePolicy);
 
         // 2 transform aliases defined -> 2 plugin lookups
         Set<PluginDesc<Transformation<?>>> transformations = new HashSet<>();
         transformations.add(transformationPluginDesc());
-        EasyMock.expect(plugins.transformations()).andReturn(transformations).times(1);
+        when(plugins.transformations()).thenReturn(transformations);
 
         Set<PluginDesc<Predicate<?>>> predicates = new HashSet<>();
         predicates.add(predicatePluginDesc());
-        EasyMock.expect(plugins.predicates()).andReturn(predicates).times(2);
-
-        replayAll();
+        when(plugins.predicates()).thenReturn(predicates);
 
         // Define 2 transformations. One has a class defined and so can get embedded configs, the other is missing
         // class info that should generate an error.
         Map<String, String> config = new HashMap<>();
-        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
         config.put(ConnectorConfig.NAME_CONFIG, "connector-name");
         config.put(ConnectorConfig.TRANSFORMS_CONFIG, "xformA");
         config.put(ConnectorConfig.TRANSFORMS_CONFIG + ".xformA.type", SampleTransformation.class.getName());
@@ -590,7 +556,7 @@ public class AbstractHerderTest {
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
-        assertEquals(SampleSourceConnector.class.getName(), result.name());
+        assertEquals(connectorClass.getName(), result.name());
         // Each transform also gets its own group
         List<String> expectedGroups = Arrays.asList(
                 ConnectorConfig.COMMON_GROUP,
@@ -630,7 +596,10 @@ public class AbstractHerderTest {
         assertFalse(
                 infos.get("predicates.predY.type").configValue().errors().isEmpty());
 
-        verifyAll();
+        verify(plugins).transformations();
+        verify(plugins, times(2)).predicates();
+        verify(plugins).newConnector(connectorClass.getName());
+        verify(plugins).compareAndSwapLoaders(insConnector);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -644,12 +613,12 @@ public class AbstractHerderTest {
     }
 
     @Test()
-    public void testConfigValidationPrincipalOnlyOverride() {
-        AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, new PrincipalConnectorClientConfigOverridePolicy());
-        replayAll();
+    public void testConfigValidationPrincipalOnlyOverride() throws Throwable {
+        final Class<? extends Connector> connectorClass = TestSourceConnector.class;
+        AbstractHerder herder = createConfigValidationHerder(connectorClass, new PrincipalConnectorClientConfigOverridePolicy());
 
         Map<String, String> config = new HashMap<>();
-        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
         config.put(ConnectorConfig.NAME_CONFIG, "connector-name");
         config.put("required", "value"); // connector required config
         String ackConfigKey = producerOverrideKey(ProducerConfig.ACKS_CONFIG);
@@ -682,16 +651,17 @@ public class AbstractHerderTest {
         assertTrue(result.values().stream().anyMatch(
             configInfo -> saslConfigKey.equals(configInfo.configValue().name()) && configInfo.configValue().errors().isEmpty()));
 
-        verifyAll();
+        verify(plugins).newConnector(connectorClass.getName());
+        verify(plugins).compareAndSwapLoaders(insConnector);
     }
 
     @Test
-    public void testConfigValidationAllOverride() {
-        AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, new AllConnectorClientConfigOverridePolicy());
-        replayAll();
+    public void testConfigValidationAllOverride() throws Throwable {
+        final Class<? extends Connector> connectorClass = TestSourceConnector.class;
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, new AllConnectorClientConfigOverridePolicy());
 
         Map<String, String> config = new HashMap<>();
-        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
         config.put(ConnectorConfig.NAME_CONFIG, "connector-name");
         config.put("required", "value"); // connector required config
         // Try to test a variety of configuration types: string, int, long, boolean, list, class
@@ -731,7 +701,9 @@ public class AbstractHerderTest {
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         assertEquals(rawOverriddenClientConfigs, validatedOverriddenClientConfigs);
-        verifyAll();
+
+        verify(plugins).newConnector(connectorClass.getName());
+        verify(plugins).compareAndSwapLoaders(insConnector);
     }
 
     @Test
@@ -1055,23 +1027,18 @@ public class AbstractHerderTest {
                                                         ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                                                         int countOfCallingNewConnector) {
 
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, connectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
 
-        ConfigBackingStore configStore = strictMock(ConfigBackingStore.class);
-        StatusBackingStore statusStore = strictMock(StatusBackingStore.class);
-
-        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
-                                 ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, connectorClientConfigOverridePolicy)
-                .addMockedMethod("generation")
-                .createMock();
-        EasyMock.expect(herder.generation()).andStubReturn(generation);
+        when(herder.generation()).thenReturn(generation);
 
         // Call to validateConnectorConfig
-        EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
-        final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
-        EasyMock.expect(transformer.transform(EasyMock.capture(configCapture))).andAnswer(configCapture::getValue);
-        EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
+        when(worker.configTransformer()).thenReturn(transformer);
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<Map<String, String>> mapArgumentCaptor = ArgumentCaptor.forClass(Map.class);
+        when(transformer.transform(mapArgumentCaptor.capture())).thenAnswer(invocation -> mapArgumentCaptor.getValue());
+        when(worker.getPlugins()).thenReturn(plugins);
         final Connector connector;
         try {
             connector = connectorClass.getConstructor().newInstance();
@@ -1079,10 +1046,10 @@ public class AbstractHerderTest {
             throw new RuntimeException("Couldn't create connector", e);
         }
         if (countOfCallingNewConnector > 0) {
-            EasyMock.expect(plugins.newConnector(connectorClass.getName())).andReturn(connector).times(countOfCallingNewConnector);
-            EasyMock.expect(plugins.compareAndSwapLoaders(connector)).andReturn(classLoader).times(countOfCallingNewConnector);
+            when(plugins.newConnector(connectorClass.getName())).thenReturn(connector);
+            when(plugins.compareAndSwapLoaders(connector)).thenReturn(classLoader);
         }
-
+        insConnector = connector;
         return herder;
     }
 
