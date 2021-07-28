@@ -408,6 +408,20 @@ public class MemoryRecords extends AbstractRecords {
         return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, timestampType, baseOffset);
     }
 
+    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
+                                               CompressionType compressionType,
+                                               TimestampType timestampType,
+                                               long baseOffset,
+                                               int maxSize) {
+        long logAppendTime = RecordBatch.NO_TIMESTAMP;
+        if (timestampType == TimestampType.LOG_APPEND_TIME)
+            logAppendTime = System.currentTimeMillis();
+
+        return new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, timestampType, baseOffset,
+            logAppendTime, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+            false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, maxSize);
+    }
+
     public static MemoryRecordsBuilder idempotentBuilder(ByteBuffer buffer,
                                                          CompressionType compressionType,
                                                          long baseOffset,
