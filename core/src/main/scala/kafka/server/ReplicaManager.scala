@@ -1769,7 +1769,8 @@ class ReplicaManager(val config: KafkaConfig,
    * records in fetch response. Log start/end offset and high watermark may change not only due to
    * this fetch request, e.g., rolling new log segment and removing old log segment may move log
    * start offset further than the last offset in the fetched records. The followers will get the
-   * updated leader's state in the next fetch response.
+   * updated leader's state in the next fetch response. If follower has a diverging epoch or if read
+   * fails with any error, follower fetch state is not updated.
    */
   private def updateFollowerFetchState(followerId: Int,
                                        readResults: Seq[(TopicPartition, LogReadResult)]): Seq[(TopicPartition, LogReadResult)] = {
@@ -1777,6 +1778,10 @@ class ReplicaManager(val config: KafkaConfig,
       val updatedReadResult = if (readResult.error != Errors.NONE) {
         debug(s"Skipping update of fetch state for follower $followerId since the " +
           s"log read returned error ${readResult.error}")
+        readResult
+      } else if (readResult.divergingEpoch.nonEmpty) {
+        debug(s"Skipping update of fetch state for follower $followerId since the " +
+          s"log read returned diverging epoch ${readResult.divergingEpoch}")
         readResult
       } else {
         onlinePartition(topicPartition) match {
