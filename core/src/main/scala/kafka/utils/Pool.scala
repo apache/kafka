@@ -80,7 +80,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
   def foreachEntry(f: (K, V) => Unit): Unit = {
     pool.forEach((k, v) => f(k, v))
   }
-  
+
   override def size: Int = pool.size
   
   override def iterator: Iterator[(K, V)] = new Iterator[(K,V)]() {
