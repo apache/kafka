@@ -60,6 +60,27 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     }
   }
 
+  def validateBrokerConfigs(resource: ConfigResource, 
+                            validateOnly: Boolean, 
+                            configProps: Properties, 
+                            configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
+    val brokerId = getAndValidateBrokerId(resource)
+    val perBrokerConfig = brokerId.nonEmpty
+    // Check that there are no static configs being altered
+    DynamicConfig.Broker.validate(configProps)
+    // Validate and process the reconfiguration
+    this.config.dynamicConfig.validate(configProps, perBrokerConfig)
+    // AlterConfigPolicy implements AutoCloseable. In the ZkAdminManager this gets closed when the broker shutsdown 
+    // The AlterConfigPolicy used for KRaft in the ConfigHelper is not being closed
+    validateConfigPolicy(resource, configEntriesMap)
+    if (!validateOnly) {
+      if (perBrokerConfig)
+        this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
+    }
+
+    resource -> ApiError.NONE
+  }
+
   def toLoggableProps(resource: ConfigResource, configProps: Properties): Map[String, String] = {
     configProps.asScala.map {
       case (key, value) => (key, KafkaConfig.loggableValue(resource.`type`, key, value))
