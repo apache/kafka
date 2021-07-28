@@ -265,14 +265,14 @@ class ReplicaManager(val config: KafkaConfig,
   // Visible for testing
   private[server] val replicaSelectorOpt: Option[ReplicaSelector] = createReplicaSelector()
 
-  newGauge("LeaderCount", () => leaderPartitionsIterator.size)
+  newGauge(ReplicaMetricNames.LeaderCount, () => leaderPartitionsIterator.size)
   // Visible for testing
-  private[kafka] val partitionCount = newGauge("PartitionCount", () => allPartitions.size)
-  newGauge("OfflineReplicaCount", () => offlinePartitionCount)
-  newGauge("UnderReplicatedPartitions", () => underReplicatedPartitionCount)
-  newGauge("UnderMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isUnderMinIsr))
-  newGauge("AtMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isAtMinIsr))
-  newGauge("ReassigningPartitions", () => reassigningPartitionsCount)
+  private[kafka] val partitionCount = newGauge(ReplicaMetricNames.PartitionCount, () => allPartitions.size)
+  newGauge(ReplicaMetricNames.OfflineReplicaCount, () => offlinePartitionCount)
+  newGauge(ReplicaMetricNames.UnderReplicatedPartitions, () => underReplicatedPartitionCount)
+  newGauge(ReplicaMetricNames.UnderMinIsrPartitionCount, () => leaderPartitionsIterator.count(_.isUnderMinIsr))
+  newGauge(ReplicaMetricNames.AtMinIsrPartitionCount, () => leaderPartitionsIterator.count(_.isAtMinIsr))
+  newGauge(ReplicaMetricNames.ReassigningPartitions, () => reassigningPartitionsCount)
 
   def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
 
@@ -1884,20 +1884,14 @@ class ReplicaManager(val config: KafkaConfig,
     warn(s"Stopped serving replicas in dir $dir")
   }
 
-  def removeMetrics(): Unit = {
-    removeMetric("LeaderCount")
-    removeMetric("PartitionCount")
-    removeMetric("OfflineReplicaCount")
-    removeMetric("UnderReplicatedPartitions")
-    removeMetric("UnderMinIsrPartitionCount")
-    removeMetric("AtMinIsrPartitionCount")
-    removeMetric("ReassigningPartitions")
+  def removeReplicaMetrics(): Unit = {
+    ReplicaMetricNames.allMetricNames.foreach(removeMetric(_))
   }
 
   // High watermark do not need to be checkpointed only when under unit tests
   def shutdown(checkpointHW: Boolean = true): Unit = {
     info("Shutting down")
-    removeMetrics()
+    removeReplicaMetrics()
     if (logDirFailureHandler != null)
       logDirFailureHandler.shutdown()
     replicaFetcherManager.shutdown()
@@ -2231,5 +2225,19 @@ class ReplicaManager(val config: KafkaConfig,
             s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}", e)
         }
     }
+  }
+}
+
+object ReplicaMetricNames {
+  val LeaderCount: String = "LeaderCount"
+  val PartitionCount: String = "PartitionCount"
+  val OfflineReplicaCount: String = "OfflineReplicaCount"
+  val UnderReplicatedPartitions: String = "UnderReplicatedPartitions"
+  val UnderMinIsrPartitionCount: String = "UnderMinIsrPartitionCount"
+  val AtMinIsrPartitionCount: String = "AtMinIsrPartitionCount"
+  val ReassigningPartitions: String = "ReassigningPartitions"
+
+  def allMetricNames: List[String] = {
+    List(LeaderCount, PartitionCount, OfflineReplicaCount, UnderReplicatedPartitions, UnderMinIsrPartitionCount, AtMinIsrPartitionCount, ReassigningPartitions)
   }
 }

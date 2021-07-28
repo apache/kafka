@@ -38,7 +38,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
 
   private val tags = Map("clientId" -> clientId)
 
-  newGauge("MaxLag", () => {
+  newGauge(AbstractFetcherManagerMetricNames.MaxLag, () => {
     // current max lag across all fetchers/topics/partitions
     fetcherThreadMap.values.foldLeft(0L) { (curMaxLagAll, fetcherThread) =>
       val maxLagThread = fetcherThread.fetcherLagStats.stats.values.foldLeft(0L)((curMaxLagThread, lagMetrics) =>
@@ -47,16 +47,16 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     }
   }, tags)
 
-  newGauge("MinFetchRate", () => {
+  newGauge(AbstractFetcherManagerMetricNames.MinFetchRate, () => {
     // current min fetch rate across all fetchers/topics/partitions
     val headRate = fetcherThreadMap.values.headOption.map(_.fetcherStats.requestRate.oneMinuteRate).getOrElse(0.0)
     fetcherThreadMap.values.foldLeft(headRate)((curMinAll, fetcherThread) =>
       math.min(curMinAll, fetcherThread.fetcherStats.requestRate.oneMinuteRate))
   }, tags)
 
-  newGauge("FailedPartitionsCount", () => failedPartitions.size, tags)
+  newGauge(AbstractFetcherManagerMetricNames.FailedPartitionsCount, () => failedPartitions.size, tags)
 
-  newGauge("DeadThreadCount", () => deadThreadCount, tags)
+  newGauge(AbstractFetcherManagerMetricNames.DeadThreadCount, () => deadThreadCount, tags)
 
   private[server] def deadThreadCount: Int = lock synchronized { fetcherThreadMap.values.count(_.isThreadFailed) }
 
@@ -231,6 +231,13 @@ class FailedPartitions {
   def contains(topicPartition: TopicPartition): Boolean = synchronized {
     failedPartitionsSet.contains(topicPartition)
   }
+}
+
+object AbstractFetcherManagerMetricNames {
+  val MaxLag: String = "MaxLag"
+  val MinFetchRate: String = "MinFetchRate"
+  val FailedPartitionsCount: String = "FailedPartitionsCount"
+  val DeadThreadCount: String = "DeadThreadCount"
 }
 
 case class BrokerAndFetcherId(broker: BrokerEndPoint, fetcherId: Int)

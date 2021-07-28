@@ -68,6 +68,20 @@ object KafkaController extends Logging {
   type UpdateFeaturesCallback = Either[ApiError, Map[String, ApiError]] => Unit
 }
 
+object ControllerMetricNames {
+  val ActiveControllerCount: String = "ActiveControllerCount"
+  val OfflinePartitionsCount: String = "OfflinePartitionsCount"
+  val PreferredReplicaImbalanceCount: String = "PreferredReplicaImbalanceCount"
+  val ControllerState: String = "ControllerState"
+  val GlobalTopicCount: String = "GlobalTopicCount"
+  val GlobalPartitionCount: String = "GlobalPartitionCount"
+  val TopicsToDeleteCount: String = "TopicsToDeleteCount"
+  val ReplicasToDeleteCount: String = "ReplicasToDeleteCount"
+  val TopicsIneligibleToDeleteCount: String = "TopicsIneligibleToDeleteCount"
+  val ReplicasIneligibleToDeleteCount: String = "ReplicasIneligibleToDeleteCount"
+  val UncleanLeaderElectionsPerSec: String = "UncleanLeaderElectionsPerSec"
+}
+
 class KafkaController(val config: KafkaConfig,
                       zkClient: KafkaZkClient,
                       time: Time,
@@ -132,16 +146,16 @@ class KafkaController(val config: KafkaConfig,
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "delegation-token-cleaner")
 
-  newGauge("ActiveControllerCount", () => if (isActive) 1 else 0)
-  newGauge("OfflinePartitionsCount", () => offlinePartitionCount)
-  newGauge("PreferredReplicaImbalanceCount", () => preferredReplicaImbalanceCount)
-  newGauge("ControllerState", () => state.value)
-  newGauge("GlobalTopicCount", () => globalTopicCount)
-  newGauge("GlobalPartitionCount", () => globalPartitionCount)
-  newGauge("TopicsToDeleteCount", () => topicsToDeleteCount)
-  newGauge("ReplicasToDeleteCount", () => replicasToDeleteCount)
-  newGauge("TopicsIneligibleToDeleteCount", () => ineligibleTopicsToDeleteCount)
-  newGauge("ReplicasIneligibleToDeleteCount", () => ineligibleReplicasToDeleteCount)
+  newGauge(ControllerMetricNames.ActiveControllerCount, () => if (isActive) 1 else 0)
+  newGauge(ControllerMetricNames.OfflinePartitionsCount, () => offlinePartitionCount)
+  newGauge(ControllerMetricNames.PreferredReplicaImbalanceCount, () => preferredReplicaImbalanceCount)
+  newGauge(ControllerMetricNames.ControllerState, () => state.value)
+  newGauge(ControllerMetricNames.GlobalTopicCount, () => globalTopicCount)
+  newGauge(ControllerMetricNames.GlobalPartitionCount, () => globalPartitionCount)
+  newGauge(ControllerMetricNames.TopicsToDeleteCount, () => topicsToDeleteCount)
+  newGauge(ControllerMetricNames.ReplicasToDeleteCount, () => replicasToDeleteCount)
+  newGauge(ControllerMetricNames.TopicsIneligibleToDeleteCount, () => ineligibleTopicsToDeleteCount)
+  newGauge(ControllerMetricNames.ReplicasIneligibleToDeleteCount, () => ineligibleReplicasToDeleteCount)
 
   /**
    * Returns true if this broker is the current controller.
@@ -2639,7 +2653,7 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
 }
 
 private[controller] class ControllerStats extends KafkaMetricsGroup {
-  val uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
+  val uncleanLeaderElectionRate = newMeter(ControllerMetricNames.UncleanLeaderElectionsPerSec, "elections", TimeUnit.SECONDS)
 
   val rateAndTimeMetrics: Map[ControllerState, KafkaTimer] = ControllerState.values.flatMap { state =>
     state.rateAndTimeMetricName.map { metricName =>

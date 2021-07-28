@@ -121,27 +121,27 @@ class LogCleaner(initialConfig: CleanerConfig,
 
 
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
-  newGauge("max-buffer-utilization-percent",
+  newGauge(CleanerMetricNames.maxBufferUtilizationPercent,
     () => maxOverCleanerThreads(_.lastStats.bufferUtilization) * 100)
 
   /* a metric to track the recopy rate of each thread's last cleaning */
-  newGauge("cleaner-recopy-percent", () => {
+  newGauge(CleanerMetricNames.cleanerRecopyPercent, () => {
     val stats = cleaners.map(_.lastStats)
     val recopyRate = stats.iterator.map(_.bytesWritten).sum.toDouble / math.max(stats.iterator.map(_.bytesRead).sum, 1)
     (100 * recopyRate).toInt
   })
 
   /* a metric to track the maximum cleaning time for the last cleaning from each thread */
-  newGauge("max-clean-time-secs",
+  newGauge(CleanerMetricNames.maxCleanTimeSecs,
     () => maxOverCleanerThreads(_.lastStats.elapsedSecs))
 
 
   // a metric to track delay between the time when a log is required to be compacted
   // as determined by max compaction lag and the time of last cleaner run.
-  newGauge("max-compaction-delay-secs",
+  newGauge(CleanerMetricNames.maxCompactionDelaySecs,
     () => maxOverCleanerThreads(_.lastPreCleanStats.maxCompactionDelayMs.toDouble) / 1000)
 
-  newGauge("DeadThreadCount", () => deadThreadCount)
+  newGauge(CleanerMetricNames.DeadThreadCount, () => deadThreadCount)
 
   private[log] def deadThreadCount: Int = cleaners.count(_.isThreadFailed)
 
@@ -449,6 +449,14 @@ object LogCleaner {
       enableCleaner = config.logCleanerEnable)
 
   }
+}
+
+object CleanerMetricNames {
+  val maxBufferUtilizationPercent: String = "max-buffer-utilization-percent"
+  val cleanerRecopyPercent: String = "cleaner-recopy-percent"
+  val maxCleanTimeSecs: String = "max-clean-time-secs"
+  val maxCompactionDelaySecs: String = "max-compaction-delay-secs"
+  val DeadThreadCount: String = "DeadThreadCount"
 }
 
 /**

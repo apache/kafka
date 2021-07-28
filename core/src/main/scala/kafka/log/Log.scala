@@ -1670,10 +1670,7 @@ class Log(@volatile var logStartOffset: Long,
    * remove deleted log metrics
    */
   private[log] def removeLogMetrics(): Unit = {
-    removeMetric(LogMetricNames.NumLogSegments, tags)
-    removeMetric(LogMetricNames.LogStartOffset, tags)
-    removeMetric(LogMetricNames.LogEndOffset, tags)
-    removeMetric(LogMetricNames.Size, tags)
+    LogMetricNames.allMetricNames.foreach(removeMetric(_, tags))
   }
 
   /**
