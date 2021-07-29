@@ -244,7 +244,7 @@ public class WorkerCoordinatorTest {
 
         final String consumerId = "leader";
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, node));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // normal join group
@@ -281,7 +281,7 @@ public class WorkerCoordinatorTest {
 
         final String memberId = "member";
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, node));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // normal join group
@@ -319,7 +319,7 @@ public class WorkerCoordinatorTest {
 
         final String memberId = "member";
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, node));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // config mismatch results in assignment error
@@ -347,7 +347,7 @@ public class WorkerCoordinatorTest {
 
         PowerMock.replayAll();
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, node));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // join the group once
@@ -364,7 +364,7 @@ public class WorkerCoordinatorTest {
         assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.assignment.tasks());
 
         // and join the group again
-        coordinator.requestRejoin();
+        coordinator.requestRejoin("test");
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId1),
                 Collections.emptyList(), Errors.NONE));

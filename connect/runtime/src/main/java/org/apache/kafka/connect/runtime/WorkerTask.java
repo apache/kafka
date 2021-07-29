@@ -148,6 +148,8 @@ abstract class WorkerTask implements Runnable {
         taskMetricsGroup.close();
     }
 
+    protected abstract void initializeAndStart();
+
     protected abstract void execute();
 
     protected abstract void close();
@@ -179,14 +181,20 @@ abstract class WorkerTask implements Runnable {
                     onPause();
                     if (!awaitUnpause()) return;
                 }
-
-                statusListener.onStartup(id);
             }
 
+            initializeAndStart();
+            statusListener.onStartup(id);
             execute();
         } catch (Throwable t) {
-            log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not recover until manually restarted", this, t);
-            throw t;
+            if (cancelled) {
+                log.warn("{} After being scheduled for shutdown, the orphan task threw an uncaught exception. A newer instance of this task might be already running", this, t);
+            } else if (stopping) {
+                log.warn("{} After being scheduled for shutdown, task threw an uncaught exception.", this, t);
+            } else {
+                log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not recover until manually restarted", this, t);
+                throw t;
+            }
         } finally {
             doClose();
         }
@@ -426,6 +434,12 @@ abstract class WorkerTask implements Runnable {
         public void onDeletion(ConnectorTaskId id) {
             taskStateTimer.changeState(State.DESTROYED, time.milliseconds());
             delegateListener.onDeletion(id);
+        }
+
+        @Override
+        public void onRestart(ConnectorTaskId id) {
+            taskStateTimer.changeState(State.RESTARTING, time.milliseconds());
+            delegateListener.onRestart(id);
         }
 
         public void recordState(TargetState state) {

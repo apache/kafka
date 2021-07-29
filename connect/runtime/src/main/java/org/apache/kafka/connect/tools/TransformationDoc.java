@@ -18,11 +18,14 @@ package org.apache.kafka.connect.tools;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.transforms.Cast;
+import org.apache.kafka.connect.transforms.DropHeaders;
 import org.apache.kafka.connect.transforms.ExtractField;
 import org.apache.kafka.connect.transforms.Filter;
 import org.apache.kafka.connect.transforms.Flatten;
+import org.apache.kafka.connect.transforms.HeaderFrom;
 import org.apache.kafka.connect.transforms.HoistField;
 import org.apache.kafka.connect.transforms.InsertField;
+import org.apache.kafka.connect.transforms.InsertHeader;
 import org.apache.kafka.connect.transforms.MaskField;
 import org.apache.kafka.connect.transforms.RegexRouter;
 import org.apache.kafka.connect.transforms.ReplaceField;
@@ -62,7 +65,10 @@ public class TransformationDoc {
             new DocInfo(Flatten.class.getName(), Flatten.OVERVIEW_DOC, Flatten.CONFIG_DEF),
             new DocInfo(Cast.class.getName(), Cast.OVERVIEW_DOC, Cast.CONFIG_DEF),
             new DocInfo(TimestampConverter.class.getName(), TimestampConverter.OVERVIEW_DOC, TimestampConverter.CONFIG_DEF),
-            new DocInfo(Filter.class.getName(), Filter.OVERVIEW_DOC, Filter.CONFIG_DEF)
+            new DocInfo(Filter.class.getName(), Filter.OVERVIEW_DOC, Filter.CONFIG_DEF),
+            new DocInfo(InsertHeader.class.getName(), InsertHeader.OVERVIEW_DOC, InsertHeader.CONFIG_DEF),
+            new DocInfo(DropHeaders.class.getName(), DropHeaders.OVERVIEW_DOC, DropHeaders.CONFIG_DEF),
+            new DocInfo(HeaderFrom.class.getName(), HeaderFrom.OVERVIEW_DOC, HeaderFrom.CONFIG_DEF)
     );
 
     private static void printTransformationHtml(PrintStream out, DocInfo docInfo) {

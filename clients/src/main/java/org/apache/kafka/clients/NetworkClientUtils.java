@@ -60,17 +60,16 @@ public final class NetworkClientUtils {
             throw new IllegalArgumentException("Timeout needs to be greater than 0");
         }
         long startTime = time.milliseconds();
-        long expiryTime = startTime + timeoutMs;
 
         if (isReady(client, node, startTime) ||  client.ready(node, startTime))
             return true;
 
         long attemptStartTime = time.milliseconds();
-        while (!client.isReady(node, attemptStartTime) && attemptStartTime < expiryTime) {
+        while (!client.isReady(node, attemptStartTime) && attemptStartTime - startTime < timeoutMs) {
             if (client.connectionFailed(node)) {
                 throw new IOException("Connection to " + node + " failed.");
             }
-            long pollTimeout = expiryTime - attemptStartTime;
+            long pollTimeout = timeoutMs - (attemptStartTime - startTime); // initialize in this order to avoid overflow
             client.poll(pollTimeout, attemptStartTime);
             if (client.authenticationException(node) != null)
                 throw client.authenticationException(node);

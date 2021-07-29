@@ -19,11 +19,11 @@ package kafka.server
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
+
 import java.io.{DataInputStream, File}
 import java.net.ServerSocket
 import java.util.Collections
 import java.util.concurrent.{Executors, TimeUnit}
-
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
 import kafka.log.LogManager
@@ -40,12 +40,13 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, Timeout}
 import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
+@Timeout(60)
 class ServerShutdownTest extends ZooKeeperTestHarness {
   var config: KafkaConfig = null
   val host = "localhost"
@@ -83,7 +84,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     var producer = createProducer(server)
 
     // create topic
-    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
+    createTopic(zkClient, topic, servers = Seq(server))
 
     // send some messages
     sent1.map(value => producer.send(new ProducerRecord(topic, 0, value))).foreach(_.get)
@@ -125,19 +126,6 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testCleanShutdownWithDeleteTopicEnabled(): Unit = {
-    val newProps = TestUtils.createBrokerConfig(0, zkConnect)
-    newProps.setProperty("delete.topic.enable", "true")
-    val newConfig = KafkaConfig.fromProps(newProps)
-    val server = new KafkaServer(newConfig, threadNamePrefix = Option(this.getClass.getName))
-    server.startup()
-    server.shutdown()
-    server.awaitShutdown()
-    CoreUtils.delete(server.config.logDirs)
-    verifyNonDaemonThreadsStatus()
-  }
-
-  @Test
   def testCleanShutdownAfterFailedStartup(): Unit = {
     val newProps = TestUtils.createBrokerConfig(0, zkConnect)
     newProps.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
@@ -148,9 +136,9 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
 
   @Test
   def testCleanShutdownAfterFailedStartupDueToCorruptLogs(): Unit = {
-    val server = new KafkaServer(config)
+    val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
     server.startup()
-    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
+    createTopic(zkClient, topic, servers = Seq(server))
     server.shutdown()
     server.awaitShutdown()
     config.logDirs.foreach { dirName =>
@@ -158,6 +146,17 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
     }
     verifyCleanShutdownAfterFailedStartup[KafkaStorageException](config)
+  }
+
+  @Test
+  def testCleanShutdownWithZkUnavailable(): Unit = {
+    val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
+    server.startup()
+    shutdownZooKeeper()
+    server.shutdown()
+    server.awaitShutdown()
+    CoreUtils.delete(server.config.logDirs)
+    verifyNonDaemonThreadsStatus()
   }
 
   private def verifyCleanShutdownAfterFailedStartup[E <: Exception](config: KafkaConfig)(implicit exceptionClassTag: ClassTag[E]): Unit = {

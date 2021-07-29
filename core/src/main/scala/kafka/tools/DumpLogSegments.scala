@@ -30,7 +30,7 @@ import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordT
 import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.raft.metadata.MetadataRecordSerde
+import org.apache.kafka.metadata.MetadataRecordSerde
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -268,19 +268,18 @@ object DumpLogSegments {
             }
             lastOffset = record.offset
 
-            var prefix = s"${RecordIndent} "
+            var prefix = s"$RecordIndent "
             if (!skipRecordMetadata) {
-              print(s"${prefix}offset: ${record.offset} isValid: ${record.isValid} crc: ${record.checksumOrNull}" +
-                  s" keySize: ${record.keySize} valueSize: ${record.valueSize} ${batch.timestampType}: ${record.timestamp}" +
-                  s" baseOffset: ${batch.baseOffset} lastOffset: ${batch.lastOffset} baseSequence: ${batch.baseSequence}" +
-                  s" lastSequence: ${batch.lastSequence} producerEpoch: ${batch.producerEpoch} partitionLeaderEpoch: ${batch.partitionLeaderEpoch}" +
-                  s" batchSize: ${batch.sizeInBytes} magic: ${batch.magic} compressType: ${batch.compressionType} position: ${validBytes}")
+              print(s"${prefix}offset: ${record.offset} ${batch.timestampType}: ${record.timestamp} " +
+                s"keySize: ${record.keySize} valueSize: ${record.valueSize}")
               prefix = " "
 
               if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
                 print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
-              } else {
-                print(s" crc: ${record.checksumOrNull} isvalid: ${record.isValid}")
+              }
+              record match {
+                case r: AbstractLegacyRecordBatch => print(s" isValid: ${r.isValid} crc: ${r.checksum}}")
+                case _ =>
               }
 
               if (batch.isControlBatch) {
@@ -325,7 +324,7 @@ object DumpLogSegments {
 
     println(" position: " + accumulativeBytes + " " + batch.timestampType + ": " + batch.maxTimestamp +
       " size: " + batch.sizeInBytes + " magic: " + batch.magic +
-      " compresscodec: " + batch.compressionType + " crc: " + batch.checksum + " isvalid: " + batch.isValid)
+      " compresscodec: " + batch.compressionType.name + " crc: " + batch.checksum + " isvalid: " + batch.isValid)
   }
 
   class TimeIndexDumpErrors {

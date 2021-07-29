@@ -18,28 +18,32 @@
 package org.apache.kafka.controller;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeMap;
+
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.FeatureMap;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
-import org.apache.kafka.timeline.TimelineHashSet;
+
+import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
 
 
 public class FeatureControlManager {
     /**
-     * The features supported by this controller's software.
+     * An immutable map containing the features supported by this controller's software.
      */
     private final Map<String, VersionRange> supportedFeatures;
 
@@ -48,16 +52,10 @@ public class FeatureControlManager {
      */
     private final TimelineHashMap<String, VersionRange> finalizedVersions;
 
-    /**
-     * The latest feature epoch.
-     */
-    private final TimelineHashSet<Long> epoch;
-
     FeatureControlManager(Map<String, VersionRange> supportedFeatures,
                           SnapshotRegistry snapshotRegistry) {
         this.supportedFeatures = supportedFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.epoch = new TimelineHashSet<>(snapshotRegistry, 0);
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
@@ -111,7 +109,7 @@ public class FeatureControlManager {
         records.add(new ApiMessageAndVersion(
             new FeatureLevelRecord().setName(featureName).
                 setMinFeatureLevel(newRange.min()).setMaxFeatureLevel(newRange.max()),
-            (short) 0));
+            FEATURE_LEVEL_RECORD.highestSupportedVersion()));
         return ApiError.NONE;
     }
 
@@ -120,18 +118,39 @@ public class FeatureControlManager {
         for (Entry<String, VersionRange> entry : finalizedVersions.entrySet(lastCommittedOffset)) {
             features.put(entry.getKey(), entry.getValue());
         }
-        long currentEpoch = -1;
-        Iterator<Long> iterator = epoch.iterator(lastCommittedOffset);
-        if (iterator.hasNext()) {
-            currentEpoch = iterator.next();
-        }
-        return new FeatureMapAndEpoch(new FeatureMap(features), currentEpoch);
+        return new FeatureMapAndEpoch(new FeatureMap(features), lastCommittedOffset);
     }
 
-    void replay(FeatureLevelRecord record, long offset) {
+    public void replay(FeatureLevelRecord record) {
         finalizedVersions.put(record.name(),
             new VersionRange(record.minFeatureLevel(), record.maxFeatureLevel()));
-        epoch.clear();
-        epoch.add(offset);
+    }
+
+    class FeatureControlIterator implements Iterator<List<ApiMessageAndVersion>> {
+        private final Iterator<Entry<String, VersionRange>> iterator;
+
+        FeatureControlIterator(long epoch) {
+            this.iterator = finalizedVersions.entrySet(epoch).iterator();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iterator.hasNext();
+        }
+
+        @Override
+        public List<ApiMessageAndVersion> next() {
+            if (!hasNext()) throw new NoSuchElementException();
+            Entry<String, VersionRange> entry = iterator.next();
+            VersionRange versions = entry.getValue();
+            return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(entry.getKey()).
+                setMinFeatureLevel(versions.min()).
+                setMaxFeatureLevel(versions.max()), FEATURE_LEVEL_RECORD.highestSupportedVersion()));
+        }
+    }
+
+    FeatureControlIterator iterator(long epoch) {
+        return new FeatureControlIterator(epoch);
     }
 }

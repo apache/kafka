@@ -109,7 +109,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             // expire it.
             nextSegmentWindow = new SessionWindow(segmentInterval + retention, segmentInterval + retention);
         }
-        if (schema instanceof WindowKeySchema) {
+        if (schema instanceof WindowKeySchema || schema instanceof TimeOrderedKeySchema) {
             windows[0] = timeWindowForSize(10L, windowSizeForTimeWindow);
             windows[1] = timeWindowForSize(500L, windowSizeForTimeWindow);
             windows[2] = timeWindowForSize(1_000L, windowSizeForTimeWindow);
@@ -124,7 +124,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore = getBytesStore();
 
         stateDir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             stateDir,
             Serdes.String(),
             Serdes.Long(),
@@ -150,14 +150,15 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(50));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(100));
 
-        final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 500);
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 500)) {
 
-        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
-            KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
-            KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
-        );
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
+                KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
+            );
 
-        assertEquals(expected, toList(values));
+            assertEquals(expected, toList(values));
+        }
     }
 
     @Test
@@ -166,13 +167,14 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(10));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(50));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(100));
-        final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(Bytes.wrap(key.getBytes()), 1, 999);
-        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
-            KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
-            KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
-        );
+        try (final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(Bytes.wrap(key.getBytes()), 1, 999)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
+                KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
+            );
 
-        assertEquals(expected, toList(results));
+            assertEquals(expected, toList(results));
+        }
     }
 
     @Test
@@ -181,8 +183,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>("a", windows[1])), serializeValue(50));
 
         bytesStore.remove(serializeKey(new Windowed<>("a", windows[0])));
-        final KeyValueIterator<Bytes, byte[]> value = bytesStore.fetch(Bytes.wrap("a".getBytes()), 0, 100);
-        assertFalse(value.hasNext());
+        try (final KeyValueIterator<Bytes, byte[]> value = bytesStore.fetch(Bytes.wrap("a".getBytes()), 0, 100)) {
+            assertFalse(value.hasNext());
+        }
     }
 
     @Test
@@ -209,6 +212,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             ),
             results
         );
+
+        segments.close();
     }
 
     @Test
@@ -237,6 +242,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             ),
             results
         );
+
+        segments.close();
     }
 
     @Test
@@ -265,6 +272,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             ),
             results
         );
+
+        segments.close();
     }
 
     @Test
@@ -299,6 +308,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 )
             )
         );
+
+        segments.close();
     }
 
     @Test
@@ -329,6 +340,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 )
             )
         );
+
+        segments.close();
     }
 
     @Test
@@ -387,18 +400,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     }
 
     @Test
-    public void shouldLogAndMeasureExpiredRecordsWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeasureExpiredRecords(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldLogAndMeasureExpiredRecordsWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeasureExpiredRecords(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldLogAndMeasureExpiredRecords(final String builtInMetricsVersion) {
+    public void shouldLogAndMeasureExpiredRecords() {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
-        streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final AbstractRocksDBSegmentedBytesStore<S> bytesStore = getBytesStore();
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
@@ -425,51 +428,29 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final String threadId = Thread.currentThread().getName();
         final Metric dropTotal;
         final Metric dropRate;
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            dropTotal = metrics.get(new MetricName(
-                "expired-window-record-drop-total",
-                "stream-metrics-scope-metrics",
-                "The total number of dropped records due to an expired window",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0"),
-                    mkEntry("metrics-scope-state-id", "bytes-store")
-                )
-            ));
+        dropTotal = metrics.get(new MetricName(
+            "dropped-records-total",
+            "stream-task-metrics",
+            "",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        ));
 
-            dropRate = metrics.get(new MetricName(
-                "expired-window-record-drop-rate",
-                "stream-metrics-scope-metrics",
-                "The average number of dropped records due to an expired window per second.",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0"),
-                    mkEntry("metrics-scope-state-id", "bytes-store")
-                )
-            ));
-        } else {
-            dropTotal = metrics.get(new MetricName(
-                "dropped-records-total",
-                "stream-task-metrics",
-                "",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            ));
-
-            dropRate = metrics.get(new MetricName(
-                "dropped-records-rate",
-                "stream-task-metrics",
-                "",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            ));
-        }
+        dropRate = metrics.get(new MetricName(
+            "dropped-records-rate",
+            "stream-task-metrics",
+            "",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        ));
         assertEquals(1.0, dropTotal.metricValue());
         assertNotEquals(0.0, dropRate.metricValue());
+
+        bytesStore.close();
     }
 
     private Set<String> segmentDirs() {
@@ -482,6 +463,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (schema instanceof SessionKeySchema) {
             return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), "dummy"));
+        } else if (schema instanceof TimeOrderedKeySchema) {
+            return TimeOrderedKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
         } else {
             return WindowKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
         }
@@ -499,6 +482,17 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             if (schema instanceof WindowKeySchema) {
                 final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
                     WindowKeySchema.fromStoreKey(
+                        next.key.get(),
+                        windowSizeForTimeWindow,
+                        stateSerdes.keyDeserializer(),
+                        stateSerdes.topic()
+                    ),
+                    stateSerdes.valueDeserializer().deserialize("dummy", next.value)
+                );
+                results.add(deserialized);
+            } else if (schema instanceof TimeOrderedKeySchema) {
+                final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
+                    TimeOrderedKeySchema.fromStoreKey(
                         next.key.get(),
                         windowSizeForTimeWindow,
                         stateSerdes.keyDeserializer(),

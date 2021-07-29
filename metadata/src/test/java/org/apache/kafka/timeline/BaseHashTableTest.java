@@ -121,4 +121,24 @@ public class BaseHashTableTest {
             assertEquals(Integer.valueOf(i), table.baseRemove(Integer.valueOf(i)));
         }
     }
+
+    @Test
+    public void testExpectedSizeToCapacity() {
+        assertEquals(2, BaseHashTable.expectedSizeToCapacity(Integer.MIN_VALUE));
+        assertEquals(2, BaseHashTable.expectedSizeToCapacity(-123));
+        assertEquals(2, BaseHashTable.expectedSizeToCapacity(0));
+        assertEquals(2, BaseHashTable.expectedSizeToCapacity(1));
+        assertEquals(4, BaseHashTable.expectedSizeToCapacity(2));
+        assertEquals(4, BaseHashTable.expectedSizeToCapacity(3));
+        assertEquals(8, BaseHashTable.expectedSizeToCapacity(4));
+        assertEquals(16, BaseHashTable.expectedSizeToCapacity(12));
+        assertEquals(32, BaseHashTable.expectedSizeToCapacity(13));
+        assertEquals(0x2000000, BaseHashTable.expectedSizeToCapacity(0x1010400));
+        assertEquals(0x4000000, BaseHashTable.expectedSizeToCapacity(0x2000000));
+        assertEquals(0x4000000, BaseHashTable.expectedSizeToCapacity(0x2000001));
+        assertEquals(BaseHashTable.MAX_CAPACITY, BaseHashTable.expectedSizeToCapacity(BaseHashTable.MAX_CAPACITY));
+        assertEquals(BaseHashTable.MAX_CAPACITY, BaseHashTable.expectedSizeToCapacity(BaseHashTable.MAX_CAPACITY + 1));
+        assertEquals(BaseHashTable.MAX_CAPACITY, BaseHashTable.expectedSizeToCapacity(Integer.MAX_VALUE - 1));
+        assertEquals(BaseHashTable.MAX_CAPACITY, BaseHashTable.expectedSizeToCapacity(Integer.MAX_VALUE));
+    }
 }

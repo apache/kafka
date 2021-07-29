@@ -16,12 +16,12 @@
 {
   "apiKey": 64,
   "type": "request",
-  "listeners": ["broker", "controller"],
+  "listeners": ["controller"],
   "name": "UnregisterBrokerRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "BrokerId", "type": "int32", "versions": "0+",
+    { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker ID to unregister." }
   ]
 }

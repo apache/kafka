@@ -20,7 +20,6 @@ package kafka.network
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent._
-
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
@@ -32,8 +31,7 @@ import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
+import org.apache.kafka.common.message.EnvelopeResponseData
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, ObjectSerializationCache}
 import org.apache.kafka.common.requests._
@@ -126,8 +124,15 @@ object RequestChannel extends Logging {
     def buildResponseSend(abstractResponse: AbstractResponse): Send = {
       envelope match {
         case Some(request) =>
-          val responseBytes = context.buildResponseEnvelopePayload(abstractResponse)
-          val envelopeResponse = new EnvelopeResponse(responseBytes, Errors.NONE)
+          val envelopeResponse = if (abstractResponse.errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
+            // Since it's a NOT_CONTROLLER error response, we need to make envelope response with NOT_CONTROLLER error
+            // to notify the requester (i.e. BrokerToControllerRequestThread) to update active controller
+            new EnvelopeResponse(new EnvelopeResponseData()
+              .setErrorCode(Errors.NOT_CONTROLLER.code()))
+          } else {
+            val responseBytes = context.buildResponseEnvelopePayload(abstractResponse)
+            new EnvelopeResponse(responseBytes, Errors.NONE)
+          }
           request.context.buildResponseSend(envelopeResponse)
         case None =>
           context.buildResponseSend(abstractResponse)
@@ -169,32 +174,24 @@ object RequestChannel extends Logging {
 
       bodyAndSize.request match {
         case alterConfigs: AlterConfigsRequest =>
-          val loggableConfigs = alterConfigs.configs().asScala.map { case (resource, config) =>
-            val loggableEntries = new AlterConfigsRequest.Config(config.entries.asScala.map { entry =>
-                new AlterConfigsRequest.ConfigEntry(entry.name, KafkaConfig.loggableValue(resource.`type`, entry.name, entry.value))
-            }.asJavaCollection)
-            (resource, loggableEntries)
-          }.asJava
-          new AlterConfigsRequest.Builder(loggableConfigs, alterConfigs.validateOnly).build(alterConfigs.version())
+          val newData = alterConfigs.data().duplicate()
+          newData.resources().forEach(resource => {
+            val resourceType = ConfigResource.Type.forId(resource.resourceType())
+            resource.configs().forEach(config => {
+              config.setValue(KafkaConfig.loggableValue(resourceType, config.name(), config.value()))
+            })
+          })
+          new AlterConfigsRequest(newData, alterConfigs.version())
 
         case alterConfigs: IncrementalAlterConfigsRequest =>
-          val resources = new AlterConfigsResourceCollection(alterConfigs.data.resources.size)
-          alterConfigs.data.resources.forEach { resource =>
-            val newResource = new AlterConfigsResource()
-              .setResourceName(resource.resourceName)
-              .setResourceType(resource.resourceType)
-            resource.configs.forEach { config =>
-              newResource.configs.add(new AlterableConfig()
-                .setName(config.name)
-                .setValue(KafkaConfig.loggableValue(ConfigResource.Type.forId(resource.resourceType), config.name, config.value))
-                .setConfigOperation(config.configOperation))
-            }
-            resources.add(newResource)
-          }
-          val data = new IncrementalAlterConfigsRequestData()
-            .setValidateOnly(alterConfigs.data.validateOnly())
-            .setResources(resources)
-          new IncrementalAlterConfigsRequest.Builder(data).build(alterConfigs.version)
+          val newData = alterConfigs.data().duplicate()
+          newData.resources().forEach(resource => {
+            val resourceType = ConfigResource.Type.forId(resource.resourceType())
+            resource.configs().forEach(config => {
+              config.setValue(KafkaConfig.loggableValue(resourceType, config.name(), config.value()))
+            })
+          })
+          new IncrementalAlterConfigsRequest.Builder(newData).build(alterConfigs.version())
 
         case _ =>
           bodyAndSize.request

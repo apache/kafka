@@ -23,7 +23,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -208,11 +207,12 @@ public class RepartitionTopicNamingTest {
             final KStream<String, String> stream3 = builder.<String, String>stream("topic3").selectKey((k, v) -> k);
 
             final KStream<String, String> joined = stream1.join(stream2, (v1, v2) -> v1 + v2,
-                                                                JoinWindows.of(Duration.ofMillis(30L)),
-                                                                Joined.named("join-repartition"));
+                JoinWindows.of(Duration.ofMillis(30L)),
+                StreamJoined.<String, String, String>as("join-store").withName("join-repartition"));
 
             joined.join(stream3, (v1, v2) -> v1 + v2, JoinWindows.of(Duration.ofMillis(30L)),
-                                                      Joined.named("join-repartition"));
+                StreamJoined.<String, String, String>as("join-store").withName("join-repartition"));
+
             builder.build();
             fail("Should not build re-using repartition topic name");
         } catch (final TopologyException te) {
@@ -446,8 +446,8 @@ public class RepartitionTopicNamingTest {
         }
 
         final String joinRepartitionTopicName = "my-join";
-        updatedStreamOne.join(updatedStreamTwo, (v1, v2) -> v1 + v2,
-                JoinWindows.of(Duration.ofMillis(1000L)), Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), joinRepartitionTopicName));
+        updatedStreamOne.join(updatedStreamTwo, (v1, v2) -> v1 + v2, JoinWindows.of(Duration.ofMillis(1000L)),
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName(joinRepartitionTopicName));
 
         return builder.build().describe().toString();
     }
@@ -463,6 +463,7 @@ public class RepartitionTopicNamingTest {
     }
 
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private Topology buildTopology(final String optimizationConfig) {
         final Initializer<Integer> initializer = () -> 0;
         final Aggregator<String, String, Integer> aggregator = (k, v, agg) -> agg + v.length();
@@ -505,7 +506,8 @@ public class RepartitionTopicNamingTest {
     }
 
 
-    private static class SimpleProcessor extends AbstractProcessor<String, String> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private static class SimpleProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
 
         final List<String> valueList;
 

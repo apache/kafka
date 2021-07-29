@@ -175,12 +175,12 @@ public class KafkaBasedLog<K, V> {
         List<PartitionInfo> partitionInfos = consumer.partitionsFor(topic);
         long started = time.nanoseconds();
         long sleepMs = 100;
-        while (partitionInfos == null && time.nanoseconds() - started < CREATE_TOPIC_TIMEOUT_NS) {
+        while (partitionInfos.isEmpty() && time.nanoseconds() - started < CREATE_TOPIC_TIMEOUT_NS) {
             time.sleep(sleepMs);
             sleepMs = Math.min(2 * sleepMs, MAX_SLEEP_MS);
             partitionInfos = consumer.partitionsFor(topic);
         }
-        if (partitionInfos == null)
+        if (partitionInfos.isEmpty())
             throw new ConnectException("Could not look up partition metadata for offset backing store topic in" +
                     " allotted period. This could indicate a connectivity issue, unavailable topic partitions, or if" +
                     " this is your first use of the topic it may have taken too long to create.");

@@ -49,6 +49,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
@@ -297,7 +298,23 @@ public class TestUtils {
      * avoid transient failures due to slow or overloaded machines.
      */
     public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
-        retryOnExceptionWithTimeout(maxWaitMs, () -> {
+        waitForCondition(testCondition, maxWaitMs, DEFAULT_POLL_INTERVAL_MS, conditionDetailsSupplier);
+    }
+
+    /**
+     * Wait for condition to be met for at most {@code maxWaitMs} with a polling interval of {@code pollIntervalMs}
+     * and throw assertion failure otherwise. This should be used instead of {@code Thread.sleep} whenever possible
+     * as it allows a longer timeout to be used without unnecessarily increasing test time (as the condition is
+     * checked frequently). The longer timeout is needed to avoid transient failures due to slow or overloaded
+     * machines.
+     */
+    public static void waitForCondition(
+        final TestCondition testCondition,
+        final long maxWaitMs,
+        final long pollIntervalMs,
+        Supplier<String> conditionDetailsSupplier
+    ) throws InterruptedException {
+        retryOnExceptionWithTimeout(maxWaitMs, pollIntervalMs, () -> {
             String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
             String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
             assertTrue(testCondition.conditionMet(),
@@ -316,7 +333,7 @@ public class TestUtils {
      */
     public static void retryOnExceptionWithTimeout(final long timeoutMs,
                                                    final ValuelessCallable runnable) throws InterruptedException {
-        retryOnExceptionWithTimeout(DEFAULT_POLL_INTERVAL_MS, timeoutMs, runnable);
+        retryOnExceptionWithTimeout(timeoutMs, DEFAULT_POLL_INTERVAL_MS, runnable);
     }
 
     /**
@@ -328,7 +345,7 @@ public class TestUtils {
      * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
      */
     public static void retryOnExceptionWithTimeout(final ValuelessCallable runnable) throws InterruptedException {
-        retryOnExceptionWithTimeout(DEFAULT_POLL_INTERVAL_MS, DEFAULT_MAX_WAIT_MS, runnable);
+        retryOnExceptionWithTimeout(DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, runnable);
     }
 
     /**
@@ -336,13 +353,13 @@ public class TestUtils {
      * {@link AssertionError}s, or for the given timeout to expire. If the timeout expires then the
      * last exception or assertion failure will be thrown thus providing context for the failure.
      *
-     * @param pollIntervalMs the interval in milliseconds to wait between invoking {@code runnable}.
      * @param timeoutMs the total time in milliseconds to wait for {@code runnable} to complete successfully.
+     * @param pollIntervalMs the interval in milliseconds to wait between invoking {@code runnable}.
      * @param runnable the code to attempt to execute successfully.
      * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
      */
-    public static void retryOnExceptionWithTimeout(final long pollIntervalMs,
-                                                   final long timeoutMs,
+    public static void retryOnExceptionWithTimeout(final long timeoutMs,
+                                                   final long pollIntervalMs,
                                                    final ValuelessCallable runnable) throws InterruptedException {
         final long expectedEnd = System.currentTimeMillis() + timeoutMs;
 
@@ -518,5 +535,45 @@ public class TestUtils {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(obj, value);
+    }
+
+    /**
+     * Returns true if both iterators have same elements in the same order.
+     *
+     * @param iterator1 first iterator.
+     * @param iterator2 second iterator.
+     * @param <T>       type of element in the iterators.
+     */
+    public static <T> boolean sameElementsWithOrder(Iterator<T> iterator1,
+                                                    Iterator<T> iterator2) {
+        while (iterator1.hasNext()) {
+            if (!iterator2.hasNext()) {
+                return false;
+            }
+
+            if (!Objects.equals(iterator1.next(), iterator2.next())) {
+                return false;
+            }
+        }
+
+        return !iterator2.hasNext();
+    }
+
+    /**
+     * Returns true if both the iterators have same set of elements irrespective of order and duplicates.
+     *
+     * @param iterator1 first iterator.
+     * @param iterator2 second iterator.
+     * @param <T>       type of element in the iterators.
+     */
+    public static <T> boolean sameElementsWithoutOrder(Iterator<T> iterator1,
+                                                       Iterator<T> iterator2) {
+        // Check both the iterators have the same set of elements irrespective of order and duplicates.
+        Set<T> allSegmentsSet = new HashSet<>();
+        iterator1.forEachRemaining(allSegmentsSet::add);
+        Set<T> expectedSegmentsSet = new HashSet<>();
+        iterator2.forEachRemaining(expectedSegmentsSet::add);
+
+        return allSegmentsSet.equals(expectedSegmentsSet);
     }
 }

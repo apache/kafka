@@ -17,20 +17,21 @@
 
 package kafka.log
 
-import java.util.{Collections, Locale, Properties}
-
-import scala.jdk.CollectionConverters._
-import kafka.api.{ApiVersion, ApiVersionValidator}
+import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_3_0_IV1}
+import kafka.log.LogConfig.configDef
 import kafka.message.BrokerCompressionCodec
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
 import kafka.utils.Implicits._
-import org.apache.kafka.common.errors.InvalidConfigurationException
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, TopicConfig}
-import org.apache.kafka.common.record.{LegacyRecord, TimestampType}
-import org.apache.kafka.common.utils.Utils
-
-import scala.collection.{Map, mutable}
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, TopicConfig}
+import org.apache.kafka.common.errors.InvalidConfigurationException
+import org.apache.kafka.common.record.{LegacyRecord, RecordVersion, TimestampType}
+import org.apache.kafka.common.utils.{ConfigUtils, Utils}
+
+import java.util.{Collections, Locale, Properties}
+import scala.annotation.nowarn
+import scala.collection.{Map, mutable}
+import scala.jdk.CollectionConverters._
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
@@ -40,6 +41,9 @@ object Defaults {
   val FlushMs = kafka.server.Defaults.LogFlushSchedulerIntervalMs
   val RetentionSize = kafka.server.Defaults.LogRetentionBytes
   val RetentionMs = kafka.server.Defaults.LogRetentionHours * 60 * 60 * 1000L
+  val RemoteLogStorageEnable = false
+  val LocalRetentionBytes = -2 // It indicates the value to be derived from RetentionSize
+  val LocalRetentionMs = -2 // It indicates the value to be derived from RetentionMs
   val MaxMessageSize = kafka.server.Defaults.MessageMaxBytes
   val MaxIndexSize = kafka.server.Defaults.LogIndexSizeMaxBytes
   val IndexInterval = kafka.server.Defaults.LogIndexIntervalBytes
@@ -48,17 +52,16 @@ object Defaults {
   val MinCompactionLagMs = kafka.server.Defaults.LogCleanerMinCompactionLagMs
   val MaxCompactionLagMs = kafka.server.Defaults.LogCleanerMaxCompactionLagMs
   val MinCleanableDirtyRatio = kafka.server.Defaults.LogCleanerMinCleanRatio
-
-  @deprecated(message = "This is a misleading variable name as it actually refers to the 'delete' cleanup policy. Use " +
-                        "`CleanupPolicy` instead.", since = "1.0.0")
-  val Compact = kafka.server.Defaults.LogCleanupPolicy
-
   val CleanupPolicy = kafka.server.Defaults.LogCleanupPolicy
   val UncleanLeaderElectionEnable = kafka.server.Defaults.UncleanLeaderElectionEnable
   val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
   val CompressionType = kafka.server.Defaults.CompressionType
   val PreAllocateEnable = kafka.server.Defaults.LogPreAllocateEnable
+
+  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
+  @deprecated("3.0")
   val MessageFormatVersion = kafka.server.Defaults.LogMessageFormatVersion
+
   val MessageTimestampType = kafka.server.Defaults.LogMessageTimestampType
   val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
   val LeaderReplicationThrottledReplicas = Collections.emptyList[String]()
@@ -94,12 +97,58 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val minInSyncReplicas = getInt(LogConfig.MinInSyncReplicasProp)
   val compressionType = getString(LogConfig.CompressionTypeProp).toLowerCase(Locale.ROOT)
   val preallocate = getBoolean(LogConfig.PreAllocateEnableProp)
+
+  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
+  @deprecated("3.0")
   val messageFormatVersion = ApiVersion(getString(LogConfig.MessageFormatVersionProp))
+
   val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp).longValue
   val LeaderReplicationThrottledReplicas = getList(LogConfig.LeaderReplicationThrottledReplicasProp)
   val FollowerReplicationThrottledReplicas = getList(LogConfig.FollowerReplicationThrottledReplicasProp)
   val messageDownConversionEnable = getBoolean(LogConfig.MessageDownConversionEnableProp)
+  val remoteStorageEnable = getBoolean(LogConfig.RemoteLogStorageEnableProp)
+
+  val localRetentionMs: Long = {
+    val localLogRetentionMs = getLong(LogConfig.LocalLogRetentionMsProp)
+
+    // -2 indicates to derive value from retentionMs property.
+    if(localLogRetentionMs == -2) retentionMs
+    else {
+      // Added validation here to check the effective value should not be more than RetentionMs.
+      if(localLogRetentionMs == -1 && retentionMs != -1) {
+        throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs, s"Value must not be -1 as ${LogConfig.RetentionMsProp} value is set as $retentionMs.")
+      }
+
+      if (localLogRetentionMs > retentionMs) {
+        throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs, s"Value must not be more than property: ${LogConfig.RetentionMsProp} value.")
+      }
+
+      localLogRetentionMs
+    }
+  }
+
+  val localRetentionBytes: Long = {
+    val localLogRetentionBytes = getLong(LogConfig.LocalLogRetentionBytesProp)
+
+    // -2 indicates to derive value from retentionSize property.
+    if(localLogRetentionBytes == -2) retentionSize;
+    else {
+      // Added validation here to check the effective value should not be more than RetentionBytes.
+      if(localLogRetentionBytes == -1 && retentionSize != -1) {
+        throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionBytes, s"Value must not be -1 as ${LogConfig.RetentionBytesProp} value is set as $retentionSize.")
+      }
+
+      if (localLogRetentionBytes > retentionSize) {
+        throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionBytes, s"Value must not be more than property: ${LogConfig.RetentionBytesProp} value.");
+      }
+
+      localLogRetentionBytes
+    }
+  }
+
+  @nowarn("cat=deprecation")
+  def recordVersion = messageFormatVersion.recordVersion
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -107,6 +156,20 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   def maxSegmentMs: Long = {
     if (compact && maxCompactionLagMs > 0) math.min(maxCompactionLagMs, segmentMs)
     else segmentMs
+  }
+
+  def initFileSize: Int = {
+    if (preallocate)
+      segmentSize
+    else
+      0
+  }
+
+  def overriddenConfigsAsLoggableString: String = {
+    val overriddenTopicProps = props.asScala.collect {
+      case (k: String, v) if overriddenConfigs.contains(k) => (k, v.asInstanceOf[AnyRef])
+    }
+    ConfigUtils.configMapToRedactedString(overriddenTopicProps.asJava, configDef)
   }
 }
 
@@ -124,6 +187,9 @@ object LogConfig {
   val FlushMsProp = TopicConfig.FLUSH_MS_CONFIG
   val RetentionBytesProp = TopicConfig.RETENTION_BYTES_CONFIG
   val RetentionMsProp = TopicConfig.RETENTION_MS_CONFIG
+  val RemoteLogStorageEnableProp = TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG
+  val LocalLogRetentionMsProp = TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG
+  val LocalLogRetentionBytesProp = TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG
   val MaxMessageBytesProp = TopicConfig.MAX_MESSAGE_BYTES_CONFIG
   val IndexIntervalBytesProp = TopicConfig.INDEX_INTERVAL_BYTES_CONFIG
   val DeleteRetentionMsProp = TopicConfig.DELETE_RETENTION_MS_CONFIG
@@ -138,6 +204,9 @@ object LogConfig {
   val MinInSyncReplicasProp = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG
   val CompressionTypeProp = TopicConfig.COMPRESSION_TYPE_CONFIG
   val PreAllocateEnableProp = TopicConfig.PREALLOCATE_CONFIG
+
+  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
+  @deprecated("3.0") @nowarn("cat=deprecation")
   val MessageFormatVersionProp = TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG
   val MessageTimestampTypeProp = TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG
   val MessageTimestampDifferenceMaxMsProp = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG
@@ -155,6 +224,9 @@ object LogConfig {
   val FlushMsDoc = TopicConfig.FLUSH_MS_DOC
   val RetentionSizeDoc = TopicConfig.RETENTION_BYTES_DOC
   val RetentionMsDoc = TopicConfig.RETENTION_MS_DOC
+  val RemoteLogStorageEnableDoc = TopicConfig.REMOTE_LOG_STORAGE_ENABLE_DOC
+  val LocalLogRetentionMsDoc = TopicConfig.LOCAL_LOG_RETENTION_MS_DOC
+  val LocalLogRetentionBytesDoc = TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC
   val MaxMessageSizeDoc = TopicConfig.MAX_MESSAGE_BYTES_DOC
   val IndexIntervalDoc = TopicConfig.INDEX_INTERVAL_BYTES_DOCS
   val FileDeleteDelayMsDoc = TopicConfig.FILE_DELETE_DELAY_MS_DOC
@@ -167,7 +239,11 @@ object LogConfig {
   val MinInSyncReplicasDoc = TopicConfig.MIN_IN_SYNC_REPLICAS_DOC
   val CompressionTypeDoc = TopicConfig.COMPRESSION_TYPE_DOC
   val PreAllocateEnableDoc = TopicConfig.PREALLOCATE_DOC
+
+  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
+  @deprecated("3.0") @nowarn("cat=deprecation")
   val MessageFormatVersionDoc = TopicConfig.MESSAGE_FORMAT_VERSION_DOC
+
   val MessageTimestampTypeDoc = TopicConfig.MESSAGE_TIMESTAMP_TYPE_DOC
   val MessageTimestampDifferenceMaxMsDoc = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC
   val MessageDownConversionEnableDoc = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC
@@ -182,6 +258,8 @@ object LogConfig {
     "all replicas for this topic."
 
   private[log] val ServerDefaultHeaderName = "Server Default Property"
+
+  val configsWithNoServerDefaults: Set[String] = Set(RemoteLogStorageEnableProp, LocalLogRetentionMsProp, LocalLogRetentionBytesProp);
 
   // Package private for testing
   private[log] class LogConfigDef(base: ConfigDef) extends ConfigDef(base) {
@@ -236,7 +314,8 @@ object LogConfig {
     import org.apache.kafka.common.config.ConfigDef.Type._
     import org.apache.kafka.common.config.ConfigDef.ValidString._
 
-    new LogConfigDef()
+    @nowarn("cat=deprecation")
+    val logConfigDef = new LogConfigDef()
       .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
         SegmentSizeDoc, KafkaConfig.LogSegmentBytesProp)
       .define(SegmentMsProp, LONG, Defaults.SegmentMs, atLeast(1), MEDIUM, SegmentMsDoc,
@@ -291,6 +370,16 @@ object LogConfig {
         FollowerReplicationThrottledReplicasDoc, FollowerReplicationThrottledReplicasProp)
       .define(MessageDownConversionEnableProp, BOOLEAN, Defaults.MessageDownConversionEnable, LOW,
         MessageDownConversionEnableDoc, KafkaConfig.LogMessageDownConversionEnableProp)
+
+    // RemoteLogStorageEnableProp, LocalLogRetentionMsProp, LocalLogRetentionBytesProp do not have server default
+    // config names.
+    logConfigDef
+      // This define method is not overridden in LogConfig as these configs do not have server defaults yet.
+      .define(RemoteLogStorageEnableProp, BOOLEAN, Defaults.RemoteLogStorageEnable, MEDIUM, RemoteLogStorageEnableDoc)
+      .define(LocalLogRetentionMsProp, LONG, Defaults.LocalRetentionMs, atLeast(-2), MEDIUM, LocalLogRetentionMsDoc)
+      .define(LocalLogRetentionBytesProp, LONG, Defaults.LocalRetentionBytes, atLeast(-2), MEDIUM, LocalLogRetentionBytesDoc)
+
+    logConfigDef
   }
 
   def apply(): LogConfig = LogConfig(new Properties())
@@ -348,6 +437,7 @@ object LogConfig {
    * Map topic config to the broker config with highest priority. Some of these have additional synonyms
    * that can be obtained using [[kafka.server.DynamicBrokerConfig#brokerConfigSynonyms]]
    */
+  @nowarn("cat=deprecation")
   val TopicConfigSynonyms = Map(
     SegmentBytesProp -> KafkaConfig.LogSegmentBytesProp,
     SegmentMsProp -> KafkaConfig.LogRollTimeMillisProp,
@@ -380,6 +470,7 @@ object LogConfig {
    * Copy the subset of properties that are relevant to Logs. The individual properties
    * are listed here since the names are slightly different in each Config class...
    */
+  @nowarn("cat=deprecation")
   def extractLogConfigMap(
     kafkaConfig: KafkaConfig
   ): java.util.Map[String, Object] = {
@@ -410,4 +501,32 @@ object LogConfig {
     logProps.put(MessageDownConversionEnableProp, kafkaConfig.logMessageDownConversionEnable: java.lang.Boolean)
     logProps
   }
+
+  def shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion: ApiVersion): Boolean =
+    interBrokerProtocolVersion >= KAFKA_3_0_IV1
+
+  class MessageFormatVersion(messageFormatVersionString: String, interBrokerProtocolVersionString: String) {
+    val messageFormatVersion = ApiVersion(messageFormatVersionString)
+    private val interBrokerProtocolVersion = ApiVersion(interBrokerProtocolVersionString)
+
+    def shouldIgnore: Boolean = shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion)
+
+    def shouldWarn: Boolean =
+      interBrokerProtocolVersion >= KAFKA_3_0_IV1 && messageFormatVersion.recordVersion.precedes(RecordVersion.V2)
+
+    @nowarn("cat=deprecation")
+    def topicWarningMessage(topicName: String): String = {
+      s"Topic configuration ${LogConfig.MessageFormatVersionProp} with value `$messageFormatVersionString` is ignored " +
+      s"for `$topicName` because the inter-broker protocol version `$interBrokerProtocolVersionString` is " +
+      "greater or equal than 3.0. This configuration is deprecated and it will be removed in Apache Kafka 4.0."
+    }
+
+    @nowarn("cat=deprecation")
+    def brokerWarningMessage: String = {
+      s"Broker configuration ${KafkaConfig.LogMessageFormatVersionProp} with value $messageFormatVersionString is ignored " +
+      s"because the inter-broker protocol version `$interBrokerProtocolVersionString` is greater or equal than 3.0. " +
+      "This configuration is deprecated and it will be removed in Apache Kafka 4.0."
+    }
+  }
+
 }

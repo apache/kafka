@@ -85,7 +85,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
 
         private PlaintextAuthenticator(Map<String, ?> configs, PlaintextTransportLayer transportLayer, ListenerName listenerName) {
             this.transportLayer = transportLayer;
-            this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, this, null, null);
+            this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null, null);
             this.listenerName = listenerName;
         }
 

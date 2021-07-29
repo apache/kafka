@@ -75,11 +75,9 @@ public class UuidTest {
     @Test
     public void testRandomUuid() {
         Uuid randomID = Uuid.randomUuid();
-        // reservedSentinel is based on the value of SENTINEL_ID_INTERNAL in Uuid.
-        Uuid reservedSentinel = new Uuid(0L, 1L);
 
         assertNotEquals(randomID, Uuid.ZERO_UUID);
-        assertNotEquals(randomID, reservedSentinel);
+        assertNotEquals(randomID, Uuid.METADATA_TOPIC_ID);
     }
 
     @Test

@@ -46,6 +46,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+@SuppressWarnings("rawtypes")
 public class ChangeLoggingKeyValueBytesStoreTest {
 
     private final MockRecordCollector collector = new MockRecordCollector();
@@ -64,7 +65,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     private InternalMockProcessorContext mockContext() {
-        return new InternalMockProcessorContext(
+        return new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
@@ -205,17 +206,20 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     public void shouldGetRecordsWithPrefixKey() {
         store.put(hi, there);
         store.put(Bytes.increment(hi), world);
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = store.prefixScan(hi.toString(), new StringSerializer());
+
         final List<Bytes> keys = new ArrayList<>();
         final List<Bytes> values = new ArrayList<>();
         int numberOfKeysReturned = 0;
 
-        while (keysWithPrefix.hasNext()) {
-            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
-            keys.add(next.key);
-            values.add(Bytes.wrap(next.value));
-            numberOfKeysReturned++;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = store.prefixScan(hi.toString(), new StringSerializer())) {
+            while (keysWithPrefix.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+                keys.add(next.key);
+                values.add(Bytes.wrap(next.value));
+                numberOfKeysReturned++;
+            }
         }
+
         assertThat(numberOfKeysReturned, is(1));
         assertThat(keys, is(Collections.singletonList(hi)));
         assertThat(values, is(Collections.singletonList(Bytes.wrap(there))));

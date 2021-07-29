@@ -65,7 +65,10 @@ class SecurityTest(EndToEndTest):
         Test that invalid hostname in certificate results in connection failures.
         When security_protocol=SSL, client SSL handshakes are expected to fail due to hostname verification failure.
         When security_protocol=PLAINTEXT and interbroker_security_protocol=SSL, controller connections fail
-        with hostname verification failure. Hence clients are expected to fail with LEADER_NOT_AVAILABLE.
+        with hostname verification failure. Since metadata cannot be propagated in the cluster without a valid certificate,
+        the broker's metadata caches will be empty. Hence we expect Metadata requests to fail with an INVALID_REPLICATION_FACTOR
+        error since the broker will attempt to create the topic automatically as it does not exist in the metadata cache,
+        and there will be no online brokers.
         """
 
         # Start Kafka with valid hostnames in the certs' SANs so that we can create the test topic via the admin client
@@ -78,7 +81,7 @@ class SecurityTest(EndToEndTest):
 
         self.create_kafka(security_protocol=security_protocol,
                           interbroker_security_protocol=interbroker_security_protocol)
-        if self.kafka.quorum_info.using_raft and interbroker_security_protocol == 'SSL':
+        if self.kafka.quorum_info.using_kraft and interbroker_security_protocol == 'SSL':
             # we don't want to interfere with communication to the controller quorum
             # (we separately test this below) so make sure it isn't using TLS
             # (it uses the inter-broker security information by default)
@@ -91,9 +94,9 @@ class SecurityTest(EndToEndTest):
         SecurityConfig.ssl_stores.valid_hostname = False
         self.kafka.restart_cluster()
 
-        if self.kafka.quorum_info.using_raft and security_protocol == 'PLAINTEXT':
+        if self.kafka.quorum_info.using_kraft and security_protocol == 'PLAINTEXT':
             # the inter-broker security protocol using TLS with a hostname verification failure
-            # doesn't impact a producer in case of a single broker with a Raft Controller,
+            # doesn't impact a producer in case of a single broker with a KRaft Controller,
             # so confirm that this is in fact the observed behavior
             self.create_and_start_clients(log_level="INFO")
             self.run_validation()
@@ -111,7 +114,7 @@ class SecurityTest(EndToEndTest):
                 # expected
                 pass
 
-            error = 'SSLHandshakeException' if security_protocol == 'SSL' else 'LEADER_NOT_AVAILABLE'
+            error = 'SSLHandshakeException' if security_protocol == 'SSL' else 'INVALID_REPLICATION_FACTOR'
             wait_until(lambda: self.producer_consumer_have_expected_error(error), timeout_sec=30)
             self.producer.stop()
             self.consumer.stop()
@@ -129,12 +132,12 @@ class SecurityTest(EndToEndTest):
         self.consumer.start()
 
     @cluster(num_nodes=2)
-    @matrix(metadata_quorum=[quorum.zk, quorum.remote_raft])
+    @matrix(metadata_quorum=[quorum.zk, quorum.remote_kraft])
     def test_quorum_ssl_endpoint_validation_failure(self, metadata_quorum=quorum.zk):
         """
-        Test that invalid hostname in ZooKeeper or Raft Controller results in broker inability to start.
+        Test that invalid hostname in ZooKeeper or KRaft Controller results in broker inability to start.
         """
-        # Start ZooKeeper/Raft-based Controller with valid hostnames in the certs' SANs
+        # Start ZooKeeper/KRaft Controller with valid hostnames in the certs' SANs
         # so that we can start Kafka
         SecurityConfig.ssl_stores = TestSslStores(self.test_context.local_scratch_dir,
                                                   valid_hostname=True)
@@ -148,13 +151,13 @@ class SecurityTest(EndToEndTest):
             self.zk.start()
 
         self.create_kafka(num_nodes=1,
-                          interbroker_security_protocol='SSL', # also sets the broker-to-raft-controller security protocol for the Raft case
+                          interbroker_security_protocol='SSL', # also sets the broker-to-kraft-controller security protocol for the KRaft case
                           zk_client_secure=True, # ignored if we aren't using ZooKeeper
                           )
         self.kafka.start()
 
         # now stop the Kafka broker
-        # and set the cert for ZooKeeper/Raft-based Controller to have an invalid hostname
+        # and set the cert for ZooKeeper/KRaft Controller to have an invalid hostname
         # so we can restart Kafka and ensure it is unable to start
         self.kafka.stop_node(self.kafka.nodes[0])
 

@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io.File
+import java.nio.file.Files
 import java.util.Properties
 
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
@@ -94,18 +95,39 @@ class LogCleanerManagerTest extends Logging {
     val logSegmentSize = TestUtils.singletonRecords("test".getBytes).sizeInBytes * 10
     val logSegmentsCount = 2
     val tpDir = new File(logDir, "A-1")
-
-    // the exception should be catched and the partition that caused it marked as uncleanable
-    class LogMock(dir: File, config: LogConfig) extends Log(dir, config, 0L, 0L,
-      time.scheduler, new BrokerTopicStats, time, 60 * 60 * 1000, LogManager.ProducerIdExpirationCheckIntervalMs,
-      topicPartition, new ProducerStateManager(tp, tpDir, 60 * 60 * 1000), new LogDirFailureChannel(10)) {
-
+    Files.createDirectories(tpDir.toPath)
+    val logDirFailureChannel = new LogDirFailureChannel(10)
+    val config = createLowRetentionLogConfig(logSegmentSize, LogConfig.Compact)
+    val maxProducerIdExpirationMs = 60 * 60 * 1000
+    val segments = new LogSegments(tp)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(tpDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
+    val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxProducerIdExpirationMs, time)
+    val offsets = LogLoader.load(LoadLogParams(
+      tpDir,
+      tp,
+      config,
+      time.scheduler,
+      time,
+      logDirFailureChannel,
+      hadCleanShutdown = true,
+      segments,
+      0L,
+      0L,
+      maxProducerIdExpirationMs,
+      leaderEpochCache,
+      producerStateManager))
+    val localLog = new LocalLog(tpDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, time.scheduler, time, tp, logDirFailureChannel)
+    // the exception should be caught and the partition that caused it marked as uncleanable
+    class LogMock extends Log(offsets.logStartOffset, localLog, new BrokerTopicStats,
+        LogManager.ProducerIdExpirationCheckIntervalMs, leaderEpochCache,
+        producerStateManager, _topicId = None, keepPartitionMetadataFile = true) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
       override def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] =
         throw new IllegalStateException("Error!")
     }
 
-    val log: Log = new LogMock(tpDir, createLowRetentionLogConfig(logSegmentSize, LogConfig.Compact))
+    val log: Log = new LogMock()
     writeRecords(log = log,
       numBatches = logSegmentsCount * 2,
       recordsPerBatch = 10,
@@ -339,7 +361,7 @@ class LogCleanerManagerTest extends Logging {
     logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
     logProps.put(LogConfig.MinCleanableDirtyRatioProp, 0: Integer)
     val config = LogConfig(logProps)
-    log.config = config
+    log.updateConfig(config)
 
     // log cleanup inprogress, the log is not available for compaction
     val cleanable = cleanerManager.grabFilthiestCompactedLog(time)
@@ -353,7 +375,7 @@ class LogCleanerManagerTest extends Logging {
     // update cleanup policy to delete
     logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
     val config2 = LogConfig(logProps)
-    log.config = config2
+    log.updateConfig(config2)
 
     // compaction in progress, should have 0 log eligible for log cleanup
     val deletableLog2 = cleanerManager.pauseCleaningForNonCompactedPartitions()
@@ -755,7 +777,9 @@ class LogCleanerManagerTest extends Logging {
       brokerTopicStats = new BrokerTopicStats,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true)
   }
 
   private def createLowRetentionLogConfig(segmentSize: Int, cleanupPolicy: String): LogConfig = {
@@ -799,7 +823,7 @@ class LogCleanerManagerTest extends Logging {
     Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
       time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
 
   private def records(key: Int, value: Int, timestamp: Long) =
     MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))

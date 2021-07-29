@@ -75,6 +75,20 @@ public class TopicConfig {
         "\"delete\" retention policy. This represents an SLA on how soon consumers must read " +
         "their data. If set to -1, no time limit is applied.";
 
+    public static final String REMOTE_LOG_STORAGE_ENABLE_CONFIG = "remote.storage.enable";
+    public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tier storage for a topic, set `remote.storage.enable` as true. " +
+            "You can not disable this config once it is enabled. It will be provided in future versions.";
+
+    public static final String LOCAL_LOG_RETENTION_MS_CONFIG = "local.retention.ms";
+    public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milli seconds to keep the local log segment before it gets deleted. " +
+            "Default value is -2, it represents `retention.ms` value is to be used. The effective value should always be less than or equal " +
+            "to `retention.ms` value.";
+
+    public static final String LOCAL_LOG_RETENTION_BYTES_CONFIG = "local.retention.bytes";
+    public static final String LOCAL_LOG_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it " +
+            "deletes the old segments. Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
+            "less than or equal to `retention.bytes` value.";
+
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
         "The largest record batch size allowed by Kafka (after compression if compression is enabled). " +
@@ -157,13 +171,25 @@ public class TopicConfig {
     public static final String PREALLOCATE_DOC = "True if we should preallocate the file on disk when " +
         "creating a new log segment.";
 
+    /**
+     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
+     * for most situations.
+     */
+    @Deprecated
     public static final String MESSAGE_FORMAT_VERSION_CONFIG = "message.format.version";
-    public static final String MESSAGE_FORMAT_VERSION_DOC = "Specify the message format version the broker " +
-        "will use to append messages to the logs. The value should be a valid ApiVersion. Some examples are: " +
-        "0.8.2, 0.9.0.0, 0.10.0, check ApiVersion for more details. By setting a particular message format " +
-        "version, the user is certifying that all the existing messages on disk are smaller or equal than the " +
-        "specified version. Setting this value incorrectly will cause consumers with older versions to break as " +
-        "they will receive messages with a format that they don't understand.";
+
+    /**
+     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
+     * for most situations.
+     */
+    @Deprecated
+    public static final String MESSAGE_FORMAT_VERSION_DOC = "[DEPRECATED] Specify the message format version the broker " +
+        "will use to append messages to the logs. The value of this config is always assumed to be `3.0` if " +
+        "`inter.broker.protocol.version` is 3.0 or higher (the actual config value is ignored). Otherwise, the value should " +
+        "be a valid ApiVersion. Some examples are: 0.10.0, 1.1, 2.8, 3.0. By setting a particular message format version, the " +
+        "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting " +
+        "this value incorrectly will cause consumers with older versions to break as they will receive messages with a format " +
+        "that they don't understand.";
 
     public static final String MESSAGE_TIMESTAMP_TYPE_CONFIG = "message.timestamp.type";
     public static final String MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is " +

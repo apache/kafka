@@ -34,7 +34,7 @@ class TransactionCoordinatorTest {
   val time = new MockTime()
 
   var nextPid: Long = 0L
-  val pidGenerator: ProducerIdGenerator = EasyMock.createNiceMock(classOf[ProducerIdGenerator])
+  val pidGenerator: ProducerIdManager = EasyMock.createNiceMock(classOf[ProducerIdManager])
   val transactionManager: TransactionStateManager = EasyMock.createNiceMock(classOf[TransactionStateManager])
   val transactionMarkerChannelManager: TransactionMarkerChannelManager = EasyMock.createNiceMock(classOf[TransactionMarkerChannelManager])
   val capturedTxn: Capture[TransactionMetadata] = EasyMock.newCapture()
@@ -50,7 +50,8 @@ class TransactionCoordinatorTest {
   private val partitions = mutable.Set[TopicPartition](new TopicPartition("topic1", 0))
   private val scheduler = new MockScheduler(time)
 
-  val coordinator = new TransactionCoordinator(brokerId,
+  val coordinator = new TransactionCoordinator(
+    brokerId,
     TransactionConfig(),
     scheduler,
     () => pidGenerator,
@@ -117,6 +118,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.anyObject().asInstanceOf[TxnTransitMetadata],
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => capturedErrorsCallback.getValue.apply(Errors.NONE)).anyTimes()
     EasyMock.replay(pidGenerator, transactionManager)
@@ -144,6 +146,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.anyObject().asInstanceOf[TxnTransitMetadata],
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => capturedErrorsCallback.getValue.apply(Errors.NONE)).anyTimes()
     EasyMock.replay(pidGenerator, transactionManager)
@@ -168,6 +171,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.anyObject().asInstanceOf[TxnTransitMetadata],
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject()
     )).andAnswer(() => capturedErrorsCallback.getValue.apply(Errors.NONE))
 
@@ -313,6 +317,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.anyObject().asInstanceOf[TxnTransitMetadata],
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject()
     ))
 
@@ -571,6 +576,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(originalMetadata.prepareAbortOrCommit(PrepareAbort, time.milliseconds())),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => capturedErrorsCallback.getValue.apply(Errors.NONE))
 
@@ -640,6 +646,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(txnTransitMetadata),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => {
       capturedErrorsCallback.getValue.apply(Errors.NOT_ENOUGH_REPLICAS)
@@ -651,6 +658,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(txnTransitMetadata),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -723,6 +731,7 @@ class TransactionCoordinatorTest {
         txnStartTimestamp = time.milliseconds(),
         txnLastUpdateTimestamp = time.milliseconds())),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => capturedErrorsCallback.getValue.apply(Errors.NONE))
 
@@ -789,6 +798,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.anyObject().asInstanceOf[TxnTransitMetadata],
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -826,6 +836,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.capture(capturedTxnTransitMetadata),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -866,6 +877,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.capture(capturedTxnTransitMetadata),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -909,6 +921,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.capture(capturedTxnTransitMetadata),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -962,6 +975,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(expectedTransition),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => {}).once()
 
@@ -1045,6 +1059,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(expectedTransition),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => capturedErrorsCallback.getValue.apply(Errors.NOT_ENOUGH_REPLICAS)).once()
 
@@ -1085,6 +1100,22 @@ class TransactionCoordinatorTest {
     val result = coordinator.handleDescribeTransactions("")
     assertEquals("", result.transactionalId)
     assertEquals(Errors.INVALID_REQUEST, Errors.forCode(result.errorCode))
+  }
+
+  @Test
+  def testDescribeTransactionsWithExpiringTransactionalId(): Unit = {
+    coordinator.startup(() => transactionStatePartitionCount, enableTransactionalIdExpiration = false)
+
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Dead, mutable.Set.empty, time.milliseconds(),
+      time.milliseconds())
+    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
+      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    EasyMock.replay(transactionManager)
+
+    val result = coordinator.handleDescribeTransactions(transactionalId)
+    assertEquals(transactionalId, result.transactionalId)
+    assertEquals(Errors.TRANSACTIONAL_ID_NOT_FOUND, Errors.forCode(result.errorCode))
   }
 
   @Test
@@ -1162,6 +1193,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.capture(capturedNewMetadata),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject()
     )).andAnswer(() => {
       metadata.completeTransitionTo(capturedNewMetadata.getValue)
@@ -1196,6 +1228,7 @@ class TransactionCoordinatorTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(transition),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(() => {
       if (runCallback)

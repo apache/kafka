@@ -18,25 +18,30 @@ package org.apache.kafka.streams.examples.wordcount;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.processor.MockProcessorContext;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.api.MockProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.jupiter.api.Test;
 
-import java.util.Iterator;
+import java.time.Duration;
+import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static java.util.Arrays.asList;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Transformer} in the {@link WordCountTransformerDemo}.
  */
 public class WordCountTransformerTest {
-    @SuppressWarnings("deprecation") // TODO will be fixed in KAFKA-10437
     @Test
     public void test() {
-        final MockProcessorContext context = new MockProcessorContext();
+        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
 
         // Create and initialize the transformer under test; including its provided store
         final WordCountTransformerDemo.MyTransformerSupplier supplier = new WordCountTransformerDemo.MyTransformerSupplier();
@@ -45,11 +50,26 @@ public class WordCountTransformerTest {
                 .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
                 // Caching is disabled by default, but FYI: caching is also not supported by MockProcessorContext.
                 .build();
-            store.init(context, store);
-            context.register(store, null);
+            store.init(context.getStateStoreContext(), store);
+            context.getStateStoreContext().register(store, null);
         }
         final Transformer<String, String, KeyValue<String, String>> transformer = supplier.get();
-        transformer.init(context);
+        transformer.init(new org.apache.kafka.streams.processor.MockProcessorContext() {
+            @Override
+            public <S extends StateStore> S getStateStore(final String name) {
+                return context.getStateStore(name);
+            }
+
+            @Override
+            public <K, V> void forward(final K key, final V value) {
+                context.forward(new Record<>((String) key, (String) value, 0L));
+            }
+
+            @Override
+            public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
+                return context.schedule(interval, type, callback);
+            }
+        });
 
         // send a record to the transformer
         transformer.transform("key", "alpha beta\tgamma\n\talpha");
@@ -61,10 +81,12 @@ public class WordCountTransformerTest {
         context.scheduledPunctuators().get(0).getPunctuator().punctuate(0L);
 
         // finally, we can verify the output.
-        final Iterator<MockProcessorContext.CapturedForward> capturedForwards = context.forwarded().iterator();
-        assertEquals(new KeyValue<>("alpha", "2"), capturedForwards.next().keyValue());
-        assertEquals(new KeyValue<>("beta", "1"), capturedForwards.next().keyValue());
-        assertEquals(new KeyValue<>("gamma", "1"), capturedForwards.next().keyValue());
-        assertFalse(capturedForwards.hasNext());
+        final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> capturedForwards = context.forwarded();
+        final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> expected = asList(
+                new MockProcessorContext.CapturedForward<>(new Record<>("alpha", "2", 0L)),
+                new MockProcessorContext.CapturedForward<>(new Record<>("beta", "1", 0L)),
+                new MockProcessorContext.CapturedForward<>(new Record<>("gamma", "1", 0L))
+        );
+        assertThat(capturedForwards, is(expected));
     }
 }

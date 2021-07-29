@@ -23,10 +23,8 @@ import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions}
 import org.apache.kafka.common.errors.TimeoutException
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestHeader}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
 
 import scala.compat.java8.OptionConverters._
 
@@ -37,47 +35,33 @@ trait ForwardingManager {
   ): Unit
 
   def controllerApiVersions: Option[NodeApiVersions]
-
-  def start(): Unit = {}
-
-  def shutdown(): Unit = {}
 }
 
 object ForwardingManager {
-
   def apply(
-    config: KafkaConfig,
-    metadataCache: MetadataCache,
-    time: Time,
-    metrics: Metrics,
-    threadNamePrefix: Option[String]
+    channelManager: BrokerToControllerChannelManager
   ): ForwardingManager = {
-    val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
-
-    val channelManager = BrokerToControllerChannelManager(
-      controllerNodeProvider = nodeProvider,
-      time = time,
-      metrics = metrics,
-      config = config,
-      channelName = "forwardingChannel",
-      threadNamePrefix = threadNamePrefix,
-      retryTimeoutMs = config.requestTimeoutMs.longValue
-    )
     new ForwardingManagerImpl(channelManager)
+  }
+
+  private[server] def buildEnvelopeRequest(context: RequestContext,
+                                           forwardRequestBuffer: ByteBuffer): EnvelopeRequest.Builder = {
+    val principalSerde = context.principalSerde.asScala.getOrElse(
+      throw new IllegalArgumentException(s"Cannot deserialize principal from request context $context " +
+        "since there is no serde defined")
+    )
+    val serializedPrincipal = principalSerde.serialize(context.principal)
+    new EnvelopeRequest.Builder(
+      forwardRequestBuffer,
+      serializedPrincipal,
+      context.clientAddress.getAddress
+    )
   }
 }
 
 class ForwardingManagerImpl(
   channelManager: BrokerToControllerChannelManager
 ) extends ForwardingManager with Logging {
-
-  override def start(): Unit = {
-    channelManager.start()
-  }
-
-  override def shutdown(): Unit = {
-    channelManager.shutdown()
-  }
 
   /**
    * Forward given request to the active controller.
@@ -91,18 +75,9 @@ class ForwardingManagerImpl(
     request: RequestChannel.Request,
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit = {
-    val principalSerde = request.context.principalSerde.asScala.getOrElse(
-      throw new IllegalArgumentException(s"Cannot deserialize principal from request $request " +
-        "since there is no serde defined")
-    )
-    val serializedPrincipal = principalSerde.serialize(request.context.principal)
-    val forwardRequestBuffer = request.buffer.duplicate()
-    forwardRequestBuffer.flip()
-    val envelopeRequest = new EnvelopeRequest.Builder(
-      forwardRequestBuffer,
-      serializedPrincipal,
-      request.context.clientAddress.getAddress
-    )
+    val requestBuffer = request.buffer.duplicate()
+    requestBuffer.flip()
+    val envelopeRequest = ForwardingManager.buildEnvelopeRequest(request.context, requestBuffer)
 
     class ForwardingResponseHandler extends ControllerRequestCompletionHandler {
       override def onComplete(clientResponse: ClientResponse): Unit = {

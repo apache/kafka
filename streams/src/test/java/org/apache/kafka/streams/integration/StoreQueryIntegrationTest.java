@@ -39,6 +39,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -48,10 +49,12 @@ import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -62,15 +65,17 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.ge
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.matchesRegex;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-
+import static java.util.Collections.singletonList;
 
 @Category({IntegrationTest.class})
 public class StoreQueryIntegrationTest {
@@ -82,7 +87,6 @@ public class StoreQueryIntegrationTest {
     private static final String INPUT_TOPIC_NAME = "input-topic";
     private static final String TABLE_NAME = "source-table";
 
-    @Rule
     public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     @Rule
@@ -92,7 +96,8 @@ public class StoreQueryIntegrationTest {
     private final MockTime mockTime = cluster.time;
 
     @Before
-    public void before() throws InterruptedException {
+    public void before() throws InterruptedException, IOException {
+        cluster.start();
         cluster.createTopic(INPUT_TOPIC_NAME, 2, 1);
     }
 
@@ -101,6 +106,7 @@ public class StoreQueryIntegrationTest {
         for (final KafkaStreams kafkaStreams : streamsToCleanup) {
             kafkaStreams.close();
         }
+        cluster.stop();
     }
 
     @Test
@@ -368,8 +374,8 @@ public class StoreQueryIntegrationTest {
 
         startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
-        assertTrue(kafkaStreams1.localThreadsMetadata().size() > 1);
-        assertTrue(kafkaStreams2.localThreadsMetadata().size() > 1);
+        assertTrue(kafkaStreams1.metadataForLocalThreads().size() > 1);
+        assertTrue(kafkaStreams2.metadataForLocalThreads().size() > 1);
 
         produceValueRange(key, 0, batch1NumMessages);
 
@@ -408,6 +414,84 @@ public class StoreQueryIntegrationTest {
         // Assert that
         assertThat(store3.get(key), is(nullValue()));
         assertThat(store4.get(key), is(nullValue()));
+    }
+
+    @Test
+    public void shouldQueryStoresAfterAddingAndRemovingStreamThread() throws Exception {
+        final int batch1NumMessages = 100;
+        final int key = 1;
+        final int key2 = 2;
+        final int key3 = 3;
+        final Semaphore semaphore = new Semaphore(0);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()),
+                      Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as(TABLE_NAME)
+                          .withCachingDisabled())
+               .toStream()
+               .peek((k, v) -> semaphore.release());
+
+        final Properties streamsConfiguration1 = streamsConfiguration();
+        streamsConfiguration1.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+
+        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration1);
+
+        startApplicationAndWaitUntilRunning(singletonList(kafkaStreams1), Duration.ofSeconds(60));
+        //Add thread
+        final Optional<String> streamThread = kafkaStreams1.addStreamThread();
+        assertThat(streamThread.isPresent(), is(true));
+
+        produceValueRange(key, 0, batch1NumMessages);
+        produceValueRange(key2, 0, batch1NumMessages);
+        produceValueRange(key3, 0, batch1NumMessages);
+
+        // Assert that all messages in the batches were processed in a timely manner
+        assertThat(semaphore.tryAcquire(3 * batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+
+        until(() -> {
+            final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
+            final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
+
+            try {
+                assertThat(store1.get(key), is(notNullValue()));
+                assertThat(store1.get(key2), is(notNullValue()));
+                assertThat(store1.get(key3), is(notNullValue()));
+                return true;
+            } catch (final InvalidStateStoreException exception) {
+                assertThat(
+                        exception.getMessage(),
+                        matchesRegex("Cannot get state store source-table because the stream thread is (PARTITIONS_ASSIGNED|STARTING|PARTITIONS_REVOKED), not RUNNING")
+                );
+                LOG.info("Streams wasn't running. Will try again.");
+                return false;
+            }
+        });
+
+        final Optional<String> removedThreadName = kafkaStreams1.removeStreamThread();
+        assertThat(removedThreadName.isPresent(), is(true));
+
+        until(() -> {
+            return kafkaStreams1.state().equals(KafkaStreams.State.RUNNING);
+        });
+
+        until(() -> {
+            final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
+            final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
+
+            try {
+                assertThat(store1.get(key), is(notNullValue()));
+                assertThat(store1.get(key2), is(notNullValue()));
+                assertThat(store1.get(key3), is(notNullValue()));
+                return true;
+            } catch (final InvalidStateStoreException exception) {
+                assertThat(
+                        exception.getMessage(),
+                        matchesRegex("Cannot get state store source-table because the stream thread is (PARTITIONS_ASSIGNED|STARTING|PARTITIONS_REVOKED), not RUNNING")
+                );
+                LOG.info("Streams wasn't running. Will try again.");
+                return false;
+            }
+        });
     }
 
     private static void until(final TestCondition condition) {
@@ -460,7 +544,7 @@ public class StoreQueryIntegrationTest {
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
         config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         return config;
     }
 }

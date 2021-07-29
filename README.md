@@ -4,11 +4,14 @@ See our [web site](https://kafka.apache.org) for details on the project.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with Java 8, 11 and 15. We set the `release` parameter in javac and scalac
+We build and test Apache Kafka with Java 8, 11 and 16. We set the `release` parameter in javac and scalac
 to `8` to ensure the generated binaries are compatible with Java 8 or higher (independently of the Java version
-used for compilation).
+used for compilation). Java 8 support has been deprecated since Apache Kafka 3.0 and will be removed in Apache
+Kafka 4.0 (see [KIP-750](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223) for more details).
 
-Scala 2.13 is used by default, see below for how to use a different Scala version or all of the supported Scala versions.
+Scala 2.12 and 2.13 are supported and 2.13 is used by default. Scala 2.12 support has been deprecated since
+Apache Kafka 3.0 and will be removed in Apache Kafka 4.0 (see [KIP-751](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218)
+for more details). See below for how to use a specific Scala version or all of the supported Scala versions.
 
 ### Build a jar and run it ###
     ./gradlew jar
@@ -60,11 +63,11 @@ See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugi
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
 
-    ./gradlew reportCoverage -PenableTestCoverage=true
+    ./gradlew reportCoverage -PenableTestCoverage=true -Dorg.gradle.parallel=false
 
 Generate coverage for a single module, i.e.: 
 
-    ./gradlew clients:reportCoverage -PenableTestCoverage=true
+    ./gradlew clients:reportCoverage -PenableTestCoverage=true -Dorg.gradle.parallel=false
     
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
@@ -76,6 +79,15 @@ Sometimes it is only necessary to rebuild the RPC auto-generated message data wh
 fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
+
+### Running a Kafka broker in ZooKeeper mode
+
+    ./bin/zookeeper-server-start.sh config/zookeeper.properties
+    ./bin/kafka-server-start.sh config/server.properties
+
+### Running a Kafka broker in KRaft (Kafka Raft metadata) mode
+
+See [config/kraft/README.md](https://github.com/apache/kafka/blob/trunk/config/kraft/README.md).
 
 ### Cleaning the build ###
     ./gradlew clean
@@ -245,7 +257,7 @@ Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterat
 
     ./gradlew allDeps
 
-    ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
+    ./gradlew allDepInsight --configuration runtimeClasspath --dependency com.fasterxml.jackson.core:jackson-databind
 
 These take the same arguments as the builtin variants.
 

@@ -154,95 +154,95 @@
            </div>
 
            <div class="code-example__snippet b-java-8 selected">
-               <pre class="line-numbers"><code class="language-java">                   import org.apache.kafka.common.serialization.Serdes;
-                   import org.apache.kafka.common.utils.Bytes;
-                   import org.apache.kafka.streams.KafkaStreams;
-                   import org.apache.kafka.streams.StreamsBuilder;
-                   import org.apache.kafka.streams.StreamsConfig;
-                   import org.apache.kafka.streams.kstream.KStream;
-                   import org.apache.kafka.streams.kstream.KTable;
-                   import org.apache.kafka.streams.kstream.Materialized;
-                   import org.apache.kafka.streams.kstream.Produced;
-                   import org.apache.kafka.streams.state.KeyValueStore;
+               <pre class="line-numbers"><code class="language-java">import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.state.KeyValueStore;
 
-                   import java.util.Arrays;
-                   import java.util.Properties;
+import java.util.Arrays;
+import java.util.Properties;
 
-                   public class WordCountApplication {
+public class WordCountApplication {
 
-                       public static void main(final String[] args) throws Exception {
-                           Properties props = new Properties();
-                           props.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application");
-                           props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
-                           props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-                           props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+   public static void main(final String[] args) throws Exception {
+       Properties props = new Properties();
+       props.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application");
+       props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
+       props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+       props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
-                           StreamsBuilder builder = new StreamsBuilder();
-                           KStream&lt;String, String&gt; textLines = builder.stream("TextLinesTopic");
-                           KTable&lt;String, Long&gt; wordCounts = textLines
-                               .flatMapValues(textLine -> Arrays.asList(textLine.toLowerCase().split("\\W+")))
-                               .groupBy((key, word) -> word)
-                               .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"));
-                           wordCounts.toStream().to("WordsWithCountsTopic", Produced.with(Serdes.String(), Serdes.Long()));
+       StreamsBuilder builder = new StreamsBuilder();
+       KStream&lt;String, String&gt; textLines = builder.stream("TextLinesTopic");
+       KTable&lt;String, Long&gt; wordCounts = textLines
+           .flatMapValues(textLine -> Arrays.asList(textLine.toLowerCase().split("\\W+")))
+           .groupBy((key, word) -> word)
+           .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"));
+       wordCounts.toStream().to("WordsWithCountsTopic", Produced.with(Serdes.String(), Serdes.Long()));
 
-                           KafkaStreams streams = new KafkaStreams(builder.build(), props);
-                           streams.start();
-                       }
+       KafkaStreams streams = new KafkaStreams(builder.build(), props);
+       streams.start();
+   }
 
-                   }</code></pre>
+}</code></pre>
            </div>
 
            <div class="code-example__snippet b-java-7">
-               <pre class="line-numbers"><code class="language-java">                   import org.apache.kafka.common.serialization.Serdes;
-                   import org.apache.kafka.common.utils.Bytes;
-                   import org.apache.kafka.streams.KafkaStreams;
-                   import org.apache.kafka.streams.StreamsBuilder;
-                   import org.apache.kafka.streams.StreamsConfig;
-                   import org.apache.kafka.streams.kstream.KStream;
-                   import org.apache.kafka.streams.kstream.KTable;
-                   import org.apache.kafka.streams.kstream.ValueMapper;
-                   import org.apache.kafka.streams.kstream.KeyValueMapper;
-                   import org.apache.kafka.streams.kstream.Materialized;
-                   import org.apache.kafka.streams.kstream.Produced;
-                   import org.apache.kafka.streams.state.KeyValueStore;
+               <pre class="line-numbers"><code class="language-java">import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.state.KeyValueStore;
 
-                   import java.util.Arrays;
-                   import java.util.Properties;
+import java.util.Arrays;
+import java.util.Properties;
 
-                   public class WordCountApplication {
+public class WordCountApplication {
 
-                       public static void main(final String[] args) throws Exception {
-                           Properties props = new Properties();
-                           props.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application");
-                           props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
-                           props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-                           props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+   public static void main(final String[] args) throws Exception {
+       Properties props = new Properties();
+       props.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application");
+       props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
+       props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+       props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
-                           StreamsBuilder builder = new StreamsBuilder();
-                           KStream&lt;String, String&gt; textLines = builder.stream("TextLinesTopic");
-                           KTable&lt;String, Long&gt; wordCounts = textLines
-                               .flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
-                                   @Override
-                                   public Iterable&lt;String&gt; apply(String textLine) {
-                                       return Arrays.asList(textLine.toLowerCase().split("\\W+"));
-                                   }
-                               })
-                               .groupBy(new KeyValueMapper&lt;String, String, String&gt;() {
-                                   @Override
-                                   public String apply(String key, String word) {
-                                       return word;
-                                   }
-                               })
-                               .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"));
+       StreamsBuilder builder = new StreamsBuilder();
+       KStream&lt;String, String&gt; textLines = builder.stream("TextLinesTopic");
+       KTable&lt;String, Long&gt; wordCounts = textLines
+           .flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
+               @Override
+               public Iterable&lt;String&gt; apply(String textLine) {
+                   return Arrays.asList(textLine.toLowerCase().split("\\W+"));
+               }
+           })
+           .groupBy(new KeyValueMapper&lt;String, String, String&gt;() {
+               @Override
+               public String apply(String key, String word) {
+                   return word;
+               }
+           })
+           .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"));
 
 
-                           wordCounts.toStream().to("WordsWithCountsTopic", Produced.with(Serdes.String(), Serdes.Long()));
+       wordCounts.toStream().to("WordsWithCountsTopic", Produced.with(Serdes.String(), Serdes.Long()));
 
-                           KafkaStreams streams = new KafkaStreams(builder.build(), props);
-                           streams.start();
-                       }
+       KafkaStreams streams = new KafkaStreams(builder.build(), props);
+       streams.start();
+   }
 
-                   }</code></pre>
+}</code></pre>
            </div>
 
            <div class="code-example__snippet b-scala">

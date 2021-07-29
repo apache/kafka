@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -29,7 +28,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -42,7 +40,6 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -136,7 +133,7 @@ public class GlobalStateManagerImplTest {
                 put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
             }
         });
-        stateDirectory = new StateDirectory(streamsConfig, time, true);
+        stateDirectory = new StateDirectory(streamsConfig, time, true, false);
         consumer = new MockConsumer<>(OffsetResetStrategy.NONE);
         stateManager = new GlobalStateManagerImpl(
             new LogContext("test"),
@@ -150,28 +147,6 @@ public class GlobalStateManagerImplTest {
         processorContext = new InternalMockProcessorContext(stateDirectory.globalStateDir(), streamsConfig);
         stateManager.setGlobalProcessorContext(processorContext);
         checkpointFile = new File(stateManager.baseDir(), StateManagerUtil.CHECKPOINT_FILE_NAME);
-    }
-
-    @After
-    public void after() throws IOException {
-        stateDirectory.unlockGlobalState();
-    }
-
-    @Test
-    public void shouldLockGlobalStateDirectory() {
-        stateManager.initialize();
-        assertTrue(new File(stateDirectory.globalStateDir(), ".lock").exists());
-    }
-
-    @Test
-    public void shouldThrowLockExceptionIfCantGetLock() throws IOException {
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, time, true);
-        try {
-            stateDir.lockGlobalState();
-            assertThrows(LockException.class, stateManager::initialize);
-        } finally {
-            stateDir.unlockGlobalState();
-        }
     }
 
     @Test
@@ -427,7 +402,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() throws IOException {
+    public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
         stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>(store1.name()) {
@@ -452,20 +427,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldUnlockGlobalStateDirectoryOnClose() throws IOException {
-        stateManager.initialize();
-        stateManager.close();
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime(), true);
-        try {
-            // should be able to get the lock now as it should've been released in close
-            assertTrue(stateDir.lockGlobalState());
-        } finally {
-            stateDir.unlockGlobalState();
-        }
-    }
-
-    @Test
-    public void shouldNotCloseStoresIfCloseAlreadyCalled() throws IOException {
+    public void shouldNotCloseStoresIfCloseAlreadyCalled() {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
         stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>("t1-store") {
@@ -483,7 +445,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldAttemptToCloseAllStoresEvenWhenSomeException() throws IOException {
+    public void shouldAttemptToCloseAllStoresEvenWhenSomeException() {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
         final NoOpReadOnlyStore<Object, Object> store = new NoOpReadOnlyStore<Object, Object>("t1-store") {
@@ -505,23 +467,6 @@ public class GlobalStateManagerImplTest {
         }
         assertFalse(store.isOpen());
         assertFalse(store2.isOpen());
-    }
-
-    @Test
-    public void shouldReleaseLockIfExceptionWhenLoadingCheckpoints() throws IOException {
-        writeCorruptCheckpoint();
-        try {
-            stateManager.initialize();
-        } catch (final StreamsException e) {
-            // expected
-        }
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime(), true);
-        try {
-            // should be able to get the lock now as it should've been released
-            assertTrue(stateDir.lockGlobalState());
-        } finally {
-            stateDir.unlockGlobalState();
-        }
     }
 
     @Test
@@ -602,31 +547,6 @@ public class GlobalStateManagerImplTest {
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
                                                                                 StateManagerUtil.CHECKPOINT_FILE_NAME));
         return offsetCheckpoint.read();
-    }
-
-    @Test
-    public void shouldThrowLockExceptionIfIOExceptionCaughtWhenTryingToLockStateDir() {
-        stateManager = new GlobalStateManagerImpl(
-            new LogContext("mock"),
-            time,
-            topology,
-            consumer,
-            new StateDirectory(streamsConfig, time, true) {
-                @Override
-                public boolean lockGlobalState() throws IOException {
-                    throw new IOException("KABOOM!");
-                }
-            },
-            stateRestoreListener,
-            streamsConfig
-        );
-
-        try {
-            stateManager.initialize();
-            fail("Should have thrown LockException");
-        } catch (final LockException e) {
-            // pass
-        }
     }
 
     @Test
@@ -1123,7 +1043,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldUseRequestTimeoutPlusTaskTimeoutInPollDuringRestoreAndFailIfNoDataReturned() {
+    public void shouldUsePollMsPlusRequestTimeoutInPollDuringRestoreAndTimeoutWhenNoProgressDuringRestore() {
         consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
             public synchronized ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
@@ -1144,62 +1064,7 @@ public class GlobalStateManagerImplTest {
         streamsConfig = new StreamsConfig(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            mkEntry(StreamsConfig.POLL_MS_CONFIG, 5L),
-            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 10L),
-            mkEntry(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 100)
-        ));
-
-        stateManager = new GlobalStateManagerImpl(
-            new LogContext("mock"),
-            time,
-            topology,
-            consumer,
-            stateDirectory,
-            stateRestoreListener,
-            streamsConfig
-        );
-        processorContext.setStateManger(stateManager);
-        stateManager.setGlobalProcessorContext(processorContext);
-
-        final long startTime = time.milliseconds();
-        final TimeoutException exception = assertThrows(
-            TimeoutException.class,
-            () -> stateManager.initialize()
-        );
-        assertThat(
-            exception.getMessage(),
-            equalTo("Global task did not make progress to restore state within 10 ms. Adjust `task.timeout.ms` if needed.")
-        );
-
-        assertThat(time.milliseconds() - startTime, equalTo(110L));
-
-    }
-
-    @Test
-    public void shouldTimeoutWhenNoProgressDuringRestore() {
-        consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public synchronized ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
-                time.sleep(1L);
-                return super.poll(timeout);
-            }
-        };
-
-        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
-        startOffsets.put(t1, 1L);
-        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(t1, 3L);
-        consumer.updatePartitions(t1.topic(), Collections.singletonList(new PartitionInfo(t1.topic(), t1.partition(), null, null, null)));
-        consumer.assign(Collections.singletonList(t1));
-        consumer.updateBeginningOffsets(startOffsets);
-        consumer.updateEndOffsets(endOffsets);
-
-        streamsConfig = new StreamsConfig(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 5L)
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -1222,9 +1087,9 @@ public class GlobalStateManagerImplTest {
         );
         assertThat(
             exception.getMessage(),
-            equalTo("Global task did not make progress to restore state within 5 ms. Adjust `task.timeout.ms` if needed.")
+            equalTo("Global task did not make progress to restore state within 301000 ms. Adjust `task.timeout.ms` if needed.")
         );
-        assertThat(time.milliseconds() - startTime, equalTo(1L));
+        assertThat(time.milliseconds() - startTime, equalTo(331_100L));
     }
 
     private void writeCorruptCheckpoint() throws IOException {

@@ -25,6 +25,7 @@ import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.Processor.ListenerMetricTag
 import kafka.server.KafkaConfig
+import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.internals.QuotaConfigs
@@ -394,6 +395,7 @@ class ConnectionQuotasTest {
     val connCreateIntervalMs = 25 // connection creation rate = 40/sec per listener (3 * 40 = 120/sec total)
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
@@ -757,7 +759,7 @@ class ConnectionQuotasTest {
       "Expected broker-connection-accept-rate metric to exist")
 
     // add listeners and verify connection limits not exceeded
-    listeners.foreach { case (name, listener) =>
+    listeners.forKeyValue { (name, listener) =>
       val listenerName = listener.listenerName
       connectionQuotas.addListener(config, listenerName)
       connectionQuotas.maxConnectionsPerListener(listenerName).configure(listenerConfig)
@@ -782,14 +784,14 @@ class ConnectionQuotasTest {
   }
 
   private def verifyNoBlockedPercentRecordedOnAllListeners(): Unit = {
-    blockedPercentMeters.foreach { case (name, meter) =>
+    blockedPercentMeters.forKeyValue { (name, meter) =>
       assertEquals(0, meter.count(),
         s"BlockedPercentMeter metric for $name listener")
     }
   }
 
   private def verifyNonZeroBlockedPercentAndThrottleTimeOnAllListeners(): Unit = {
-    blockedPercentMeters.foreach { case (name, meter) =>
+    blockedPercentMeters.forKeyValue { (name, meter) =>
       assertTrue(meter.count() > 0,
         s"Expected BlockedPercentMeter metric for $name listener to be recorded")
     }
@@ -805,7 +807,7 @@ class ConnectionQuotasTest {
   }
 
   private def verifyOnlyNonInterBrokerListenersBlockedPercentRecorded(): Unit = {
-    blockedPercentMeters.foreach { case (name, meter) =>
+    blockedPercentMeters.forKeyValue { (name, meter) =>
       name match {
         case "REPLICATION" =>
           assertEquals(0, meter.count(), s"BlockedPercentMeter metric for $name listener")

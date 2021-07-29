@@ -22,6 +22,7 @@ import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -268,6 +269,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
     }
 
+    // should enable it after KAFKA-12495 fixed
+    @Ignore
     @Test
     public void testMultipleWorkersRejoining() throws Exception {
         // create test topic

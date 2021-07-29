@@ -98,4 +98,13 @@ public class TokenBucket implements MeasurableStat {
     private double burst(final MetricConfig config) {
         return config.samples() * convert(config.timeWindowMs(), unit) * config.quota().bound();
     }
+
+    @Override
+    public String toString() {
+        return "TokenBucket(" +
+            "unit=" + unit +
+            ", tokens=" + tokens +
+            ", lastUpdateMs=" + lastUpdateMs +
+            ')';
+    }
 }

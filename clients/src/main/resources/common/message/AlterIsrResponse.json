@@ -36,7 +36,7 @@
           "about": "The broker ID of the leader." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
           "about": "The leader epoch." },
-        { "name": "Isr", "type": "[]int32", "versions": "0+",
+        { "name": "Isr", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The in-sync replica IDs." },
         { "name": "CurrentIsrVersion", "type": "int32", "versions": "0+",
           "about": "The current ISR version." }

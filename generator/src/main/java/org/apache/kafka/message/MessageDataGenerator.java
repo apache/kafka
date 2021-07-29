@@ -1578,7 +1578,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             buffer.printf("if (v < 0 || v > 65535) {%n");
             buffer.incrementIndent();
             buffer.printf("throw new RuntimeException(\"Invalid value \" + v + " +
-                    "\"for unsigned short field.\");%n");
+                    "\" for unsigned short field.\");%n");
             buffer.decrementIndent();
             buffer.printf("}%n");
         }

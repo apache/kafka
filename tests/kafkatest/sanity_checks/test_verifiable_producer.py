@@ -49,12 +49,14 @@ class TestVerifiableProducer(Test):
     @parametrize(producer_version=str(LATEST_0_9))
     @parametrize(producer_version=str(LATEST_0_10_0))
     @parametrize(producer_version=str(LATEST_0_10_1))
+    @matrix(producer_version=[str(DEV_BRANCH)], acks=["0", "1", "-1"], enable_idempotence=[False])
+    @matrix(producer_version=[str(DEV_BRANCH)], acks=["-1"], enable_idempotence=[True])
     @matrix(producer_version=[str(DEV_BRANCH)], security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=quorum.all)
     @cluster(num_nodes=4)
     @matrix(producer_version=[str(DEV_BRANCH)], security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN', 'GSSAPI'],
             metadata_quorum=quorum.all)
-    def test_simple_run(self, producer_version, security_protocol = 'PLAINTEXT', sasl_mechanism='PLAIN',
-                        metadata_quorum=quorum.zk):
+    def test_simple_run(self, producer_version, acks=None, enable_idempotence=False, security_protocol = 'PLAINTEXT',
+                        sasl_mechanism='PLAIN', metadata_quorum=quorum.zk):
         """
         Test that we can start VerifiableProducer on the current branch snapshot version or against the 0.8.2 jar, and
         verify that we can produce a small number of messages.
@@ -63,7 +65,7 @@ class TestVerifiableProducer(Test):
         self.kafka.client_sasl_mechanism = sasl_mechanism
         self.kafka.interbroker_security_protocol = security_protocol
         self.kafka.interbroker_sasl_mechanism = sasl_mechanism
-        if self.kafka.quorum_info.using_raft:
+        if self.kafka.quorum_info.using_kraft:
             controller_quorum = self.kafka.controller_quorum
             controller_quorum.controller_security_protocol = security_protocol
             controller_quorum.controller_sasl_mechanism = sasl_mechanism
@@ -72,6 +74,8 @@ class TestVerifiableProducer(Test):
         self.kafka.start()
 
         node = self.producer.nodes[0]
+        self.producer.enable_idempotence = enable_idempotence
+        self.producer.acks = acks
         node.version = KafkaVersion(producer_version)
         self.producer.start()
         wait_until(lambda: self.producer.num_acked > 5, timeout_sec=15,
@@ -97,13 +101,13 @@ class TestVerifiableProducer(Test):
         assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
 
     @cluster(num_nodes=4)
-    @matrix(inter_broker_security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=[quorum.remote_raft])
+    @matrix(inter_broker_security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=[quorum.remote_kraft])
     @matrix(inter_broker_security_protocol=['SASL_SSL'], inter_broker_sasl_mechanism=['PLAIN', 'GSSAPI'],
-            metadata_quorum=[quorum.remote_raft])
-    def test_multiple_raft_security_protocols(
-            self, inter_broker_security_protocol, inter_broker_sasl_mechanism='GSSAPI', metadata_quorum=quorum.remote_raft):
+            metadata_quorum=[quorum.remote_kraft])
+    def test_multiple_kraft_security_protocols(
+            self, inter_broker_security_protocol, inter_broker_sasl_mechanism='GSSAPI', metadata_quorum=quorum.remote_kraft):
         """
-        Test for remote Raft cases that we can start VerifiableProducer on the current branch snapshot version, and
+        Test for remote KRaft cases that we can start VerifiableProducer on the current branch snapshot version, and
         verify that we can produce a small number of messages.  The inter-controller and broker-to-controller
         security protocols are defined to be different (which differs from the above test, where they were the same).
         """
@@ -140,10 +144,10 @@ class TestVerifiableProducer(Test):
         assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
 
     @cluster(num_nodes=4)
-    @parametrize(metadata_quorum=quorum.remote_raft)
-    def test_multiple_raft_sasl_mechanisms(self, metadata_quorum):
+    @parametrize(metadata_quorum=quorum.remote_kraft)
+    def test_multiple_kraft_sasl_mechanisms(self, metadata_quorum):
         """
-        Test for remote Raft cases that we can start VerifiableProducer on the current branch snapshot version, and
+        Test for remote KRaft cases that we can start VerifiableProducer on the current branch snapshot version, and
         verify that we can produce a small number of messages.  The inter-controller and broker-to-controller
         security protocols are both SASL_PLAINTEXT but the SASL mechanisms are different (we set
         GSSAPI for the inter-controller mechanism and PLAIN for the broker-to-controller mechanism).

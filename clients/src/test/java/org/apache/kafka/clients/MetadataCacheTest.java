@@ -67,7 +67,8 @@ public class MetadataCacheTest {
                 Collections.emptySet(),
                 Collections.emptySet(),
                 Collections.emptySet(),
-                null);
+                null,
+                Collections.emptyMap());
 
         Cluster cluster = cache.cluster();
         assertNull(cluster.leaderFor(topicPartition));

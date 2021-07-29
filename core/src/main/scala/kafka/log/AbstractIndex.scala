@@ -207,7 +207,7 @@ abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: 
    * @throws IOException if rename fails
    */
   def renameTo(f: File): Unit = {
-    try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+    try Utils.atomicMoveWithFallback(file.toPath, f.toPath, false)
     finally _file = f
   }
 

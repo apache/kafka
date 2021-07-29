@@ -60,6 +60,7 @@ final public class FetchSnapshotRequest extends AbstractRequest {
      * @return the created fetch snapshot request data
      */
     public static FetchSnapshotRequestData singleton(
+        String clusterId,
         TopicPartition topicPartition,
         UnaryOperator<FetchSnapshotRequestData.PartitionSnapshot> operator
     ) {
@@ -68,6 +69,7 @@ final public class FetchSnapshotRequest extends AbstractRequest {
         );
 
         return new FetchSnapshotRequestData()
+            .setClusterId(clusterId)
             .setTopics(
                 Collections.singletonList(
                     new FetchSnapshotRequestData.TopicSnapshot()

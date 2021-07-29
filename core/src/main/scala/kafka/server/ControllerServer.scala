@@ -17,9 +17,9 @@
 
 package kafka.server
 
-import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util
 import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 
 import kafka.cluster.Broker.ServerInfo
 import kafka.log.LogConfig
@@ -37,26 +37,27 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics}
-import org.apache.kafka.metadata.{ApiMessageAndVersion, VersionRange}
-import org.apache.kafka.metalog.MetaLogManager
+import org.apache.kafka.metadata.VersionRange
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.common.config.ConfigException
 
 import scala.jdk.CollectionConverters._
 
 /**
- * A KIP-500 Kafka controller.
+ * A Kafka controller that runs in KRaft (Kafka Raft) mode.
  */
 class ControllerServer(
-                        val metaProperties: MetaProperties,
-                        val config: KafkaConfig,
-                        val metaLogManager: MetaLogManager,
-                        val raftManager: RaftManager[ApiMessageAndVersion],
-                        val time: Time,
-                        val metrics: Metrics,
-                        val threadNamePrefix: Option[String],
-                        val controllerQuorumVotersFuture: CompletableFuture[util.List[String]]
-                      ) extends Logging with KafkaMetricsGroup {
+  val metaProperties: MetaProperties,
+  val config: KafkaConfig,
+  val raftManager: RaftManager[ApiMessageAndVersion],
+  val time: Time,
+  val metrics: Metrics,
+  val threadNamePrefix: Option[String],
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
+) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
   val lock = new ReentrantLock()
@@ -137,8 +138,13 @@ class ControllerServer(
         credentialProvider,
         apiVersionManager)
       socketServer.startup(startProcessingRequests = false, controlPlaneListener = None, config.controllerListeners)
-      socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
-        config.controllerListeners.head.listenerName))
+
+      if (config.controllerListeners.nonEmpty) {
+        socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
+          config.controllerListeners.head.listenerName))
+      } else {
+        throw new ConfigException("No controller.listener.names defined for controller");
+      }
 
       val configDefs = Map(ConfigResource.Type.BROKER -> KafkaConfig.configDef,
         ConfigResource.Type.TOPIC -> LogConfig.configDefCopy).asJava
@@ -147,18 +153,18 @@ class ControllerServer(
         setTime(time).
         setThreadNamePrefix(threadNamePrefixAsString).
         setConfigDefs(configDefs).
-        setLogManager(metaLogManager).
+        setRaftClient(raftManager.client).
         setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
         setDefaultNumPartitions(config.numPartitions.intValue()).
         setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
           TimeUnit.MILLISECONDS)).
+        setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
         setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
         build()
 
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
-      val controllerNodes =
-        RaftConfig.quorumVoterStringsToNodes(controllerQuorumVotersFuture.get()).asScala
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,
@@ -199,6 +205,8 @@ class ControllerServer(
         CoreUtils.swallow(socketServer.shutdown(), this)
       if (controllerApisHandlerPool != null)
         CoreUtils.swallow(controllerApisHandlerPool.shutdown(), this)
+      if (controllerApis != null)
+        CoreUtils.swallow(controllerApis.close(), this)
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
       if (controller != null)

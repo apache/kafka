@@ -44,12 +44,6 @@ public class DeleteTopicsRequest extends AbstractRequest {
         public DeleteTopicsRequest build(short version) {
             if (version >= 6 && !data.topicNames().isEmpty()) {
                 data.setTopics(groupByTopic(data.topicNames()));
-            } else if (version >= 6) {
-                for (DeleteTopicState topic : data.topics()) {
-                    if (topic.name() != null && topic.name().equals("")) {
-                        topic.setName(null);
-                    }
-                }
             }
             return new DeleteTopicsRequest(data, version);
         }
@@ -100,6 +94,12 @@ public class DeleteTopicsRequest extends AbstractRequest {
         if (version() >= 6)
             return data.topics().stream().map(topic -> topic.name()).collect(Collectors.toList());
         return data.topicNames(); 
+    }
+
+    public int numberOfTopics() {
+        if (version() >= 6)
+            return data.topics().size();
+        return data.topicNames().size();
     }
     
     public List<Uuid> topicIds() {

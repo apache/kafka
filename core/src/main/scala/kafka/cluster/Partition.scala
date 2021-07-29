@@ -18,7 +18,6 @@ package kafka.cluster
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
-
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.{KafkaController, StateChangeLogger}
@@ -26,7 +25,6 @@ import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.server.metadata.ConfigRepository
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zookeeper.ZooKeeperClientException
@@ -69,7 +67,6 @@ class DelayedOperations(topicPartition: TopicPartition,
 object Partition extends KafkaMetricsGroup {
   def apply(topicPartition: TopicPartition,
             time: Time,
-            configRepository: ConfigRepository,
             replicaManager: ReplicaManager): Partition = {
 
     val isrChangeListener = new IsrChangeListener {
@@ -308,27 +305,27 @@ class Partition(val topicPartition: TopicPartition,
                 s"different from the requested log dir $logDir")
             false
           case None =>
-            createLogIfNotExists(isNew = false, isFutureReplica = true, highWatermarkCheckpoints)
+            createLogIfNotExists(isNew = false, isFutureReplica = true, highWatermarkCheckpoints, topicId)
             true
         }
       }
     }
   }
 
-  def createLogIfNotExists(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Unit = {
+  def createLogIfNotExists(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Unit = {
     isFutureReplica match {
       case true if futureLog.isEmpty =>
-        val log = createLog(isNew, isFutureReplica, offsetCheckpoints)
+        val log = createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
         this.futureLog = Option(log)
       case false if log.isEmpty =>
-        val log = createLog(isNew, isFutureReplica, offsetCheckpoints)
+        val log = createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
         this.log = Option(log)
       case _ => trace(s"${if (isFutureReplica) "Future Log" else "Log"} already exists.")
     }
   }
 
   // Visible for testing
-  private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
+  private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Log = {
     def updateHighWatermark(log: Log) = {
       val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).getOrElse {
         info(s"No checkpointed highwatermark is found for partition $topicPartition")
@@ -341,7 +338,7 @@ class Partition(val topicPartition: TopicPartition,
     logManager.initializingLog(topicPartition)
     var maybeLog: Option[Log] = None
     try {
-      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica)
+      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId)
       maybeLog = Some(log)
       updateHighWatermark(log)
       log
@@ -425,41 +422,11 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   /**
-   * Checks if the topic ID provided in the request is consistent with the topic ID in the log.
-   * If a valid topic ID is provided, and the log exists but has no ID set, set the log ID to be the request ID.
-   *
-   * @param requestTopicId the topic ID from the request
-   * @return true if the request topic id is consistent, false otherwise
+   * @return the topic ID for the log or None if the log or the topic ID does not exist.
    */
-  def checkOrSetTopicId(requestTopicId: Uuid): Boolean = {
-    // If the request had an invalid topic ID, then we assume that topic IDs are not supported.
-    // The topic ID was not inconsistent, so return true.
-    // If the log is empty, then we can not say that topic ID is inconsistent, so return true.
-    if (requestTopicId == null || requestTopicId == Uuid.ZERO_UUID)
-      true
-    else {
-      log match {
-        case None => true
-        case Some(log) => {
-          // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
-          // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
-          // Topic ID is consistent since we are just setting it here.
-          if (log.topicId == Uuid.ZERO_UUID) {
-            log.partitionMetadataFile.write(requestTopicId)
-            log.topicId = requestTopicId
-            true
-          } else if (log.topicId != requestTopicId) {
-            stateChangeLogger.error(s"Topic Id in memory: ${log.topicId} does not" +
-              s" match the topic Id for partition $topicPartition provided in the request: " +
-              s"$requestTopicId.")
-            false
-          } else {
-            // topic ID in log exists and matches request topic ID
-            true
-          }
-        }
-      }
-    }
+  def topicId: Option[Uuid] = {
+    val log = this.log.orElse(logManager.getLog(topicPartition))
+    log.flatMap(_.topicId)
   }
 
   // remoteReplicas will be called in the hot path, and must be inexpensive
@@ -540,7 +507,8 @@ class Partition(val topicPartition: TopicPartition,
    * If the leader replica id does not change, return false to indicate the replica manager.
    */
   def makeLeader(partitionState: LeaderAndIsrPartitionState,
-                 highWatermarkCheckpoints: OffsetCheckpoints): Boolean = {
+                 highWatermarkCheckpoints: OffsetCheckpoints,
+                 topicId: Option[Uuid]): Boolean = {
     val (leaderHWIncremented, isNewLeader) = inWriteLock(leaderIsrUpdateLock) {
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
@@ -557,7 +525,7 @@ class Partition(val topicPartition: TopicPartition,
         removingReplicas = removingReplicas
       )
       try {
-        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId)
       } catch {
         case e: ZooKeeperClientException =>
           stateChangeLogger.error(s"A ZooKeeper client exception has occurred and makeLeader will be skipping the " +
@@ -577,9 +545,6 @@ class Partition(val topicPartition: TopicPartition,
       leaderEpoch = partitionState.leaderEpoch
       leaderEpochStartOffsetOpt = Some(leaderEpochStartOffset)
       zkVersion = partitionState.zkVersion
-
-      // Clear any pending AlterIsr requests and check replica state
-      alterIsrManager.clearPending(topicPartition)
 
       // In the case of successive leader elections in a short time period, a follower may have
       // entries in its log from a later epoch than any entry in the new leader's log. In order
@@ -624,7 +589,8 @@ class Partition(val topicPartition: TopicPartition,
    * replica manager that state is already correct and the become-follower steps can be skipped
    */
   def makeFollower(partitionState: LeaderAndIsrPartitionState,
-                   highWatermarkCheckpoints: OffsetCheckpoints): Boolean = {
+                   highWatermarkCheckpoints: OffsetCheckpoints,
+                   topicId: Option[Uuid]): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
       val newLeaderBrokerId = partitionState.leader
       val oldLeaderEpoch = leaderEpoch
@@ -639,7 +605,7 @@ class Partition(val topicPartition: TopicPartition,
         removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
       )
       try {
-        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId)
       } catch {
         case e: ZooKeeperClientException =>
           stateChangeLogger.error(s"A ZooKeeper client exception has occurred. makeFollower will be skipping the " +
@@ -657,9 +623,6 @@ class Partition(val topicPartition: TopicPartition,
       leaderEpoch = partitionState.leaderEpoch
       leaderEpochStartOffsetOpt = None
       zkVersion = partitionState.zkVersion
-
-      // Since we might have been a leader previously, still clear any pending AlterIsr requests
-      alterIsrManager.clearPending(topicPartition)
 
       if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && leaderEpoch == oldLeaderEpoch) {
         false
@@ -917,7 +880,7 @@ class Partition(val topicPartition: TopicPartition,
     // care has been taken to avoid generating unnecessary collections in this code
     var lowWaterMark = localLogOrException.logStartOffset
     remoteReplicas.foreach { replica =>
-      if (metadataCache.getAliveBroker(replica.brokerId).nonEmpty && replica.logStartOffset < lowWaterMark) {
+      if (metadataCache.hasAliveBroker(replica.brokerId) && replica.logStartOffset < lowWaterMark) {
         lowWaterMark = replica.logStartOffset
       }
     }
@@ -1053,7 +1016,8 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int): LogAppendInfo = {
+  def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int,
+                            requestLocal: RequestLocal): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
@@ -1067,7 +1031,7 @@ class Partition(val topicPartition: TopicPartition,
           }
 
           val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,
-            interBrokerProtocolVersion)
+            interBrokerProtocolVersion, requestLocal)
 
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderLog))
@@ -1108,6 +1072,12 @@ class Partition(val topicPartition: TopicPartition,
       if (epochEndOffset.endOffset == UNDEFINED_EPOCH_OFFSET || epochEndOffset.leaderEpoch == UNDEFINED_EPOCH) {
         throw new OffsetOutOfRangeException("Could not determine the end offset of the last fetched epoch " +
           s"$lastFetchedEpoch from the request")
+      }
+
+      // If fetch offset is less than log start, fail with OffsetOutOfRangeException, regardless of whether epochs are diverging
+      if (fetchOffset < initialLogStartOffset) {
+        throw new OffsetOutOfRangeException(s"Received request for offset $fetchOffset for partition $topicPartition, " +
+          s"but we only have log segments in the range $initialLogStartOffset to $initialLogEndOffset.")
       }
 
       if (epochEndOffset.leaderEpoch < fetchEpoch || epochEndOffset.endOffset < fetchOffset) {
@@ -1369,13 +1339,15 @@ class Partition(val topicPartition: TopicPartition,
     isrState = proposedIsrState
 
     if (!alterIsrManager.submit(alterIsrItem)) {
-      // If the ISR manager did not accept our update, we need to revert back to previous state
+      // If the ISR manager did not accept our update, we need to revert the proposed state.
+      // This can happen if the ISR state was updated by the controller (via LeaderAndIsr in ZK-mode or
+      // ChangePartitionRecord in KRaft mode) but we have an AlterIsr request still in-flight.
       isrState = oldState
       isrChangeListener.markFailed()
-      throw new IllegalStateException(s"Failed to enqueue ISR change state $newLeaderAndIsr for partition $topicPartition")
+      warn(s"Failed to enqueue ISR change state $newLeaderAndIsr for partition $topicPartition")
+    } else {
+      debug(s"Enqueued ISR change to state $newLeaderAndIsr after transition to $proposedIsrState")
     }
-
-    debug(s"Enqueued ISR change to state $newLeaderAndIsr after transition to $proposedIsrState")
   }
 
   /**
@@ -1413,10 +1385,15 @@ class Partition(val topicPartition: TopicPartition,
           if (leaderAndIsr.leaderEpoch != leaderEpoch) {
             debug(s"Ignoring new ISR ${leaderAndIsr} since we have a stale leader epoch $leaderEpoch.")
             isrChangeListener.markFailed()
-          } else if (leaderAndIsr.zkVersion <= zkVersion) {
+          } else if (leaderAndIsr.zkVersion < zkVersion) {
             debug(s"Ignoring new ISR ${leaderAndIsr} since we have a newer version $zkVersion.")
             isrChangeListener.markFailed()
           } else {
+            // This is one of two states:
+            //   1) leaderAndIsr.zkVersion > zkVersion: Controller updated to new version with proposedIsrState.
+            //   2) leaderAndIsr.zkVersion == zkVersion: No update was performed since proposed and actual state are the same.
+            // In both cases, we want to move from Pending to Committed state to ensure new updates are processed.
+
             isrState = CommittedIsr(leaderAndIsr.isr.toSet)
             zkVersion = leaderAndIsr.zkVersion
             info(s"ISR updated to ${isrState.isr.mkString(",")} and version updated to [$zkVersion]")

@@ -19,7 +19,6 @@ package kafka.server
 import java.io.File
 import java.nio.file.Files
 import java.util.Properties
-
 import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdException, KafkaException}
 import kafka.log.Log
 import org.apache.kafka.common.Uuid
@@ -29,16 +28,19 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 class KafkaRaftServerTest {
+  private val clusterIdBase64 = "H3KKO4NTRPaCWtEmm3vW7A"
 
   @Test
   def testSuccessfulLoadMetaProperties(): Unit = {
-    val clusterId = Uuid.randomUuid()
+    val clusterId = clusterIdBase64
     val nodeId = 0
     val metaProperties = MetaProperties(clusterId, nodeId)
 
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker,controller")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
 
     val (loadedMetaProperties, offlineDirs) =
       invokeLoadMetaProperties(metaProperties, configProperties)
@@ -49,7 +51,7 @@ class KafkaRaftServerTest {
 
   @Test
   def testLoadMetaPropertiesWithInconsistentNodeId(): Unit = {
-    val clusterId = Uuid.randomUuid()
+    val clusterId = clusterIdBase64
     val metaNodeId = 1
     val configNodeId = 0
 
@@ -58,6 +60,7 @@ class KafkaRaftServerTest {
 
     configProperties.put(KafkaConfig.ProcessRolesProp, "controller")
     configProperties.put(KafkaConfig.NodeIdProp, configNodeId.toString)
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
 
     assertThrows(classOf[InconsistentNodeIdException], () =>
       invokeLoadMetaProperties(metaProperties, configProperties))
@@ -90,7 +93,7 @@ class KafkaRaftServerTest {
 
   @Test
   def testStartupFailsIfMetaPropertiesMissingInSomeLogDir(): Unit = {
-    val clusterId = Uuid.randomUuid()
+    val clusterId = clusterIdBase64
     val nodeId = 1
 
     // One log dir is online and has properly formatted `meta.properties`.
@@ -110,7 +113,7 @@ class KafkaRaftServerTest {
 
   @Test
   def testStartupFailsIfMetaLogDirIsOffline(): Unit = {
-    val clusterId = Uuid.randomUuid()
+    val clusterId = clusterIdBase64
     val nodeId = 1
 
     // One log dir is online and has properly formatted `meta.properties`
@@ -131,7 +134,7 @@ class KafkaRaftServerTest {
 
   @Test
   def testStartupDoesNotFailIfDataDirIsOffline(): Unit = {
-    val clusterId = Uuid.randomUuid()
+    val clusterId = clusterIdBase64
     val nodeId = 1
 
     // One log dir is online and has properly formatted `meta.properties`
@@ -155,7 +158,7 @@ class KafkaRaftServerTest {
   @Test
   def testStartupFailsIfUnexpectedMetadataDir(): Unit = {
     val nodeId = 1
-    val clusterId = Uuid.randomUuid()
+    val clusterId = clusterIdBase64
 
     // Create two directories with valid `meta.properties`
     val metadataDir = TestUtils.tempDirectory()
@@ -186,7 +189,7 @@ class KafkaRaftServerTest {
 
     // Create a random clusterId in each log dir
     Seq(logDir1, logDir2).foreach { dir =>
-      writeMetaProperties(dir, MetaProperties(clusterId = Uuid.randomUuid(), nodeId))
+      writeMetaProperties(dir, MetaProperties(clusterId = Uuid.randomUuid().toString, nodeId))
     }
 
     val configProperties = new Properties

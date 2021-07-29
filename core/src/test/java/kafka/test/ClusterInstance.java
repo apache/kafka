@@ -29,7 +29,7 @@ public interface ClusterInstance {
 
     enum ClusterType {
         ZK,
-        // RAFT
+        RAFT
     }
 
     /**
@@ -94,4 +94,6 @@ public interface ClusterInstance {
     void start();
 
     void stop();
+
+    void rollingBrokerRestart();
 }

@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
-import java.util.{Collections, Locale, Map, Properties, Random}
+import java.util.{Collections, Locale, Map, Optional, Properties, Random}
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.utils.Implicits._
@@ -35,7 +35,6 @@ import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -69,7 +68,7 @@ object ConsoleConsumer extends Logging {
       if (conf.partitionArg.isDefined)
         new ConsumerWrapper(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
       else
-        new ConsumerWrapper(Option(conf.topicArg), None, None, Option(conf.whitelistArg), consumer, timeoutMs)
+        new ConsumerWrapper(Option(conf.topicArg), None, None, Option(conf.includedTopicsArg), consumer, timeoutMs)
 
     addShutdownHook(consumerWrapper, conf)
 
@@ -112,8 +111,8 @@ object ConsoleConsumer extends Logging {
       }
       messageCount += 1
       try {
-        formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
-                                             msg.timestampType, 0, 0, 0, msg.key, msg.value, msg.headers), output)
+        formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp, msg.timestampType,
+          0, 0, msg.key, msg.value, msg.headers, Optional.empty[Integer]), output)
       } catch {
         case e: Throwable =>
           if (skipMessageOnError) {
@@ -188,20 +187,26 @@ object ConsoleConsumer extends Logging {
   }
 
   class ConsumerConfig(args: Array[String]) extends CommandDefaultOptions(args) {
-    val topicIdOpt = parser.accepts("topic", "The topic id to consume on.")
+    val topicOpt = parser.accepts("topic", "The topic to consume on.")
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val whitelistOpt = parser.accepts("whitelist", "Regular expression specifying whitelist of topics to include for consumption.")
+    val whitelistOpt = parser.accepts("whitelist",
+      "DEPRECATED, use --include instead; ignored if --include specified. Regular expression specifying list of topics to include for consumption.")
       .withRequiredArg
-      .describedAs("whitelist")
+      .describedAs("Java regex (String)")
+      .ofType(classOf[String])
+    val includeOpt = parser.accepts("include",
+      "Regular expression specifying list of topics to include for consumption.")
+      .withRequiredArg
+      .describedAs("Java regex (String)")
       .ofType(classOf[String])
     val partitionIdOpt = parser.accepts("partition", "The partition to consume from. Consumption " +
       "starts from the end of the partition unless '--offset' is specified.")
       .withRequiredArg
       .describedAs("partition")
       .ofType(classOf[java.lang.Integer])
-    val offsetOpt = parser.accepts("offset", "The offset id to consume from (a non-negative number), or 'earliest' which means from beginning, or 'latest' which means from end")
+    val offsetOpt = parser.accepts("offset", "The offset to consume from (a non-negative number), or 'earliest' which means from beginning, or 'latest' which means from end")
       .withRequiredArg
       .describedAs("consume offset")
       .ofType(classOf[String])
@@ -210,7 +215,7 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("consumer_prop")
       .ofType(classOf[String])
-    val consumerConfigOpt = parser.accepts("consumer.config", s"Consumer config properties file. Note that ${consumerPropertyOpt} takes precedence over this config.")
+    val consumerConfigOpt = parser.accepts("consumer.config", s"Consumer config properties file. Note that $consumerPropertyOpt takes precedence over this config.")
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])
@@ -288,7 +293,7 @@ object ConsoleConsumer extends Logging {
 
     // topic must be specified.
     var topicArg: String = null
-    var whitelistArg: String = null
+    var includedTopicsArg: String = null
     var filterSpec: TopicFilter = null
     val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
     val consumerProps = if (options.has(consumerConfigOpt))
@@ -307,23 +312,29 @@ object ConsoleConsumer extends Logging {
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
     val formatter: MessageFormatter = messageFormatterClass.getDeclaredConstructor().newInstance().asInstanceOf[MessageFormatter]
 
-    if (keyDeserializer != null && !keyDeserializer.isEmpty) {
+    if (keyDeserializer != null && keyDeserializer.nonEmpty) {
       formatterArgs.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer)
     }
-    if (valueDeserializer != null && !valueDeserializer.isEmpty) {
+    if (valueDeserializer != null && valueDeserializer.nonEmpty) {
       formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
     }
 
     formatter.configure(formatterArgs.asScala.asJava)
 
-    val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
-    if (topicOrFilterOpt.size != 1)
-      CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/topic is required.")
-    topicArg = options.valueOf(topicIdOpt)
-    whitelistArg = options.valueOf(whitelistOpt)
+    topicArg = options.valueOf(topicOpt)
+    includedTopicsArg = if (options.has(includeOpt))
+      options.valueOf(includeOpt)
+    else
+      options.valueOf(whitelistOpt)
+
+    val topicOrFilterArgs = List(topicArg, includedTopicsArg).filterNot(_ == null)
+    // user need to specify value for either --topic or one of the include filters options (--include or --whitelist)
+    if (topicOrFilterArgs.size != 1)
+      CommandLineUtils.printUsageAndDie(parser, s"Exactly one of --include/--topic is required. " +
+        s"${if (options.has(whitelistOpt)) "--whitelist is DEPRECATED use --include instead; ignored if --include specified."}")
 
     if (partitionArg.isDefined) {
-      if (!options.has(topicIdOpt))
+      if (!options.has(topicOpt))
         CommandLineUtils.printUsageAndDie(parser, "The topic is required when partition is specified.")
       if (fromBeginning && options.has(offsetOpt))
         CommandLineUtils.printUsageAndDie(parser, "Options from-beginning and offset cannot be specified together.")
@@ -393,13 +404,13 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  private[tools] class ConsumerWrapper(topic: Option[String], partitionId: Option[Int], offset: Option[Long], whitelist: Option[String],
+  private[tools] class ConsumerWrapper(topic: Option[String], partitionId: Option[Int], offset: Option[Long], includedTopics: Option[String],
                                        consumer: Consumer[Array[Byte], Array[Byte]], val timeoutMs: Long = Long.MaxValue) {
     consumerInit()
     var recordIter = Collections.emptyList[ConsumerRecord[Array[Byte], Array[Byte]]]().iterator()
 
     def consumerInit(): Unit = {
-      (topic, partitionId, offset, whitelist) match {
+      (topic, partitionId, offset, includedTopics) match {
         case (Some(topic), Some(partitionId), Some(offset), None) =>
           seek(topic, partitionId, offset)
         case (Some(topic), Some(partitionId), None, None) =>
@@ -407,11 +418,11 @@ object ConsoleConsumer extends Logging {
           seek(topic, partitionId, ListOffsetsRequest.LATEST_TIMESTAMP)
         case (Some(topic), None, None, None) =>
           consumer.subscribe(Collections.singletonList(topic))
-        case (None, None, None, Some(whitelist)) =>
-          consumer.subscribe(Pattern.compile(whitelist))
+        case (None, None, None, Some(include)) =>
+          consumer.subscribe(Pattern.compile(include))
         case _ =>
           throw new IllegalArgumentException("An invalid combination of arguments is provided. " +
-            "Exactly one of 'topic' or 'whitelist' must be provided. " +
+            "Exactly one of 'topic' or 'include' must be provided. " +
             "If 'topic' is provided, an optional 'partition' may also be provided. " +
             "If 'partition' is provided, an optional 'offset' may also be provided, otherwise, consumption starts from the end of the partition.")
       }
@@ -579,7 +590,7 @@ class DefaultMessageFormatter extends MessageFormatter {
   }
 
   private def getDeserializerProperty(isKey: Boolean)(configs: Map[String, _], propertyName: String): Deserializer[_] = {
-    val deserializer = Class.forName(configs.get(propertyName).asInstanceOf[String]).newInstance().asInstanceOf[Deserializer[_]]
+    val deserializer = Class.forName(configs.get(propertyName).asInstanceOf[String]).getDeclaredConstructor().newInstance().asInstanceOf[Deserializer[_]]
     val deserializerConfig = propertiesWithKeyPrefixStripped(propertyName + ".", configs)
       .asScala
       .asJava
@@ -614,18 +625,3 @@ class NoOpMessageFormatter extends MessageFormatter {
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {}
 }
 
-class ChecksumMessageFormatter extends MessageFormatter {
-  private var topicStr: String = _
-
-  override def configure(configs: Map[String, _]): Unit = {
-    topicStr = if (configs.containsKey("topic"))
-      configs.get("topic").toString + ":"
-    else
-      ""
-  }
-
-  @nowarn("cat=deprecation")
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
-    output.println(topicStr + "checksum:" + consumerRecord.checksum)
-  }
-}

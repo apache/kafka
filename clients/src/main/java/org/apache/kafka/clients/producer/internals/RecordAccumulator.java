@@ -465,7 +465,13 @@ public final class RecordAccumulator {
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
                         boolean full = deque.size() > 1 || batch.isFull();
                         boolean expired = waitedTimeMs >= timeToWaitMs;
-                        boolean sendable = full || expired || exhausted || closed || flushInProgress();
+                        boolean transactionCompleting = transactionManager != null && transactionManager.isCompleting();
+                        boolean sendable = full
+                            || expired
+                            || exhausted
+                            || closed
+                            || flushInProgress()
+                            || transactionCompleting;
                         if (sendable && !backingOff) {
                             readyNodes.add(leader);
                         } else {
@@ -578,7 +584,7 @@ public final class RecordAccumulator {
                         transactionManager != null ? transactionManager.producerIdAndEpoch() : null;
                     ProducerBatch batch = deque.pollFirst();
                     if (producerIdAndEpoch != null && !batch.hasSequence()) {
-                        // If the the producer id/epoch of the partition do not match the latest one
+                        // If the producer id/epoch of the partition do not match the latest one
                         // of the producer, we update it and reset the sequence. This should be
                         // only done when all its in-flight batches have completed. This is guarantee
                         // in `shouldStopDrainBatchesForPartition`.
@@ -710,8 +716,12 @@ public final class RecordAccumulator {
      */
     public void awaitFlushCompletion() throws InterruptedException {
         try {
-            for (ProducerBatch batch : this.incomplete.copyAll())
-                batch.produceFuture.await();
+            // Obtain a copy of all of the incomplete ProduceRequestResult(s) at the time of the flush.
+            // We must be careful not to hold a reference to the ProduceBatch(s) so that garbage
+            // collection can occur on the contents.
+            // The sender will remove ProducerBatch(s) from the original incomplete collection.
+            for (ProduceRequestResult result : this.incomplete.requestResults())
+                result.await();
         } finally {
             this.flushesInProgress.decrementAndGet();
         }

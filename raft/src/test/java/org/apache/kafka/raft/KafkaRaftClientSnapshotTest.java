@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
@@ -31,8 +32,9 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotWriterTest;
+import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -47,6 +49,169 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final public class KafkaRaftClientSnapshotTest {
+    @Test
+    public void testLeaderListenerNotified() throws Exception {
+        int localId = 0;
+        int otherNodeId = localId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(snapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .withEmptySnapshot(snapshotId)
+            .deleteBeforeSnapshot(snapshotId)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        // Advance the highWatermark
+        long localLogEndOffset = context.log.endOffset().offset;
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, localLogEndOffset, epoch, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
+
+        // Check that listener was notified of the new snapshot
+        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
+        }
+    }
+
+    @Test
+    public void testFollowerListenerNotified() throws Exception {
+        int localId = 0;
+        int leaderId = localId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, leaderId);
+        int epoch = 2;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(snapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .withEmptySnapshot(snapshotId)
+            .deleteBeforeSnapshot(snapshotId)
+            .withElectedLeader(epoch, leaderId)
+            .build();
+
+        // Advance the highWatermark
+        long localLogEndOffset = context.log.endOffset().offset;
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, localLogEndOffset, snapshotId.epoch);
+        context.deliverResponse(
+            fetchRequest.correlationId,
+            fetchRequest.destinationId(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, localLogEndOffset, Errors.NONE)
+        );
+
+        context.pollUntilRequest();
+        context.assertSentFetchRequest(epoch, localLogEndOffset, snapshotId.epoch);
+
+        // Check that listener was notified of the new snapshot
+        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
+        }
+    }
+
+    @Test
+    public void testSecondListenerNotified() throws Exception {
+        int localId = 0;
+        int leaderId = localId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, leaderId);
+        int epoch = 2;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(snapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .withEmptySnapshot(snapshotId)
+            .deleteBeforeSnapshot(snapshotId)
+            .withElectedLeader(epoch, leaderId)
+            .build();
+
+        // Advance the highWatermark
+        long localLogEndOffset = context.log.endOffset().offset;
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, localLogEndOffset, snapshotId.epoch);
+        context.deliverResponse(
+            fetchRequest.correlationId,
+            fetchRequest.destinationId(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, localLogEndOffset, Errors.NONE)
+        );
+
+        context.pollUntilRequest();
+        context.assertSentFetchRequest(epoch, localLogEndOffset, snapshotId.epoch);
+
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
+        context.client.register(secondListener);
+        context.client.poll();
+
+        // Check that the second listener was notified of the new snapshot
+        try (SnapshotReader<String> snapshot = secondListener.drainHandledSnapshot().get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
+        }
+    }
+
+    @Test
+    public void testListenerRenotified() throws Exception {
+        int localId = 0;
+        int otherNodeId = localId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(snapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .appendToLog(snapshotId.epoch, Arrays.asList("g", "h", "i"))
+            .withEmptySnapshot(snapshotId)
+            .deleteBeforeSnapshot(snapshotId)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        // Stop the listener from reading commit batches
+        context.listener.updateReadCommit(false);
+
+        // Advance the highWatermark
+        long localLogEndOffset = context.log.endOffset().offset;
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, localLogEndOffset, epoch, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
+
+        // Check that listener was notified of the new snapshot
+        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
+        }
+
+        // Generate a new snapshot
+        OffsetAndEpoch secondSnapshotId = new OffsetAndEpoch(localLogEndOffset, epoch);
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(secondSnapshotId.offset - 1, secondSnapshotId.epoch, 0).get()) {
+            assertEquals(secondSnapshotId, snapshot.snapshotId());
+            snapshot.freeze();
+        }
+        context.log.deleteBeforeSnapshot(secondSnapshotId);
+        context.client.poll();
+
+        // Resume the listener from reading commit batches
+        context.listener.updateReadCommit(true);
+
+        context.client.poll();
+        // Check that listener was notified of the second snapshot
+        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
+            assertEquals(secondSnapshotId, snapshot.snapshotId());
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
+        }
+    }
+
     @Test
     public void testFetchRequestOffsetLessThanLogStart() throws Exception {
         int localId = 0;
@@ -78,13 +243,12 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(localLogEndOffset, epoch);
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1, snapshotId.epoch, 0).get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
-
+        context.log.deleteBeforeSnapshot(snapshotId);
         context.client.poll();
-
-        assertEquals(snapshotId.offset, context.log.startOffset());
 
         // Send Fetch request less than start offset
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 0, epoch, 0));
@@ -123,12 +287,13 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1, oldestSnapshotId.epoch, 0).get()) {
+            assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
         context.client.poll();
 
-        context.client.scheduleAppend(epoch, Arrays.asList("a", "b", "c"));
+        context.client.scheduleAppend(epoch, Arrays.asList("g", "h", "i"));
         context.time.sleep(context.appendLingerMs());
         context.client.poll();
 
@@ -166,7 +331,8 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1, oldestSnapshotId.epoch, 0).get()) {
+            assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
         context.client.poll();
@@ -213,7 +379,8 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1, oldestSnapshotId.epoch, 0).get()) {
+            assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
         context.client.poll();
@@ -255,9 +422,11 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1, oldestSnapshotId.epoch, 0).get()) {
+            assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
+        context.log.deleteBeforeSnapshot(oldestSnapshotId);
         context.client.poll();
 
         // Send fetch with log start offset and invalid last fetched epoch
@@ -302,7 +471,8 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId.offset - 1, oldestSnapshotId.epoch, 0).get()) {
+            assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
         context.client.poll();
@@ -379,116 +549,128 @@ final public class KafkaRaftClientSnapshotTest {
     public void testFetchSnapshotRequestAsLeader() throws Exception {
         int localId = 0;
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
-        int epoch = 2;
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(0, 0);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = Arrays.asList("foo", "bar");
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch, Arrays.asList("a"))
+            .build();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId)) {
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1, snapshotId.epoch, 0).get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
             snapshot.append(records);
             snapshot.freeze();
         }
 
-        try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
-            context.deliverRequest(
-                fetchSnapshotRequest(
-                    context.metadataPartition,
-                    epoch,
-                    snapshotId,
-                    Integer.MAX_VALUE,
-                    0
-                )
-            );
+        RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                Integer.MAX_VALUE,
+                0
+            )
+        );
 
-            context.client.poll();
+        context.client.poll();
 
-            FetchSnapshotResponseData.PartitionSnapshot response = context
-                .assertSentFetchSnapshotResponse(context.metadataPartition)
-                .get();
+        FetchSnapshotResponseData.PartitionSnapshot response = context
+            .assertSentFetchSnapshotResponse(context.metadataPartition)
+            .get();
 
-            assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
-            assertEquals(snapshot.sizeInBytes(), response.size());
-            assertEquals(0, response.position());
-            assertEquals(snapshot.sizeInBytes(), response.unalignedRecords().sizeInBytes());
+        assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
+        assertEquals(snapshot.sizeInBytes(), response.size());
+        assertEquals(0, response.position());
+        assertEquals(snapshot.sizeInBytes(), response.unalignedRecords().sizeInBytes());
 
-            UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.read(0, Math.toIntExact(snapshot.sizeInBytes()));
+        UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.slice(0, Math.toIntExact(snapshot.sizeInBytes()));
 
-            assertEquals(memoryRecords.buffer(), ((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
-        }
+        assertEquals(memoryRecords.buffer(), ((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
     }
 
     @Test
     public void testPartialFetchSnapshotRequestAsLeader() throws Exception {
         int localId = 0;
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
-        int epoch = 2;
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(0, 0);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(2, 1);
         List<String> records = Arrays.asList("foo", "bar");
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch, records)
+            .build();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId)) {
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1, snapshotId.epoch, 0).get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
             snapshot.append(records);
             snapshot.freeze();
         }
 
-        try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
-            // Fetch half of the snapshot
-            context.deliverRequest(
-                fetchSnapshotRequest(
-                    context.metadataPartition,
-                    epoch,
-                    snapshotId,
-                    Math.toIntExact(snapshot.sizeInBytes() / 2),
-                    0
-                )
-            );
+        RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
+        // Fetch half of the snapshot
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                Math.toIntExact(snapshot.sizeInBytes() / 2),
+                0
+            )
+        );
 
-            context.client.poll();
+        context.client.poll();
 
-            FetchSnapshotResponseData.PartitionSnapshot response = context
-                .assertSentFetchSnapshotResponse(context.metadataPartition)
-                .get();
+        FetchSnapshotResponseData.PartitionSnapshot response = context
+            .assertSentFetchSnapshotResponse(context.metadataPartition)
+            .get();
 
-            assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
-            assertEquals(snapshot.sizeInBytes(), response.size());
-            assertEquals(0, response.position());
-            assertEquals(snapshot.sizeInBytes() / 2, response.unalignedRecords().sizeInBytes());
+        assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
+        assertEquals(snapshot.sizeInBytes(), response.size());
+        assertEquals(0, response.position());
+        assertEquals(snapshot.sizeInBytes() / 2, response.unalignedRecords().sizeInBytes());
 
-            UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.read(0, Math.toIntExact(snapshot.sizeInBytes()));
-            ByteBuffer snapshotBuffer = memoryRecords.buffer();
+        UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.slice(0, Math.toIntExact(snapshot.sizeInBytes()));
+        ByteBuffer snapshotBuffer = memoryRecords.buffer();
 
-            ByteBuffer responseBuffer = ByteBuffer.allocate(Math.toIntExact(snapshot.sizeInBytes()));
-            responseBuffer.put(((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
+        ByteBuffer responseBuffer = ByteBuffer.allocate(Math.toIntExact(snapshot.sizeInBytes()));
+        responseBuffer.put(((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
 
-            ByteBuffer expectedBytes = snapshotBuffer.duplicate();
-            expectedBytes.limit(Math.toIntExact(snapshot.sizeInBytes() / 2));
+        ByteBuffer expectedBytes = snapshotBuffer.duplicate();
+        expectedBytes.limit(Math.toIntExact(snapshot.sizeInBytes() / 2));
 
-            assertEquals(expectedBytes, responseBuffer.duplicate().flip());
+        assertEquals(expectedBytes, responseBuffer.duplicate().flip());
 
-            // Fetch the remainder of the snapshot
-            context.deliverRequest(
-                fetchSnapshotRequest(
-                    context.metadataPartition,
-                    epoch,
-                    snapshotId,
-                    Integer.MAX_VALUE,
-                    responseBuffer.position()
-                )
-            );
+        // Fetch the remainder of the snapshot
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                Integer.MAX_VALUE,
+                responseBuffer.position()
+            )
+        );
 
-            context.client.poll();
+        context.client.poll();
 
-            response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
-            assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
-            assertEquals(snapshot.sizeInBytes(), response.size());
-            assertEquals(responseBuffer.position(), response.position());
-            assertEquals(snapshot.sizeInBytes() - (snapshot.sizeInBytes() / 2), response.unalignedRecords().sizeInBytes());
+        response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
+        assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
+        assertEquals(snapshot.sizeInBytes(), response.size());
+        assertEquals(responseBuffer.position(), response.position());
+        assertEquals(snapshot.sizeInBytes() - (snapshot.sizeInBytes() / 2), response.unalignedRecords().sizeInBytes());
 
-            responseBuffer.put(((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
-            assertEquals(snapshotBuffer, responseBuffer.flip());
-        }
+        responseBuffer.put(((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
+        assertEquals(snapshotBuffer, responseBuffer.flip());
     }
 
     @Test
@@ -525,13 +707,20 @@ final public class KafkaRaftClientSnapshotTest {
     public void testFetchSnapshotRequestWithInvalidPosition() throws Exception {
         int localId = 0;
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
-        int epoch = 2;
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(0, 0);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = Arrays.asList("foo", "bar");
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch, Arrays.asList("a"))
+            .build();
 
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId)) {
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId.offset - 1, snapshotId.epoch, 0).get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
             snapshot.append(records);
             snapshot.freeze();
         }
@@ -553,24 +742,23 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(epoch, response.currentLeader().leaderEpoch());
         assertEquals(localId, response.currentLeader().leaderId());
 
-        try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
-            context.deliverRequest(
-                fetchSnapshotRequest(
-                    context.metadataPartition,
-                    epoch,
-                    snapshotId,
-                    Integer.MAX_VALUE,
-                    snapshot.sizeInBytes()
-                )
-            );
+        RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                Integer.MAX_VALUE,
+                snapshot.sizeInBytes()
+            )
+        );
 
-            context.client.poll();
+        context.client.poll();
 
-            response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
-            assertEquals(Errors.POSITION_OUT_OF_RANGE, Errors.forCode(response.errorCode()));
-            assertEquals(epoch, response.currentLeader().leaderEpoch());
-            assertEquals(localId, response.currentLeader().leaderId());
-        }
+        response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
+        assertEquals(Errors.POSITION_OUT_OF_RANGE, Errors.forCode(response.errorCode()));
+        assertEquals(epoch, response.currentLeader().leaderEpoch());
+        assertEquals(localId, response.currentLeader().leaderId());
     }
 
     @Test
@@ -648,7 +836,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId,
             fetchRequest.destinationId(),
-            snapshotFetchResponse(context.metadataPartition, epoch, leaderId, invalidEpoch, 200L)
+            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, invalidEpoch, 200L)
         );
 
         // Handle the invalid response
@@ -665,7 +853,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId,
             fetchRequest.destinationId(),
-            snapshotFetchResponse(context.metadataPartition, epoch, leaderId, invalidEndOffset, 200L)
+            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, invalidEndOffset, 200L)
         );
 
         // Handle the invalid response
@@ -707,7 +895,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId,
             fetchRequest.destinationId(),
-            snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
+            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -747,9 +935,15 @@ final public class KafkaRaftClientSnapshotTest {
         fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, snapshotId.offset, snapshotId.epoch);
 
-        try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
-            assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
-            SnapshotWriterTest.assertSnapshot(Arrays.asList(records), snapshot);
+        // Check that the snapshot was written to the log
+        RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
+        assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
+        SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
+
+        // Check that listener was notified of the new snapshot
+        try (SnapshotReader<String> reader = context.listener.drainHandledSnapshot().get()) {
+            assertEquals(snapshotId, reader.snapshotId());
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), reader);
         }
     }
 
@@ -772,7 +966,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId,
             fetchRequest.destinationId(),
-            snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
+            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -844,9 +1038,15 @@ final public class KafkaRaftClientSnapshotTest {
         fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, snapshotId.offset, snapshotId.epoch);
 
-        try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
-            assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
-            SnapshotWriterTest.assertSnapshot(Arrays.asList(records), snapshot);
+        // Check that the snapshot was written to the log
+        RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
+        assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
+        SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
+
+        // Check that listener was notified of the new snapshot
+        try (SnapshotReader<String> reader = context.listener.drainHandledSnapshot().get()) {
+            assertEquals(snapshotId, reader.snapshotId());
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), reader);
         }
     }
 
@@ -869,7 +1069,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId,
             fetchRequest.destinationId(),
-            snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
+            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -927,7 +1127,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId,
             fetchRequest.destinationId(),
-            snapshotFetchResponse(context.metadataPartition, epoch, firstLeaderId, snapshotId, 200L)
+            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, firstLeaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -984,7 +1184,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId,
             fetchRequest.destinationId(),
-            snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
+            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1041,7 +1241,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId,
             fetchRequest.destinationId(),
-            snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
+            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1108,7 +1308,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId,
             fetchRequest.destinationId(),
-            snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
+            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1154,7 +1354,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId,
             fetchRequest.destinationId(),
-            snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
+            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1218,7 +1418,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId,
             fetchRequest.destinationId(),
-            snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
+            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1269,7 +1469,84 @@ final public class KafkaRaftClientSnapshotTest {
         context.assertVotedCandidate(epoch + 1, localId);
     }
 
+    @Test
+    public void testFetchSnapshotRequestClusterIdValidation() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+
+        // null cluster id is accepted
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                context.clusterId.toString(),
+                context.metadataPartition,
+                epoch,
+                new OffsetAndEpoch(0, 0),
+                Integer.MAX_VALUE,
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchSnapshotResponse(context.metadataPartition);
+
+        // null cluster id is accepted
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                null,
+                context.metadataPartition,
+                epoch,
+                new OffsetAndEpoch(0, 0),
+                Integer.MAX_VALUE,
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchSnapshotResponse(context.metadataPartition);
+
+        // empty cluster id is rejected
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                "",
+                context.metadataPartition,
+                epoch,
+                new OffsetAndEpoch(0, 0),
+                Integer.MAX_VALUE,
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchSnapshotResponse(Errors.INCONSISTENT_CLUSTER_ID);
+
+        // invalid cluster id is rejected
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                "invalid-uuid",
+                context.metadataPartition,
+                epoch,
+                new OffsetAndEpoch(0, 0),
+                Integer.MAX_VALUE,
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchSnapshotResponse(Errors.INCONSISTENT_CLUSTER_ID);
+    }
+
     private static FetchSnapshotRequestData fetchSnapshotRequest(
+            TopicPartition topicPartition,
+            int epoch,
+            OffsetAndEpoch offsetAndEpoch,
+            int maxBytes,
+            long position
+    ) {
+        return fetchSnapshotRequest(null, topicPartition, epoch, offsetAndEpoch, maxBytes, position);
+    }
+
+    private static FetchSnapshotRequestData fetchSnapshotRequest(
+        String clusterId,
         TopicPartition topicPartition,
         int epoch,
         OffsetAndEpoch offsetAndEpoch,
@@ -1281,6 +1558,7 @@ final public class KafkaRaftClientSnapshotTest {
             .setEpoch(offsetAndEpoch.epoch);
 
         FetchSnapshotRequestData request = FetchSnapshotRequest.singleton(
+            clusterId,
             topicPartition,
             snapshotPartition -> {
                 return snapshotPartition
@@ -1323,12 +1601,13 @@ final public class KafkaRaftClientSnapshotTest {
 
     private static FetchResponseData snapshotFetchResponse(
         TopicPartition topicPartition,
+        Uuid topicId,
         int epoch,
         int leaderId,
         OffsetAndEpoch snapshotId,
         long highWatermark
     ) {
-        return RaftUtil.singletonFetchResponse(topicPartition, Errors.NONE, partitionData -> {
+        return RaftUtil.singletonFetchResponse(topicPartition, topicId, Errors.NONE, partitionData -> {
             partitionData.setHighWatermark(highWatermark);
 
             partitionData.currentLeader()
@@ -1358,14 +1637,15 @@ final public class KafkaRaftClientSnapshotTest {
     }
 
     private static SnapshotWriter<String> snapshotWriter(RaftClientTestContext context, RawSnapshotWriter snapshot) {
-        return new SnapshotWriter<>(
-            snapshot,
+        return SnapshotWriter.createWithHeader(
+            () -> Optional.of(snapshot),
             4 * 1024,
             MemoryPool.NONE,
             context.time,
+            0,
             CompressionType.NONE,
             new StringSerde()
-        );
+        ).get();
     }
 
     private final static class MemorySnapshotWriter implements RawSnapshotWriter {

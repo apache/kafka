@@ -219,18 +219,23 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     @Override
+    protected void initializeAndStart() {
+        // If we try to start the task at all by invoking initialize, then count this as
+        // "started" and expect a subsequent call to the task's stop() method
+        // to properly clean up any resources allocated by its initialize() or
+        // start() methods. If the task throws an exception during stop(),
+        // the worst thing that happens is another exception gets logged for an already-
+        // failed task
+        started = true;
+        task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
+        task.start(taskConfig);
+        log.info("{} Source task finished initialization and start", this);
+    }
+
+    @Override
     public void execute() {
         try {
-            // If we try to start the task at all by invoking initialize, then count this as
-            // "started" and expect a subsequent call to the task's stop() method
-            // to properly clean up any resources allocated by its initialize() or 
-            // start() methods. If the task throws an exception during stop(),
-            // the worst thing that happens is another exception gets logged for an already-
-            // failed task
-            started = true;
-            task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
-            task.start(taskConfig);
-            log.info("{} Source task finished initialization and start", this);
+            log.info("{} Executing source task", this);
             while (!isStopping()) {
                 if (shouldPause()) {
                     onPause();
@@ -370,7 +375,7 @@ class WorkerSourceTask extends WorkerTask {
                     (recordMetadata, e) -> {
                         if (e != null) {
                             log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
-                            log.debug("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
+                            log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
                             producerSendException.compareAndSet(null, e);
                         } else {
                             recordSent(producerRecord);
@@ -396,7 +401,7 @@ class WorkerSourceTask extends WorkerTask {
             } catch (ConnectException e) {
                 log.warn("{} Failed to send record to topic '{}' and partition '{}' due to an unrecoverable exception: ",
                         this, producerRecord.topic(), producerRecord.partition(), e);
-                log.warn("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
+                log.trace("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
                 throw e;
             } catch (KafkaException e) {
                 throw new ConnectException("Unrecoverable exception trying to send", e);
@@ -475,7 +480,7 @@ class WorkerSourceTask extends WorkerTask {
             removed = outstandingMessagesBacklog.remove(record);
         // But if neither one had it, something is very wrong
         if (removed == null) {
-            log.error("{} CRITICAL Saw callback for record that was not present in the outstanding message set: {}", this, record);
+            log.error("{} CRITICAL Saw callback for record from topic {} partition {} that was not present in the outstanding message set", this, record.topic(), record.partition());
         } else if (flushing && outstandingMessages.isEmpty()) {
             // flush thread may be waiting on the outstanding messages to clear
             this.notifyAll();

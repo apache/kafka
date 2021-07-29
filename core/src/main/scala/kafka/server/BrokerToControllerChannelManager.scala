@@ -21,6 +21,7 @@ import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.atomic.AtomicReference
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
+import kafka.raft.RaftManager
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.Node
@@ -31,9 +32,10 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.metalog.MetaLogManager
+import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.collection.Seq
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 trait ControllerNodeProvider {
@@ -71,21 +73,19 @@ class MetadataCacheControllerNodeProvider(
 ) extends ControllerNodeProvider {
   override def get(): Option[Node] = {
     metadataCache.getControllerId
-      .flatMap(metadataCache.getAliveBroker)
-      .map(_.endpoints(listenerName.value))
+      .flatMap(metadataCache.getAliveBrokerNode(_, listenerName))
   }
 }
 
 object RaftControllerNodeProvider {
-  def apply(metaLogManager: MetaLogManager,
+  def apply(raftManager: RaftManager[ApiMessageAndVersion],
             config: KafkaConfig,
             controllerQuorumVoterNodes: Seq[Node]): RaftControllerNodeProvider = {
-
     val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
     val controllerSecurityProtocol = config.listenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
     val controllerSaslMechanism = config.saslMechanismControllerProtocol
     new RaftControllerNodeProvider(
-      metaLogManager,
+      raftManager,
       controllerQuorumVoterNodes,
       controllerListenerName,
       controllerSecurityProtocol,
@@ -98,7 +98,7 @@ object RaftControllerNodeProvider {
  * Finds the controller node by checking the metadata log manager.
  * This provider is used when we are using a Raft-based metadata quorum.
  */
-class RaftControllerNodeProvider(val metaLogManager: MetaLogManager,
+class RaftControllerNodeProvider(val raftManager: RaftManager[ApiMessageAndVersion],
                                  controllerQuorumVoterNodes: Seq[Node],
                                  val listenerName: ListenerName,
                                  val securityProtocol: SecurityProtocol,
@@ -107,14 +107,7 @@ class RaftControllerNodeProvider(val metaLogManager: MetaLogManager,
   val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
 
   override def get(): Option[Node] = {
-    val leader = metaLogManager.leader()
-    if (leader == null) {
-      None
-    } else if (leader.nodeId() < 0) {
-      None
-    } else {
-      idToNode.get(leader.nodeId())
-    }
+    raftManager.leaderAndEpoch.leaderId.asScala.map(idToNode)
   }
 }
 
@@ -168,7 +161,7 @@ class BrokerToControllerChannelManagerImpl(
   threadNamePrefix: Option[String],
   retryTimeoutMs: Long
 ) extends BrokerToControllerChannelManager with Logging {
-  private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
+  private val logContext = new LogContext(s"[BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
   private val currentNodeApiVersions = NodeApiVersions.create()
@@ -218,7 +211,6 @@ class BrokerToControllerChannelManagerImpl(
         config.requestTimeoutMs,
         config.connectionSetupTimeoutMs,
         config.connectionSetupTimeoutMaxMs,
-        ClientDnsLookup.USE_ALL_DNS_IPS,
         time,
         true,
         apiVersions,
@@ -226,8 +218,8 @@ class BrokerToControllerChannelManagerImpl(
       )
     }
     val threadName = threadNamePrefix match {
-      case None => s"broker-${config.brokerId}-to-controller-send-thread"
-      case Some(name) => s"$name:broker-${config.brokerId}-to-controller-send-thread"
+      case None => s"BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName"
+      case Some(name) => s"$name:BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName"
     }
 
     new BrokerToControllerRequestThread(
@@ -295,6 +287,10 @@ class BrokerToControllerRequestThread(
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
   private val activeController = new AtomicReference[Node](null)
 
+  // Used for testing
+  @volatile
+  private[server] var started = false
+
   def activeControllerAddress(): Option[Node] = {
     Option(activeController.get())
   }
@@ -304,6 +300,9 @@ class BrokerToControllerRequestThread(
   }
 
   def enqueue(request: BrokerToControllerQueueItem): Unit = {
+    if (!started) {
+      throw new IllegalStateException("Cannot enqueue a request if the request thread is not running")
+    }
     requestQueue.add(request)
     if (activeControllerAddress().isDefined) {
       wakeup()
@@ -379,5 +378,10 @@ class BrokerToControllerRequestThread(
           super.pollOnce(maxTimeoutMs = 100)
       }
     }
+  }
+
+  override def start(): Unit = {
+    super.start()
+    started = true
   }
 }

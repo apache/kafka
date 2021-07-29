@@ -82,9 +82,9 @@
           "about": "The leader epoch of this partition." },
         { "name": "ReplicaNodes", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The set of all nodes that host this partition." },
-        { "name": "IsrNodes", "type": "[]int32", "versions": "0+",
+        { "name": "IsrNodes", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The set of nodes that are in sync with the leader for this partition." },
-        { "name": "OfflineReplicas", "type": "[]int32", "versions": "5+", "ignorable": true,
+        { "name": "OfflineReplicas", "type": "[]int32", "versions": "5+", "ignorable": true, "entityType": "brokerId",
           "about": "The set of offline replicas of this partition." }
       ]},
       { "name": "TopicAuthorizedOperations", "type": "int32", "versions": "8+", "default": "-2147483648",

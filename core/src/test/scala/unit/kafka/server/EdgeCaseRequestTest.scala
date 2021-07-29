@@ -37,7 +37,7 @@ import org.apache.kafka.common.{TopicPartition, requests}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 
 class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
@@ -116,7 +116,6 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     }
   }
 
-  @nowarn("cat=deprecation")
   @Test
   def testProduceRequestWithNullClientId(): Unit = {
     val topic = "topic"
@@ -154,11 +153,12 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
     assertEquals(0, responseBuffer.remaining, "The response should parse completely")
     assertEquals(correlationId, responseHeader.correlationId, "The correlationId should match request")
-    assertEquals(1, produceResponse.responses.size, "One partition response should be returned")
-
-    val partitionResponse = produceResponse.responses.get(topicPartition)
-    assertNotNull(partitionResponse)
-    assertEquals(Errors.NONE, partitionResponse.error, "There should be no error")
+    assertEquals(1, produceResponse.data.responses.size, "One topic response should be returned")
+    val topicProduceResponse = produceResponse.data.responses.asScala.head
+    assertEquals(1, topicProduceResponse.partitionResponses.size, "One partition response should be returned")    
+    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+    assertNotNull(partitionProduceResponse)
+    assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode), "There should be no error")
   }
 
   @Test

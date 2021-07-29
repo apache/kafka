@@ -1,6 +1,4 @@
 /*
- * Copyright (C) 2018 Joan Goyeau.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,8 +17,7 @@
 package org.apache.kafka.streams.scala.kstream
 
 import java.time.Duration.ofSeconds
-import java.time.Instant
-
+import java.time.{Duration, Instant}
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
   JoinWindows,
@@ -36,14 +33,15 @@ import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.utils.TestDriver
-import org.junit.runner.RunWith
-import org.scalatest.{FlatSpec, Matchers}
-import org.scalatestplus.junit.JUnitRunner
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Test
 
-@RunWith(classOf[JUnitRunner])
-class KStreamTest extends FlatSpec with Matchers with TestDriver {
+import scala.jdk.CollectionConverters._
 
-  "filter a KStream" should "filter records satisfying the predicate" in {
+class KStreamTest extends TestDriver {
+
+  @Test
+  def testFilterRecordsSatisfyingPredicate(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -55,20 +53,21 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     val testOutput = testDriver.createOutput[String, String](sinkTopic)
 
     testInput.pipeInput("1", "value1")
-    testOutput.readValue shouldBe "value1"
+    assertEquals("value1", testOutput.readValue)
 
     testInput.pipeInput("2", "value2")
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testInput.pipeInput("3", "value3")
-    testOutput.readValue shouldBe "value3"
+    assertEquals("value3", testOutput.readValue)
 
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "filterNot a KStream" should "filter records not satisfying the predicate" in {
+  @Test
+  def testFilterRecordsNotSatisfyingPredicate(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -80,20 +79,21 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     val testOutput = testDriver.createOutput[String, String](sinkTopic)
 
     testInput.pipeInput("1", "value1")
-    testOutput.readValue shouldBe "value1"
+    assertEquals("value1", testOutput.readValue)
 
     testInput.pipeInput("2", "value2")
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testInput.pipeInput("3", "value3")
-    testOutput.readValue shouldBe "value3"
+    assertEquals("value3", testOutput.readValue)
 
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "foreach a KStream" should "run foreach actions on records" in {
+  @Test
+  def testForeachActionsOnRecords(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
 
@@ -104,15 +104,16 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     val testInput = testDriver.createInput[String, String](sourceTopic)
 
     testInput.pipeInput("1", "value1")
-    acc shouldBe "value1"
+    assertEquals("value1", acc)
 
     testInput.pipeInput("2", "value2")
-    acc shouldBe "value1value2"
+    assertEquals("value1value2", acc)
 
     testDriver.close()
   }
 
-  "peek a KStream" should "run peek actions on records" in {
+  @Test
+  def testPeekActionsOnRecords(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -125,17 +126,18 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     val testOutput = testDriver.createOutput[String, String](sinkTopic)
 
     testInput.pipeInput("1", "value1")
-    acc shouldBe "value1"
-    testOutput.readValue shouldBe "value1"
+    assertEquals("value1", acc)
+    assertEquals("value1", testOutput.readValue)
 
     testInput.pipeInput("2", "value2")
-    acc shouldBe "value1value2"
-    testOutput.readValue shouldBe "value2"
+    assertEquals("value1value2", acc)
+    assertEquals("value2", testOutput.readValue)
 
     testDriver.close()
   }
 
-  "selectKey a KStream" should "select a new key" in {
+  @Test
+  def testSelectNewKey(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -147,17 +149,18 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     val testOutput = testDriver.createOutput[String, String](sinkTopic)
 
     testInput.pipeInput("1", "value1")
-    testOutput.readKeyValue.key shouldBe "value1"
+    assertEquals("value1", testOutput.readKeyValue.key)
 
     testInput.pipeInput("1", "value2")
-    testOutput.readKeyValue.key shouldBe "value2"
+    assertEquals("value2", testOutput.readKeyValue.key)
 
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "repartition" should "repartition a KStream" in {
+  @Test
+  def testRepartitionKStream(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val repartitionName = "repartition"
@@ -171,15 +174,15 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     testInput.pipeInput("1", "value1")
     val kv1 = testOutput.readKeyValue
-    kv1.key shouldBe "1"
-    kv1.value shouldBe "value1"
+    assertEquals("1", kv1.key)
+    assertEquals("value1", kv1.value)
 
     testInput.pipeInput("2", "value2")
     val kv2 = testOutput.readKeyValue
-    kv2.key shouldBe "2"
-    kv2.value shouldBe "value2"
+    assertEquals("2", kv2.key)
+    assertEquals("value2", kv2.value)
 
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     // appId == "test"
     testDriver.producedTopicNames() contains "test-" + repartitionName + "-repartition"
@@ -187,7 +190,9 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testDriver.close()
   }
 
-  "join 2 KStreams" should "join correctly records" in {
+  //noinspection ScalaDeprecation
+  @Test
+  def testJoinCorrectlyRecords(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic1 = "source1"
     val sourceTopic2 = "source2"
@@ -195,7 +200,9 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     val stream1 = builder.stream[String, String](sourceTopic1)
     val stream2 = builder.stream[String, String](sourceTopic2)
-    stream1.join(stream2)((a, b) => s"$a-$b", JoinWindows.of(ofSeconds(1))).to(sinkTopic)
+    stream1
+      .join(stream2)((a, b) => s"$a-$b", JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(1), Duration.ofHours(24)))
+      .to(sinkTopic)
 
     val now = Instant.now()
 
@@ -207,14 +214,15 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testInput1.pipeInput("1", "topic1value1", now)
     testInput2.pipeInput("1", "topic2value1", now)
 
-    testOutput.readValue shouldBe "topic1value1-topic2value1"
+    assertEquals("topic1value1-topic2value1", testOutput.readValue)
 
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "transform a KStream" should "transform correctly records" in {
+  @Test
+  def testTransformCorrectlyRecords(): Unit = {
     class TestTransformer extends Transformer[String, String, KeyValue[String, String]] {
       override def init(context: ProcessorContext): Unit = {}
 
@@ -240,15 +248,16 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testInput.pipeInput("1", "value", now)
 
     val result = testOutput.readKeyValue()
-    result.value shouldBe "value-transformed"
-    result.key shouldBe "1-transformed"
+    assertEquals("value-transformed", result.value)
+    assertEquals("1-transformed", result.key)
 
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "flatTransform a KStream" should "flatTransform correctly records" in {
+  @Test
+  def testFlatTransformCorrectlyRecords(): Unit = {
     class TestTransformer extends Transformer[String, String, Iterable[KeyValue[String, String]]] {
       override def init(context: ProcessorContext): Unit = {}
 
@@ -274,15 +283,16 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testInput.pipeInput("1", "value", now)
 
     val result = testOutput.readKeyValue()
-    result.value shouldBe "value-transformed"
-    result.key shouldBe "1-transformed"
+    assertEquals("value-transformed", result.value)
+    assertEquals("1-transformed", result.key)
 
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "flatTransformValues a KStream" should "correctly flatTransform values in records" in {
+  @Test
+  def testCorrectlyFlatTransformValuesInRecords(): Unit = {
     class TestTransformer extends ValueTransformer[String, Iterable[String]] {
       override def init(context: ProcessorContext): Unit = {}
 
@@ -310,14 +320,15 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     testInput.pipeInput("1", "value", now)
 
-    testOutput.readValue shouldBe "value-transformed"
+    assertEquals("value-transformed", testOutput.readValue)
 
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "flatTransformValues with key in a KStream" should "correctly flatTransformValues in records" in {
+  @Test
+  def testCorrectlyFlatTransformValuesInRecordsWithKey(): Unit = {
     class TestTransformer extends ValueTransformerWithKey[String, String, Iterable[String]] {
       override def init(context: ProcessorContext): Unit = {}
 
@@ -345,14 +356,15 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     testInput.pipeInput("1", "value", now)
 
-    testOutput.readValue shouldBe "value-transformed-1"
+    assertEquals("value-transformed-1", testOutput.readValue)
 
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "join 2 KStreamToTables" should "join correctly records" in {
+  @Test
+  def testJoinTwoKStreamToTables(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic1 = "source1"
     val sourceTopic2 = "source2"
@@ -370,14 +382,15 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testInput1.pipeInput("1", "topic1value1")
     testInput2.pipeInput("1", "topic2value1")
 
-    testOutput.readValue shouldBe "topic1value1topic2value1"
+    assertEquals("topic1value1topic2value1", testOutput.readValue)
 
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "setting a name on a filter" should "pass the name to the topology" in {
+  @Test
+  def testSettingNameOnFilter(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -390,10 +403,11 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     import scala.jdk.CollectionConverters._
 
     val filterNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.toList(1)
-    filterNode.name() shouldBe "my-name"
+    assertEquals("my-name", filterNode.name())
   }
 
-  "setting a name on output table" should "pass the name to the topology" in {
+  @Test
+  def testSettingNameOnOutputTable(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic1 = "source1"
     val sinkTopic = "sink"
@@ -407,10 +421,11 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     import scala.jdk.CollectionConverters._
 
     val tableNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.toList(1)
-    tableNode.name() shouldBe "my-name"
+    assertEquals("my-name", tableNode.name())
   }
 
-  "setting a name on a join" should "pass the name to the topology" in {
+  @Test
+  def testSettingNameOnJoin(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic1 = "source"
     val sourceGTable = "table"
@@ -425,10 +440,11 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     import scala.jdk.CollectionConverters._
 
     val joinNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.toList(1)
-    joinNode.name() shouldBe "my-name"
+    assertEquals("my-name", joinNode.name())
   }
 
-  "setting a name on a transform" should "pass the name to the topology" in {
+  @Test
+  def testSettingNameOnTransform(): Unit = {
     class TestTransformer extends Transformer[String, String, KeyValue[String, String]] {
       override def init(context: ProcessorContext): Unit = {}
 
@@ -446,9 +462,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
       .transform(() => new TestTransformer, Named.as("my-name"))
       .to(sinkTopic)
 
-    import scala.jdk.CollectionConverters._
-
     val transformNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.toList(1)
-    transformNode.name() shouldBe "my-name"
+    assertEquals("my-name", transformNode.name())
   }
 }
