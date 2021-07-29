@@ -703,6 +703,29 @@ class ReplicaManagerTest {
       assertEquals(0L, followerReplica.logStartOffset)
       assertEquals(0L, followerReplica.logEndOffset)
 
+      // Next we receive an invalid request with a higher fetch offset, but a diverging epoch.
+      // We expect that the replica state does not get updated.
+      val divergingFetchPartitionData = new FetchRequest.PartitionData(3L, 0L, maxFetchBytes,
+        Optional.of(leaderEpoch), Optional.of(leaderEpoch - 1))
+
+      replicaManager.fetchMessages(
+        timeout = 0L,
+        replicaId = 1,
+        fetchMinBytes = 1,
+        fetchMaxBytes = maxFetchBytes,
+        hardMaxBytesLimit = false,
+        fetchInfos = Seq(tp -> divergingFetchPartitionData),
+        topicIds = topicIds.asJava,
+        quota = UnboundedQuota,
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED,
+        responseCallback = callback,
+        clientMetadata = None
+      )
+
+      assertTrue(successfulFetch.isDefined)
+      assertEquals(0L, followerReplica.logStartOffset)
+      assertEquals(0L, followerReplica.logEndOffset)
+
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }

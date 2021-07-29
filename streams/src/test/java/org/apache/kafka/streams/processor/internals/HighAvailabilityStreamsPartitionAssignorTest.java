@@ -108,6 +108,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
     private Admin adminClient;
     private StreamsConfig streamsConfig = new StreamsConfig(configProps());
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
+    private TopologyMetadata topologyMetadata = new TopologyMetadata(builder, streamsConfig);
     private final StreamsMetadataState streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
     private final Map<String, Subscription> subscriptions = new HashMap<>();
 
@@ -147,11 +148,10 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
     private void createMockTaskManager(final Map<TaskId, Long> taskOffsetSums) {
         taskManager = EasyMock.createNiceMock(TaskManager.class);
-        expect(taskManager.builder()).andReturn(builder).anyTimes();
+        expect(taskManager.topologyMetadata()).andStubReturn(topologyMetadata);
         expect(taskManager.getTaskOffsetSums()).andReturn(taskOffsetSums).anyTimes();
         expect(taskManager.processId()).andReturn(UUID_1).anyTimes();
-        builder.setApplicationId(APPLICATION_ID);
-        builder.buildTopology();
+        topologyMetadata.buildAndRewriteTopology();
     }
 
     // If you don't care about setting the end offsets for each specific topic partition, the helper method
