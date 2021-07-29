@@ -164,8 +164,6 @@ public class MemoryRecords extends AbstractRecords {
         FilterResult filterResult = new FilterResult(destinationBuffer);
         ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
         for (MutableRecordBatch batch : batches) {
-            long maxOffset = -1L;
-
             final BatchRetentionResult batchRetentionResult = filter.checkBatchRetention(batch);
             final boolean containsMarkerForEmptyTxn = batchRetentionResult.containsMarkerForEmptyTxn;
             final BatchRetention batchRetention = batchRetentionResult.batchRetention;
@@ -183,16 +181,16 @@ public class MemoryRecords extends AbstractRecords {
             List<Record> retainedRecords = new ArrayList<>();
 
             final BatchFilterResult iterationResult = filterBatch(batch, decompressionBufferSupplier, filterResult, filter,
-                                                                          batchMagic, true, maxOffset, retainedRecords);
+                                                                          batchMagic, true, retainedRecords);
             boolean containsTombstones = iterationResult.containsTombstones();
             boolean writeOriginalBatch = iterationResult.shouldWriteOriginalBatch();
-            maxOffset = iterationResult.maxOffset();
+            long maxOffset = iterationResult.maxOffset();
 
             if (!retainedRecords.isEmpty()) {
                 // we check if the delete horizon should be set to a new value
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
-                boolean needToSetDeleteHorizon = batch.magic() >= 2 && (containsTombstones || containsMarkerForEmptyTxn)
+                boolean needToSetDeleteHorizon = batch.magic() >= RecordBatch.MAGIC_VALUE_V2 && (containsTombstones || containsMarkerForEmptyTxn)
                     && !batch.deleteHorizonMs().isPresent();
                 if (writeOriginalBatch && !needToSetDeleteHorizon) {
                     if (batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP) > filterResult.latestDeleteHorizon())
@@ -255,8 +253,8 @@ public class MemoryRecords extends AbstractRecords {
                                                  RecordFilter filter,
                                                  byte batchMagic,
                                                  boolean writeOriginalBatch,
-                                                 long maxOffset,
                                                  List<Record> retainedRecords) {
+        long maxOffset = -1;
         boolean containsTombstones = false;
         try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
             while (iterator.hasNext()) {

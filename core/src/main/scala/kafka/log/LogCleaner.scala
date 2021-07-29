@@ -662,7 +662,7 @@ private[log] class Cleaner(val id: Int,
         val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata)
 
         if (batch.isControlBatch) {
-          if (batch.magic() < 2) {
+          if (batch.magic() < RecordBatch.MAGIC_VALUE_V2) {
             discardBatchRecords = canDiscardBatch && !retainLegacyDeletesAndTxnMarkers
           } else {
             discardBatchRecords = canDiscardBatch && 
