@@ -32,23 +32,26 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import java.util.stream.IntStream;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignmentCollection;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
@@ -69,6 +72,7 @@ import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.MetadataRecordSerde;
+import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
@@ -85,6 +89,7 @@ import static org.apache.kafka.controller.ConfigurationControlManagerTest.CONFIG
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -607,4 +612,143 @@ public class QuorumControllerTest {
             }
         }
     }
+
+    @Test
+    public void testMissingInMemorySnapshot() throws Exception {
+        int numBrokers = 3;
+        int numPartitions = 3;
+        String topicName = "topic-name";
+
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
+            try (QuorumControllerTestEnv controlEnv =
+                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
+                QuorumController controller = controlEnv.activeController();
+
+                Map<Integer, Long> brokerEpochs = registerBrokers(controller, numBrokers);
+
+                // Create a lot of partitions
+                List<CreatableReplicaAssignment> partitions = IntStream
+                    .range(0, numPartitions)
+                    .mapToObj(partitionIndex -> new CreatableReplicaAssignment()
+                        .setPartitionIndex(partitionIndex)
+                        .setBrokerIds(Arrays.asList(0, 1, 2))
+                    )
+                    .collect(Collectors.toList());
+
+                Uuid topicId = controller.createTopics(
+                    new CreateTopicsRequestData()
+                        .setTopics(
+                            new CreatableTopicCollection(
+                                Collections.singleton(
+                                    new CreatableTopic()
+                                        .setName(topicName)
+                                        .setNumPartitions(-1)
+                                        .setReplicationFactor((short) -1)
+                                        .setAssignments(new CreatableReplicaAssignmentCollection(partitions.iterator()))
+                                ).iterator()
+                            )
+                        )
+                ).get().topics().find(topicName).topicId();
+
+                // Create a lot of alter isr
+                List<AlterIsrRequestData.PartitionData> alterIsrs = IntStream
+                    .range(0, numPartitions)
+                    .mapToObj(partitionIndex -> {
+                        PartitionRegistration partitionRegistration = controller.replicationControl().getPartition(
+                            topicId,
+                            partitionIndex
+                        );
+
+                        return new AlterIsrRequestData.PartitionData()
+                            .setPartitionIndex(partitionIndex)
+                            .setLeaderEpoch(partitionRegistration.leaderEpoch)
+                            .setCurrentIsrVersion(partitionRegistration.partitionEpoch)
+                            .setNewIsr(Arrays.asList(0, 1));
+                    })
+                    .collect(Collectors.toList());
+
+                AlterIsrRequestData.TopicData topicData = new AlterIsrRequestData.TopicData()
+                        .setName(topicName);
+                topicData.partitions().addAll(alterIsrs);
+
+                int leaderId = 0;
+                AlterIsrRequestData alterIsrRequest = new AlterIsrRequestData()
+                    .setBrokerId(leaderId)
+                    .setBrokerEpoch(brokerEpochs.get(leaderId));
+                alterIsrRequest.topics().add(topicData);
+
+                logEnv.logManagers().get(0).resignAfterNonAtomicCommit();
+
+                assertThrows(
+                    ExecutionException.class,
+                    () -> controller.alterIsr(alterIsrRequest).get()
+                );
+
+                // Wait for the new active controller
+                final QuorumController newController = controlEnv.activeController();
+
+                // Since the alterIsr partially failed we expect to see
+                // some partitions to still have 2 in the ISR.
+                int partitionsWithReplica2 = Utils.toList(
+                    newController
+                        .replicationControl()
+                        .brokersToIsrs()
+                        .partitionsWithBrokerInIsr(2)
+                ).size();
+                int partitionsWithReplica0 = Utils.toList(
+                    newController
+                        .replicationControl()
+                        .brokersToIsrs()
+                        .partitionsWithBrokerInIsr(0)
+                ).size();
+
+                assertEquals(numPartitions, partitionsWithReplica0);
+                assertNotEquals(0, partitionsWithReplica2);
+                assertTrue(
+                    partitionsWithReplica0 > partitionsWithReplica2,
+                    String.format(
+                        "partitionsWithReplica0 = %s, partitionsWithReplica2 = %s",
+                        partitionsWithReplica0,
+                        partitionsWithReplica2
+                    )
+                );
+            }
+        }
+    }
+
+    private Map<Integer, Long> registerBrokers(QuorumController controller, int numBrokers) throws Exception {
+        Map<Integer, Long> brokerEpochs = new HashMap<>();
+        for (int brokerId = 0; brokerId < numBrokers; brokerId++) {
+            BrokerRegistrationReply reply = controller.registerBroker(
+                    new BrokerRegistrationRequestData()
+                    .setBrokerId(brokerId)
+                    .setRack(null)
+                    .setClusterId("06B-K3N1TBCNYFgruEVP0Q")
+                    .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
+                    .setListeners(
+                        new ListenerCollection(
+                            Arrays.asList(
+                                new Listener()
+                                .setName("PLAINTEXT")
+                                .setHost("localhost")
+                                .setPort(9092 + brokerId)
+                                ).iterator()
+                            )
+                        )
+                    ).get();
+            brokerEpochs.put(brokerId, reply.epoch());
+
+            // Send heartbeat to unfence
+            controller.processBrokerHeartbeat(
+                    new BrokerHeartbeatRequestData()
+                    .setWantFence(false)
+                    .setBrokerEpoch(brokerEpochs.get(brokerId))
+                    .setBrokerId(brokerId)
+                    .setCurrentMetadataOffset(100000L)
+                    ).get();
+        }
+
+        return brokerEpochs;
+    }
+
 }
