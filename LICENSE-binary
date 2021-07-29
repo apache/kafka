@@ -243,7 +243,6 @@ netty-handler-4.1.59.Final
 netty-resolver-4.1.59.Final
 netty-transport-4.1.59.Final
 netty-transport-native-epoll-4.1.59.Final
-netty-transport-native-epoll-4.1.59.Final
 netty-transport-native-unix-common-4.1.59.Final
 plexus-utils-3.2.1
 rocksdbjni-5.18.4
