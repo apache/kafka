@@ -1133,23 +1133,25 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val originalControllerId = TestUtils.waitUntilControllerElected(zkClient)
     assertEquals(0, originalControllerId)
     val controller = getController().kafkaController
+    assertEquals(KAFKA_2_7_IV0, servers(originalControllerId).config.interBrokerProtocolVersion)
     val remainingBrokers = servers.filter(_.config.brokerId != originalControllerId)
     val tp = new TopicPartition("t", 0)
-    val assignment = Map(tp.partition -> servers.map(_.config.brokerId))
+    // Only the remaining brokers will have the replicas for the partition
+    val assignment = Map(tp.partition -> remainingBrokers.map(_.config.brokerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    waitForPartitionState(tp, firstControllerEpoch, originalControllerId, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, remainingBrokers(0).config.brokerId, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
     assertEquals(None, topicIdAfterCreate)
     val emptyTopicId = controller.controllerContext.topicIds.get("t")
     assertEquals(None, emptyTopicId)
 
-    // All logs should not have topic IDs
-    servers.foreach({ server =>
+    // All partition logs should not have topic IDs
+    remainingBrokers.foreach { server =>
       TestUtils.waitUntilTrue(() => server.logManager.getLog(tp).isDefined, "log was not created for server" + server.config.brokerId)
       val topicIdInLog = server.logManager.getLog(tp).get.topicId
       assertEquals(None, topicIdInLog)
-    })
+    }
 
     // Shut down the controller to transfer the controller to a new IBP broker.
     servers(originalControllerId).shutdown()
@@ -1165,12 +1167,13 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     assertEquals(topicIdAfterUpgrade.get, topicId)
     assertEquals("t", controller2.controllerContext.topicNames(topicId))
 
-    // All logs should have topic IDs
-    remainingBrokers.foreach({ server =>
+    // All partition logs should have topic IDs
+    remainingBrokers.foreach { server =>
       TestUtils.waitUntilTrue(() => server.logManager.getLog(tp).isDefined, "log was not created for server" + server.config.brokerId)
       val topicIdInLog = server.logManager.getLog(tp).get.topicId
-      assertEquals(Some(topicId), topicIdInLog)
-    })
+      assertEquals(Some(topicId), topicIdInLog,
+        s"Server ${server.config.brokerId} had topic ID $topicIdInLog instead of ${Some(topicId)} as expected.")
+    }
 
     adminZkClient.deleteTopic(tp.topic)
     TestUtils.waitUntilTrue(() => !servers.head.kafkaController.controllerContext.allTopics.contains(tp.topic),

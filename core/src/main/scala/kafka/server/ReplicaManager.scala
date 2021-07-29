@@ -1393,15 +1393,15 @@ class ReplicaManager(val config: KafkaConfig,
                   s"leader epoch $currentLeaderEpoch")
                 responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
               } else {
-                // The controller may send LeaderAndIsr to upgrade to using topic IDs without bumping the epoch.
                 val error = requestTopicId match {
                   case Some(topicId) if logTopicId.isEmpty =>
+                    // The controller may send LeaderAndIsr to upgrade to using topic IDs without bumping the epoch.
                     // If we have a matching epoch, we expect the log to be defined.
                     val log = localLogOrException(partition.topicPartition)
                     log.assignTopicId(topicId)
                     stateChangeLogger.info(s"Updating log for $topicPartition to assign topic ID " +
-                      s"$topicId from LeaderAndIsr request from controller $controllerId with correlation" +
-                      s" id $correlationId epoch $controllerEpoch")
+                      s"$topicId from LeaderAndIsr request from controller $controllerId with correlation " +
+                      s"id $correlationId epoch $controllerEpoch")
                     Errors.NONE
                   case _ =>
                     stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
