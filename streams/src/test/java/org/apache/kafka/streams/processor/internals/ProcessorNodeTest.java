@@ -148,13 +148,14 @@ public class ProcessorNodeTest {
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
 
-        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
-        final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
+            final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
 
-        final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
-        final String msg = se.getMessage();
-        assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
-        assertTrue("Error about class cast with serdes", msg.contains("Serdes"));
+            final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
+            final String msg = se.getMessage();
+            assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
+            assertTrue("Error about class cast with serdes", msg.contains("Serdes"));
+        }
     }
 
     @Test

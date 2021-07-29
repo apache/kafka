@@ -81,14 +81,15 @@ public class AbstractStreamTest {
 
         stream.randomFilter().process(supplier);
 
-        final TopologyTestDriver driver = new TopologyTestDriver(builder.build());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build())) {
 
-        final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
-        for (final int expectedKey : expectedKeys) {
-            inputTopic.pipeInput(expectedKey, "V" + expectedKey);
+            final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
+            for (final int expectedKey : expectedKeys) {
+                inputTopic.pipeInput(expectedKey, "V" + expectedKey);
+            }
+
+            assertTrue(supplier.theCapturedProcessor().processed().size() <= expectedKeys.length);
         }
-
-        assertTrue(supplier.theCapturedProcessor().processed().size() <= expectedKeys.length);
     }
 
     private static class ExtendedKStream<K, V> extends AbstractStream<K, V> {
