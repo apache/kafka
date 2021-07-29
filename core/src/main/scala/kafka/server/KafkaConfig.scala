@@ -2008,5 +2008,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     require(principalBuilderClass != null, s"${KafkaConfig.PrincipalBuilderClassProp} must be non-null")
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass), 
       s"${KafkaConfig.PrincipalBuilderClassProp} must implement KafkaPrincipalSerde")
+
+    if (usesSelfManagedQuorum) {
+      require(getClass(KafkaConfig.AlterConfigPolicyClassNameProp) == null, "alter.config.policy.class.name is not supported in KRaft, please disable.")
+      require(getClass(KafkaConfig.CreateTopicPolicyClassNameProp) == null, "create.topic.policy.class.name is not supported in KRaft, please disable.")
+    }
   }
 }
