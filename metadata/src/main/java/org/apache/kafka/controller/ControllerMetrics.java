@@ -18,7 +18,7 @@
 package org.apache.kafka.controller;
 
 
-public interface ControllerMetrics {
+public interface ControllerMetrics extends AutoCloseable {
     void setActive(boolean active);
 
     boolean active();
@@ -42,4 +42,6 @@ public interface ControllerMetrics {
     void setPreferredReplicaImbalanceCount(int replicaImbalances);
 
     int preferredReplicaImbalanceCount();
+
+    void close();
 }
