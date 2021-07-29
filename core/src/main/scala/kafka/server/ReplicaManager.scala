@@ -1290,7 +1290,8 @@ class ReplicaManager(val config: KafkaConfig,
           // NotLeaderForPartitionException or ReplicaNotAvailableException.
           // If it is from a follower then send the offset metadata but not the records data as that can be fetched
           // from the remote store.
-          if (remoteLogManager.isDefined && log != null && !log.config.compact) {
+          if (remoteLogManager.isDefined && log != null && !log.config.compact &&
+            log.rlmEnabled && log.config.remoteStorageEnable) {
             // For follower fetch requests, throw an error saying that this offset is moved to tiered storage.
             val highWatermark = log.highWatermark
             val leaderLogStartOffset = log.logStartOffset
