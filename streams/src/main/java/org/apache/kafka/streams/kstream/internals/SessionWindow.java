@@ -20,9 +20,6 @@ import org.apache.kafka.streams.kstream.Window;
 
 /**
  * A session window covers a closed time interval with its start and end timestamp both being an inclusive boundary.
- * It is a fixed size window, i.e., all instances (of a single {@link org.apache.kafka.streams.kstream.TimeWindows
- * window specification}) will have the same size.
- *
  * <p>
  * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
  *
