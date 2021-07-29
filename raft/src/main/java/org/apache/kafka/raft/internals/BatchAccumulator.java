@@ -98,13 +98,14 @@ public class BatchAccumulator<T> implements Closeable {
      * @param epoch the expected leader epoch. If this does not match, then {@link Long#MAX_VALUE}
      *              will be returned as an offset which cannot become committed
      * @param records the list of records to include in the batches
-     * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the epoch does not
-     *         match; null if no memory could be allocated for the batch at this time
+     * @return the expected offset of the last record
      * @throws RecordBatchTooLargeException if the size of one record T is greater than the maximum
      *         batch size; if this exception is throw some of the elements in records may have
      *         been committed
+     * @throws IllegalStateException if the epoch does not match or no memory could be allocated for
+     *         the batch at this time
      */
-    public Long append(int epoch, List<T> records) {
+    public long append(int epoch, List<T> records) {
         return append(epoch, records, false);
     }
 
@@ -116,19 +117,20 @@ public class BatchAccumulator<T> implements Closeable {
      * @param epoch the expected leader epoch. If this does not match, then {@link Long#MAX_VALUE}
      *              will be returned as an offset which cannot become committed
      * @param records the list of records to include in a batch
-     * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the epoch does not
-     *         match; null if no memory could be allocated for the batch at this time
+     * @return the expected offset of the last record
      * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
+     * @throws IllegalStateException if the epoch does not match or no memory could be allocated for
+     *         the batch at this time
      */
-    public Long appendAtomic(int epoch, List<T> records) {
+    public long appendAtomic(int epoch, List<T> records) {
         return append(epoch, records, true);
     }
 
-    private Long append(int epoch, List<T> records, boolean isAtomic) {
+    private long append(int epoch, List<T> records, boolean isAtomic) {
         if (epoch != this.epoch) {
-            return Long.MAX_VALUE;
+            throw new IllegalStateException("Append failed because the epoch doesn't match");
         }
 
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
@@ -148,7 +150,7 @@ public class BatchAccumulator<T> implements Closeable {
                 }
 
                 if (batch == null) {
-                    return null;
+                    throw new IllegalStateException("Append failed because we failed to allocate memory to write the batch");
                 }
 
                 batch.appendRecord(record, serializationCache);

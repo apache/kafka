@@ -186,13 +186,18 @@ class KafkaRaftManager[T](
     records: Seq[T],
     isAtomic: Boolean
   ): Option[Long] = {
-    val offset = if (isAtomic) {
-      client.scheduleAtomicAppend(epoch, records.asJava)
-    } else {
-      client.scheduleAppend(epoch, records.asJava)
+    try {
+      val offset = if (isAtomic) {
+        client.scheduleAtomicAppend(epoch, records.asJava)
+      } else {
+        client.scheduleAppend(epoch, records.asJava)
+      }
+      Some(offset)
+    } catch {
+      case e: IllegalStateException =>
+        logger.warn("Appending failed, return None", e)
+        None
     }
-
-    Option(offset).map(Long.unbox)
   }
 
   override def handleRequest(
@@ -227,7 +232,7 @@ class KafkaRaftManager[T](
       metrics,
       expirationService,
       logContext,
-      metaProperties.clusterId.toString,
+      metaProperties.clusterId,
       OptionalInt.of(config.nodeId),
       raftConfig
     )

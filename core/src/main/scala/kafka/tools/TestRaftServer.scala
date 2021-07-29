@@ -196,7 +196,7 @@ class TestRaftServer(
 
       raftManager.scheduleAppend(leaderEpoch, Seq(payload)) match {
         case Some(offset) => pendingAppends.offer(PendingAppend(offset, currentTimeMs))
-        case None => time.sleep(10)
+        case None => eventQueue.offer(HandleResign)
       }
     }
 

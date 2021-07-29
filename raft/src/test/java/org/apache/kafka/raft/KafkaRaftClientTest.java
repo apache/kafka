@@ -270,7 +270,7 @@ public class KafkaRaftClientTest {
         assertEquals(0L, context.log.endOffset().offset);
         context.assertElectedLeader(epoch, localId);
         context.client.poll();
-        assertEquals(Long.MAX_VALUE, context.client.scheduleAppend(epoch, Arrays.asList("a", "b")));
+        assertThrows(IllegalStateException.class, () -> context.client.scheduleAppend(epoch, Arrays.asList("a", "b")));
 
         context.pollUntilRequest();
         int correlationId = context.assertSentEndQuorumEpochRequest(epoch, 1);
