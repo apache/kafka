@@ -39,7 +39,6 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -61,11 +60,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStore;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
-
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
@@ -73,9 +72,9 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.matchesRegex;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.oneOf;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static java.util.Collections.singletonList;
 
 @Category({IntegrationTest.class})
 public class StoreQueryIntegrationTest {
@@ -153,10 +152,16 @@ public class StoreQueryIntegrationTest {
                 return true;
             } catch (final InvalidStateStoreException exception) {
                 assertThat(
-                    exception.getMessage(),
-                    containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING")
+                        "Unexpected exception thrown while getting the value from store.",
+                        exception.getMessage(),
+                        is(
+                                oneOf(
+                                        containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
+                                        containsString("The state store, source-table, may have migrated to another instance")
+                                )
+                        )
                 );
-                LOG.info("Streams wasn't running. Will try again.");
+                LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
         });
