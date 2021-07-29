@@ -43,12 +43,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
@@ -418,7 +419,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     /**
      * The listener objects attached to this local log manager.
      */
-    private final List<MetaLogListenerData> listeners = new ArrayList<>();
+    private final Map<Listener<ApiMessageAndVersion>, MetaLogListenerData> listeners = new IdentityHashMap<>();
 
     /**
      * The current leader, as seen by this log manager.
@@ -441,7 +442,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             try {
                 log.debug("Node {}: running log check.", nodeId);
                 int numEntriesFound = 0;
-                for (MetaLogListenerData listenerData : listeners) {
+                for (MetaLogListenerData listenerData : listeners.values()) {
                     while (true) {
                         // Load the snapshot if needed and we are not the leader
                         LeaderAndEpoch notifiedLeader = listenerData.notifiedLeader();
@@ -526,7 +527,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 if (initialized && !shutdown) {
                     log.debug("Node {}: beginning shutdown.", nodeId);
                     resign(leader.epoch());
-                    for (MetaLogListenerData listenerData : listeners) {
+                    for (MetaLogListenerData listenerData : listeners.values()) {
                         listenerData.beginShutdown();
                     }
                     shared.unregisterLogManager(this);
@@ -586,8 +587,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                     "already been shut down.", nodeId);
                 future.complete(null);
             } else if (initialized) {
-                log.info("Node {}: registered MetaLogListener.", nodeId);
-                listeners.add(new MetaLogListenerData(listener));
+                int id = System.identityHashCode(listener);
+                if (listeners.putIfAbsent(listener, new MetaLogListenerData(listener)) != null) {
+                    log.error("Node {}: can't register because listener {} already exists", nodeId, id);
+                } else {
+                    log.info("Node {}: registered MetaLogListener {}", nodeId, id);
+                }
                 shared.electLeaderIfNeeded();
                 scheduleLogCheck();
                 future.complete(null);
@@ -606,6 +611,22 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         } catch (ExecutionException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public void unregister(RaftClient.Listener<ApiMessageAndVersion> listener) {
+        eventQueue.append(() -> {
+            if (shutdown) {
+                log.info("Node {}: can't unregister because local log manager is shutdown", nodeId);
+            } else {
+                int id = System.identityHashCode(listener);
+                if (listeners.remove(listener) == null) {
+                    log.error("Node {}: can't unregister because the listener {} doesn't exists", nodeId, id);
+                } else {
+                    log.info("Node {}: unregistered MetaLogListener {}", nodeId, id);
+                }
+            }
+        });
     }
 
     @Override
@@ -664,7 +685,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     public List<RaftClient.Listener<ApiMessageAndVersion>> listeners() {
         final CompletableFuture<List<RaftClient.Listener<ApiMessageAndVersion>>> future = new CompletableFuture<>();
         eventQueue.append(() -> {
-            future.complete(listeners.stream().map(l -> l.listener).collect(Collectors.toList()));
+            future.complete(listeners.values().stream().map(l -> l.listener).collect(Collectors.toList()));
         });
         try {
             return future.get();

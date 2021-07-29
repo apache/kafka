@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
@@ -60,8 +61,7 @@ public class MeteredWindowStore<K, V>
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
     private InternalProcessorContext context;
-    private final String threadId;
-    private String taskId;
+    private TaskId taskId;
 
     MeteredWindowStore(final WindowStore<Bytes, byte[]> inner,
                        final long windowSizeMs,
@@ -71,7 +71,6 @@ public class MeteredWindowStore<K, V>
                        final Serde<V> valueSerde) {
         super(inner);
         this.windowSizeMs = windowSizeMs;
-        threadId = Thread.currentThread().getName();
         this.metricsScope = metricsScope;
         this.time = time;
         this.keySerde = keySerde;
@@ -83,13 +82,13 @@ public class MeteredWindowStore<K, V>
     public void init(final ProcessorContext context,
                      final StateStore root) {
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
+        taskId = context.taskId();
         initStoreSerde(context);
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
-        taskId = context.taskId().toString();
 
         registerMetrics();
         final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(taskId, metricsScope, name(), streamsMetrics);
+            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
@@ -99,13 +98,13 @@ public class MeteredWindowStore<K, V>
     public void init(final StateStoreContext context,
                      final StateStore root) {
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
+        taskId = context.taskId();
         initStoreSerde(context);
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
-        taskId = context.taskId().toString();
 
         registerMetrics();
         final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(taskId, metricsScope, name(), streamsMetrics);
+            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
@@ -115,10 +114,10 @@ public class MeteredWindowStore<K, V>
     }
 
     private void registerMetrics() {
-        putSensor = StateStoreMetrics.putSensor(taskId, metricsScope, name(), streamsMetrics);
-        fetchSensor = StateStoreMetrics.fetchSensor(taskId, metricsScope, name(), streamsMetrics);
-        flushSensor = StateStoreMetrics.flushSensor(taskId, metricsScope, name(), streamsMetrics);
-        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
+        putSensor = StateStoreMetrics.putSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        fetchSensor = StateStoreMetrics.fetchSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
     }
 
     @Deprecated
@@ -128,7 +127,7 @@ public class MeteredWindowStore<K, V>
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.namedTopology()),
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerde(valueSerde, new SerdeGetter(context)));
     }
@@ -139,7 +138,7 @@ public class MeteredWindowStore<K, V>
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.namedTopology()),
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerde(valueSerde, new SerdeGetter(context)));
     }
@@ -313,7 +312,7 @@ public class MeteredWindowStore<K, V>
         try {
             wrapped().close();
         } finally {
-            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId, name());
+            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId.toString(), name());
         }
     }
 

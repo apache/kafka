@@ -63,14 +63,16 @@ public class WindowKeySchemaTest {
             KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[] {0}), new TimeWindow(10, 20)), 4), 4),
             KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[] {0, 0}), new TimeWindow(10, 20)), 5), 5),
             KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[] {0, 0, 0}), new TimeWindow(10, 20)), 6), 6));
-        final DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()));
+        try (final DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()))) {
 
-        final HasNextCondition hasNextCondition = windowKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE);
-        final List<Integer> results = new ArrayList<>();
-        while (hasNextCondition.hasNext(iterator)) {
-            results.add(iterator.next().value);
+            final HasNextCondition hasNextCondition = windowKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE);
+            final List<Integer> results = new ArrayList<>();
+            while (hasNextCondition.hasNext(iterator)) {
+                results.add(iterator.next().value);
+            }
+
+            assertThat(results, equalTo(Arrays.asList(1, 2, 3, 4, 5, 6)));
         }
-        assertThat(results, equalTo(Arrays.asList(1, 2, 3, 4, 5, 6)));
     }
 
     @Test

@@ -44,7 +44,6 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsNotStartedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
-import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
@@ -54,8 +53,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
@@ -159,15 +157,13 @@ public class KafkaStreams implements AutoCloseable {
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
     private final Admin adminClient;
     private final StreamsMetricsImpl streamsMetrics;
-    private final ProcessorTopology taskTopology;
-    private final ProcessorTopology globalTaskTopology;
     private final long totalCacheSize;
     private final StreamStateListener streamStateListener;
     private final StateRestoreListener delegatingStateRestoreListener;
     private final Map<Long, StreamThread.State> threadState;
     private final UUID processId;
     private final KafkaClientSupplier clientSupplier;
-    private final InternalTopologyBuilder internalTopologyBuilder;
+    protected final TopologyMetadata topologyMetadata;
     private final QueryableStoreProvider queryableStoreProvider;
 
     GlobalStreamThread globalStreamThread;
@@ -221,6 +217,9 @@ public class KafkaStreams implements AutoCloseable {
      *   the instance will be in the ERROR state. The user will not need to close it.
      */
     public enum State {
+        // Note: if you add a new state, check the below methods and how they are used within Streams to see if
+        // any of them should be updated to include the new state. For example a new shutdown path or terminal
+        // state would likely need to be included in methods like isShuttingDown(), hasCompletedShutdown(), etc.
         CREATED(1, 3),          // 0
         REBALANCING(2, 3, 5),   // 1
         RUNNING(1, 2, 3, 5),    // 2
@@ -235,8 +234,24 @@ public class KafkaStreams implements AutoCloseable {
             this.validTransitions.addAll(Arrays.asList(validTransitions));
         }
 
+        public boolean hasNotStarted() {
+            return equals(CREATED);
+        }
+
         public boolean isRunningOrRebalancing() {
             return equals(RUNNING) || equals(REBALANCING);
+        }
+
+        public boolean isShuttingDown() {
+            return equals(PENDING_SHUTDOWN) || equals(PENDING_ERROR);
+        }
+
+        public boolean hasCompletedShutdown() {
+            return equals(NOT_RUNNING) || equals(ERROR);
+        }
+
+        public boolean hasStartedOrFinishedShuttingDown() {
+            return isShuttingDown() || hasCompletedShutdown();
         }
 
         public boolean isValidTransition(final State newState) {
@@ -342,10 +357,10 @@ public class KafkaStreams implements AutoCloseable {
 
     private void validateIsRunningOrRebalancing() {
         synchronized (stateLock) {
-            if (state == State.CREATED) {
+            if (state.hasNotStarted()) {
                 throw new StreamsNotStartedException("KafkaStreams has not been started, you can retry after calling start()");
             }
-            if (!isRunningOrRebalancing()) {
+            if (!state.isRunningOrRebalancing()) {
                 throw new IllegalStateException("KafkaStreams is not running. State is " + state + ".");
             }
         }
@@ -369,14 +384,14 @@ public class KafkaStreams implements AutoCloseable {
      * An app can set a single {@link KafkaStreams.StateListener} so that the app is notified when state changes.
      *
      * @param listener a new state listener
-     * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
+     * @throws IllegalStateException if this {@code KafkaStreams} instance has already been started.
      */
     public void setStateListener(final KafkaStreams.StateListener listener) {
         synchronized (stateLock) {
-            if (state == State.CREATED) {
+            if (state.hasNotStarted()) {
                 stateListener = listener;
             } else {
-                throw new IllegalStateException("Can only set StateListener in CREATED state. Current state is: " + state);
+                throw new IllegalStateException("Can only set StateListener before calling start(). Current state is: " + state);
             }
         }
     }
@@ -386,7 +401,7 @@ public class KafkaStreams implements AutoCloseable {
      * terminates due to an uncaught exception.
      *
      * @param uncaughtExceptionHandler the uncaught exception handler for all internal threads; {@code null} deletes the current handler
-     * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
+     * @throws IllegalStateException if this {@code KafkaStreams} instance has already been started.
      *
      * @deprecated Since 2.8.0. Use {@link KafkaStreams#setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)} instead.
      *
@@ -394,7 +409,7 @@ public class KafkaStreams implements AutoCloseable {
     @Deprecated
     public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) {
         synchronized (stateLock) {
-            if (state == State.CREATED) {
+            if (state.hasNotStarted()) {
                 oldHandler = true;
                 processStreamThread(thread -> thread.setUncaughtExceptionHandler(uncaughtExceptionHandler));
 
@@ -402,7 +417,7 @@ public class KafkaStreams implements AutoCloseable {
                     globalStreamThread.setUncaughtExceptionHandler(uncaughtExceptionHandler);
                 }
             } else {
-                throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
+                throw new IllegalStateException("Can only set UncaughtExceptionHandler before calling start(). " +
                     "Current state is: " + state);
             }
         }
@@ -420,13 +435,13 @@ public class KafkaStreams implements AutoCloseable {
      * thread that encounters such an exception.
      *
      * @param streamsUncaughtExceptionHandler the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads
-     * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
+     * @throws IllegalStateException if this {@code KafkaStreams} instance has already been started.
      * @throws NullPointerException if streamsUncaughtExceptionHandler is null.
      */
     public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final Consumer<Throwable> handler = exception -> handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
         synchronized (stateLock) {
-            if (state == State.CREATED) {
+            if (state.hasNotStarted()) {
                 this.streamsUncaughtExceptionHandler = handler;
                 Objects.requireNonNull(streamsUncaughtExceptionHandler);
                 processStreamThread(thread -> thread.setStreamsUncaughtExceptionHandler(handler));
@@ -434,7 +449,7 @@ public class KafkaStreams implements AutoCloseable {
                     globalStreamThread.setUncaughtExceptionHandler(handler);
                 }
             } else {
-                throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
+                throw new IllegalStateException("Can only set UncaughtExceptionHandler before calling start(). " +
                     "Current state is: " + state);
             }
         }
@@ -483,6 +498,7 @@ public class KafkaStreams implements AutoCloseable {
         }
         switch (action) {
             case REPLACE_THREAD:
+                log.error("Replacing thread in the streams uncaught exception handler", throwable);
                 replaceStreamThread(throwable);
                 break;
             case SHUTDOWN_CLIENT:
@@ -520,14 +536,14 @@ public class KafkaStreams implements AutoCloseable {
      * processing.
      *
      * @param globalStateRestoreListener The listener triggered when {@link StateStore} is being restored.
-     * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
+     * @throws IllegalStateException if this {@code KafkaStreams} instance has already been started.
      */
     public void setGlobalStateRestoreListener(final StateRestoreListener globalStateRestoreListener) {
         synchronized (stateLock) {
-            if (state == State.CREATED) {
+            if (state.hasNotStarted()) {
                 this.globalStateRestoreListener = globalStateRestoreListener;
             } else {
-                throw new IllegalStateException("Can only set GlobalStateRestoreListener in CREATED state. " +
+                throw new IllegalStateException("Can only set GlobalStateRestoreListener before calling start(). " +
                     "Current state is: " + state);
             }
         }
@@ -690,7 +706,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public KafkaStreams(final Topology topology,
                         final Properties props) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
+        this(topology, new StreamsConfig(props), new DefaultKafkaClientSupplier());
     }
 
     /**
@@ -708,7 +724,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final KafkaClientSupplier clientSupplier) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, Time.SYSTEM);
+        this(topology, new StreamsConfig(props), clientSupplier, Time.SYSTEM);
     }
 
     /**
@@ -725,7 +741,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final Time time) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), time);
+        this(topology, new StreamsConfig(props), new DefaultKafkaClientSupplier(), time);
     }
 
     /**
@@ -745,7 +761,7 @@ public class KafkaStreams implements AutoCloseable {
                         final Properties props,
                         final KafkaClientSupplier clientSupplier,
                         final Time time) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time);
+        this(topology, new StreamsConfig(props), clientSupplier, time);
     }
 
     /**
@@ -778,7 +794,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final KafkaClientSupplier clientSupplier) {
-        this(topology.internalTopologyBuilder, config, clientSupplier);
+        this(new TopologyMetadata(topology.internalTopologyBuilder, config), config, clientSupplier);
     }
 
     /**
@@ -795,40 +811,40 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final Time time) {
-        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), time);
+        this(new TopologyMetadata(topology.internalTopologyBuilder, config), config, new DefaultKafkaClientSupplier(), time);
     }
 
-    private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
+    private KafkaStreams(final Topology topology,
                          final StreamsConfig config,
-                         final KafkaClientSupplier clientSupplier) throws StreamsException {
-        this(internalTopologyBuilder, config, clientSupplier, Time.SYSTEM);
+                         final KafkaClientSupplier clientSupplier,
+                         final Time time) throws StreamsException {
+        this(new TopologyMetadata(topology.internalTopologyBuilder, config), config, clientSupplier, time);
     }
 
-    private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
+    protected KafkaStreams(final TopologyMetadata topologyMetadata,
+                           final StreamsConfig config,
+                           final KafkaClientSupplier clientSupplier) throws StreamsException {
+        this(topologyMetadata, config, clientSupplier, Time.SYSTEM);
+    }
+
+    private KafkaStreams(final TopologyMetadata topologyMetadata,
                          final StreamsConfig config,
                          final KafkaClientSupplier clientSupplier,
                          final Time time) throws StreamsException {
         this.config = config;
         this.time = time;
 
-        this.internalTopologyBuilder = internalTopologyBuilder;
-        internalTopologyBuilder.rewriteTopology(config);
+        this.topologyMetadata = topologyMetadata;
+        this.topologyMetadata.buildAndRewriteTopology();
 
-        // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
-        taskTopology = internalTopologyBuilder.buildTopology();
-        globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
-
-        final boolean hasGlobalTopology = globalTaskTopology != null;
-        final boolean hasPersistentStores = taskTopology.hasPersistentLocalStore() ||
-            (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
+        final boolean hasGlobalTopology = topologyMetadata.hasGlobalTopology();
 
         try {
-            stateDirectory = new StateDirectory(config, time, hasPersistentStores, internalTopologyBuilder.hasNamedTopologies());
+            stateDirectory = new StateDirectory(config, time, topologyMetadata.hasPersistentStores(), topologyMetadata.hasNamedTopologies());
             processId = stateDirectory.initializeProcessId();
         } catch (final ProcessorStateException fatal) {
             throw new StreamsException(fatal);
         }
-
 
         // The application ID is a required config and hence should always have value
         final String userClientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
@@ -859,12 +875,12 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addVersionMetric(streamsMetrics);
         ClientMetrics.addCommitIdMetric(streamsMetrics);
         ClientMetrics.addApplicationIdMetric(streamsMetrics, config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
-        ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, internalTopologyBuilder.describe().toString());
+        ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, this.topologyMetadata.topologyDescriptionString());
         ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) -> getNumLiveStreamThreads());
 
         streamsMetadataState = new StreamsMetadataState(
-            internalTopologyBuilder,
+                this.topologyMetadata,
             parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
 
         oldHandler = false;
@@ -872,14 +888,14 @@ public class KafkaStreams implements AutoCloseable {
         delegatingStateRestoreListener = new DelegatingStateRestoreListener();
 
         totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
-        final int numStreamThreads = getNumStreamThreads(hasGlobalTopology);
+        final int numStreamThreads = topologyMetadata.getNumStreamThreads(config);
         final long cacheSizePerThread = getCacheSizePerThread(numStreamThreads);
 
         GlobalStreamThread.State globalThreadState = null;
         if (hasGlobalTopology) {
             final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(
-                globalTaskTopology,
+                topologyMetadata.globalTaskTopology(),
                 config,
                 clientSupplier.getGlobalConsumer(config.getGlobalConsumerConfigs(clientId)),
                 stateDirectory,
@@ -897,7 +913,7 @@ public class KafkaStreams implements AutoCloseable {
         threadState = new HashMap<>(numStreamThreads);
         streamStateListener = new StreamStateListener(threadState, globalThreadState);
 
-        final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
+        final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(this.topologyMetadata.globalStateStores());
 
         if (hasGlobalTopology) {
             globalStreamThread.setStateListener(streamStateListener);
@@ -914,7 +930,7 @@ public class KafkaStreams implements AutoCloseable {
 
     private StreamThread createAndAddStreamThread(final long cacheSizePerThread, final int threadIdx) {
         final StreamThread streamThread = StreamThread.create(
-            internalTopologyBuilder,
+            topologyMetadata,
             config,
             clientSupplier,
             adminClient,
@@ -951,23 +967,6 @@ public class KafkaStreams implements AutoCloseable {
         final MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                                                                       config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         return new Metrics(metricConfig, reporters, time, metricsContext);
-    }
-
-    private int getNumStreamThreads(final boolean hasGlobalTopology) {
-        final int numStreamThreads;
-        if (internalTopologyBuilder.hasNoNonGlobalTopology()) {
-            log.info("Overriding number of StreamThreads to zero for global-only topology");
-            numStreamThreads = 0;
-        } else {
-            numStreamThreads = config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
-        }
-
-        if (numStreamThreads == 0 && !hasGlobalTopology) {
-            log.error("Topology with no input topics will create no stream threads and no global thread.");
-            throw new TopologyException("Topology has no stream threads and no global threads, " +
-                                            "must subscribe to at least one source topic or global table.");
-        }
-        return numStreamThreads;
     }
 
     /**
@@ -1195,7 +1194,7 @@ public class KafkaStreams implements AutoCloseable {
         if (numStreamThreads == 0) {
             return totalCacheSize;
         }
-        return totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
+        return totalCacheSize / (numStreamThreads + (topologyMetadata.hasGlobalTopology() ? 1 : 0));
     }
 
     private void resizeThreadCache(final long cacheSizePerThread) {
@@ -1284,6 +1283,14 @@ public class KafkaStreams implements AutoCloseable {
         } else {
             throw new IllegalStateException("The client is either already started or already stopped, cannot re-start");
         }
+
+        if (topologyMetadata.isEmpty()) {
+            if (setState(State.RUNNING)) {
+                log.debug("Transitioning directly to RUNNING for app with no named topologies");
+            } else {
+                throw new IllegalStateException("Unexpected error in transitioning KafkaStreams with empty processing topology to RUNNING");
+            }
+        }
     }
 
     /**
@@ -1345,11 +1352,11 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private boolean close(final long timeoutMs) {
-        if (state == State.ERROR || state == State.NOT_RUNNING) {
+        if (state.hasCompletedShutdown()) {
             log.info("Streams client is already in the terminal {} state, all resources are closed and the client has stopped.", state);
             return true;
         }
-        if (state == State.PENDING_ERROR || state == State.PENDING_SHUTDOWN) {
+        if (state.isShuttingDown()) {
             log.info("Streams client is in {}, all resources are being closed and the client will be stopped.", state);
             if (state == State.PENDING_ERROR && waitOnState(State.ERROR, timeoutMs)) {
                 log.info("Streams client stopped to ERROR completely");
@@ -1428,11 +1435,11 @@ public class KafkaStreams implements AutoCloseable {
      * <p>
      * Calling this method triggers a restore of local {@link StateStore}s on the next {@link #start() application start}.
      *
-     * @throws IllegalStateException if this {@code KafkaStreams} instance is currently {@link State#RUNNING running}
+     * @throws IllegalStateException if this {@code KafkaStreams} instance has been started and hasn't fully shut down
      * @throws StreamsException if cleanup failed
      */
     public void cleanUp() {
-        if (!(state == State.CREATED || state == State.NOT_RUNNING || state == State.ERROR)) {
+        if (!(state.hasNotStarted() || state.hasCompletedShutdown())) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
         stateDirectory.clean();
@@ -1562,8 +1569,8 @@ public class KafkaStreams implements AutoCloseable {
      *
      * @param storeQueryParameters   the parameters used to fetch a queryable store
      * @return A facade wrapping the local {@link StateStore} instances
-     * @throws StreamsNotStartedException If Streams state is {@link KafkaStreams.State#CREATED CREATED}. Just
-     *         retry and wait until to {@link KafkaStreams.State#RUNNING RUNNING}.
+     * @throws StreamsNotStartedException If Streams has not yet been started. Just call {@link KafkaStreams#start()}
+     *                                    and then retry this call.
      * @throws UnknownStateStoreException If the specified store name does not exist in the topology.
      * @throws InvalidStateStorePartitionException If the specified partition does not exist.
      * @throws InvalidStateStoreException If the Streams instance isn't in a queryable state.
@@ -1575,8 +1582,7 @@ public class KafkaStreams implements AutoCloseable {
     public <T> T store(final StoreQueryParameters<T> storeQueryParameters) {
         validateIsRunningOrRebalancing();
         final String storeName = storeQueryParameters.storeName();
-        if ((taskTopology == null || !taskTopology.hasStore(storeName))
-            && (globalTaskTopology == null || !globalTaskTopology.hasStore(storeName))) {
+        if (!topologyMetadata.hasStore(storeName)) {
             throw new UnknownStateStoreException(
                 "Cannot get state store " + storeName + " because no such store is registered in the topology."
             );
