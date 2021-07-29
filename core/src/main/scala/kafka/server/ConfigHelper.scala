@@ -40,18 +40,6 @@ import scala.jdk.CollectionConverters._
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
 
-  val alterConfigPolicy =
-    Option(config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
-
-  def validateConfigPolicy(resource: ConfigResource, configEntriesMap: Map[String, String]): Unit = {
-    this.alterConfigPolicy match {
-      case Some(policy) =>
-        policy.validate(new AlterConfigPolicy.RequestMetadata(
-          new ConfigResource(resource.`type`(), resource.name), configEntriesMap.asJava))
-      case None =>
-    }
-  }
-
   def getAndValidateBrokerId(resource: ConfigResource) = {
     if (resource.name == null || resource.name.isEmpty)
       None
@@ -73,9 +61,6 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     DynamicConfig.Broker.validate(configProps)
     // Validate and process the reconfiguration
     this.config.dynamicConfig.validate(configProps, perBrokerConfig)
-    // AlterConfigPolicy implements AutoCloseable. In the ZkAdminManager this gets closed when the broker shutsdown 
-    // The AlterConfigPolicy used for KRaft in the ConfigHelper is not being closed
-    validateConfigPolicy(resource, configEntriesMap)
     if (!validateOnly) {
       if (perBrokerConfig)
         this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
