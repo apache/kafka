@@ -1373,7 +1373,7 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public long curClaimEpoch() {
+    public int curClaimEpoch() {
         return curClaimEpoch;
     }
 

@@ -674,7 +674,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             .max();
 
         if (firstOffset.isPresent() && resignAfterNonAtomicCommit.getAndSet(false)) {
-            // Emulate losing leadering in them middle of a non-atomic append by not writing
+            // Emulate losing leadership in them middle of a non-atomic append by not writing
             // the rest of the batch and instead writing a leader change message
             resign(leader.epoch());
 
