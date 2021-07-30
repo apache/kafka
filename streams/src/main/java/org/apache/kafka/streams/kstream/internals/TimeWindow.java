@@ -19,33 +19,21 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.kstream.Window;
 
 /**
- * A {@link TimeWindow} covers a half-open time interval with its start timestamp as an inclusive boundary and its end
- * timestamp as exclusive boundary.
- * It is a fixed size window, i.e., all instances (of a single {@link org.apache.kafka.streams.kstream.TimeWindows
- * window specification}) will have the same size.
- * <p>
- * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
- *
- * @see SessionWindow
- * @see UnlimitedWindow
- * @see org.apache.kafka.streams.kstream.TimeWindows
- * @see org.apache.kafka.streams.processor.TimestampExtractor
+ * A {@link TimeWindow} is a time interval window container that holds the start and end time for use in window-agnostic cases,
+ * ex: in {@link org.apache.kafka.streams.state.WindowStore}, we'll store the aggregated values of any fixed-size types of time windows.
+ * We use {@link TimeWindow} to represent these time windows
  */
 public class TimeWindow extends Window {
 
     /**
-     * Create a new window for the given start time (inclusive) and end time (exclusive).
+     * Create a new window for the given start time and end time.
      *
-     * @param startMs the start timestamp of the window (inclusive)
-     * @param endMs   the end timestamp of the window (exclusive)
-     * @throws IllegalArgumentException if {@code startMs} is negative or if {@code endMs} is smaller than or equal to
-     * {@code startMs}
+     * @param startMs the start timestamp of the window
+     * @param endMs   the end timestamp of the window
+     * @throws IllegalArgumentException if {@code startMs} is negative or if {@code endMs} is smaller than {@code startMs}
      */
     public TimeWindow(final long startMs, final long endMs) throws IllegalArgumentException {
         super(startMs, endMs);
-        if (startMs == endMs) {
-            throw new IllegalArgumentException("Window endMs must be greater than window startMs.");
-        }
     }
 
     /**
@@ -62,7 +50,7 @@ public class TimeWindow extends Window {
                 + other.getClass() + ".");
         }
         final TimeWindow otherWindow = (TimeWindow) other;
-        return startMs < otherWindow.endMs && otherWindow.startMs < endMs;
+        return startMs <= otherWindow.endMs && otherWindow.startMs <= endMs;
     }
 
 }
