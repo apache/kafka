@@ -1171,14 +1171,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                     // note the position in consumer is the "next" record to fetch,
                     // so it should be larger than the consumed offset by 1; if it is
-                    // more than one it means there are skipped offsets
+                    // more than 1 it means there are skipped offsets
                     if (offset > entry.getValue() + 1) {
                         commitNeeded = true;
                         entry.setValue(offset - 1);
                     }
                 } catch (final TimeoutException error) {
-                    // it's possible to timeout if we have not initialized the position and not processed any records;
-                    // in this case we can just skip and mov forward
+                    // the `consumer.position()` call should never block, because we know that we did process data
+                    // for the requested partition and thus the consumer should have a valid local position
+                    // that it can return immediately
+
+                    // hence, a `TimeoutException` indicates a bug and thus we rethrow it as fatal `IllegalStateException`
+                    throw new IllegalStateException(error);
                 } catch (final KafkaException fatal) {
                     throw new StreamsException(fatal);
                 }
