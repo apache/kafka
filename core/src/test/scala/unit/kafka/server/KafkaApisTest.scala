@@ -3881,7 +3881,8 @@ class KafkaApisTest {
 
   private def verifyShouldVerifyBeforeForwarding(handler: RequestChannel.Request => Unit): Unit = {
     val request = createMockRequest()
-    // Not sure why this is throwing NPE now, working on testing manually
+    // Throws NPE because there is no request body in the mock request. 
+    // TODO: Need a more complete testing strategy than what was here before. 
     val e = assertThrows(classOf[NullPointerException], () => handler(request))
     assertNotEquals(KafkaApis.shouldAlwaysForward(request).getMessage, e.getMessage)
   }
