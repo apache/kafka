@@ -119,9 +119,8 @@ public class KStreamSlidingWindowAggregateTest {
     public void testAggregateSmallInputWithZeroTimeDifference() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        // We use CachingWindowStore to store the aggregated values internally, and then use TimeWindow to represent the "windowed KTable"
-        // thus, the window size must be greater than 0 here
-        final WindowBytesStoreSupplier storeSupplier = getStoreSupplier(inOrderIterator, defaultInOrderName, defaultReverseName, 1L);
+        // create a window store supplier with window size of 0
+        final WindowBytesStoreSupplier storeSupplier = getStoreSupplier(inOrderIterator, defaultInOrderName, defaultReverseName, 0L);
 
         // we should support the "zero" time difference since sliding window is both start and end time inclusive
         final KTable<Windowed<String>, String> table = builder

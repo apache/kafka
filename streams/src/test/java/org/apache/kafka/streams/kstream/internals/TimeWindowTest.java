@@ -36,11 +36,6 @@ public class TimeWindowTest {
     private final SessionWindow sessionWindow = new SessionWindow(start, end);
 
     @Test
-    public void endMustBeLargerThanStart() {
-        assertThrows(IllegalArgumentException.class, () -> new TimeWindow(start, start));
-    }
-
-    @Test
     public void shouldNotOverlapIfOtherWindowIsBeforeThisWindow() {
         /*
          * This:        [-------)
