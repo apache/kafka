@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.scram.internals;
 
 import java.security.InvalidKeyException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Collection;
@@ -226,7 +227,7 @@ public class ScramSaslServer implements SaslServer {
             byte[] expectedStoredKey = scramCredential.storedKey();
             byte[] clientSignature = formatter.clientSignature(expectedStoredKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);
             byte[] computedStoredKey = formatter.storedKey(clientSignature, clientFinalMessage.proof());
-            if (!Arrays.equals(computedStoredKey, expectedStoredKey))
+            if (!MessageDigest.isEqual(computedStoredKey, expectedStoredKey))
                 throw new SaslException("Invalid client credentials");
         } catch (InvalidKeyException e) {
             throw new SaslException("Sasl client verification failed", e);
