@@ -860,7 +860,7 @@ case class OffsetTruncationState(offset: Long, truncationCompleted: Boolean) {
 
   def this(offset: Long) = this(offset, true)
 
-  override def toString: String = "offset:%d-truncationCompleted:%b".format(offset, truncationCompleted)
+  override def toString: String = s"TruncationState(offset=$offset, completed=$truncationCompleted)"
 }
 
 case class OffsetAndEpoch(offset: Long, leaderEpoch: Int) {
