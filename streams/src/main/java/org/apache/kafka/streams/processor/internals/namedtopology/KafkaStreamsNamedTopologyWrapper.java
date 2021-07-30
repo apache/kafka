@@ -21,6 +21,7 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 
 import java.util.Collection;
@@ -50,6 +51,13 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     /**
      * A Kafka Streams application with a single initial NamedTopology
      */
+    public KafkaStreamsNamedTopologyWrapper(final NamedTopology topology, final Properties props) {
+        this(Collections.singleton(topology), new StreamsConfig(props), new DefaultKafkaClientSupplier());
+    }
+
+    /**
+     * A Kafka Streams application with a single initial NamedTopology
+     */
     public KafkaStreamsNamedTopologyWrapper(final NamedTopology topology, final Properties props, final KafkaClientSupplier clientSupplier) {
         this(Collections.singleton(topology), new StreamsConfig(props), clientSupplier);
     }
@@ -57,8 +65,25 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     /**
      * An empty Kafka Streams application that allows NamedTopologies to be added at a later point
      */
+    public KafkaStreamsNamedTopologyWrapper(final Properties props) {
+        this(Collections.emptyList(), new StreamsConfig(props), new DefaultKafkaClientSupplier());
+    }
+
+    /**
+     * An empty Kafka Streams application that allows NamedTopologies to be added at a later point
+     */
     public KafkaStreamsNamedTopologyWrapper(final Properties props, final KafkaClientSupplier clientSupplier) {
         this(Collections.emptyList(), new StreamsConfig(props), clientSupplier);
+    }
+
+    /**
+     * A Kafka Streams application with a multiple initial NamedTopologies
+     *
+     * @throws IllegalArgumentException if any of the named topologies have the same name
+     * @throws TopologyException        if multiple NamedTopologies subscribe to the same input topics or pattern
+     */
+    public KafkaStreamsNamedTopologyWrapper(final Collection<NamedTopology> topologies, final Properties props) {
+        this(topologies, new StreamsConfig(props), new DefaultKafkaClientSupplier());
     }
 
     /**
