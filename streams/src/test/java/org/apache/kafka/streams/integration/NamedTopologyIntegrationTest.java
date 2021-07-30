@@ -65,7 +65,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 
 public class NamedTopologyIntegrationTest {
-        public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
     private final static String INPUT_STREAM_1 = "input-stream-1";
     private final static String INPUT_STREAM_2 = "input-stream-2";
@@ -74,8 +74,8 @@ public class NamedTopologyIntegrationTest {
     private final static String OUTPUT_STREAM_2 = "output-stream-2";
     private final static String OUTPUT_STREAM_3 = "output-stream-3";
 
-    private static Properties PRODUCER_CONFIG;
-    private static Properties CONSUMER_CONFIG;
+    private static Properties producerConfig;
+    private static Properties consumerConfig;
 
     @BeforeClass
     public static void initializeClusterAndStandardTopics() throws Exception {
@@ -88,8 +88,8 @@ public class NamedTopologyIntegrationTest {
         CLUSTER.createTopic(OUTPUT_STREAM_2, 2, 1);
         CLUSTER.createTopic(OUTPUT_STREAM_3, 2, 1);
 
-        PRODUCER_CONFIG = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, LongSerializer.class);
-        CONSUMER_CONFIG = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, LongDeserializer.class);
+        producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, LongSerializer.class);
+        consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, LongDeserializer.class);
 
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
         produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
@@ -205,7 +205,7 @@ public class NamedTopologyIntegrationTest {
             .toStream().to(OUTPUT_STREAM_1);
         streams = new KafkaStreamsNamedTopologyWrapper(topology1Builder.buildNamedTopology(props), props, clientSupplier);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
-        final List<KeyValue<String, Long>> results = waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_1, 3);
+        final List<KeyValue<String, Long>> results = waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3);
         assertThat(results, equalTo(STANDARD_OUTPUT_DATA));
 
         final Set<String> allTopics = CLUSTER.getAllTopicsInCluster();
@@ -221,9 +221,9 @@ public class NamedTopologyIntegrationTest {
         streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder, topology2Builder, topology3Builder), props, clientSupplier);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_1, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_2, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_3, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(STANDARD_OUTPUT_DATA));
 
         assertThat(CLUSTER.getAllTopicsInCluster().containsAll(asList(changelog1, changelog2, changelog3)), is(true));
     }
@@ -236,9 +236,9 @@ public class NamedTopologyIntegrationTest {
         streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder, topology2Builder, topology3Builder), props, clientSupplier);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_1, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_2, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_3, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(STANDARD_OUTPUT_DATA));
 
         System.out.println(CLUSTER.getAllTopicsInCluster());
         assertThat(CLUSTER.getAllTopicsInCluster().containsAll(asList(changelog1, changelog2, changelog3)), is(true));
@@ -252,9 +252,9 @@ public class NamedTopologyIntegrationTest {
         streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder, topology2Builder, topology3Builder), props, clientSupplier);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_1, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_2, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_3, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(STANDARD_OUTPUT_DATA));
     }
 
     @Test
@@ -265,16 +265,16 @@ public class NamedTopologyIntegrationTest {
         streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder, topology2Builder, topology3Builder), props, clientSupplier);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_1, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_2, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(CONSUMER_CONFIG, OUTPUT_STREAM_3, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(STANDARD_OUTPUT_DATA));
     }
 
     private static void produceToInputTopics(final String topic, final Collection<KeyValue<String, Long>> records) {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             topic,
             records,
-            PRODUCER_CONFIG,
+            producerConfig,
             CLUSTER.time
         );
     }
