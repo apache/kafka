@@ -59,6 +59,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.RequestManager.ConnectionState;
+import org.apache.kafka.raft.errors.FencedEpochException;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.BlockingMessageQueue;
@@ -2259,7 +2261,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private long append(int epoch, List<T> records, boolean isAtomic) {
         LeaderState<T> leaderState = quorum.<T>maybeLeaderState().orElseThrow(
-            () -> new IllegalStateException("Can not get offset because we are not the current leader")
+            () -> new NotLeaderException("Append failed because the replication is not the current leader")
         );
 
         BatchAccumulator<T> accumulator = leaderState.accumulator();
@@ -2305,7 +2307,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         int currentEpoch = leaderAndEpoch.epoch();
 
         if (epoch > currentEpoch) {
-            throw new IllegalArgumentException("Attempt to resign from epoch " + epoch +
+            throw new FencedEpochException("Attempt to resign from epoch " + epoch +
                 " which is larger than the current epoch " + currentEpoch);
         } else if (epoch < currentEpoch) {
             // If the passed epoch is smaller than the current epoch, then it might mean
@@ -2316,7 +2318,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 "current epoch {}", epoch, currentEpoch);
             return;
         } else if (!leaderAndEpoch.isLeader(quorum.localIdOrThrow())) {
-            throw new IllegalArgumentException("Cannot resign from epoch " + epoch +
+            throw new NotLeaderException("Cannot resign from epoch " + epoch +
                 " since we are not the leader");
         } else {
             // Note that if we transition to another state before we have a chance to

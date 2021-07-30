@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.raft.errors.BufferAllocationException;
+import org.apache.kafka.raft.errors.FencedEpochException;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
@@ -142,12 +145,13 @@ public interface RaftClient<T> extends AutoCloseable {
      *
      * @param epoch the current leader epoch
      * @param records the list of records to append
-     * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
-     *         be committed; null if no memory could be allocated for the batch at this time
+     * @return the expected offset of the last record if append succeed
      * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
-     * @throws IllegalStateException if the append operation failed
+     * @throws NotLeaderException if we are not the current leader
+     * @throws FencedEpochException the epoch doesn't match the leader epoch
+     * @throws BufferAllocationException if we failed to allocate memory for the records
      */
     long scheduleAppend(int epoch, List<T> records);
 
@@ -165,12 +169,13 @@ public interface RaftClient<T> extends AutoCloseable {
      *
      * @param epoch the current leader epoch
      * @param records the list of records to append
-     * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
-     *         be committed; null if no memory could be allocated for the batch at this time
+     * @return the expected offset of the last record if append succeed
      * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
-     * @throws IllegalStateException if the append operation failed
+     * @throws NotLeaderException if we are not the current leader
+     * @throws FencedEpochException the epoch doesn't match the leader epoch
+     * @throws BufferAllocationException we failed to allocate memory for the records
      */
     long scheduleAtomicAppend(int epoch, List<T> records);
 

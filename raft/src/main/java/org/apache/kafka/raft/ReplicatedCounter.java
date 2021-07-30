@@ -65,7 +65,8 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             long offset = client.scheduleAppend(epoch, singletonList(uncommitted));
             log.debug("Scheduled append of record {} with epoch {} at offset {}",
                 uncommitted, epoch, offset);
-        } catch (IllegalStateException e) {
+        } catch (Exception e) {
+            log.info("Appending failed, transition to resigned", e);
             client.resign(epoch);
         }
     }
