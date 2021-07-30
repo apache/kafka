@@ -333,6 +333,42 @@ public final class Utils {
     }
 
     /**
+     * Compares two character arrays for equality using a constant-time algorithm, which is needed
+     * for comparing passwords. Two arrays are equal if they have the same length and all
+     * characters at corresponding positions are equal.
+     *
+     * All characters in the first array are examined to determine equality.
+     * The calculation time depends only on the length of this first character array; it does not
+     * depend on the length of the second character array or the contents of either array.
+     *
+     * @param first the first array to compare
+     * @param second the second array to compare
+     * @return true if the arrays are equal, or false otherwise
+     */
+    public static boolean isEqualConstantTime(char[] first, char[] second) {
+        if (first == second) {
+            return true;
+        }
+        if (first == null || second == null) {
+            return false;
+        }
+
+        if (second.length == 0) {
+            return first.length == 0;
+        }
+
+        // time-constant comparison that always compares all characters in first array
+        boolean matches = first.length == second.length;
+        for (int i = 0; i < first.length; ++i) {
+            int j = i < second.length ? i : 0;
+            if (first[i] != second[j]) {
+                matches = false;
+            }
+        }
+        return matches;
+    }
+
+    /**
      * Sleep for a bit
      * @param ms The duration of the sleep
      */
