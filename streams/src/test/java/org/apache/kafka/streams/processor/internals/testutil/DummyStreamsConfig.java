@@ -14,34 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.processor.internals.testutil;
 
-package org.apache.kafka.controller;
+import org.apache.kafka.streams.StreamsConfig;
 
+import java.util.Properties;
 
-public interface ControllerMetrics extends AutoCloseable {
-    void setActive(boolean active);
+public class DummyStreamsConfig extends StreamsConfig {
 
-    boolean active();
+    private final static Properties PROPS = dummyProps();
 
-    void updateEventQueueTime(long durationMs);
+    public DummyStreamsConfig() {
+        super(PROPS);
+    }
 
-    void updateEventQueueProcessingTime(long durationMs);
-
-    void setGlobalTopicsCount(int topicCount);
-
-    int globalTopicsCount();
-
-    void setGlobalPartitionCount(int partitionCount);
-
-    int globalPartitionCount();
-
-    void setOfflinePartitionCount(int offlinePartitions);
-
-    int offlinePartitionCount();
-
-    void setPreferredReplicaImbalanceCount(int replicaImbalances);
-
-    int preferredReplicaImbalanceCount();
-
-    void close();
+    private static Properties dummyProps() {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-application");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
+        return props;
+    }
 }

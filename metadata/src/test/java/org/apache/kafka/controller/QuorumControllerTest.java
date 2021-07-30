@@ -103,11 +103,14 @@ public class QuorumControllerTest {
      */
     @Test
     public void testCreateAndClose() throws Throwable {
+        MockControllerMetrics metrics = new MockControllerMetrics();
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, __ -> { })
+            QuorumControllerTestEnv controlEnv =
+                new QuorumControllerTestEnv(logEnv, builder -> builder.setMetrics(metrics))
         ) {
         }
+        assertTrue(metrics.isClosed(), "metrics were not closed");
     }
 
     /**

@@ -1380,6 +1380,7 @@ public final class QuorumController implements Controller {
     @Override
     public void close() throws InterruptedException {
         queue.close();
+        controllerMetrics.close();
     }
 
     // VisibleForTesting

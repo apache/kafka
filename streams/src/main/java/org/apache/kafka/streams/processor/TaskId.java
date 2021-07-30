@@ -37,6 +37,8 @@ public class TaskId implements Comparable<TaskId> {
 
     private static final Logger LOG = LoggerFactory.getLogger(TaskId.class);
 
+    public static final String NAMED_TOPOLOGY_DELIMITER = "__";
+
     /** The ID of the subtopology, aka topicGroupId. */
     @Deprecated
     public final int topicGroupId;
@@ -80,30 +82,30 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public String toString() {
-        return namedTopology != null ? namedTopology + "_" + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
+        return namedTopology != null ? namedTopology + NAMED_TOPOLOGY_DELIMITER + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
     }
 
     /**
      * @throws TaskIdFormatException if the taskIdStr is not a valid {@link TaskId}
      */
     public static TaskId parse(final String taskIdStr) {
-        final int firstIndex = taskIdStr.indexOf('_');
-        final int secondIndex = taskIdStr.indexOf('_', firstIndex + 1);
-        if (firstIndex <= 0 || firstIndex + 1 >= taskIdStr.length()) {
-            throw new TaskIdFormatException(taskIdStr);
-        }
-
         try {
-            // If only one copy of '_' exists, there is no named topology in the string
-            if (secondIndex < 0) {
-                final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, firstIndex));
-                final int partition = Integer.parseInt(taskIdStr.substring(firstIndex + 1));
+            final int namedTopologyDelimiterIndex = taskIdStr.indexOf(NAMED_TOPOLOGY_DELIMITER);
+            // If there is no copy of the NamedTopology delimiter, this task has no named topology and only one `_` char
+            if (namedTopologyDelimiterIndex < 0) {
+                final int index = taskIdStr.indexOf('_');
+
+                final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, index));
+                final int partition = Integer.parseInt(taskIdStr.substring(index + 1));
 
                 return new TaskId(topicGroupId, partition);
             } else {
-                final String namedTopology = taskIdStr.substring(0, firstIndex);
-                final int topicGroupId = Integer.parseInt(taskIdStr.substring(firstIndex + 1, secondIndex));
-                final int partition = Integer.parseInt(taskIdStr.substring(secondIndex + 1));
+                final int topicGroupIdIndex = namedTopologyDelimiterIndex + 2;
+                final int subtopologyPartitionDelimiterIndex = taskIdStr.indexOf('_', topicGroupIdIndex);
+
+                final String namedTopology = taskIdStr.substring(0, namedTopologyDelimiterIndex);
+                final int topicGroupId = Integer.parseInt(taskIdStr.substring(topicGroupIdIndex, subtopologyPartitionDelimiterIndex));
+                final int partition = Integer.parseInt(taskIdStr.substring(subtopologyPartitionDelimiterIndex + 1));
 
                 return new TaskId(topicGroupId, partition, namedTopology);
             }
