@@ -880,7 +880,7 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) -> getNumLiveStreamThreads());
 
         streamsMetadataState = new StreamsMetadataState(
-                this.topologyMetadata,
+            this.topologyMetadata,
             parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
 
         oldHandler = false;

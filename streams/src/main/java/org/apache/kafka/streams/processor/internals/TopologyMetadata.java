@@ -90,14 +90,14 @@ public class TopologyMetadata {
 
         // If there are named topologies but some are empty, this indicates a bug in user code
         if (hasNamedTopologies()) {
-            if (hasNoNonGlobalTopology() && !hasGlobalTopology()) {
+            if (hasNoLocalTopology() && !hasGlobalTopology()) {
                 log.error("Detected a named topology with no input topics, a named topology may not be empty.");
                 throw new TopologyException("Topology has no stream threads and no global threads, " +
                                                 "must subscribe to at least one source topic or pattern.");
             }
         } else {
             // If both the global and non-global topologies are empty, this indicates a bug in user code
-            if (hasNoNonGlobalTopology() && !hasGlobalTopology()) {
+            if (hasNoLocalTopology() && !hasGlobalTopology()) {
                 log.error("Topology with no input topics will create no stream threads and no global thread.");
                 throw new TopologyException("Topology has no stream threads and no global threads, " +
                                                 "must subscribe to at least one source topic or global table.");
@@ -105,7 +105,7 @@ public class TopologyMetadata {
         }
 
         // Lastly we check for an empty non-global topology and override the threads to zero if set otherwise
-        if (configuredNumStreamThreads != 0 && hasNoNonGlobalTopology()) {
+        if (configuredNumStreamThreads != 0 && hasNoLocalTopology()) {
             log.info("Overriding number of StreamThreads to zero for global-only topology");
             return 0;
         }
@@ -118,12 +118,18 @@ public class TopologyMetadata {
         return !builders.containsKey(UNNAMED_TOPOLOGY);
     }
 
+    /**
+     * @return true iff any of the topologies have a global topology
+     */
     public boolean hasGlobalTopology() {
         return evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::hasGlobalStores);
     }
 
-    public boolean hasNoNonGlobalTopology() {
-        return evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::hasNoNonGlobalTopology);
+    /**
+     * @return true iff any of the topologies have no local (aka non-global) topology
+     */
+    public boolean hasNoLocalTopology() {
+        return evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::hasNoLocalTopology);
     }
 
     public boolean hasPersistentStores() {

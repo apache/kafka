@@ -1387,7 +1387,7 @@ public class InternalTopologyBuilder {
         return sourceTopicPatternString;
     }
 
-    public boolean hasNoNonGlobalTopology() {
+    public boolean hasNoLocalTopology() {
         return nodeToSourcePatterns.isEmpty() && sourceTopicNames.isEmpty();
     }
 
