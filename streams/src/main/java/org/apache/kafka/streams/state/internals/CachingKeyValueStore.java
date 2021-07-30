@@ -252,7 +252,7 @@ public class CachingKeyValueStore
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
-        if (from.compareTo(to) > 0) {
+        if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
                 "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -269,7 +269,7 @@ public class CachingKeyValueStore
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                         final Bytes to) {
-        if (from.compareTo(to) > 0) {
+        if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
                 "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +

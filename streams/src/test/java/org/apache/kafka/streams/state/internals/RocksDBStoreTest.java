@@ -68,11 +68,13 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.easymock.EasyMock.eq;
@@ -694,11 +696,24 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldThrowNullPointerExceptionOnRange() {
+    public void shouldReturnValueOnRange() {
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
-        assertThrows(
-            NullPointerException.class,
-            () -> rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "2"))));
+
+        final KeyValue<String, String> kv0 = new KeyValue<>("0", "zero");
+        final KeyValue<String, String> kv1 = new KeyValue<>("1", "one");
+        final KeyValue<String, String> kv2 = new KeyValue<>("2", "two");
+
+        rocksDBStore.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
+        rocksDBStore.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
+        rocksDBStore.put(new Bytes(kv2.key.getBytes(UTF_8)), kv2.value.getBytes(UTF_8));
+
+        final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
+        expectedContents.add(kv0);
+        expectedContents.add(kv1);
+
+        try (final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "1")))) {
+            assertEquals(expectedContents, getDeserializedList(iterator));
+        }
     }
 
     @Test
@@ -958,6 +973,12 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         entries.add(new KeyValue<>("2".getBytes(UTF_8), "b".getBytes(UTF_8)));
         entries.add(new KeyValue<>("3".getBytes(UTF_8), "c".getBytes(UTF_8)));
         return entries;
+    }
+
+    private List<KeyValue<String, String>> getDeserializedList(final KeyValueIterator<Bytes, byte[]> iter) {
+        final List<KeyValue<Bytes, byte[]>> bytes = Utils.toList(iter);
+        final List<KeyValue<String, String>> result = bytes.stream().map(kv -> new KeyValue<String, String>(kv.key.toString(), stringDeserializer.deserialize(null, kv.value))).collect(Collectors.toList());
+        return result;
     }
 
 }

@@ -20,12 +20,13 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
@@ -37,34 +38,46 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-        if (from.compareTo(to) > 0) {
+        if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
-                "This may be due to range arguments set in the wrong order, " +
-                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
+                    "This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                    "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
+        } else {
+            final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
+            final Iterator<Bytes> keys = getIterator(treeMap, from, to, true);
+            return new DelegatingPeekingKeyValueIterator<>(name(),
+                    new MemoryNavigableLRUCache.CacheIterator(keys, treeMap));
         }
-
-        final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
-        return new DelegatingPeekingKeyValueIterator<>(name(),
-            new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet()
-                .subSet(from, true, to, true).iterator(), treeMap));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
-        if (from.compareTo(to) > 0) {
+        if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
-                "This may be due to range arguments set in the wrong order, " +
-                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
+                    "This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                    "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
+        } else {
+            final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
+            final Iterator<Bytes> keys = getIterator(treeMap, from, to, false);
+            return new DelegatingPeekingKeyValueIterator<>(name(),
+                    new MemoryNavigableLRUCache.CacheIterator(keys, treeMap));
         }
+    }
 
-        final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
-        return new DelegatingPeekingKeyValueIterator<>(name(),
-            new MemoryNavigableLRUCache.CacheIterator(treeMap
-                .subMap(from, true, to, true).descendingKeySet().iterator(), treeMap));
+    private Iterator<Bytes> getIterator(final TreeMap<Bytes, byte[]> treeMap, final Bytes from, final Bytes to, final boolean forward) {
+        if (from == null && to == null) {
+            return forward ? treeMap.navigableKeySet().iterator() : treeMap.navigableKeySet().descendingIterator();
+        } else if (from == null) {
+            return forward ? treeMap.navigableKeySet().headSet(to, true).iterator() : treeMap.navigableKeySet().headSet(to, true).descendingIterator();
+        } else if (to == null) {
+            return forward ? treeMap.navigableKeySet().tailSet(from, true).iterator() : treeMap.navigableKeySet().tailSet(from, true).descendingIterator();
+        } else {
+            return forward ? treeMap.navigableKeySet().subSet(from, true, to, true).iterator() : treeMap.navigableKeySet().subSet(from, true, to, true).descendingIterator();
+        }
     }
 
     @Override
@@ -83,14 +96,12 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
     @Override
     public  KeyValueIterator<Bytes, byte[]> all() {
-        final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
-        return new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet().iterator(), treeMap);
+        return range(null, null);
     }
 
     @Override
     public  KeyValueIterator<Bytes, byte[]> reverseAll() {
-        final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
-        return new MemoryNavigableLRUCache.CacheIterator(treeMap.descendingKeySet().iterator(), treeMap);
+        return reverseRange(null, null);
     }
 
     private synchronized TreeMap<Bytes, byte[]> toTreeMap() {
