@@ -60,6 +60,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -743,5 +744,47 @@ public class UtilsTest {
 
         assertThat(diff, is(mkSet("a", "b")));
         assertThat(diff.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testCharacterArrayEquality() {
+        assertCharacterArraysAreNotEqual(null, "abc");
+        assertCharacterArraysAreNotEqual(null, "");
+        assertCharacterArraysAreNotEqual("abc", null);
+        assertCharacterArraysAreNotEqual("", null);
+        assertCharacterArraysAreNotEqual("", "abc");
+        assertCharacterArraysAreNotEqual("abc", "abC");
+        assertCharacterArraysAreNotEqual("abc", "abcd");
+        assertCharacterArraysAreNotEqual("abc", "abcdefg");
+        assertCharacterArraysAreNotEqual("abcdefg", "abc");
+        assertCharacterArraysAreEqual("abc", "abc");
+        assertCharacterArraysAreEqual("a", "a");
+        assertCharacterArraysAreEqual("", "");
+        assertCharacterArraysAreEqual("", "");
+        assertCharacterArraysAreEqual(null, null);
+    }
+
+    private void assertCharacterArraysAreNotEqual(String a, String b) {
+        char[] first = a != null ? a.toCharArray() : null;
+        char[] second = b != null ? b.toCharArray() : null;
+        if (a == null) {
+            assertNotNull(b);
+        } else {
+            assertFalse(a.equals(b));
+        }
+        assertFalse(Utils.isEqualConstantTime(first, second));
+        assertFalse(Utils.isEqualConstantTime(second, first));
+    }
+
+    private void assertCharacterArraysAreEqual(String a, String b) {
+        char[] first = a != null ? a.toCharArray() : null;
+        char[] second = b != null ? b.toCharArray() : null;
+        if (a == null) {
+            assertNull(b);
+        } else {
+            assertTrue(a.equals(b));
+        }
+        assertTrue(Utils.isEqualConstantTime(first, second));
+        assertTrue(Utils.isEqualConstantTime(second, first));
     }
 }
