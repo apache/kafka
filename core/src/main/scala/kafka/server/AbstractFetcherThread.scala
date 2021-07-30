@@ -247,7 +247,7 @@ abstract class AbstractFetcherThread(name: String,
         val highWatermark = partitionState.fetchOffset
         val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
 
-        info(s"Truncating partition $tp to $truncationState due to local high watermark $highWatermark")
+        info(s"Truncating partition $tp with $truncationState due to local high watermark $highWatermark")
         if (doTruncate(tp, truncationState))
           fetchOffsets.put(tp, truncationState)
       }
@@ -265,7 +265,7 @@ abstract class AbstractFetcherThread(name: String,
       Errors.forCode(leaderEpochOffset.errorCode) match {
         case Errors.NONE =>
           val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
-          info(s"Truncating partition $tp to $offsetTruncationState due to leader epoch and offset $leaderEpochOffset")
+          info(s"Truncating partition $tp with $offsetTruncationState due to leader epoch and offset $leaderEpochOffset")
           if (doTruncate(tp, offsetTruncationState))
             fetchOffsets.put(tp, offsetTruncationState)
 
