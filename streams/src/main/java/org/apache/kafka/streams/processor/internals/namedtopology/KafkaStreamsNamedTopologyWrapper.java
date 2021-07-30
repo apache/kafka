@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
  *
  * Note: some standard features of Kafka Streams are not yet supported with NamedTopologies. These include:
  *       - global state stores
- *       - interactive queries (IQ)
+ *       - interactive queries (IQ) -- partially working, requires all stores to be given a unique name
  *       - TopologyTestDriver (TTD)
  */
 @Unstable
