@@ -44,6 +44,8 @@ import static org.apache.kafka.common.utils.Utils.validHostPattern;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -465,5 +467,47 @@ public class UtilsTest {
         // Test that deleting a non-existent directory hierarchy works.
         Utils.delete(tempDir);
         assertFalse(Files.exists(tempDir.toPath()));
+    }
+
+    @Test
+    public void testCharacterArrayEquality() {
+        assertCharacterArraysAreNotEqual(null, "abc");
+        assertCharacterArraysAreNotEqual(null, "");
+        assertCharacterArraysAreNotEqual("abc", null);
+        assertCharacterArraysAreNotEqual("", null);
+        assertCharacterArraysAreNotEqual("", "abc");
+        assertCharacterArraysAreNotEqual("abc", "abC");
+        assertCharacterArraysAreNotEqual("abc", "abcd");
+        assertCharacterArraysAreNotEqual("abc", "abcdefg");
+        assertCharacterArraysAreNotEqual("abcdefg", "abc");
+        assertCharacterArraysAreEqual("abc", "abc");
+        assertCharacterArraysAreEqual("a", "a");
+        assertCharacterArraysAreEqual("", "");
+        assertCharacterArraysAreEqual("", "");
+        assertCharacterArraysAreEqual(null, null);
+    }
+
+    private void assertCharacterArraysAreNotEqual(String a, String b) {
+        char[] first = a != null ? a.toCharArray() : null;
+        char[] second = b != null ? b.toCharArray() : null;
+        if (a == null) {
+            assertNotNull(b);
+        } else {
+            assertFalse(a.equals(b));
+        }
+        assertFalse(Utils.isEqualConstantTime(first, second));
+        assertFalse(Utils.isEqualConstantTime(second, first));
+    }
+
+    private void assertCharacterArraysAreEqual(String a, String b) {
+        char[] first = a != null ? a.toCharArray() : null;
+        char[] second = b != null ? b.toCharArray() : null;
+        if (a == null) {
+            assertNull(b);
+        } else {
+            assertTrue(a.equals(b));
+        }
+        assertTrue(Utils.isEqualConstantTime(first, second));
+        assertTrue(Utils.isEqualConstantTime(second, first));
     }
 }

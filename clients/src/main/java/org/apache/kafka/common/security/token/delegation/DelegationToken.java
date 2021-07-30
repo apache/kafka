@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.token.delegation;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Base64;
 
@@ -61,7 +62,7 @@ public class DelegationToken {
         if (tokenInformation != null ? !tokenInformation.equals(token.tokenInformation) : token.tokenInformation != null) {
             return false;
         }
-        return Arrays.equals(hmac, token.hmac);
+        return MessageDigest.isEqual(hmac, token.hmac);
     }
 
     @Override
