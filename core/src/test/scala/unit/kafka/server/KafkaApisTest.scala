@@ -3879,14 +3879,6 @@ class KafkaApisTest {
     assertEquals(KafkaApis.shouldAlwaysForward(request).getMessage, e.getMessage)
   }
 
-  private def verifyShouldVerifyBeforeForwarding(handler: RequestChannel.Request => Unit): Unit = {
-    val request = createMockRequest()
-    // Throws NPE because there is no request body in the mock request. 
-    // TODO: Need a more complete testing strategy than what was here before. 
-    val e = assertThrows(classOf[NullPointerException], () => handler(request))
-    assertNotEquals(KafkaApis.shouldAlwaysForward(request).getMessage, e.getMessage)
-  }
-
   @Test
   def testRaftShouldNeverHandleLeaderAndIsrRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
@@ -3954,21 +3946,9 @@ class KafkaApisTest {
   }
 
   @Test
-  def testRaftShouldVerifyBeforeForwardingAlterConfigsRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldVerifyBeforeForwarding(createKafkaApis(raftSupport = true).handleAlterConfigsRequest)
-  }
-
-  @Test
   def testRaftShouldAlwaysForwardAlterPartitionReassignmentsRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterPartitionReassignmentsRequest)
-  }
-
-  @Test
-  def testRaftShouldVerifyBeforeForwardingIncrementalAlterConfigsRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldVerifyBeforeForwarding(createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest)
   }
 
   @Test
