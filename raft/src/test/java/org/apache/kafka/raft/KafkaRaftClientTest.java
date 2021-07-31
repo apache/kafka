@@ -36,7 +36,6 @@ import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.errors.BufferAllocationException;
-import org.apache.kafka.raft.errors.FencedEpochException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
@@ -326,7 +325,7 @@ public class KafkaRaftClientTest {
     }
 
     @Test
-    public void testAppendFailedWithFencedEpochException() throws Exception {
+    public void testAppendFailedWithFencedEpoch() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
@@ -338,8 +337,9 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalInt.of(localId), context.currentLeader());
         int epoch = context.currentEpoch();
 
-        assertThrows(FencedEpochException.class, () -> context.client.scheduleAppend(epoch + 1, singletonList("a")));
-        assertThrows(FencedEpochException.class, () -> context.client.scheduleAppend(epoch - 1, singletonList("a")));
+        // Throws NotLeaderException on unexpected epoch
+        assertThrows(NotLeaderException.class, () -> context.client.scheduleAppend(epoch + 1, singletonList("a")));
+        assertThrows(NotLeaderException.class, () -> context.client.scheduleAppend(epoch - 1, singletonList("a")));
     }
 
     @Test
@@ -553,7 +553,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
         context.becomeLeader();
 
-        assertThrows(FencedEpochException.class,
+        assertThrows(IllegalArgumentException.class,
             () -> context.client.resign(context.currentEpoch() + 1));
     }
 
@@ -569,7 +569,7 @@ public class KafkaRaftClientTest {
             .build();
 
         assertEquals(OptionalInt.of(otherNodeId), context.currentLeader());
-        assertThrows(NotLeaderException.class, () -> context.client.resign(leaderEpoch));
+        assertThrows(IllegalArgumentException.class, () -> context.client.resign(leaderEpoch));
     }
 
     @Test

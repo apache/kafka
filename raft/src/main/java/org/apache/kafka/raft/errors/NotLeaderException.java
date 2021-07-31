@@ -17,8 +17,8 @@
 package org.apache.kafka.raft.errors;
 
 /**
- * Indicates that an operation is not allowed because it can only be performed on the leader and
- * this node is not the current leader.
+ * Indicates that an operation is not allowed because this node is not the
+ * current leader or the epoch is not the same with the current leader epoch.
  */
 public class NotLeaderException extends RaftException {
 

@@ -23,7 +23,7 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.BufferAllocationException;
-import org.apache.kafka.raft.errors.FencedEpochException;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -97,14 +97,14 @@ public class BatchAccumulator<T> implements Closeable {
      * this method can split the records into multiple batches it is possible that some of the
      * records will get committed while other will not when the leader fails.
      *
-     * @param epoch the expected leader epoch. If this does not match, then {@link FencedEpochException}
+     * @param epoch the expected leader epoch. If this does not match, then {@link NotLeaderException}
      *              will be thrown
      * @param records the list of records to include in the batches
      * @return the expected offset of the last record
      * @throws RecordBatchTooLargeException if the size of one record T is greater than the maximum
      *         batch size; if this exception is throw some of the elements in records may have
      *         been committed
-     * @throws FencedEpochException the epoch doesn't match the leader epoch
+     * @throws NotLeaderException if the epoch doesn't match the leader epoch
      * @throws BufferAllocationException if we failed to allocate memory for the records
      */
     public long append(int epoch, List<T> records) {
@@ -116,14 +116,14 @@ public class BatchAccumulator<T> implements Closeable {
      * same underlying record batch so that either all of the records become committed or none of
      * them do.
      *
-     * @param epoch the expected leader epoch. If this does not match, then {@link FencedEpochException}
+     * @param epoch the expected leader epoch. If this does not match, then {@link NotLeaderException}
      *              will be thrown
      * @param records the list of records to include in a batch
      * @return the expected offset of the last record
      * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
-     * @throws FencedEpochException the epoch doesn't match the leader epoch
+     * @throws NotLeaderException if the epoch doesn't match the leader epoch
      * @throws BufferAllocationException if we failed to allocate memory for the records
      */
     public long appendAtomic(int epoch, List<T> records) {
@@ -132,7 +132,7 @@ public class BatchAccumulator<T> implements Closeable {
 
     private long append(int epoch, List<T> records, boolean isAtomic) {
         if (epoch != this.epoch) {
-            throw new FencedEpochException("Append failed because the epoch doesn't match");
+            throw new NotLeaderException("Append failed because the epoch doesn't match");
         }
 
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
