@@ -243,10 +243,16 @@ public class StoreQueryIntegrationTest {
                 return true;
             } catch (final InvalidStateStoreException exception) {
                 assertThat(
+                    "Unexpected exception thrown while getting the value from store.",
                     exception.getMessage(),
-                    containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING")
+                    is(
+                        oneOf(
+                            containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
+                            containsString("The state store, source-table, may have migrated to another instance")
+                        )
+                    )
                 );
-                LOG.info("Streams wasn't running. Will try again.");
+                LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
         });
@@ -509,10 +515,16 @@ public class StoreQueryIntegrationTest {
                 return true;
             } catch (final InvalidStateStoreException exception) {
                 assertThat(
-                        exception.getMessage(),
-                        matchesRegex("Cannot get state store source-table because the stream thread is (PARTITIONS_ASSIGNED|STARTING|PARTITIONS_REVOKED), not RUNNING")
+                    "Unexpected exception thrown while getting the value from store.",
+                    exception.getMessage(),
+                    is(
+                        oneOf(
+                            containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
+                            containsString("The state store, source-table, may have migrated to another instance")
+                        )
+                    )
                 );
-                LOG.info("Streams wasn't running. Will try again.");
+                LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
         });
@@ -533,10 +545,16 @@ public class StoreQueryIntegrationTest {
                 return true;
             } catch (final InvalidStateStoreException exception) {
                 assertThat(
-                        exception.getMessage(),
-                        matchesRegex("Cannot get state store source-table because the stream thread is (PARTITIONS_ASSIGNED|STARTING|PARTITIONS_REVOKED), not RUNNING")
+                    "Unexpected exception thrown while getting the value from store.",
+                    exception.getMessage(),
+                    is(
+                        oneOf(
+                            containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
+                            containsString("The state store, source-table, may have migrated to another instance")
+                        )
+                    )
                 );
-                LOG.info("Streams wasn't running. Will try again.");
+                LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
         });
