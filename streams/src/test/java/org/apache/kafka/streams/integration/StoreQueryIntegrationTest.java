@@ -152,11 +152,7 @@ public class StoreQueryIntegrationTest {
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                    exception.getMessage(),
-                    containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING")
-                );
-                LOG.info("Streams wasn't running. Will try again.");
+                LOG.info("Streams wasn't running. Will try again.", exception);
                 return false;
             }
         });
@@ -243,11 +239,7 @@ public class StoreQueryIntegrationTest {
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                    exception.getMessage(),
-                    containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING")
-                );
-                LOG.info("Streams wasn't running. Will try again.");
+                LOG.info("Streams wasn't running. Will try again.", exception);
                 return false;
             }
         });
