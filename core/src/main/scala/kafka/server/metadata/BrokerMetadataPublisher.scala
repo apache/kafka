@@ -19,7 +19,7 @@ package kafka.server.metadata
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{Log, LogManager}
+import kafka.log.{UnifiedLog, LogManager}
 import kafka.server.ConfigType
 import kafka.server.{ConfigEntityName, ConfigHandler, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
@@ -64,7 +64,7 @@ object BrokerMetadataPublisher extends Logging {
    */
   def findStrayPartitions(brokerId: Int,
                           newTopicsImage: TopicsImage,
-                          logs: Iterable[Log]): Iterable[TopicPartition] = {
+                          logs: Iterable[UnifiedLog]): Iterable[TopicPartition] = {
     logs.flatMap { log =>
       val topicId = log.topicId.getOrElse {
         throw new RuntimeException(s"The log dir $log does not have a topic ID, " +

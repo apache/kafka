@@ -16,7 +16,7 @@
  */
 package kafka.raft
 
-import kafka.log.{Defaults, Log, SegmentDeletion}
+import kafka.log.{Defaults, UnifiedLog, SegmentDeletion}
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMillisProp, MetadataLogSegmentMinBytesProp, NodeIdProp, ProcessRolesProp, QuorumVotersProp}
 import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.{MockTime, TestUtils}
@@ -905,7 +905,7 @@ object KafkaMetadataLogTest {
 
     val logDir = createLogDirectory(
       tempDir,
-      Log.logDirName(KafkaRaftServer.MetadataPartition)
+      UnifiedLog.logDirName(KafkaRaftServer.MetadataPartition)
     )
 
     val metadataLog = KafkaMetadataLog(

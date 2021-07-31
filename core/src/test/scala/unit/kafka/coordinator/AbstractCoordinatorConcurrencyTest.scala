@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
-import kafka.log.{AppendOrigin, Log, LogConfig}
+import kafka.log.{AppendOrigin, UnifiedLog, LogConfig}
 import kafka.server._
 import kafka.utils._
 import kafka.utils.timer.MockTimer
@@ -160,7 +160,7 @@ object AbstractCoordinatorConcurrencyTest {
   class TestReplicaManager extends ReplicaManager(
     null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None, null) {
 
-    @volatile var logs: mutable.Map[TopicPartition, (Log, Long)] = _
+    @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
     var producePurgatory: DelayedOperationPurgatory[DelayedProduce] = _
     var watchKeys: mutable.Set[TopicPartitionOperationKey] = _
 
@@ -212,13 +212,13 @@ object AbstractCoordinatorConcurrencyTest {
       Some(RecordBatch.MAGIC_VALUE_V2)
     }
 
-    def getOrCreateLogs(): mutable.Map[TopicPartition, (Log, Long)] = {
+    def getOrCreateLogs(): mutable.Map[TopicPartition, (UnifiedLog, Long)] = {
       if (logs == null)
-        logs = mutable.Map[TopicPartition, (Log, Long)]()
+        logs = mutable.Map[TopicPartition, (UnifiedLog, Long)]()
       logs
     }
 
-    def updateLog(topicPartition: TopicPartition, log: Log, endOffset: Long): Unit = {
+    def updateLog(topicPartition: TopicPartition, log: UnifiedLog, endOffset: Long): Unit = {
       getOrCreateLogs().put(topicPartition, (log, endOffset))
     }
 
@@ -226,7 +226,7 @@ object AbstractCoordinatorConcurrencyTest {
       getOrCreateLogs().get(topicPartition).map(_._1.config)
     }
 
-    override def getLog(topicPartition: TopicPartition): Option[Log] =
+    override def getLog(topicPartition: TopicPartition): Option[UnifiedLog] =
       getOrCreateLogs().get(topicPartition).map(l => l._1)
 
     override def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =
