@@ -553,23 +553,30 @@ class ControllerApis(val requestChannel: RequestChannel,
     val registrationRequest = request.body[BrokerRegistrationRequest]
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
-    controller.registerBroker(registrationRequest.data).handle[Unit] { (reply, e) =>
-      def createResponseCallback(requestThrottleMs: Int,
-                                 reply: BrokerRegistrationReply,
-                                 e: Throwable): BrokerRegistrationResponse = {
-        if (e != null) {
-          new BrokerRegistrationResponse(new BrokerRegistrationResponseData().
-            setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(Errors.forException(e).code))
-        } else {
-          new BrokerRegistrationResponse(new BrokerRegistrationResponseData().
-            setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(NONE.code).
-            setBrokerEpoch(reply.epoch))
-        }
-      }
+    if (controllerNodes.filter(_.id == registrationRequest.brokerId).nonEmpty) {
       requestHelper.sendResponseMaybeThrottle(request,
-        requestThrottleMs => createResponseCallback(requestThrottleMs, reply, e))
+        requestThrottleMs => new BrokerRegistrationResponse(new BrokerRegistrationResponseData().
+          setThrottleTimeMs(requestThrottleMs).
+          setErrorCode(DUPLICATE_BROKER_REGISTRATION.code)))
+    } else {
+      controller.registerBroker(registrationRequest.data).handle[Unit] { (reply, e) =>
+        def createResponseCallback(requestThrottleMs: Int,
+                                   reply: BrokerRegistrationReply,
+                                   e: Throwable): BrokerRegistrationResponse = {
+          if (e != null) {
+            new BrokerRegistrationResponse(new BrokerRegistrationResponseData().
+              setThrottleTimeMs(requestThrottleMs).
+              setErrorCode(Errors.forException(e).code))
+          } else {
+            new BrokerRegistrationResponse(new BrokerRegistrationResponseData().
+              setThrottleTimeMs(requestThrottleMs).
+              setErrorCode(NONE.code).
+              setBrokerEpoch(reply.epoch))
+          }
+        }
+        requestHelper.sendResponseMaybeThrottle(request,
+          requestThrottleMs => createResponseCallback(requestThrottleMs, reply, e))
+      }
     }
   }
 

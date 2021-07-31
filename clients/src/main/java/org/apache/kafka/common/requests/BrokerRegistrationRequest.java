@@ -57,6 +57,10 @@ public class BrokerRegistrationRequest extends AbstractRequest {
         return data;
     }
 
+    public int brokerId() {
+        return data.brokerId();
+    }
+
     @Override
     public BrokerRegistrationResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);

@@ -357,6 +357,10 @@ class BrokerToControllerRequestThread(
       }}
 
       requestQueue.putFirst(queueItem)
+    } else if (response.responseBody.errorCounts.containsKey(Errors.DUPLICATE_BROKER_REGISTRATION)) {
+      error(s"Request ${queueItem.request} failed because a controller with this node.id is already in use.",
+        response.authenticationException)
+      queueItem.callback.onComplete(response)
     } else {
       queueItem.callback.onComplete(response)
     }
