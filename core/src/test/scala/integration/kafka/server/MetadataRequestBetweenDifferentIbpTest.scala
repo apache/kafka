@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.api.{ApiVersion, KAFKA_2_8_IV0, KAFKA_3_0_IV1}
+import kafka.api.{ApiVersion, KAFKA_2_8_IV0}
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import kafka.zk.ZkVersion
@@ -36,8 +36,8 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
   override def generateConfigs: Seq[KafkaConfig] = {
     Seq(
       createConfig(0, KAFKA_2_8_IV0),
-      createConfig(1, KAFKA_3_0_IV1),
-      createConfig(2, KAFKA_3_0_IV1)
+      createConfig(1, ApiVersion.latestVersion),
+      createConfig(2, ApiVersion.latestVersion)
     )
   }
 
@@ -45,7 +45,7 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
   def testUnknownTopicId(): Unit = {
     val topic = "topic"
 
-    // Kill controller and restart until broker 2 become controller
+    // Kill controller and restart until broker with latest ibp become controller
     ensureControllerIn(Seq(1, 2))
     createTopic(topic, Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1)))
 
@@ -61,11 +61,11 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
     // Make the broker whose version=KAFKA_2_8_IV0 controller
     ensureControllerIn(Seq(0))
 
-    // Restart the broker whose version=KAFKA_3_0_IV1, and the controller will send metadata request to it
+    // Restart the broker whose ibp is higher, and the controller will send metadata request to it
     killBroker(1)
     restartDeadBrokers()
 
-    // Send request to a broker whose version=KAFKA_3_0_IV1 and restarted just now
+    // Send request to a broker whose ibp is higher and restarted just now
     val resp2 = sendMetadataRequest(new MetadataRequest(requestData(topic, topicId), 12.toShort), brokerSocketServer(1))
     assertEquals(Errors.UNKNOWN_TOPIC_ID, resp2.topicMetadata.iterator().next().error())
   }
@@ -73,13 +73,7 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
   private def ensureControllerIn(brokerIds: Seq[Int]): Unit = {
     while (!brokerIds.contains(controllerSocketServer.config.brokerId)) {
       zkClient.deleteController(ZkVersion.MatchAnyVersion)
-
-      TestUtils.waitUntilTrue(() => try {
-        controllerSocketServer
-        true
-      } catch {
-        case _: IllegalStateException => false
-      }, "No controller broker is elected in time period")
+      TestUtils.waitUntilControllerElected(zkClient)
     }
   }
 

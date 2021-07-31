@@ -321,7 +321,7 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * describe a batch of topics.
+     * Describe some topics in the cluster.
      *
      * When using topic IDs, this operation is supported by brokers with version 3.1.0 or higher.
      *
