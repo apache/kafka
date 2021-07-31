@@ -34,7 +34,7 @@ import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotWriterImpl;
+import org.apache.kafka.snapshot.FileSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
 import org.junit.jupiter.api.Test;
 
@@ -1638,7 +1638,7 @@ final public class KafkaRaftClientSnapshotTest {
     }
 
     private static SnapshotWriter<String> snapshotWriter(RaftClientTestContext context, RawSnapshotWriter snapshot) {
-        return SnapshotWriterImpl.createWithHeader(
+        return FileSnapshotWriter.createWithHeader(
             () -> Optional.of(snapshot),
             4 * 1024,
             MemoryPool.NONE,

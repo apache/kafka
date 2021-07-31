@@ -42,14 +42,14 @@ import java.util.OptionalLong;
  * offsets and epoch from the log are included in this snapshot. Both of these values are
  * inclusive.
  */
-public final class SnapshotReaderImpl<T> implements SnapshotReader<T> {
+public final class FileSnapshotReader<T> implements SnapshotReader<T> {
     private final OffsetAndEpoch snapshotId;
     private final RecordsIterator<T> iterator;
 
     private Optional<Batch<T>> nextBatch = Optional.empty();
     private OptionalLong lastContainedLogTimestamp = OptionalLong.empty();
 
-    private SnapshotReaderImpl(
+    private FileSnapshotReader(
         OffsetAndEpoch snapshotId,
         RecordsIterator<T> iterator
     ) {
@@ -125,13 +125,13 @@ public final class SnapshotReaderImpl<T> implements SnapshotReader<T> {
         iterator.close();
     }
 
-    public static <T> SnapshotReaderImpl<T> of(
+    public static <T> FileSnapshotReader<T> of(
         RawSnapshotReader snapshot,
         RecordSerde<T> serde,
         BufferSupplier bufferSupplier,
         int maxBatchSize
     ) {
-        return new SnapshotReaderImpl<>(
+        return new FileSnapshotReader<>(
             snapshot.snapshotId(),
             new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize)
         );

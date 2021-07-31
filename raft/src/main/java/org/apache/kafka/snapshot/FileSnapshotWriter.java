@@ -45,13 +45,13 @@ import java.util.function.Supplier;
  *
  * @see org.apache.kafka.raft.RaftClient#createSnapshot(OffsetAndEpoch)
  */
-final public class SnapshotWriterImpl<T> implements SnapshotWriter<T> {
+final public class FileSnapshotWriter<T> implements SnapshotWriter<T> {
     final private RawSnapshotWriter snapshot;
     final private BatchAccumulator<T> accumulator;
     final private Time time;
     final private long lastContainedLogTimestamp;
 
-    private SnapshotWriterImpl(
+    private FileSnapshotWriter(
         RawSnapshotWriter snapshot,
         int maxBatchSize,
         MemoryPool memoryPool,
@@ -120,7 +120,7 @@ final public class SnapshotWriterImpl<T> implements SnapshotWriter<T> {
      * @param lastContainedLogTimestamp The append time of the highest record contained in this snapshot
      * @param compressionType the compression algorithm to use
      * @param serde the record serialization and deserialization implementation
-     * @return {@link Optional}{@link SnapshotWriterImpl}
+     * @return {@link Optional}{@link FileSnapshotWriter}
      */
     public static <T> Optional<SnapshotWriter<T>> createWithHeader(
         Supplier<Optional<RawSnapshotWriter>> supplier,
@@ -132,7 +132,7 @@ final public class SnapshotWriterImpl<T> implements SnapshotWriter<T> {
         RecordSerde<T> serde
     ) {
         Optional<SnapshotWriter<T>> writer = supplier.get().map(snapshot -> {
-            return new SnapshotWriterImpl<T>(
+            return new FileSnapshotWriter<T>(
                     snapshot,
                     maxBatchSize,
                     memoryPool,

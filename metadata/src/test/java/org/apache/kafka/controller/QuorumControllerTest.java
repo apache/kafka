@@ -75,7 +75,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
-import org.apache.kafka.snapshot.SnapshotReaderImpl;
+import org.apache.kafka.snapshot.FileSnapshotReader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -401,7 +401,7 @@ public class QuorumControllerTest {
     }
 
     private SnapshotReader<ApiMessageAndVersion> createSnapshotReader(RawSnapshotReader reader) {
-        return SnapshotReaderImpl.of(
+        return FileSnapshotReader.of(
             reader,
             new MetadataRecordSerde(),
             BufferSupplier.create(),

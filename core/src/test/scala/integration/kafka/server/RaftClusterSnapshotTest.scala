@@ -18,17 +18,19 @@
 package kafka.server
 
 import java.util.Collections
+
 import kafka.testkit.KafkaClusterTestKit
 import kafka.testkit.TestKitNodes
 import kafka.utils.TestUtils
-import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.metadata.MetadataRecordSerde
-import org.apache.kafka.snapshot.SnapshotReaderImpl
+import org.apache.kafka.snapshot.FileSnapshotReader
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
@@ -76,7 +78,7 @@ class RaftClusterSnapshotTest {
       // For every controller and broker perform some sanity checks against the lastest snapshot
       for ((_, raftManager) <- cluster.raftManagers().asScala) {
         TestUtils.resource(
-          SnapshotReaderImpl.of(
+          FileSnapshotReader.of(
             raftManager.replicatedLog.latestSnapshot.get(),
             new MetadataRecordSerde(),
             BufferSupplier.create(),
