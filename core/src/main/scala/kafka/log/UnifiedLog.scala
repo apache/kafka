@@ -544,9 +544,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   // For compatibility, metrics are defined to be under `Log` class
   override def metricName(name: String, tags: scala.collection.Map[String, String]): MetricName = {
-    val klass = getClass
-    val pkg = if (klass.getPackage == null) "" else klass.getPackage.getName
-    explicitMetricName(pkg, "Log", name, tags)
+    val pkg = getClass.getPackage
+    val pkgStr = if (pkg == null) "" else pkg.getName
+    explicitMetricName(pkgStr, "Log", name, tags)
   }
 
   private def recordVersion: RecordVersion = config.recordVersion
