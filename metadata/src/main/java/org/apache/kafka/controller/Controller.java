@@ -263,7 +263,7 @@ public interface Controller extends AutoCloseable {
      * If this controller is active, this is the non-negative controller epoch.
      * Otherwise, this is -1.
      */
-    long curClaimEpoch();
+    int curClaimEpoch();
 
     /**
      * Returns true if this controller is currently active.
