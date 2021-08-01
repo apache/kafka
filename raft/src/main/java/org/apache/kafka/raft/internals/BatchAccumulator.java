@@ -131,8 +131,11 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     private long append(int epoch, List<T> records, boolean isAtomic) {
-        if (epoch != this.epoch) {
+        if (epoch < this.epoch) {
             throw new NotLeaderException("Append failed because the epoch doesn't match");
+        } else if (epoch > this.epoch) {
+            throw new IllegalArgumentException("Attempt to append from epoch " + epoch +
+                " which is larger than the current epoch " + this.epoch);
         }
 
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();

@@ -337,8 +337,9 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalInt.of(localId), context.currentLeader());
         int epoch = context.currentEpoch();
 
-        // Throws NotLeaderException on unexpected epoch
-        assertThrows(NotLeaderException.class, () -> context.client.scheduleAppend(epoch + 1, singletonList("a")));
+        // Throws IllegalArgumentException on higher epoch
+        assertThrows(IllegalArgumentException.class, () -> context.client.scheduleAppend(epoch + 1, singletonList("a")));
+        // Throws NotLeaderException on smaller epoch
         assertThrows(NotLeaderException.class, () -> context.client.scheduleAppend(epoch - 1, singletonList("a")));
     }
 
