@@ -54,13 +54,17 @@ import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * The LocalLogManager is a test implementation that relies on the contents of memory.
@@ -260,6 +264,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             append(new LeaderChangeBatch(newLeader));
         }
 
+        synchronized LeaderAndEpoch leaderAndEpoch() {
+            return leader;
+        }
+
         synchronized Entry<Long, LocalBatch> nextBatch(long offset) {
             Entry<Long, LocalBatch> entry = batches.higherEntry(offset);
             if (entry == null) {
@@ -358,6 +366,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             return offset;
         }
 
+        void setOffset(long offset) {
+            this.offset = offset;
+        }
+
         LeaderAndEpoch notifiedLeader() {
             return notifiedLeader;
         }
@@ -426,6 +438,13 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
      */
     private volatile LeaderAndEpoch leader = new LeaderAndEpoch(OptionalInt.empty(), 0);
 
+    /*
+     * If this variable is true the next non-atomic append with more than 1 record will
+     * result is half the records getting appended with leader election following that.
+     * This is done to emulate having some of the records not getting committed.
+     */
+    private AtomicBoolean resignAfterNonAtomicCommit = new AtomicBoolean(false);
+
     public LocalLogManager(LogContext logContext,
                            int nodeId,
                            SharedLogData shared,
@@ -478,9 +497,17 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             LeaderChangeBatch batch = (LeaderChangeBatch) entry.getValue();
                             log.trace("Node {}: handling LeaderChange to {}.",
                                 nodeId, batch.newLeader);
-                            listenerData.handleLeaderChange(entryOffset, batch.newLeader);
-                            if (batch.newLeader.epoch() > leader.epoch()) {
-                                leader = batch.newLeader;
+                            // Only notify the listener if it equals the shared leader state
+                            LeaderAndEpoch sharedLeader = shared.leaderAndEpoch();
+                            if (batch.newLeader.equals(sharedLeader)) {
+                                listenerData.handleLeaderChange(entryOffset, batch.newLeader);
+                                if (batch.newLeader.epoch() > leader.epoch()) {
+                                    leader = batch.newLeader;
+                                }
+                            } else {
+                                log.debug("Node {}: Ignoring {} since it doesn't match the latest known leader {}",
+                                        nodeId, batch.newLeader, sharedLeader);
+                                listenerData.setOffset(entryOffset);
                             }
                         } else if (entry.getValue() instanceof LocalRecordBatch) {
                             LocalRecordBatch batch = (LocalRecordBatch) entry.getValue();
@@ -631,7 +658,34 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     @Override
     public Long scheduleAppend(int epoch, List<ApiMessageAndVersion> batch) {
-        return scheduleAtomicAppend(epoch, batch);
+        if (batch.isEmpty()) {
+            throw new IllegalArgumentException("Batch cannot be empty");
+        }
+
+        List<ApiMessageAndVersion> first = batch.subList(0, batch.size() / 2);
+        List<ApiMessageAndVersion> second = batch.subList(batch.size() / 2, batch.size());
+
+        assertEquals(batch.size(), first.size() + second.size());
+        assertFalse(second.isEmpty());
+
+        OptionalLong firstOffset = first
+            .stream()
+            .mapToLong(record -> scheduleAtomicAppend(epoch, Collections.singletonList(record)))
+            .max();
+
+        if (firstOffset.isPresent() && resignAfterNonAtomicCommit.getAndSet(false)) {
+            // Emulate losing leadership in the middle of a non-atomic append by not writing
+            // the rest of the batch and instead writing a leader change message
+            resign(leader.epoch());
+
+            return firstOffset.getAsLong() + second.size();
+        } else {
+            return second
+                .stream()
+                .mapToLong(record -> scheduleAtomicAppend(epoch, Collections.singletonList(record)))
+                .max()
+                .getAsLong();
+        }
     }
 
     @Override
@@ -707,5 +761,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         } catch (ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public void resignAfterNonAtomicCommit() {
+        resignAfterNonAtomicCommit.set(true);
     }
 }
