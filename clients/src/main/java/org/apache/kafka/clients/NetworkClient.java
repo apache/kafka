@@ -359,6 +359,8 @@ public class NetworkClient implements KafkaClient {
         long now = time.milliseconds();
         cancelInFlightRequests(nodeId, now, null);
         connectionStates.remove(nodeId);
+        apiVersions.remove(nodeId);
+        nodesNeedingApiVersionsFetch.remove(nodeId);
     }
 
     /**

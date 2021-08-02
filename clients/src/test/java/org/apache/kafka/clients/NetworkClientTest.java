@@ -32,6 +32,7 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -56,6 +57,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -198,6 +200,10 @@ public class NetworkClientTest {
         assertFalse(client.hasInFlightRequests(node.idString()));
         assertFalse(client.hasInFlightRequests());
         assertFalse(client.isReady(node, 0), "Connection should not be ready after close");
+        ApiVersions apiVersions  = TestUtils.fieldValue(client, NetworkClient.class, "apiVersions");
+        assertNull(apiVersions.get(node.idString()));
+        Map<String, ApiVersionsRequest.Builder> nodesNeedingApiVersionsFetch  = TestUtils.fieldValue(client, NetworkClient.class, "nodesNeedingApiVersionsFetch");
+        assertEquals(0, nodesNeedingApiVersionsFetch.size());
     }
 
     @Test
