@@ -72,7 +72,7 @@ public class StreamsProducer {
     private Producer<byte[], byte[]> producer;
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
-    private double oldProducerTotalBlockedTime;
+    private double oldProducerTotalBlockedTime = 0;
 
     public StreamsProducer(final StreamsConfig config,
                            final String threadId,
@@ -190,7 +190,8 @@ public class StreamsProducer {
         transactionInitialized = false;
     }
 
-    private static double getMetricValue(Map<MetricName, ? extends Metric> metrics, String name) {
+    private static double getMetricValue(final Map<MetricName, ? extends Metric> metrics,
+                                         final String name) {
         return metrics.keySet().stream()
             .filter(n -> n.name().equals(name))
             .findFirst()

@@ -1135,11 +1135,11 @@ public class StreamsProducerTest {
 
     @Test
     public void shouldComputeTotalBlockedTimeAfterReset() {
-        setProducerMetrics(nonEosMockProducer, 1, 2, 3, 4, 5, 6, 7);
-        nonEosStreamsProducer.resetProducer();
+        setProducerMetrics(eosBetaMockProducer, 1, 2, 3, 4, 5, 6, 7);
+        eosBetaStreamsProducer.resetProducer();
 
         final double expectedTotalBlocked = 1 + 2 + 3 + 4 + 5 + 6 + 7;
-        assertThat(nonEosStreamsProducer.totalBlockedTime(), greaterThan(2 * expectedTotalBlocked));
+        assertThat(eosBetaStreamsProducer.totalBlockedTime(), greaterThan(2 * expectedTotalBlocked));
     }
 
     private MetricName metricName(final String name) {
@@ -1147,7 +1147,7 @@ public class StreamsProducerTest {
     }
 
     private void addMetric(
-        MockProducer<?, ?> producer,
+        final MockProducer<?, ?> producer,
         final String name,
         final double value
     ) {
@@ -1166,14 +1166,14 @@ public class StreamsProducerTest {
     }
 
     private void setProducerMetrics(
-        MockProducer<?, ?> producer,
-        double bufferPoolWaitTime,
-        double flushTime,
-        double txnInitTime,
-        double txnBeginTime,
-        double txnSendOffsetsTime,
-        double txnCommitTime,
-        double txnAbortTime
+        final MockProducer<?, ?> producer,
+        final double bufferPoolWaitTime,
+        final double flushTime,
+        final double txnInitTime,
+        final double txnBeginTime,
+        final double txnSendOffsetsTime,
+        final double txnCommitTime,
+        final double txnAbortTime
     ) {
         addMetric(producer, "bufferpool-wait-time-total", bufferPoolWaitTime);
         addMetric(producer, "flush-time-total", flushTime);
