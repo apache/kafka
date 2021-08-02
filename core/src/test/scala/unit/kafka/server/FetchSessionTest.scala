@@ -25,7 +25,6 @@ import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchMetadata => JFetchMetadata}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
@@ -72,22 +71,22 @@ class FetchSessionTest {
   def testSessionCache(): Unit = {
     val cache = new FetchSessionCache(3, 100)
     assertEquals(0, cache.size)
-    val id1 = cache.maybeCreateSession(0, false, "clientId", KafkaPrincipal.ANONYMOUS, 10, true, () => dummyCreate(10))
-    val id2 = cache.maybeCreateSession(10, false, "clientId", KafkaPrincipal.ANONYMOUS, 20, true, () => dummyCreate(20))
-    val id3 = cache.maybeCreateSession(20, false, "clientId", KafkaPrincipal.ANONYMOUS, 30, true, () => dummyCreate(30))
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, "clientId", KafkaPrincipal.ANONYMOUS, 40, true, () => dummyCreate(40)))
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, "clientId", KafkaPrincipal.ANONYMOUS, 5, true, () => dummyCreate(5)))
+    val id1 = cache.maybeCreateSession(0, false, "clientId", 10, true, () => dummyCreate(10))
+    val id2 = cache.maybeCreateSession(10, false, "clientId", 20, true, () => dummyCreate(20))
+    val id3 = cache.maybeCreateSession(20, false, "clientId", 30, true, () => dummyCreate(30))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, "clientId", 40, true, () => dummyCreate(40)))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, "clientId", 5, true, () => dummyCreate(5)))
     assertCacheContains(cache, id1, id2, id3)
     cache.touch(cache.get(id1).get, 200)
-    val id4 = cache.maybeCreateSession(210, false, "clientId", KafkaPrincipal.ANONYMOUS, 11, true, () => dummyCreate(11))
+    val id4 = cache.maybeCreateSession(210, false, "clientId", 11, true, () => dummyCreate(11))
     assertCacheContains(cache, id1, id3, id4)
     cache.touch(cache.get(id1).get, 400)
     cache.touch(cache.get(id3).get, 390)
     cache.touch(cache.get(id4).get, 400)
-    val id5 = cache.maybeCreateSession(410, false, "clientId", KafkaPrincipal.ANONYMOUS, 50, true, () => dummyCreate(50))
+    val id5 = cache.maybeCreateSession(410, false, "clientId", 50, true, () => dummyCreate(50))
     assertCacheContains(cache, id3, id4, id5)
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(410, false, "clientId", KafkaPrincipal.ANONYMOUS, 5, true, () => dummyCreate(5)))
-    val id6 = cache.maybeCreateSession(410, true, "clientId", KafkaPrincipal.ANONYMOUS, 5, true, () => dummyCreate(5))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(410, false, "clientId", 5, true, () => dummyCreate(5)))
+    val id6 = cache.maybeCreateSession(410, true, "clientId", 5, true, () => dummyCreate(5))
     assertCacheContains(cache, id3, id5, id6)
   }
 
@@ -97,7 +96,7 @@ class FetchSessionTest {
     assertEquals(0, cache.totalPartitions)
     assertEquals(0, cache.size)
     assertEquals(0, cache.evictionsMeter.count)
-    val id1 = cache.maybeCreateSession(0, false, "clientId", KafkaPrincipal.ANONYMOUS, 2, true, () => dummyCreate(2))
+    val id1 = cache.maybeCreateSession(0, false, "clientId", 2, true, () => dummyCreate(2))
     assertTrue(id1 > 0)
     assertCacheContains(cache, id1)
     val session1 = cache.get(id1).get
@@ -105,7 +104,7 @@ class FetchSessionTest {
     assertEquals(2, cache.totalPartitions)
     assertEquals(1, cache.size)
     assertEquals(0, cache.evictionsMeter.count)
-    val id2 = cache.maybeCreateSession(0, false, "clientId", KafkaPrincipal.ANONYMOUS, 4, true, () => dummyCreate(4))
+    val id2 = cache.maybeCreateSession(0, false, "clientId", 4, true, () => dummyCreate(4))
     val session2 = cache.get(id2).get
     assertTrue(id2 > 0)
     assertCacheContains(cache, id1, id2)
@@ -114,7 +113,7 @@ class FetchSessionTest {
     assertEquals(0, cache.evictionsMeter.count)
     cache.touch(session1, 200)
     cache.touch(session2, 200)
-    val id3 = cache.maybeCreateSession(200, false, "clientId", KafkaPrincipal.ANONYMOUS, 5, true, () => dummyCreate(5))
+    val id3 = cache.maybeCreateSession(200, false, "clientId", 5, true, () => dummyCreate(5))
     assertTrue(id3 > 0)
     assertCacheContains(cache, id2, id3)
     assertEquals(9, cache.totalPartitions)
@@ -179,7 +178,8 @@ class FetchSessionTest {
     val context1 = fetchManager.newContext(
       request1.version,
       request1.metadata,
-      request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request1.isFromFollower,
+      "clientId",
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -214,7 +214,8 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(
       request2.version,
       request2.metadata,
-      request2.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request2.isFromFollower,
+      "clientId",
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -235,7 +236,8 @@ class FetchSessionTest {
     val context3 = fetchManager.newContext(
       request3.version,
       request3.metadata,
-      request3.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request3.isFromFollower,
+      "clientId",
       request3.fetchData(topicNames),
       request3.forgottenTopics(topicNames),
       topicIds
@@ -279,7 +281,8 @@ class FetchSessionTest {
     val context1 = fetchManager.newContext(
       request1.version,
       request1.metadata,
-      request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request1.isFromFollower,
+      "clientId",
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -314,7 +317,8 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(
       request2.version,
       request2.metadata,
-      request2.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request2.isFromFollower,
+      "clientId",
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -334,7 +338,8 @@ class FetchSessionTest {
     val context3 = fetchManager.newContext(
       request3.version,
       request3.metadata,
-      request3.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request3.isFromFollower,
+      "clientId",
       request3.fetchData(topicNames),
       request3.forgottenTopics(topicNames),
       topicIds
@@ -358,7 +363,8 @@ class FetchSessionTest {
     val context = fetchManager.newContext(
       request.version,
       request.metadata,
-      request.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request.isFromFollower,
+      "clientId",
       request.fetchData(topicNames),
       request.forgottenTopics(topicNames),
       topicIds
@@ -375,7 +381,8 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(
       request2.version,
       request2.metadata,
-      request2.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request2.isFromFollower,
+      "clientId",
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -413,7 +420,8 @@ class FetchSessionTest {
     val context3 = fetchManager.newContext(
       request3.version,
       request3.metadata,
-      request3.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request3.isFromFollower,
+      "clientId",
       request3.fetchData(topicNames),
       request3.forgottenTopics(topicNames),
       topicIds
@@ -427,7 +435,8 @@ class FetchSessionTest {
     val context4 = fetchManager.newContext(
       request4.version,
       request4.metadata,
-      request4.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request4.isFromFollower,
+      "clientId",
       request4.fetchData(topicNames),
       request4.forgottenTopics(topicNames),
       topicIds
@@ -441,7 +450,8 @@ class FetchSessionTest {
     val context5 = fetchManager.newContext(
       request5.version,
       request5.metadata,
-      request5.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request5.isFromFollower,
+      "clientId",
       request5.fetchData(topicNames),
       request5.forgottenTopics(topicNames),
       topicIds
@@ -465,7 +475,8 @@ class FetchSessionTest {
     val context6 = fetchManager.newContext(
       request6.version,
       request6.metadata,
-      request6.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request6.isFromFollower,
+      "clientId",
       request6.fetchData(topicNames),
       request6.forgottenTopics(topicNames),
       topicIds
@@ -480,7 +491,8 @@ class FetchSessionTest {
     val context7 = fetchManager.newContext(
       request7.version,
       request7.metadata,
-      request7.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request7.isFromFollower,
+      "clientId",
       request7.fetchData(topicNames),
       request7.forgottenTopics(topicNames),
       topicIds
@@ -503,7 +515,8 @@ class FetchSessionTest {
       val context8 = fetchManager.newContext(
         request8.version,
         request8.metadata,
-        request8.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+        request8.isFromFollower,
+        "clientId",
         request8.fetchData(topicNames),
         request8.forgottenTopics(topicNames),
         topicIds
@@ -547,7 +560,8 @@ class FetchSessionTest {
     val context1 = fetchManager.newContext(
       request1.version,
       request1.metadata,
-      request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request1.isFromFollower,
+      "clientId",
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -579,7 +593,8 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(
       request2.version,
       request2.metadata,
-      request2.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request2.isFromFollower,
+      "clientId",
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -634,7 +649,8 @@ class FetchSessionTest {
     val context1 = fetchManager.newContext(
       request1.version,
       request1.metadata,
-      request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request1.isFromFollower,
+      "clientId",
       request1.fetchData(topicNamesOnlyBar),
       request1.forgottenTopics(topicNamesOnlyBar),
       topicIdsOnlyBar
@@ -676,7 +692,8 @@ class FetchSessionTest {
     val context1 = fetchManager.newContext(
       request1.version,
       request1.metadata,
-      request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request1.isFromFollower,
+      "clientId",
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -702,7 +719,8 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(
       request2.version,
       request2.metadata,
-      request2.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request2.isFromFollower,
+      "clientId",
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -734,7 +752,8 @@ class FetchSessionTest {
     val context1 = fetchManager.newContext(
       request1.version,
       request1.metadata,
-      request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request1.isFromFollower,
+      "clientId",
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -759,7 +778,8 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(
       request2.version,
       request2.metadata,
-      request2.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request2.isFromFollower,
+      "clientId",
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -791,7 +811,8 @@ class FetchSessionTest {
     val context1 = fetchManager.newContext(
       request1.version,
       request1.metadata,
-      request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request1.isFromFollower,
+      "clientId",
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -820,7 +841,8 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(
       request2.version,
       request2.metadata,
-      request2.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request2.isFromFollower,
+      "clientId",
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -853,7 +875,8 @@ class FetchSessionTest {
     val context1 = fetchManager.newContext(
       request1.version,
       request1.metadata,
-      request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request1.isFromFollower,
+      "clientId",
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -885,7 +908,8 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(
       request2.version,
       request2.metadata,
-      request2.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request2.isFromFollower,
+      "clientId",
       request2.fetchData(topicNamesFooChanged),
       request2.forgottenTopics(topicNamesFooChanged),
       topicIdsFooChanged
@@ -927,7 +951,8 @@ class FetchSessionTest {
     val session1context1 = fetchManager.newContext(
       session1request1.version,
       session1request1.metadata,
-      session1request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      session1request1.isFromFollower,
+      "clientId",
       session1request1.fetchData(topicNames),
       session1request1.forgottenTopics(topicNames),
       topicIds
@@ -963,7 +988,8 @@ class FetchSessionTest {
     val session2context = fetchManager.newContext(
       session2request1.version,
       session2request1.metadata,
-      session2request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      session2request1.isFromFollower,
+      "clientId",
       session2request1.fetchData(topicNames),
       session2request1.forgottenTopics(topicNames),
       topicIds
@@ -999,7 +1025,8 @@ class FetchSessionTest {
     val context1v2 = fetchManager.newContext(
       session1request2.version,
       session1request2.metadata,
-      session1request2.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      session1request2.isFromFollower,
+      "clientId",
       session1request2.fetchData(topicNames),
       session1request2.forgottenTopics(topicNames),
       topicIds
@@ -1021,7 +1048,8 @@ class FetchSessionTest {
     val session3context = fetchManager.newContext(
       session3request1.version,
       session3request1.metadata,
-      session3request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      session3request1.isFromFollower,
+      "clientId",
       session3request1.fetchData(topicNames),
       session3request1.forgottenTopics(topicNames),
       topicIds
@@ -1068,7 +1096,8 @@ class FetchSessionTest {
     val session1context = fetchManager.newContext(
       session1request.version,
       session1request.metadata,
-      session1request.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      session1request.isFromFollower,
+      "clientId",
       session1request.fetchData(topicNames),
       session1request.forgottenTopics(topicNames),
       topicIds
@@ -1104,7 +1133,8 @@ class FetchSessionTest {
     val session2context = fetchManager.newContext(
       session2request.version,
       session2request.metadata,
-      session2request.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      session2request.isFromFollower,
+      "clientId",
       session2request.fetchData(topicNames),
       session2request.forgottenTopics(topicNames),
       topicIds
@@ -1144,7 +1174,8 @@ class FetchSessionTest {
     val session3context = fetchManager.newContext(
       session3request.version,
       session3request.metadata,
-      session3request.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      session3request.isFromFollower,
+      "clientId",
       session3request.fetchData(topicNames),
       session3request.forgottenTopics(topicNames),
       topicIds
@@ -1187,7 +1218,8 @@ class FetchSessionTest {
     val session4context = fetchManager.newContext(
       session4request.version,
       session4request.metadata,
-      session4request.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      session4request.isFromFollower,
+      "clientId",
       session4request.fetchData(topicNames),
       session4request.forgottenTopics(topicNames),
       topicIds
@@ -1235,7 +1267,8 @@ class FetchSessionTest {
     val context1 = fetchManager.newContext(
       request1.version,
       request1.metadata,
-      request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request1.isFromFollower,
+      "clientId",
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -1267,7 +1300,8 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(
       request2.version,
       request2.metadata,
-      request2.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request2.isFromFollower,
+      "clientId",
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -1299,7 +1333,8 @@ class FetchSessionTest {
     val context1 = fetchManager.newContext(
       request1.version,
       request1.metadata,
-      request1.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request1.isFromFollower,
+      "clientId",
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -1329,7 +1364,8 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(
       request2.version,
       request2.metadata,
-      request2.isFromFollower, "clientId", KafkaPrincipal.ANONYMOUS,
+      request2.isFromFollower,
+      "clientId",
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -1382,8 +1418,8 @@ class FetchSessionTest {
     reqData.put(tp3, new FetchRequest.PartitionData(100, 0, 1000, Optional.of(5), Optional.of(4)))
 
     // Full fetch context returns all partitions in the response
-    val context1 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), JFetchMetadata.INITIAL, false, "clientId", KafkaPrincipal.ANONYMOUS,
-     reqData, Collections.emptyList(), topicIds)
+    val context1 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), JFetchMetadata.INITIAL, false,
+      "clientId", reqData, Collections.emptyList(), topicIds)
     assertEquals(classOf[FullFetchContext], context1.getClass)
 
     val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
@@ -1410,8 +1446,8 @@ class FetchSessionTest {
 
     // Incremental fetch context returns partitions with changes but only deprioritizes
     // the partitions with records
-    val context2 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), new JFetchMetadata(resp1.sessionId, 1), false, "clientId", KafkaPrincipal.ANONYMOUS,
-      reqData, Collections.emptyList(), topicIds)
+    val context2 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), new JFetchMetadata(resp1.sessionId, 1), false,
+      "clientId", reqData, Collections.emptyList(), topicIds)
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
 
     // Partitions are ordered in the session as per last response
