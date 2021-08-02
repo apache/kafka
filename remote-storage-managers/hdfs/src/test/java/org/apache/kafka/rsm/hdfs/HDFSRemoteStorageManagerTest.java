@@ -205,6 +205,19 @@ public class HDFSRemoteStorageManagerTest {
         testRepeatedCacheReads(cache, String.valueOf(1048576), 1024, 1);
     }
 
+    @Test
+    public void testDeleteOnNonExistentFiles() throws Exception {
+        Uuid uuid = Uuid.randomUuid();
+        RemoteLogSegmentId id = new RemoteLogSegmentId(tp, uuid);
+        RemoteLogSegmentMetadata metadata = new RemoteLogSegmentMetadata(id,
+                0, 100, 0, 0, 1L, 1000,
+                Collections.singletonMap(0, 0L));
+        String path = baseDir + File.separator + tp + File.separator + uuid;
+        assertFalse(hdfs.exists(new Path(path)));
+        rsm.deleteLogSegmentData(metadata);
+        assertFalse(hdfs.exists(new Path(path)));
+    }
+
     private void testRepeatedCacheReads(LRUCacheWithContext cache,
                                         String cacheLineSizeInBytes,
                                         int segSize,

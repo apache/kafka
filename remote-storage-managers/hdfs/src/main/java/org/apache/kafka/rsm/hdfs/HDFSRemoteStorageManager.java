@@ -33,6 +33,8 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -53,6 +55,8 @@ import static org.apache.kafka.rsm.hdfs.LogSegmentDataHeader.FileType.TIMESTAMP_
 import static org.apache.kafka.rsm.hdfs.LogSegmentDataHeader.FileType.TRANSACTION_INDEX;
 
 public class HDFSRemoteStorageManager implements RemoteStorageManager {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(HDFSRemoteStorageManager.class);
 
     private String baseDir;
     private Configuration hadoopConf;
@@ -148,18 +152,27 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public void deleteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
+    public void deleteLogSegmentData(RemoteLogSegmentMetadata segmentMetadata) throws RemoteStorageException {
         boolean delete;
+        String pathLoc;
         try {
-            String path = getSegmentRemoteDir(remoteLogSegmentMetadata.remoteLogSegmentId());
-            delete = getFS().delete(new Path(path), true);
+            pathLoc = getSegmentRemoteDir(segmentMetadata.remoteLogSegmentId());
+            Path path = new Path(pathLoc);
+            FileSystem fs = getFS();
+            if (fs.exists(path)) {
+                delete = fs.delete(path, true);
+            } else {
+                delete = true;
+                LOGGER.warn("Skipping the call to delete log segment data: {} as the segment file doesn't exists",
+                        segmentMetadata);
+            }
         } catch (Exception e) {
             throw new RemoteStorageException("Failed to delete remote log segment with id:" +
-                    remoteLogSegmentMetadata.remoteLogSegmentId(), e);
+                    segmentMetadata.remoteLogSegmentId(), e);
         }
         if (!delete) {
             throw new RemoteStorageException("Failed to delete remote log segment with id: " +
-                    remoteLogSegmentMetadata.remoteLogSegmentId());
+                    segmentMetadata.remoteLogSegmentId());
         }
     }
 
