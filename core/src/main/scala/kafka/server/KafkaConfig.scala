@@ -1933,6 +1933,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       "offsets.commit.required.acks must be greater or equal -1 and less or equal to offsets.topic.replication.factor")
     require(BrokerCompressionCodec.isValid(compressionType), "compression.type : " + compressionType + " is not valid." +
       " Valid options are " + BrokerCompressionCodec.brokerCompressionOptions.mkString(","))
+    require(!processRoles.contains(ControllerRole) || controllerListeners.nonEmpty,
+      s"${KafkaConfig.ControllerListenerNamesProp} cannot be empty if the server has the controller role")
 
     val advertisedListenerNames = advertisedListeners.map(_.listenerName).toSet
     val listenerNames = listeners.map(_.listenerName).toSet
@@ -2006,5 +2008,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     require(principalBuilderClass != null, s"${KafkaConfig.PrincipalBuilderClassProp} must be non-null")
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass), 
       s"${KafkaConfig.PrincipalBuilderClassProp} must implement KafkaPrincipalSerde")
+
+    if (usesSelfManagedQuorum) {
+      require(getClass(KafkaConfig.AlterConfigPolicyClassNameProp) == null, s"${KafkaConfig.AlterConfigPolicyClassNameProp} is not supported in KRaft.")
+      require(getClass(KafkaConfig.CreateTopicPolicyClassNameProp) == null, s"${KafkaConfig.CreateTopicPolicyClassNameProp} is not supported in KRaft.")
+    }
   }
 }

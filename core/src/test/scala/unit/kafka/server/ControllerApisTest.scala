@@ -95,6 +95,7 @@ class ControllerApisTest {
                                    props: Properties = new Properties()): ControllerApis = {
     props.put(KafkaConfig.NodeIdProp, nodeId: java.lang.Integer)
     props.put(KafkaConfig.ProcessRolesProp, "controller")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
     new ControllerApis(
       requestChannel,
       authorizer,

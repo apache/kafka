@@ -62,7 +62,7 @@ public interface RaftClient<T> extends AutoCloseable {
          * when a leader steps down or fails.
          *
          * If this node is the leader, then the notification of leadership will be delayed until
-         * the implementation of this interface has caughup to the high-watermark through calls to
+         * the implementation of this interface has caught up to the high-watermark through calls to
          * {@link #handleSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
          *
          * If this node is not the leader, then this method will be called as soon as possible. In
@@ -89,15 +89,32 @@ public interface RaftClient<T> extends AutoCloseable {
     void initialize();
 
     /**
-     * Register a listener to get commit/leader notifications.
+     * Register a listener to get commit, snapshot and leader notifications.
      *
-     * @param listener the listener
+     * The implementation of this interface assumes that each call to {@code register} uses
+     * a different {@code Listener} instance. If the same instance is used for multiple calls
+     * to this method, then only one {@code Listener} will be registered.
+     *
+     * @param listener the listener to register
      */
     void register(Listener<T> listener);
 
     /**
+     * Unregisters a listener.
+     *
+     * To distinguish from events that happend before the call to {@code unregister} and a future
+     * call to {@code register}, different {@code Listener} instances must be used.
+     *
+     * If the {@code Listener} provided was never registered then the unregistration is ignored. 
+     *
+     * @param listener the listener to unregister
+     */
+    void unregister(Listener<T> listener);
+
+    /**
      * Return the current {@link LeaderAndEpoch}.
-     * @return the current {@link LeaderAndEpoch}
+     *
+     * @return the current leader and epoch
      */
     LeaderAndEpoch leaderAndEpoch();
 

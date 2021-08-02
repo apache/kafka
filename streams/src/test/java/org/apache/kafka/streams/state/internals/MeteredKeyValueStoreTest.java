@@ -93,7 +93,7 @@ public class MeteredKeyValueStoreTest {
     private static final KeyValue<Bytes, byte[]> BYTE_KEY_VALUE_PAIR = KeyValue.pair(KEY_BYTES, VALUE_BYTES);
 
     private final String threadId = Thread.currentThread().getName();
-    private final TaskId taskId = new TaskId(0, 0);
+    private final TaskId taskId = new TaskId(0, 0, "My-Topology");
 
     @Mock(type = MockType.NICE)
     private KeyValueStore<Bytes, byte[]> inner;
@@ -178,7 +178,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled() {
-        final String defaultChangelogTopicName = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, STORE_NAME);
+        final String defaultChangelogTopicName = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, STORE_NAME, taskId.namedTopology());
         expect(context.changelogFor(STORE_NAME)).andReturn(null);
         doShouldPassChangelogTopicNameToStateStoreSerde(defaultChangelogTopicName);
     }

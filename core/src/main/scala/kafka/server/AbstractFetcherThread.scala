@@ -246,7 +246,7 @@ abstract class AbstractFetcherThread(name: String,
         val highWatermark = partitionState.fetchOffset
         val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
 
-        info(s"Truncating partition $tp to local high watermark $highWatermark")
+        info(s"Truncating partition $tp with $truncationState due to local high watermark $highWatermark")
         if (doTruncate(tp, truncationState))
           fetchOffsets.put(tp, truncationState)
       }
@@ -264,6 +264,7 @@ abstract class AbstractFetcherThread(name: String,
       Errors.forCode(leaderEpochOffset.errorCode) match {
         case Errors.NONE =>
           val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
+          info(s"Truncating partition $tp with $offsetTruncationState due to leader epoch and offset $leaderEpochOffset")
           if (doTruncate(tp, offsetTruncationState))
             fetchOffsets.put(tp, offsetTruncationState)
 
@@ -316,10 +317,6 @@ abstract class AbstractFetcherThread(name: String,
           warn(s"Error in response for fetch request $fetchRequest", t)
           inLock(partitionMapLock) {
             partitionsWithError ++= partitionStates.partitionSet.asScala
-            // there is an error occurred while fetching partitions, sleep a while
-            // note that `AbstractFetcherThread.handlePartitionsWithError` will also introduce the same delay for every
-            // partition with error effectively doubling the delay. It would be good to improve this.
-            // partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
           }
         }
     }
@@ -863,7 +860,7 @@ case class OffsetTruncationState(offset: Long, truncationCompleted: Boolean) {
 
   def this(offset: Long) = this(offset, true)
 
-  override def toString: String = "offset:%d-truncationCompleted:%b".format(offset, truncationCompleted)
+  override def toString: String = s"TruncationState(offset=$offset, completed=$truncationCompleted)"
 }
 
 case class OffsetAndEpoch(offset: Long, leaderEpoch: Int) {

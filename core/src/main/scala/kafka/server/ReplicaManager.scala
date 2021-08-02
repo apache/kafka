@@ -1368,13 +1368,14 @@ class ReplicaManager(val config: KafkaConfig,
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
               val requestTopicId = topicIdFromRequest(topicPartition.topic)
+              val logTopicId = partition.topicId
 
-              if (!hasConsistentTopicId(requestTopicId, partition.topicId)) {
-                stateChangeLogger.error(s"Topic ID in memory: ${partition.topicId.get} does not" +
+              if (!hasConsistentTopicId(requestTopicId, logTopicId)) {
+                stateChangeLogger.error(s"Topic ID in memory: ${logTopicId.get} does not" +
                   s" match the topic ID for partition $topicPartition received: " +
                   s"${requestTopicId.get}.")
                 responseMap.put(topicPartition, Errors.INCONSISTENT_TOPIC_ID)
-              } else if (requestLeaderEpoch > currentLeaderEpoch || partition.topicId.isEmpty) {
+              } else if (requestLeaderEpoch > currentLeaderEpoch) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
                 if (partitionState.replicas.contains(localBrokerId))
@@ -1393,11 +1394,24 @@ class ReplicaManager(val config: KafkaConfig,
                   s"leader epoch $currentLeaderEpoch")
                 responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
               } else {
-                stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
-                  s"controller $controllerId with correlation id $correlationId " +
-                  s"epoch $controllerEpoch for partition $topicPartition since its associated " +
-                  s"leader epoch $requestLeaderEpoch matches the current leader epoch")
-                responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
+                val error = requestTopicId match {
+                  case Some(topicId) if logTopicId.isEmpty =>
+                    // The controller may send LeaderAndIsr to upgrade to using topic IDs without bumping the epoch.
+                    // If we have a matching epoch, we expect the log to be defined.
+                    val log = localLogOrException(partition.topicPartition)
+                    log.assignTopicId(topicId)
+                    stateChangeLogger.info(s"Updating log for $topicPartition to assign topic ID " +
+                      s"$topicId from LeaderAndIsr request from controller $controllerId with correlation " +
+                      s"id $correlationId epoch $controllerEpoch")
+                    Errors.NONE
+                  case _ =>
+                    stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
+                      s"controller $controllerId with correlation id $correlationId " +
+                      s"epoch $controllerEpoch for partition $topicPartition since its associated " +
+                      s"leader epoch $requestLeaderEpoch matches the current leader epoch")
+                    Errors.STALE_CONTROLLER_EPOCH
+                }
+                responseMap.put(topicPartition, error)
               }
             }
           }
@@ -1770,7 +1784,8 @@ class ReplicaManager(val config: KafkaConfig,
    * records in fetch response. Log start/end offset and high watermark may change not only due to
    * this fetch request, e.g., rolling new log segment and removing old log segment may move log
    * start offset further than the last offset in the fetched records. The followers will get the
-   * updated leader's state in the next fetch response.
+   * updated leader's state in the next fetch response. If follower has a diverging epoch or if read
+   * fails with any error, follower fetch state is not updated.
    */
   private def updateFollowerFetchState(followerId: Int,
                                        readResults: Seq[(TopicPartition, LogReadResult)]): Seq[(TopicPartition, LogReadResult)] = {
@@ -1778,6 +1793,10 @@ class ReplicaManager(val config: KafkaConfig,
       val updatedReadResult = if (readResult.error != Errors.NONE) {
         debug(s"Skipping update of fetch state for follower $followerId since the " +
           s"log read returned error ${readResult.error}")
+        readResult
+      } else if (readResult.divergingEpoch.nonEmpty) {
+        debug(s"Skipping update of fetch state for follower $followerId since the " +
+          s"log read returned diverging epoch ${readResult.divergingEpoch}")
         readResult
       } else {
         onlinePartition(topicPartition) match {
@@ -2221,15 +2240,15 @@ class ReplicaManager(val config: KafkaConfig,
     replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollower)
   }
 
-  def deleteGhostReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {
+  def deleteStrayReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {
     stopPartitions(topicPartitions.map { tp => tp -> true }.toMap).foreach {
       case (topicPartition, e) =>
         if (e.isInstanceOf[KafkaStorageException]) {
-          stateChangeLogger.error(s"Unable to delete ghost replica ${topicPartition} because " +
+          stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
             "the local replica for the partition is in an offline log directory")
         } else {
-          stateChangeLogger.error(s"Unable to delete ghost replica ${topicPartition} because " +
-            s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}")
+          stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
+            s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}", e)
         }
     }
   }

@@ -22,23 +22,24 @@ import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, NewPartitionReassignment, NewTopic}
-import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo};
+import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{Test, Timeout}
-
+import org.junit.jupiter.api.{Tag, Test, Timeout}
 import java.util
 import java.util.{Arrays, Collections, Optional}
+
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
-class RaftClusterTest {
+@Tag("integration")
+class KRaftClusterTest {
 
   @Test
   def testCreateClusterAndClose(): Unit = {
