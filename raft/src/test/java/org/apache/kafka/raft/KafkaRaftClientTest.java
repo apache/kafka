@@ -349,16 +349,7 @@ public class KafkaRaftClientTest {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
-        ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
-        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
-        Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
-            .thenReturn(buffer);
-        Mockito.when(memoryPool.tryAllocate(256))
-            .thenReturn(leaderBuffer);
-
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withMemoryPool(memoryPool)
             .build();
 
         context.becomeLeader();
