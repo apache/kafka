@@ -39,15 +39,19 @@ import scala.jdk.CollectionConverters._
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
 
-  def getAndValidateBrokerId(resource: ConfigResource) = {
+  def getBrokerId(resource: ConfigResource) = {
     if (resource.name == null || resource.name.isEmpty)
       None
     else {
-      val id = resourceNameToBrokerId(resource.name)
-      if (id != this.config.brokerId)
-        throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received ${resource.name}")
-      Some(id)
+      Some(resourceNameToBrokerId(resource.name))
     }
+  }
+
+  def getAndValidateBrokerId(resource: ConfigResource) = {
+    val id = getBrokerId(resource)
+    if (id.nonEmpty && (id.get != this.config.brokerId))
+      throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received ${resource.name}")
+    id
   }
 
   def validateBrokerConfigs(resource: ConfigResource, 

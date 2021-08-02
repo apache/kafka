@@ -2601,7 +2601,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
     val alterConfigsRequest = request.body[AlterConfigsRequest]
-    if (!request.isForwarded && config.usesSelfManagedQuorum) {
+
+    if (!request.isForwarded) {
       // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller
       val brokerConfigs = alterConfigsRequest.configs.asScala.filter(entry => entry._1.`type` == ConfigResource.Type.BROKER)
 
@@ -2650,44 +2651,51 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
         requestHelper.sendResponseMaybeThrottle(request, responseCallback)
       } else {
-        // Now forward the request to the controller so that the configs are authorized and persisted to metadata.
-        // This will never fail since this request has not already been forwarded and this is a KRaft broker.
-        forwardToControllerOrFail(request)
+        metadataSupport match {
+          case ZkSupport(_, controller, _, _, _) =>
+            if (!controller.isActive &&  isForwardingEnabled(request)) {
+              forwardToControllerOrFail(request)
+              return
+            }
+          case RaftSupport(_,_) =>
+            forwardToControllerOrFail(request)
+        }
       }
-    } else if (config.requiresZookeeper) {
-      val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-      if (!request.isForwarded && isForwardingEnabled(request) && !zkSupport.controller.isActive) {
-        forwardToControllerOrFail(request)
-      } else {
-        val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.toMap.partition { case (resource, _) =>
-          resource.`type` match {
-            case ConfigResource.Type.BROKER_LOGGER =>
-              throw new InvalidRequestException(s"AlterConfigs is deprecated and does not support the resource type ${ConfigResource.Type.BROKER_LOGGER}")
-            case ConfigResource.Type.BROKER =>
-              authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
-            case ConfigResource.Type.TOPIC =>
-              authHelper.authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
-            case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
-          }
+    } 
+
+    if (config.requiresZookeeper) {
+      // Forwarding to the controller is being enabled by default in IBP >= 3.0 to maintain a single ZK writer.
+      // Note that authorization and persisting of configs will not occur on a zkBroker if the request was forwarding enabled and forwarded to the active controller
+      // This method returns after a zkBroker forwards the request so that configs are not persisted from this broker after being forwarded to the controller
+      val zkSupport = metadataSupport.asInstanceOf[ZkSupport]
+      val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.toMap.partition { case (resource, _) =>
+        resource.`type` match {
+          case ConfigResource.Type.BROKER_LOGGER =>
+            throw new InvalidRequestException(s"AlterConfigs is deprecated and does not support the resource type ${ConfigResource.Type.BROKER_LOGGER}")
+          case ConfigResource.Type.BROKER =>
+            authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
+          case ConfigResource.Type.TOPIC =>
+            authHelper.authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
+          case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
         }
-        val authorizedResult = zkSupport.adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
-        val unauthorizedResult = unauthorizedResources.keys.map { resource =>
-          resource -> configsAuthorizationApiError(resource)
-        }
-        def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
-          val data = new AlterConfigsResponseData()
-            .setThrottleTimeMs(requestThrottleMs)
-          (authorizedResult ++ unauthorizedResult).foreach{ case (resource, error) =>
-            data.responses().add(new AlterConfigsResourceResponse()
-              .setErrorCode(error.error.code)
-              .setErrorMessage(error.message)
-              .setResourceName(resource.name)
-              .setResourceType(resource.`type`.id))
-          }
-          new AlterConfigsResponse(data)
-        }
-        requestHelper.sendResponseMaybeThrottle(request, responseCallback)
       }
+      val authorizedResult = zkSupport.adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
+      val unauthorizedResult = unauthorizedResources.keys.map { resource =>
+        resource -> configsAuthorizationApiError(resource)
+      }
+      def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
+        val data = new AlterConfigsResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+        (authorizedResult ++ unauthorizedResult).foreach{ case (resource, error) =>
+          data.responses().add(new AlterConfigsResourceResponse()
+            .setErrorCode(error.error.code)
+            .setErrorMessage(error.message)
+            .setResourceName(resource.name)
+            .setResourceType(resource.`type`.id))
+        }
+        new AlterConfigsResponse(data)
+      }
+      requestHelper.sendResponseMaybeThrottle(request, responseCallback)
     }
   }
 
@@ -2798,7 +2806,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }.toBuffer
     }.toMap
 
-    if (!request.isForwarded && config.usesSelfManagedQuorum) {
+    if (!request.isForwarded) {
       // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller
       val results = configs.map { case (resource, alterConfigOps) =>
         try {
@@ -2809,7 +2817,12 @@ class KafkaApis(val requestChannel: RequestChannel,
               // val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
 
               // For now in the KRaft case, just validate new configs without retrieving the old config
-              val configProps = new Properties
+              val configProps = metadataSupport match {
+                case ZkSupport(adminManager, _, _, _, _) =>
+                  adminManager.fetchBrokerConfigOrDefault(configHelper.getAndValidateBrokerId(resource))
+                case RaftSupport(_,_) =>
+                  new Properties
+              }
 
               val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry.name, entry.configEntry.value)).toMap
               configHelper.prepareIncrementalConfigs(alterConfigOps.toSeq, configProps, KafkaConfig.configKeys)
@@ -2842,11 +2855,21 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
           requestThrottleMs, results.asJava))
       } else {
-        // Now forward the request to the controller so that the configs are authorized and persisted to metadata.
-        // This will never fail since this request has not already been forwarded and this is a KRaft broker.
-        forwardToControllerOrFail(request)
+        // Calling forwardToControllerOrFail in either case never fails
+        metadataSupport match {
+          case ZkSupport(_, controller, _, _, _) =>
+            if (!controller.isActive &&  isForwardingEnabled(request)) {
+              forwardToControllerOrFail(request)
+              return
+            }
+          case RaftSupport(_,_) =>
+            forwardToControllerOrFail(request)
+        }
       }
     } else if (config.requiresZookeeper) {
+      // Forwarding to the controller is being enabled by default in IBP >= 3.0 to maintain a single ZK writer.
+      // Note that authorization and persisting of configs will not occur on a zkBroker if the request was forwarding enabled and forwarded to the active controller
+      // This method returns after a zkBroker forwards the request so that configs are not persisted from this broker after being forwarded to the controller
       val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
       if (!request.isForwarded && isForwardingEnabled(request) && !zkSupport.controller.isActive) {
         forwardToControllerOrFail(request)

@@ -447,22 +447,16 @@ class ZkAdminManager(val config: KafkaConfig,
 
   private def alterBrokerConfigs(resource: ConfigResource, validateOnly: Boolean,
                                  configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
-    val brokerId = configHelper.getAndValidateBrokerId(resource)
+    val brokerId = configHelper.getBrokerId(resource)
     val perBrokerConfig = brokerId.nonEmpty
-    this.config.dynamicConfig.validate(configProps, perBrokerConfig)
-    validateConfigPolicy(resource, configEntriesMap)
-    if (!validateOnly) {
-      if (perBrokerConfig)
-        this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
 
-      if (perBrokerConfig)
-        info(s"Updating broker ${brokerId.get} with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
-      else
-        info(s"Updating brokers with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
+    if (perBrokerConfig)
+      info(s"Updating broker ${brokerId.get} with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
+    else
+      info(s"Updating brokers with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
 
-      adminZkClient.changeBrokerConfig(brokerId,
-        this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
-    }
+    adminZkClient.changeBrokerConfig(brokerId,
+      this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
 
     resource -> ApiError.NONE
   }
@@ -493,6 +487,11 @@ class ZkAdminManager(val config: KafkaConfig,
     }
   }
 
+  def fetchBrokerConfigOrDefault(brokerId: Option[Int]): Properties = {
+    if (brokerId.nonEmpty) adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.get.toString)
+    else adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default)
+  }
+
   def incrementalAlterConfigs(configs: Map[ConfigResource, Seq[AlterConfigOp]], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, alterConfigOps) =>
       try {
@@ -517,7 +516,7 @@ class ZkAdminManager(val config: KafkaConfig,
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER =>
-            val brokerId = configHelper.getAndValidateBrokerId(resource)
+            val brokerId = configHelper.getBrokerId(resource)
             val perBrokerConfig = brokerId.nonEmpty
 
             val persistentProps = if (perBrokerConfig) adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.get.toString)
@@ -528,9 +527,6 @@ class ZkAdminManager(val config: KafkaConfig,
             alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER_LOGGER =>
-            configHelper.getAndValidateBrokerId(resource)
-            configHelper.validateLogLevelConfigs(alterConfigOps)
-
             if (!validateOnly)
               alterLogLevelConfigs(alterConfigOps)
             resource -> ApiError.NONE
