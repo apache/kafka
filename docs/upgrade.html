@@ -22,6 +22,8 @@
 <h5><a id="upgrade_300_notable" href="#upgrade_300_notable">Notable changes in 3.0.0</a></h5>
 <ul>
     <li>ZooKeeper has been upgraded to version 3.6.3.</li>
+    <li>A preview of KRaft mode is available, though upgrading to it from the 2.8 Early Access release is not possible. See
+        the <code>config/kraft/README.md</code> file for details.</li>
     <li>The release tarball no longer includes test, sources, javadoc and test sources jars. These are still published to the Maven Central repository. </li>
     <li>A number of implementation dependency jars are <a href="https://github.com/apache/kafka/pull/10203">now available in the runtime classpath
         instead of compile and runtime classpaths</a>. Compilation errors after the upgrade can be fixed by adding the missing dependency jar(s) explicitly
