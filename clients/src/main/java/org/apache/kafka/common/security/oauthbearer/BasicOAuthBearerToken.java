@@ -2,6 +2,7 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import java.util.Collections;
 import java.util.Set;
+import java.util.StringJoiner;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
 public class BasicOAuthBearerToken implements OAuthBearerToken {
@@ -49,6 +50,17 @@ public class BasicOAuthBearerToken implements OAuthBearerToken {
     @Override
     public Long startTimeMs() {
         return startTimeMs;
+    }
+
+    @Override
+    public String toString() {
+        return new StringJoiner(", ", BasicOAuthBearerToken.class.getSimpleName() + "[", "]")
+            .add("value='" + value + "'")
+            .add("scope=" + scope)
+            .add("lifetimeMs=" + lifetimeMs)
+            .add("principalName='" + principalName + "'")
+            .add("startTimeMs=" + startTimeMs)
+            .toString();
     }
 
 }

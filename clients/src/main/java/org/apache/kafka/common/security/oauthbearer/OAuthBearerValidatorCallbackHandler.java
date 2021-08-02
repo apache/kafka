@@ -39,8 +39,13 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     private void handle(OAuthBearerValidatorCallback callback) throws IOException {
         try {
-            log.warn("handle - callback.token(): {}", callback.token());
-            log.warn("handle - callback.tokenValue(): {}", callback.tokenValue());
+            String accessToken = callback.tokenValue();
+            log.debug("handle - accessToken: {}", accessToken);
+
+            OAuthBearerToken token = OAuthBearerUtils.parseAndValidateToken(accessToken);
+            log.debug("handle - token: {}", token);
+
+            callback.token(token);
         } catch (Exception e) {
             callback.error("nyi", e.getMessage(), "https://www.example.com");
         }

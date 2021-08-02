@@ -56,11 +56,12 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
             String tokenEndpointUrl = OAuthBearerUtils.getTokenEndpoint(issuerUri);
             log.warn("handle - tokenEndpointUrl: {}", tokenEndpointUrl);
 
-            String accessToken = OAuthBearerUtils
-                .getAccessToken(tokenEndpointUrl, clientId, clientSecret, scope);
+            String accessToken = OAuthBearerUtils.getAccessToken(tokenEndpointUrl, clientId, clientSecret, scope);
             log.warn("handle - accessToken: {}", accessToken);
 
             OAuthBearerToken token = OAuthBearerUtils.parseAndValidateToken(accessToken);
+            log.warn("handle - token: {}", token);
+
             callback.token(token);
         } catch (Exception e) {
             callback.error("nyi", e.getMessage(), "https://www.example.com");
