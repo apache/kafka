@@ -657,7 +657,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public Long scheduleAppend(int epoch, List<ApiMessageAndVersion> batch) {
+    public long scheduleAppend(int epoch, List<ApiMessageAndVersion> batch) {
         if (batch.isEmpty()) {
             throw new IllegalArgumentException("Batch cannot be empty");
         }
@@ -689,7 +689,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public Long scheduleAtomicAppend(int epoch, List<ApiMessageAndVersion> batch) {
+    public long scheduleAtomicAppend(int epoch, List<ApiMessageAndVersion> batch) {
         return shared.tryAppend(nodeId, leader.epoch(), batch);
     }
 
