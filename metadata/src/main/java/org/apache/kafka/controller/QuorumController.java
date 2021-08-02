@@ -580,16 +580,11 @@ public final class QuorumController implements Controller {
                 // written before we can return our result to the user.  Here, we hand off
                 // the batch of records to the raft client.  They will be written out
                 // asynchronously.
-                final Long offset;
+                final long offset;
                 if (result.isAtomic()) {
                     offset = raftClient.scheduleAtomicAppend(controllerEpoch, result.records());
                 } else {
                     offset = raftClient.scheduleAppend(controllerEpoch, result.records());
-                }
-                if (offset == null) {
-                    throw new IllegalStateException("The raft client was unable to allocate a buffer for an append");
-                } else if (offset == Long.MAX_VALUE) {
-                    throw new IllegalStateException("Unable to append records since this is not the leader");
                 }
                 op.processBatchEndOffset(offset);
                 writeOffset = offset;

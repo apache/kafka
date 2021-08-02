@@ -91,16 +91,6 @@ trait RaftManager[T] {
     listener: RaftClient.Listener[T]
   ): Unit
 
-  def scheduleAtomicAppend(
-    epoch: Int,
-    records: Seq[T]
-  ): Option[Long]
-
-  def scheduleAppend(
-    epoch: Int,
-    records: Seq[T]
-  ): Option[Long]
-
   def leaderAndEpoch: LeaderAndEpoch
 
   def client: RaftClient[T]
@@ -167,34 +157,6 @@ class KafkaRaftManager[T](
     client.register(listener)
   }
 
-  override def scheduleAtomicAppend(
-    epoch: Int,
-    records: Seq[T]
-  ): Option[Long] = {
-    append(epoch, records, true)
-  }
-
-  override def scheduleAppend(
-    epoch: Int,
-    records: Seq[T]
-  ): Option[Long] = {
-    append(epoch, records, false)
-  }
-
-  private def append(
-    epoch: Int,
-    records: Seq[T],
-    isAtomic: Boolean
-  ): Option[Long] = {
-    val offset = if (isAtomic) {
-      client.scheduleAtomicAppend(epoch, records.asJava)
-    } else {
-      client.scheduleAppend(epoch, records.asJava)
-    }
-
-    Option(offset).map(Long.unbox)
-  }
-
   override def handleRequest(
     header: RequestHeader,
     request: ApiMessage,
@@ -227,7 +189,7 @@ class KafkaRaftManager[T](
       metrics,
       expirationService,
       logContext,
-      metaProperties.clusterId.toString,
+      metaProperties.clusterId,
       OptionalInt.of(config.nodeId),
       raftConfig
     )

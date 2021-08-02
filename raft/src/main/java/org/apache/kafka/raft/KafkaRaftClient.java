@@ -59,6 +59,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.RequestManager.ConnectionState;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.BlockingMessageQueue;
@@ -2248,24 +2249,23 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public Long scheduleAppend(int epoch, List<T> records) {
+    public long scheduleAppend(int epoch, List<T> records) {
         return append(epoch, records, false);
     }
 
     @Override
-    public Long scheduleAtomicAppend(int epoch, List<T> records) {
+    public long scheduleAtomicAppend(int epoch, List<T> records) {
         return append(epoch, records, true);
     }
 
-    private Long append(int epoch, List<T> records, boolean isAtomic) {
-        Optional<LeaderState<T>> leaderStateOpt = quorum.maybeLeaderState();
-        if (!leaderStateOpt.isPresent()) {
-            return Long.MAX_VALUE;
-        }
+    private long append(int epoch, List<T> records, boolean isAtomic) {
+        LeaderState<T> leaderState = quorum.<T>maybeLeaderState().orElseThrow(
+            () -> new NotLeaderException("Append failed because the replication is not the current leader")
+        );
 
-        BatchAccumulator<T> accumulator = leaderStateOpt.get().accumulator();
+        BatchAccumulator<T> accumulator = leaderState.accumulator();
         boolean isFirstAppend = accumulator.isEmpty();
-        final Long offset;
+        final long offset;
         if (isAtomic) {
             offset = accumulator.appendAtomic(epoch, records);
         } else {
