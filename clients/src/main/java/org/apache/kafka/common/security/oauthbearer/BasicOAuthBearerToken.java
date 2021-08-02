@@ -1,10 +1,10 @@
-package org.apache.kafka.common.security.oauthbearer.internals.nob;
+package org.apache.kafka.common.security.oauthbearer;
 
 import java.util.Collections;
 import java.util.Set;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
-public class NobOAuthBearerToken implements OAuthBearerToken {
+public class BasicOAuthBearerToken implements OAuthBearerToken {
 
     private final String value;
 
@@ -16,7 +16,7 @@ public class NobOAuthBearerToken implements OAuthBearerToken {
 
     private final Long startTimeMs;
 
-    public NobOAuthBearerToken(final String value, final Set<String> scope, final Long lifetimeMs,
+    public BasicOAuthBearerToken(final String value, final Set<String> scope, final Long lifetimeMs,
         final String principalName,
         final Long startTimeMs) {
         this.value = value;

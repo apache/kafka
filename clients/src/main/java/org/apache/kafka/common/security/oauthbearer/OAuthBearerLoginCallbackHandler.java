@@ -1,23 +1,18 @@
-package org.apache.kafka.common.security.oauthbearer.internals.nob;
+package org.apache.kafka.common.security.oauthbearer;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
-import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class NobAuthenticateCallbackHandler implements AuthenticateCallbackHandler {
+public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(NobAuthenticateCallbackHandler.class);
+    private static final Logger log = LoggerFactory.getLogger(OAuthBearerLoginCallbackHandler.class);
 
     private String clientId;
 
@@ -58,14 +53,14 @@ public class NobAuthenticateCallbackHandler implements AuthenticateCallbackHandl
 
     private void handle(OAuthBearerTokenCallback callback) throws IOException {
         try {
-            String tokenEndpointUrl = NobUtils.getTokenEndpoint(issuerUri);
+            String tokenEndpointUrl = OAuthBearerUtils.getTokenEndpoint(issuerUri);
             log.warn("handle - tokenEndpointUrl: {}", tokenEndpointUrl);
 
-            String accessToken = NobUtils
+            String accessToken = OAuthBearerUtils
                 .getAccessToken(tokenEndpointUrl, clientId, clientSecret, scope);
             log.warn("handle - accessToken: {}", accessToken);
 
-            OAuthBearerToken token = NobUtils.parseAndValidateToken(accessToken);
+            OAuthBearerToken token = OAuthBearerUtils.parseAndValidateToken(accessToken);
             callback.token(token);
         } catch (Exception e) {
             callback.error("nyi", e.getMessage(), "https://www.example.com");

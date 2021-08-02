@@ -1,4 +1,4 @@
-package org.apache.kafka.common.security.oauthbearer.internals.nob;
+package org.apache.kafka.common.security.oauthbearer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,19 +17,16 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import javax.net.ssl.HttpsURLConnection;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class NobUtils {
+public class OAuthBearerUtils {
 
-    private static final Logger log = LoggerFactory.getLogger(NobUtils.class);
+    private static final Logger log = LoggerFactory.getLogger(OAuthBearerUtils.class);
 
     static String getTokenEndpoint(String issuerUri) throws IOException {
         String openIdConfigurationUrl = String.format("%s/.well-known/openid-configuration", issuerUri);
@@ -191,7 +188,7 @@ public class NobUtils {
         return new String(Base64.getUrlDecoder().decode(s), StandardCharsets.UTF_8);
     }
 
-    static NobOAuthBearerToken parseAndValidateToken(String jwt) {
+    static BasicOAuthBearerToken parseAndValidateToken(String jwt) {
         if (jwt.endsWith("."))
             jwt += ".";
 
@@ -228,7 +225,7 @@ public class NobUtils {
             startTimeMs = expiration.longValue() * 1000;
         }
 
-        return new NobOAuthBearerToken(jwt, scopes, lifetimeMs, principalName, startTimeMs);
+        return new BasicOAuthBearerToken(jwt, scopes, lifetimeMs, principalName, startTimeMs);
     }
 
 }
