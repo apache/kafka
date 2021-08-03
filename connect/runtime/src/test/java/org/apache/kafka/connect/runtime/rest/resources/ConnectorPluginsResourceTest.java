@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import javax.ws.rs.core.HttpHeaders;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -33,11 +31,9 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.TestSinkConnector;
 import org.apache.kafka.connect.runtime.TestSourceConnector;
-import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
-import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
@@ -53,17 +49,11 @@ import org.apache.kafka.connect.tools.SchemaSourceConnector;
 import org.apache.kafka.connect.tools.VerifiableSinkConnector;
 import org.apache.kafka.connect.tools.VerifiableSourceConnector;
 import org.apache.kafka.connect.util.Callback;
-import org.easymock.Capture;
-import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
 
 import javax.ws.rs.BadRequestException;
 import java.net.URL;
@@ -81,10 +71,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.MockitoAnnotations.openMocks;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest(RestClient.class)
-@PowerMockIgnore("javax.management.*")
 public class ConnectorPluginsResourceTest {
 
     private static Map<String, String> props;
@@ -182,29 +174,24 @@ public class ConnectorPluginsResourceTest {
     @Mock
     private Plugins plugins;
     private ConnectorPluginsResource connectorPluginsResource;
+    @Captor
+    private ArgumentCaptor<Callback<ConfigInfos>> callbackArgumentCaptor;
 
     @Before
     public void setUp() throws Exception {
-        PowerMock.mockStatic(RestClient.class,
-                RestClient.class.getMethod("httpRequest", String.class, String.class, HttpHeaders.class, Object.class, TypeReference.class, WorkerConfig.class));
+        openMocks(this);
 
-        plugins = PowerMock.createMock(Plugins.class);
-        herder = PowerMock.createMock(AbstractHerder.class);
         connectorPluginsResource = new ConnectorPluginsResource(herder);
     }
 
     private void expectPlugins() {
-        EasyMock.expect(herder.plugins()).andReturn(plugins);
-        EasyMock.expect(plugins.connectors()).andReturn(CONNECTOR_PLUGINS);
-        PowerMock.replayAll();
+        when(herder.plugins()).thenReturn(plugins);
+        when(plugins.connectors()).thenReturn(CONNECTOR_PLUGINS);
     }
 
     @Test
     public void testValidateConfigWithSingleErrorDueToMissingConnectorClassname() throws Throwable {
-        Capture<Callback<ConfigInfos>> configInfosCallback = EasyMock.newCapture();
-        herder.validateConnectorConfig(EasyMock.eq(partialProps), EasyMock.capture(configInfosCallback), EasyMock.anyBoolean());
-
-        PowerMock.expectLastCall().andAnswer((IAnswer<Void>) () -> {
+        doAnswer(invocation -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
             List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(partialProps);
 
@@ -219,16 +206,14 @@ public class ConnectorPluginsResourceTest {
             configValues.addAll(connectorConfigValues);
 
             ConfigInfos configInfos = AbstractHerder.generateResult(
-                ConnectorPluginsResourceTestConnector.class.getName(),
-                resultConfigKeys,
-                configValues,
-                Collections.singletonList("Test")
+                    ConnectorPluginsResourceTestConnector.class.getName(),
+                    resultConfigKeys,
+                    configValues,
+                    Collections.singletonList("Test")
             );
-            configInfosCallback.getValue().onCompletion(null, configInfos);
+            callbackArgumentCaptor.getValue().onCompletion(null, configInfos);
             return null;
-        });
-
-        PowerMock.replayAll();
+        }).when(herder).validateConnectorConfig(eq(partialProps), callbackArgumentCaptor.capture(), anyBoolean());
 
         // This call to validateConfigs does not throw a BadRequestException because we've mocked
         // validateConnectorConfig.
@@ -243,16 +228,11 @@ public class ConnectorPluginsResourceTest {
             new HashSet<>(PARTIAL_CONFIG_INFOS.values()),
             new HashSet<>(configInfos.values())
         );
-
-        PowerMock.verifyAll();
     }
 
     @Test
     public void testValidateConfigWithSimpleName() throws Throwable {
-        Capture<Callback<ConfigInfos>> configInfosCallback = EasyMock.newCapture();
-        herder.validateConnectorConfig(EasyMock.eq(props), EasyMock.capture(configInfosCallback), EasyMock.anyBoolean());
-
-        PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
+        doAnswer(invocation -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
             List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(props);
 
@@ -272,11 +252,9 @@ public class ConnectorPluginsResourceTest {
                     configValues,
                     Collections.singletonList("Test")
             );
-            configInfosCallback.getValue().onCompletion(null, configInfos);
+            callbackArgumentCaptor.getValue().onCompletion(null, configInfos);
             return null;
-        });
-
-        PowerMock.replayAll();
+        }).when(herder).validateConnectorConfig(eq(props), callbackArgumentCaptor.capture(), anyBoolean());
 
         // make a request to connector-plugins resource using just the simple class name.
         ConfigInfos configInfos = connectorPluginsResource.validateConfigs(
@@ -287,16 +265,11 @@ public class ConnectorPluginsResourceTest {
         assertEquals(0, configInfos.errorCount());
         assertEquals(CONFIG_INFOS.groups(), configInfos.groups());
         assertEquals(new HashSet<>(CONFIG_INFOS.values()), new HashSet<>(configInfos.values()));
-
-        PowerMock.verifyAll();
     }
 
     @Test
     public void testValidateConfigWithAlias() throws Throwable {
-        Capture<Callback<ConfigInfos>> configInfosCallback = EasyMock.newCapture();
-        herder.validateConnectorConfig(EasyMock.eq(props), EasyMock.capture(configInfosCallback), EasyMock.anyBoolean());
-
-        PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
+        doAnswer(invocation -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
             List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(props);
 
@@ -316,11 +289,9 @@ public class ConnectorPluginsResourceTest {
                     configValues,
                     Collections.singletonList("Test")
             );
-            configInfosCallback.getValue().onCompletion(null, configInfos);
+            callbackArgumentCaptor.getValue().onCompletion(null, configInfos);
             return null;
-        });
-
-        PowerMock.replayAll();
+        }).when(herder).validateConnectorConfig(eq(props), callbackArgumentCaptor.capture(), anyBoolean());
 
         // make a request to connector-plugins resource using a valid alias.
         ConfigInfos configInfos = connectorPluginsResource.validateConfigs(
@@ -331,8 +302,6 @@ public class ConnectorPluginsResourceTest {
         assertEquals(0, configInfos.errorCount());
         assertEquals(CONFIG_INFOS.groups(), configInfos.groups());
         assertEquals(new HashSet<>(CONFIG_INFOS.values()), new HashSet<>(configInfos.values()));
-
-        PowerMock.verifyAll();
     }
 
     @Test
@@ -363,7 +332,6 @@ public class ConnectorPluginsResourceTest {
         assertFalse(connectorPlugins.contains(newInfo(MockConnector.class)));
         assertFalse(connectorPlugins.contains(newInfo(SchemaSourceConnector.class)));
         assertTrue(connectorPlugins.contains(newInfo(ConnectorPluginsResourceTestConnector.class)));
-        PowerMock.verifyAll();
     }
 
     @Test
