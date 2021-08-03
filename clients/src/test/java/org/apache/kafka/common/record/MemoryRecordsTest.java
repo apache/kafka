@@ -520,7 +520,7 @@ public class MemoryRecordsTest {
 
             List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
             assertEquals(1, batches.size());
-            assertEquals(deleteHorizon, batches.get(0).deleteHorizonMs().getAsLong());
+            assertEquals(OptionalLong.of(deleteHorizon), batches.get(0).deleteHorizonMs());
 
             CloseableIterator<Record> recordIterator = batches.get(0).streamingIterator(BufferSupplier.create());
             Record record = recordIterator.next();

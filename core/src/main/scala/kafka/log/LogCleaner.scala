@@ -513,7 +513,6 @@ private[log] class Cleaner(val id: Int,
     info("Beginning cleaning of log %s.".format(cleanable.log.name))
 
     val log = cleanable.log
-    log.latestDeleteHorizon = RecordBatch.NO_TIMESTAMP
 
     val stats = new CleanerStats()
 
@@ -589,11 +588,8 @@ private[log] class Cleaner(val id: Int,
           s"${if(retainLegacyDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
 
         try {
-          val latestDeleteHorizon: Long = cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainLegacyDeletesAndTxnMarkers, log.config.deleteRetentionMs,
+          cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainLegacyDeletesAndTxnMarkers, log.config.deleteRetentionMs,
                     log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, stats, currentTime = currentTime)
-          if (log.latestDeleteHorizon < latestDeleteHorizon) {
-            log.latestDeleteHorizon = latestDeleteHorizon
-          }
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -650,9 +646,7 @@ private[log] class Cleaner(val id: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
                              stats: CleanerStats,
-                             currentTime: Long): Long = {
-    var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP
-
+                             currentTime: Long): Unit = {
     val logCleanerFilter: RecordFilter = new RecordFilter(currentTime, deleteRetentionMs) {
       var discardBatchRecords: Boolean = _
 
@@ -662,12 +656,7 @@ private[log] class Cleaner(val id: Int,
         val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata)
 
         if (batch.isControlBatch) {
-          if (batch.magic() < RecordBatch.MAGIC_VALUE_V2) {
-            discardBatchRecords = canDiscardBatch && !retainLegacyDeletesAndTxnMarkers
-          } else {
-            discardBatchRecords = canDiscardBatch && 
-              batch.deleteHorizonMs().isPresent && batch.deleteHorizonMs().getAsLong <= currentTime
-          }
+            discardBatchRecords = canDiscardBatch && batch.deleteHorizonMs().isPresent && batch.deleteHorizonMs().getAsLong <= currentTime
         } else {
           discardBatchRecords = canDiscardBatch
         }
@@ -719,9 +708,6 @@ private[log] class Cleaner(val id: Int,
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
       val result = records.filterTo(topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier)
-      if (result.latestDeleteHorizon() > latestDeleteHorizon) {
-        latestDeleteHorizon = result.latestDeleteHorizon();
-      }
 
       stats.readMessages(result.messagesRead, result.bytesRead)
       stats.recopyMessages(result.messagesRetained, result.bytesRetained)
@@ -748,7 +734,6 @@ private[log] class Cleaner(val id: Int,
         growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records)
     }
     restoreBuffers()
-    latestDeleteHorizon
   }
 
 

@@ -204,7 +204,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     assertTrue(cleaner.awaitCleaned(new TopicPartition("log-partition", 0),
                                     latestOffset, maxWaitMs = 5000))
-    assertEquals(log.latestDeleteHorizon, T0 + tombstoneRetentionMs)
+//    assertEquals(log.latestDeleteHorizon, T0 + tombstoneRetentionMs)
 
     time.sleep(tombstoneRetentionMs + 1)
     TestUtils.waitUntilTrue(() => log.size == 0, "Log should be empty")

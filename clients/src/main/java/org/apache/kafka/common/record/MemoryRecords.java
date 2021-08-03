@@ -181,10 +181,10 @@ public class MemoryRecords extends AbstractRecords {
             List<Record> retainedRecords = new ArrayList<>();
 
             final BatchFilterResult iterationResult = filterBatch(batch, decompressionBufferSupplier, filterResult, filter,
-                                                                          batchMagic, true, retainedRecords);
-            boolean containsTombstones = iterationResult.containsTombstones();
-            boolean writeOriginalBatch = iterationResult.shouldWriteOriginalBatch();
-            long maxOffset = iterationResult.maxOffset();
+                    batchMagic, true, retainedRecords);
+            boolean containsTombstones = iterationResult.containsTombstones;
+            boolean writeOriginalBatch = iterationResult.writeOriginalBatch;
+            long maxOffset = iterationResult.maxOffset;
 
             if (!retainedRecords.isEmpty()) {
                 // we check if the delete horizon should be set to a new value
@@ -287,21 +287,12 @@ public class MemoryRecords extends AbstractRecords {
         private final boolean writeOriginalBatch;
         private final boolean containsTombstones;
         private final long maxOffset;
-        public BatchFilterResult(final boolean writeOriginalBatch,
+        private BatchFilterResult(final boolean writeOriginalBatch,
                                  final boolean containsTombstones,
                                  final long maxOffset) {
             this.writeOriginalBatch = writeOriginalBatch;
             this.containsTombstones = containsTombstones;
             this.maxOffset = maxOffset;
-        }
-        public boolean shouldWriteOriginalBatch() {
-            return this.writeOriginalBatch;
-        }
-        public boolean containsTombstones() {
-            return this.containsTombstones;
-        }
-        public long maxOffset() {
-            return this.maxOffset;
         }
     }
 
