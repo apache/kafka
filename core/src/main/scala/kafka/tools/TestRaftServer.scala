@@ -19,7 +19,6 @@ package kafka.tools
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
-
 import joptsimple.OptionException
 import kafka.network.SocketServer
 import kafka.raft.{KafkaRaftManager, RaftManager}
@@ -36,6 +35,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
+import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.snapshot.SnapshotReader
@@ -193,10 +193,13 @@ class TestRaftServer(
       currentTimeMs: Long
     ): Unit = {
       recordCount.incrementAndGet()
-
-      raftManager.scheduleAppend(leaderEpoch, Seq(payload)) match {
-        case Some(offset) => pendingAppends.offer(PendingAppend(offset, currentTimeMs))
-        case None => time.sleep(10)
+      try {
+        val offset = raftManager.client.scheduleAppend(leaderEpoch, List(payload).asJava)
+        pendingAppends.offer(PendingAppend(offset, currentTimeMs))
+      } catch {
+        case e: NotLeaderException =>
+          logger.debug(s"Append failed because this node is no longer leader in epoch $leaderEpoch", e)
+          time.sleep(10)
       }
     }
 
