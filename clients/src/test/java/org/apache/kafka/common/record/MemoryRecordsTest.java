@@ -40,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -99,6 +100,18 @@ public class MemoryRecordsTest {
                             : asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2);
                     for (byte magic : magics)
                         arguments.add(Arguments.of(new Args(magic, firstOffset, type)));
+                }
+            return arguments.stream();
+        }
+    }
+
+    private static class V2MemoryRecordsArgumentsProvider implements ArgumentsProvider {
+        @Override
+        public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
+            List<Arguments> arguments = new ArrayList<>();
+            for (long firstOffset : asList(0L, 57L))
+                for (CompressionType type: CompressionType.values()) {
+                    arguments.add(Arguments.of(new Args(RecordBatch.MAGIC_VALUE_V2, firstOffset, type)));
                 }
             return arguments.stream();
         }
@@ -492,41 +505,45 @@ public class MemoryRecordsTest {
      * It also verifies that the record timestamps remain correct as a delta relative to the delete horizon.
      */
     @ParameterizedTest
-    @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
+    @ArgumentsSource(V2MemoryRecordsArgumentsProvider.class)
     public void testBaseTimestampToDeleteHorizonConversion(Args args) {
         int partitionLeaderEpoch = 998;
-        if (args.magic >= RecordBatch.MAGIC_VALUE_V2) {
-            ByteBuffer buffer = ByteBuffer.allocate(2048);
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, args.magic, args.compression, TimestampType.CREATE_TIME,
-                    0L, RecordBatch.NO_TIMESTAMP, partitionLeaderEpoch);
-            builder.append(10L, "1".getBytes(), null);
+        ByteBuffer buffer = ByteBuffer.allocate(2048);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, args.magic, args.compression, TimestampType.CREATE_TIME,
+                0L, RecordBatch.NO_TIMESTAMP, partitionLeaderEpoch);
+        builder.append(5L, "0".getBytes(), "0".getBytes());
+        builder.append(10L, "1".getBytes(), null);
+        builder.append(15L, "2".getBytes(), "2".getBytes());
 
-            ByteBuffer filtered = ByteBuffer.allocate(2048);
-            final long deleteHorizon = Integer.MAX_VALUE / 2;
-            final RecordFilter recordFilter = new MemoryRecords.RecordFilter(deleteHorizon - 1, 1) {
-                @Override
-                protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
-                    return true;
-                }
+        ByteBuffer filtered = ByteBuffer.allocate(2048);
+        final long deleteHorizon = Integer.MAX_VALUE / 2;
+        final RecordFilter recordFilter = new MemoryRecords.RecordFilter(deleteHorizon - 1, 1) {
+            @Override
+            protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
+                return true;
+            }
 
-                @Override
-                protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
-                    return new BatchRetentionResult(BatchRetention.RETAIN_EMPTY, true);
-                }
-            };
-            builder.build().filterTo(new TopicPartition("random", 0), recordFilter, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
-            filtered.flip();
-            MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+            @Override
+            protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
+                return new BatchRetentionResult(BatchRetention.RETAIN_EMPTY, true);
+            }
+        };
+        builder.build().filterTo(new TopicPartition("random", 0), recordFilter, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        filtered.flip();
+        MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
-            List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
-            assertEquals(1, batches.size());
-            assertEquals(OptionalLong.of(deleteHorizon), batches.get(0).deleteHorizonMs());
+        List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
+        assertEquals(1, batches.size());
+        assertEquals(OptionalLong.of(deleteHorizon), batches.get(0).deleteHorizonMs());
 
-            CloseableIterator<Record> recordIterator = batches.get(0).streamingIterator(BufferSupplier.create());
-            Record record = recordIterator.next();
-            assertEquals(10L, record.timestamp());
-            recordIterator.close();
-        }
+        CloseableIterator<Record> recordIterator = batches.get(0).streamingIterator(BufferSupplier.create());
+        Record record = recordIterator.next();
+        assertEquals(5L, record.timestamp());
+        record = recordIterator.next();
+        assertEquals(10L, record.timestamp());
+        record = recordIterator.next();
+        assertEquals(15L, record.timestamp());
+        recordIterator.close();
     }
 
     @Test
