@@ -159,7 +159,7 @@ class ReplicationTest(EndToEndTest):
             - Validate that every acked message was consumed
         """
 
-        if failure_mode == "controller" and metadata_quorum != quorum.zk:
+        if broker_type == "controller" and metadata_quorum != quorum.zk:
             raise Exception("There is no controller broker when using KRaft metadata quorum")
         self.create_zookeeper_if_necessary()
         if self.zk:
