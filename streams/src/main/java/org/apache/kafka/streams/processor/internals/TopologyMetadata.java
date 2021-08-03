@@ -99,7 +99,7 @@ public class TopologyMetadata {
     }
 
     /**
-     * @return the version of the assignor responsible for distributing tasks during the last rebalance
+     * @return the set of named topologies that the assignor distributed tasks for during the last rebalance
      */
     public Set<String> assignmentNamedTopologies() {
         return version.assignedNamedTopologies;

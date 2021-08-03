@@ -56,7 +56,6 @@ public class SubscriptionInfo {
     private Set<TaskId> prevTasksCache = null;
     private Set<TaskId> standbyTasksCache = null;
     private Map<TaskId, Long> taskOffsetSumsCache = null;
-    private Set<String> supportedNamedTopologiesCache = null;
 
     static {
         // Just statically check to make sure that the generated code always stays in sync with the overall protocol
@@ -88,8 +87,7 @@ public class SubscriptionInfo {
                             final String userEndPoint,
                             final Map<TaskId, Long> taskOffsetSums,
                             final byte uniqueField,
-                            final int errorCode,
-                            final Set<String> supportedNamedTopologies) {
+                            final int errorCode) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
@@ -109,9 +107,6 @@ public class SubscriptionInfo {
         }
         if (version >= 9) {
             data.setErrorCode(errorCode);
-        }
-        if (version >= 11) {
-            data.setSupportedNamedTopologies(new ArrayList<>(supportedNamedTopologies));
         }
 
         this.data = data;
@@ -276,13 +271,6 @@ public class SubscriptionInfo {
         return data.userEndPoint() == null || data.userEndPoint().length == 0
             ? null
             : new String(data.userEndPoint(), StandardCharsets.UTF_8);
-    }
-
-    public Set<String> supportedNamedTopologies() {
-        if (supportedNamedTopologiesCache == null) {
-            supportedNamedTopologiesCache = new HashSet<>(data.supportedNamedTopologies());
-        }
-        return supportedNamedTopologiesCache;
     }
 
     public static Set<TaskId> getActiveTasksFromTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {
