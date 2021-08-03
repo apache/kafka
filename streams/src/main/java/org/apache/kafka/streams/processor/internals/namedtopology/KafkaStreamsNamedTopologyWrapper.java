@@ -24,14 +24,13 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
@@ -48,8 +47,6 @@ import java.util.stream.Collectors;
  */
 @Unstable
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
-
-    final Map<String, NamedTopology> nameToTopology = new ConcurrentHashMap<>();
 
     /**
      * A Kafka Streams application with a single initial NamedTopology
@@ -113,22 +110,19 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
             config,
             clientSupplier
         );
-        for (final NamedTopology topology : topologies) {
-            nameToTopology.put(topology.name(), topology);
-        }
     }
 
     /**
      * @return the NamedTopology for the specific name, or Optional.empty() if the application has no NamedTopology of that name
      */
     public Optional<NamedTopology> getTopologyByName(final String name) {
-        return Optional.ofNullable(nameToTopology.get(name));
+        return Optional.ofNullable(topologyMetadata.getBuilderForTopologyName(name)).map(InternalTopologyBuilder::namedTopology);
     }
 
     /**
      * Add a new NamedTopology to a running Kafka Streams app. If multiple instances of the application are running,
-     * you should inform all of them by calling {@link #addNamedTopology(NamedTopology)} on each client. You do not
-     * need to worry about synchronizing between the clients, however, as Kafka Streams will handle that transparently.
+     * you should inform all of them by calling {@link #addNamedTopology(NamedTopology)} on each client in order for
+     * it to begin processing the new topology.
      *
      * @throws IllegalArgumentException if this topology name is already in use
      * @throws IllegalStateException    if streams has not been started or has already shut down
@@ -137,16 +131,17 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     public void addNamedTopology(final NamedTopology newTopology) {
         if (hasStartedOrFinishedShuttingDown()) {
             throw new IllegalStateException("Cannot add a NamedTopology while the state is " + super.state);
+        } else if (getTopologyByName(newTopology.name()).isPresent()) {
+            throw new IllegalArgumentException("Unable to add the new NamedTopology " + newTopology.name() +
+                                                   " as another of the same name already exists");
         }
-
         topologyMetadata.registerAndBuildNewTopology(newTopology.internalTopologyBuilder());
-        nameToTopology.put(newTopology.name(), newTopology);
     }
 
     /**
      * Remove an existing NamedTopology from a running Kafka Streams app. If multiple instances of the application are
-     * running, you should inform all of them by calling {@link #removeNamedTopology(String)} on each client. You do
-     * not need to worry about synchronizing between the clients, however, as Kafka Streams will handle that transparently.
+     * running, you should inform all of them by calling {@link #removeNamedTopology(String)} on each client to ensure
+     * it stops processing the old topology.
      *
      * @throws IllegalArgumentException if this topology name cannot be found
      * @throws IllegalStateException    if streams has not been started or has already shut down
@@ -155,11 +150,10 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     public void removeNamedTopology(final String topologyToRemove) {
         if (!isRunningOrRebalancing()) {
             throw new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state);
-        } else if (!nameToTopology.containsKey(topologyToRemove)) {
-            throw new IllegalArgumentException("Unable to locate a NamedTopology called " + topologyToRemove);
+        } else if (!getTopologyByName(topologyToRemove).isPresent()) {
+            throw new IllegalArgumentException("Unable to locate for removal a NamedTopology called " + topologyToRemove);
         }
 
-        nameToTopology.remove(topologyToRemove);
         topologyMetadata.unregisterTopology(topologyToRemove);
     }
 

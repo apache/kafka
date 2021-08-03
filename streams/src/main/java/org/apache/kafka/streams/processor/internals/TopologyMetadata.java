@@ -57,6 +57,7 @@ public class TopologyMetadata {
 
     private final StreamsConfig config;
     private final TopologyVersion version;
+
     private final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders; // Keep sorted by topology name for readability
 
     private ProcessorTopology globalTopology;
@@ -86,6 +87,7 @@ public class TopologyMetadata {
                             final StreamsConfig config) {
         version = new TopologyVersion();
         this.config = config;
+
         this.builders = builders;
         if (builders.isEmpty()) {
             log.debug("Starting up empty KafkaStreams app with no topology");
@@ -113,6 +115,10 @@ public class TopologyMetadata {
 
     public void unlock() {
         version.topologyLock.unlock();
+    }
+
+    public InternalTopologyBuilder getBuilderForTopologyName(final String name) {
+        return builders.get(name);
     }
 
     /**
@@ -145,6 +151,10 @@ public class TopologyMetadata {
         }
     }
 
+    /**
+     * Removes the topology and blocks until all threads on the older version have ack'ed this removal.
+     * IT is guaranteed that no more tasks from this removed topology will be processed
+     */
     public void unregisterTopology(final String topologyName) {
         try {
             lock();
