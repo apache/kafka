@@ -592,7 +592,6 @@ class Partition(val topicPartition: TopicPartition,
                    highWatermarkCheckpoints: OffsetCheckpoints,
                    topicId: Option[Uuid]): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
-      val addedTopicId = this.topicId.isEmpty && topicId.isDefined
       val newLeaderBrokerId = partitionState.leader
       val oldLeaderEpoch = leaderEpoch
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
@@ -625,7 +624,7 @@ class Partition(val topicPartition: TopicPartition,
       leaderEpochStartOffsetOpt = None
       zkVersion = partitionState.zkVersion
 
-      if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && leaderEpoch == oldLeaderEpoch && !addedTopicId) {
+      if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && leaderEpoch == oldLeaderEpoch) {
         false
       } else {
         leaderReplicaIdOpt = Some(newLeaderBrokerId)

@@ -34,6 +34,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition, Uuid}
+
 import java.nio.ByteBuffer
 import java.util
 import java.util.Optional
@@ -458,7 +459,11 @@ abstract class AbstractFetcherThread(name: String,
    */
   private def partitionFetchState(tp: TopicPartition, initialFetchState: InitialFetchState, currentState: PartitionFetchState): PartitionFetchState = {
     if (currentState != null && currentState.currentLeaderEpoch == initialFetchState.currentLeaderEpoch) {
-      currentState
+      if (currentState.topicId.isEmpty && initialFetchState.topicId.isDefined) {
+        currentState.updateTopicId(initialFetchState.topicId)
+      } else {
+        currentState
+      }
     } else if (initialFetchState.initOffset < 0) {
       fetchOffsetAndTruncate(tp, initialFetchState.topicId, initialFetchState.currentLeaderEpoch)
     } else if (isTruncationOnFetchSupported) {
@@ -853,6 +858,10 @@ case class PartitionFetchState(topicId: Option[Uuid],
       s", lag=$lag" +
       s", delay=${delay.map(_.delayMs).getOrElse(0)}ms" +
       s")"
+  }
+
+  def updateTopicId(topicId: Option[Uuid]): PartitionFetchState = {
+    PartitionFetchState(topicId, fetchOffset, lag, currentLeaderEpoch, delay, state, lastFetchedEpoch)
   }
 }
 
