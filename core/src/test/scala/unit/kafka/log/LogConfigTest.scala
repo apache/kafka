@@ -222,8 +222,8 @@ class LogConfigTest {
     props.put(LogConfig.RetentionMsProp, retentionMs.toString)
     val logConfig = new LogConfig(props)
 
-    assertEquals(retentionMs, logConfig.localRetentionMs)
-    assertEquals(retentionBytes, logConfig.localRetentionBytes)
+    assertEquals(retentionMs, logConfig.tieredLogConfig.localRetentionMs)
+    assertEquals(retentionBytes, logConfig.tieredLogConfig.localRetentionBytes)
   }
 
   @Test
@@ -231,8 +231,8 @@ class LogConfigTest {
     val logConfig = new LogConfig( new Properties())
 
     // Local retention defaults are derived from retention properties which can be default or custom.
-    assertEquals(Defaults.RetentionMs, logConfig.localRetentionMs)
-    assertEquals(Defaults.RetentionSize, logConfig.localRetentionBytes)
+    assertEquals(Defaults.RetentionMs, logConfig.tieredLogConfig.localRetentionMs)
+    assertEquals(Defaults.RetentionSize, logConfig.tieredLogConfig.localRetentionBytes)
   }
 
   @Test
@@ -247,8 +247,8 @@ class LogConfigTest {
     props.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes.toString)
     val logConfig = new LogConfig(props)
 
-    assertEquals(localRetentionMs, logConfig.localRetentionMs)
-    assertEquals(localRetentionBytes, logConfig.localRetentionBytes)
+    assertEquals(localRetentionMs, logConfig.tieredLogConfig.localRetentionMs)
+    assertEquals(localRetentionBytes, logConfig.tieredLogConfig.localRetentionBytes)
   }
 
   @Test
