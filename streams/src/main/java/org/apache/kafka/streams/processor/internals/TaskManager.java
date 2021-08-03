@@ -155,6 +155,15 @@ public class TaskManager {
     }
 
     /**
+     * Stop all tasks and consuming after the last named topology is removed to prevent further processing
+     */
+    void handleEmptyTopology() {
+        log.info("Closing all tasks and unsubscribing the consumer due to empty topology");
+        mainConsumer.unsubscribe();
+        shutdown(true);
+    }
+
+    /**
      * @throws TaskMigratedException
      */
     void handleCorruption(final Set<TaskId> corruptedTasks) {
@@ -935,8 +944,8 @@ public class TaskManager {
         return tasksToCloseDirty;
     }
 
-    public void updateCurrentAssigmentTopologyVersion(final long assignmentTopologyVersion) {
-        topologyMetadata.updateCurrentAssignmentTopologyVersion(assignmentTopologyVersion);
+    public void updateCurrentAssignmentTopology(final Set<String> assignedNamedTopologies) {
+        topologyMetadata.updateCurrentAssignmentTopology(assignedNamedTopologies);
     }
 
     void maybeCreateTasksFromNewTopologies() {

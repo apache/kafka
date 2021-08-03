@@ -100,8 +100,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE,
-            Collections.emptySet(),
-            0L
+            Collections.emptySet()
         ));
     }
 
@@ -115,8 +114,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE,
-            Collections.emptySet(),
-            0L
+            Collections.emptySet()
         ));
     }
 
@@ -130,8 +128,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE,
-            Collections.emptySet(),
-            0L
+            Collections.emptySet()
         );
         final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
         assertEquals(1, decoded.version());
@@ -152,8 +149,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE,
-            Collections.emptySet(),
-            0L
+            Collections.emptySet()
         );
         final ByteBuffer buffer = info.encode();
 
@@ -197,8 +193,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE,
-            Collections.emptySet(),
-            0L
+            Collections.emptySet()
         );
         final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
         assertEquals(2, decoded.version());
@@ -219,8 +214,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE,
-            Collections.emptySet(),
-            0L
+            Collections.emptySet()
         );
         final ByteBuffer buffer = info.encode();
 
@@ -265,8 +259,7 @@ public class SubscriptionInfoTest {
                 TASK_OFFSET_SUMS,
                 IGNORED_UNIQUE_FIELD,
                 IGNORED_ERROR_CODE,
-                Collections.emptySet(),
-                0L
+                Collections.emptySet()
             );
             final SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
             assertEquals(version, decoded.version());
@@ -289,8 +282,7 @@ public class SubscriptionInfoTest {
                 TASK_OFFSET_SUMS,
                 IGNORED_UNIQUE_FIELD,
                 IGNORED_ERROR_CODE,
-                Collections.emptySet(),
-                0L
+                Collections.emptySet()
             );
             final ByteBuffer buffer = info.encode();
 
@@ -331,7 +323,7 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldEncodeAndDecodeVersion5() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet(), 0L);
+            new SubscriptionInfo(5, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet());
         assertEquals(info, SubscriptionInfo.decode(info.encode()));
     }
 
@@ -348,23 +340,23 @@ public class SubscriptionInfoTest {
         final int latestSupportedVersion = LATEST_SUPPORTED_VERSION - 1;
 
         final SubscriptionInfo info =
-            new SubscriptionInfo(usedVersion, latestSupportedVersion, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet(), 0L);
+            new SubscriptionInfo(usedVersion, latestSupportedVersion, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet());
         final SubscriptionInfo expectedInfo =
-            new SubscriptionInfo(usedVersion, latestSupportedVersion, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet(), 0L);
+            new SubscriptionInfo(usedVersion, latestSupportedVersion, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet());
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion7() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet(), 0L);
+            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet());
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
     @Test
     public void shouldConvertTaskOffsetSumMapToTaskSets() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet(), 0L);
+            new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet());
         assertThat(info.prevTasks(), is(ACTIVE_TASKS));
         assertThat(info.standbyTasks(), is(STANDBY_TASKS));
     }
@@ -378,8 +370,7 @@ public class SubscriptionInfoTest {
                                  TASK_OFFSET_SUMS,
                                  IGNORED_UNIQUE_FIELD,
                                  IGNORED_ERROR_CODE,
-                                 Collections.emptySet(),
-                                 0L
+                                 Collections.emptySet()
             ).encode());
         assertThat(info.taskOffsetSums(), is(TASK_OFFSET_SUMS));
     }
@@ -410,14 +401,14 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldEncodeAndDecodeVersion8() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet(), 0L);
+            new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet());
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
     @Test
     public void shouldNotErrorAccessingFutureVars() {
         final SubscriptionInfo info =
-                new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet(), 0L);
+                new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet());
         try {
             info.errorCode();
         } catch (final Exception e) {
@@ -428,21 +419,21 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldEncodeAndDecodeVersion9() {
         final SubscriptionInfo info =
-                new SubscriptionInfo(9, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet(), 0L);
+                new SubscriptionInfo(9, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet());
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion10() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet(), 0L);
+            new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, Collections.emptySet());
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion10WithNamedTopologies() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", NAMED_TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, NAMED_TOPOLOGIES, 0L);
+            new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", NAMED_TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, NAMED_TOPOLOGIES);
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
@@ -450,14 +441,14 @@ public class SubscriptionInfoTest {
     public void shouldThrowIfAttemptingToUseNamedTopologiesWithOlderVersion() {
         assertThrows(
             TaskAssignmentException.class,
-            () -> new SubscriptionInfo(MIN_NAMED_TOPOLOGY_VERSION - 1, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", NAMED_TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, NAMED_TOPOLOGIES, 0L)
+            () -> new SubscriptionInfo(MIN_NAMED_TOPOLOGY_VERSION - 1, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", NAMED_TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, NAMED_TOPOLOGIES)
         );
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion11() {
         final SubscriptionInfo info =
-            new SubscriptionInfo(11, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", NAMED_TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, NAMED_TOPOLOGIES, 15L);
+            new SubscriptionInfo(11, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", NAMED_TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, NAMED_TOPOLOGIES);
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 

@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map.Entry;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -48,7 +50,6 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.entriesToMap;
 import static org.apache.kafka.common.utils.Utils.intersection;
-import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.expect;
@@ -140,20 +141,22 @@ public final class AssignmentTestUtils {
         return adminClient;
     }
 
-    public static Set<String> namedTopologiesOfTasks(final Set<TaskId> tasks) {
+    public static Set<String> namedTopologiesOfTasks(final Collection<TaskId> tasks) {
         return tasks.stream().map(TaskId::namedTopology).filter(Objects::nonNull).collect(Collectors.toSet());
     }
 
-    public static Set<String> namedTopologiesOfTasks(final Set<TaskId> activeTasks,
-                                                     final Set<TaskId> standbyTasks) {
-        return namedTopologiesOfTasks(union(HashSet::new, activeTasks, standbyTasks));
+    public static Set<String> namedTopologiesOfTasks(final Collection<TaskId> activeTasks,
+                                                     final Collection<TaskId> standbyTasks) {
+        final List<TaskId> allTasks = new ArrayList<>(activeTasks);
+        allTasks.addAll(standbyTasks);
+        return namedTopologiesOfTasks(allTasks);
     }
 
     public static SubscriptionInfo getInfo(final UUID processId,
                                            final Set<TaskId> prevTasks,
                                            final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, namedTopologiesOfTasks(prevTasks, standbyTasks), 0L);
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, namedTopologiesOfTasks(prevTasks, standbyTasks));
     }
 
     public static SubscriptionInfo getInfo(final UUID processId,
@@ -161,7 +164,7 @@ public final class AssignmentTestUtils {
                                            final Set<TaskId> standbyTasks,
                                            final String userEndPoint) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, namedTopologiesOfTasks(prevTasks, standbyTasks), 0L);
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, namedTopologiesOfTasks(prevTasks, standbyTasks));
     }
 
     public static SubscriptionInfo getInfo(final UUID processId,
@@ -169,7 +172,7 @@ public final class AssignmentTestUtils {
                                            final Set<TaskId> standbyTasks,
                                            final byte uniqueField) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0, namedTopologiesOfTasks(prevTasks, standbyTasks), 0L);
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0, namedTopologiesOfTasks(prevTasks, standbyTasks));
     }
 
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets

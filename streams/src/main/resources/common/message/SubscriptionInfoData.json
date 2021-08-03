@@ -70,11 +70,6 @@
       "name": "supportedNamedTopologies",
       "versions": "11+",
       "type": "[]string"
-    },
-    {
-      "name": "topologyVersionNumber",
-      "versions": "11+",
-      "type": "int64"
     }
   ],
   "commonStructs": [

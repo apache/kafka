@@ -89,8 +89,7 @@ public class SubscriptionInfo {
                             final Map<TaskId, Long> taskOffsetSums,
                             final byte uniqueField,
                             final int errorCode,
-                            final Set<String> supportedNamedTopologies,
-                            final long topologyVersion) {
+                            final Set<String> supportedNamedTopologies) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
@@ -113,7 +112,6 @@ public class SubscriptionInfo {
         }
         if (version >= 11) {
             data.setSupportedNamedTopologies(new ArrayList<>(supportedNamedTopologies));
-            data.setTopologyVersionNumber(topologyVersion);
         }
 
         this.data = data;
@@ -285,10 +283,6 @@ public class SubscriptionInfo {
             supportedNamedTopologiesCache = new HashSet<>(data.supportedNamedTopologies());
         }
         return supportedNamedTopologiesCache;
-    }
-
-    public long topologyVersionNumber() {
-        return data.topologyVersionNumber();
     }
 
     public static Set<TaskId> getActiveTasksFromTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {

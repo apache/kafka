@@ -124,6 +124,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 import static org.easymock.EasyMock.anyLong;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -1017,7 +1018,7 @@ public class StreamsPartitionAssignorTest {
 
         taskManager.handleAssignment(activeTasks, standbyTasks);
         EasyMock.expectLastCall();
-        taskManager.updateCurrentAssigmentTopologyVersion(anyLong());
+        taskManager.updateCurrentAssignmentTopology(EasyMock.anyObject());
         EasyMock.expectLastCall();
         streamsMetadataState = EasyMock.createStrictMock(StreamsMetadataState.class);
         final Capture<Cluster> capturedCluster = EasyMock.newCapture();
@@ -2184,7 +2185,7 @@ public class StreamsPartitionAssignorTest {
                                                            final Set<TaskId> prevTasks,
                                                            final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
-            version, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, namedTopologiesOfTasks(prevTasks, standbyTasks), 0L);
+            version, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, namedTopologiesOfTasks(prevTasks, standbyTasks));
     }
 
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets

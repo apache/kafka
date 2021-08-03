@@ -249,13 +249,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         handleRebalanceStart(topics);
         uniqueField++;
 
-        final long topologyVersion;
         final Set<String> currentNamedTopologies;
         final Map<TaskId, Long> taskOffsetSums;
         try {
             taskManager.topologyMetadata().lock();
 
-            topologyVersion = taskManager.topologyMetadata().topologyVersion();
             currentNamedTopologies = taskManager.topologyMetadata().namedTopologiesView();
 
             final Map<TaskId, Long> allTaskOffsetSums = taskManager.getTaskOffsetSums();
@@ -276,8 +274,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             taskOffsetSums,
             uniqueField,
             assignmentErrorCode.get(),
-            currentNamedTopologies,
-            topologyVersion
+            currentNamedTopologies
         ).encode();
     }
 
@@ -328,7 +325,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Set<TopicPartition> allOwnedPartitions = new HashSet<>();
 
         Set<String> latestNamedTopologies = new HashSet<>();
-        long highestTopologyVersion = 0;
         int minReceivedMetadataVersion = LATEST_SUPPORTED_VERSION;
         int minSupportedMetadataVersion = LATEST_SUPPORTED_VERSION;
 
@@ -369,11 +365,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             clientMetadata.addConsumer(consumerId, subscription.ownedPartitions());
             allOwnedPartitions.addAll(subscription.ownedPartitions());
             clientMetadata.addPreviousTasksAndOffsetSums(consumerId, info.taskOffsetSums());
-
-            if (info.topologyVersionNumber() > highestTopologyVersion)  {
-                latestNamedTopologies = info.supportedNamedTopologies();
-                highestTopologyVersion = info.topologyVersionNumber();
-            }
         }
 
         try {
@@ -404,12 +395,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final Set<String> allSourceTopics = new HashSet<>();
             final Map<Subtopology, Set<String>> sourceTopicsByGroup = new HashMap<>();
             for (final Map.Entry<Subtopology, TopicsInfo> entry : topicGroups.entrySet()) {
-                if (latestNamedTopologies.isEmpty() || latestNamedTopologies.contains(entry.getKey().namedTopology)) {
-                    allSourceTopics.addAll(entry.getValue().sourceTopics);
-                    sourceTopicsByGroup.put(entry.getKey(), entry.getValue().sourceTopics);
-                } else {
-                    log.debug("Filtered stale NamedTopology {} from tasks to be assigned", entry.getKey().namedTopology);
-                }
+                allSourceTopics.addAll(entry.getValue().sourceTopics);
+                sourceTopicsByGroup.put(entry.getKey(), entry.getValue().sourceTopics);
             }
 
             // get the tasks as partition groups from the partition grouper
@@ -445,7 +432,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 minReceivedMetadataVersion,
                 minSupportedMetadataVersion,
                 versionProbing,
-                probingRebalanceNeeded
+                probingRebalanceNeeded,
+                taskManager.topologyMetadata().assignmentNamedTopologies()
             );
 
             return new GroupAssignment(assignment);
@@ -789,7 +777,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                          final int minUserMetadataVersion,
                                                          final int minSupportedMetadataVersion,
                                                          final boolean versionProbing,
-                                                         final boolean shouldTriggerProbingRebalance) {
+                                                         final boolean shouldTriggerProbingRebalance,
+                                                         final Set<String> assignmentNamedTopologies) {
         boolean rebalanceRequired = shouldTriggerProbingRebalance || versionProbing;
         final Map<String, Assignment> assignment = new HashMap<>();
 
@@ -832,7 +821,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 minUserMetadataVersion,
                 minSupportedMetadataVersion,
                 encodeNextProbingRebalanceTime,
-                taskManager.topologyMetadata().topologyVersion()
+                assignmentNamedTopologies
             );
 
             if (tasksRevoked || encodeNextProbingRebalanceTime) {
@@ -881,7 +870,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                          final int minUserMetadataVersion,
                                          final int minSupportedMetadataVersion,
                                          final boolean probingRebalanceNeeded,
-                                         final long assignmentTopologyVersion) {
+                                         final Set<String> assignmentNamedTopologies) {
         boolean followupRebalanceRequiredForRevokedTasks = false;
 
         // We only want to encode a scheduled probing rebalance for a single member in this client
@@ -922,7 +911,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHostState,
                 standbyPartitionsByHost,
                 AssignorError.NONE.code(),
-                assignmentTopologyVersion
+                assignmentNamedTopologies
             );
 
             if (!activeTasksRemovedPendingRevokation.isEmpty()) {
@@ -1322,7 +1311,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // we do not capture any exceptions but just let the exception thrown from consumer.poll directly
         // since when stream thread captures it, either we close all tasks as dirty or we close thread
         taskManager.handleAssignment(activeTasks, info.standbyTasks());
-        taskManager.updateCurrentAssigmentTopologyVersion(info.assignmentTopologyVersion());
+        taskManager.updateCurrentAssignmentTopology(info.assignmentNamedTopologies());
     }
 
     private void maybeScheduleFollowupRebalance(final long encodedNextScheduledRebalanceMs,

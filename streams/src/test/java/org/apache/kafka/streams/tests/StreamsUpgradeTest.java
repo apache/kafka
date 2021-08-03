@@ -166,8 +166,7 @@ public class StreamsUpgradeTest {
                     taskManager.getTaskOffsetSums(),
                     uniqueField,
                     0,
-                    namedTopologiesOfTasks(taskManager.getTaskOffsetSums().keySet()),
-                    0L
+                    namedTopologiesOfTasks(taskManager.getTaskOffsetSums().keySet())
                 ).encode();
             } else {
                 return new FutureSubscriptionInfo(
@@ -269,8 +268,7 @@ public class StreamsUpgradeTest {
                                 taskManager().getTaskOffsetSums(),
                                 (byte) 0,
                                 0,
-                                namedTopologiesOfTasks(taskManager().getTaskOffsetSums().keySet()),
-                                0L
+                                namedTopologiesOfTasks(taskManager().getTaskOffsetSums().keySet())
                             ).encode(),
                             subscription.ownedPartitions()
                         ));

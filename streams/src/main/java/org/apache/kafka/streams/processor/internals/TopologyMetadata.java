@@ -65,8 +65,8 @@ public class TopologyMetadata {
     private final Set<String> allInputTopics = new HashSet<>();
 
     public static class TopologyVersion {
-        public AtomicLong topologyVersion = new AtomicLong(0L); // the current version of the topology for this instance
-        public AtomicLong assignmentTopologyVersion = new AtomicLong(0L); // the highest version of any assigned tasks
+        public AtomicLong topologyVersion = new AtomicLong(0L); // the local topology version
+        public Set<String> assignedNamedTopologies = new HashSet<>(); // the named topologies whose tasks are actively assigned
         public ReentrantLock topologyLock = new ReentrantLock();
         public Condition topologyCV = topologyLock.newCondition();
     }
@@ -94,15 +94,15 @@ public class TopologyMetadata {
         }
     }
 
-    public void updateCurrentAssignmentTopologyVersion(final long assignmentTopologyVersion) {
-        version.assignmentTopologyVersion.set(assignmentTopologyVersion);
+    public void updateCurrentAssignmentTopology(final Set<String> assignedNamedTopologies) {
+        version.assignedNamedTopologies = assignedNamedTopologies;
     }
 
     /**
      * @return the version of the assignor responsible for distributing tasks during the last rebalance
      */
-    public long assignmentTopologyVersion() {
-        return version.assignmentTopologyVersion.get();
+    public Set<String> assignmentNamedTopologies() {
+        return version.assignedNamedTopologies;
     }
 
     public long topologyVersion() {
