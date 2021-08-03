@@ -50,7 +50,7 @@ class StreamsSmokeTest(KafkaTest):
     @matrix(processing_guarantee=['at_least_once', 'exactly_once', 'exactly_once_v2'],
             crash=[True, False],
             metadata_quorum=quorum.all_non_upgrade)
-    def test_streams(self, processing_guarantee, crash):
+    def test_streams(self, processing_guarantee, crash, metadata_quorum):
         processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee)
         processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee)
         processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee)
