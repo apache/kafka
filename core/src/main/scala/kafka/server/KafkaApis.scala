@@ -2802,24 +2802,21 @@ class KafkaApis(val requestChannel: RequestChannel,
       // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller.
       val results = configs.map { case (resource, alterConfigOps) =>
         try {
+          val brokerId = configHelper.getAndValidateBrokerId(resource)
           if (resource.`type` == ConfigResource.Type.BROKER) {
-              // In ZK case, the old config is retrieved, altered then validated
-              // val persistentProps = if (perBrokerConfig) adminKRaftClient.fetchEntityConfig(ConfigType.Broker, brokerId.get.toString)
-              // else adminKRaftClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default)
-              // val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
-
-              // For now in the KRaft case, just validate new configs without retrieving the old config
-              val configProps = new Properties
-
-              val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry.name, entry.configEntry.value)).toMap
-              configHelper.prepareIncrementalConfigs(alterConfigOps.toSeq, configProps, KafkaConfig.configKeys)
-              configHelper.validateBrokerConfigs(resource, alterConfigsRequest.data.validateOnly, configProps, configEntriesMap)
+            val dynamicDefaultConfigs = config.dynamicConfig.currentDynamicDefaultConfigs
+            val dynamicBrokerConfigs = config.dynamicConfig.overrideDynamicDefaultWithBrokerConfigs
+            val dynamicConfigs = if (brokerId.nonEmpty) dynamicBrokerConfigs else dynamicDefaultConfigs
+            val configProps = new Properties()
+            configProps.putAll(dynamicConfigs.asJava)
+            val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry.name, entry.configEntry.value)).toMap
+            configHelper.prepareIncrementalConfigs(alterConfigOps.toSeq, configProps, KafkaConfig.configKeys)
+            configHelper.validateBrokerConfigs(resource, alterConfigsRequest.data.validateOnly, configProps, configEntriesMap)
           } else if (resource.`type` == ConfigResource.Type.BROKER_LOGGER) {
-              configHelper.getAndValidateBrokerId(resource)
-              configHelper.validateLogLevelConfigs(alterConfigOps.toSeq)
-              resource -> ApiError.NONE
+            configHelper.validateLogLevelConfigs(alterConfigOps.toSeq)
+            resource -> ApiError.NONE
           } else {
-              resource -> ApiError.NONE
+            resource -> ApiError.NONE
           }
         } catch {
           case e @ (_: ConfigException | _: IllegalArgumentException) =>

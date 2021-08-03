@@ -288,6 +288,13 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     dynamicDefaultConfigs.clone()
   }
 
+  private[server] def overrideDynamicDefaultWithBrokerConfigs: Map[String, String] = {
+    val dynamicConfigs = collection.mutable.Map[String, String]() ++ currentDynamicDefaultConfigs
+    val dynamicBrokerConfigs = collection.mutable.Map[String, String]() ++ currentDynamicBrokerConfigs
+    overrideProps(dynamicConfigs, dynamicBrokerConfigs)
+    dynamicConfigs
+  }
+
   private[server] def updateBrokerConfig(brokerId: Int, persistentProps: Properties): Unit = CoreUtils.inWriteLock(lock) {
     try {
       val props = fromPersistentProps(persistentProps, perBrokerConfig = true)
