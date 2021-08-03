@@ -374,7 +374,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         error(s"$errorMessage: $invalidPropNames")
       }
     }
-    removeInvalidProps(nonDynamicConfigs(props), "Non-dynamic configs configured in ZooKeeper will be ignored")
+    removeInvalidProps(nonDynamicConfigs(props), "Non-dynamic configs configured in Zookeeper and KRaft clusters will be ignored")
     removeInvalidProps(securityConfigsWithoutListenerPrefix(props),
       "Security configs can be dynamically updated only using listener prefix, base configs will be ignored")
     if (!perBrokerConfig)

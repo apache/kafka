@@ -186,11 +186,13 @@ public class ConfigurationControlManager {
             outputResults.put(configResource, error);
             return;
         }
-        List<ApiMessageAndVersion> newRecords = new ArrayList<>();
+
         Map<String, String> currentConfigs = configData.get(configResource);
         if (currentConfigs == null) {
             currentConfigs = Collections.emptyMap();
         }
+
+        List<ApiMessageAndVersion> newRecords = new ArrayList<>();
         for (Entry<String, String> entry : newConfigs.entrySet()) {
             String key = entry.getKey();
             String newValue = entry.getValue();

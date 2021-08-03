@@ -2799,7 +2799,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }.toMap
 
     if (!request.isForwarded && config.usesSelfManagedQuorum) {
-      // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller
+      // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller.
       val results = configs.map { case (resource, alterConfigOps) =>
         try {
           if (resource.`type` == ConfigResource.Type.BROKER) {
