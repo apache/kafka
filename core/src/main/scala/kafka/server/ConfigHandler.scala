@@ -228,9 +228,7 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       else
         DefaultReplicationThrottledRate
     }
-    // In KRaft empty string can respresent the default resource configs instead of the znode "<default>". "<default>" could also be used but it
-    // would have to be persisted to every config record with empty string for the resource name in ConfigurationControlManager
-    if ((brokerId == ConfigEntityName.Default && brokerConfig.requiresZookeeper) || (brokerId.isEmpty && brokerConfig.usesSelfManagedQuorum))
+    if (brokerId == ConfigEntityName.Default)
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
       brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
