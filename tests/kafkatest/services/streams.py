@@ -393,6 +393,9 @@ class StreamsEosTestBaseService(StreamsTestBaseService):
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE}
 
+        # Long.MAX_VALUE lets us do the assignment without a warmup
+        properties['acceptable.recovery.lag'] = "9223372036854775807"
+
         cfg = KafkaConfig(**properties)
         return cfg.render()
 
@@ -471,6 +474,9 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       # the old broker (< 2.4) does not support configuration replication.factor=-1
                       "replication.factor": 1}
+
+        # Long.MAX_VALUE lets us do the assignment without a warmup
+        properties['acceptable.recovery.lag'] = "9223372036854775807"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
@@ -610,6 +616,9 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
         if self.UPGRADE_TO == "future_version":
             properties['test.future.metadata'] = "any_value"
 
+        # Long.MAX_VALUE lets us do the assignment without a warmup
+        properties['acceptable.recovery.lag'] = "9223372036854775807"
+
         cfg = KafkaConfig(**properties)
         return cfg.render()
 
@@ -656,6 +665,9 @@ class StreamsNamedRepartitionTopicService(StreamsTestBaseService):
         properties['aggregation.topic'] = self.AGGREGATION_TOPIC
         properties['add.operations'] = self.ADD_ADDITIONAL_OPS
 
+        # Long.MAX_VALUE lets us do the assignment without a warmup
+        properties['acceptable.recovery.lag'] = "9223372036854775807"
+
         cfg = KafkaConfig(**properties)
         return cfg.render()
 
@@ -677,8 +689,9 @@ class StaticMemberTestService(StreamsTestBaseService):
                       consumer_property.SESSION_TIMEOUT_MS: 60000}
 
         properties['input.topic'] = self.INPUT_TOPIC
-        # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
-        properties['internal.task.assignor.class'] = "org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor"
+
+        # Long.MAX_VALUE lets us do the assignment without a warmup
+        properties['acceptable.recovery.lag'] = "9223372036854775807"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
@@ -758,6 +771,9 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
         properties['sink.topic'] = self.SINK_TOPIC
         properties['task.delimiter'] = self.TASK_DELIMITER
         properties['report.interval'] = self.REPORT_INTERVAL
+
+        # Long.MAX_VALUE lets us do the assignment without a warmup
+        properties['acceptable.recovery.lag'] = "9223372036854775807"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
