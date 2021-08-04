@@ -240,10 +240,9 @@ public class ClusterControlManager {
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }
         // Update broker registrations.
-        brokerRegistrations.put(brokerId, new BrokerRegistration(brokerId,
+        BrokerRegistration prevRegistration = brokerRegistrations.put(brokerId, new BrokerRegistration(brokerId,
             record.brokerEpoch(), record.incarnationId(), listeners, features,
             Optional.ofNullable(record.rack()), record.fenced()));
-        BrokerRegistration prevRegistration = brokerRegistrations.get(brokerId);
         if (prevRegistration == null) {
             log.info("Registered new broker: {}", record);
         } else if (prevRegistration.incarnationId().equals(record.incarnationId())) {
