@@ -690,7 +690,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @SuppressWarnings("unchecked")
     public boolean process(final long wallClockTime) {
-        if (record == null) {
+        if (isFrozen) {
+            return false;
+        } else if (record == null) {
             if (!isProcessable(wallClockTime)) {
                 return false;
             }

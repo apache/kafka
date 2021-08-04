@@ -887,10 +887,7 @@ public class StreamThread extends Thread {
                 topologyMetadata.maybeWaitForNonEmptyTopology();
 
                 lastSeenTopologyVersion = topologyMetadata.topologyVersion();
-                // If this client ever rebalanced while it's topology version lagged the group leader's, it may have
-                // received tasks corresponding to a NamedTopology it did not yet know. When that happens we just
-                // stash those assigned taskIds away until we catch up on the topology changes, then create them later
-                taskManager.maybeCreateTasksFromNewTopologies();
+                taskManager.handleTopologyUpdates();
 
                 if (lastSeenTopologyVersion > 0) {
                     log.info("StreamThread has detected a new update to the topology, triggering a rebalance to update the group assignment");

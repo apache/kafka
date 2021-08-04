@@ -41,6 +41,7 @@ public abstract class AbstractTask implements Task {
     private Task.State state = CREATED;
     private long deadlineMs = NO_DEADLINE;
 
+    protected boolean isFrozen;
     protected Set<TopicPartition> inputPartitions;
     protected final Logger log;
     protected final LogContext logContext;
@@ -153,6 +154,11 @@ public abstract class AbstractTask implements Task {
     public void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
         this.inputPartitions = topicPartitions;
         topology.updateSourceTopics(allTopologyNodesToSourceTopics);
+    }
+
+    @Override
+    public void freezeProcessing() {
+        isFrozen = true;
     }
 
     @Override

@@ -945,10 +945,6 @@ public class TaskManager {
         return tasksToCloseDirty;
     }
 
-    void maybeCreateTasksFromNewTopologies() {
-        tasks.maybeCreateTasksFromNewTopologies();
-    }
-
     Set<TaskId> activeTaskIds() {
         return activeTaskStream()
             .map(Task::id)
@@ -1189,6 +1185,18 @@ public class TaskManager {
                 if (task.inputPartitions().contains(topicPartition)) {
                     ((StreamTask) task).updateEndOffsets(topicPartition, offset);
                 }
+            }
+        }
+    }
+
+    /**
+     * Checks for added or removed NamedTopologies that correspond to any assigned tasks, and creates/freezes them if so
+     */
+    void handleTopologyUpdates() {
+        tasks.maybeCreateTasksFromNewTopologies();
+        for (final Task task : activeTaskIterable()) {
+            if (topologyMetadata.namedTopologiesView().contains(task.id().namedTopology())) {
+                task.freezeProcessing();
             }
         }
     }
