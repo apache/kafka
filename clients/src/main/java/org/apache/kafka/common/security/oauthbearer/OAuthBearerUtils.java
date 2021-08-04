@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.kafka.common.security.oauthbearer;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -17,6 +34,7 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import javax.net.ssl.HttpsURLConnection;
@@ -94,8 +112,8 @@ public class OAuthBearerUtils {
         String authorizationHeader,
         String requestBody)
         throws IOException {
-        HttpURLConnection con = (HttpURLConnection)new URL(uri).openConnection();
-        con.setRequestMethod(requestMethod.toUpperCase());
+        HttpURLConnection con = (HttpURLConnection) new URL(uri).openConnection();
+        con.setRequestMethod(requestMethod.toUpperCase(Locale.ROOT));
         con.setRequestProperty("Accept", "application/json");
         con.setRequestProperty("Authorization", authorizationHeader);
         con.setRequestProperty("Cache-Control", "no-cache");
@@ -201,27 +219,27 @@ public class OAuthBearerUtils {
 
         if (payload.containsKey("scp")) {
             @SuppressWarnings("unchecked")
-            Collection<String> scopeList = (Collection<String>)payload.get("scp");
+            Collection<String> scopeList = (Collection<String>) payload.get("scp");
             scopes.addAll(scopeList);
         }
 
         Long lifetimeMs = null;
 
         if (payload.containsKey("exp")) {
-            Number expiration = (Number)payload.get("exp");
+            Number expiration = (Number) payload.get("exp");
             lifetimeMs = expiration.longValue() * 1000;
         }
 
         String principalName = null;
 
         if (payload.containsKey("sub")) {
-            principalName = (String)payload.get("sub");
+            principalName = (String) payload.get("sub");
         }
 
         Long startTimeMs = null;
 
         if (payload.containsKey("iat")) {
-            Number expiration = (Number)payload.get("iat");
+            Number expiration = (Number) payload.get("iat");
             startTimeMs = expiration.longValue() * 1000;
         }
 
