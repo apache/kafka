@@ -944,10 +944,6 @@ public class TaskManager {
         return tasksToCloseDirty;
     }
 
-    public void updateCurrentAssignmentTopology(final Set<String> assignedNamedTopologies) {
-        topologyMetadata.updateCurrentAssignmentTopology(assignedNamedTopologies);
-    }
-
     void maybeCreateTasksFromNewTopologies() {
         tasks.maybeCreateTasksFromNewTopologies();
     }

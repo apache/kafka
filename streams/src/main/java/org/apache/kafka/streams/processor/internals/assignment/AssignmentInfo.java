@@ -56,8 +56,7 @@ public class AssignmentInfo {
     private Map<HostInfo, Set<TopicPartition>> partitionsByHost;
     private Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost;
     private int errCode;
-    private long nextRebalanceMs = Long.MAX_VALUE;
-    private Set<String> assignmentNamedTopologies;
+    private Long nextRebalanceMs = Long.MAX_VALUE;
 
     // used for decoding and "future consumer" assignments during version probing
     public AssignmentInfo(final int version,
@@ -68,8 +67,7 @@ public class AssignmentInfo {
              Collections.emptyMap(),
              Collections.emptyMap(),
              Collections.emptyMap(),
-             0,
-             Collections.emptySet());
+             0);
     }
 
     public AssignmentInfo(final int version,
@@ -78,7 +76,7 @@ public class AssignmentInfo {
                           final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
                           final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost,
                           final int errCode) {
-        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, partitionsByHost, standbyPartitionsByHost, errCode, Collections.emptySet());
+        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, partitionsByHost, standbyPartitionsByHost, errCode);
     }
 
     public AssignmentInfo(final int version,
@@ -87,8 +85,7 @@ public class AssignmentInfo {
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
                           final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
                           final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost,
-                          final int errCode,
-                          final Set<String> assignmentNamedTopologies) {
+                          final int errCode) {
         this.usedVersion = version;
         this.commonlySupportedVersion = commonlySupportedVersion;
         this.activeTasks = activeTasks;
@@ -96,7 +93,6 @@ public class AssignmentInfo {
         this.partitionsByHost = partitionsByHost;
         this.standbyPartitionsByHost = standbyPartitionsByHost;
         this.errCode = errCode;
-        this.assignmentNamedTopologies = assignmentNamedTopologies;
 
         if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
             throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
@@ -138,10 +134,6 @@ public class AssignmentInfo {
 
     public long nextRebalanceMs() {
         return nextRebalanceMs;
-    }
-
-    public Set<String> assignmentNamedTopologies() {
-        return assignmentNamedTopologies;
     }
 
     /**
@@ -199,15 +191,6 @@ public class AssignmentInfo {
                     encodeActiveAndStandbyHostPartitions(out);
                     out.writeInt(errCode);
                     out.writeLong(nextRebalanceMs);
-                    break;
-                case 11:
-                    out.writeInt(usedVersion);
-                    out.writeInt(commonlySupportedVersion);
-                    encodeActiveAndStandbyTaskAssignment(out);
-                    encodeActiveAndStandbyHostPartitions(out);
-                    out.writeInt(errCode);
-                    out.writeLong(nextRebalanceMs);
-                    encodeAssignmentNamedTopologies(out);
                     break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
@@ -304,14 +287,6 @@ public class AssignmentInfo {
         encodeHostPartitionMapUsingDictionary(out, topicNameDict, standbyPartitionsByHost);
     }
 
-    private void encodeAssignmentNamedTopologies(final DataOutputStream out) throws IOException {
-        out.writeInt(assignmentNamedTopologies.size());
-        for (final String topology : assignmentNamedTopologies) {
-            out.writeInt(topology.length());
-            out.writeChars(topology);
-        }
-    }
-
     private void writeHostInfo(final DataOutputStream out, final HostInfo hostInfo) throws IOException {
         out.writeUTF(hostInfo.host());
         out.writeInt(hostInfo.port());
@@ -393,16 +368,6 @@ public class AssignmentInfo {
                     decodeActiveAndStandbyHostPartitions(assignmentInfo, in);
                     assignmentInfo.errCode = in.readInt();
                     assignmentInfo.nextRebalanceMs = in.readLong();
-                    break;
-                case 11:
-                    commonlySupportedVersion = in.readInt();
-                    assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
-                    decodeActiveTasks(assignmentInfo, in);
-                    decodeStandbyTasks(assignmentInfo, in);
-                    decodeActiveAndStandbyHostPartitions(assignmentInfo, in);
-                    assignmentInfo.errCode = in.readInt();
-                    assignmentInfo.nextRebalanceMs = in.readLong();
-                    decodeAssignmentNamedTopologies(assignmentInfo, in);
                     break;
                 default:
                     final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +
@@ -486,20 +451,6 @@ public class AssignmentInfo {
         final Map<Integer, String> topicIndexDict = decodeTopicIndexAndGet(in);
         assignmentInfo.partitionsByHost = decodeHostPartitionMapUsingDictionary(in, topicIndexDict);
         assignmentInfo.standbyPartitionsByHost = decodeHostPartitionMapUsingDictionary(in, topicIndexDict);
-    }
-
-    private static void decodeAssignmentNamedTopologies(final AssignmentInfo assignmentInfo,
-                                                        final DataInputStream in) throws IOException {
-        final int numTopologies = in.readInt();
-        assignmentInfo.assignmentNamedTopologies = new HashSet<>(numTopologies);
-        for (int i = 0; i < numTopologies; ++i) {
-            final int topologyNameLength = in.readInt();
-            final StringBuilder namedTopologyBuilder = new StringBuilder(topologyNameLength);
-            for (int j = 0; j < topologyNameLength; ++j) {
-                namedTopologyBuilder.append(in.readChar());
-            }
-            assignmentInfo.assignmentNamedTopologies.add(namedTopologyBuilder.toString());
-        }
     }
 
     private static Set<TopicPartition> readTopicPartitions(final DataInputStream in,

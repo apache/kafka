@@ -155,13 +155,6 @@ class ActiveTaskCreator {
 
             final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
             if (topology == null) {
-                // TODO KAFKA-12648: account for case where a NamedTopology is removed after the thread has sent its
-                //  subscription (and thus is still in the supportedNamedTopologies) but before it receives its
-                //  assignment and initializes new tasks. ie, it may be that this task is not just waiting to be
-                //  created but in fact no longer exists, we should avoid adding it to newUnknownTasks in this case.
-                //  We should be able to use the topology version number for this, but need to be careful in case
-                //  the NamedTopology is removed and then added back again
-
                 // task belongs to a named topology that hasn't been added yet, wait until it has to create this
                 newUnknownTasks.put(taskId, partitions);
                 continue;

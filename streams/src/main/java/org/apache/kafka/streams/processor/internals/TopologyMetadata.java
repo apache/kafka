@@ -66,7 +66,6 @@ public class TopologyMetadata {
 
     public static class TopologyVersion {
         public AtomicLong topologyVersion = new AtomicLong(0L); // the local topology version
-        public Set<String> assignedNamedTopologies = new HashSet<>(); // the named topologies whose tasks are actively assigned
         public ReentrantLock topologyLock = new ReentrantLock();
         public Condition topologyCV = topologyLock.newCondition();
     }
@@ -92,17 +91,6 @@ public class TopologyMetadata {
         if (builders.isEmpty()) {
             log.debug("Starting up empty KafkaStreams app with no topology");
         }
-    }
-
-    public void updateCurrentAssignmentTopology(final Set<String> assignedNamedTopologies) {
-        version.assignedNamedTopologies = assignedNamedTopologies;
-    }
-
-    /**
-     * @return the set of named topologies that the assignor distributed tasks for during the last rebalance
-     */
-    public Set<String> assignmentNamedTopologies() {
-        return version.assignedNamedTopologies;
     }
 
     public long topologyVersion() {
@@ -273,7 +261,8 @@ public class TopologyMetadata {
     }
 
     public boolean hasOffsetResetOverrides() {
-        return evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::hasOffsetResetOverrides);
+        // Return true if using named topologies, as there may be named topologies added later which do have overrides
+        return hasNamedTopologies() || evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::hasOffsetResetOverrides);
     }
 
     public OffsetResetStrategy offsetResetStrategy(final String topic) {
@@ -325,9 +314,7 @@ public class TopologyMetadata {
         }
         final StringBuilder sb = new StringBuilder();
 
-        applyToEachBuilder(b -> {
-            sb.append(b.describe().toString());
-        });
+        applyToEachBuilder(b -> sb.append(b.describe().toString()));
 
         return sb.toString();
     }

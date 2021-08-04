@@ -430,8 +430,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 minReceivedMetadataVersion,
                 minSupportedMetadataVersion,
                 versionProbing,
-                probingRebalanceNeeded,
-                taskManager.topologyMetadata().assignmentNamedTopologies()
+                probingRebalanceNeeded
             );
 
             return new GroupAssignment(assignment);
@@ -775,8 +774,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                          final int minUserMetadataVersion,
                                                          final int minSupportedMetadataVersion,
                                                          final boolean versionProbing,
-                                                         final boolean shouldTriggerProbingRebalance,
-                                                         final Set<String> assignmentNamedTopologies) {
+                                                         final boolean shouldTriggerProbingRebalance) {
         boolean rebalanceRequired = shouldTriggerProbingRebalance || versionProbing;
         final Map<String, Assignment> assignment = new HashMap<>();
 
@@ -818,8 +816,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyTaskAssignment,
                 minUserMetadataVersion,
                 minSupportedMetadataVersion,
-                encodeNextProbingRebalanceTime,
-                assignmentNamedTopologies
+                encodeNextProbingRebalanceTime
             );
 
             if (tasksRevoked || encodeNextProbingRebalanceTime) {
@@ -867,8 +864,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                          final Map<String, List<TaskId>> standbyTaskAssignments,
                                          final int minUserMetadataVersion,
                                          final int minSupportedMetadataVersion,
-                                         final boolean probingRebalanceNeeded,
-                                         final Set<String> assignmentNamedTopologies) {
+                                         final boolean probingRebalanceNeeded) {
         boolean followupRebalanceRequiredForRevokedTasks = false;
 
         // We only want to encode a scheduled probing rebalance for a single member in this client
@@ -908,8 +904,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyTaskMap,
                 partitionsByHostState,
                 standbyPartitionsByHost,
-                AssignorError.NONE.code(),
-                assignmentNamedTopologies
+                AssignorError.NONE.code()
             );
 
             if (!activeTasksRemovedPendingRevokation.isEmpty()) {
@@ -1280,7 +1275,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             case 8:
             case 9:
             case 10:
-            case 11:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);
@@ -1309,7 +1303,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // we do not capture any exceptions but just let the exception thrown from consumer.poll directly
         // since when stream thread captures it, either we close all tasks as dirty or we close thread
         taskManager.handleAssignment(activeTasks, info.standbyTasks());
-        taskManager.updateCurrentAssignmentTopology(info.assignmentNamedTopologies());
     }
 
     private void maybeScheduleFollowupRebalance(final long encodedNextScheduledRebalanceMs,

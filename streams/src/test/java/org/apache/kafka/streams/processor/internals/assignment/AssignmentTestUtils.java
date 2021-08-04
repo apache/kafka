@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map.Entry;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -139,17 +137,6 @@ public final class AssignmentTestUtils {
 
         EasyMock.replay(result);
         return adminClient;
-    }
-
-    public static Set<String> namedTopologiesOfTasks(final Collection<TaskId> tasks) {
-        return tasks.stream().map(TaskId::namedTopology).filter(Objects::nonNull).collect(Collectors.toSet());
-    }
-
-    public static Set<String> namedTopologiesOfTasks(final Collection<TaskId> activeTasks,
-                                                     final Collection<TaskId> standbyTasks) {
-        final List<TaskId> allTasks = new ArrayList<>(activeTasks);
-        allTasks.addAll(standbyTasks);
-        return namedTopologiesOfTasks(allTasks);
     }
 
     public static SubscriptionInfo getInfo(final UUID processId,
