@@ -108,7 +108,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val FollowerReplicationThrottledReplicas = getList(LogConfig.FollowerReplicationThrottledReplicasProp)
   val messageDownConversionEnable = getBoolean(LogConfig.MessageDownConversionEnableProp)
 
-  class TieredLogConfig {
+  class RemoteLogConfig {
     val remoteStorageEnable = getBoolean(LogConfig.RemoteLogStorageEnableProp)
 
     val localRetentionMs: Long = {
@@ -150,8 +150,8 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
     }
   }
 
-  private val _tieredLogConfig = new TieredLogConfig()
-  def tieredLogConfig = _tieredLogConfig
+  private val _remoteLogConfig = new RemoteLogConfig()
+  def remoteLogConfig = _remoteLogConfig
 
   @nowarn("cat=deprecation")
   def recordVersion = messageFormatVersion.recordVersion
