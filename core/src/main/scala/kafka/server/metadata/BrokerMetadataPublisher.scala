@@ -203,13 +203,9 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
           }
           tag.foreach { t =>
             val newProperties = newImage.configs().configProperties(configResource)
-            val maybeDefaultName = if (conf.usesSelfManagedQuorum) {
-              configResource.name() match {
-                case "" => ConfigEntityName.Default 
-                case k => k
-              }
-            } else {
-              configResource.name()
+            val maybeDefaultName = configResource.name() match {
+              case "" => ConfigEntityName.Default 
+              case k => k
             }
             dynamicConfigHandlers(t).processConfigChanges(maybeDefaultName, newProperties)
           }
