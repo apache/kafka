@@ -14,8 +14,9 @@ Most important of all, KRaft mode is more scalable.  We expect to be able to [su
 # Quickstart
 
 ## Warning
-KRaft mode in Kafka 3.0 is provided for testing only, *NOT* for production.  We do not yet support upgrading existing ZooKeeper-based Kafka clusters into this mode.  In fact, when Kafka 3.1 is released,
-it may not be possible to upgrade your KRaft clusters from 3.0 to 3.1.  There may be bugs, including serious ones.  You should *assume that your data could be lost at any time* if you try the preview release of KRaft mode.
+KRaft mode in Kafka 3.0 is provided for testing only, *NOT* for production.  We do not yet support upgrading existing ZooKeeper-based Kafka clusters into KRaft mode.
+It is not possible to upgrade KRaft clusters from 2.8 to 3.0. Upgrading KRaft clusters from 3.0 to 3.1 will be supported. There may be bugs, including serious ones.
+You should *assume that your data could be lost at any time* if you try the preview release of KRaft mode.
 
 ## Generate a cluster ID
 The first step is to generate an ID for your new cluster, using the kafka-storage tool:
@@ -26,7 +27,7 @@ xtzWWN4bTjitpL3kfd9s5g
 ~~~~
 
 ## Format Storage Directories
-The next step is to format your storage directories.  If you are running in single-node mode, you can do this with one command:
+The next step is to format your storage directories.  If you are running in single-node mode, you can do this with one command. The string `<uuid>` should be replaced with the value returned by `kafka-storage.sh random-uuid`:
 
 ~~~~
 $ ./bin/kafka-storage.sh format -t <uuid> -c ./config/kraft/server.properties

@@ -1725,7 +1725,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return Long.MAX_VALUE;
         }
 
-        return connection.remainingRequestTimeMs(currentTimeMs);
+        long connectionWaitTimeMs = connection.remainingRequestTimeMs(currentTimeMs);
+        logger.trace(
+            "Cannot send request because connection for {} is not ready. Wait for {} ms.",
+            destinationId,
+            connectionWaitTimeMs
+        );
+
+        return connectionWaitTimeMs;
     }
 
     private EndQuorumEpochRequestData buildEndQuorumEpochRequest(
