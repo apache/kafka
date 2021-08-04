@@ -17,11 +17,13 @@
 package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
+
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
-import kafka.log.Log
+import kafka.log.{Log, LogConfig}
 import kafka.server.{FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache, RequestLocal}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
@@ -72,7 +74,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
     txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, txnConfig, time,
       new Metrics())
-    txnStateManager.startup(() => zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME).get)
+    txnStateManager.startup(() => zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME).get,
+      enableTransactionalIdExpiration = true)
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
@@ -455,8 +458,9 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   }
 
   private def prepareTxnLog(partitionId: Int): Unit = {
-
     val logMock: Log =  EasyMock.mock(classOf[Log])
+    EasyMock.expect(logMock.config).andStubReturn(new LogConfig(Collections.emptyMap()))
+
     val fileRecordsMock: FileRecords = EasyMock.mock(classOf[FileRecords])
 
     val topicPartition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)

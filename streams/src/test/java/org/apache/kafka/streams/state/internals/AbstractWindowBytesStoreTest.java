@@ -847,11 +847,12 @@ public abstract class AbstractWindowBytesStoreTest {
         windowStore.put(1, "two", 2L);
         windowStore.put(1, "three", 3L);
 
-        final WindowStoreIterator<String> iterator = windowStore.fetch(1, ofEpochMilli(1L), ofEpochMilli(3L));
-        assertTrue(iterator.hasNext());
-        windowStore.close();
+        try (final WindowStoreIterator<String> iterator = windowStore.fetch(1, ofEpochMilli(1L), ofEpochMilli(3L))) {
+            assertTrue(iterator.hasNext());
+            windowStore.close();
 
-        assertFalse(iterator.hasNext());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -988,19 +989,20 @@ public abstract class AbstractWindowBytesStoreTest {
         windowStore.put(2, "two", 2L);
         windowStore.put(3, "three", 3L);
 
-        final WindowStoreIterator<String> singleKeyIterator = windowStore.fetch(2, 0L, 5L);
-        final KeyValueIterator<Windowed<Integer>, String> keyRangeIterator = windowStore.fetch(2, 2, 0L, 5L);
+        try (final WindowStoreIterator<String> singleKeyIterator = windowStore.fetch(2, 0L, 5L);
+             final KeyValueIterator<Windowed<Integer>, String> keyRangeIterator = windowStore.fetch(2, 2, 0L, 5L)) {
 
-        assertEquals(singleKeyIterator.next().value, keyRangeIterator.next().value);
-        assertEquals(singleKeyIterator.next().value, keyRangeIterator.next().value);
-        assertFalse(singleKeyIterator.hasNext());
-        assertFalse(keyRangeIterator.hasNext());
+            assertEquals(singleKeyIterator.next().value, keyRangeIterator.next().value);
+            assertEquals(singleKeyIterator.next().value, keyRangeIterator.next().value);
+            assertFalse(singleKeyIterator.hasNext());
+            assertFalse(keyRangeIterator.hasNext());
+        }
     }
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetch(-1, 1, 0L, 10L);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+             final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetch(-1, 1, 0L, 10L)) {
             assertFalse(iterator.hasNext());
 
             final List<String> messages = appender.getMessages();
@@ -1076,9 +1078,10 @@ public abstract class AbstractWindowBytesStoreTest {
         windowStore.put(1, "one", 0L);
         windowStore.put(1, "two", 4 * RETENTION_PERIOD);
 
-        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, 10L);
+        try (final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, 10L)) {
 
-        assertFalse(iterator.hasNext());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -1086,28 +1089,30 @@ public abstract class AbstractWindowBytesStoreTest {
         final long currentTime = 0;
         windowStore.put(1, "one", currentTime);
 
-        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetchAll(0L, currentTime);
+        try (final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetchAll(0L, currentTime)) {
 
-        assertTrue(iterator.hasNext());
-        final Windowed<Integer> nextKey = iterator.peekNextKey();
+            assertTrue(iterator.hasNext());
+            final Windowed<Integer> nextKey = iterator.peekNextKey();
 
-        assertEquals(iterator.peekNextKey(), nextKey);
-        assertEquals(iterator.peekNextKey(), iterator.next().key);
-        assertFalse(iterator.hasNext());
+            assertEquals(iterator.peekNextKey(), nextKey);
+            assertEquals(iterator.peekNextKey(), iterator.next().key);
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
     public void testValueIteratorPeek() {
         windowStore.put(1, "one", 0L);
 
-        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, 10L);
+        try (final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, 10L)) {
 
-        assertTrue(iterator.hasNext());
-        final Long nextKey = iterator.peekNextKey();
+            assertTrue(iterator.hasNext());
+            final Long nextKey = iterator.peekNextKey();
 
-        assertEquals(iterator.peekNextKey(), nextKey);
-        assertEquals(iterator.peekNextKey(), iterator.next().key);
-        assertFalse(iterator.hasNext());
+            assertEquals(iterator.peekNextKey(), nextKey);
+            assertEquals(iterator.peekNextKey(), iterator.next().key);
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -1118,20 +1123,21 @@ public abstract class AbstractWindowBytesStoreTest {
         currentTime += WINDOW_SIZE * 10;
         windowStore.put(1, "two", currentTime);
 
-        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.all();
+        try (final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.all()) {
 
-        currentTime += WINDOW_SIZE * 10;
-        windowStore.put(1, "three", currentTime);
+            currentTime += WINDOW_SIZE * 10;
+            windowStore.put(1, "three", currentTime);
 
-        currentTime += WINDOW_SIZE * 10;
-        windowStore.put(2, "four", currentTime);
+            currentTime += WINDOW_SIZE * 10;
+            windowStore.put(2, "four", currentTime);
 
-        // Iterator should return all records in store and not throw exception b/c some were added after fetch
-        assertEquals(windowedPair(1, "one", 0), iterator.next());
-        assertEquals(windowedPair(1, "two", WINDOW_SIZE * 10), iterator.next());
-        assertEquals(windowedPair(1, "three", WINDOW_SIZE * 20), iterator.next());
-        assertEquals(windowedPair(2, "four", WINDOW_SIZE * 30), iterator.next());
-        assertFalse(iterator.hasNext());
+            // Iterator should return all records in store and not throw exception b/c some were added after fetch
+            assertEquals(windowedPair(1, "one", 0), iterator.next());
+            assertEquals(windowedPair(1, "two", WINDOW_SIZE * 10), iterator.next());
+            assertEquals(windowedPair(1, "three", WINDOW_SIZE * 20), iterator.next());
+            assertEquals(windowedPair(2, "four", WINDOW_SIZE * 30), iterator.next());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -1152,13 +1158,14 @@ public abstract class AbstractWindowBytesStoreTest {
         windowStore.put(1, "three", currentTime);
         windowStore.put(1, "three-2", currentTime);
 
-        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0, WINDOW_SIZE * 10);
+        try (final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0, WINDOW_SIZE * 10)) {
 
-        assertEquals(new KeyValue<>(0L, "one"), iterator.next());
-        assertEquals(new KeyValue<>(0L, "one-2"), iterator.next());
-        assertEquals(new KeyValue<>(WINDOW_SIZE * 10, "two"), iterator.next());
-        assertEquals(new KeyValue<>(WINDOW_SIZE * 10, "two-2"), iterator.next());
-        assertFalse(iterator.hasNext());
+            assertEquals(new KeyValue<>(0L, "one"), iterator.next());
+            assertEquals(new KeyValue<>(0L, "one-2"), iterator.next());
+            assertEquals(new KeyValue<>(WINDOW_SIZE * 10, "two"), iterator.next());
+            assertEquals(new KeyValue<>(WINDOW_SIZE * 10, "two-2"), iterator.next());
+            assertFalse(iterator.hasNext());
+        }
     }
 
 

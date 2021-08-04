@@ -66,6 +66,8 @@ private[transaction] sealed trait TransactionState {
   def name: String
 
   def validPreviousStates: Set[TransactionState]
+
+  def isExpirationAllowed: Boolean = false
 }
 
 /**
@@ -78,6 +80,7 @@ private[transaction] case object Empty extends TransactionState {
   val id: Byte = 0
   val name: String = "Empty"
   val validPreviousStates: Set[TransactionState] = Set(Empty, CompleteCommit, CompleteAbort)
+  override def isExpirationAllowed: Boolean = true
 }
 
 /**
@@ -125,6 +128,7 @@ private[transaction] case object CompleteCommit extends TransactionState {
   val id: Byte = 4
   val name: String = "CompleteCommit"
   val validPreviousStates: Set[TransactionState] = Set(PrepareCommit)
+  override def isExpirationAllowed: Boolean = true
 }
 
 /**
@@ -136,6 +140,7 @@ private[transaction] case object CompleteAbort extends TransactionState {
   val id: Byte = 5
   val name: String = "CompleteAbort"
   val validPreviousStates: Set[TransactionState] = Set(PrepareAbort)
+  override def isExpirationAllowed: Boolean = true
 }
 
 /**

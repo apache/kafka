@@ -257,7 +257,7 @@ Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterat
 
     ./gradlew allDeps
 
-    ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
+    ./gradlew allDepInsight --configuration runtimeClasspath --dependency com.fasterxml.jackson.core:jackson-databind
 
 These take the same arguments as the builtin variants.
 

@@ -154,6 +154,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     DATA_LOG_DIR_1 = "%s-1" % (DATA_LOG_DIR_PREFIX)
     DATA_LOG_DIR_2 = "%s-2" % (DATA_LOG_DIR_PREFIX)
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka.properties")
+    METADATA_LOG_DIR = os.path.join (PERSISTENT_ROOT, "kafka-metadata-logs")
+    METADATA_SNAPSHOT_SEARCH_STR = "%s/__cluster_metadata-0/*.checkpoint" % METADATA_LOG_DIR
+    METADATA_FIRST_LOG = "%s/__cluster_metadata-0/00000000000000000000.log" % METADATA_LOG_DIR
     # Kafka Authorizer
     ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer"
     HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "kafka_heap_dump.bin")
@@ -308,7 +311,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     jmx_attributes=jmx_attributes,
                     listener_security_config=listener_security_config,
                     extra_kafka_opts=extra_kafka_opts, tls_version=tls_version,
-                    remote_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft
+                    remote_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft,
+                    server_prop_overrides=server_prop_overrides
                 )
                 self.controller_quorum = self.remote_controller_quorum
 

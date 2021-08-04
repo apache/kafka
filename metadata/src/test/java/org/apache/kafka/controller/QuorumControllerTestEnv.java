@@ -18,12 +18,14 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
+import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -32,10 +34,12 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         LoggerFactory.getLogger(QuorumControllerTestEnv.class);
 
     private final List<QuorumController> controllers;
+    private final LocalLogManagerTestEnv logEnv;
 
     public QuorumControllerTestEnv(LocalLogManagerTestEnv logEnv,
                                    Consumer<QuorumController.Builder> builderConsumer)
                                    throws Exception {
+        this.logEnv = logEnv;
         int numControllers = logEnv.logManagers().size();
         this.controllers = new ArrayList<>(numControllers);
         try {
@@ -54,21 +58,20 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     QuorumController activeController() throws InterruptedException {
         AtomicReference<QuorumController> value = new AtomicReference<>(null);
         TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
-            QuorumController activeController = null;
+            LeaderAndEpoch leader = logEnv.leaderAndEpoch();
             for (QuorumController controller : controllers) {
-                if (controller.isActive()) {
-                    if (activeController != null) {
-                        throw new RuntimeException("node " + activeController.nodeId() +
-                            " thinks it's the leader, but so does " + controller.nodeId());
-                    }
-                    activeController = controller;
+                if (OptionalInt.of(controller.nodeId()).equals(leader.leaderId()) &&
+                    controller.curClaimEpoch() == leader.epoch()) {
+                    value.set(controller);
+                    break;
                 }
             }
-            if (activeController == null) {
-                throw new RuntimeException("No leader found.");
+
+            if (value.get() == null) {
+                throw new RuntimeException(String.format("Expected to see %s as leader", leader));
             }
-            value.set(activeController);
         });
+
         return value.get();
     }
 

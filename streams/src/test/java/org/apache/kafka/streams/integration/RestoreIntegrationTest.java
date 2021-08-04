@@ -151,7 +151,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(inputStream, 0);
         setCommittedOffset(inputStream, offsetLimitDelta);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(inputStream, 0), (long) offsetCheckpointed - 1));
@@ -217,7 +217,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(changelog, 0);
         createStateForRestoration(inputStream, 10000);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(changelog, 0), (long) offsetCheckpointed - 1));
