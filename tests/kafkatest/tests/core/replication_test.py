@@ -130,8 +130,7 @@ class ReplicationTest(EndToEndTest):
             metadata_quorum=quorum.all_non_upgrade)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["controller"],
-            security_protocol=["PLAINTEXT", "SASL_SSL"],
-            metadata_quorum=quorum.all_non_upgrade)
+            security_protocol=["PLAINTEXT", "SASL_SSL"])
     @matrix(failure_mode=["hard_bounce"],
             broker_type=["leader"],
             security_protocol=["SASL_SSL"], client_sasl_mechanism=["PLAIN"], interbroker_sasl_mechanism=["PLAIN", "GSSAPI"],
