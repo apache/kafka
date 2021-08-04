@@ -555,10 +555,13 @@ class Log(@volatile var logStartOffset: Long,
   def assignTopicId(topicId: Uuid): Unit = {
     // defensively check that any newly assign topic ID matches any that is already set
     _topicId.foreach { current =>
-      if (!current.equals(topicId))
-      // we should never get here as the topic IDs should have been checked in becomeLeaderOrFollower
+      if (!current.equals(topicId)) {
+        // we should never get here as the topic IDs should have been checked in becomeLeaderOrFollower
         throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
           s"but log already contained topic ID $current")
+      }
+      // Topic ID already assigned so we can return
+      return
     }
 
     if (keepPartitionMetadataFile) {
