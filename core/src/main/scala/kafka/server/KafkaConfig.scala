@@ -830,7 +830,7 @@ object KafkaConfig {
     "all considered replicas so a typical scenario would be to " +
     "create a topic with a replication factor of 3, set min.insync.replicas to 2, and " +
     "produce with acks of \"all\". This will ensure that the producer raises an exception " +
-    "if a majority of replicas (2) do not receive a write."
+    "if a majority of replicas, in this case 2, do not receive a write."
 
   val CreateTopicPolicyClassNameDoc = "The create topic policy class that should be used for validation. The class should " +
     "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface."
