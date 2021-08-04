@@ -36,10 +36,12 @@ import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Wraps a {@link KafkaClusterTestKit} inside lifecycle methods for a test invocation. Each instance of this
@@ -122,7 +124,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public Collection<SocketServer> brokerSocketServers() {
-            return clusterReference.get().brokers().values().stream()
+            return brokers()
                 .map(BrokerServer::socketServer)
                 .collect(Collectors.toList());
         }
@@ -134,14 +136,14 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public Collection<SocketServer> controllerSocketServers() {
-            return clusterReference.get().controllers().values().stream()
+            return controllers()
                 .map(ControllerServer::socketServer)
                 .collect(Collectors.toList());
         }
 
         @Override
         public SocketServer anyBrokerSocketServer() {
-            return clusterReference.get().brokers().values().stream()
+            return brokers()
                 .map(BrokerServer::socketServer)
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
@@ -149,7 +151,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public SocketServer anyControllerSocketServer() {
-            return clusterReference.get().controllers().values().stream()
+            return controllers()
                 .map(ControllerServer::socketServer)
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
@@ -198,8 +200,32 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public void shutdownBroker(int brokerId) {
+            findBrokerOrThrow(brokerId).shutdown();
+        }
+
+        @Override
+        public void startBroker(int brokerId) {
+            findBrokerOrThrow(brokerId).startup();
+        }
+
+        @Override
         public void rollingBrokerRestart() {
             throw new UnsupportedOperationException("Restarting Raft servers is not yet supported.");
         }
+
+        private BrokerServer findBrokerOrThrow(int brokerId) {
+            return Optional.ofNullable(clusterReference.get().brokers().get(brokerId))
+                .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
+        }
+
+        private Stream<BrokerServer> brokers() {
+            return clusterReference.get().brokers().values().stream();
+        }
+
+        private Stream<ControllerServer> controllers() {
+            return clusterReference.get().controllers().values().stream();
+        }
+
     }
 }

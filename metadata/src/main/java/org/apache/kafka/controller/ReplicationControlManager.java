@@ -123,8 +123,8 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 public class ReplicationControlManager {
 
     static class TopicControlInfo {
-        private final String name;
-        private final Uuid id;
+        final String name;
+        final Uuid id;
         private final TimelineHashMap<Integer, PartitionRegistration> parts;
 
         TopicControlInfo(String name, SnapshotRegistry snapshotRegistry, Uuid id) {
@@ -587,6 +587,11 @@ public class ReplicationControlManager {
     }
 
     // VisibleForTesting
+    TopicControlInfo getTopic(Uuid topicId) {
+        return topics.get(topicId);
+    }
+
+    // VisibleForTesting
     BrokersToIsrs brokersToIsrs() {
         return brokersToIsrs;
     }
@@ -787,7 +792,7 @@ public class ReplicationControlManager {
     }
 
     ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
-        boolean uncleanOk = electionTypeIsUnclean(request.electionType());
+        ElectionType electionType = electionType(request.electionType());
         List<ApiMessageAndVersion> records = new ArrayList<>();
         ElectLeadersResponseData response = new ElectLeadersResponseData();
         if (request.topicPartitions() == null) {
@@ -804,7 +809,7 @@ public class ReplicationControlManager {
                 TopicControlInfo topic = topics.get(topicEntry.getValue());
                 if (topic != null) {
                     for (int partitionId : topic.parts.keySet()) {
-                        ApiError error = electLeader(topicName, partitionId, uncleanOk, records);
+                        ApiError error = electLeader(topicName, partitionId, electionType, records);
                         topicResults.partitionResult().add(new PartitionResult().
                             setPartitionId(partitionId).
                             setErrorCode(error.error().code()).
@@ -818,7 +823,7 @@ public class ReplicationControlManager {
                     new ReplicaElectionResult().setTopic(topic.topic());
                 response.replicaElectionResults().add(topicResults);
                 for (int partitionId : topic.partitions()) {
-                    ApiError error = electLeader(topic.topic(), partitionId, uncleanOk, records);
+                    ApiError error = electLeader(topic.topic(), partitionId, electionType, records);
                     topicResults.partitionResult().add(new PartitionResult().
                         setPartitionId(partitionId).
                         setErrorCode(error.error().code()).
@@ -829,17 +834,15 @@ public class ReplicationControlManager {
         return ControllerResult.of(records, response);
     }
 
-    static boolean electionTypeIsUnclean(byte electionType) {
-        ElectionType type;
+    private static ElectionType electionType(byte electionType) {
         try {
-            type = ElectionType.valueOf(electionType);
+            return ElectionType.valueOf(electionType);
         } catch (IllegalArgumentException e) {
             throw new InvalidRequestException("Unknown election type " + (int) electionType);
         }
-        return type == ElectionType.UNCLEAN;
     }
 
-    ApiError electLeader(String topic, int partitionId, boolean uncleanOk,
+    ApiError electLeader(String topic, int partitionId, ElectionType electionType,
                          List<ApiMessageAndVersion> records) {
         Uuid topicId = topicsByName.get(topic);
         if (topicId == null) {
@@ -860,8 +863,9 @@ public class ReplicationControlManager {
             topicId,
             partitionId,
             r -> clusterControl.unfenced(r),
-            () -> uncleanOk || configurationControl.uncleanLeaderElectionEnabledForTopic(topic));
-        builder.setAlwaysElectPreferredIfPossible(true);
+            () -> electionType == ElectionType.UNCLEAN);
+
+        builder.setAlwaysElectPreferredIfPossible(electionType == ElectionType.PREFERRED);
         Optional<ApiMessageAndVersion> record = builder.build();
         if (!record.isPresent()) {
             if (partition.leader == NO_LEADER) {

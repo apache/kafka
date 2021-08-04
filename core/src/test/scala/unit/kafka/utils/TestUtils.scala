@@ -1625,6 +1625,13 @@ object TestUtils extends Logging {
     waitForLeaderToBecome(client, topicPartition, None)
   }
 
+  def waitForOnlineBroker(client: Admin, brokerId: Int): Unit = {
+    waitUntilTrue(() => {
+      val nodes = client.describeCluster().nodes().get()
+      nodes.asScala.exists(_.id == brokerId)
+    }, s"Timed out waiting for brokerId $brokerId to come online")
+  }
+
   def waitForLeaderToBecome(client: Admin, topicPartition: TopicPartition, leader: Option[Int]): Unit = {
     val topic = topicPartition.topic
     val partition = topicPartition.partition
