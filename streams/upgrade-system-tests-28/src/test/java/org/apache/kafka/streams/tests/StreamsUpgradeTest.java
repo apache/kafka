@@ -38,7 +38,7 @@ public class StreamsUpgradeTest {
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
 
-        System.out.println("StreamsTest instance started (StreamsUpgradeTest v2.7)");
+        System.out.println("StreamsTest instance started (StreamsUpgradeTest v2.8)");
         System.out.println("props=" + streamsProperties);
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -48,7 +48,7 @@ public class StreamsUpgradeTest {
 
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsUpgradeTest");
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
         config.putAll(streamsProperties);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);
@@ -67,7 +67,7 @@ public class StreamsUpgradeTest {
 
             @Override
             public void init(final ProcessorContext context) {
-                System.out.println("[2.7] initializing processor: topic=data taskId=" + context.taskId());
+                System.out.println("[2.8] initializing processor: topic=data taskId=" + context.taskId());
                 numRecordsProcessed = 0;
             }
 
