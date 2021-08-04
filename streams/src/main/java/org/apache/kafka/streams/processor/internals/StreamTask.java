@@ -1171,7 +1171,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                     // note the position in consumer is the "next" record to fetch,
                     // so it should be larger than the consumed offset by 1; if it is
-                    // more than 1 it means there are skipped offsets
+                    // more than 1 it means there are control records, which the consumer skips over silently
                     if (offset > entry.getValue() + 1) {
                         commitNeeded = true;
                         entry.setValue(offset - 1);
