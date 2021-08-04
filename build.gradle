@@ -1898,7 +1898,7 @@ project(':streams:test-utils') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
-    testImplementation libs.easymock
+    testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jlog4j
