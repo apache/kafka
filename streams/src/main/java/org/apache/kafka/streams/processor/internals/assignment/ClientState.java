@@ -339,7 +339,7 @@ public class ClientState {
             if (taskLagTotals.containsKey(task)) {
                 prevTasksByLag.add(task);
             } else {
-                LOG.debug("Skipping previous task{} since it's not part of the current assignment", task);
+                LOG.debug("Skipping previous task {} since it's not part of the current assignment", task);
             }
         }
         return prevTasksByLag;

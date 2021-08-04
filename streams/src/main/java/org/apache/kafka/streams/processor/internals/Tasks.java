@@ -35,6 +35,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.diff;
+
 class Tasks {
     private final Logger log;
     private final TopologyMetadata topologyMetadata;
@@ -82,6 +84,15 @@ class Tasks {
 
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
         this.mainConsumer = mainConsumer;
+    }
+
+    void handleNewAssignmentAndCreateTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                           final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
+                                           final Set<TaskId> assignedActiveTasks,
+                                           final Set<TaskId> assignedStandbyTasks) {
+        activeTaskCreator.removeRevokedUnknownTasks(diff(HashSet::new, assignedActiveTasks, activeTasksToCreate.keySet()));
+        standbyTaskCreator.removeRevokedUnknownTasks(diff(HashSet::new, assignedStandbyTasks, standbyTasksToCreate.keySet()));
+        createTasks(activeTasksToCreate, standbyTasksToCreate);
     }
 
     void maybeCreateTasksFromNewTopologies() {

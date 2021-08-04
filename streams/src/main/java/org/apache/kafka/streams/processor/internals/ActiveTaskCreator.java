@@ -44,6 +44,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.filterMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
@@ -65,8 +66,10 @@ class ActiveTaskCreator {
     private final Map<TaskId, StreamsProducer> taskProducers;
     private final StreamThread.ProcessingMode processingMode;
 
-    // tasks may be assigned for a NamedTopology that is not yet known by this host, and saved for later creation
-    private final Map<TaskId, Set<TopicPartition>>  unknownTasksToBeCreated = new HashMap<>();
+    // Tasks may have been assigned for a NamedTopology that is not yet known by this host. When that occurs we stash
+    // these unknown tasks until either the corresponding NamedTopology is added and we can create them at last, or
+    // we receive a new assignment and they are revoked from the thread.
+    private final Map<TaskId, Set<TopicPartition>> unknownTasksToBeCreated = new HashMap<>();
 
     ActiveTaskCreator(final TopologyMetadata topologyMetadata,
                       final StreamsConfig config,
@@ -136,8 +139,12 @@ class ActiveTaskCreator {
         return threadProducer;
     }
 
+    void removeRevokedUnknownTasks(final Set<TaskId> revokedTasks) {
+        unknownTasksToBeCreated.keySet().removeAll(revokedTasks);
+    }
+
     Map<TaskId, Set<TopicPartition>> uncreatedTasksForTopologies(final Set<String> currentTopologies) {
-        return unknownTasksToBeCreated.entrySet().stream().filter(t -> currentTopologies.contains(t.getKey().namedTopology())).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+        return filterMap(unknownTasksToBeCreated, t -> currentTopologies.contains(t.getKey().namedTopology()));
     }
 
     // TODO: change return type to `StreamTask`
@@ -145,7 +152,7 @@ class ActiveTaskCreator {
                                  final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
         // TODO: change type to `StreamTask`
         final List<Task> createdTasks = new ArrayList<>();
-        final Map<TaskId, Set<TopicPartition>>  newUnknownTasks = new HashMap<>();
+        final Map<TaskId, Set<TopicPartition>> newUnknownTasks = new HashMap<>();
 
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();

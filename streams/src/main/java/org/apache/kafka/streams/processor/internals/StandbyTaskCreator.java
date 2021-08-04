@@ -36,6 +36,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.filterMap;
+
 class StandbyTaskCreator {
     private final TopologyMetadata topologyMetadata;
     private final StreamsConfig config;
@@ -47,7 +49,7 @@ class StandbyTaskCreator {
     private final Sensor createTaskSensor;
 
     // tasks may be assigned for a NamedTopology that is not yet known by this host, and saved for later creation
-    private final Map<TaskId, Set<TopicPartition>>  unknownTasksToBeCreated = new HashMap<>();
+    private final Map<TaskId, Set<TopicPartition>> unknownTasksToBeCreated = new HashMap<>();
 
     StandbyTaskCreator(final TopologyMetadata topologyMetadata,
                        final StreamsConfig config,
@@ -72,8 +74,12 @@ class StandbyTaskCreator {
         );
     }
 
+    void removeRevokedUnknownTasks(final Set<TaskId> revokedTasks) {
+        unknownTasksToBeCreated.keySet().removeAll(revokedTasks);
+    }
+
     Map<TaskId, Set<TopicPartition>> uncreatedTasksForTopologies(final Set<String> currentTopologies) {
-        return unknownTasksToBeCreated.entrySet().stream().filter(t -> currentTopologies.contains(t.getKey().namedTopology())).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+        return filterMap(unknownTasksToBeCreated, t -> currentTopologies.contains(t.getKey().namedTopology()));
     }
 
     // TODO: change return type to `StandbyTask`

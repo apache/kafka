@@ -176,8 +176,8 @@ public class TopologyMetadata {
         if (allInputTopics.size() != numInputTopics + numNewInputTopics) {
             inputTopics.retainAll(allInputTopics);
             inputPatterns.retainAll(allInputTopics);
-            inputTopics.addAll(inputPatterns);
-            log.error("Tried to add the NamedTopology {} but it had overlap with other input topics: {}", builder.topologyName(), inputTopics);
+            log.error("Tried to add the NamedTopology {} but it had overlap with other input topics {} or patterns {}",
+                      builder.topologyName(), inputTopics, inputPatterns);
             throw new TopologyException("Named Topologies may not subscribe to the same input topics or patterns");
         }
 
