@@ -21,6 +21,7 @@ package kafka.tools
 import java.util.Properties
 import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, IncludeList, ToolsUtils}
+import org.apache.kafka.clients.admin.{Admin, OffsetSpec}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
@@ -72,7 +73,7 @@ object GetOffsetShell {
                            .ofType(classOf[String])
     val timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently committed record timestamp is given.]")
                            .withRequiredArg
-                           .describedAs("timestamp/-1(latest)/-2(earliest)")
+                           .describedAs("timestamp/-1(latest)/-2(earliest)/-3(max timestamp)")
                            .ofType(classOf[java.lang.Long])
                            .defaultsTo(-1L)
     val commandConfigOpt = parser.accepts("command-config", s"Property file containing configs to be passed to Consumer Client.")
@@ -124,6 +125,7 @@ object GetOffsetShell {
     config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     config.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
     val consumer = new KafkaConsumer(config, new ByteArrayDeserializer, new ByteArrayDeserializer)
+    val client = Admin.create(config)
 
     try {
       val partitionInfos = listPartitionInfos(consumer, topicPartitionFilter)
@@ -140,15 +142,18 @@ object GetOffsetShell {
           Some(new TopicPartition(p.topic, p.partition))
       }
 
+      val offsetSpec = listOffsetsTimestamp match {
+        case ListOffsetsRequest.EARLIEST_TIMESTAMP => OffsetSpec.earliest()
+        case ListOffsetsRequest.LATEST_TIMESTAMP => OffsetSpec.latest()
+        case ListOffsetsRequest.MAX_TIMESTAMP => OffsetSpec.maxTimestamp()
+        case _ => OffsetSpec.forTimestamp(listOffsetsTimestamp)
+      }
+
+      val timestampsToSearch = topicPartitions.map(tp => tp -> offsetSpec).toMap.asJava
+
       /* Note that the value of the map can be null */
-      val partitionOffsets: collection.Map[TopicPartition, java.lang.Long] = listOffsetsTimestamp match {
-        case ListOffsetsRequest.EARLIEST_TIMESTAMP => consumer.beginningOffsets(topicPartitions.asJava).asScala
-        case ListOffsetsRequest.LATEST_TIMESTAMP => consumer.endOffsets(topicPartitions.asJava).asScala
-        case _ =>
-          val timestampsToSearch = topicPartitions.map(tp => tp -> (listOffsetsTimestamp: java.lang.Long)).toMap.asJava
-          consumer.offsetsForTimes(timestampsToSearch).asScala.map { case (k, x) =>
-            if (x == null) (k, null) else (k, x.offset: java.lang.Long)
-          }
+      val partitionOffsets = client.listOffsets(timestampsToSearch).all().get().asScala.map { case (k, x) =>
+        if (x == null) (k, null) else (k, x.offset: java.lang.Long)
       }
 
       partitionOffsets.toSeq.sortWith((tp1, tp2) => compareTopicPartitions(tp1._1, tp2._1)).foreach {
@@ -156,6 +161,7 @@ object GetOffsetShell {
       }
     } finally {
       consumer.close()
+      client.close()
     }
   }
 
