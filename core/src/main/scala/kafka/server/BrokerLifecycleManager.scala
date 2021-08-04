@@ -206,6 +206,10 @@ class BrokerLifecycleManager(val config: KafkaConfig,
         case BrokerState.RUNNING =>
           info("Beginning controlled shutdown.")
           _state = BrokerState.PENDING_CONTROLLED_SHUTDOWN
+          // Send the next heartbeat immediately in order to let the controller
+          // begin processing the controlled shutdown as soon as possible.
+          scheduleNextCommunication(0)
+
         case _ =>
           info(s"Skipping controlled shutdown because we are in state ${_state}.")
           beginShutdown()
