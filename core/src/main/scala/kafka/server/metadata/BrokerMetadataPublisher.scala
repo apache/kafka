@@ -21,7 +21,7 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{Log, LogManager}
 import kafka.server.ConfigType
-import kafka.server.{ConfigHandler, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{ConfigEntityName, ConfigHandler, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
@@ -203,7 +203,11 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
           }
           tag.foreach { t =>
             val newProperties = newImage.configs().configProperties(configResource)
-            dynamicConfigHandlers(t).processConfigChanges(configResource.name(), newProperties)
+            val maybeDefaultName = configResource.name() match {
+              case "" => ConfigEntityName.Default 
+              case k => k
+            }
+            dynamicConfigHandlers(t).processConfigChanges(maybeDefaultName, newProperties)
           }
         }
       }
