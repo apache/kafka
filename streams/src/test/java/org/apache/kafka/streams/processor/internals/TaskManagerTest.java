@@ -586,9 +586,10 @@ public class TaskManagerTest {
     public void shouldReInitializeThreadProducerOnHandleLostAllIfEosV2Enabled() {
         activeTaskCreator.reInitializeThreadProducer();
         expectLastCall();
-        replay(activeTaskCreator);
 
         setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
+
+        replay(activeTaskCreator);
 
         taskManager.handleLostAll();
 
