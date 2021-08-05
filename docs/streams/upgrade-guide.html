@@ -53,6 +53,15 @@
     </ul>
 
     <p>
+        Since 3.0.0 release, Kafka Streams uses a newer RocksDB version which bumped its footer version persisted on files.
+        This means that old versioned RocksDB would not be able to recognize the bytes written by that newer versioned RocksDB,
+        and hence it is harder to downgrade Kafka Streams with version 3.0.0 or newer to older versions in-flight.
+        Users need to wipe out the local RocksDB state stores written by the new versioned Kafka Streams before swapping in the
+        older versioned Kafka Streams bytecode, which when then restore the state stores with the old versioned footer from the
+        changelogs.
+    </p>
+
+    <p>
         Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2. This can be configured
         by setting <code>"processing.guarantee"</code> to <code>"exactly_once_v2"</code> for
         application versions 3.0+, or setting it to <code>"exactly_once_beta"</code> for versions between 2.6 and 2.8.
