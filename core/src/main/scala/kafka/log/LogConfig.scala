@@ -134,7 +134,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
       val localLogRetentionBytes = getLong(LogConfig.LocalLogRetentionBytesProp)
 
       // -2 indicates to derive value from retentionSize property.
-      if(localLogRetentionBytes == -2) retentionSize;
+      if(localLogRetentionBytes == -2) retentionSize
       else {
         // Added validation here to check the effective value should not be more than RetentionBytes.
         if(localLogRetentionBytes == -1 && retentionSize != -1) {
