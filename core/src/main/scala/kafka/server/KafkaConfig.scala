@@ -1919,6 +1919,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         throw new ConfigException(s"Missing configuration `${KafkaConfig.NodeIdProp}` which is required " +
           s"when `process.roles` is defined (i.e. when running in KRaft mode).")
       }
+      require(getClass(KafkaConfig.AlterConfigPolicyClassNameProp) == null, s"${KafkaConfig.AlterConfigPolicyClassNameProp} is not supported in KRaft.")
+      require(getClass(KafkaConfig.CreateTopicPolicyClassNameProp) == null, s"${KafkaConfig.CreateTopicPolicyClassNameProp} is not supported in KRaft.")
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
@@ -1947,6 +1949,15 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
           s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
           s"are ${listenerNames.map(_.value).mkString(",")}"
       )
+    }
+
+    val voterIds: Set[Integer] = if (usesSelfManagedQuorum) RaftConfig.parseVoterConnections(quorumVoters).asScala.keySet.toSet else Set.empty
+    if (processRoles.contains(ControllerRole)) {
+      // Ensure that controllers use their node.id as a voter in controller.quorum.voters 
+      require(voterIds.contains(nodeId), s"The controller must contain a voter for it's ${KafkaConfig.NodeIdProp}=$nodeId in ${RaftConfig.QUORUM_VOTERS_CONFIG}.")
+    } else {
+      // Ensure that the broker's node.id is not an id in controller.quorum.voters
+      require(!voterIds.contains(nodeId), s"Since ${KafkaConfig.ProcessRolesProp}=broker, the the broker's ${KafkaConfig.NodeIdProp}=nodeId should not be in ${RaftConfig.QUORUM_VOTERS_CONFIG}")
     }
 
     require(!advertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
@@ -2008,10 +2019,5 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     require(principalBuilderClass != null, s"${KafkaConfig.PrincipalBuilderClassProp} must be non-null")
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass), 
       s"${KafkaConfig.PrincipalBuilderClassProp} must implement KafkaPrincipalSerde")
-
-    if (usesSelfManagedQuorum) {
-      require(getClass(KafkaConfig.AlterConfigPolicyClassNameProp) == null, s"${KafkaConfig.AlterConfigPolicyClassNameProp} is not supported in KRaft.")
-      require(getClass(KafkaConfig.CreateTopicPolicyClassNameProp) == null, s"${KafkaConfig.CreateTopicPolicyClassNameProp} is not supported in KRaft.")
-    }
   }
 }
