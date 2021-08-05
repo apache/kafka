@@ -107,10 +107,6 @@ public class TopologyMetadata {
         version.topologyLock.unlock();
     }
 
-    public InternalTopologyBuilder getBuilderForTopologyName(final String name) {
-        return builders.get(name);
-    }
-
     public void wakeupThreads() {
         try {
             lock();
@@ -395,6 +391,13 @@ public class TopologyMetadata {
 
     private InternalTopologyBuilder lookupBuilderForTask(final TaskId task) {
         return task.namedTopology() == null ? builders.get(UNNAMED_TOPOLOGY) : builders.get(task.namedTopology());
+    }
+
+    /**
+     * @return the InternalTopologyBuilder for a NamedTopology, or null if no such NamedTopology exists
+     */
+    public InternalTopologyBuilder lookupBuilderForNamedTopology(final String name) {
+        return builders.get(name);
     }
 
     private boolean evaluateConditionIsTrueForAnyBuilders(final Function<InternalTopologyBuilder, Boolean> condition) {

@@ -116,7 +116,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @return the NamedTopology for the specific name, or Optional.empty() if the application has no NamedTopology of that name
      */
     public Optional<NamedTopology> getTopologyByName(final String name) {
-        return Optional.ofNullable(topologyMetadata.getBuilderForTopologyName(name)).map(InternalTopologyBuilder::namedTopology);
+        return Optional.ofNullable(topologyMetadata.lookupBuilderForNamedTopology(name)).map(InternalTopologyBuilder::namedTopology);
     }
 
     /**
