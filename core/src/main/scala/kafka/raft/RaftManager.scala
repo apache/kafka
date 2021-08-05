@@ -24,7 +24,7 @@ import java.util.concurrent.CompletableFuture
 import kafka.log.Log
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
-import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
+import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
@@ -181,10 +181,10 @@ class KafkaRaftManager[T](
     val expirationService = new TimingWheelExpirationService(expirationTimer)
     val quorumStateStore = new FileBasedStateStore(new File(dataDir, "quorum-state"))
 
-    val nodeId = if (config.processRoles.contains(BrokerRole) && !config.processRoles.contains(ControllerRole)) {
-      OptionalInt.empty()
-    } else {
+    val nodeId = if (config.processRoles.contains(ControllerRole)) {
       OptionalInt.of(config.nodeId)
+    } else {
+      OptionalInt.empty()
     }
 
     val client = new KafkaRaftClient(
