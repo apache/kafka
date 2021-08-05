@@ -23,6 +23,7 @@ import java.util.Properties
 
 import kafka.server.KafkaConfig
 import kafka.utils.Exit
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
@@ -124,6 +125,17 @@ class KafkaTest {
     // Ensure that with a valid config no exception is thrown
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")
     KafkaConfig.fromProps(propertiesFile)
+  }
+
+  @Test
+  def testMustContainQuorumVotersIfUsingProcessRoles(): Unit = {
+    // Ensure that validation is happening at startup to check that colocated processes use their node.id as a voter in controller.quorum.voters 
+    val propertiesFile = new Properties
+    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
+    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
+    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "")
+    setListenerProps(propertiesFile)
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(propertiesFile))
   }
 
   private def setListenerProps(props: Properties): Unit = {

@@ -1960,6 +1960,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         // Ensure that the broker's node.id is not an id in controller.quorum.voters
         require(!voterIds.contains(nodeId), s"If ${KafkaConfig.ProcessRolesProp} does not contain the 'controller' role, the node id $nodeId must not be included in the set of voters ${RaftConfig.QUORUM_VOTERS_CONFIG}=$voterIds")
       }
+    } else if (usesSelfManagedQuorum) {
+      throw new ConfigException(s"If using ${KafkaConfig.ProcessRolesProp}, ${RaftConfig.QUORUM_VOTERS_CONFIG} must contain a parseable set of voters.")
     }
 
     require(!advertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
