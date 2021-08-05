@@ -1109,15 +1109,29 @@ public class StreamTaskTest {
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition1, 0L));
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition1, 1L));
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition1, 2L));
-        consumer.updateEndOffsets(mkMap(mkEntry(partition2, 0L)));
+        consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition2, 0L));
         consumer.poll(Duration.ZERO);
 
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 0L)));
         task.addRecords(partition2, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition2, 0L)));
         task.process(0L);
-        final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.prepareCommit();
 
-        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, encodeTimestamp(0L))))));
+        assertTrue(task.commitNeeded());
+        assertThat(task.prepareCommit(), equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, encodeTimestamp(0L))))));
+        task.postCommit(false);
+
+        // the task should still be committed since the processed records have not reached the consumer position
+        assertTrue(task.commitNeeded());
+
+        consumer.poll(Duration.ZERO);
+        task.process(0L);
+
+        assertTrue(task.commitNeeded());
+        assertThat(task.prepareCommit(), equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(3L, encodeTimestamp(0L))),
+                                                       mkEntry(partition2, new OffsetAndMetadata(1L, encodeTimestamp(0L))))));
+        task.postCommit(false);
+
+        assertFalse(task.commitNeeded());
     }
 
     @Test

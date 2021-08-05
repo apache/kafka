@@ -1158,7 +1158,38 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public boolean commitNeeded() {
-        return commitNeeded;
+        // we need to do an extra check if the flag was false, that
+        // if the consumer position has been updated; this is because
+        // there may be non data records such as control markers bypassed
+        if (commitNeeded) {
+            return true;
+        } else {
+            for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+                final TopicPartition partition = entry.getKey();
+                try {
+                    final long offset = mainConsumer.position(partition);
+
+                    // note the position in consumer is the "next" record to fetch,
+                    // so it should be larger than the consumed offset by 1; if it is
+                    // more than 1 it means there are control records, which the consumer skips over silently
+                    if (offset > entry.getValue() + 1) {
+                        commitNeeded = true;
+                        entry.setValue(offset - 1);
+                    }
+                } catch (final TimeoutException error) {
+                    // the `consumer.position()` call should never block, because we know that we did process data
+                    // for the requested partition and thus the consumer should have a valid local position
+                    // that it can return immediately
+
+                    // hence, a `TimeoutException` indicates a bug and thus we rethrow it as fatal `IllegalStateException`
+                    throw new IllegalStateException(error);
+                } catch (final KafkaException fatal) {
+                    throw new StreamsException(fatal);
+                }
+            }
+
+            return commitNeeded;
+        }
     }
 
     @Override
