@@ -72,30 +72,30 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     }
 
     @Override
-    public void handle(final Callback[] callbacks)
-        throws IOException, UnsupportedCallbackException {
-        if (callbacks != null && callbacks.length > 0) {
-            for (Callback callback : callbacks) {
-                if (callback instanceof OAuthBearerValidatorCallback)
-                    handle((OAuthBearerValidatorCallback) callback);
+    public void handle(final Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+        for (Callback callback : callbacks) {
+            if (callback instanceof OAuthBearerValidatorCallback) {
+                handle((OAuthBearerValidatorCallback) callback);
+            } else {
+                throw new UnsupportedCallbackException(callback);
             }
-        } else {
-            log.warn("Nope - no callbacks provided");
         }
     }
 
-    private void handle(OAuthBearerValidatorCallback callback) throws IOException {
+    private void handle(OAuthBearerValidatorCallback callback) {
+        String accessToken = callback.tokenValue();
+        log.debug("handle - accessToken: {}", accessToken);
+
+        OAuthBearerToken token;
+
         try {
-            String accessToken = callback.tokenValue();
-            log.debug("handle - accessToken: {}", accessToken);
-
-            OAuthBearerToken token = accessTokenValidator.validate(accessToken);
-            log.warn("handle - token: {}", token);
-
-            callback.token(token);
-        } catch (Exception e) {
-            callback.error("nyi", e.getMessage(), "https://www.example.com");
+            token = accessTokenValidator.validate(accessToken);
+        } catch (ValidateException e) {
+            throw new IllegalStateException("Could not validate OAuth access token", e);
         }
+
+        log.debug("handle - token: {}", token);
+        callback.token(token);
     }
 
 }

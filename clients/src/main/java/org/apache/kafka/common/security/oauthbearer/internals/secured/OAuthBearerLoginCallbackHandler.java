@@ -82,7 +82,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         String accessToken = client.getAccessToken();
         log.debug("handle - accessToken: {}", accessToken);
 
-        OAuthBearerToken token = null;
+        OAuthBearerToken token;
 
         try {
             token = accessTokenValidator.validate(accessToken);
