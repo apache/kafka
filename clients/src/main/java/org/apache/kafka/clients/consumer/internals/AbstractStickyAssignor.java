@@ -142,12 +142,11 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 for (final TopicPartition tp : memberData.partitions) {
                     // filter out any topics that no longer exist or aren't part of the current subscription
                     if (allTopics.contains(tp.topic())) {
-
-                        if (!allPreviousPartitionsToOwner.containsKey(tp)) {
-                            allPreviousPartitionsToOwner.put(tp, consumer);
+                        String otherConsumer = allPreviousPartitionsToOwner.put(tp, consumer);
+                        if (otherConsumer == null) {
+                            // this partition is not owned by other consumer in the same generation
                             ownedPartitions.add(tp);
                         } else {
-                            String otherConsumer = allPreviousPartitionsToOwner.get(tp);
                             log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
                                 + "same generation {}, this will be invalidated and removed from their previous assignment.",
                                      consumer, otherConsumer, tp, maxGeneration);
