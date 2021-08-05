@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
@@ -121,40 +122,49 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
     /**
      * Add a new NamedTopology to a running Kafka Streams app. If multiple instances of the application are running,
-     * you should inform all of them by calling {@link #addNamedTopology(NamedTopology)} on each client in order for
+     * you should inform all of them by calling {@code #addNamedTopology(NamedTopology)} on each client in order for
      * it to begin processing the new topology.
+     *
+     * @return a {@link KafkaFuture} that completes successfully when all threads on this client have picked up the
+     * new {@link NamedTopology}. Note that the new topology is not guaranteed to begin processing on this client or
+     * any others until its addition has been completed by all instances of the application.
      *
      * @throws IllegalArgumentException if this topology name is already in use
      * @throws IllegalStateException    if streams has not been started or has already shut down
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
-    public void addNamedTopology(final NamedTopology newTopology) {
+    public KafkaFuture<Void> addNamedTopology(final NamedTopology newTopology) {
         if (hasStartedOrFinishedShuttingDown()) {
             throw new IllegalStateException("Cannot add a NamedTopology while the state is " + super.state);
         } else if (getTopologyByName(newTopology.name()).isPresent()) {
             throw new IllegalArgumentException("Unable to add the new NamedTopology " + newTopology.name() +
                                                    " as another of the same name already exists");
         }
-        topologyMetadata.registerAndBuildNewTopology(newTopology.internalTopologyBuilder());
+        return topologyMetadata.registerAndBuildNewTopology(newTopology.internalTopologyBuilder());
     }
 
     /**
      * Remove an existing NamedTopology from a running Kafka Streams app. If multiple instances of the application are
-     * running, you should inform all of them by calling {@link #removeNamedTopology(String)} on each client to ensure
+     * running, you should inform all of them by calling {@code #removeNamedTopology(String)} on each client to ensure
      * it stops processing the old topology.
+     *
+     * @return a {@link KafkaFuture} that completes successfully when all threads on this client have removed the
+     * corresponding {@link NamedTopology}. At this point no more of its tasks will be processed by the current client,
+     * but there may still be other clients which do. It is only guaranteed that this {@link NamedTopology} has fully
+     * stopped processing when all clients have successfully completed their corresponding {@link KafkaFuture}.
      *
      * @throws IllegalArgumentException if this topology name cannot be found
      * @throws IllegalStateException    if streams has not been started or has already shut down
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
-    public void removeNamedTopology(final String topologyToRemove) {
+    public KafkaFuture<Void> removeNamedTopology(final String topologyToRemove) {
         if (!isRunningOrRebalancing()) {
             throw new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state);
         } else if (!getTopologyByName(topologyToRemove).isPresent()) {
             throw new IllegalArgumentException("Unable to locate for removal a NamedTopology called " + topologyToRemove);
         }
 
-        topologyMetadata.unregisterTopology(topologyToRemove);
+        return topologyMetadata.unregisterTopology(topologyToRemove);
     }
 
     /**
