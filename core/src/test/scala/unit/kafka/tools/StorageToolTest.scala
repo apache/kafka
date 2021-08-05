@@ -25,6 +25,7 @@ import java.util.Properties
 
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.TestUtils
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.{Test, Timeout}
@@ -37,6 +38,7 @@ class StorageToolTest {
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo,/tmp/bar")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
     properties.setProperty(KafkaConfig.NodeIdProp, "2")
+    properties.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9092")
     properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
     properties
   }

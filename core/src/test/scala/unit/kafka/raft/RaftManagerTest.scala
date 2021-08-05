@@ -34,21 +34,30 @@ import org.mockito.Mockito._
 
 class RaftManagerTest {
 
-  private def instantiateRaftManagerWithConfigs(processRoles: String, nodeId:String) = {
+  private def instantiateRaftManagerWithConfigs(topicPartition: TopicPartition, processRoles: String, nodeId: String) = {
     def configWithProcessRolesAndNodeId(processRoles: String, nodeId: String): KafkaConfig = {
       val props = new Properties
       props.setProperty(KafkaConfig.ProcessRolesProp, processRoles)
       props.setProperty(KafkaConfig.NodeIdProp, nodeId)
       props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9093")
       props.setProperty(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
-      props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, nodeId.concat("@localhost:9093"))
-      if (processRoles.contains("broker"))
+      if (processRoles.contains("broker")) {
         props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
         props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092")
+        if (!processRoles.contains("controller")) {
+          val nodeIdMod = (nodeId.toInt + 1)
+          props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeIdMod.toString}@localhost:9093")
+        }
+      } 
+
+      if (processRoles.contains("controller")) {
+        props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:9093")
+      }
+
       new KafkaConfig(props)
     }
 
-    val config = configWithProcessRolesAndNodeId(processRoles, nodeId)
+    val config = configWithProcessRolesAndNodeId(processRoles, nodeId) 
     val topicId = new Uuid(0L, 2L)
     val metaProperties = MetaProperties(
       clusterId = Uuid.randomUuid.toString,
@@ -59,7 +68,7 @@ class RaftManagerTest {
       metaProperties,
       config,
       new ByteArraySerde,
-      new TopicPartition("__taft_id_test", 0),
+      topicPartition,
       topicId,
       Time.SYSTEM,
       new Metrics(Time.SYSTEM),
@@ -70,21 +79,21 @@ class RaftManagerTest {
 
   @Test
   def testSentinelNodeIdIfBrokerRoleOnly(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs("broker", "1")
+    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test1", 0), "broker", "1")
     assertFalse(raftManager.client.nodeId.isPresent)
     raftManager.shutdown()
   }
 
   @Test
   def testNodeIdPresentIfControllerRoleOnly(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs("controller", "1")
+    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test2", 0), "controller", "1")
     assertTrue(raftManager.client.nodeId.getAsInt == 1)
     raftManager.shutdown()
   }
 
   @Test
   def testNodeIdPresentIfColocated(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs("controller,broker", "1")
+    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test3", 0), "controller,broker", "1")
     assertTrue(raftManager.client.nodeId.getAsInt == 1)
     raftManager.shutdown()
   }

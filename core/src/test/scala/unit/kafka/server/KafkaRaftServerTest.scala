@@ -23,6 +23,7 @@ import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdExce
 import kafka.log.Log
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -40,6 +41,7 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker,controller")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeId.toString}@localhost:9092")
     configProperties.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
 
     val (loadedMetaProperties, offlineDirs) =
@@ -60,6 +62,7 @@ class KafkaRaftServerTest {
 
     configProperties.put(KafkaConfig.ProcessRolesProp, "controller")
     configProperties.put(KafkaConfig.NodeIdProp, configNodeId.toString)
+    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${configNodeId.toString}@localhost:9092")
     configProperties.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
 
     assertThrows(classOf[InconsistentNodeIdException], () =>
@@ -105,6 +108,7 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${(nodeId + 1).toString}@localhost:9092")
     configProperties.put(KafkaConfig.LogDirProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
     val config = KafkaConfig.fromProps(configProperties)
 
@@ -124,6 +128,7 @@ class KafkaRaftServerTest {
     val invalidDir = TestUtils.tempFile("blah")
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
+    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${(nodeId + 1).toString}@localhost:9092")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.MetadataLogDirProp, invalidDir.getAbsolutePath)
     configProperties.put(KafkaConfig.LogDirProp, validDir.getAbsolutePath)
@@ -146,6 +151,7 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${(nodeId + 1).toString}@localhost:9092")
     configProperties.put(KafkaConfig.MetadataLogDirProp, validDir.getAbsolutePath)
     configProperties.put(KafkaConfig.LogDirProp, invalidDir.getAbsolutePath)
     val config = KafkaConfig.fromProps(configProperties)
@@ -174,6 +180,7 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${(nodeId + 1).toString}@localhost:9092")
     configProperties.put(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
     configProperties.put(KafkaConfig.LogDirProp, dataDir.getAbsolutePath)
     val config = KafkaConfig.fromProps(configProperties)
@@ -194,6 +201,7 @@ class KafkaRaftServerTest {
 
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
+    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${(nodeId + 1).toString}@localhost:9092")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.LogDirProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
     val config = KafkaConfig.fromProps(configProperties)

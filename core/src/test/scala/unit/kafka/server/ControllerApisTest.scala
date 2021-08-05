@@ -57,6 +57,7 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.controller.Controller
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions._
@@ -96,6 +97,7 @@ class ControllerApisTest {
     props.put(KafkaConfig.NodeIdProp, nodeId: java.lang.Integer)
     props.put(KafkaConfig.ProcessRolesProp, "controller")
     props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+    props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:9093")
     new ControllerApis(
       requestChannel,
       authorizer,

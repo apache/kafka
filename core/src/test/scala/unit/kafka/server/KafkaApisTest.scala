@@ -69,6 +69,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.easymock.EasyMock._
 import org.easymock.{Capture, EasyMock, IAnswer}
@@ -132,6 +133,8 @@ class KafkaApisTest {
       val properties = TestUtils.createBrokerConfig(brokerId, "")
       properties.put(KafkaConfig.NodeIdProp, brokerId.toString)
       properties.put(KafkaConfig.ProcessRolesProp, "broker")
+      val nodeIdMod = (brokerId + 1)
+      properties.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeIdMod.toString}@localhost:9093")
       properties
     } else {
       TestUtils.createBrokerConfig(brokerId, "zk")

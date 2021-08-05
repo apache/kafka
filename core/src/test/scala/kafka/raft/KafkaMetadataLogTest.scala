@@ -59,7 +59,8 @@ final class KafkaMetadataLogTest {
   def testConfig(): Unit = {
     val props = new Properties()
     props.put(ProcessRolesProp, util.Arrays.asList("broker"))
-    props.put(NodeIdProp, Int.box(1))
+    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
+    props.put(NodeIdProp, Int.box(2))
     props.put(MetadataLogSegmentBytesProp, Int.box(10240))
     props.put(MetadataLogSegmentMillisProp, Int.box(10 * 1024))
     assertThrows(classOf[InvalidConfigurationException], () => {
