@@ -18,13 +18,15 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.slf4j.Logger;
@@ -41,15 +43,17 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
     @Override
     public void configure(final Map<String, ?> configs, final String saslMechanism,
         final List<AppConfigurationEntry> jaasConfigEntries) {
-        LoginCallbackHandlerConfiguration conf = null;
+        if (!OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(saslMechanism))
+            throw new IllegalArgumentException(String.format("Unexpected SASL mechanism: %s", saslMechanism));
+        if (Objects.requireNonNull(jaasConfigEntries).size() != 1 || jaasConfigEntries.get(0) == null)
+            throw new IllegalArgumentException(
+                String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)",
+                    jaasConfigEntries.size()));
+        @SuppressWarnings("unchecked")
+        final Map<String, String> unmodifiableModuleOptions = Collections
+            .unmodifiableMap((Map<String, String>) jaasConfigEntries.get(0).getOptions());
 
-        for (AppConfigurationEntry ace : jaasConfigEntries) {
-            Map<String, ?> options = ace.getOptions();
-            conf = new LoginCallbackHandlerConfiguration(options);
-        }
-
-        if (conf == null)
-            throw new ConfigException("The OAuth login callback was not provided any options");
+        LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(unmodifiableModuleOptions);
 
         String clientId = conf.getClientId();
         String clientSecret = conf.getClientSecret();

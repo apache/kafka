@@ -82,19 +82,23 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
             CLOCK_SKEW_DOC)
         .define(EXPECTED_AUDIENCE_CONFIG,
             Type.LIST,
+            null,
             Importance.LOW,
             EXPECTED_AUDIENCE_DOC)
         .define(EXPECTED_ISSUER_CONFIG,
             Type.STRING,
+            null,
             Importance.LOW,
             EXPECTED_ISSUER_DOC)
         .define(JWKS_ENDPOINT_URI_CONFIG,
             Type.STRING,
+            null,
             JWKS_ENDPOINT_URI_VALIDATOR,
             Importance.MEDIUM,
             JWKS_ENDPOINT_URI_DOC)
         .define(JWKS_FILE_CONFIG,
             Type.STRING,
+            null,
             JWKS_FILE_VALIDATOR,
             Importance.MEDIUM,
             JWKS_FILE_DOC)
@@ -129,7 +133,7 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
         }
 
         String jwksFile = getString(JWKS_FILE_CONFIG);
-        String jwksEndpointUri = getString(JWKS_ENDPOINT_URI_DOC);
+        String jwksEndpointUri = getString(JWKS_ENDPOINT_URI_CONFIG);
 
         if (jwksFile != null && jwksEndpointUri != null)
             throw new ConfigException(String.format("The OAuth validator configuration options %s and %s cannot both be specified", JWKS_FILE_CONFIG, JWKS_ENDPOINT_URI_CONFIG));

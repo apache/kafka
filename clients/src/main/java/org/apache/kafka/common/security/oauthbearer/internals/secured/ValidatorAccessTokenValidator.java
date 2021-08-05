@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -91,7 +92,7 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
         NumericDate issuedAt = getClaim(claims::getIssuedAt, ReservedClaimNames.ISSUED_AT);
 
         OAuthBearerToken token = new BasicOAuthBearerToken(accessToken,
-            scopes != null && !scopes.isEmpty() ? new HashSet<>(scopes) : null,
+            scopes != null && !scopes.isEmpty() ? new HashSet<>(scopes) : Collections.emptySet(),
             expiration != null ? expiration.getValueInMillis() : null,
             sub,
             issuedAt != null ? issuedAt.getValueInMillis() : null);

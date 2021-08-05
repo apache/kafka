@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
+
 import java.util.Map;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -51,16 +53,19 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
     private static final ConfigDef CONFIG = new ConfigDef()
         .define(CLIENT_ID_CONFIG,
             Type.STRING,
+            NO_DEFAULT_VALUE,
             CLIENT_ID_VALIDATOR,
             Importance.HIGH,
             CLIENT_ID_DOC)
         .define(CLIENT_SECRET_CONFIG,
-            Type.PASSWORD,
+            Type.STRING,
+            NO_DEFAULT_VALUE,
             CLIENT_SECRET_VALIDATOR,
             Importance.HIGH,
             CLIENT_SECRET_DOC)
         .define(SCOPE_CONFIG,
             Type.STRING,
+            null,
             Importance.MEDIUM,
             SCOPE_DOC)
         .define(SCOPE_CLAIM_NAME_CONFIG,
@@ -75,6 +80,7 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
             SUB_CLAIM_NAME_DOC)
         .define(TOKEN_ENDPOINT_URI_CONFIG,
             Type.STRING,
+            NO_DEFAULT_VALUE,
             TOKEN_ENDPOINT_URI_VALIDATOR,
             Importance.MEDIUM,
             TOKEN_ENDPOINT_URI_DOC);
