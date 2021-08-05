@@ -15,15 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
+import org.jose4j.keys.resolvers.VerificationKeyResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,9 +36,34 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerValidatorCallbackHandler.class);
 
+    private AccessTokenValidator accessTokenValidator;
+
     @Override
     public void configure(final Map<String, ?> configs, final String saslMechanism,
         final List<AppConfigurationEntry> jaasConfigEntries) {
+        ValidatorCallbackHandlerConfiguration conf = null;
+
+        for (AppConfigurationEntry ace : jaasConfigEntries) {
+            Map<String, ?> options = ace.getOptions();
+            conf = new ValidatorCallbackHandlerConfiguration(options);
+        }
+
+        if (conf == null)
+            throw new ConfigException("The OAuth validator callback was not provided any options");
+
+        Integer clockSkew = conf.getClockSkew();
+        Set<String> expectedAudiences = conf.getExpectedAudiences();
+        String expectedIssuer = conf.getExpectedIssuer();
+        VerificationKeyResolver verificationKeyResolver = conf.getVerificationKeyResolver();
+        String scopeClaimName = conf.getScopeClaimName();
+        String subClaimName = conf.getSubClaimName();
+
+        this.accessTokenValidator = new ValidatorAccessTokenValidator(clockSkew,
+            expectedAudiences,
+            expectedIssuer,
+            verificationKeyResolver,
+            scopeClaimName,
+            subClaimName);
     }
 
     @Override
@@ -59,8 +89,8 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
             String accessToken = callback.tokenValue();
             log.debug("handle - accessToken: {}", accessToken);
 
-            OAuthBearerToken token = OAuthBearerUtils.parseAndValidateToken(accessToken);
-            log.debug("handle - token: {}", token);
+            OAuthBearerToken token = accessTokenValidator.validate(accessToken);
+            log.warn("handle - token: {}", token);
 
             callback.token(token);
         } catch (Exception e) {

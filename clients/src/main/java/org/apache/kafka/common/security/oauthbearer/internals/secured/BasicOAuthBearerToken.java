@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import java.util.Collections;
 import java.util.Set;
 import java.util.StringJoiner;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
 public class BasicOAuthBearerToken implements OAuthBearerToken {
 
