@@ -888,7 +888,8 @@ public class StreamThread extends Thread {
     private long pollPhase() {
         checkForTopologyUpdates();
         if (topologyMetadata.isEmpty()) {
-                log.debug("Skipping poll since there is no topology and the consumer is not subscribed to any topics");
+            log.debug("Skipping poll since there is no topology and the consumer is not subscribed to any topics");
+            return 0L;
         }
 
         final ConsumerRecords<byte[], byte[]> records;
