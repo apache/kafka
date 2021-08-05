@@ -290,7 +290,7 @@ object TestRaftServer extends Logging {
     }
   }
 
-  private class ByteArraySerde extends RecordSerde[Array[Byte]] {
+  class ByteArraySerde extends RecordSerde[Array[Byte]] {
     override def recordSize(data: Array[Byte], serializationCache: ObjectSerializationCache): Int = {
       data.length
     }
