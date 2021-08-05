@@ -139,8 +139,8 @@ class ActiveTaskCreator {
         return threadProducer;
     }
 
-    void removeRevokedUnknownTasks(final Set<TaskId> revokedTasks) {
-        unknownTasksToBeCreated.keySet().removeAll(revokedTasks);
+    void removeRevokedUnknownTasks(final Set<TaskId> assignedTasks) {
+        unknownTasksToBeCreated.keySet().retainAll(assignedTasks);
     }
 
     Map<TaskId, Set<TopicPartition>> uncreatedTasksForTopologies(final Set<String> currentTopologies) {

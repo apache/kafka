@@ -249,22 +249,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         handleRebalanceStart(topics);
         uniqueField++;
 
-        final Set<String> currentNamedTopologies;
-        final Map<TaskId, Long> taskOffsetSums;
-        try {
-            taskManager.topologyMetadata().lock();
+        final Set<String> currentNamedTopologies = taskManager.topologyMetadata().namedTopologiesView();
 
-            currentNamedTopologies = taskManager.topologyMetadata().namedTopologiesView();
-
-            final Map<TaskId, Long> allTaskOffsetSums = taskManager.getTaskOffsetSums();
-
-            // If using NamedTopologies, filter out any that are no longer recognized/have been removed
-            taskOffsetSums = taskManager.topologyMetadata().hasNamedTopologies() ?
-                filterMap(allTaskOffsetSums, t -> currentNamedTopologies.contains(t.getKey().namedTopology())) :
-                allTaskOffsetSums;
-        } finally {
-            taskManager.topologyMetadata().unlock();
-        }
+        // If using NamedTopologies, filter out any that are no longer recognized/have been removed
+        final Map<TaskId, Long> taskOffsetSums = taskManager.topologyMetadata().hasNamedTopologies() ?
+            filterMap(taskManager.getTaskOffsetSums(), t -> currentNamedTopologies.contains(t.getKey().namedTopology())) :
+            taskManager.getTaskOffsetSums();
 
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,

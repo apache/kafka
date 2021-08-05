@@ -172,7 +172,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      */
     public void cleanUpNamedTopology(final String name) {
         if (getTopologyByName(name).isPresent()) {
-            throw new IllegalStateException("Can't clean up local state for an active NamedTopology: ");
+            throw new IllegalStateException("Can't clean up local state for an active NamedTopology: " + name);
         }
         stateDirectory.clearLocalStateForNamedTopology(name);
     }

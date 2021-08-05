@@ -721,9 +721,9 @@ public class StreamThread extends Thread {
         final long startMs = time.milliseconds();
         now = startMs;
 
-        handleTopologyUpdatesPhase();
-
         final long pollLatency = pollPhase();
+
+        topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
@@ -873,34 +873,29 @@ public class StreamThread extends Thread {
         log.debug("Idempotent restore call done. Thread state has not changed.");
     }
 
-    private void handleTopologyUpdatesPhase() {
-        // Check if the topology has been updated since we last checked, ie via #addNamedTopology or #removeNamedTopology
-        // or if this is the very first topology in which case we may need to wait for it to be non-empty
-        if (lastSeenTopologyVersion < topologyMetadata.topologyVersion() || lastSeenTopologyVersion == 0) {
-            try {
-                topologyMetadata.lock();
+    // Check if the topology has been updated since we last checked, ie via #addNamedTopology or #removeNamedTopology
+    private void checkForTopologyUpdates() {
+        if (lastSeenTopologyVersion < topologyMetadata.topologyVersion()) {
+            lastSeenTopologyVersion = topologyMetadata.topologyVersion();
+            taskManager.handleTopologyUpdates();
 
-                // If the last named topology was just removed, make sure to close/flush/commit all tasks before waiting
-                if (topologyMetadata.isEmpty() && lastSeenTopologyVersion > 0) {
-                    taskManager.handleEmptyTopology();
-                }
-                topologyMetadata.maybeWaitForNonEmptyTopology();
-
-                lastSeenTopologyVersion = topologyMetadata.topologyVersion();
-                taskManager.handleTopologyUpdates();
-
-                if (lastSeenTopologyVersion > 0) {
-                    log.info("StreamThread has detected a new update to the topology, triggering a rebalance to update the group assignment");
-                    subscribeConsumer();
-                    mainConsumer.enforceRebalance();
-                }
-            } finally {
-                topologyMetadata.unlock();
-            }
+            log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
+            subscribeConsumer();
+            mainConsumer.enforceRebalance();
         }
     }
 
     private long pollPhase() {
+        checkForTopologyUpdates();
+        if (mainConsumer.subscription().isEmpty()) {
+            if (topologyMetadata.isEmpty()) {
+                log.debug("Skipping poll since there is no topology and the consumer is not subscribed to any topics");
+                return 0;
+            } else {
+                throw new IllegalStateException("Consumer is not subscribed to any topics in the topology");
+            }
+        }
+
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 

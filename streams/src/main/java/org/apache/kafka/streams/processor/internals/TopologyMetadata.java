@@ -23,6 +23,7 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
+import org.apache.kafka.streams.processor.internals.StreamThread.State;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -40,6 +41,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
@@ -97,11 +99,11 @@ public class TopologyMetadata {
         return version.topologyVersion.get();
     }
 
-    public void lock() {
+    private void lock() {
         version.topologyLock.lock();
     }
 
-    public void unlock() {
+    private void unlock() {
         version.topologyLock.unlock();
     }
 
@@ -109,19 +111,29 @@ public class TopologyMetadata {
         return builders.get(name);
     }
 
-    /**
-     * @throws IllegalStateException if the thread is not already holding the lock via TopologyMetadata#lock
-     */
-    public void maybeWaitForNonEmptyTopology() {
-        if (!version.topologyLock.isHeldByCurrentThread()) {
-            throw new IllegalStateException("Must call lock() before attempting to wait on non-empty topology");
+    public void wakeupThreads() {
+        try {
+            lock();
+            version.topologyCV.signalAll();
+        } finally {
+            unlock();
         }
-        while (isEmpty()) {
+    }
+
+    public void maybeWaitForNonEmptyTopology(final Supplier<State> threadState) {
+        if (isEmpty() && threadState.get().isAlive()) {
             try {
-                log.debug("Detected that the topology is currently empty, going to wait for something to be added");
-                version.topologyCV.await();
-            } catch (final InterruptedException e) {
-                log.debug("StreamThread was interrupted while waiting on empty topology", e);
+                lock();
+                while (isEmpty() && threadState.get().isAlive()) {
+                    try {
+                        log.debug("Detected that the topology is currently empty, waiting for something to process");
+                        version.topologyCV.await();
+                    } catch (final InterruptedException e) {
+                        log.debug("StreamThread was interrupted while waiting on empty topology", e);
+                    }
+                }
+            } finally {
+                unlock();
             }
         }
     }
@@ -139,10 +151,6 @@ public class TopologyMetadata {
         }
     }
 
-    /**
-     * Removes the topology and blocks until all threads on the older version have ack'ed this removal.
-     * IT is guaranteed that no more tasks from this removed topology will be processed
-     */
     public void unregisterTopology(final String topologyName) {
         try {
             lock();

@@ -1189,12 +1189,13 @@ public class TaskManager {
     }
 
     /**
-     * Checks for added or removed NamedTopologies that correspond to any assigned tasks, and creates/freezes them if so
+     * Handle any added or removed NamedTopologies. Check if any uncreated assigned tasks belong to a newly
+     * added NamedTopology and create them if so, then freeze any tasks whose named topology no longer exists
      */
     void handleTopologyUpdates() {
         tasks.maybeCreateTasksFromNewTopologies();
         for (final Task task : activeTaskIterable()) {
-            if (topologyMetadata.namedTopologiesView().contains(task.id().namedTopology())) {
+            if (!topologyMetadata.namedTopologiesView().contains(task.id().namedTopology())) {
                 task.freezeProcessing();
             }
         }

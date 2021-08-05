@@ -1312,6 +1312,7 @@ public class KafkaStreams implements AutoCloseable {
             // notify all the threads to stop; avoid deadlocks by stopping any
             // further state reports from the thread since we're shutting down
             processStreamThread(StreamThread::shutdown);
+            topologyMetadata.wakeupThreads();
 
             processStreamThread(thread -> {
                 try {
