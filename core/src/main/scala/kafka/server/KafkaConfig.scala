@@ -1952,12 +1952,14 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
 
     val voterIds: Set[Integer] = if (usesSelfManagedQuorum) RaftConfig.parseVoterConnections(quorumVoters).asScala.keySet.toSet else Set.empty
-    if (processRoles.contains(ControllerRole)) {
-      // Ensure that controllers use their node.id as a voter in controller.quorum.voters 
-      require(voterIds.contains(nodeId), s"The controller must contain a voter for it's ${KafkaConfig.NodeIdProp}=$nodeId in ${RaftConfig.QUORUM_VOTERS_CONFIG}.")
-    } else {
-      // Ensure that the broker's node.id is not an id in controller.quorum.voters
-      require(!voterIds.contains(nodeId), s"Since ${KafkaConfig.ProcessRolesProp}=broker, the the broker's ${KafkaConfig.NodeIdProp}=nodeId should not be in ${RaftConfig.QUORUM_VOTERS_CONFIG}")
+    if (voterIds.nonEmpty) {
+      if (processRoles.contains(ControllerRole)) {
+        // Ensure that controllers use their node.id as a voter in controller.quorum.voters 
+        require(voterIds.contains(nodeId), s"If ${KafkaConfig.ProcessRolesProp} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${RaftConfig.QUORUM_VOTERS_CONFIG}=$voterIds")
+      } else {
+        // Ensure that the broker's node.id is not an id in controller.quorum.voters
+        require(!voterIds.contains(nodeId), s"If ${KafkaConfig.ProcessRolesProp} does not contain the 'controller' role, the node id $nodeId must not be included in the set of voters ${RaftConfig.QUORUM_VOTERS_CONFIG}=$voterIds")
+      }
     }
 
     require(!advertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
