@@ -506,7 +506,7 @@ public class RaftEventSimulationTest {
                 METADATA_PARTITION,
                 Uuid.METADATA_TOPIC_ID,
                 new LogContext(String.format("[Node %s] ", nodeId)),
-                RaftClientTestContext.mockReplicatedLogConfig
+                RaftClientTestContext.DEFAULT_MOCK_REPLICATED_LOG_CONFIG
             );
         }
     }

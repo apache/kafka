@@ -94,7 +94,7 @@ public final class RaftClientTestContext {
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
 
-    static final MockReplicatedLogConfig mockReplicatedLogConfig = new MockReplicatedLogConfig(
+    static final MockReplicatedLogConfig DEFAULT_MOCK_REPLICATED_LOG_CONFIG = new MockReplicatedLogConfig(
             100 * 1024,
             100 * 1024,
             10 * 1000,
@@ -142,7 +142,7 @@ public final class RaftClientTestContext {
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final Random random = Mockito.spy(new Random(1));
         private final LogContext logContext = new LogContext();
-        private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID, logContext, mockReplicatedLogConfig);
+        private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID, logContext, DEFAULT_MOCK_REPLICATED_LOG_CONFIG);
         private final Set<Integer> voters;
         private final OptionalInt localId;
 

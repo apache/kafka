@@ -16,19 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.Utils;
-
-import java.net.InetSocketAddress;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 public class MockReplicatedLogConfig {
 
     private final int logSegmentBytes;
