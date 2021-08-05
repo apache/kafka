@@ -197,6 +197,10 @@ public class TaskManagerTest {
         taskManager.setMainConsumer(consumer);
         reset(topologyBuilder);
         expect(topologyBuilder.hasNamedTopology()).andStubReturn(false);
+        activeTaskCreator.removeRevokedUnknownTasks(anyObject());
+        expectLastCall().asStub();
+        standbyTaskCreator.removeRevokedUnknownTasks(anyObject());
+        expectLastCall().asStub();
     }
 
     @Test
