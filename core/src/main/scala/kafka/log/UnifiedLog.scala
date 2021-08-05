@@ -261,7 +261,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   import kafka.log.UnifiedLog._
 
-  this.logIdent = s"[Log partition=$topicPartition, dir=$parentDir] "
+  this.logIdent = s"[UnifiedLog partition=$topicPartition, dir=$parentDir] "
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
