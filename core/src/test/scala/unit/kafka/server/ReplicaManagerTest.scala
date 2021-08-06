@@ -2502,15 +2502,16 @@ class ReplicaManagerTest {
     try {
       val brokerList = Seq[Integer](0, 1).asJava
       val topicPartition = new TopicPartition(topic, 0)
+      val topicPartition2 = new TopicPartition(topic, 1)
 
-      def leaderAndIsrRequest(topicIds: util.Map[String, Uuid], version: Short): LeaderAndIsrRequest =
+      def leaderAndIsrRequest(topicIds: util.Map[String, Uuid], version: Short, partition: Int = 0, leaderEpoch: Int = 0): LeaderAndIsrRequest =
         new LeaderAndIsrRequest.Builder(version, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
           .setTopicName(topic)
-          .setPartitionIndex(0)
+          .setPartitionIndex(partition)
           .setControllerEpoch(0)
           .setLeader(0)
-          .setLeaderEpoch(0)
+          .setLeaderEpoch(leaderEpoch)
           .setIsr(brokerList)
           .setZkVersion(0)
           .setReplicas(brokerList)
@@ -2533,7 +2534,24 @@ class ReplicaManagerTest {
       assertTrue(log.topicId.isDefined)
       assertEquals(topicId, log.topicId.get)
 
+      // Repeat with partition 2, but in this case, update the leader epoch
+      // Send a request without a topic ID so that we have a log without a topic ID associated to the partition.
+      val response3 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(Collections.emptyMap(), 4, 1), (_, _) => ())
+      assertEquals(Errors.NONE, response3.partitionErrors(Collections.emptyMap()).get(topicPartition2))
+      assertTrue(replicaManager.localLog(topicPartition2).isDefined)
+      val log2 = replicaManager.localLog(topicPartition2).get
+      assertFalse(log2.partitionMetadataFile.exists())
+      assertTrue(log2.topicId.isEmpty)
+
+      val response4 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(topicIds.asJava, ApiKeys.LEADER_AND_ISR.latestVersion, 1, 1), (_, _) => ())
+      assertEquals(Errors.NONE, response4.partitionErrors(topicNames.asJava).get(topicPartition2))
+      assertTrue(replicaManager.localLog(topicPartition2).isDefined)
+      assertTrue(log2.partitionMetadataFile.exists())
+      assertTrue(log2.topicId.isDefined)
+      assertEquals(topicId, log2.topicId.get)
+
       assertEquals(topicId, log.partitionMetadataFile.read().topicId)
+      assertEquals(topicId, log2.partitionMetadataFile.read().topicId)
     } finally replicaManager.shutdown(checkpointHW = false)
   }
 
