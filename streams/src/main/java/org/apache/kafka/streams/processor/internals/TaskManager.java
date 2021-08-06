@@ -526,9 +526,9 @@ public class TaskManager {
         }
 
         if (!remainingRevokedPartitions.isEmpty()) {
-            log.debug("The following revoked partitions {} are missing from the current task partitions. It could potentially " +
-                         "due to race condition of consumer detecting the heartbeat failure, or the tasks " +
-                         "have been cleaned up by the handleAssignment callback", remainingRevokedPartitions);
+            log.debug("The following revoked partitions {} are missing from the current task partitions. It could "
+                          + "potentially be due to race condition of consumer detecting the heartbeat failure, or the tasks " +
+                         "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
         }
 
         prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);

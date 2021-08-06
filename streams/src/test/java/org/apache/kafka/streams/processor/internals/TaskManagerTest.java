@@ -2771,6 +2771,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, consumer, changeLogReader);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
+            LogCaptureAppender.setClassLoggerToDebug(TaskManager.class);
             taskManager.handleAssignment(taskId00Assignment, emptyMap());
             assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
             assertThat(task00.state(), is(Task.State.RUNNING));
@@ -2781,8 +2782,8 @@ public class TaskManagerTest {
             final List<String> messages = appender.getMessages();
             assertThat(
                 messages,
-                hasItem("taskManagerTestThe following partitions [unknown-0] are missing " +
-                    "from the task partitions. It could potentially due to race " +
+                hasItem("taskManagerTestThe following revoked partitions [unknown-0] are missing " +
+                    "from the current task partitions. It could potentially be due to race " +
                     "condition of consumer detecting the heartbeat failure, or the " +
                     "tasks have been cleaned up by the handleAssignment callback.")
             );
