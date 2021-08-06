@@ -262,7 +262,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ProcessRolesProp, "controller")
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
     props.put(KafkaConfig.NodeIdProp, "1")
-    props.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
+    props.put(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
 
     assertFalse(isValidKafkaConfig(props))
     val caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
@@ -1093,7 +1093,7 @@ class KafkaConfigTest {
     val largeBrokerId = 2000
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
-    props.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     props.put(KafkaConfig.NodeIdProp, largeBrokerId.toString)
     assertTrue(isValidKafkaConfig(props))
   }

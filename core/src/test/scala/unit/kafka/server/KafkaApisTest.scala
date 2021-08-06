@@ -133,7 +133,7 @@ class KafkaApisTest {
       properties.put(KafkaConfig.NodeIdProp, brokerId.toString)
       properties.put(KafkaConfig.ProcessRolesProp, "broker")
       val voterId = (brokerId + 1)
-      properties.setProperty(KafkaConfig.QuorumVotersProp, s"$voterId@localhost:9093")
+      properties.put(KafkaConfig.QuorumVotersProp, s"$voterId@localhost:9093")
       properties
     } else {
       TestUtils.createBrokerConfig(brokerId, "zk")
