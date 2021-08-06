@@ -114,7 +114,7 @@ public class ClientUtilsTest {
 
     @Test
     public void testResolveDnsLookupResolveCanonicalBootstrapServers() throws UnknownHostException {
-        assertEquals(2, resolveToTwoIps(ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY).size());
+        assertEquals(1, resolveToTwoIps(ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY).size());
     }
 
     private List<InetAddress> resolveToTwoIps(ClientDnsLookup dnsLookup) throws UnknownHostException {
