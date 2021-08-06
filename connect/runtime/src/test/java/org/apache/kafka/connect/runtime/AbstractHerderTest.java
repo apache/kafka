@@ -159,19 +159,6 @@ public class AbstractHerderTest {
 
     @Test
     public void testConnectors() {
-//        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-//            .withConstructor(
-//                Worker.class,
-//                String.class,
-//                String.class,
-//                StatusBackingStore.class,
-//                ConfigBackingStore.class,
-//                ConnectorClientConfigOverridePolicy.class
-//            )
-//            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
-//            .addMockedMethod("generation")
-//            .createMock();
-
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
