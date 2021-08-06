@@ -873,16 +873,17 @@ public class StreamThread extends Thread {
 
     // Check if the topology has been updated since we last checked, ie via #addNamedTopology or #removeNamedTopology
     private void checkForTopologyUpdates() {
-        if (lastSeenTopologyVersion < topologyMetadata.topologyVersion()) {
+        if (lastSeenTopologyVersion < topologyMetadata.topologyVersion() || topologyMetadata.isEmpty()) {
             lastSeenTopologyVersion = topologyMetadata.topologyVersion();
             taskManager.handleTopologyUpdates();
+
+            topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
             // TODO KAFKA-12648 Pt.4: optimize to avoid always triggering a rebalance for each thread on every update
             log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
             subscribeConsumer();
             mainConsumer.enforceRebalance();
         }
-        topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
     }
 
     private long pollPhase() {
