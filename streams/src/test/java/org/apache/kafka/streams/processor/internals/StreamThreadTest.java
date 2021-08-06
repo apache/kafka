@@ -814,7 +814,14 @@ public class StreamThreadTest {
         final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.singleton(task));
         expect(activeTaskCreator.producerClientIds()).andStubReturn(Collections.singleton("producerClientId"));
-        EasyMock.replay(consumer, consumerGroupMetadata, task, activeTaskCreator);
+        expect(activeTaskCreator.uncreatedTasksForTopologies(anyObject())).andStubReturn(emptyMap());
+        activeTaskCreator.removeRevokedUnknownTasks(singleton(task1));
+
+        final StandbyTaskCreator standbyTaskCreator = mock(StandbyTaskCreator.class);
+        expect(standbyTaskCreator.uncreatedTasksForTopologies(anyObject())).andStubReturn(emptyMap());
+        standbyTaskCreator.removeRevokedUnknownTasks(emptySet());
+
+        EasyMock.replay(consumer, consumerGroupMetadata, task, activeTaskCreator, standbyTaskCreator);
 
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
@@ -826,7 +833,7 @@ public class StreamThreadTest {
             null,
             null,
             activeTaskCreator,
-            null,
+            standbyTaskCreator,
             new TopologyMetadata(internalTopologyBuilder, config),
             null,
             null,

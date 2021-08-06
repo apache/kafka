@@ -553,12 +553,21 @@ class Log(@volatile var logStartOffset: Long,
 
   /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
   def assignTopicId(topicId: Uuid): Unit = {
-    if (keepPartitionMetadataFile) {
-      _topicId = Some(topicId)
-      if (!partitionMetadataFile.exists()) {
-        partitionMetadataFile.record(topicId)
-        scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
-      }
+    _topicId match {
+      case Some(currentId) =>
+        if (!currentId.equals(topicId)) {
+          throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+            s"but log already contained topic ID $currentId")
+        }
+
+      case None =>
+        if (keepPartitionMetadataFile) {
+          _topicId = Some(topicId)
+          if (!partitionMetadataFile.exists()) {
+            partitionMetadataFile.record(topicId)
+            scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
+          }
+        }
     }
   }
 
