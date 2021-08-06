@@ -557,6 +557,11 @@ public class StreamThread extends Thread {
         boolean cleanRun = false;
         try {
             cleanRun = runLoop();
+        } catch (final IllegalStateException | IllegalArgumentException e) { // Potentially we might want to add other non recoverable RTE
+            failedStreamThreadSensor.record();
+            log.error("Something wrong occurred while running the stream processors. Stopping now", e);
+            // rethrowing the exception up in the call chain to stop the processing immediately.
+            throw e;
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
             this.streamsUncaughtExceptionHandler.accept(e);

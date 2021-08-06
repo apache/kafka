@@ -2336,9 +2336,9 @@ public class StreamThreadTest {
         expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
         expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
         consumer.subscribe((Collection<String>) anyObject(), anyObject());
-        EasyMock.expectLastCall().anyTimes();
+        EasyMock.expectLastCall().atLeastOnce();
         consumer.unsubscribe();
-        EasyMock.expectLastCall().anyTimes();
+        EasyMock.expectLastCall().atLeastOnce();
         EasyMock.replay(consumerGroupMetadata);
         final Task task1 = mock(Task.class);
         final Task task2 = mock(Task.class);
@@ -2394,6 +2394,80 @@ public class StreamThreadTest {
 
         verify(taskManager);
         assertThat(exceptionHandlerInvoked.get(), is(true));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    @SuppressWarnings("unchecked")
+    public void shouldNotInvokeExceptionHandlerWhenIllegalStateException() {
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        expect(taskManager.producerClientIds()).andStubReturn(Collections.emptySet());
+
+        final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
+        expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
+        consumer.subscribe((Collection<String>) anyObject(), anyObject());
+        EasyMock.expectLastCall().atLeastOnce();
+        consumer.unsubscribe();
+        EasyMock.expectLastCall().atLeastOnce();
+        consumer.close();
+        EasyMock.expectLastCall().atLeastOnce();
+        EasyMock.replay(consumerGroupMetadata);
+
+        final Task task1 = mock(Task.class);
+        final Task task2 = mock(Task.class);
+        final TaskId taskId1 = new TaskId(0, 0);
+        final TaskId taskId2 = new TaskId(0, 2);
+        expect(task1.state()).andStubReturn(Task.State.RUNNING);
+        expect(task1.id()).andStubReturn(taskId1);
+        expect(task2.state()).andStubReturn(Task.State.RUNNING);
+        expect(task2.id()).andStubReturn(taskId2);
+
+        EasyMock.replay(task1, task2, taskManager, consumer);
+
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            changelogReader,
+            null,
+            taskManager,
+            streamsMetrics,
+            topologyMetadata,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE),
+            null,
+            HANDLER,
+            null
+        ) {
+            @Override
+            void runOnce() {
+                setState(State.PENDING_SHUTDOWN);
+                //Throwing an IllegalStateException that shouldn't be passed to the exception handler
+                throw new IllegalStateException("Something unexpected happened!");
+            }
+        }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+
+        // Setting up an exception handler that shouldn't be called
+        final AtomicBoolean exceptionHandlerInvoked = new AtomicBoolean(false);
+        thread.setStreamsUncaughtExceptionHandler(e -> exceptionHandlerInvoked.set(true));
+
+        try {
+            thread.run();
+        } catch (final IllegalStateException e) {
+            // verify the right methods have been called
+            verify(taskManager);
+            assertThat(exceptionHandlerInvoked.get(), is(false));
+            throw e;
+        }
     }
 
     @Test
