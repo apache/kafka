@@ -694,7 +694,7 @@ class FetchSessionCache(private val maxEntries: Int,
       false
     } else if (now - lastUsedEntry.getKey.lastUsedMs > evictionMs) {
       val session = lastUsedEntry.getValue
-      trace(s"Evicting stale FetchSession ${session.id} for $evictor")
+      trace(s"Evicting stale FetchSession ${session.id} for $evictor.")
       remove(session)
       evictionsMeter.mark()
       true
