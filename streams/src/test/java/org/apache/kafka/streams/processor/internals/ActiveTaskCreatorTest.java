@@ -462,9 +462,10 @@ public class ActiveTaskCreatorTest {
         expect(topology.sources()).andStubReturn(Collections.singleton(sourceNode));
         replay(builder, stateDirectory, topology, sourceNode);
 
+        final StreamsConfig config = new StreamsConfig(properties);
         activeTaskCreator = new ActiveTaskCreator(
-            builder,
-            new StreamsConfig(properties),
+            new TopologyMetadata(builder, config),
+            config,
             streamsMetrics,
             stateDirectory,
             changeLogReader,
