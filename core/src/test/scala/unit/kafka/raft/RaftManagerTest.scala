@@ -79,22 +79,25 @@ class RaftManagerTest {
 
   @Test
   def testSentinelNodeIdIfBrokerRoleOnly(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test1", 0), "broker", "1")
+    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "broker", "1")
     assertFalse(raftManager.client.nodeId.isPresent)
+    raftManager.deleteDataDir()
     raftManager.shutdown()
   }
 
   @Test
   def testNodeIdPresentIfControllerRoleOnly(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test2", 0), "controller", "1")
+    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "controller", "1")
     assertTrue(raftManager.client.nodeId.getAsInt == 1)
+    raftManager.deleteDataDir()
     raftManager.shutdown()
   }
 
   @Test
   def testNodeIdPresentIfColocated(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test3", 0), "controller,broker", "1")
+    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "controller,broker", "1")
     assertTrue(raftManager.client.nodeId.getAsInt == 1)
+    raftManager.deleteDataDir()
     raftManager.shutdown()
   }
 
