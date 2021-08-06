@@ -43,7 +43,7 @@ import java.util.function.Supplier;
  * topic partition from offset 0 up to but not including the end offset in the snapshot
  * id.
  *
- * @see org.apache.kafka.raft.RaftClient#createSnapshot(OffsetAndEpoch)
+ * @see org.apache.kafka.raft.KafkaRaftClient#createSnapshot(long, int, long)
  */
 final public class FileSnapshotWriter<T> implements SnapshotWriter<T> {
     final private RawSnapshotWriter snapshot;
@@ -52,27 +52,27 @@ final public class FileSnapshotWriter<T> implements SnapshotWriter<T> {
     final private long lastContainedLogTimestamp;
 
     private FileSnapshotWriter(
-        RawSnapshotWriter snapshot,
-        int maxBatchSize,
-        MemoryPool memoryPool,
-        Time time,
-        long lastContainedLogTimestamp,
-        CompressionType compressionType,
-        RecordSerde<T> serde
+            RawSnapshotWriter snapshot,
+            int maxBatchSize,
+            MemoryPool memoryPool,
+            Time time,
+            long lastContainedLogTimestamp,
+            CompressionType compressionType,
+            RecordSerde<T> serde
     ) {
         this.snapshot = snapshot;
         this.time = time;
         this.lastContainedLogTimestamp = lastContainedLogTimestamp;
 
         this.accumulator = new BatchAccumulator<>(
-            snapshot.snapshotId().epoch,
-            0,
-            Integer.MAX_VALUE,
-            maxBatchSize,
-            memoryPool,
-            time,
-            compressionType,
-            serde
+                snapshot.snapshotId().epoch,
+                0,
+                Integer.MAX_VALUE,
+                maxBatchSize,
+                memoryPool,
+                time,
+                compressionType,
+                serde
         );
     }
 
@@ -84,15 +84,15 @@ final public class FileSnapshotWriter<T> implements SnapshotWriter<T> {
     public void initializeSnapshotWithHeader() {
         if (snapshot.sizeInBytes() != 0) {
             String message = String.format(
-                "Initializing writer with a non-empty snapshot: id = '%s'.",
-                snapshot.snapshotId()
+                    "Initializing writer with a non-empty snapshot: id = '%s'.",
+                    snapshot.snapshotId()
             );
             throw new IllegalStateException(message);
         }
 
         SnapshotHeaderRecord headerRecord = new SnapshotHeaderRecord()
-            .setVersion(ControlRecordUtils.SNAPSHOT_HEADER_HIGHEST_VERSION)
-            .setLastContainedLogTimestamp(lastContainedLogTimestamp);
+                .setVersion(ControlRecordUtils.SNAPSHOT_HEADER_HIGHEST_VERSION)
+                .setLastContainedLogTimestamp(lastContainedLogTimestamp);
         accumulator.appendSnapshotHeaderMessage(headerRecord, time.milliseconds());
         accumulator.forceDrain();
     }
@@ -104,7 +104,7 @@ final public class FileSnapshotWriter<T> implements SnapshotWriter<T> {
      */
     private void finalizeSnapshotWithFooter() {
         SnapshotFooterRecord footerRecord = new SnapshotFooterRecord()
-            .setVersion(ControlRecordUtils.SNAPSHOT_FOOTER_HIGHEST_VERSION);
+                .setVersion(ControlRecordUtils.SNAPSHOT_FOOTER_HIGHEST_VERSION);
         accumulator.appendSnapshotFooterMessage(footerRecord, time.milliseconds());
         accumulator.forceDrain();
     }
@@ -123,13 +123,13 @@ final public class FileSnapshotWriter<T> implements SnapshotWriter<T> {
      * @return {@link Optional}{@link FileSnapshotWriter}
      */
     public static <T> Optional<SnapshotWriter<T>> createWithHeader(
-        Supplier<Optional<RawSnapshotWriter>> supplier,
-        int maxBatchSize,
-        MemoryPool memoryPool,
-        Time snapshotTime,
-        long lastContainedLogTimestamp,
-        CompressionType compressionType,
-        RecordSerde<T> serde
+            Supplier<Optional<RawSnapshotWriter>> supplier,
+            int maxBatchSize,
+            MemoryPool memoryPool,
+            Time snapshotTime,
+            long lastContainedLogTimestamp,
+            CompressionType compressionType,
+            RecordSerde<T> serde
     ) {
         Optional<SnapshotWriter<T>> writer = supplier.get().map(snapshot -> {
             return new FileSnapshotWriter<T>(
@@ -186,8 +186,8 @@ final public class FileSnapshotWriter<T> implements SnapshotWriter<T> {
     public void append(List<T> records) {
         if (snapshot.isFrozen()) {
             String message = String.format(
-                "Append not supported. Snapshot is already frozen: id = '%s'.",
-                snapshot.snapshotId()
+                    "Append not supported. Snapshot is already frozen: id = '%s'.",
+                    snapshot.snapshotId()
             );
 
             throw new IllegalStateException(message);
