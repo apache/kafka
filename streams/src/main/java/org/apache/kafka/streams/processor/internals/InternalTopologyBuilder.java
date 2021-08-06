@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
@@ -136,6 +137,7 @@ public class InternalTopologyBuilder {
 
     // The name of the topology this builder belongs to, or null if none
     private String topologyName;
+    private NamedTopology namedTopology;
 
     private boolean hasPersistentStores = false;
 
@@ -336,13 +338,17 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public void setTopologyName(final String namedTopology) {
-        Objects.requireNonNull(namedTopology, "named topology can't be null");
+
+    public void setNamedTopology(final NamedTopology topology) {
+        final String topologyName = topology.name();
+        Objects.requireNonNull(topologyName, "topology name can't be null");
+        Objects.requireNonNull(topology, "named topology can't be null");
         if (this.topologyName != null) {
-            log.error("Tried to reset the namedTopology to {} but it was already set to {}", namedTopology, this.topologyName);
-            throw new IllegalStateException("NamedTopology has already been set to " + this.topologyName);
+            log.error("Tried to reset the topologyName to {} but it was already set to {}", topologyName, this.topologyName);
+            throw new IllegalStateException("The topologyName has already been set to " + this.topologyName);
         }
-        this.topologyName = namedTopology;
+        this.namedTopology = topology;
+        this.topologyName = topologyName;
     }
 
     // public for testing only
@@ -366,6 +372,10 @@ public class InternalTopologyBuilder {
 
     public String topologyName() {
         return topologyName;
+    }
+
+    public NamedTopology namedTopology() {
+        return namedTopology;
     }
 
     public synchronized final InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {

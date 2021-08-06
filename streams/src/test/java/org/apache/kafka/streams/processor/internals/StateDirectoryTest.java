@@ -707,6 +707,31 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldRemoveNonEmptyNamedTopologyDirsWhenCallingClearLocalStateForNamedTopology() throws Exception {
+        initializeStateDirectory(true, true);
+        final String topologyName = "topology1";
+        final File taskDir = directory.getOrCreateDirectoryForTask(new TaskId(2, 0, topologyName));
+        final File namedTopologyDir = new File(appDir, "__" + topologyName + "__");
+
+        assertThat(taskDir.exists(), is(true));
+        assertThat(namedTopologyDir.exists(), is(true));
+        directory.clearLocalStateForNamedTopology(topologyName);
+        assertThat(taskDir.exists(), is(false));
+        assertThat(namedTopologyDir.exists(), is(false));
+    }
+
+    @Test
+    public void shouldRemoveEmptyNamedTopologyDirsWhenCallingClearLocalStateForNamedTopology() throws IOException {
+        initializeStateDirectory(true, true);
+        final String topologyName = "topology1";
+        final File namedTopologyDir = new File(appDir, "__" + topologyName + "__");
+        assertThat(namedTopologyDir.mkdir(), is(true));
+        assertThat(namedTopologyDir.exists(), is(true));
+        directory.clearLocalStateForNamedTopology(topologyName);
+        assertThat(namedTopologyDir.exists(), is(false));
+    }
+
+    @Test
     public void shouldNotRemoveDirsThatDoNotMatchNamedTopologyDirsWhenCallingClean() throws IOException {
         initializeStateDirectory(true, true);
         final File someDir = new File(appDir, "_not-a-valid-named-topology_dir_name_");

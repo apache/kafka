@@ -20,6 +20,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.file.StandardOpenOption;
 import java.util.AbstractMap;
 import java.util.EnumSet;
+import java.util.Map.Entry;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
@@ -1326,6 +1327,10 @@ public final class Utils {
         result.addAll(left);
         result.removeAll(right);
         return result;
+    }
+
+    public static <K, V> Map<K, V> filterMap(final Map<K, V> map, final Predicate<Entry<K, V>> filterPredicate) {
+        return map.entrySet().stream().filter(filterPredicate).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
     }
 
     /**

@@ -31,6 +31,9 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.common.utils.Utils.mkSortedSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T1_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
@@ -424,6 +427,22 @@ public class ClientStateTest {
 
         assertThat(client.lagFor(TASK_0_1), equalTo(500L));
         assertThat(client.lagFor(TASK_0_2), equalTo(0L));
+    }
+
+    @Test
+    public void shouldNotTryToLookupTasksThatWerePreviouslyAssignedButNoLongerExist() {
+        final Map<TaskId, Long> clientReportedTaskEndOffsetSums = mkMap(
+            mkEntry(NAMED_TASK_T0_0_0, 500L),
+            mkEntry(NAMED_TASK_T1_0_0, 500L)
+            );
+        final Map<TaskId, Long> allTaskEndOffsetSumsComputedByAssignor = Collections.singletonMap(NAMED_TASK_T0_0_0, 500L);
+        client.addPreviousTasksAndOffsetSums("c1", clientReportedTaskEndOffsetSums);
+        client.computeTaskLags(null, allTaskEndOffsetSumsComputedByAssignor);
+
+        assertThrows(IllegalStateException.class, () -> client.lagFor(NAMED_TASK_T1_0_0));
+
+        client.assignActive(NAMED_TASK_T0_0_0);
+        assertThat(client.prevTasksByLag("c1"), equalTo(mkSortedSet(NAMED_TASK_T0_0_0)));
     }
 
     @Test

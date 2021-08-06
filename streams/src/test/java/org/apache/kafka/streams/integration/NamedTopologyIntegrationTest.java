@@ -22,27 +22,31 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStreamsBuilder;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
 
-import java.util.stream.Collectors;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -53,8 +57,10 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.KeyValue.pair;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 
@@ -67,12 +73,30 @@ import static java.util.Collections.singletonList;
 public class NamedTopologyIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
+    // TODO KAFKA-12648:
+    //  1) full test coverage for add/removeNamedTopology, covering:
+    //      - the "last topology removed" case
+    //      - test using multiple clients, with standbys
+
+    // "standard" input topics which are pre-filled with the STANDARD_INPUT_DATA
     private final static String INPUT_STREAM_1 = "input-stream-1";
     private final static String INPUT_STREAM_2 = "input-stream-2";
     private final static String INPUT_STREAM_3 = "input-stream-3";
+
     private final static String OUTPUT_STREAM_1 = "output-stream-1";
     private final static String OUTPUT_STREAM_2 = "output-stream-2";
     private final static String OUTPUT_STREAM_3 = "output-stream-3";
+
+    private final static String SUM_OUTPUT = "sum";
+    private final static String COUNT_OUTPUT = "count";
+
+
+    // "delayed" input topics which are empty at start to allow control over when input data appears
+    private final static String DELAYED_INPUT_STREAM_1 = "delayed-input-stream-1";
+    private final static String DELAYED_INPUT_STREAM_2 = "delayed-input-stream-2";
+
+    private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> IN_MEMORY_STORE = Materialized.as(Stores.inMemoryKeyValueStore("store"));
+    private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> ROCKSDB_STORE = Materialized.as(Stores.persistentKeyValueStore("store"));
 
     private static Properties producerConfig;
     private static Properties consumerConfig;
@@ -84,9 +108,9 @@ public class NamedTopologyIntegrationTest {
         CLUSTER.createTopic(INPUT_STREAM_1, 2, 1);
         CLUSTER.createTopic(INPUT_STREAM_2, 2, 1);
         CLUSTER.createTopic(INPUT_STREAM_3, 2, 1);
-        CLUSTER.createTopic(OUTPUT_STREAM_1, 2, 1);
-        CLUSTER.createTopic(OUTPUT_STREAM_2, 2, 1);
-        CLUSTER.createTopic(OUTPUT_STREAM_3, 2, 1);
+
+        CLUSTER.createTopic(DELAYED_INPUT_STREAM_1, 2, 1);
+        CLUSTER.createTopic(DELAYED_INPUT_STREAM_2, 2, 1);
 
         producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, LongSerializer.class);
         consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, LongDeserializer.class);
@@ -108,17 +132,30 @@ public class NamedTopologyIntegrationTest {
     private String changelog2;
     private String changelog3;
 
-    final static List<KeyValue<String, Long>> STANDARD_INPUT_DATA = asList(KeyValue.pair("A", 100L), KeyValue.pair("B", 200L), KeyValue.pair("A", 300L), KeyValue.pair("C", 400L));
-    final static List<KeyValue<String, Long>> STANDARD_OUTPUT_DATA = asList(KeyValue.pair("B", 1L), KeyValue.pair("A", 2L), KeyValue.pair("C", 1L)); // output of basic count topology with caching
+    private final static List<KeyValue<String, Long>> STANDARD_INPUT_DATA =
+        asList(pair("A", 100L), pair("B", 200L), pair("A", 300L), pair("C", 400L), pair("C", -50L));
+    private final static List<KeyValue<String, Long>> COUNT_OUTPUT_DATA =
+        asList(pair("B", 1L), pair("A", 2L), pair("C", 2L)); // output of count operation with caching
+    private final static List<KeyValue<String, Long>> SUM_OUTPUT_DATA =
+        asList(pair("B", 200L), pair("A", 400L), pair("C", 350L)); // output of summation with caching
 
-    final KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
+    private final KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
 
-    final NamedTopologyStreamsBuilder topology1Builder = new NamedTopologyStreamsBuilder("topology-1");
-    final NamedTopologyStreamsBuilder topology2Builder = new NamedTopologyStreamsBuilder("topology-2");
-    final NamedTopologyStreamsBuilder topology3Builder = new NamedTopologyStreamsBuilder("topology-3");
+    // builders for the 1st Streams instance (default)
+    private final NamedTopologyStreamsBuilder topology1Builder = new NamedTopologyStreamsBuilder("topology-1");
+    private final NamedTopologyStreamsBuilder topology2Builder = new NamedTopologyStreamsBuilder("topology-2");
+    private final NamedTopologyStreamsBuilder topology3Builder = new NamedTopologyStreamsBuilder("topology-3");
 
-    Properties props;
-    KafkaStreamsNamedTopologyWrapper streams;
+    // builders for the 2nd Streams instance
+    private final NamedTopologyStreamsBuilder topology1Builder2 = new NamedTopologyStreamsBuilder("topology-1");
+    private final NamedTopologyStreamsBuilder topology2Builder2 = new NamedTopologyStreamsBuilder("topology-2");
+    private final NamedTopologyStreamsBuilder topology3Builder2 = new NamedTopologyStreamsBuilder("topology-3");
+
+    private Properties props;
+    private Properties props2;
+
+    private KafkaStreamsNamedTopologyWrapper streams;
+    private KafkaStreamsNamedTopologyWrapper streams2;
 
     private Properties configProps() {
         final Properties streamsConfiguration = new Properties();
@@ -134,19 +171,30 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Before
-    public void setup() {
+    public void setup() throws Exception {
         appId = safeUniqueTestName(NamedTopologyIntegrationTest.class, testName);
-        props = configProps();
         changelog1 = appId + "-topology-1-store-changelog";
         changelog2 = appId + "-topology-2-store-changelog";
         changelog3 = appId + "-topology-3-store-changelog";
+        props = configProps();
+        props2 = configProps();
+
+        // TODO KAFKA-12648: refactor to avoid deleting & (re)creating outputs topics for each test
+        CLUSTER.createTopic(OUTPUT_STREAM_1, 2, 1);
+        CLUSTER.createTopic(OUTPUT_STREAM_2, 2, 1);
+        CLUSTER.createTopic(OUTPUT_STREAM_3, 2, 1);
     }
 
     @After
-    public void shutdown() {
+    public void shutdown() throws Exception {
         if (streams != null) {
             streams.close(Duration.ofSeconds(30));
         }
+        if (streams2 != null) {
+            streams2.close(Duration.ofSeconds(30));
+        }
+
+        CLUSTER.deleteTopics(OUTPUT_STREAM_1, OUTPUT_STREAM_2, OUTPUT_STREAM_3);
     }
 
     @Test
@@ -155,7 +203,7 @@ public class NamedTopologyIntegrationTest {
         final String fkjTopologyName = "FKJ-topology";
 
         final NamedTopologyStreamsBuilder countBuilder = new NamedTopologyStreamsBuilder(countTopologyName);
-        countBuilder.stream(INPUT_STREAM_1).selectKey((k, v) -> k).groupByKey().count();
+        countBuilder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count();
 
         final NamedTopologyStreamsBuilder fkjBuilder = new NamedTopologyStreamsBuilder(fkjTopologyName);
 
@@ -183,6 +231,7 @@ public class NamedTopologyIntegrationTest {
         final String fkjTopicPrefix = appId + "-" + fkjTopologyName;
         final  Set<String> internalTopics = CLUSTER
             .getAllTopicsInCluster().stream()
+            .filter(t -> t.contains(appId))
             .filter(t -> t.endsWith("-repartition") || t.endsWith("-changelog") || t.endsWith("-topic"))
             .collect(Collectors.toSet());
         assertThat(internalTopics, is(mkSet(
@@ -201,12 +250,12 @@ public class NamedTopologyIntegrationTest {
         topology1Builder.stream(INPUT_STREAM_1)
             .selectKey((k, v) -> k)
             .groupByKey()
-            .count(Materialized.as(Stores.persistentKeyValueStore("store")))
+            .count(ROCKSDB_STORE)
             .toStream().to(OUTPUT_STREAM_1);
         streams = new KafkaStreamsNamedTopologyWrapper(topology1Builder.buildNamedTopology(props), props, clientSupplier);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
         final List<KeyValue<String, Long>> results = waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3);
-        assertThat(results, equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(results, equalTo(COUNT_OUTPUT_DATA));
 
         final Set<String> allTopics = CLUSTER.getAllTopicsInCluster();
         assertThat(allTopics.contains(appId + "-" + "topology-1" + "-store-changelog"), is(true));
@@ -215,59 +264,164 @@ public class NamedTopologyIntegrationTest {
 
     @Test
     public void shouldProcessMultipleIdenticalNamedTopologiesWithInMemoryAndPersistentStateStores() throws Exception {
-        topology1Builder.stream(INPUT_STREAM_1).selectKey((k, v) -> k).groupByKey().count(Materialized.as(Stores.persistentKeyValueStore("store"))).toStream().to(OUTPUT_STREAM_1);
-        topology2Builder.stream(INPUT_STREAM_2).selectKey((k, v) -> k).groupByKey().count(Materialized.as(Stores.inMemoryKeyValueStore("store"))).toStream().to(OUTPUT_STREAM_2);
-        topology3Builder.stream(INPUT_STREAM_3).selectKey((k, v) -> k).groupByKey().count(Materialized.as(Stores.persistentKeyValueStore("store"))).toStream().to(OUTPUT_STREAM_3);
+        topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(ROCKSDB_STORE).toStream().to(OUTPUT_STREAM_1);
+        topology2Builder.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
+        topology3Builder.stream(INPUT_STREAM_3).groupBy((k, v) -> k).count(ROCKSDB_STORE).toStream().to(OUTPUT_STREAM_3);
         streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder, topology2Builder, topology3Builder), props, clientSupplier);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(COUNT_OUTPUT_DATA));
 
         assertThat(CLUSTER.getAllTopicsInCluster().containsAll(asList(changelog1, changelog2, changelog3)), is(true));
     }
 
     @Test
-    public void shouldProcessMultipleIdenticalNamedTopologiesWithInMemoryStateStores() throws Exception {
-        topology1Builder.stream(INPUT_STREAM_1).selectKey((k, v) -> k).groupByKey().count(Materialized.as(Stores.inMemoryKeyValueStore("store"))).toStream().to(OUTPUT_STREAM_1);
-        topology2Builder.stream(INPUT_STREAM_2).selectKey((k, v) -> k).groupByKey().count(Materialized.as(Stores.inMemoryKeyValueStore("store"))).toStream().to(OUTPUT_STREAM_2);
-        topology3Builder.stream(INPUT_STREAM_3).selectKey((k, v) -> k).groupByKey().count(Materialized.as(Stores.inMemoryKeyValueStore("store"))).toStream().to(OUTPUT_STREAM_3);
-        streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder, topology2Builder, topology3Builder), props, clientSupplier);
+    public void shouldAddNamedTopologyToUnstartedApplicationWithEmptyInitialTopology() throws Exception {
+        topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+        streams = new KafkaStreamsNamedTopologyWrapper(props, clientSupplier);
+        streams.addNamedTopology(topology1Builder.buildNamedTopology(props));
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+    }
+    
+    @Test
+    public void shouldAddNamedTopologyToRunningApplicationWithEmptyInitialTopology() throws Exception {
+        topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+        streams = new KafkaStreamsNamedTopologyWrapper(props, clientSupplier);
+        streams.start();
 
-        System.out.println(CLUSTER.getAllTopicsInCluster());
-        assertThat(CLUSTER.getAllTopicsInCluster().containsAll(asList(changelog1, changelog2, changelog3)), is(true));
+        streams.addNamedTopology(topology1Builder.buildNamedTopology(props));
+        IntegrationTestUtils.waitForApplicationState(singletonList(streams), State.RUNNING, Duration.ofSeconds(15));
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
     }
 
+    @Test
+    public void shouldAddNamedTopologyToRunningApplicationWithSingleInitialNamedTopology() throws Exception {
+        topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+        topology2Builder.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
+        streams = new KafkaStreamsNamedTopologyWrapper(topology1Builder.buildNamedTopology(props), props, clientSupplier);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
+
+        streams.addNamedTopology(topology2Builder.buildNamedTopology(props));
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
+    }
+
+    @Test
+    public void shouldAddNamedTopologyToRunningApplicationWithMultipleInitialNamedTopologies() throws Exception {
+        topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(ROCKSDB_STORE).toStream().to(OUTPUT_STREAM_1);
+        topology2Builder.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(ROCKSDB_STORE).toStream().to(OUTPUT_STREAM_2);
+        topology3Builder.stream(INPUT_STREAM_3).groupBy((k, v) -> k).count(ROCKSDB_STORE).toStream().to(OUTPUT_STREAM_3);
+        streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder, topology2Builder), props, clientSupplier);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
+
+        streams.addNamedTopology(topology3Builder.buildNamedTopology(props));
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(COUNT_OUTPUT_DATA));
+    }
+
+    @Test
+    public void shouldAddNamedTopologyToRunningApplicationWithMultipleNodes() throws Exception {
+        topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+        topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+
+        topology2Builder.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
+        topology2Builder2.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
+
+        streams = new KafkaStreamsNamedTopologyWrapper(topology1Builder.buildNamedTopology(props), props, clientSupplier);
+        streams2 = new KafkaStreamsNamedTopologyWrapper(topology1Builder2.buildNamedTopology(props2), props2, clientSupplier);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(asList(streams, streams2), Duration.ofSeconds(15));
+
+        streams.addNamedTopology(topology2Builder.buildNamedTopology(props));
+        streams2.addNamedTopology(topology2Builder2.buildNamedTopology(props2));
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
+
+        // TODO KAFKA-12648: need to make sure that both instances actually did some of this processing of topology-2,
+        //  ie that both joined the group after the new topology was added and then successfully processed records from it
+        //  Also: test where we wait for a rebalance between streams.addNamedTopology and streams2.addNamedTopology,
+        //  and vice versa, to make sure we hit case where not all new tasks are initially assigned, and when not all yet known
+    }
+
+    @Ignore // TODO KAFKA-12648: re-enable once we have the ability to block on the removed topology
+    @Test
+    public void shouldRemoveOneNamedTopologyWhileAnotherContinuesProcessing() throws Exception {
+        topology1Builder.stream(DELAYED_INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+        topology2Builder.stream(DELAYED_INPUT_STREAM_2).map((k, v) -> {
+            throw new IllegalStateException("Should not process any records for removed topology-2");
+        });
+        streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder, topology2Builder), props, clientSupplier);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
+
+        streams.removeNamedTopology("topology-2");
+
+        produceToInputTopics(DELAYED_INPUT_STREAM_1, STANDARD_INPUT_DATA);
+        produceToInputTopics(DELAYED_INPUT_STREAM_2, STANDARD_INPUT_DATA);
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+    }
+
+    @Ignore // TODO KAFKA-12648: re-enable once we have the ability to block on the removed topology
+    @Test
+    public void shouldRemoveAndReplaceTopologicallyIncompatibleNamedTopology() throws Exception {
+        CLUSTER.createTopics(SUM_OUTPUT, COUNT_OUTPUT);
+        // Build up named topology with two stateful subtopologies
+        final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
+        inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
+        inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+        streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder), props, clientSupplier);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+        streams.removeNamedTopology("topology-1");
+        streams.cleanUpNamedTopology("topology-1");
+
+        // Prepare a new named topology with the same name but an incompatible topology (stateful subtopologies swap order)
+        final KStream<String, Long> inputStream2 = topology1Builder2.stream(DELAYED_INPUT_STREAM_1);
+        inputStream2.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+        inputStream2.groupByKey().count().toStream().to(COUNT_OUTPUT);
+
+        produceToInputTopics(DELAYED_INPUT_STREAM_1, STANDARD_INPUT_DATA);
+        streams.addNamedTopology(topology1Builder2.buildNamedTopology(props));
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+        CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
+    }
+    
     @Test
     public void shouldAllowPatternSubscriptionWithMultipleNamedTopologies() throws Exception {
-        topology1Builder.stream(Pattern.compile(INPUT_STREAM_1)).selectKey((k, v) -> k).groupByKey().count().toStream().to(OUTPUT_STREAM_1);
-        topology2Builder.stream(Pattern.compile(INPUT_STREAM_2)).selectKey((k, v) -> k).groupByKey().count().toStream().to(OUTPUT_STREAM_2);
-        topology3Builder.stream(Pattern.compile(INPUT_STREAM_3)).selectKey((k, v) -> k).groupByKey().count().toStream().to(OUTPUT_STREAM_3);
+        topology1Builder.stream(Pattern.compile(INPUT_STREAM_1)).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_1);
+        topology2Builder.stream(Pattern.compile(INPUT_STREAM_2)).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_2);
+        topology3Builder.stream(Pattern.compile(INPUT_STREAM_3)).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_3);
         streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder, topology2Builder, topology3Builder), props, clientSupplier);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(COUNT_OUTPUT_DATA));
     }
 
     @Test
     public void shouldAllowMixedCollectionAndPatternSubscriptionWithMultipleNamedTopologies() throws Exception {
-        topology1Builder.stream(INPUT_STREAM_1).selectKey((k, v) -> k).groupByKey().count().toStream().to(OUTPUT_STREAM_1);
-        topology2Builder.stream(Pattern.compile(INPUT_STREAM_2)).selectKey((k, v) -> k).groupByKey().count().toStream().to(OUTPUT_STREAM_2);
-        topology3Builder.stream(Pattern.compile(INPUT_STREAM_3)).selectKey((k, v) -> k).groupByKey().count().toStream().to(OUTPUT_STREAM_3);
+        topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_1);
+        topology2Builder.stream(Pattern.compile(INPUT_STREAM_2)).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_2);
+        topology3Builder.stream(Pattern.compile(INPUT_STREAM_3)).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_3);
         streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder, topology2Builder, topology3Builder), props, clientSupplier);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(STANDARD_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(STANDARD_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(COUNT_OUTPUT_DATA));
     }
 
     private static void produceToInputTopics(final String topic, final Collection<KeyValue<String, Long>> records) {

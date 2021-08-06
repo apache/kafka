@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
@@ -30,7 +29,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import java.time.Duration;
 import java.util.Properties;
 import java.util.regex.Pattern;
 
@@ -38,7 +36,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
 import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
 
 public class NamedTopologyTest {
     final KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
@@ -78,12 +75,6 @@ public class NamedTopologyTest {
     }
 
     @Test
-    public void shouldStartUpAndGoToRunningWithEmptyNamedTopology() throws Exception {
-        streams = new KafkaStreamsNamedTopologyWrapper(props, clientSupplier);
-        IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
-    }
-
-    @Test
     public void shouldBuildSingleNamedTopology() {
         builder1.stream("stream-1").filter((k, v) -> !k.equals(v)).to("output-1");
 
@@ -112,15 +103,15 @@ public class NamedTopologyTest {
         final NamedTopology topology2 = builder2.buildNamedTopology(props);
         final NamedTopology topology3 = builder3.buildNamedTopology(props);
         streams = new KafkaStreamsNamedTopologyWrapper(asList(topology1, topology2, topology3), props, clientSupplier);
-        assertThat(streams.getTopologyByName("topology-1"), equalTo(topology1));
-        assertThat(streams.getTopologyByName("topology-2"), equalTo(topology2));
-        assertThat(streams.getTopologyByName("topology-3"), equalTo(topology3));
+        assertThat(streams.getTopologyByName("topology-1").get(), equalTo(topology1));
+        assertThat(streams.getTopologyByName("topology-2").get(), equalTo(topology2));
+        assertThat(streams.getTopologyByName("topology-3").get(), equalTo(topology3));
     }
 
     @Test
-    public void shouldThrowIllegalArgumentWhenLookingUpNonExistentTopologyByName() {
+    public void shouldReturnEmptyWhenLookingUpNonExistentTopologyByName() {
         streams = new KafkaStreamsNamedTopologyWrapper(builder1.buildNamedTopology(props), props, clientSupplier);
-        assertThrows(IllegalArgumentException.class, () -> streams.getTopologyByName("non-existent-topology"));
+        assertThat(streams.getTopologyByName("non-existent-topology").isPresent(), equalTo(false));
     }
 
     @Test

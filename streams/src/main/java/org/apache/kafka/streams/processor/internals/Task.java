@@ -196,7 +196,6 @@ public interface Task {
 
     void clearTaskTimeout();
 
-
     // task status inquiry
 
     TaskId id();

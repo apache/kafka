@@ -135,6 +135,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         configMap.putAll(props);
 
         streamsConfig = new StreamsConfig(configMap);
+        topologyMetadata = new TopologyMetadata(builder, streamsConfig);
         partitionAssignor.configure(configMap);
         EasyMock.replay(taskManager, adminClient);
 

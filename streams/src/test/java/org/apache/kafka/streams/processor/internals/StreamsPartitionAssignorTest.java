@@ -232,6 +232,7 @@ public class StreamsPartitionAssignorTest {
         partitionAssignor.configure(configMap);
         EasyMock.replay(taskManager, adminClient);
 
+        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));
         return overwriteInternalTopicManagerWithMock(false);
     }
 
