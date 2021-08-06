@@ -350,7 +350,7 @@ public class TaskManager {
             throw new IllegalArgumentException("Tasks to close-dirty should be empty");
         }
 
-        // for all tasks to close or recycle, we should first right a checkpoint as in post-commit
+        // for all tasks to close or recycle, we should first write a checkpoint as in post-commit
         final List<Task> tasksToCheckpoint = new ArrayList<>(tasksToCloseClean);
         tasksToCheckpoint.addAll(tasksToRecycle);
         for (final Task task : tasksToCheckpoint) {
@@ -526,9 +526,9 @@ public class TaskManager {
         }
 
         if (!remainingRevokedPartitions.isEmpty()) {
-            log.warn("The following partitions {} are missing from the task partitions. It could potentially " +
+            log.debug("The following revoked partitions {} are missing from the current task partitions. It could potentially " +
                          "due to race condition of consumer detecting the heartbeat failure, or the tasks " +
-                         "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
+                         "have been cleaned up by the handleAssignment callback", remainingRevokedPartitions);
         }
 
         prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
@@ -711,6 +711,28 @@ public class TaskManager {
     }
 
     /**
+     * Clean up after closed or removed tasks by making sure to unlock any remaining locked directories for them, for
+     * example unassigned tasks or those in the CREATED state when closed, since Task#close will not unlock them
+     */
+    private void releaseLockedDirectoriesForTasks(final Set<TaskId> tasksToUnlock) {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
+        while (taskIdIterator.hasNext()) {
+            final TaskId id = taskIdIterator.next();
+            if (tasksToUnlock.contains(id)) {
+                stateDirectory.unlock(id);
+                taskIdIterator.remove();
+            }
+        }
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw fatalException;
+        }
+    }
+
+    /**
      * We must release the lock for any unassigned tasks that we temporarily locked in preparation for a
      * rebalance in {@link #tryToLockAllNonEmptyTaskDirectories()}.
      */
@@ -784,12 +806,50 @@ public class TaskManager {
     void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        final Set<Task> tasksToCloseDirty = new HashSet<>();
         // TODO: change type to `StreamTask`
         final Set<Task> activeTasks = new TreeSet<>(Comparator.comparing(Task::id));
         activeTasks.addAll(tasks.activeTasks());
-        tasksToCloseDirty.addAll(tryCloseCleanAllActiveTasks(clean, firstException));
-        tasksToCloseDirty.addAll(tryCloseCleanAllStandbyTasks(clean, firstException));
+
+        executeAndMaybeSwallow(
+            clean,
+            () -> closeAndCleanUpTasks(activeTasks, standbyTaskIterable(), clean),
+            e -> firstException.compareAndSet(null, e),
+            e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
+        );
+
+        executeAndMaybeSwallow(
+            clean,
+            tasks::closeThreadProducerIfNeeded,
+            e -> firstException.compareAndSet(null, e),
+            e -> log.warn("Ignoring an exception while closing thread producer.", e)
+        );
+
+        tasks.clear();
+
+        // this should be called after closing all tasks and clearing them from `tasks` to make sure we unlock the dir
+        // for any tasks that may have still been in CREATED at the time of shutdown, since Task#close will not do so
+        executeAndMaybeSwallow(
+            clean,
+            this::releaseLockedUnassignedTaskDirectories,
+            e -> firstException.compareAndSet(null, e),
+            e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
+        );
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw new RuntimeException("Unexpected exception while closing task", fatalException);
+        }
+    }
+
+    /**
+     * Closes and cleans up after the provided tasks, including closing their corresponding task producers
+     */
+    void closeAndCleanUpTasks(final Collection<Task> activeTasks, final Collection<Task> standbyTasks, final boolean clean) {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        final Set<Task> tasksToCloseDirty = new HashSet<>();
+        tasksToCloseDirty.addAll(tryCloseCleanActiveTasks(activeTasks, clean, firstException));
+        tasksToCloseDirty.addAll(tryCloseCleanStandbyTasks(standbyTasks, clean, firstException));
 
         for (final Task task : tasksToCloseDirty) {
             closeTaskDirty(task);
@@ -805,34 +865,16 @@ public class TaskManager {
             );
         }
 
-        executeAndMaybeSwallow(
-            clean,
-            tasks::closeThreadProducerIfNeeded,
-            e -> firstException.compareAndSet(null, e),
-            e -> log.warn("Ignoring an exception while closing thread producer.", e)
-        );
-
-        tasks.clear();
-
-
-        // this should be called after closing all tasks, to make sure we unlock the task dir for tasks that may
-        // have still been in CREATED at the time of shutdown, since Task#close will not do so
-        executeAndMaybeSwallow(
-            clean,
-            this::releaseLockedUnassignedTaskDirectories,
-            e -> firstException.compareAndSet(null, e),
-            e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
-        );
-
-        final RuntimeException fatalException = firstException.get();
-        if (fatalException != null) {
-            throw new RuntimeException("Unexpected exception while closing task", fatalException);
+        final RuntimeException exception = firstException.get();
+        if (exception != null) {
+            throw exception;
         }
     }
 
     // Returns the set of active tasks that must be closed dirty
-    private Collection<Task> tryCloseCleanAllActiveTasks(final boolean clean,
-                                                         final AtomicReference<RuntimeException> firstException) {
+    private Collection<Task> tryCloseCleanActiveTasks(final Collection<Task> activeTasksToClose,
+                                                      final boolean clean,
+                                                      final AtomicReference<RuntimeException> firstException) {
         if (!clean) {
             return activeTaskIterable();
         }
@@ -843,7 +885,7 @@ public class TaskManager {
         final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
 
         // first committing all tasks and then suspend and close them clean
-        for (final Task task : activeTaskIterable()) {
+        for (final Task task : activeTasksToClose) {
             try {
                 final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
                 tasksToCommit.add(task);
@@ -919,15 +961,16 @@ public class TaskManager {
     }
 
     // Returns the set of standby tasks that must be closed dirty
-    private Collection<Task> tryCloseCleanAllStandbyTasks(final boolean clean,
-                                                          final AtomicReference<RuntimeException> firstException) {
+    private Collection<Task> tryCloseCleanStandbyTasks(final Collection<Task> standbyTasksToClose,
+                                                       final boolean clean,
+                                                       final AtomicReference<RuntimeException> firstException) {
         if (!clean) {
             return standbyTaskIterable();
         }
         final Set<Task> tasksToCloseDirty = new HashSet<>();
 
         // first committing and then suspend / close clean
-        for (final Task task : standbyTaskIterable()) {
+        for (final Task task : standbyTasksToClose) {
             try {
                 task.prepareCommit();
                 task.postCommit(true);
@@ -1194,10 +1237,30 @@ public class TaskManager {
      */
     void handleTopologyUpdates() {
         tasks.maybeCreateTasksFromNewTopologies();
-        for (final Task task : activeTaskIterable()) {
-            if (!topologyMetadata.namedTopologiesView().contains(task.id().namedTopology())) {
-                task.freezeProcessing();
+
+        try {
+            final Set<Task> activeTasksToRemove = new HashSet<>();
+            final Set<Task> standbyTasksToRemove = new HashSet<>();
+            for (final Task task : tasks.allTasks()) {
+                if (!topologyMetadata.namedTopologiesView().contains(task.id().namedTopology())) {
+                    if (task.isActive()) {
+                        activeTasksToRemove.add(task);
+                    } else {
+                        standbyTasksToRemove.add(task);
+                    }
+                }
             }
+
+            final Set<TaskId> allRemovedTasks =
+                union(HashSet::new, activeTasksToRemove, standbyTasksToRemove).stream().map(Task::id).collect(Collectors.toSet());
+            closeAndCleanUpTasks(activeTasksToRemove, standbyTasksToRemove, true);
+            allRemovedTasks.forEach(tasks::removeTaskBeforeClosing);
+            releaseLockedDirectoriesForTasks(allRemovedTasks);
+        } catch (final Exception e) {
+            // TODO KAFKA-12648: for now just swallow the exception to avoid interfering with the other topologies
+            //  that are running alongside, but eventually we should be able to rethrow up to the handler to inform
+            //  the user of an error in this named topology without killing the thread and delaying the others
+            log.error("Caught the following exception while closing tasks from a removed topology:", e);
         }
     }
 

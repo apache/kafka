@@ -3494,7 +3494,7 @@ public class TaskManagerTest {
 
         @Override
         public boolean process(final long wallClockTime) {
-            if (isActive() && state() == State.RUNNING && !isFrozen) {
+            if (isActive() && state() == State.RUNNING) {
                 for (final LinkedList<ConsumerRecord<byte[], byte[]>> records : queue.values()) {
                     final ConsumerRecord<byte[], byte[]> record = records.poll();
                     if (record != null) {

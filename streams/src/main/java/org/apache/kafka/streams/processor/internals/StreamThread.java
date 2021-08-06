@@ -723,8 +723,6 @@ public class StreamThread extends Thread {
 
         final long pollLatency = pollPhase();
 
-        topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
-
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
         // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
@@ -879,18 +877,16 @@ public class StreamThread extends Thread {
             lastSeenTopologyVersion = topologyMetadata.topologyVersion();
             taskManager.handleTopologyUpdates();
 
+            // TODO KAFKA-12648 Pt.4: optimize to avoid always triggering a rebalance for each thread on every update
             log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
             subscribeConsumer();
             mainConsumer.enforceRebalance();
         }
+        topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
     }
 
     private long pollPhase() {
         checkForTopologyUpdates();
-        if (topologyMetadata.isEmpty()) {
-            log.debug("Skipping poll since there is no topology and the consumer is not subscribed to any topics");
-            return 0L;
-        }
 
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");

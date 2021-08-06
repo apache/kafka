@@ -196,11 +196,6 @@ public interface Task {
 
     void clearTaskTimeout();
 
-    /**
-     * Inform the task to freeze all further active processing, without affecting the task's underlying state
-     */
-    void freezeProcessing();
-
     // task status inquiry
 
     TaskId id();
