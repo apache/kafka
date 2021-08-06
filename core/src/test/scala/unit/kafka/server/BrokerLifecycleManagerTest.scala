@@ -35,7 +35,6 @@ import org.apache.kafka.common.requests.{AbstractRequest, BrokerHeartbeatRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.metadata.BrokerState
-import org.apache.kafka.raft.RaftConfig
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.api.Assertions._
 
@@ -49,7 +48,7 @@ class BrokerLifecycleManagerTest {
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "broker")
     properties.setProperty(KafkaConfig.NodeIdProp, "1")
-    properties.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9093")
+    properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9093")
     properties.setProperty(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp, "300000")
     properties
   }

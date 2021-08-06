@@ -262,7 +262,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ProcessRolesProp, "controller")
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
     props.put(KafkaConfig.NodeIdProp, "1")
-    props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"1@localhost:9092")
+    props.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
 
     assertFalse(isValidKafkaConfig(props))
     val caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
@@ -1055,7 +1055,7 @@ class KafkaConfigTest {
 
   private def assertInvalidQuorumVoters(value: String): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
+    props.put(KafkaConfig.QuorumVotersProp, value)
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
@@ -1080,7 +1080,7 @@ class KafkaConfigTest {
 
   private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, AddressSpec]): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
+    props.put(KafkaConfig.QuorumVotersProp, value)
     val raftConfig = new RaftConfig(KafkaConfig.fromProps(props))
     assertEquals(expectedVoters, raftConfig.quorumVoterConnections())
   }
@@ -1093,7 +1093,7 @@ class KafkaConfigTest {
     val largeBrokerId = 2000
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
-    props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9093")
+    props.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     props.put(KafkaConfig.NodeIdProp, largeBrokerId.toString)
     assertTrue(isValidKafkaConfig(props))
   }
@@ -1120,7 +1120,7 @@ class KafkaConfigTest {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
     props.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
-    props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9093")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     assertFalse(isValidKafkaConfig(props))
   }
 
@@ -1197,7 +1197,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ProcessRolesProp, "broker")
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
     props.put(KafkaConfig.NodeIdProp, "1")
-    props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9093")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     assertTrue(isValidKafkaConfig(props))
   }
 
@@ -1211,7 +1211,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.MetadataLogDirProp, metadataDir)
     props.put(KafkaConfig.LogDirProp, dataDir)
     props.put(KafkaConfig.NodeIdProp, "1")
-    props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9093")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     assertTrue(isValidKafkaConfig(props))
 
     val config = KafkaConfig.fromProps(props)
@@ -1228,12 +1228,11 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ProcessRolesProp, "broker")
     props.put(KafkaConfig.LogDirProp, s"$dataDir1,$dataDir2")
     props.put(KafkaConfig.NodeIdProp, "1")
-    props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9093")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     assertTrue(isValidKafkaConfig(props))
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(dataDir1, config.metadataLogDir)
     assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
   }
-
 }

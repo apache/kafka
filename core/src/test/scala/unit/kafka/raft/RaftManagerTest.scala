@@ -45,19 +45,19 @@ class RaftManagerTest {
         props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
         props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092")
         if (!processRoles.contains("controller")) {
-          val nodeIdMod = (nodeId.toInt + 1)
-          props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeIdMod.toString}@localhost:9093")
+          val voterId = (nodeId.toInt + 1)
+          props.setProperty(KafkaConfig.QuorumVotersProp, s"${voterId}@localhost:9093")
         }
       } 
 
       if (processRoles.contains("controller")) {
-        props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:9093")
+        props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
       }
 
       new KafkaConfig(props)
     }
 
-    val config = configWithProcessRolesAndNodeId(processRoles, nodeId) 
+    val config = configWithProcessRolesAndNodeId(processRoles, nodeId)
     val topicId = new Uuid(0L, 2L)
     val metaProperties = MetaProperties(
       clusterId = Uuid.randomUuid.toString,

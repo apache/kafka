@@ -20,7 +20,6 @@ import java.util.Properties
 
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.MetricsContext
-import org.apache.kafka.raft.RaftConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -36,7 +35,7 @@ class ServerTest {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
     props.put(KafkaConfig.NodeIdProp, nodeId.toString)
-    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${(nodeId + 1).toString}@localhost:9092")
+    props.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9092")
     val config = KafkaConfig.fromProps(props)
 
     val context = Server.createKafkaMetricsContext(config, clusterId)

@@ -390,6 +390,7 @@ object KafkaConfig {
   val MetadataLogSegmentMillisProp = "metadata.log.segment.ms"
   val MetadataMaxRetentionBytesProp = "metadata.max.retention.bytes"
   val MetadataMaxRetentionMillisProp = "metadata.max.retention.ms"
+  val QuorumVotersProp = RaftConfig.QUORUM_VOTERS_CONFIG
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
@@ -1951,18 +1952,18 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       )
     }
 
-    val voterIds: Set[Integer] = if (usesSelfManagedQuorum) RaftConfig.parseVoterConnections(quorumVoters).asScala.keySet.toSet else Set.empty
-    if (voterIds.nonEmpty) {
-      if (processRoles.contains(ControllerRole)) {
+    if (usesSelfManagedQuorum) {
+      val voterIds: Set[Integer] = RaftConfig.parseVoterConnections(quorumVoters).asScala.keySet.toSet
+      if (voterIds.isEmpty) {
+        throw new ConfigException(s"If using ${KafkaConfig.ProcessRolesProp}, ${KafkaConfig.QuorumVotersProp} must contain a parseable set of voters.")
+      } else if (processRoles.contains(ControllerRole)) {
         // Ensure that controllers use their node.id as a voter in controller.quorum.voters 
-        require(voterIds.contains(nodeId), s"If ${KafkaConfig.ProcessRolesProp} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${RaftConfig.QUORUM_VOTERS_CONFIG}=$voterIds")
+        require(voterIds.contains(nodeId), s"If ${KafkaConfig.ProcessRolesProp} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${KafkaConfig.QuorumVotersProp}=$voterIds")
       } else {
         // Ensure that the broker's node.id is not an id in controller.quorum.voters
-        require(!voterIds.contains(nodeId), s"If ${KafkaConfig.ProcessRolesProp} does not contain the 'controller' role, the node id $nodeId must not be included in the set of voters ${RaftConfig.QUORUM_VOTERS_CONFIG}=$voterIds")
+        require(!voterIds.contains(nodeId), s"If ${KafkaConfig.ProcessRolesProp} does not contain the 'controller' role, the node id $nodeId must not be included in the set of voters ${KafkaConfig.QuorumVotersProp}=$voterIds")
       }
-    } else if (usesSelfManagedQuorum) {
-      throw new ConfigException(s"If using ${KafkaConfig.ProcessRolesProp}, ${RaftConfig.QUORUM_VOTERS_CONFIG} must contain a parseable set of voters.")
-    }
+    } 
 
     require(!advertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
       s"${KafkaConfig.AdvertisedListenersProp} cannot use the nonroutable meta-address 0.0.0.0. "+

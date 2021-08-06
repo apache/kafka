@@ -27,7 +27,6 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.raft.RaftConfig
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 
@@ -88,7 +87,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "broker")
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
-    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
+    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
     setListenerProps(propertiesFile)
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(propertiesFile))
 
@@ -103,7 +102,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller")
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
-    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
+    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9092")
     setListenerProps(propertiesFile)
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(propertiesFile))
 
@@ -118,7 +117,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
-    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
+    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9092")
     setListenerProps(propertiesFile)
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(propertiesFile))
 
@@ -133,7 +132,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
-    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "")
+    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "")
     setListenerProps(propertiesFile)
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(propertiesFile))
   }
