@@ -27,9 +27,7 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
+import org.apache.kafka.common.security.oauthbearer.*;
 import org.jose4j.keys.resolvers.VerificationKeyResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +38,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     private AccessTokenValidator accessTokenValidator;
 
+    @SuppressWarnings("unchecked")
     @Override
     public void configure(final Map<String, ?> configs, final String saslMechanism,
         final List<AppConfigurationEntry> jaasConfigEntries) {
@@ -49,11 +48,10 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
             throw new IllegalArgumentException(
                 String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)",
                     jaasConfigEntries.size()));
-        @SuppressWarnings("unchecked")
-        final Map<String, String> unmodifiableModuleOptions = Collections
+        Map<String, String> moduleOptions = Collections
             .unmodifiableMap((Map<String, String>) jaasConfigEntries.get(0).getOptions());
 
-        ValidatorCallbackHandlerConfiguration conf = new ValidatorCallbackHandlerConfiguration(unmodifiableModuleOptions);
+        ValidatorCallbackHandlerConfiguration conf = new ValidatorCallbackHandlerConfiguration(moduleOptions);
 
         Integer clockSkew = conf.getClockSkew();
         Set<String> expectedAudiences = conf.getExpectedAudiences();
@@ -80,6 +78,9 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
         for (Callback callback : callbacks) {
             if (callback instanceof OAuthBearerValidatorCallback) {
                 handle((OAuthBearerValidatorCallback) callback);
+            } else if (callback instanceof OAuthBearerExtensionsValidatorCallback) {
+                OAuthBearerExtensionsValidatorCallback extensionsCallback = (OAuthBearerExtensionsValidatorCallback) callback;
+                extensionsCallback.inputExtensions().map().forEach((extensionName, v) -> extensionsCallback.valid(extensionName));
             } else {
                 throw new UnsupportedCallbackException(callback);
             }
@@ -97,6 +98,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
             log.debug("handle - token: {}", token);
             callback.token(token);
         } catch (ValidateException e) {
+            log.warn(e.getMessage(), e);
             callback.error("invalid_token", null, null);
 //            throw new IllegalStateException("Could not validate OAuth access token", e);
         }

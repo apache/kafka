@@ -18,17 +18,18 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
-import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import javax.security.sasl.SaslException;
+
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.security.auth.*;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,10 +37,15 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerLoginCallbackHandler.class);
 
+    private static final String EXTENSION_PREFIX = "Extension_";
+
+    private Map<String, String> moduleOptions;
+
     private LoginTokenEndpointHttpClient client;
 
     private AccessTokenValidator accessTokenValidator;
 
+    @SuppressWarnings("unchecked")
     @Override
     public void configure(final Map<String, ?> configs, final String saslMechanism,
         final List<AppConfigurationEntry> jaasConfigEntries) {
@@ -49,11 +55,10 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
             throw new IllegalArgumentException(
                 String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)",
                     jaasConfigEntries.size()));
-        @SuppressWarnings("unchecked")
-        final Map<String, String> unmodifiableModuleOptions = Collections
+        moduleOptions = Collections
             .unmodifiableMap((Map<String, String>) jaasConfigEntries.get(0).getOptions());
 
-        LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(unmodifiableModuleOptions);
+        LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(moduleOptions);
 
         String clientId = conf.getClientId();
         String clientSecret = conf.getClientSecret();
@@ -76,6 +81,8 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         for (Callback callback : callbacks) {
             if (callback instanceof OAuthBearerTokenCallback) {
                 handle((OAuthBearerTokenCallback) callback);
+            } else if (callback instanceof SaslExtensionsCallback) {
+                    handle((SaslExtensionsCallback) callback);
             } else {
                 throw new UnsupportedCallbackException(callback);
             }
@@ -96,6 +103,28 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
         log.debug("handle - token: {}", token);
         callback.token(token);
+    }
+
+    private void handle(SaslExtensionsCallback callback) {
+        Map<String, String> extensions = new HashMap<>();
+
+        for (Map.Entry<String, String> configEntry : this.moduleOptions.entrySet()) {
+            String key = configEntry.getKey();
+            if (!key.startsWith(EXTENSION_PREFIX))
+                continue;
+
+            extensions.put(key.substring(EXTENSION_PREFIX.length()), configEntry.getValue());
+        }
+
+        SaslExtensions saslExtensions = new SaslExtensions(extensions);
+
+        try {
+            OAuthBearerClientInitialResponse.validateExtensions(saslExtensions);
+        } catch (SaslException e) {
+            throw new ConfigException(e.getMessage());
+        }
+
+        callback.extensions(saslExtensions);
     }
 
 }

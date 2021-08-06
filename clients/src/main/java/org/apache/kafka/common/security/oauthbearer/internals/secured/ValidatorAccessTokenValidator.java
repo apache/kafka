@@ -57,7 +57,7 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
         if (clockSkew != null)
             jwtConsumerBuilder.setAllowedClockSkewInSeconds(clockSkew);
 
-        if (expectedAudiences != null && expectedAudiences.isEmpty())
+        if (expectedAudiences != null && !expectedAudiences.isEmpty())
             jwtConsumerBuilder.setExpectedAudience(expectedAudiences.toArray(new String[0]));
 
         if (expectedIssuer != null)
