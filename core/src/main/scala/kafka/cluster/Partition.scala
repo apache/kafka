@@ -313,14 +313,22 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def createLogIfNotExists(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Unit = {
-    isFutureReplica match {
-      case true if futureLog.isEmpty =>
-        val log = createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
-        this.futureLog = Option(log)
-      case false if log.isEmpty =>
-        val log = createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
-        this.log = Option(log)
-      case _ => trace(s"${if (isFutureReplica) "Future Log" else "Log"} already exists.")
+    def maybeCreate(logOpt: Option[Log]): Log = {
+      logOpt match {
+        case Some(log) =>
+          trace(s"${if (isFutureReplica) "Future Log" else "Log"} already exists.")
+          if (log.topicId.isEmpty)
+            topicId.foreach(log.assignTopicId)
+          log
+        case None =>
+          createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
+      }
+    }
+
+    if (isFutureReplica) {
+      this.futureLog = Some(maybeCreate(this.futureLog))
+    } else {
+      this.log = Some(maybeCreate(this.log))
     }
   }
 
