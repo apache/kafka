@@ -1766,7 +1766,7 @@ object UnifiedLog extends Logging {
       topicPartition,
       logDirFailureChannel,
       config.recordVersion,
-      s"[Log partition=$topicPartition, dir=${dir.getParent}] ")
+      s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     val offsets = LogLoader.load(LoadLogParams(
       dir,
