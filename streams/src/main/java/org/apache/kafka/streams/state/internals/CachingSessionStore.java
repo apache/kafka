@@ -31,6 +31,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -88,8 +89,9 @@ class CachingSessionStore
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
-        final Bytes binaryKey = cacheFunction.key(entry.key());
-        final Windowed<Bytes> bytesKey = SessionKeySchema.from(binaryKey);
+        final ByteBuffer binaryKey = cacheFunction.key(entry.key());
+        final Bytes keyBytes = Bytes.wrap(binaryKey);
+        final Windowed<Bytes> bytesKey = SessionKeySchema.from(keyBytes);
         if (flushListener != null) {
             final byte[] newValueBytes = entry.newValue();
             final byte[] oldValueBytes = newValueBytes == null || sendOldValues ?
@@ -105,7 +107,7 @@ class CachingSessionStore
                 context.setRecordContext(entry.entry().context());
                 try {
                     flushListener.apply(
-                        binaryKey.get(),
+                        keyBytes.get(),
                         newValueBytes,
                         sendOldValues ? oldValueBytes : null,
                         entry.entry().context().timestamp());

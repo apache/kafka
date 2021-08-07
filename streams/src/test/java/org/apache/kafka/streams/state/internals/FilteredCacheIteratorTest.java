@@ -25,6 +25,7 @@ import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 
@@ -40,8 +41,8 @@ public class FilteredCacheIteratorTest {
 
     private static final CacheFunction IDENTITY_FUNCTION = new CacheFunction() {
         @Override
-        public Bytes key(final Bytes cacheKey) {
-            return cacheKey;
+        public ByteBuffer key(final Bytes cacheKey) {
+            return ByteBuffer.wrap(cacheKey.get());
         }
 
         @Override

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Comparator;
 
@@ -38,6 +39,26 @@ public class Bytes implements Comparable<Bytes> {
         if (bytes == null)
             return null;
         return new Bytes(bytes);
+    }
+
+    /**
+     * Create a Bytes using the byte buffer. If the provided byteBuffer contains the whole content, we can directly
+     * use the backed array. If the byteBuffer has only partial of the content (ex: a sliced byteBuffer), we'll do array copy
+     *
+     * @param byteBuffer    The byteBuffer becomes the backing storage for the object.
+     */
+    public static Bytes wrap(ByteBuffer byteBuffer) {
+        if (byteBuffer == null)
+            return null;
+        else if (byteBuffer.hasArray() && byteBuffer.array().length == byteBuffer.capacity()) {
+            // the byte buffer is not a sub-byteBuffer
+            return new Bytes(byteBuffer.array());
+        } else {
+            // the byteBuffer has only partial of the content (ex: a sliced byteBuffer), do array copy to it
+            final byte[] bytes = new byte[byteBuffer.remaining()];
+            byteBuffer.get(bytes, 0, bytes.length);
+            return new Bytes(bytes);
+        }
     }
 
     /**

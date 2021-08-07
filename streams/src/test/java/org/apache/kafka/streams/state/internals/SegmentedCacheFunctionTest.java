@@ -33,7 +33,8 @@ public class SegmentedCacheFunctionTest {
     private static final int TIMESTAMP = 736213517;
 
     private static final Bytes THE_KEY = WindowKeySchema.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, TIMESTAMP, 42);
-    private final static Bytes THE_CACHE_KEY = Bytes.wrap(
+    private static final ByteBuffer THE_KEY_BYTE_BUFFER = ByteBuffer.wrap(THE_KEY.get());
+    private static final Bytes THE_CACHE_KEY = Bytes.wrap(
         ByteBuffer.allocate(8 + THE_KEY.get().length)
             .putLong(TIMESTAMP / SEGMENT_INTERVAL)
             .put(THE_KEY.get()).array()
@@ -45,7 +46,7 @@ public class SegmentedCacheFunctionTest {
     public void key() {
         assertThat(
             cacheFunction.key(THE_CACHE_KEY),
-            equalTo(THE_KEY)
+            equalTo(THE_KEY_BYTE_BUFFER)
         );
     }
 
@@ -58,20 +59,19 @@ public class SegmentedCacheFunctionTest {
 
         assertThat(buffer.getLong(), equalTo(segmentId));
 
-        final byte[] actualKey = new byte[buffer.remaining()];
-        buffer.get(actualKey);
-        assertThat(Bytes.wrap(actualKey), equalTo(THE_KEY));
+        final ByteBuffer actualKey = buffer.slice();
+        assertThat(actualKey, equalTo(THE_KEY_BYTE_BUFFER));
     }
 
     @Test
     public void testRoundTripping() {
         assertThat(
             cacheFunction.key(cacheFunction.cacheKey(THE_KEY)),
-            equalTo(THE_KEY)
+            equalTo(THE_KEY_BYTE_BUFFER)
         );
 
         assertThat(
-            cacheFunction.cacheKey(cacheFunction.key(THE_CACHE_KEY)),
+            cacheFunction.cacheKey(Bytes.wrap(cacheFunction.key(THE_CACHE_KEY))),
             equalTo(THE_CACHE_KEY)
         );
     }

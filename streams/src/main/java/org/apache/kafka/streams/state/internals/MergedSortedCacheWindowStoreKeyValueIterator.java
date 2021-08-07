@@ -23,6 +23,8 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 
+import java.nio.ByteBuffer;
+
 class MergedSortedCacheWindowStoreKeyValueIterator
     extends AbstractMergedSortedCacheStoreIterator<Windowed<Bytes>, Windowed<Bytes>, byte[], byte[]> {
 
@@ -56,8 +58,8 @@ class MergedSortedCacheWindowStoreKeyValueIterator
 
     @Override
     Windowed<Bytes> deserializeCacheKey(final Bytes cacheKey) {
-        final byte[] binaryKey = cacheFunction.key(cacheKey).get();
-        return WindowKeySchema.fromStoreKey(binaryKey, windowSize, serdes.keyDeserializer(), serdes.topic());
+        final ByteBuffer byteBufferKey = cacheFunction.key(cacheKey);
+        return WindowKeySchema.fromStoreKey(byteBufferKey, windowSize, serdes.keyDeserializer(), serdes.topic());
     }
 
     @Override

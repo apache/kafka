@@ -19,7 +19,12 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 
+import java.nio.ByteBuffer;
+
 interface CacheFunction {
-    Bytes key(Bytes cacheKey);
+    // return ByteBuffer here since we usually do further content extraction (ex: extractKeyBytes) with the key.
+    // With ByteBuffer, we can better manipulate this partial content extraction without array copy
+    ByteBuffer key(Bytes cacheKey);
+    // return Bytes here since we won't have further operation to this cacheKey
     Bytes cacheKey(Bytes cacheKey);
 }

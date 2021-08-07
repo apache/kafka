@@ -192,6 +192,16 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
         return bytes;
     }
 
+    static ByteBuffer extractStoreKeyBytes(final ByteBuffer binaryKey) {
+        final int limit = binaryKey.limit();
+        binaryKey.position(0);
+        binaryKey.limit(binaryKey.remaining() - TIMESTAMP_SIZE - SEQNUM_SIZE);
+        final ByteBuffer keyByteBuffer = binaryKey.slice();
+        binaryKey.limit(limit);
+
+        return keyByteBuffer;
+    }
+
     static <K> K extractStoreKey(final byte[] binaryKey,
                                  final StateSerdes<K, ?> serdes) {
         final byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE];
@@ -203,6 +213,10 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE);
     }
 
+    static long extractStoreTimestamp(final ByteBuffer binaryKey) {
+        return binaryKey.getLong(binaryKey.remaining() - TIMESTAMP_SIZE - SEQNUM_SIZE);
+    }
+
     static int extractStoreSequence(final byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getInt(binaryKey.length - SEQNUM_SIZE);
     }
@@ -212,6 +226,15 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
                                                final Deserializer<K> deserializer,
                                                final String topic) {
         final K key = deserializer.deserialize(topic, extractStoreKeyBytes(binaryKey));
+        final Window window = extractStoreWindow(binaryKey, windowSize);
+        return new Windowed<>(key, window);
+    }
+
+    public static <K> Windowed<K> fromStoreKey(final ByteBuffer binaryKey,
+                                               final long windowSize,
+                                               final Deserializer<K> deserializer,
+                                               final String topic) {
+        final K key = deserializer.deserialize(topic, Bytes.wrap(extractStoreKeyBytes(binaryKey)).get());
         final Window window = extractStoreWindow(binaryKey, windowSize);
         return new Windowed<>(key, window);
     }
@@ -230,10 +253,24 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
         return new Windowed<>(key, window);
     }
 
+    public static Windowed<Bytes> fromStoreBytesKey(final ByteBuffer binaryKey,
+                                                    final long windowSize) {
+        final ByteBuffer key = extractStoreKeyBytes(binaryKey);
+        final Window window = extractStoreWindow(binaryKey, windowSize);
+
+        return new Windowed<>(Bytes.wrap(key), window);
+    }
+
     static Window extractStoreWindow(final byte[] binaryKey,
                                      final long windowSize) {
         final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
         final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE);
+        return timeWindowForSize(start, windowSize);
+    }
+
+    static Window extractStoreWindow(final ByteBuffer binaryKey,
+                                     final long windowSize) {
+        final long start = binaryKey.getLong(binaryKey.remaining() - TIMESTAMP_SIZE - SEQNUM_SIZE);
         return timeWindowForSize(start, windowSize);
     }
 }

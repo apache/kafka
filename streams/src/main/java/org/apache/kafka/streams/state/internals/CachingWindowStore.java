@@ -34,6 +34,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -101,7 +102,7 @@ class CachingWindowStore
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
                                     final InternalProcessorContext context) {
-        final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
+        final ByteBuffer binaryWindowKey = cacheFunction.key(entry.key());
         final Windowed<Bytes> windowedKeyBytes = WindowKeySchema.fromStoreBytesKey(binaryWindowKey, windowSize);
         final long windowStartTimestamp = windowedKeyBytes.window().start();
         final Bytes binaryKey = windowedKeyBytes.key();
@@ -120,7 +121,7 @@ class CachingWindowStore
                 context.setRecordContext(entry.entry().context());
                 try {
                     flushListener.apply(
-                        binaryWindowKey,
+                        Bytes.wrap(binaryWindowKey).get(),
                         rawNewValue,
                         sendOldValues ? rawOldValue : null,
                         entry.entry().context().timestamp());

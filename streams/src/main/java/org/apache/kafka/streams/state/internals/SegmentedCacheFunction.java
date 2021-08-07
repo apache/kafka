@@ -35,8 +35,8 @@ class SegmentedCacheFunction implements CacheFunction {
     }
 
     @Override
-    public Bytes key(final Bytes cacheKey) {
-        return Bytes.wrap(bytesFromCacheKey(cacheKey));
+    public ByteBuffer key(final Bytes cacheKey) {
+        return bytesFromCacheKey(cacheKey);
     }
 
     @Override
@@ -51,10 +51,14 @@ class SegmentedCacheFunction implements CacheFunction {
         return Bytes.wrap(buf.array());
     }
 
-    static byte[] bytesFromCacheKey(final Bytes cacheKey) {
-        final byte[] binaryKey = new byte[cacheKey.get().length - SEGMENT_ID_BYTES];
-        System.arraycopy(cacheKey.get(), SEGMENT_ID_BYTES, binaryKey, 0, binaryKey.length);
-        return binaryKey;
+    static ByteBuffer bytesFromCacheKey(final Bytes cacheKey) {
+        final ByteBuffer byteBuffer = ByteBuffer.wrap(cacheKey.get());
+        byteBuffer.position(SEGMENT_ID_BYTES);
+        final ByteBuffer keyByteBuffer = byteBuffer.slice();
+
+        byteBuffer.position(0);
+
+        return keyByteBuffer;
     }
 
     public long segmentId(final Bytes key) {

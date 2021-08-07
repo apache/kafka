@@ -44,7 +44,7 @@ class FilteredCacheIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEn
 
             @Override
             public Bytes peekNextKey() {
-                return cacheFunction.key(cacheIterator.peekNextKey());
+                return Bytes.wrap(cacheFunction.key(cacheIterator.peekNextKey()));
             }
 
             @Override
@@ -58,7 +58,7 @@ class FilteredCacheIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEn
             }
 
             private KeyValue<Bytes, LRUCacheEntry> cachedPair(final KeyValue<Bytes, LRUCacheEntry> next) {
-                return KeyValue.pair(cacheFunction.key(next.key), next.value);
+                return KeyValue.pair(Bytes.wrap(cacheFunction.key(next.key)), next.value);
             }
 
         };

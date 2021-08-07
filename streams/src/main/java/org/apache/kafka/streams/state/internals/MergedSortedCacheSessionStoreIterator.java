@@ -22,6 +22,8 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
+import java.nio.ByteBuffer;
+
 /**
  * Merges two iterators. Assumes each of them is sorted by key
  *
@@ -45,8 +47,8 @@ class MergedSortedCacheSessionStoreIterator extends AbstractMergedSortedCacheSto
 
     @Override
     Windowed<Bytes> deserializeCacheKey(final Bytes cacheKey) {
-        final byte[] binaryKey = cacheFunction.key(cacheKey).get();
-        final byte[] keyBytes = SessionKeySchema.extractKeyBytes(binaryKey);
+        final ByteBuffer binaryKey = cacheFunction.key(cacheKey);
+        final ByteBuffer keyBytes = SessionKeySchema.extractKeyBytes(binaryKey);
         final Window window = SessionKeySchema.extractWindow(binaryKey);
         return new Windowed<>(Bytes.wrap(keyBytes), window);
     }

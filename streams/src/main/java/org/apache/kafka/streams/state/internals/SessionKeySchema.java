@@ -104,6 +104,16 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         return bytes;
     }
 
+    static ByteBuffer extractKeyBytes(final ByteBuffer binaryKey) {
+        final int limit = binaryKey.limit();
+        binaryKey.position(0);
+        binaryKey.limit(binaryKey.remaining() - 2 * TIMESTAMP_SIZE);
+        final ByteBuffer keyByteBuffer = binaryKey.slice();
+        binaryKey.limit(limit);
+
+        return keyByteBuffer;
+    }
+
     static long extractEndTimestamp(final byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
     }
@@ -119,6 +129,12 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         return new SessionWindow(start, end);
     }
 
+    static Window extractWindow(final ByteBuffer binaryKey) {
+        final long start = binaryKey.getLong(binaryKey.remaining() - TIMESTAMP_SIZE);
+        final long end = binaryKey.getLong(binaryKey.remaining() - 2 * TIMESTAMP_SIZE);
+        return new SessionWindow(start, end);
+    }
+
     public static <K> Windowed<K> from(final byte[] binaryKey,
                                        final Deserializer<K> keyDeserializer,
                                        final String topic) {
@@ -131,6 +147,13 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         final byte[] binaryKey = bytesKey.get();
         final Window window = extractWindow(binaryKey);
         return new Windowed<>(Bytes.wrap(extractKeyBytes(binaryKey)), window);
+    }
+
+    public static Windowed<Bytes> from(final ByteBuffer bytesKey) {
+        final Window window = extractWindow(bytesKey);
+        final ByteBuffer keyByteBuffer = extractKeyBytes(bytesKey);
+
+        return new Windowed<>(Bytes.wrap(keyByteBuffer), window);
     }
 
     public static <K> Windowed<K> from(final Windowed<Bytes> keyBytes,
