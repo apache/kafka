@@ -128,13 +128,21 @@ class KafkaTest {
 
   @Test
   def testMustContainQuorumVotersIfUsingProcessRoles(): Unit = {
-    // Ensure that validation is happening at startup to check that colocated processes use their node.id as a voter in controller.quorum.voters 
+    // Ensure that validation is happening at startup to check that if process.roles is set controller.quorum.voters is not empty
     val propertiesFile = new Properties
     propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
     propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "")
     setListenerProps(propertiesFile)
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(propertiesFile))
+
+    // Ensure that if neither process.roles nor controller.quorum.voters is populated, then an exception is thrown if zookeeper.connect is not defined
+    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(propertiesFile))
+
+    // Ensure that no exception is thrown once zookeeper.connect is defined
+    propertiesFile.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    KafkaConfig.fromProps(propertiesFile)
   }
 
   private def setListenerProps(props: Properties): Unit = {
