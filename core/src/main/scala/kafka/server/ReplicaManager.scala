@@ -2193,7 +2193,6 @@ class ReplicaManager(val config: KafkaConfig,
                                        newLocalFollowers: mutable.HashMap[TopicPartition, LocalLeaderInfo]): Unit = {
     stateChangeLogger.info(s"Transitioning ${newLocalFollowers.size} partition(s) to " +
       "local followers.")
-    replicaFetcherManager.removeFetcherForPartitions(newLocalFollowers.keySet)
     val shuttingDown = isShuttingDown.get()
     val partitionsToMakeFollower = new mutable.HashMap[TopicPartition, InitialFetchState]
     val newFollowerTopicSet = new mutable.HashSet[String]
@@ -2211,25 +2210,25 @@ class ReplicaManager(val config: KafkaConfig,
             val listenerName = config.interBrokerListenerName.value()
             val leader = info.partition.leader
             val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
-            if (partition.makeFollower(state, offsetCheckpoints, Some(info.topicId))) {
-              Option(newImage.cluster().broker(leader)).flatMap(_.node(listenerName).asScala) match {
-                case None =>
-                  stateChangeLogger.trace(
-                    s"Unable to start fetching ${tp} with topic ID ${info.topicId} from leader " +
-                    s"${leader} because it is not alive."
-                  )
-                case Some(node) =>
+            Option(newImage.cluster().broker(leader)).flatMap(_.node(listenerName).asScala) match {
+              case None =>
+                stateChangeLogger.trace(
+                  s"Unable to start fetching ${tp} with topic ID ${info.topicId} from leader " +
+                  s"${leader} because it is not alive."
+                )
+              case Some(node) =>
+                if (partition.makeFollower(state, offsetCheckpoints, Some(info.topicId))) {
                   val leaderEndPoint = new BrokerEndPoint(node.id(), node.host(), node.port())
                   val log = partition.localLogOrException
                   val fetchOffset = initialFetchOffset(log)
                   partitionsToMakeFollower.put(tp,
                     InitialFetchState(leaderEndPoint, partition.getLeaderEpoch, fetchOffset))
-              }
-            } else {
-              stateChangeLogger.info(
-                s"Skipped the become-follower state change after marking its partition as " +
-                s"follower for partition $tp with id ${info.topicId} and partition state $state."
-              )
+                } else {
+                  stateChangeLogger.info(
+                    s"Skipped the become-follower state change after marking its partition as " +
+                    s"follower for partition $tp with id ${info.topicId} and partition state $state."
+                  )
+                }
             }
           }
           changedPartitions.add(partition)
@@ -2241,8 +2240,14 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
 
-    updateLeaderAndFollowerMetrics(newFollowerTopicSet)
+    replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeFollower.keySet)
+    stateChangeLogger.info(s"Stopped fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
+
     replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollower)
+    stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
+
+    updateLeaderAndFollowerMetrics(newFollowerTopicSet)
+
   }
 
   def deleteStrayReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {
