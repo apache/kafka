@@ -67,7 +67,7 @@ public class StreamsUpgradeTest {
 
             @Override
             public void init(final ProcessorContext context) {
-                System.out.println("[2.6] initializing processor: topic=data taskId=" + context.taskId());
+                System.out.println("[2.7] initializing processor: topic=data taskId=" + context.taskId());
                 numRecordsProcessed = 0;
             }
 

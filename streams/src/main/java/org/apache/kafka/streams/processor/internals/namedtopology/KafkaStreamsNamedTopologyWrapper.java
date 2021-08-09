@@ -20,33 +20,33 @@ import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
-import java.util.TreeMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
 /**
  * This is currently an internal and experimental feature for enabling certain kinds of topology upgrades. Use at
  * your own risk.
  *
- * Status: basic architecture implemented but no actual upgrades are supported yet
+ * Status: additive upgrades possible, removal of NamedTopologies not yet supported
  *
  * Note: some standard features of Kafka Streams are not yet supported with NamedTopologies. These include:
  *       - global state stores
- *       - interactive queries (IQ) -- partially working, requires all stores to be given a unique name
+ *       - interactive queries (IQ)
  *       - TopologyTestDriver (TTD)
  */
 @Unstable
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
-
-    final Map<String, NamedTopology> nameToTopology = new HashMap<>();
 
     /**
      * A Kafka Streams application with a single initial NamedTopology
@@ -105,31 +105,76 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                     (v1, v2) -> {
                         throw new IllegalArgumentException("Topology names must be unique");
                     },
-                    () -> new TreeMap<>())),
+                    () -> new ConcurrentSkipListMap<>())),
                 config),
             config,
             clientSupplier
         );
-        for (final NamedTopology topology : topologies) {
-            nameToTopology.put(topology.name(), topology);
+    }
+
+    /**
+     * @return the NamedTopology for the specific name, or Optional.empty() if the application has no NamedTopology of that name
+     */
+    public Optional<NamedTopology> getTopologyByName(final String name) {
+        return Optional.ofNullable(topologyMetadata.lookupBuilderForNamedTopology(name)).map(InternalTopologyBuilder::namedTopology);
+    }
+
+    /**
+     * Add a new NamedTopology to a running Kafka Streams app. If multiple instances of the application are running,
+     * you should inform all of them by calling {@link #addNamedTopology(NamedTopology)} on each client in order for
+     * it to begin processing the new topology.
+     *
+     * @throws IllegalArgumentException if this topology name is already in use
+     * @throws IllegalStateException    if streams has not been started or has already shut down
+     * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
+     */
+    public void addNamedTopology(final NamedTopology newTopology) {
+        if (hasStartedOrFinishedShuttingDown()) {
+            throw new IllegalStateException("Cannot add a NamedTopology while the state is " + super.state);
+        } else if (getTopologyByName(newTopology.name()).isPresent()) {
+            throw new IllegalArgumentException("Unable to add the new NamedTopology " + newTopology.name() +
+                                                   " as another of the same name already exists");
         }
+        topologyMetadata.registerAndBuildNewTopology(newTopology.internalTopologyBuilder());
     }
 
-    public NamedTopology getTopologyByName(final String name) {
-        if (nameToTopology.containsKey(name)) {
-            return nameToTopology.get(name);
-        } else {
-            throw new IllegalArgumentException("Unable to locate a NamedTopology called " + name);
+    /**
+     * Remove an existing NamedTopology from a running Kafka Streams app. If multiple instances of the application are
+     * running, you should inform all of them by calling {@link #removeNamedTopology(String)} on each client to ensure
+     * it stops processing the old topology.
+     *
+     * @throws IllegalArgumentException if this topology name cannot be found
+     * @throws IllegalStateException    if streams has not been started or has already shut down
+     * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
+     */
+    public void removeNamedTopology(final String topologyToRemove) {
+        if (!isRunningOrRebalancing()) {
+            throw new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state);
+        } else if (!getTopologyByName(topologyToRemove).isPresent()) {
+            throw new IllegalArgumentException("Unable to locate for removal a NamedTopology called " + topologyToRemove);
         }
+
+        topologyMetadata.unregisterTopology(topologyToRemove);
     }
 
-    public void addNamedTopology(final NamedTopology topology) {
-        nameToTopology.put(topology.name(), topology);
-        throw new UnsupportedOperationException();
-    }
-
-    public void removeNamedTopology(final String namedTopology) {
-        throw new UnsupportedOperationException();
+    /**
+     * Do a clean up of the local state directory for this NamedTopology by deleting all data with regard to the
+     * @link StreamsConfig#APPLICATION_ID_CONFIG application ID} in the ({@link StreamsConfig#STATE_DIR_CONFIG})
+     * <p>
+     * May be called while the Streams is in any state, but only on a {@link NamedTopology} that has already been
+     * removed via {@link #removeNamedTopology(String)}.
+     * <p>
+     * Calling this method triggers a restore of local {@link StateStore}s for this {@link NamedTopology} if it is
+     * ever re-added via {@link #addNamedTopology(NamedTopology)}.
+     *
+     * @throws IllegalStateException if this {@code NamedTopology} hasn't been removed
+     * @throws StreamsException if cleanup failed
+     */
+    public void cleanUpNamedTopology(final String name) {
+        if (getTopologyByName(name).isPresent()) {
+            throw new IllegalStateException("Can't clean up local state for an active NamedTopology: " + name);
+        }
+        stateDirectory.clearLocalStateForNamedTopology(name);
     }
 
     public String getFullTopologyDescription() {
