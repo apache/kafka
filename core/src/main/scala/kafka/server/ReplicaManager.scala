@@ -1367,9 +1367,10 @@ class ReplicaManager(val config: KafkaConfig,
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
               val requestTopicId = topicIdFromRequest(topicPartition.topic)
+              val logTopicId = partition.topicId
 
-              if (!hasConsistentTopicId(requestTopicId, partition.topicId)) {
-                stateChangeLogger.error(s"Topic ID in memory: ${partition.topicId.get} does not" +
+              if (!hasConsistentTopicId(requestTopicId, logTopicId)) {
+                stateChangeLogger.error(s"Topic ID in memory: ${logTopicId.get} does not" +
                   s" match the topic ID for partition $topicPartition received: " +
                   s"${requestTopicId.get}.")
                 responseMap.put(topicPartition, Errors.INCONSISTENT_TOPIC_ID)
@@ -1392,11 +1393,24 @@ class ReplicaManager(val config: KafkaConfig,
                   s"leader epoch $currentLeaderEpoch")
                 responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
               } else {
-                stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
-                  s"controller $controllerId with correlation id $correlationId " +
-                  s"epoch $controllerEpoch for partition $topicPartition since its associated " +
-                  s"leader epoch $requestLeaderEpoch matches the current leader epoch")
-                responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
+                val error = requestTopicId match {
+                  case Some(topicId) if logTopicId.isEmpty =>
+                    // The controller may send LeaderAndIsr to upgrade to using topic IDs without bumping the epoch.
+                    // If we have a matching epoch, we expect the log to be defined.
+                    val log = localLogOrException(partition.topicPartition)
+                    log.assignTopicId(topicId)
+                    stateChangeLogger.info(s"Updating log for $topicPartition to assign topic ID " +
+                      s"$topicId from LeaderAndIsr request from controller $controllerId with correlation " +
+                      s"id $correlationId epoch $controllerEpoch")
+                    Errors.NONE
+                  case _ =>
+                    stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
+                      s"controller $controllerId with correlation id $correlationId " +
+                      s"epoch $controllerEpoch for partition $topicPartition since its associated " +
+                      s"leader epoch $requestLeaderEpoch matches the current leader epoch")
+                    Errors.STALE_CONTROLLER_EPOCH
+                }
+                responseMap.put(topicPartition, error)
               }
             }
           }

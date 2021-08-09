@@ -403,8 +403,8 @@ object LogLoader extends Logging {
           Some(logEndOffset)
         else {
           warn(s"${params.logIdentifier}Deleting all segments because logEndOffset ($logEndOffset) " +
-            s" smaller than logStartOffset ${params.logStartOffsetCheckpoint}." +
-            " This could happen if segment files were deleted from the file system.")
+            s"is smaller than logStartOffset ${params.logStartOffsetCheckpoint}. " +
+            "This could happen if segment files were deleted from the file system.")
           removeAndDeleteSegmentsAsync(params.segments.values, params)
           params.leaderEpochCache.foreach(_.clearAndFlush())
           params.producerStateManager.truncateFullyAndStartAt(params.logStartOffsetCheckpoint)
