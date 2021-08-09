@@ -40,7 +40,6 @@ import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTA
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import scala.jdk.CollectionConverters._
-import scala.reflect.io.Directory
 
 object KafkaRaftManager {
   class RaftIoThread(
@@ -79,11 +78,6 @@ object KafkaRaftManager {
     val dir = new File(logDirPath, logDirName)
     Files.createDirectories(dir.toPath)
     dir
-  }
-
-  private def deleteLogDirectory(logDir: File, logDirName: String): Unit = {
-    val dir = new Directory(new File(logDir.getAbsolutePath, logDirName))
-    dir.deleteRecursively()
   }
 }
 
@@ -218,12 +212,6 @@ class KafkaRaftManager[T](
   private def createDataDir(): File = {
     val logDirName = Log.logDirName(topicPartition)
     KafkaRaftManager.createLogDirectory(new File(config.metadataLogDir), logDirName)
-  }
-
-  // visible for testing cleanup
-  private[raft] def deleteDataDir(): Unit = {
-    val logDirName = Log.logDirName(topicPartition)
-    KafkaRaftManager.deleteLogDirectory(new File(config.metadataLogDir), logDirName)
   }
 
   private def buildMetadataLog(): KafkaMetadataLog = {
