@@ -116,6 +116,7 @@ object ApiVersion {
     // Introduce AllocateProducerIds (KIP-730)
     KAFKA_3_0_IV0,
     // Introduce ListOffsets V7 which supports listing offsets by max timestamp (KIP-734)
+    // Assume message format version is 3.0 (KIP-724)
     KAFKA_3_0_IV1,
     // Adds topic IDs to Fetch requests/responses (KIP-516)
     KAFKA_3_1_IV0

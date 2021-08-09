@@ -185,7 +185,7 @@ public class ClusterControlManagerTest {
                         setPort((short) 9092).
                         setName("PLAINTEXT").
                         setHost("example.com")).iterator())).
-                setFenced(false), (short) 1)),
+                setFenced(false), (short) 0)),
             Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(1).setRack(null).
                 setEndPoints(new BrokerEndpointCollection(Collections.singleton(
@@ -193,7 +193,7 @@ public class ClusterControlManagerTest {
                         setPort((short) 9093).
                         setName("PLAINTEXT").
                         setHost("example.com")).iterator())).
-                setFenced(false), (short) 1)),
+                setFenced(false), (short) 0)),
             Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(2).setRack(null).
                 setEndPoints(new BrokerEndpointCollection(Collections.singleton(
@@ -201,7 +201,7 @@ public class ClusterControlManagerTest {
                         setPort((short) 9094).
                         setName("PLAINTEXT").
                         setHost("example.com")).iterator())).
-                setFenced(true), (short) 1))),
+                setFenced(true), (short) 0))),
                 clusterControl.iterator(Long.MAX_VALUE));
     }
 }

@@ -42,7 +42,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
  * </pre>
  */
 public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageAndVersion> {
-    private static final short DEFAULT_FRAME_VERSION = 0;
+    private static final short DEFAULT_FRAME_VERSION = 1;
     private static final int DEFAULT_FRAME_VERSION_SIZE = ByteUtils.sizeOfUnsignedVarint(DEFAULT_FRAME_VERSION);
 
     private static short unsignedIntToShort(Readable input, String entity) {
@@ -83,7 +83,10 @@ public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageA
                                      int size) {
         short frameVersion = unsignedIntToShort(input, "frame version");
 
-        if (frameVersion != DEFAULT_FRAME_VERSION) {
+        if (frameVersion == 0) {
+            throw new MetadataParseException("Could not deserialize metadata record with frame version 0. " +
+                "Note that upgrades from the preview release of KRaft in 2.8 to newer versions are not supported.");
+        } else if (frameVersion != DEFAULT_FRAME_VERSION) {
             throw new MetadataParseException("Could not deserialize metadata record due to unknown frame version "
                     + frameVersion + "(only frame version " + DEFAULT_FRAME_VERSION + " is supported)");
         }

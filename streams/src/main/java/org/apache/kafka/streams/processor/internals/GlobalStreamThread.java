@@ -262,7 +262,7 @@ public class GlobalStreamThread extends Thread {
                 stateMaintainer.update(record);
             }
             final long now = time.milliseconds();
-            if (now >= lastFlush + flushInterval) {
+            if (now - flushInterval >= lastFlush) {
                 stateMaintainer.flushState();
                 lastFlush = now;
             }

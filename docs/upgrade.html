@@ -22,16 +22,25 @@
 <h5><a id="upgrade_300_notable" href="#upgrade_300_notable">Notable changes in 3.0.0</a></h5>
 <ul>
     <li>ZooKeeper has been upgraded to version 3.6.3.</li>
+    <li>A preview of KRaft mode is available, though upgrading to it from the 2.8 Early Access release is not possible. See
+        the <code>config/kraft/README.md</code> file for details.</li>
     <li>The release tarball no longer includes test, sources, javadoc and test sources jars. These are still published to the Maven Central repository. </li>
     <li>A number of implementation dependency jars are <a href="https://github.com/apache/kafka/pull/10203">now available in the runtime classpath
         instead of compile and runtime classpaths</a>. Compilation errors after the upgrade can be fixed by adding the missing dependency jar(s) explicitly
         or updating the application not to use internal classes.</li>
     <li>The default value for the consumer configuration <code>session.timeout.ms</code> was increased from 10s to 45s. See
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-735%3A+Increase+default+consumer+session+timeout">KIP-735</a> for more details.</li>
+    <li>The broker configuration <code>log.message.format.version</code> and topic configuration <code>message.format.version</code> have been deprecated.
+        The value of both configurations is always assumed to be <code>3.0</code> if <code>inter.broker.protocol.version</code> is <code>3.0</code> or higher.
+        If <code>log.message.format.version</code> or <<code>message.format.version</code> are set, we recommend clearing them at the same time as the
+        <code>inter.broker.protocol.version</code> upgrade to 3.0. This will avoid potential compatibility issues if the <code>inter.broker.protocol.version</code>
+        is downgraded. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-724%3A+Drop+support+for+message+formats+v0+and+v1">KIP-724</a> for more details.</li>
     <li>The Streams API removed all deprecated APIs that were deprecated in version 2.5.0 or earlier.
         For a complete list of removed APIs compare the detailed Kafka Streams upgrade notes.</li>
     <li>Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
         Projects that were relying on this transitive dependency will have to explicitly declare it.</li>
+    <li>Custom principal builder implementations specified through <code>principal.builder.class</code> must now implement the 
+        <code>KafkaPrincipalSerde</code> interface to allow for forwarding between brokers. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-590%3A+Redirect+Zookeeper+Mutation+Protocols+to+The+Controller">KIP-590</a> for more details about the usage of KafkaPrincipalSerde.</li>
     <li>A number of deprecated classes, methods and tools have been removed from the <code>clients</code>, <code>connect</code>, <code>core</code> and <code>tools</code> modules:</li>
     <ul>
         <li>The Scala <code>Authorizer</code>, <code>SimpleAclAuthorizer</code> and related classes have been removed. Please use the Java <code>Authorizer</code>
@@ -46,8 +55,11 @@
             <code>AclBindingFilter</code>.</li>
         <li>The <code>Admin.electedPreferredLeaders()</code> methods were removed. Please use <code>Admin.electLeaders</code> instead.</li>
         <li>The <code>kafka-preferred-replica-election</code> command line tool was removed. Please use <code>kafka-leader-election</code> instead.</li>
-        <li>The <code>--zookeeper</code> option was removed from the <code>bin/kafka-topics.sh</code> and <code>bin/kafka-reassign-partitions.sh</code> command line tools.
+        <li>The <code>--zookeeper</code> option was removed from the <code>kafka-topics</code> and <code>kafka-reassign-partitions</code> command line tools.
             Please use <code>--bootstrap-server</code> instead.</li>
+        <li>In the <code>kafka-configs</code> command line tool, the <code>--zookeeper</code> option is only supported for updating <a href="#security_sasl_scram_credentials">SCRAM Credentials configuration</a>
+            and <a href="#dynamicbrokerconfigs">describing/updating dynamic broker configs when brokers are not running</a>. Please use <code>--bootstrap-server</code>
+            for other configuration operations.</li>
         <li>The <code>ConfigEntry</code> constructor was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12577">KAFKA-12577</a>).
             Please use the remaining public constructor instead.</li>
         <li>The config value <code>default</code> for the client config <code>client.dns.lookup</code> has been removed. In the unlikely
@@ -60,6 +72,9 @@
             were removed. These methods were not intended to be public API and there is no replacement.</li>
         <li>The <code>NoOffsetForPartitionException.partition()</code> method was removed. Please use <code>partitions()</code>
             instead.</li>
+        <li>The default <code>partition.assignment.strategy</code> is changed to "[RangeAssignor, CooperativeStickyAssignor]",
+            which will use the RangeAssignor by default, but allows upgrading to the CooperativeStickyAssignor with just a single rolling bounce that removes the RangeAssignor from the list.
+            Please check the client upgrade path guide <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-429:+Kafka+Consumer+Incremental+Rebalance+Protocol#KIP429:KafkaConsumerIncrementalRebalanceProtocol-Consumer">here</a> for more detail.</li>
         <li>The Scala <code>kafka.common.MessageFormatter</code> was removed. Please use the Java <code>org.apache.kafka.common.MessageFormatter</code>.</li>
         <li>The <code>MessageFormatter.init(Properties)</code> method was removed. Please use <code>configure(Map)</code> instead.</li>
         <li>The <code>checksum()</code> method has been removed from <code>ConsumerRecord</code> and <code>RecordMetadata</code>. The message

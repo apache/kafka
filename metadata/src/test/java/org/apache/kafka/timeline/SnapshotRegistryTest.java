@@ -55,23 +55,23 @@ public class SnapshotRegistryTest {
     @Test
     public void testCreateSnapshots() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
-        Snapshot snapshot123 = registry.createSnapshot(123);
+        Snapshot snapshot123 = registry.getOrCreateSnapshot(123);
         assertEquals(snapshot123, registry.getSnapshot(123));
         assertThrows(RuntimeException.class, () -> registry.getSnapshot(456));
         assertIteratorContains(registry.iterator(), snapshot123);
         assertEquals("Can't create a new snapshot at epoch 1 because there is already " +
             "a snapshot with epoch 123", assertThrows(RuntimeException.class,
-                () -> registry.createSnapshot(1)).getMessage());
-        Snapshot snapshot456 = registry.createSnapshot(456);
+                () -> registry.getOrCreateSnapshot(1)).getMessage());
+        Snapshot snapshot456 = registry.getOrCreateSnapshot(456);
         assertIteratorContains(registry.iterator(), snapshot123, snapshot456);
     }
 
     @Test
     public void testCreateAndDeleteSnapshots() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
-        Snapshot snapshot123 = registry.createSnapshot(123);
-        Snapshot snapshot456 = registry.createSnapshot(456);
-        Snapshot snapshot789 = registry.createSnapshot(789);
+        Snapshot snapshot123 = registry.getOrCreateSnapshot(123);
+        Snapshot snapshot456 = registry.getOrCreateSnapshot(456);
+        Snapshot snapshot789 = registry.getOrCreateSnapshot(789);
         registry.deleteSnapshot(snapshot456.epoch());
         assertIteratorContains(registry.iterator(), snapshot123, snapshot789);
     }
@@ -79,10 +79,20 @@ public class SnapshotRegistryTest {
     @Test
     public void testDeleteSnapshotUpTo() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
-        registry.createSnapshot(10);
-        registry.createSnapshot(12);
-        Snapshot snapshot14 = registry.createSnapshot(14);
+        registry.getOrCreateSnapshot(10);
+        registry.getOrCreateSnapshot(12);
+        Snapshot snapshot14 = registry.getOrCreateSnapshot(14);
         registry.deleteSnapshotsUpTo(14);
         assertIteratorContains(registry.iterator(), snapshot14);
+    }
+
+    @Test
+    public void testCreateSnapshotOfLatest() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        registry.getOrCreateSnapshot(10);
+        Snapshot latest = registry.getOrCreateSnapshot(12);
+        Snapshot duplicate = registry.getOrCreateSnapshot(12);
+
+        assertEquals(latest, duplicate);
     }
 }

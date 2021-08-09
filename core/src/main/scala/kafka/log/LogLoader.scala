@@ -74,8 +74,18 @@ case class LoadLogParams(dir: File,
  * This object is responsible for all activities related with recovery of log segments from disk.
  */
 object LogLoader extends Logging {
+
   /**
-   * Load the log segments from the log files on disk, and return the components of the loaded log.
+   * Clean shutdown file that indicates the broker was cleanly shutdown in 0.8 and higher.
+   * This is used to avoid unnecessary recovery after a clean shutdown. In theory this could be
+   * avoided by passing in the recovery point, however finding the correct position to do this
+   * requires accessing the offset index which may not be safe in an unclean shutdown.
+   * For more information see the discussion in PR#2104
+   */
+  val CleanShutdownFile = ".kafka_cleanshutdown"
+
+  /**
+   * Load the log segments from the log files on disk, and returns the components of the loaded log.
    * Additionally, it also suitably updates the provided LeaderEpochFileCache and ProducerStateManager
    * to reflect the contents of the loaded log.
    *
@@ -90,7 +100,6 @@ object LogLoader extends Logging {
    *                                           overflow index offset
    */
   def load(params: LoadLogParams): LoadedLogOffsets = {
-
     // First pass: through the files in the log directory and remove any temporary files
     // and find any interrupted swap operations
     val swapFiles = removeTempFilesAndCollectSwapFiles(params)
@@ -140,7 +149,6 @@ object LogLoader extends Logging {
         file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, Log.SwapFileSuffix, "")))
       }
     }
-
 
     // Fourth pass: load all the log and index files.
     // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. When
@@ -196,11 +204,10 @@ object LogLoader extends Logging {
       params.segments,
       newLogStartOffset,
       nextOffset,
-      params.config.messageFormatVersion.recordVersion,
+      params.config.recordVersion,
       params.time,
       reloadFromCleanShutdown = params.hadCleanShutdown,
       params.logIdentifier)
-
     val activeSegment = params.segments.lastSegment.get
     LoadedLogOffsets(
       newLogStartOffset,
@@ -274,7 +281,7 @@ object LogLoader extends Logging {
       } catch {
         case e: LogSegmentOffsetOverflowException =>
           info(s"${params.logIdentifier}Caught segment overflow error: ${e.getMessage}. Split segment and retry.")
-          Log.splitOverflowedSegment(
+          val result = Log.splitOverflowedSegment(
             e.segment,
             params.segments,
             params.dir,
@@ -282,8 +289,8 @@ object LogLoader extends Logging {
             params.config,
             params.scheduler,
             params.logDirFailureChannel,
-            params.producerStateManager,
             params.logIdentifier)
+          deleteProducerSnapshotsAsync(result.deletedSegments, params)
       }
     }
     throw new IllegalStateException()
@@ -361,7 +368,7 @@ object LogLoader extends Logging {
       params.segments,
       params.logStartOffsetCheckpoint,
       segment.baseOffset,
-      params.config.messageFormatVersion.recordVersion,
+      params.config.recordVersion,
       params.time,
       reloadFromCleanShutdown = false,
       params.logIdentifier)
@@ -396,8 +403,8 @@ object LogLoader extends Logging {
           Some(logEndOffset)
         else {
           warn(s"${params.logIdentifier}Deleting all segments because logEndOffset ($logEndOffset) " +
-            s" smaller than logStartOffset ${params.logStartOffsetCheckpoint}." +
-            " This could happen if segment files were deleted from the file system.")
+            s"is smaller than logStartOffset ${params.logStartOffsetCheckpoint}. " +
+            "This could happen if segment files were deleted from the file system.")
           removeAndDeleteSegmentsAsync(params.segments.values, params)
           params.leaderEpochCache.foreach(_.clearAndFlush())
           params.producerStateManager.truncateFullyAndStartAt(params.logStartOffsetCheckpoint)
@@ -493,14 +500,25 @@ object LogLoader extends Logging {
       Log.deleteSegmentFiles(
         toDelete,
         asyncDelete = true,
-        deleteProducerStateSnapshots = true,
         params.dir,
         params.topicPartition,
         params.config,
         params.scheduler,
         params.logDirFailureChannel,
-        params.producerStateManager,
         params.logIdentifier)
+      deleteProducerSnapshotsAsync(segmentsToDelete, params)
     }
+  }
+
+  private def deleteProducerSnapshotsAsync(segments: Iterable[LogSegment],
+                                           params: LoadLogParams): Unit = {
+    Log.deleteProducerSnapshots(segments,
+      params.producerStateManager,
+      asyncDelete = true,
+      params.scheduler,
+      params.config,
+      params.logDirFailureChannel,
+      params.dir.getParent,
+      params.topicPartition)
   }
 }

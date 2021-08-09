@@ -98,8 +98,8 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
             return key.idValue;
         }).collect(Collectors.toList());
         DescribeGroupsRequestData data = new DescribeGroupsRequestData()
-                .setGroups(groupIds)
-                .setIncludeAuthorizedOperations(includeAuthorizedOperations);
+            .setGroups(groupIds)
+            .setIncludeAuthorizedOperations(includeAuthorizedOperations);
         return new DescribeGroupsRequest.Builder(data);
     }
 
@@ -109,16 +109,16 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
     ) {
-        DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
-        Map<CoordinatorKey, ConsumerGroupDescription> completed = new HashMap<>();
-        Map<CoordinatorKey, Throwable> failed = new HashMap<>();
-        List<CoordinatorKey> unmapped = new ArrayList<>();
+        final DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
+        final Map<CoordinatorKey, ConsumerGroupDescription> completed = new HashMap<>();
+        final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
+        final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
 
         for (DescribedGroup describedGroup : response.data().groups()) {
             CoordinatorKey groupIdKey = CoordinatorKey.byGroupId(describedGroup.groupId());
             Errors error = Errors.forCode(describedGroup.errorCode());
             if (error != Errors.NONE) {
-                handleError(groupIdKey, error, failed, unmapped);
+                handleError(groupIdKey, error, failed, groupsToUnmap);
                 continue;
             }
             final String protocolType = describedGroup.protocolType();
@@ -133,13 +133,12 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                             deserializeAssignment(ByteBuffer.wrap(groupMember.memberAssignment()));
                         partitions = new HashSet<>(assignment.partitions());
                     }
-                    final MemberDescription memberDescription = new MemberDescription(
-                            groupMember.memberId(),
-                            Optional.ofNullable(groupMember.groupInstanceId()),
-                            groupMember.clientId(),
-                            groupMember.clientHost(),
-                            new MemberAssignment(partitions));
-                    memberDescriptions.add(memberDescription);
+                    memberDescriptions.add(new MemberDescription(
+                        groupMember.memberId(),
+                        Optional.ofNullable(groupMember.groupInstanceId()),
+                        groupMember.clientId(),
+                        groupMember.clientHost(),
+                        new MemberAssignment(partitions)));
                 }
                 final ConsumerGroupDescription consumerGroupDescription =
                     new ConsumerGroupDescription(groupIdKey.idValue, protocolType.isEmpty(),
@@ -151,38 +150,44 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 completed.put(groupIdKey, consumerGroupDescription);
             } else {
                 failed.put(groupIdKey, new IllegalArgumentException(
-                        String.format("GroupId %s is not a consumer group (%s).",
-                                groupIdKey.idValue, protocolType)));
+                    String.format("GroupId %s is not a consumer group (%s).",
+                        groupIdKey.idValue, protocolType)));
             }
         }
-        return new ApiResult<>(completed, failed, unmapped);
+
+        return new ApiResult<>(completed, failed, new ArrayList<>(groupsToUnmap));
     }
 
     private void handleError(
         CoordinatorKey groupId,
         Errors error,
         Map<CoordinatorKey, Throwable> failed,
-        List<CoordinatorKey> unmapped
+        Set<CoordinatorKey> groupsToUnmap
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.error("Received authorization failure for group {} in `DescribeGroups` response", groupId,
-                        error.exception());
+                log.debug("`DescribeGroups` request for group id {} failed due to error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
+
             case COORDINATOR_LOAD_IN_PROGRESS:
+                // If the coordinator is in the middle of loading, then we just need to retry
+                log.debug("`DescribeGroups` request for group id {} failed because the coordinator " +
+                    "is still in the process of loading state. Will retry", groupId.idValue);
+                break;
+
             case COORDINATOR_NOT_AVAILABLE:
-                break;
             case NOT_COORDINATOR:
-                log.debug("DescribeGroups request for group {} returned error {}. Will retry",
-                        groupId, error);
-                unmapped.add(groupId);
+                // If the coordinator is unavailable or there was a coordinator change, then we unmap
+                // the key so that we retry the `FindCoordinator` request
+                log.debug("`DescribeGroups` request for group id {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry", groupId.idValue, error);
+                groupsToUnmap.add(groupId);
                 break;
+
             default:
-                log.error("Received unexpected error for group {} in `DescribeGroups` response", 
-                        groupId, error.exception());
-                failed.put(groupId, error.exception(
-                        "Received unexpected error for group " + groupId + " in `DescribeGroups` response"));
+                log.error("`DescribeGroups` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
+                failed.put(groupId, error.exception());
         }
     }
 
