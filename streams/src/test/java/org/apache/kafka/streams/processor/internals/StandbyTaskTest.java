@@ -82,8 +82,8 @@ public class StandbyTaskTest {
     private final String storeName1 = "store1";
     private final String storeName2 = "store2";
     private final String applicationId = "test-application";
-    private final String storeChangelogTopicName1 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName1, taskId.namedTopology());
-    private final String storeChangelogTopicName2 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName2, taskId.namedTopology());
+    private final String storeChangelogTopicName1 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName1, taskId.topologyName());
+    private final String storeChangelogTopicName2 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName2, taskId.topologyName());
 
     private final TopicPartition partition = new TopicPartition(storeChangelogTopicName1, 0);
     private final MockKeyValueStore store1 = (MockKeyValueStore) new MockKeyValueStoreBuilder(storeName1, false).build();
