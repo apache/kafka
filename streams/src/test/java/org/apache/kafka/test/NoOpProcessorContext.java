@@ -147,6 +147,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
 
     @Override
     public String changelogFor(final String storeName) {
-        return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName, taskId().namedTopology());
+        return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName, taskId().topologyName());
     }
 }
