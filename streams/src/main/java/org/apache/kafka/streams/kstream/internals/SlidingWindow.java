@@ -19,34 +19,30 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.kstream.Window;
 
 /**
- * A {@link TimeWindow} covers a half-open time interval with its start timestamp as an inclusive boundary and its end
- * timestamp as exclusive boundary.
- * It is a fixed size window, i.e., all instances (of a single {@link org.apache.kafka.streams.kstream.TimeWindows
- * window specification}) will have the same size.
+ * A sliding window covers a closed time interval with its start and end timestamp both being an inclusive boundary.
  * <p>
  * For time semantics, see {@link org.apache.kafka.streams.processor.TimestampExtractor TimestampExtractor}.
  *
- * @see SessionWindow
+ * <p>
+ * {@link SessionWindow} and {@link SlidingWindow} have the same definition, just to have meaningful names for different type of windows.
+ *
+ * @see TimeWindow
  * @see UnlimitedWindow
- * @see SlidingWindow
- * @see org.apache.kafka.streams.kstream.TimeWindows
+ * @see SessionWindow
+ * @see org.apache.kafka.streams.kstream.SlidingWindows
  * @see org.apache.kafka.streams.processor.TimestampExtractor
  */
-public class TimeWindow extends Window {
+public final class SlidingWindow extends Window {
 
     /**
-     * Create a new window for the given start time (inclusive) and end time (exclusive).
+     * Create a new window for the given start time and end time (both inclusive).
      *
      * @param startMs the start timestamp of the window (inclusive)
-     * @param endMs   the end timestamp of the window (exclusive)
-     * @throws IllegalArgumentException if {@code startMs} is negative or if {@code endMs} is smaller than or equal to
-     * {@code startMs}
+     * @param endMs   the end timestamp of the window (inclusive)
+     * @throws IllegalArgumentException if {@code startMs} is negative or if {@code endMs} is smaller than {@code startMs}
      */
-    public TimeWindow(final long startMs, final long endMs) throws IllegalArgumentException {
+    public SlidingWindow(final long startMs, final long endMs) throws IllegalArgumentException {
         super(startMs, endMs);
-        if (startMs == endMs) {
-            throw new IllegalArgumentException("Window endMs must be greater than window startMs.");
-        }
     }
 
     /**
@@ -56,14 +52,13 @@ public class TimeWindow extends Window {
      * @return {@code true} if {@code other} overlaps with this window&mdash;{@code false} otherwise
      * @throws IllegalArgumentException if the {@code other} window has a different type than {@code this} window
      */
-    @Override
     public boolean overlap(final Window other) throws IllegalArgumentException {
         if (getClass() != other.getClass()) {
             throw new IllegalArgumentException("Cannot compare windows of different type. This window has type " + getClass() +
                 ". Other window has type " + other.getClass() + ".");
         }
-        final TimeWindow otherWindow = (TimeWindow) other;
-        return startMs < otherWindow.endMs && otherWindow.startMs < endMs;
+        final SlidingWindow otherWindow = (SlidingWindow) other;
+        return !(otherWindow.endMs < startMs || endMs < otherWindow.startMs);
     }
 
 }

@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.Window;
  *
  * @see TimeWindow
  * @see SessionWindow
+ * @see SlidingWindow
  * @see org.apache.kafka.streams.kstream.UnlimitedWindows
  * @see org.apache.kafka.streams.processor.TimestampExtractor
  */
@@ -54,8 +55,8 @@ public class UnlimitedWindow extends Window {
     @Override
     public boolean overlap(final Window other) {
         if (getClass() != other.getClass()) {
-            throw new IllegalArgumentException("Cannot compare windows of different type. Other window has type "
-                + other.getClass() + ".");
+            throw new IllegalArgumentException("Cannot compare windows of different type. This window has type " + getClass() +
+                ". Other window has type " + other.getClass() + ".");
         }
         return true;
     }
