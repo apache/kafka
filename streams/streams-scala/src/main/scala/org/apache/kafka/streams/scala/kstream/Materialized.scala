@@ -50,8 +50,9 @@ object Materialized {
    * @param valueSerde the value serde to use.
    * @return a new [[Materialized]] instance with the given storeName
    */
-  def as[K, V, S <: StateStore](storeName: String)(implicit keySerde: Serde[K],
-                                                   valueSerde: Serde[V]): MaterializedJ[K, V, S] =
+  def as[K, V, S <: StateStore](
+    storeName: String
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): MaterializedJ[K, V, S] =
     MaterializedJ.as(storeName).withKeySerde(keySerde).withValueSerde(valueSerde)
 
   /**
@@ -68,8 +69,9 @@ object Materialized {
    * @param valueSerde the value serde to use.
    * @return a new [[Materialized]] instance with the given supplier
    */
-  def as[K, V](supplier: WindowBytesStoreSupplier)(implicit keySerde: Serde[K],
-                                                   valueSerde: Serde[V]): MaterializedJ[K, V, ByteArrayWindowStore] =
+  def as[K, V](
+    supplier: WindowBytesStoreSupplier
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): MaterializedJ[K, V, ByteArrayWindowStore] =
     MaterializedJ.as(supplier).withKeySerde(keySerde).withValueSerde(valueSerde)
 
   /**
@@ -86,8 +88,9 @@ object Materialized {
    * @param valueSerde the value serde to use.
    * @return a new [[Materialized]] instance with the given supplier
    */
-  def as[K, V](supplier: SessionBytesStoreSupplier)(implicit keySerde: Serde[K],
-                                                    valueSerde: Serde[V]): MaterializedJ[K, V, ByteArraySessionStore] =
+  def as[K, V](
+    supplier: SessionBytesStoreSupplier
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): MaterializedJ[K, V, ByteArraySessionStore] =
     MaterializedJ.as(supplier).withKeySerde(keySerde).withValueSerde(valueSerde)
 
   /**
