@@ -1009,7 +1009,7 @@ project(':core') {
     from(project.file("$rootDir/config")) { into "config/" }
     from(project.file("$rootDir/licenses")) { into "licenses/" }
     from "$rootDir/LICENSE-binary" rename {String filename -> filename.replace("-binary", "")}
-    from "$rootDir/NOTICE"
+    from "$rootDir/NOTICE-binary" rename {String filename -> filename.replace("-binary", "")}
     from(configurations.runtimeClasspath) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
@@ -1505,8 +1505,11 @@ project(':storage') {
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':core')
+    testImplementation project(':core').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
+    testImplementation libs.bcpkix
 
     testRuntimeOnly libs.slf4jlog4j
   }
@@ -1558,6 +1561,12 @@ project(':storage') {
     dependsOn createVersionFile
     from("$buildDir") {
       include "kafka/$buildVersionFileName"
+    }
+  }
+
+  test {
+    useJUnitPlatform {
+      includeEngines 'junit-jupiter'
     }
   }
 
@@ -1833,6 +1842,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-25:test',
             ':streams:upgrade-system-tests-26:test',
             ':streams:upgrade-system-tests-27:test',
+            ':streams:upgrade-system-tests-28:test',
             ':streams:examples:test'
     ]
   )
@@ -1889,7 +1899,7 @@ project(':streams:test-utils') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
-    testImplementation libs.easymock
+    testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jlog4j
@@ -2124,6 +2134,19 @@ project(':streams:upgrade-system-tests-27') {
 
   dependencies {
     testImplementation libs.kafkaStreams_27
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-28') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-28"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_28
     testRuntimeOnly libs.junitJupiter
   }
 

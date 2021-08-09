@@ -97,7 +97,7 @@ public class MeteredSessionStoreTest {
     private static final long END_TIMESTAMP = 42L;
 
     private final String threadId = Thread.currentThread().getName();
-    private final TaskId taskId = new TaskId(0, 0);
+    private final TaskId taskId = new TaskId(0, 0, "My-Topology");
     private final Metrics metrics = new Metrics();
     private MeteredSessionStore<String, String> store;
     @Mock(type = MockType.NICE)
@@ -181,7 +181,7 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled() {
         final String defaultChangelogTopicName =
-            ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, STORE_NAME);
+            ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, STORE_NAME, taskId.namedTopology());
         expect(context.changelogFor(STORE_NAME)).andReturn(null);
         doShouldPassChangelogTopicNameToStateStoreSerde(defaultChangelogTopicName);
     }

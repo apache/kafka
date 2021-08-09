@@ -771,7 +771,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (assignmentSnapshot != null && !assignmentSnapshot.matches(metadataSnapshot)) {
             final String reason = String.format("cached metadata has changed from %s at the beginning of the rebalance to %s",
                 assignmentSnapshot, metadataSnapshot);
-            requestRejoin(reason);
+            requestRejoinIfNecessary(reason);
             return true;
         }
 
@@ -779,7 +779,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (joinedSubscription != null && !joinedSubscription.equals(subscriptions.subscription())) {
             final String reason = String.format("subscription has changed from %s at the beginning of the rebalance to %s",
                 joinedSubscription, subscriptions.subscription());
-            requestRejoin(reason);
+            requestRejoinIfNecessary(reason);
             return true;
         }
 

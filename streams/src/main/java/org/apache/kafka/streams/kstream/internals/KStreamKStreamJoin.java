@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
@@ -29,13 +28,13 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.KeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
 @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
@@ -96,14 +95,8 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
             droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             otherWindowStore = context.getStateStore(otherWindowName);
 
-            if (enableSpuriousResultFix
-                && StreamsConfig.InternalConfig.getBoolean(
-                    context.appConfigs(),
-                    ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
-                    true
-                )) {
+            if (enableSpuriousResultFix) {
                 outerJoinWindowStore = outerJoinWindowName.map(context::getStateStore);
-                sharedTimeTracker.nextTimeToEmit = context.currentSystemTimeMs();
 
                 sharedTimeTracker.setEmitInterval(
                     StreamsConfig.InternalConfig.getLong(
@@ -207,6 +200,9 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
             // as throttling is a non-functional performance optimization
             if (context.currentSystemTimeMs() < sharedTimeTracker.nextTimeToEmit) {
                 return;
+            }
+            if (sharedTimeTracker.nextTimeToEmit == 0) {
+                sharedTimeTracker.nextTimeToEmit = context.currentSystemTimeMs();
             }
             sharedTimeTracker.advanceNextTimeToEmit();
 

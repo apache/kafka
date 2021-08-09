@@ -20,8 +20,8 @@ package kafka.server
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import DynamicConfig.Broker._
-import kafka.api.ApiVersion
 import kafka.controller.KafkaController
+import kafka.log.LogConfig.MessageFormatVersion
 import kafka.log.{LogConfig, LogManager}
 import kafka.network.ConnectionQuotas
 import kafka.security.CredentialProvider
@@ -36,6 +36,7 @@ import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.util.Try
@@ -108,12 +109,18 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     }
   }
 
+  @nowarn("cat=deprecation")
   def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
     // Verify message format version
     Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
-      if (kafkaConfig.interBrokerProtocolVersion < ApiVersion(versionString)) {
-        warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
-          s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
+      val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.version)
+      if (messageFormatVersion.shouldIgnore) {
+        if (messageFormatVersion.shouldWarn)
+          warn(messageFormatVersion.topicWarningMessage(topic))
+        Some(LogConfig.MessageFormatVersionProp)
+      } else if (kafkaConfig.interBrokerProtocolVersion < messageFormatVersion.messageFormatVersion) {
+        warn(s"Topic configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
+          s"is higher than what is allowed by the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
         Some(LogConfig.MessageFormatVersionProp)
       } else
         None

@@ -56,14 +56,14 @@ public class TimelineLongTest {
     public void testSnapshot() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineLong value = new TimelineLong(registry);
-        registry.createSnapshot(2);
+        registry.getOrCreateSnapshot(2);
         value.set(1L);
-        registry.createSnapshot(3);
+        registry.getOrCreateSnapshot(3);
         value.set(2L);
         value.increment();
         value.increment();
         value.decrement();
-        registry.createSnapshot(4);
+        registry.getOrCreateSnapshot(4);
         assertEquals(0L, value.get(2));
         assertEquals(1L, value.get(3));
         assertEquals(3L, value.get(4));
@@ -77,9 +77,9 @@ public class TimelineLongTest {
     public void testReset() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineLong value = new TimelineLong(registry);
-        registry.createSnapshot(2);
+        registry.getOrCreateSnapshot(2);
         value.set(1L);
-        registry.createSnapshot(3);
+        registry.getOrCreateSnapshot(3);
         value.set(2L);
 
         registry.reset();
