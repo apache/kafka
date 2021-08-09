@@ -2209,14 +2209,19 @@ class ReplicaManager(val config: KafkaConfig,
           } else {
             val listenerName = config.interBrokerListenerName.value()
             val leader = info.partition.leader
-            val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
             Option(newImage.cluster().broker(leader)).flatMap(_.node(listenerName).asScala) match {
               case None =>
                 stateChangeLogger.trace(
                   s"Unable to start fetching ${tp} with topic ID ${info.topicId} from leader " +
                   s"${leader} because it is not alive."
                 )
+
+                // Create the local replica even if the leader is unavailable. This is required
+                // to ensure that we include the partition's high watermark in the checkpoint
+                // file (see KAFKA-1647)
+                partition.createLogIfNotExists(isNew, false, offsetCheckpoints, Some(info.topicId))
               case Some(node) =>
+                val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
                 if (partition.makeFollower(state, offsetCheckpoints, Some(info.topicId))) {
                   val leaderEndPoint = new BrokerEndPoint(node.id(), node.host(), node.port())
                   val log = partition.localLogOrException
