@@ -54,6 +54,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData.Lis
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -256,6 +257,19 @@ public class ReplicationControlManagerTest {
                     result.response());
                 replay(result.records());
             }
+        }
+
+        void alterTopicConfig(
+            String topic,
+            String configKey,
+            String configValue
+        ) throws Exception {
+            ConfigRecord configRecord = new ConfigRecord()
+                .setResourceType(ConfigResource.Type.TOPIC.id())
+                .setResourceName(topic)
+                .setName(configKey)
+                .setValue(configValue);
+            replay(singletonList(new ApiMessageAndVersion(configRecord, (short) 0)));
         }
 
         void fenceBrokers(Set<Integer> brokerIds) throws Exception {
@@ -1144,7 +1158,7 @@ public class ReplicationControlManagerTest {
         // Now we bring 2 back online which should allow the unclean election of partition 0
         ctx.unfenceBrokers(Utils.mkSet(2));
 
-        // Bring 2 back into the ISR for partitions 1. This allows us to verify that
+        // Bring 2 back into the ISR for partition 1. This allows us to verify that
         // preferred election does not occur as a result of the unclean election request.
         ctx.alterIsr(partition1, 4, asList(2, 4));
 
@@ -1165,8 +1179,31 @@ public class ReplicationControlManagerTest {
         assertLeaderAndIsr(replication, partition2, 0, new int[]{0});
     }
 
-    // TODO: Another test case we would like to have is verifying that PREFERRED election
-    //       cannot trigger an unclean election (even if unclean election is enabled)
+    @Test
+    public void testPreferredElectionDoesNotTriggerUncleanElection() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(1, 2, 3, 4);
+        ctx.unfenceBrokers(1, 2, 3, 4);
+
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{new int[]{1, 2, 3}}).topicId();
+        TopicIdPartition partition = new TopicIdPartition(fooId, 0);
+
+        ctx.fenceBrokers(Utils.mkSet(2, 3));
+        ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
+
+        assertLeaderAndIsr(replication, partition, NO_LEADER, new int[]{1});
+
+        ctx.alterTopicConfig("foo", "unclean.leader.election.enable", "true");
+
+        ElectLeadersRequestData request = buildElectLeadersRequest(
+            ElectionType.UNCLEAN,
+            singletonMap("foo", singletonList(0))
+        );
+
+        // No election should be done even though unclean election is available
+        assertEquals(Collections.emptyList(), replication.electLeaders(request).records());
+    }
 
     private ElectLeadersRequestData buildElectLeadersRequest(
         ElectionType electionType,
