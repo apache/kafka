@@ -1242,7 +1242,7 @@ public class TaskManager {
             final Set<Task> activeTasksToRemove = new HashSet<>();
             final Set<Task> standbyTasksToRemove = new HashSet<>();
             for (final Task task : tasks.allTasks()) {
-                if (!topologyMetadata.namedTopologiesView().contains(task.id().namedTopology())) {
+                if (!topologyMetadata.namedTopologiesView().contains(task.id().topologyName())) {
                     if (task.isActive()) {
                         activeTasksToRemove.add(task);
                     } else {

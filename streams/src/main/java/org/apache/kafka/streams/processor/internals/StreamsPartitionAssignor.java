@@ -253,7 +253,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         // If using NamedTopologies, filter out any that are no longer recognized/have been removed
         final Map<TaskId, Long> taskOffsetSums = taskManager.topologyMetadata().hasNamedTopologies() ?
-            filterMap(taskManager.getTaskOffsetSums(), t -> currentNamedTopologies.contains(t.getKey().namedTopology())) :
+            filterMap(taskManager.getTaskOffsetSums(), t -> currentNamedTopologies.contains(t.getKey().topologyName())) :
             taskManager.getTaskOffsetSums();
 
         return new SubscriptionInfo(
@@ -524,7 +524,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
             allAssignedPartitions.addAll(partitions);
 
-            tasksForTopicGroup.computeIfAbsent(new Subtopology(id.subtopology(), id.namedTopology()), k -> new HashSet<>()).add(id);
+            tasksForTopicGroup.computeIfAbsent(new Subtopology(id.subtopology(), id.topologyName()), k -> new HashSet<>()).add(id);
         }
 
         checkAllPartitions(allSourceTopics, partitionsForTask, allAssignedPartitions, fullMetadata);

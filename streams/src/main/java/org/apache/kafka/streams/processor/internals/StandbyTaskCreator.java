@@ -77,7 +77,7 @@ class StandbyTaskCreator {
     }
 
     Map<TaskId, Set<TopicPartition>> uncreatedTasksForTopologies(final Set<String> currentTopologies) {
-        return filterMap(unknownTasksToBeCreated, t -> currentTopologies.contains(t.getKey().namedTopology()));
+        return filterMap(unknownTasksToBeCreated, t -> currentTopologies.contains(t.getKey().topologyName()));
     }
 
     // TODO: change return type to `StandbyTask`
