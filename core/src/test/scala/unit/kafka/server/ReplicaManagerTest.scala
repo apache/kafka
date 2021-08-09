@@ -17,6 +17,14 @@
 
 package kafka.server
 
+import java.io.File
+import java.net.InetAddress
+import java.nio.file.Files
+import java.util
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.stream.IntStream
+import java.util.{Collections, Optional, Properties}
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
@@ -30,7 +38,9 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
+import org.apache.kafka.common.metadata.{PartitionRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
@@ -41,25 +51,14 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
+import org.apache.kafka.image.{ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, TopicImage, TopicsDelta, TopicsImage }
+import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.mockito.{ArgumentMatchers, Mockito}
-
-import java.io.File
-import java.net.InetAddress
-import java.nio.file.Files
-import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
-import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.{Collections, Optional, Properties}
-import org.apache.kafka.common.metadata.{PartitionRecord, RemoveTopicRecord, TopicRecord}
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.image.{TopicImage, TopicsDelta, TopicsImage}
-import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
-
+import org.mockito.{ArgumentMatchers, Mockito}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -1573,7 +1572,7 @@ class ReplicaManagerTest {
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
-    val produceResult = sendProducerAppend(replicaManager, tp0)
+    val produceResult = sendProducerAppend(replicaManager, tp0, 3)
     assertNull(produceResult.get)
 
     Mockito.when(replicaManager.metadataCache.contains(tp0)).thenReturn(true)
@@ -1588,17 +1587,22 @@ class ReplicaManagerTest {
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, produceResult.get.error)
   }
 
-  private def sendProducerAppend(replicaManager: ReplicaManager,
-                                 topicPartition: TopicPartition): AtomicReference[PartitionResponse] = {
+  private def sendProducerAppend(
+    replicaManager: ReplicaManager,
+    topicPartition: TopicPartition,
+    numOfRecords: Int
+  ): AtomicReference[PartitionResponse] = {
     val produceResult = new AtomicReference[PartitionResponse]()
     def callback(response: Map[TopicPartition, PartitionResponse]): Unit = {
       produceResult.set(response(topicPartition))
     }
 
-    val records = MemoryRecords.withRecords(CompressionType.NONE,
-      new SimpleRecord("a".getBytes()),
-      new SimpleRecord("b".getBytes()),
-      new SimpleRecord("c".getBytes())
+    val records = MemoryRecords.withRecords(
+      CompressionType.NONE,
+      IntStream
+        .range(0, numOfRecords)
+        .mapToObj(i => new SimpleRecord(i.toString.getBytes))
+        .toArray(Array.ofDim[SimpleRecord]): _*
     )
 
     replicaManager.appendRecords(
@@ -2809,5 +2813,150 @@ class ReplicaManagerTest {
         new PartitionRegistration(Array(2, 4, 1), Array(2, 4, 1),
           Replicas.NONE, Replicas.NONE, 2, 123, 456)))),
     replicaManager.calculateDeltaChanges(TEST_DELTA))
+  }
+
+  @Test
+  def testDeltaFromLeaderToFollower(): Unit = {
+    val localId = 1
+    val otherId = localId + 1
+    val numOfRecords = 3
+    val epoch = 100
+    val topicPartition = new TopicPartition("foo", 0)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+
+    // Make the local replica the leader
+    val leaderMetadataImage = imageFromTopics(topicsImage(localId, true, epoch))
+    replicaManager.applyDelta(leaderMetadataImage, topicsDelta(localId, true, epoch))
+
+    // Check the state of that partition and fetcher
+    val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+    assertTrue(leaderPartition.isLeader)
+    assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
+    assertEquals(epoch, leaderPartition.getLeaderEpoch)
+
+    assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+
+    // Send a produce request and advance the highwatermark
+    val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+    fetchMessages(
+      replicaManager,
+      otherId,
+      topicPartition,
+      new PartitionData(numOfRecords, 0, Int.MaxValue, Optional.empty()),
+      Int.MaxValue,
+      IsolationLevel.READ_UNCOMMITTED,
+      None
+    )
+    assertEquals(Errors.NONE, leaderResponse.get.error)
+
+    // Change the local replica to follower
+    val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch + 1))
+    replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch + 1))
+
+    // Append on a follower should fail
+    val followerResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, followerResponse.get.error)
+
+    // Check the state of that partition and fetcher
+    val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+    assertFalse(followerPartition.isLeader)
+    assertEquals(epoch + 1, followerPartition.getLeaderEpoch)
+
+    val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
+    assertNotEquals(None, fetcher)
+    assertEquals(BrokerEndPoint(otherId, "localhost", 9093), fetcher.get.sourceBroker)
+  }
+
+  @Test
+  def testDeltaFromFollowerToLeader(): Unit = {
+    val localId = 1
+    val otherId = localId + 1
+    val numOfRecords = 3
+    val epoch = 100
+    val topicPartition = new TopicPartition("foo", 0)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+
+    // Make the local replica the follower
+    val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch))
+    replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch))
+
+    // Check the state of that partition and fetcher
+    val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+    assertFalse(followerPartition.isLeader)
+    assertEquals(epoch, followerPartition.getLeaderEpoch)
+
+    val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
+    assertNotEquals(None, fetcher)
+    assertEquals(BrokerEndPoint(otherId, "localhost", 9093), fetcher.get.sourceBroker)
+
+    // Append on a follower should fail
+    val followerResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, followerResponse.get.error)
+
+    // Change the local replica to leader
+    val leaderMetadataImage = imageFromTopics(topicsImage(localId, true, epoch + 1))
+    replicaManager.applyDelta(leaderMetadataImage, topicsDelta(localId, true, epoch + 1))
+
+    // Send a produce request and advance the highwatermark
+    val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+    fetchMessages(
+      replicaManager,
+      otherId,
+      topicPartition,
+      new PartitionData(numOfRecords, 0, Int.MaxValue, Optional.empty()),
+      Int.MaxValue,
+      IsolationLevel.READ_UNCOMMITTED,
+      None
+    )
+    assertEquals(Errors.NONE, leaderResponse.get.error)
+
+    val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+    assertTrue(leaderPartition.isLeader)
+    assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
+    assertEquals(epoch + 1, leaderPartition.getLeaderEpoch)
+
+    assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+  }
+
+  private def topicsImage(replica: Int, isLeader: Boolean, epoch: Int): TopicsImage = {
+    val leader = if (isLeader) replica else replica + 1
+    val topicsById = new util.HashMap[Uuid, TopicImage]()
+    val topicsByName = new util.HashMap[String, TopicImage]()
+    val fooPartitions = new util.HashMap[Integer, PartitionRegistration]()
+    fooPartitions.put(0, new PartitionRegistration(Array(replica, replica + 1),
+      Array(replica, replica + 1), Replicas.NONE, Replicas.NONE, leader, epoch, epoch))
+    val foo = new TopicImage("foo", FOO_UUID, fooPartitions)
+
+    topicsById.put(FOO_UUID, foo)
+    topicsByName.put("foo", foo)
+
+    new TopicsImage(topicsById, topicsByName)
+  }
+
+  private def topicsDelta(replica: Int, isLeader: Boolean, epoch: Int): TopicsDelta = {
+    val leader = if (isLeader) replica else replica + 1
+    val delta = new TopicsDelta(TopicsImage.EMPTY)
+    delta.replay(new TopicRecord().setName("foo").setTopicId(FOO_UUID))
+    delta.replay(new PartitionRecord().setPartitionId(0).
+      setTopicId(FOO_UUID).
+      setReplicas(util.Arrays.asList(replica, replica + 1)).
+      setIsr(util.Arrays.asList(replica, replica + 1)).
+      setRemovingReplicas(Collections.emptyList()).
+      setAddingReplicas(Collections.emptyList()).
+      setLeader(leader).
+      setLeaderEpoch(epoch).
+      setPartitionEpoch(epoch))
+
+    delta
+  }
+
+  private def imageFromTopics(topicsImage: TopicsImage): MetadataImage = {
+    new MetadataImage(
+      FeaturesImage.EMPTY,
+      ClusterImageTest.IMAGE1,
+      topicsImage,
+      ConfigurationsImage.EMPTY,
+      ClientQuotasImage.EMPTY
+    )
   }
 }
