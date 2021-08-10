@@ -181,7 +181,7 @@ public class QuorumControllerTest {
         int brokerCount = 5;
         int brokersToKeepUnfenced = 1;
         short replicationFactor = 5;
-        Long sessionTimeout = 3L;
+        Long sessionTimeout = 1L;
         Long sleepMillis = (sessionTimeout*1000)/2;
 
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
@@ -242,15 +242,22 @@ public class QuorumControllerTest {
                 Uuid topicIdBar = createTopicsResponseData.topics().find("bar").topicId();
 
                 // Fence some of the brokers
-               boolean fencingComplete = true;
+                boolean fencingComplete;
+                Long waitIterations = 0L;
                 do {
+                    fencingComplete = true;
                     sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
                     for (int i = brokersToKeepUnfenced ; i < brokerCount ; i++) {
-                       if(active.replicationControl().isBrokerUnfenced(i)) {
-                           fencingComplete = false;
-                       }
+                        if(active.replicationControl().isBrokerUnfenced(i)) {
+                            fencingComplete = false;
+                        }
                     }
                     Thread.sleep(1000);
+                    waitIterations++;
+
+                    if (waitIterations >= sessionTimeout*3) {
+                        assertTrue(false, "Fencing of brokers did not process within expected time");
+                    }
                 } while (!fencingComplete);
 
                 // At this point the brokers we want fenced are fenced.
@@ -268,7 +275,7 @@ public class QuorumControllerTest {
                     }
                 }
 
-                // Verify that isr for the topic partitions were changed correctly
+                // Verify the isr and leaders for the topic partitions
                 int[] sortedIsrFoo = active.replicationControl().getPartition(topicIdFoo,0).isr.clone();
                 int[] sortedIsrBar = active.replicationControl().getPartition(topicIdBar,0).isr.clone();
                 Arrays.sort(sortedIsrFoo);
@@ -278,6 +285,14 @@ public class QuorumControllerTest {
                     "The ISR for topic foo was " + Arrays.toString(sortedIsrFoo) +
                     " and for topic bar was " + Arrays.toString(sortedIsrBar) +
                         ". Both are expected to be " + Arrays.toString(expectedIsr));
+
+                int fooLeader = active.replicationControl().getPartition(topicIdFoo,0).leader;
+                boolean leaderInIsr = IntStream.of(sortedIsrFoo).anyMatch(i -> i == fooLeader);
+                assertTrue(leaderInIsr, "Leader for topic foo not in isr");
+
+                int barLeader = active.replicationControl().getPartition(topicIdBar,0).leader;
+                leaderInIsr = IntStream.of(sortedIsrFoo).anyMatch(i -> i == barLeader);
+                assertTrue(leaderInIsr, "Leader for topic bar not in isr");
             }
         }
     }

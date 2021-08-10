@@ -41,15 +41,18 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     private final List<QuorumController> controllers;
     private final LocalLogManagerTestEnv logEnv;
 
-    public QuorumControllerTestEnv(LocalLogManagerTestEnv logEnv,
-        Consumer<QuorumController.Builder> builderConsumer)
-                                   throws Exception {
+    public QuorumControllerTestEnv(
+        LocalLogManagerTestEnv logEnv,
+        Consumer<QuorumController.Builder> builderConsumer
+    ) throws Exception {
         this(logEnv, builderConsumer, Optional.empty());
     }
 
-    public QuorumControllerTestEnv(LocalLogManagerTestEnv logEnv,
-        Consumer<Builder> builderConsumer, Optional<Long> sessionTimeoutSeconds)
-                                   throws Exception {
+    public QuorumControllerTestEnv(
+        LocalLogManagerTestEnv logEnv,
+        Consumer<Builder> builderConsumer,
+        Optional<Long> sessionTimeoutSeconds
+    ) throws Exception {
         this.logEnv = logEnv;
         int numControllers = logEnv.logManagers().size();
         this.controllers = new ArrayList<>(numControllers);

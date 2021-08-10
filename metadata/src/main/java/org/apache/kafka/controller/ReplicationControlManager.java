@@ -928,16 +928,14 @@ public class ReplicationControlManager {
     ControllerResult<Void> maybeFenceOneStaleBroker() {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         BrokerHeartbeatManager heartbeatManager = clusterControl.heartbeatManager();
-        Optional<Integer> staleBroker = heartbeatManager.findOneStaleBroker();
-        if (staleBroker.isPresent()) {
+        heartbeatManager.findOneStaleBroker().ifPresent(brokerId -> {
             // Even though multiple brokers can go stale at a time, we will process
             // fencing one at a time so that the effect of fencing each broker is visible
             // to the system prior to processing the next one
-            int brokerId = staleBroker.get();
             log.info("Fencing broker {} because its session has timed out.", brokerId);
             handleBrokerFenced(brokerId, records);
             heartbeatManager.fence(brokerId);
-        }
+        });
         return ControllerResult.of(records, null);
     }
 

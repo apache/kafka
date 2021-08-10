@@ -105,12 +105,10 @@ public class BrokerHeartbeatManagerTest {
         assertFalse(iter.hasNext());
 
         time.sleep(20);
-        Integer nodeId = 1;
-        while (manager.findOneStaleBroker().isPresent()) {
-           assertEquals(Optional.of(nodeId), manager.findOneStaleBroker());
-           manager.fence(nodeId);
-           nodeId++;
-        }
+        assertEquals(Optional.of(1), manager.findOneStaleBroker());
+        manager.fence(1);
+        assertEquals(Optional.of(2), manager.findOneStaleBroker());
+        manager.fence(2);
 
         assertEquals(Optional.empty(), manager.findOneStaleBroker());
         iter = manager.unfenced().iterator();
@@ -136,13 +134,13 @@ public class BrokerHeartbeatManagerTest {
         assertEquals(Optional.of(0), manager.findOneStaleBroker());
         manager.fence(0);
         assertEquals(12_000_000, manager.nextCheckTimeNs());
+
         time.sleep(3);
-        Integer nodeId = 1;
-        while (manager.findOneStaleBroker().isPresent()) {
-            assertEquals(Optional.of(nodeId), manager.findOneStaleBroker());
-            manager.fence(nodeId);
-            nodeId++;
-        }
+        assertEquals(Optional.of(1), manager.findOneStaleBroker());
+        manager.fence(1);
+        assertEquals(Optional.of(2), manager.findOneStaleBroker());
+        manager.fence(2);
+
         assertEquals(14_000_000, manager.nextCheckTimeNs());
     }
 

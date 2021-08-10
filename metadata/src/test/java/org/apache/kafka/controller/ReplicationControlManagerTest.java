@@ -1064,7 +1064,9 @@ public class ReplicationControlManagerTest {
         ctx.fenceBrokers(Utils.mkSet(2, 3));
 
         PartitionRegistration partition0 = replication.getPartition(fooId, 0);
+        assertArrayEquals(new int[]{1,2,3}, partition0.replicas);
         assertArrayEquals(new int[]{1}, partition0.isr);
+        assertEquals(1, partition0.leader);
     }
 
     @Test
