@@ -2252,7 +2252,6 @@ class ReplicaManager(val config: KafkaConfig,
     stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
 
     updateLeaderAndFollowerMetrics(newFollowerTopicSet)
-
   }
 
   def deleteStrayReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {

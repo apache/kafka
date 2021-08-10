@@ -2863,8 +2863,7 @@ class ReplicaManagerTest {
     assertEquals(epoch + 1, followerPartition.getLeaderEpoch)
 
     val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-    assertNotEquals(None, fetcher)
-    assertEquals(BrokerEndPoint(otherId, "localhost", 9093), fetcher.get.sourceBroker)
+    assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
   }
 
   @Test
@@ -2886,8 +2885,7 @@ class ReplicaManagerTest {
     assertEquals(epoch, followerPartition.getLeaderEpoch)
 
     val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-    assertNotEquals(None, fetcher)
-    assertEquals(BrokerEndPoint(otherId, "localhost", 9093), fetcher.get.sourceBroker)
+    assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
 
     // Append on a follower should fail
     val followerResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
@@ -2936,8 +2934,7 @@ class ReplicaManagerTest {
     assertEquals(epoch, followerPartition.getLeaderEpoch)
 
     val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-    assertNotEquals(None, fetcher)
-    assertEquals(BrokerEndPoint(otherId, "localhost", 9093), fetcher.get.sourceBroker)
+    assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
 
     // Apply the same delta again
     replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch))
@@ -2948,8 +2945,7 @@ class ReplicaManagerTest {
     assertEquals(epoch, noChangePartition.getLeaderEpoch)
 
     val noChangeFetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-    assertNotEquals(None, noChangeFetcher)
-    assertEquals(BrokerEndPoint(otherId, "localhost", 9093), noChangeFetcher.get.sourceBroker)
+    assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), noChangeFetcher.map(_.sourceBroker))
   }
 
   private def topicsImage(replica: Int, isLeader: Boolean, epoch: Int): TopicsImage = {
