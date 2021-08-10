@@ -2948,6 +2948,77 @@ class ReplicaManagerTest {
     assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), noChangeFetcher.map(_.sourceBroker))
   }
 
+  @Test
+  def testDeltaToFollowerCompletesProduce(): Unit = {
+    val localId = 1
+    val otherId = localId + 1
+    val numOfRecords = 3
+    val epoch = 100
+    val topicPartition = new TopicPartition("foo", 0)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+
+    // Make the local replica the leader
+    val leaderMetadataImage = imageFromTopics(topicsImage(localId, true, epoch))
+    replicaManager.applyDelta(leaderMetadataImage, topicsDelta(localId, true, epoch))
+
+    // Check the state of that partition and fetcher
+    val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+    assertTrue(leaderPartition.isLeader)
+    assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
+    assertEquals(epoch, leaderPartition.getLeaderEpoch)
+
+    assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+
+    // Send a produce request
+    val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+
+    // Change the local replica to follower
+    val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch + 1))
+    replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch + 1))
+
+    // Check that the produce failed because it changed to follower before replicating
+    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, leaderResponse.get.error)
+  }
+
+  @Test
+  def testDeltaToFollowerCompletesFetch(): Unit = {
+    val localId = 1
+    val otherId = localId + 1
+    val epoch = 100
+    val topicPartition = new TopicPartition("foo", 0)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+
+    // Make the local replica the leader
+    val leaderMetadataImage = imageFromTopics(topicsImage(localId, true, epoch))
+    replicaManager.applyDelta(leaderMetadataImage, topicsDelta(localId, true, epoch))
+
+    // Check the state of that partition and fetcher
+    val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+    assertTrue(leaderPartition.isLeader)
+    assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
+    assertEquals(epoch, leaderPartition.getLeaderEpoch)
+
+    assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+
+    // Send a fetch request
+    val fetchCallback = fetchMessages(
+      replicaManager,
+      otherId,
+      topicPartition,
+      new PartitionData(0, 0, Int.MaxValue, Optional.empty()),
+      Int.MaxValue,
+      IsolationLevel.READ_UNCOMMITTED,
+      None
+    )
+
+    // Change the local replica to follower
+    val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch + 1))
+    replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch + 1))
+
+    // Check that the produce failed because it changed to follower before replicating
+    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchCallback.assertFired.error)
+  }
+
   private def topicsImage(replica: Int, isLeader: Boolean, epoch: Int): TopicsImage = {
     val leader = if (isLeader) replica else replica + 1
     val topicsById = new util.HashMap[Uuid, TopicImage]()

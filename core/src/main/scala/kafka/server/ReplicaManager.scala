@@ -2201,8 +2201,6 @@ class ReplicaManager(val config: KafkaConfig,
         try {
           newFollowerTopicSet.add(tp.topic())
 
-          completeDelayedFetchOrProduceRequests(tp)
-
           if (shuttingDown) {
             stateChangeLogger.trace(s"Unable to start fetching ${tp} with topic " +
               s"ID ${info.topicId} because the replica manager is shutting down.")
@@ -2250,6 +2248,8 @@ class ReplicaManager(val config: KafkaConfig,
 
     replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollower)
     stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
+
+    partitionsToMakeFollower.keySet.foreach(completeDelayedFetchOrProduceRequests)
 
     updateLeaderAndFollowerMetrics(newFollowerTopicSet)
   }
