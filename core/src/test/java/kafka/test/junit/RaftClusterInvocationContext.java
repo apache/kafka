@@ -27,6 +27,7 @@ import kafka.testkit.TestKitNodes;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerState;
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
@@ -38,6 +39,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -111,6 +113,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         private final ClusterConfig clusterConfig;
         final AtomicBoolean started = new AtomicBoolean(false);
         final AtomicBoolean stopped = new AtomicBoolean(false);
+        private final ConcurrentLinkedQueue<Admin> admins = new ConcurrentLinkedQueue<>();
 
         RaftClusterInstance(AtomicReference<KafkaClusterTestKit> clusterReference, ClusterConfig clusterConfig) {
             this.clusterReference = clusterReference;
@@ -174,7 +177,9 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public Admin createAdminClient(Properties configOverrides) {
-            return Admin.create(clusterReference.get().clientProperties());
+            Admin admin = Admin.create(clusterReference.get().clientProperties());
+            admins.add(admin);
+            return admin;
         }
 
         @Override
@@ -191,11 +196,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void stop() {
             if (stopped.compareAndSet(false, true)) {
-                try {
-                    clusterReference.get().close();
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to stop Raft server", e);
-                }
+                Utils.closeQuietly(clusterReference.get(), "cluster");
+                admins.forEach(admin -> Utils.closeQuietly(admin, "admin"));
             }
         }
 
