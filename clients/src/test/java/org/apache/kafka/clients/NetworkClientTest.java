@@ -210,6 +210,64 @@ public class NetworkClientTest {
         assertEquals(UnsupportedVersionException.class, metadataUpdater.getAndClearFailure().getClass());
     }
 
+    @Test
+    public void testCloseClearsCompletedReceives() {
+        client.ready(node, time.milliseconds());
+        awaitReady(client, node);
+        client.poll(1, time.milliseconds());
+        assertTrue(client.isReady(node, time.milliseconds()), "The client should be ready");
+        ProduceRequestData data = new ProduceRequestData()
+                .setAcks((short)1)
+                .setTimeoutMs(1000);
+
+        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(data);
+        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
+        client.send(request, time.milliseconds());
+        assertTrue(client.hasInFlightRequests());
+
+        short requestVersion = PRODUCE.latestVersion();
+        ProduceResponse produceResponse = new ProduceResponse(new ProduceResponseData());
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(produceResponse, requestVersion, request.correlationId());
+        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+
+        // Save completed receive references for looking back after close call
+        List<NetworkReceive> completedReceives = selector.completedReceives();
+        client.close();
+
+        completedReceives.forEach(completedReceive -> assertNull(completedReceive.payload()));
+        assertTrue(selector.completedReceives().isEmpty());
+    }
+
+    @Test
+    public void testSetEnableClientResponseWithFinalize() {
+        client.ready(node, time.milliseconds());
+        client.setEnableClientResponseWithFinalize(true);
+        awaitReady(client, node);
+        client.poll(1, time.milliseconds());
+        assertTrue(client.isReady(node, time.milliseconds()), "The client should be ready");
+        ProduceRequestData data = new ProduceRequestData()
+                .setAcks((short)1)
+                .setTimeoutMs(1000);
+
+        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(data);
+        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
+        client.send(request, time.milliseconds());
+        assertTrue(client.hasInFlightRequests());
+
+        short requestVersion = PRODUCE.latestVersion();
+        ProduceResponse produceResponse = new ProduceResponse(new ProduceResponseData());
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(produceResponse, requestVersion, request.correlationId());
+        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+
+        List<ClientResponse> responses = client.poll(1, time.milliseconds());
+        assertEquals(1, responses.size());
+
+        ClientResponse response = responses.get(0);
+        assertTrue(response instanceof ClientResponseWithFinalize);
+
+        client.setEnableClientResponseWithFinalize(false);
+    }
+
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
         awaitReady(networkClient, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
         short requestVersion = PRODUCE.latestVersion();
@@ -229,6 +287,7 @@ public class NetworkClientTest {
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(produceResponse, requestVersion, request.correlationId());
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
         List<ClientResponse> responses = networkClient.poll(1, time.milliseconds());
+
         assertEquals(1, responses.size());
         assertTrue(handler.executed, "The handler should have executed.");
         assertTrue(handler.response.hasResponse(), "Should have a response body.");
@@ -1115,7 +1174,7 @@ public class NetworkClientTest {
         return ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
-    private static class TestCallbackHandler implements RequestCompletionHandler {
+    public static class TestCallbackHandler implements RequestCompletionHandler {
         public boolean executed = false;
         public ClientResponse response;
 

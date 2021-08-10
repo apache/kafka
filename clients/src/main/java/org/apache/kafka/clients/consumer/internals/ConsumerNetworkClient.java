@@ -601,6 +601,12 @@ public class ConsumerNetworkClient implements Closeable {
             } else {
                 future.complete(response);
             }
+
+            if (response != null) {
+                // dec ref count and release the buffer to memory pool if any
+                // the fetch request buffer pool won't be release since we hold on to buffer references and add ref counts
+                this.response.decRefCount();
+            }
         }
 
         public void onFailure(RuntimeException e) {
@@ -611,6 +617,9 @@ public class ConsumerNetworkClient implements Closeable {
         @Override
         public void onComplete(ClientResponse response) {
             this.response = response;
+            // increment ref count to the client response in order to hold on to buffer till we are done with handler
+            // this will make sure everything except poll is released once fireCompleted call is done
+            this.response.incRefCount();
             pendingCompletion.add(this);
         }
     }

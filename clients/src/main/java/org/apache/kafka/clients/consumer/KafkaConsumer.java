@@ -757,6 +757,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     apiVersions,
                     throttleTimeSensor,
                     logContext);
+            netClient.setEnableClientResponseWithFinalize(config.getBoolean(CommonClientConfigs.ENABLE_CLIENT_RESPONSE_LEAK_CHECK));
+
             this.client = new ConsumerNetworkClient(
                     logContext,
                     netClient,

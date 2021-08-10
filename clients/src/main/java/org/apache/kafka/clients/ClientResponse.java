@@ -16,18 +16,24 @@
  */
 package org.apache.kafka.clients;
 
+import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 /**
  * A response from the server. Contains both the body of the response as well as the correlated request
  * metadata that was originally sent.
  */
 public class ClientResponse {
-
-    private final RequestHeader requestHeader;
+    protected static final Logger log = LoggerFactory.getLogger(ClientResponse.class);
+    protected final RequestHeader requestHeader;
     private final RequestCompletionHandler callback;
     private final String destination;
     private final long receivedTimeMs;
@@ -36,6 +42,35 @@ public class ClientResponse {
     private final UnsupportedVersionException versionMismatch;
     private final AuthenticationException authenticationException;
     private final AbstractResponse responseBody;
+    protected final MemoryPool memoryPool;
+    protected final AtomicLong refCount;
+    protected ByteBuffer responsePayload;
+    private boolean bufferReleased = false;
+
+    public ClientResponse(RequestHeader requestHeader,
+        RequestCompletionHandler callback,
+        String destination,
+        long createdTimeMs,
+        long receivedTimeMs,
+        boolean disconnected,
+        UnsupportedVersionException versionMismatch,
+        AuthenticationException authenticationException,
+        AbstractResponse responseBody,
+        MemoryPool memoryPool,
+        ByteBuffer responsePayload) {
+        this.requestHeader = requestHeader;
+        this.callback = callback;
+        this.destination = destination;
+        this.receivedTimeMs = receivedTimeMs;
+        this.latencyMs = receivedTimeMs - createdTimeMs;
+        this.disconnected = disconnected;
+        this.versionMismatch = versionMismatch;
+        this.authenticationException = authenticationException;
+        this.responseBody = responseBody;
+        this.memoryPool = memoryPool;
+        this.responsePayload = responsePayload;
+        this.refCount = new AtomicLong(0);
+    }
 
     /**
      * @param requestHeader The header of the corresponding request
@@ -57,15 +92,8 @@ public class ClientResponse {
                           UnsupportedVersionException versionMismatch,
                           AuthenticationException authenticationException,
                           AbstractResponse responseBody) {
-        this.requestHeader = requestHeader;
-        this.callback = callback;
-        this.destination = destination;
-        this.receivedTimeMs = receivedTimeMs;
-        this.latencyMs = receivedTimeMs - createdTimeMs;
-        this.disconnected = disconnected;
-        this.versionMismatch = versionMismatch;
-        this.authenticationException = authenticationException;
-        this.responseBody = responseBody;
+        this(requestHeader, callback, destination, createdTimeMs, receivedTimeMs, disconnected, versionMismatch,
+            authenticationException, responseBody, null, null);
     }
 
     public long receivedTimeMs() {
@@ -104,6 +132,45 @@ public class ClientResponse {
         return latencyMs;
     }
 
+    private void releaseBuffer() {
+        if (memoryPool != null && responsePayload != null) {
+            if (log.isTraceEnabled()) {
+                log.trace("ByteBuffer[{}] returned to memorypool. Ref Count: {}. RequestType: {}",
+                    responsePayload.position(), refCount.get(), this.requestHeader.apiKey());
+            }
+
+            memoryPool.release(responsePayload);
+            responsePayload = null;
+            bufferReleased = true;
+        }
+    }
+
+    private boolean usingMemoryPool() {
+        return memoryPool != null && memoryPool != MemoryPool.NONE;
+    }
+
+    public void incRefCount() {
+        if (bufferReleased && usingMemoryPool()) {
+            // If somebody tried to call incRefCount after buffer has been released. This shouldn't happen
+            throw new IllegalStateException(
+                "Ref count being incremented again after buffer release. This should never happen.");
+        }
+        refCount.incrementAndGet();
+    }
+
+    public void decRefCount() {
+        long value = refCount.decrementAndGet();
+        if (value < 0 && usingMemoryPool()) {
+            // Oops! This seems to be a place where we shouldn't get to.
+            // However, to save users from exceptions, who don't use pooling, don't throw an exception.
+            throw new IllegalStateException("Ref count decremented below zero. This should never happen.");
+        }
+
+        if (value == 0) {
+            releaseBuffer();
+        }
+    }
+
     public void onComplete() {
         if (callback != null)
             callback.onComplete(this);
@@ -122,5 +189,4 @@ public class ClientResponse {
                responseBody +
                ")";
     }
-
 }
