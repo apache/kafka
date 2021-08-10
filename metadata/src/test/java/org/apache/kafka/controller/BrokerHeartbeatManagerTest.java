@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
