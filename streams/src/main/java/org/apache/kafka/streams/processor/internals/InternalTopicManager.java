@@ -424,58 +424,62 @@ public class InternalTopicManager {
                             .configs(topicConfig));
                 }
 
-                final CreateTopicsResult createTopicsResult = adminClient.createTopics(newTopics);
+                // it's possible that although some topics are not ready yet because they
+                // are temporarily not available, not that they do not exist; in this case
+                // the new topics to create may be empty and hence we can skip here
+                if (!newTopics.isEmpty()) {
+                    final CreateTopicsResult createTopicsResult = adminClient.createTopics(newTopics);
 
-                for (final Map.Entry<String, KafkaFuture<Void>> createTopicResult : createTopicsResult.values().entrySet()) {
-                    final String topicName = createTopicResult.getKey();
-                    try {
-                        createTopicResult.getValue().get();
-                        topicsNotReady.remove(topicName);
-                    } catch (final InterruptedException fatalException) {
-                        // this should not happen; if it ever happens it indicate a bug
-                        Thread.currentThread().interrupt();
-                        log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
-                        throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
-                    } catch (final ExecutionException executionException) {
-                        final Throwable cause = executionException.getCause();
-                        if (cause instanceof TopicExistsException) {
-                            // This topic didn't exist earlier or its leader not known before; just retain it for next round of validation.
-                            log.info(
-                                "Could not create topic {}. Topic is probably marked for deletion (number of partitions is unknown).\n"
-                                    +
-                                    "Will retry to create this topic in {} ms (to let broker finish async delete operation first).\n"
-                                    +
-                                    "Error message was: {}", topicName, retryBackOffMs,
-                                cause.toString());
-                        } else {
-                            log.error("Unexpected error during topic creation for {}.\n" +
-                                "Error message was: {}", topicName, cause.toString());
+                    for (final Map.Entry<String, KafkaFuture<Void>> createTopicResult : createTopicsResult.values().entrySet()) {
+                        final String topicName = createTopicResult.getKey();
+                        try {
+                            createTopicResult.getValue().get();
+                            topicsNotReady.remove(topicName);
+                        } catch (final InterruptedException fatalException) {
+                            // this should not happen; if it ever happens it indicate a bug
+                            Thread.currentThread().interrupt();
+                            log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
+                            throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
+                        } catch (final ExecutionException executionException) {
+                            final Throwable cause = executionException.getCause();
+                            if (cause instanceof TopicExistsException) {
+                                // This topic didn't exist earlier or its leader not known before; just retain it for next round of validation.
+                                log.info(
+                                        "Could not create topic {}. Topic is probably marked for deletion (number of partitions is unknown).\n"
+                                                +
+                                                "Will retry to create this topic in {} ms (to let broker finish async delete operation first).\n"
+                                                +
+                                                "Error message was: {}", topicName, retryBackOffMs,
+                                        cause.toString());
+                            } else {
+                                log.error("Unexpected error during topic creation for {}.\n" +
+                                        "Error message was: {}", topicName, cause.toString());
 
-                            if (cause instanceof UnsupportedVersionException) {
-                                final String errorMessage = cause.getMessage();
-                                if (errorMessage != null &&
-                                    errorMessage.startsWith("Creating topics with default partitions/replication factor are only supported in CreateTopicRequest version 4+")) {
+                                if (cause instanceof UnsupportedVersionException) {
+                                    final String errorMessage = cause.getMessage();
+                                    if (errorMessage != null &&
+                                            errorMessage.startsWith("Creating topics with default partitions/replication factor are only supported in CreateTopicRequest version 4+")) {
 
-                                    throw new StreamsException(String.format(
-                                        "Could not create topic %s, because brokers don't support configuration replication.factor=-1."
-                                            + " You can change the replication.factor config or upgrade your brokers to version 2.4 or newer to avoid this error.",
-                                        topicName)
+                                        throw new StreamsException(String.format(
+                                                "Could not create topic %s, because brokers don't support configuration replication.factor=-1."
+                                                        + " You can change the replication.factor config or upgrade your brokers to version 2.4 or newer to avoid this error.",
+                                                topicName)
+                                        );
+                                    }
+                                } else {
+                                    throw new StreamsException(
+                                            String.format("Could not create topic %s.", topicName),
+                                            cause
                                     );
                                 }
-                            } else {
-                                throw new StreamsException(
-                                    String.format("Could not create topic %s.", topicName),
-                                    cause
-                                );
                             }
+                        } catch (final TimeoutException retriableException) {
+                            log.error("Creating topic {} timed out.\n" +
+                                    "Error message was: {}", topicName, retriableException.toString());
                         }
-                    } catch (final TimeoutException retriableException) {
-                        log.error("Creating topic {} timed out.\n" +
-                            "Error message was: {}", topicName, retriableException.toString());
                     }
                 }
             }
-
 
             if (!topicsNotReady.isEmpty()) {
                 currentWallClockMs = time.milliseconds();

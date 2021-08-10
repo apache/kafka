@@ -113,7 +113,7 @@ public class InternalTopicManagerTest {
             put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1);
             put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), 16384);
             put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), 100);
-            put(StreamsConfig.RETRY_BACKOFF_MS_CONFIG, 50);
+            put(StreamsConfig.RETRY_BACKOFF_MS_CONFIG, 10);
         }
     };
 
@@ -822,9 +822,7 @@ public class InternalTopicManagerTest {
             .andReturn(new MockDescribeTopicsResult(
                 Collections.singletonMap(topic1, topicDescriptionLeaderNotAvailableFuture)))
             .once();
-        // return empty set for 1st time
-        EasyMock.expect(admin.createTopics(Collections.emptySet()))
-            .andReturn(new MockCreateTopicsResult(Collections.emptyMap())).once();
+        // we would not need to call create-topics for the first time
         EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
             .andReturn(new MockDescribeTopicsResult(
                 Collections.singletonMap(topic1, topicDescriptionUnknownTopicFuture)))
@@ -868,8 +866,6 @@ public class InternalTopicManagerTest {
             .andReturn(new MockDescribeTopicsResult(
                 Collections.singletonMap(topic1, topicDescriptionFailFuture)))
             .once();
-        EasyMock.expect(admin.createTopics(Collections.emptySet()))
-            .andReturn(new MockCreateTopicsResult(Collections.emptyMap())).once();
         EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
             .andReturn(new MockDescribeTopicsResult(
                 Collections.singletonMap(topic1, topicDescriptionSuccessFuture)))
@@ -901,8 +897,6 @@ public class InternalTopicManagerTest {
             .andReturn(new MockDescribeTopicsResult(
                 Collections.singletonMap(topic1, topicDescriptionFailFuture)))
             .anyTimes();
-        EasyMock.expect(admin.createTopics(Collections.emptySet()))
-            .andReturn(new MockCreateTopicsResult(Collections.emptyMap())).anyTimes();
 
         EasyMock.replay(admin);
 
