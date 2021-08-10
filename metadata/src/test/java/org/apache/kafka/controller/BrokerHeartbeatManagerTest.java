@@ -78,7 +78,7 @@ public class BrokerHeartbeatManagerTest {
     }
 
     @Test
-    public void testFindStaleBrokers() {
+    public void testFindOneStaleBroker() {
         BrokerHeartbeatManager manager = newBrokerHeartbeatManager();
         MockTime time = (MockTime)  manager.time();
         assertFalse(manager.hasValidSession(0));
@@ -93,22 +93,26 @@ public class BrokerHeartbeatManagerTest {
         assertEquals(1, iter.next().id());
         assertEquals(2, iter.next().id());
         assertFalse(iter.hasNext());
-        assertEquals(Collections.emptyList(), manager.findStaleBrokers());
+        assertEquals(Optional.empty(), manager.findOneStaleBroker());
 
         time.sleep(5);
-        assertEquals(Collections.singletonList(0), manager.findStaleBrokers());
+        assertEquals(Optional.of(0), manager.findOneStaleBroker());
         manager.fence(0);
-        assertEquals(Collections.emptyList(), manager.findStaleBrokers());
+        assertEquals(Optional.empty(), manager.findOneStaleBroker());
         iter = manager.unfenced().iterator();
         assertEquals(1, iter.next().id());
         assertEquals(2, iter.next().id());
         assertFalse(iter.hasNext());
 
         time.sleep(20);
-        assertEquals(Arrays.asList(1, 2), manager.findStaleBrokers());
-        manager.fence(1);
-        manager.fence(2);
-        assertEquals(Collections.emptyList(), manager.findStaleBrokers());
+        Integer nodeId = 1;
+        while (manager.findOneStaleBroker().isPresent()) {
+           assertEquals(Optional.of(nodeId), manager.findOneStaleBroker());
+           manager.fence(nodeId);
+           nodeId++;
+        }
+
+        assertEquals(Optional.empty(), manager.findOneStaleBroker());
         iter = manager.unfenced().iterator();
         assertFalse(iter.hasNext());
     }
@@ -125,17 +129,20 @@ public class BrokerHeartbeatManagerTest {
         manager.touch(2, false, 0);
         time.sleep(1);
         manager.touch(3, false, 0);
-        assertEquals(Collections.emptyList(), manager.findStaleBrokers());
+        assertEquals(Optional.empty(), manager.findOneStaleBroker());
         assertEquals(10_000_000, manager.nextCheckTimeNs());
         time.sleep(7);
         assertEquals(10_000_000, manager.nextCheckTimeNs());
-        assertEquals(Collections.singletonList(0), manager.findStaleBrokers());
+        assertEquals(Optional.of(0), manager.findOneStaleBroker());
         manager.fence(0);
         assertEquals(12_000_000, manager.nextCheckTimeNs());
         time.sleep(3);
-        assertEquals(Arrays.asList(1, 2), manager.findStaleBrokers());
-        manager.fence(1);
-        manager.fence(2);
+        Integer nodeId = 1;
+        while (manager.findOneStaleBroker().isPresent()) {
+            assertEquals(Optional.of(nodeId), manager.findOneStaleBroker());
+            manager.fence(nodeId);
+            nodeId++;
+        }
         assertEquals(14_000_000, manager.nextCheckTimeNs());
     }
 

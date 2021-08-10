@@ -925,16 +925,25 @@ public class ReplicationControlManager {
         return ControllerResult.of(records, null);
     }
 
-    ControllerResult<Void> maybeFenceStaleBrokers() {
+    ControllerResult<Void> maybeFenceOneStaleBroker() {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         BrokerHeartbeatManager heartbeatManager = clusterControl.heartbeatManager();
-        List<Integer> staleBrokers = heartbeatManager.findStaleBrokers();
-        for (int brokerId : staleBrokers) {
+        Optional<Integer> staleBroker = heartbeatManager.findOneStaleBroker();
+        if (staleBroker.isPresent()) {
+            // Even though multiple brokers can go stale at a time, we will process
+            // fencing one at a time so that the effect of fencing each broker is visible
+            // to the system prior to processing the next one
+            int brokerId = staleBroker.get();
             log.info("Fencing broker {} because its session has timed out.", brokerId);
             handleBrokerFenced(brokerId, records);
             heartbeatManager.fence(brokerId);
         }
         return ControllerResult.of(records, null);
+    }
+
+    // Visible for testing
+    Boolean isBrokerUnfenced(int brokerId) {
+        return clusterControl.unfenced(brokerId);
     }
 
     ControllerResult<List<CreatePartitionsTopicResult>>

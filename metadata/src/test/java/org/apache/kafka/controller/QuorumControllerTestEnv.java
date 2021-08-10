@@ -17,6 +17,11 @@
 
 package org.apache.kafka.controller;
 
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
+
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
+import org.apache.kafka.controller.QuorumController.Builder;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.test.TestUtils;
@@ -37,7 +42,13 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     private final LocalLogManagerTestEnv logEnv;
 
     public QuorumControllerTestEnv(LocalLogManagerTestEnv logEnv,
-                                   Consumer<QuorumController.Builder> builderConsumer)
+        Consumer<QuorumController.Builder> builderConsumer)
+                                   throws Exception {
+        this(logEnv, builderConsumer, Optional.empty());
+    }
+
+    public QuorumControllerTestEnv(LocalLogManagerTestEnv logEnv,
+        Consumer<Builder> builderConsumer, Optional<Long> sessionTimeoutSeconds)
                                    throws Exception {
         this.logEnv = logEnv;
         int numControllers = logEnv.logManagers().size();
@@ -46,6 +57,10 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             for (int i = 0; i < numControllers; i++) {
                 QuorumController.Builder builder = new QuorumController.Builder(i);
                 builder.setRaftClient(logEnv.logManagers().get(i));
+                if (sessionTimeoutSeconds.isPresent()) {
+                    builder.setSessionTimeoutNs(NANOSECONDS.convert(
+                        sessionTimeoutSeconds.get(), TimeUnit.SECONDS));
+                }
                 builderConsumer.accept(builder);
                 this.controllers.add(builder.build());
             }
