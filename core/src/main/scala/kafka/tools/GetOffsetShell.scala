@@ -21,11 +21,10 @@ package kafka.tools
 import java.util.Properties
 import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, IncludeList, ToolsUtils}
-import org.apache.kafka.clients.admin.{Admin, OffsetSpec}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, OffsetSpec}
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
 
 import java.util.regex.Pattern
@@ -124,11 +123,10 @@ object GetOffsetShell {
       new Properties
     config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     config.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
-    val consumer = new KafkaConsumer(config, new ByteArrayDeserializer, new ByteArrayDeserializer)
     val client = Admin.create(config)
 
     try {
-      val partitionInfos = listPartitionInfos(consumer, topicPartitionFilter)
+      val partitionInfos = listPartitionInfos(client, topicPartitionFilter, !excludeInternalTopics)
 
       if (partitionInfos.isEmpty) {
         throw new IllegalArgumentException("Could not match any topic-partitions with the specified filters")
@@ -160,7 +158,6 @@ object GetOffsetShell {
         case (tp, offset) => println(s"${tp.topic}:${tp.partition}:${Option(offset).getOrElse("")}")
       }
     } finally {
-      consumer.close()
       client.close()
     }
   }
@@ -230,9 +227,14 @@ object GetOffsetShell {
   /**
    * Return the partition infos. Filter them with topicPartitionFilter.
    */
-  private def listPartitionInfos(consumer: KafkaConsumer[_, _], topicPartitionFilter: PartitionInfo => Boolean): Seq[PartitionInfo] = {
-    consumer.listTopics.asScala.values.flatMap { partitions =>
-      partitions.asScala.filter(topicPartitionFilter)
+  private def listPartitionInfos(client: Admin, topicPartitionFilter: PartitionInfo => Boolean, listInternal: Boolean): Seq[PartitionInfo] = {
+    val topics = client.listTopics(new ListTopicsOptions().listInternal(listInternal)).names().get().asScala
+    client.describeTopics(topics.asJavaCollection).all().get().asScala.flatMap { case (topic, description) =>
+      description
+        .partitions()
+        .asScala
+        .map(tp => new PartitionInfo(topic, tp.partition(), tp.leader(), tp.replicas().asScala.toArray, tp.isr().asScala.toArray))
+        .filter(topicPartitionFilter)
     }.toBuffer
   }
 }
