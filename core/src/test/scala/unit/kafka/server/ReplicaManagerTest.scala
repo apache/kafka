@@ -1008,31 +1008,37 @@ class ReplicaManagerTest {
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch,
       expectTruncation = expectTruncation, localLogOffset = Some(10), extraProps = extraProps, topicId = Some(topicId))
 
-    // Initialize partition state to follower, with leader = 1, leaderEpoch = 1
-    val tp = new TopicPartition(topic, topicPartition)
-    val partition = replicaManager.createPartition(tp)
-    val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
-    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-    partition.makeFollower(
-      leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds),
-      offsetCheckpoints,
-      None)
+    try {
+      // Initialize partition state to follower, with leader = 1, leaderEpoch = 1
+      val tp = new TopicPartition(topic, topicPartition)
+      val partition = replicaManager.createPartition(tp)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      partition.makeFollower(
+        leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds),
+        offsetCheckpoints,
+        None)
 
-    // Make local partition a follower - because epoch increased by more than 1, truncation should
-    // trigger even though leader does not change
-    leaderEpoch += leaderEpochIncrement
-    val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
-      controllerId, controllerEpoch, brokerEpoch,
-      Seq(leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds)).asJava,
-      Collections.singletonMap(topic, topicId),
-      Set(new Node(followerBrokerId, "host1", 0),
-        new Node(leaderBrokerId, "host2", 1)).asJava).build()
-    replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest0,
-      (_, followers) => assertEquals(followerBrokerId, followers.head.partitionId))
-    assertTrue(countDownLatch.await(1000L, TimeUnit.MILLISECONDS))
+      // Make local partition a follower - because epoch increased by more than 1, truncation should
+      // trigger even though leader does not change
+      leaderEpoch += leaderEpochIncrement
+      val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
+        controllerId, controllerEpoch, brokerEpoch,
+        Seq(leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds)).asJava,
+        Collections.singletonMap(topic, topicId),
+        Set(new Node(followerBrokerId, "host1", 0),
+          new Node(leaderBrokerId, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest0,
+        (_, followers) => assertEquals(followerBrokerId, followers.head.partitionId))
+      assertTrue(countDownLatch.await(1000L, TimeUnit.MILLISECONDS))
 
-    // Truncation should have happened once
-    EasyMock.verify(mockLogMgr)
+      // Truncation should have happened once
+      EasyMock.verify(mockLogMgr)
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
@@ -1084,40 +1090,46 @@ class ReplicaManagerTest {
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true, topicId = Some(topicId))
 
-    val brokerList = Seq[Integer](0, 1).asJava
+    try {
+      val brokerList = Seq[Integer](0, 1).asJava
 
-    val tp0 = new TopicPartition(topic, 0)
+      val tp0 = new TopicPartition(topic, 0)
 
-    initializeLogAndTopicId(replicaManager, tp0, topicId)
+      initializeLogAndTopicId(replicaManager, tp0, topicId)
 
-    // Make this replica the follower
-    val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
-      Seq(new LeaderAndIsrPartitionState()
-        .setTopicName(topic)
-        .setPartitionIndex(0)
-        .setControllerEpoch(0)
-        .setLeader(1)
-        .setLeaderEpoch(1)
-        .setIsr(brokerList)
-        .setZkVersion(0)
-        .setReplicas(brokerList)
-        .setIsNew(false)).asJava,
-      Collections.singletonMap(topic, topicId),
-      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-    replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
+      // Make this replica the follower
+      val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(topic)
+          .setPartitionIndex(0)
+          .setControllerEpoch(0)
+          .setLeader(1)
+          .setLeaderEpoch(1)
+          .setIsr(brokerList)
+          .setZkVersion(0)
+          .setReplicas(brokerList)
+          .setIsNew(false)).asJava,
+        Collections.singletonMap(topic, topicId),
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
-    val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
-      InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
+      val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
+        InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
-    val consumerResult = fetchAsConsumer(replicaManager, tp0,
-      new PartitionData(0, 0, 100000, Optional.empty()),
-      clientMetadata = Some(metadata))
+      val consumerResult = fetchAsConsumer(replicaManager, tp0,
+        new PartitionData(0, 0, 100000, Optional.empty()),
+        clientMetadata = Some(metadata))
 
-    // Fetch from follower succeeds
-    assertTrue(consumerResult.isFired)
+      // Fetch from follower succeeds
+      assertTrue(consumerResult.isFired)
 
-    // But only leader will compute preferred replica
-    assertTrue(consumerResult.assertFired.preferredReadReplica.isEmpty)
+      // But only leader will compute preferred replica
+      assertTrue(consumerResult.assertFired.preferredReadReplica.isEmpty)
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
@@ -1135,40 +1147,46 @@ class ReplicaManagerTest {
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true, topicId = Some(topicId))
 
-    val brokerList = Seq[Integer](0, 1).asJava
+    try {
+      val brokerList = Seq[Integer](0, 1).asJava
 
-    val tp0 = new TopicPartition(topic, 0)
+      val tp0 = new TopicPartition(topic, 0)
 
-    initializeLogAndTopicId(replicaManager, tp0, topicId)
+      initializeLogAndTopicId(replicaManager, tp0, topicId)
 
-    // Make this replica the follower
-    val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
-      Seq(new LeaderAndIsrPartitionState()
-        .setTopicName(topic)
-        .setPartitionIndex(0)
-        .setControllerEpoch(0)
-        .setLeader(0)
-        .setLeaderEpoch(1)
-        .setIsr(brokerList)
-        .setZkVersion(0)
-        .setReplicas(brokerList)
-        .setIsNew(false)).asJava,
-      Collections.singletonMap(topic, topicId),
-      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-    replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
+      // Make this replica the follower
+      val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(topic)
+          .setPartitionIndex(0)
+          .setControllerEpoch(0)
+          .setLeader(0)
+          .setLeaderEpoch(1)
+          .setIsr(brokerList)
+          .setZkVersion(0)
+          .setReplicas(brokerList)
+          .setIsNew(false)).asJava,
+        Collections.singletonMap(topic, topicId),
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
-    val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
-      InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
+      val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
+        InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
-    val consumerResult = fetchAsConsumer(replicaManager, tp0,
-      new PartitionData(0, 0, 100000, Optional.empty()),
-      clientMetadata = Some(metadata))
+      val consumerResult = fetchAsConsumer(replicaManager, tp0,
+        new PartitionData(0, 0, 100000, Optional.empty()),
+        clientMetadata = Some(metadata))
 
-    // Fetch from follower succeeds
-    assertTrue(consumerResult.isFired)
+      // Fetch from follower succeeds
+      assertTrue(consumerResult.isFired)
 
-    // Returns a preferred replica (should just be the leader, which is None)
-    assertFalse(consumerResult.assertFired.preferredReadReplica.isDefined)
+      // Returns a preferred replica (should just be the leader, which is None)
+      assertFalse(consumerResult.assertFired.preferredReadReplica.isDefined)
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
@@ -1280,39 +1298,45 @@ class ReplicaManagerTest {
   def testFetchFollowerNotAllowedForOlderClients(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1))
 
-    val tp0 = new TopicPartition(topic, 0)
-    val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
-    replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-    val partition0Replicas = Seq[Integer](0, 1).asJava
-    val becomeFollowerRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
-      Seq(new LeaderAndIsrPartitionState()
-        .setTopicName(tp0.topic)
-        .setPartitionIndex(tp0.partition)
-        .setControllerEpoch(0)
-        .setLeader(1)
-        .setLeaderEpoch(0)
-        .setIsr(partition0Replicas)
-        .setZkVersion(0)
-        .setReplicas(partition0Replicas)
-        .setIsNew(true)).asJava,
-      topicIds.asJava,
-      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-    replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
+    try {
+      val tp0 = new TopicPartition(topic, 0)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      val partition0Replicas = Seq[Integer](0, 1).asJava
+      val becomeFollowerRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(tp0.topic)
+          .setPartitionIndex(tp0.partition)
+          .setControllerEpoch(0)
+          .setLeader(1)
+          .setLeaderEpoch(0)
+          .setIsr(partition0Replicas)
+          .setZkVersion(0)
+          .setReplicas(partition0Replicas)
+          .setIsNew(true)).asJava,
+        topicIds.asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
 
-    // Fetch from follower, with non-empty ClientMetadata (FetchRequest v11+)
-    val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
-    var partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
-      Optional.of(0))
-    var fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, Some(clientMetadata))
-    assertNotNull(fetchResult.get)
-    assertEquals(Errors.NONE, fetchResult.get.error)
+      // Fetch from follower, with non-empty ClientMetadata (FetchRequest v11+)
+      val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
+      var partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+        Optional.of(0))
+      var fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, Some(clientMetadata))
+      assertNotNull(fetchResult.get)
+      assertEquals(Errors.NONE, fetchResult.get.error)
 
-    // Fetch from follower, with empty ClientMetadata (which implies an older version)
-    partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
-      Optional.of(0))
-    fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, None)
-    assertNotNull(fetchResult.get)
-    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.get.error)
+      // Fetch from follower, with empty ClientMetadata (which implies an older version)
+      partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+        Optional.of(0))
+      fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, None)
+      assertNotNull(fetchResult.get)
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.get.error)
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
@@ -1366,49 +1390,55 @@ class ReplicaManagerTest {
     val mockTimer = new MockTimer(time)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(mockTimer, aliveBrokerIds = Seq(0, 1))
 
-    val tp0 = new TopicPartition(topic, 0)
-    val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
-    replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-    val partition0Replicas = Seq[Integer](0, 1).asJava
+    try {
+      val tp0 = new TopicPartition(topic, 0)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      val partition0Replicas = Seq[Integer](0, 1).asJava
 
-    val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
-      Seq(new LeaderAndIsrPartitionState()
-        .setTopicName(tp0.topic)
-        .setPartitionIndex(tp0.partition)
-        .setControllerEpoch(0)
-        .setLeader(0)
-        .setLeaderEpoch(1)
-        .setIsr(partition0Replicas)
-        .setZkVersion(0)
-        .setReplicas(partition0Replicas)
-        .setIsNew(true)).asJava,
-      topicIds.asJava,
-      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-    replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
+      val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(tp0.topic)
+          .setPartitionIndex(tp0.partition)
+          .setControllerEpoch(0)
+          .setLeader(0)
+          .setLeaderEpoch(1)
+          .setIsr(partition0Replicas)
+          .setZkVersion(0)
+          .setReplicas(partition0Replicas)
+          .setIsNew(true)).asJava,
+        topicIds.asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
-    val partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
-      Optional.empty())
-    val fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, None, timeout = 10)
-    assertNull(fetchResult.get)
+      val partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+        Optional.empty())
+      val fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, None, timeout = 10)
+      assertNull(fetchResult.get)
 
-    // Become a follower and ensure that the delayed fetch returns immediately
-    val becomeFollowerRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
-      Seq(new LeaderAndIsrPartitionState()
-        .setTopicName(tp0.topic)
-        .setPartitionIndex(tp0.partition)
-        .setControllerEpoch(0)
-        .setLeader(1)
-        .setLeaderEpoch(2)
-        .setIsr(partition0Replicas)
-        .setZkVersion(0)
-        .setReplicas(partition0Replicas)
-        .setIsNew(true)).asJava,
-      topicIds.asJava,
-      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-    replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
+      // Become a follower and ensure that the delayed fetch returns immediately
+      val becomeFollowerRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(tp0.topic)
+          .setPartitionIndex(tp0.partition)
+          .setControllerEpoch(0)
+          .setLeader(1)
+          .setLeaderEpoch(2)
+          .setIsr(partition0Replicas)
+          .setZkVersion(0)
+          .setReplicas(partition0Replicas)
+          .setIsNew(true)).asJava,
+        topicIds.asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
 
-    assertNotNull(fetchResult.get)
-    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.get.error)
+      assertNotNull(fetchResult.get)
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.get.error)
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
@@ -1416,50 +1446,56 @@ class ReplicaManagerTest {
     val mockTimer = new MockTimer(time)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(mockTimer, aliveBrokerIds = Seq(0, 1))
 
-    val tp0 = new TopicPartition(topic, 0)
-    val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
-    replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-    val partition0Replicas = Seq[Integer](0, 1).asJava
+    try {
+      val tp0 = new TopicPartition(topic, 0)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      val partition0Replicas = Seq[Integer](0, 1).asJava
 
-    val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
-      Seq(new LeaderAndIsrPartitionState()
-        .setTopicName(tp0.topic)
-        .setPartitionIndex(tp0.partition)
-        .setControllerEpoch(0)
-        .setLeader(0)
-        .setLeaderEpoch(1)
-        .setIsr(partition0Replicas)
-        .setZkVersion(0)
-        .setReplicas(partition0Replicas)
-        .setIsNew(true)).asJava,
-      topicIds.asJava,
-      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-    replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
+      val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(tp0.topic)
+          .setPartitionIndex(tp0.partition)
+          .setControllerEpoch(0)
+          .setLeader(0)
+          .setLeaderEpoch(1)
+          .setIsr(partition0Replicas)
+          .setZkVersion(0)
+          .setReplicas(partition0Replicas)
+          .setIsNew(true)).asJava,
+        topicIds.asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
-    val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
-    val partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
-      Optional.of(1))
-    val fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, Some(clientMetadata), timeout = 10)
-    assertNull(fetchResult.get)
+      val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
+      val partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+        Optional.of(1))
+      val fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, Some(clientMetadata), timeout = 10)
+      assertNull(fetchResult.get)
 
-    // Become a follower and ensure that the delayed fetch returns immediately
-    val becomeFollowerRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
-      Seq(new LeaderAndIsrPartitionState()
-        .setTopicName(tp0.topic)
-        .setPartitionIndex(tp0.partition)
-        .setControllerEpoch(0)
-        .setLeader(1)
-        .setLeaderEpoch(2)
-        .setIsr(partition0Replicas)
-        .setZkVersion(0)
-        .setReplicas(partition0Replicas)
-        .setIsNew(true)).asJava,
-      topicIds.asJava,
-      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-    replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
+      // Become a follower and ensure that the delayed fetch returns immediately
+      val becomeFollowerRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(tp0.topic)
+          .setPartitionIndex(tp0.partition)
+          .setControllerEpoch(0)
+          .setLeader(1)
+          .setLeaderEpoch(2)
+          .setIsr(partition0Replicas)
+          .setZkVersion(0)
+          .setReplicas(partition0Replicas)
+          .setIsNew(true)).asJava,
+        topicIds.asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
 
-    assertNotNull(fetchResult.get)
-    assertEquals(Errors.FENCED_LEADER_EPOCH, fetchResult.get.error)
+      assertNotNull(fetchResult.get)
+      assertEquals(Errors.FENCED_LEADER_EPOCH, fetchResult.get.error)
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
@@ -2824,46 +2860,52 @@ class ReplicaManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
 
-    // Make the local replica the leader
-    val leaderMetadataImage = imageFromTopics(topicsImage(localId, true, epoch))
-    replicaManager.applyDelta(leaderMetadataImage, topicsDelta(localId, true, epoch))
+    try {
+      // Make the local replica the leader
+      val leaderMetadataImage = imageFromTopics(topicsImage(localId, true, epoch))
+      replicaManager.applyDelta(leaderMetadataImage, topicsDelta(localId, true, epoch))
 
-    // Check the state of that partition and fetcher
-    val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
-    assertTrue(leaderPartition.isLeader)
-    assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
-    assertEquals(epoch, leaderPartition.getLeaderEpoch)
+      // Check the state of that partition and fetcher
+      val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+      assertTrue(leaderPartition.isLeader)
+      assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
+      assertEquals(epoch, leaderPartition.getLeaderEpoch)
 
-    assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+      assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
 
-    // Send a produce request and advance the highwatermark
-    val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
-    fetchMessages(
-      replicaManager,
-      otherId,
-      topicPartition,
-      new PartitionData(numOfRecords, 0, Int.MaxValue, Optional.empty()),
-      Int.MaxValue,
-      IsolationLevel.READ_UNCOMMITTED,
-      None
-    )
-    assertEquals(Errors.NONE, leaderResponse.get.error)
+      // Send a produce request and advance the highwatermark
+      val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+      fetchMessages(
+        replicaManager,
+        otherId,
+        topicPartition,
+        new PartitionData(numOfRecords, 0, Int.MaxValue, Optional.empty()),
+        Int.MaxValue,
+        IsolationLevel.READ_UNCOMMITTED,
+        None
+      )
+      assertEquals(Errors.NONE, leaderResponse.get.error)
 
-    // Change the local replica to follower
-    val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch + 1))
-    replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch + 1))
+      // Change the local replica to follower
+      val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch + 1))
+      replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch + 1))
 
-    // Append on a follower should fail
-    val followerResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
-    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, followerResponse.get.error)
+      // Append on a follower should fail
+      val followerResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, followerResponse.get.error)
 
-    // Check the state of that partition and fetcher
-    val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
-    assertFalse(followerPartition.isLeader)
-    assertEquals(epoch + 1, followerPartition.getLeaderEpoch)
+      // Check the state of that partition and fetcher
+      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      assertFalse(followerPartition.isLeader)
+      assertEquals(epoch + 1, followerPartition.getLeaderEpoch)
 
-    val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-    assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
+      val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
+      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
@@ -2875,45 +2917,51 @@ class ReplicaManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
 
-    // Make the local replica the follower
-    val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch))
-    replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch))
+    try {
+      // Make the local replica the follower
+      val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch))
+      replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch))
 
-    // Check the state of that partition and fetcher
-    val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
-    assertFalse(followerPartition.isLeader)
-    assertEquals(epoch, followerPartition.getLeaderEpoch)
+      // Check the state of that partition and fetcher
+      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      assertFalse(followerPartition.isLeader)
+      assertEquals(epoch, followerPartition.getLeaderEpoch)
 
-    val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-    assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
+      val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
+      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
 
-    // Append on a follower should fail
-    val followerResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
-    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, followerResponse.get.error)
+      // Append on a follower should fail
+      val followerResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, followerResponse.get.error)
 
-    // Change the local replica to leader
-    val leaderMetadataImage = imageFromTopics(topicsImage(localId, true, epoch + 1))
-    replicaManager.applyDelta(leaderMetadataImage, topicsDelta(localId, true, epoch + 1))
+      // Change the local replica to leader
+      val leaderMetadataImage = imageFromTopics(topicsImage(localId, true, epoch + 1))
+      replicaManager.applyDelta(leaderMetadataImage, topicsDelta(localId, true, epoch + 1))
 
-    // Send a produce request and advance the highwatermark
-    val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
-    fetchMessages(
-      replicaManager,
-      otherId,
-      topicPartition,
-      new PartitionData(numOfRecords, 0, Int.MaxValue, Optional.empty()),
-      Int.MaxValue,
-      IsolationLevel.READ_UNCOMMITTED,
-      None
-    )
-    assertEquals(Errors.NONE, leaderResponse.get.error)
+      // Send a produce request and advance the highwatermark
+      val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+      fetchMessages(
+        replicaManager,
+        otherId,
+        topicPartition,
+        new PartitionData(numOfRecords, 0, Int.MaxValue, Optional.empty()),
+        Int.MaxValue,
+        IsolationLevel.READ_UNCOMMITTED,
+        None
+      )
+      assertEquals(Errors.NONE, leaderResponse.get.error)
 
-    val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
-    assertTrue(leaderPartition.isLeader)
-    assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
-    assertEquals(epoch + 1, leaderPartition.getLeaderEpoch)
+      val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+      assertTrue(leaderPartition.isLeader)
+      assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
+      assertEquals(epoch + 1, leaderPartition.getLeaderEpoch)
 
-    assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+      assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
@@ -2924,28 +2972,34 @@ class ReplicaManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
 
-    // Make the local replica the follower
-    val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch))
-    replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch))
+    try {
+      // Make the local replica the follower
+      val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch))
+      replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch))
 
-    // Check the state of that partition and fetcher
-    val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
-    assertFalse(followerPartition.isLeader)
-    assertEquals(epoch, followerPartition.getLeaderEpoch)
+      // Check the state of that partition and fetcher
+      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      assertFalse(followerPartition.isLeader)
+      assertEquals(epoch, followerPartition.getLeaderEpoch)
 
-    val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-    assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
+      val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
+      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
 
-    // Apply the same delta again
-    replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch))
+      // Apply the same delta again
+      replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch))
 
-    // Check that the state stays the same
-    val HostedPartition.Online(noChangePartition) = replicaManager.getPartition(topicPartition)
-    assertFalse(noChangePartition.isLeader)
-    assertEquals(epoch, noChangePartition.getLeaderEpoch)
+      // Check that the state stays the same
+      val HostedPartition.Online(noChangePartition) = replicaManager.getPartition(topicPartition)
+      assertFalse(noChangePartition.isLeader)
+      assertEquals(epoch, noChangePartition.getLeaderEpoch)
 
-    val noChangeFetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-    assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), noChangeFetcher.map(_.sourceBroker))
+      val noChangeFetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
+      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), noChangeFetcher.map(_.sourceBroker))
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
@@ -2957,27 +3011,33 @@ class ReplicaManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
 
-    // Make the local replica the leader
-    val leaderMetadataImage = imageFromTopics(topicsImage(localId, true, epoch))
-    replicaManager.applyDelta(leaderMetadataImage, topicsDelta(localId, true, epoch))
+    try {
+      // Make the local replica the leader
+      val leaderMetadataImage = imageFromTopics(topicsImage(localId, true, epoch))
+      replicaManager.applyDelta(leaderMetadataImage, topicsDelta(localId, true, epoch))
 
-    // Check the state of that partition and fetcher
-    val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
-    assertTrue(leaderPartition.isLeader)
-    assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
-    assertEquals(epoch, leaderPartition.getLeaderEpoch)
+      // Check the state of that partition and fetcher
+      val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+      assertTrue(leaderPartition.isLeader)
+      assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
+      assertEquals(epoch, leaderPartition.getLeaderEpoch)
 
-    assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+      assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
 
-    // Send a produce request
-    val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+      // Send a produce request
+      val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
 
-    // Change the local replica to follower
-    val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch + 1))
-    replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch + 1))
+      // Change the local replica to follower
+      val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch + 1))
+      replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch + 1))
 
-    // Check that the produce failed because it changed to follower before replicating
-    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, leaderResponse.get.error)
+      // Check that the produce failed because it changed to follower before replicating
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, leaderResponse.get.error)
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
@@ -2988,35 +3048,41 @@ class ReplicaManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
 
-    // Make the local replica the leader
-    val leaderMetadataImage = imageFromTopics(topicsImage(localId, true, epoch))
-    replicaManager.applyDelta(leaderMetadataImage, topicsDelta(localId, true, epoch))
+    try {
+      // Make the local replica the leader
+      val leaderMetadataImage = imageFromTopics(topicsImage(localId, true, epoch))
+      replicaManager.applyDelta(leaderMetadataImage, topicsDelta(localId, true, epoch))
 
-    // Check the state of that partition and fetcher
-    val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
-    assertTrue(leaderPartition.isLeader)
-    assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
-    assertEquals(epoch, leaderPartition.getLeaderEpoch)
+      // Check the state of that partition and fetcher
+      val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+      assertTrue(leaderPartition.isLeader)
+      assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
+      assertEquals(epoch, leaderPartition.getLeaderEpoch)
 
-    assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+      assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
 
-    // Send a fetch request
-    val fetchCallback = fetchMessages(
-      replicaManager,
-      otherId,
-      topicPartition,
-      new PartitionData(0, 0, Int.MaxValue, Optional.empty()),
-      Int.MaxValue,
-      IsolationLevel.READ_UNCOMMITTED,
-      None
-    )
+      // Send a fetch request
+      val fetchCallback = fetchMessages(
+        replicaManager,
+        otherId,
+        topicPartition,
+        new PartitionData(0, 0, Int.MaxValue, Optional.empty()),
+        Int.MaxValue,
+        IsolationLevel.READ_UNCOMMITTED,
+        None
+      )
 
-    // Change the local replica to follower
-    val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch + 1))
-    replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch + 1))
+      // Change the local replica to follower
+      val followerMetadataImage = imageFromTopics(topicsImage(localId, false, epoch + 1))
+      replicaManager.applyDelta(followerMetadataImage, topicsDelta(localId, false, epoch + 1))
 
-    // Check that the produce failed because it changed to follower before replicating
-    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchCallback.assertFired.error)
+      // Check that the produce failed because it changed to follower before replicating
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchCallback.assertFired.error)
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   private def topicsImage(replica: Int, isLeader: Boolean, epoch: Int): TopicsImage = {

@@ -104,7 +104,7 @@ class DelayedProduce(delayMs: Long,
       }
     }
 
-    // check if every partition has satisfied at least one of case A or B
+    // check if every partition has satisfied at least one of case A, B or C
     if (!produceMetadata.produceStatus.values.exists(_.acksPending))
       forceComplete()
     else
