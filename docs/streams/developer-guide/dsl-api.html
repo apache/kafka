@@ -362,15 +362,16 @@
                     <tbody valign="top">
                     <tr class="row-even"><td><p class="first"><strong>Branch</strong></p>
                         <ul class="last simple">
-                            <li>KStream &rarr; KStream[]</li>
+                            <li>KStream &rarr; BranchedKStream</li>
                         </ul>
                     </td>
                         <td><p class="first">Branch (or split) a <code class="docutils literal"><span class="pre">KStream</span></code> based on the supplied predicates into one or more <code class="docutils literal"><span class="pre">KStream</span></code> instances.
-                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#split">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#split()">details</a>)</p>
                             <p>Predicates are evaluated in order.  A record is placed to one and only one output stream on the first match:
-                                if the n-th predicate evaluates to true, the record is placed to n-th stream.  If no predicate matches, the
-                                the record is dropped.</p>
+                                if the n-th predicate evaluates to true, the record is placed to n-th stream. If a record does not match any predicates,
+                                it will be routed to the default branch, or dropped if no default branch is created.</p>
                             <p>Branching is useful, for example, to route records to different downstream topics.</p>
+<<<<<<< HEAD
                             <pre class="brush: java;">
 KStream<String, Long> stream = ...;
 Map<String, KStream<String, Long>> branches =
@@ -379,7 +380,7 @@ Map<String, KStream<String, Long>> branches =
              Branched.as("A"))
         .branch((key, value) -> key.startsWith("B"),  /* second predicate */
              Branched.as("B"))
-.defaultBranch(Branched.as("C"))
+        .defaultBranch(Branched.as("C"))              /* default branch */
 );
 
 // KStream branches.get("Branch-A") contains all records whose keys start with "A"
