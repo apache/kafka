@@ -769,6 +769,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     logContext,
                     config.getString(ConsumerConfig.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG),
                     leastLoadedNodeAlgorithm);
+            netClient.setEnableClientResponseWithFinalize(config.getBoolean(CommonClientConfigs.ENABLE_CLIENT_RESPONSE_LEAK_CHECK));
 
             this.client = new ConsumerNetworkClient(
                     logContext,

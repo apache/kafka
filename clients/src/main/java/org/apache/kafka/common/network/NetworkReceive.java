@@ -135,11 +135,15 @@ public class NetworkReceive implements Receive {
 
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         if (buffer != null && buffer != EMPTY_BUFFER) {
             memoryPool.release(buffer);
             buffer = null;
         }
+    }
+
+    public MemoryPool memoryPool() {
+        return memoryPool;
     }
 
     public ByteBuffer payload() {

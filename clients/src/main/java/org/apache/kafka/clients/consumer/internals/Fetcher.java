@@ -318,7 +318,8 @@ public class Fetcher<K, V> implements Closeable {
                                     short responseVersion = resp.requestHeader().apiVersion();
 
                                     completedFetches.add(new CompletedFetch(partition, partitionData,
-                                            metricAggregator, batches, fetchOffset, responseVersion));
+                                            metricAggregator, batches, fetchOffset, responseVersion, resp));
+                                    resp.incRefCount();
                                 }
                             }
 
@@ -605,12 +606,25 @@ public class Fetcher<K, V> implements Closeable {
         try {
             while (recordsRemaining > 0) {
                 if (nextInLineFetch == null || nextInLineFetch.isConsumed) {
+                    // The completed fetch object could be de-referenced and use the underlying buffer in
+                    // two different cases.
+                    // 1. The CompletedFetch could be a valid object containing fetched data from broker. In that case,
+                    //    the records are retrieved by fetchRecords() call below and then, underlying buffer is no
+                    //    longer needed and it's released via the Fetcher.CompletedFetch.drain() method.
+                    // 2. The CompletedFetch could be an object containing an error code from broker such as
+                    //    NOT_LEADER_FOR_PARTITION. In that case, we don't need to retrieve the records and ref count
+                    //    is decremented after initializeCompletedFetch() method.
                     CompletedFetch records = completedFetches.peek();
                     if (records == null) break;
 
                     if (records.notInitialized()) {
                         try {
                             nextInLineFetch = initializeCompletedFetch(records);
+
+                            // nextInLineRecords might be null when completedFetch contains error
+                            if (nextInLineFetch == null) {
+                                records.response.decRefCount();
+                            }
                         } catch (Exception e) {
                             // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
                             // (2) there are no fetched records with actual content preceding this exception.
@@ -620,6 +634,7 @@ public class Fetcher<K, V> implements Closeable {
                             FetchResponse.PartitionData partition = records.partitionData;
                             if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
                                 completedFetches.poll();
+                                records.response.decRefCount();
                             }
                             throw e;
                         }
@@ -1398,13 +1413,15 @@ public class Fetcher<K, V> implements Closeable {
         private Exception cachedRecordException = null;
         private boolean corruptLastRecord = false;
         private boolean initialized = false;
+        private final ClientResponse response;
 
         private CompletedFetch(TopicPartition partition,
                                FetchResponse.PartitionData<Records> partitionData,
                                FetchResponseMetricAggregator metricAggregator,
                                Iterator<? extends RecordBatch> batches,
                                Long fetchOffset,
-                               short responseVersion) {
+                               short responseVersion,
+                               ClientResponse response) {
             this.partition = partition;
             this.partitionData = partitionData;
             this.metricAggregator = metricAggregator;
@@ -1414,12 +1431,14 @@ public class Fetcher<K, V> implements Closeable {
             this.lastEpoch = Optional.empty();
             this.abortedProducerIds = new HashSet<>();
             this.abortedTransactions = abortedTransactions(partitionData);
+            this.response = response;
         }
 
         private void drain() {
             if (!isConsumed) {
                 maybeCloseRecordStream();
                 cachedRecordException = null;
+                this.response.decRefCount();
                 this.isConsumed = true;
                 this.metricAggregator.record(partition, bytesRead, recordsRead);
 
@@ -1829,6 +1848,10 @@ public class Fetcher<K, V> implements Closeable {
     public void close() {
         if (nextInLineFetch != null)
             nextInLineFetch.drain();
+        for (CompletedFetch completedFetch : completedFetches) {
+            completedFetch.response.decRefCount();
+        }
+        completedFetches.clear();
         decompressionBufferSupplier.close();
     }
 

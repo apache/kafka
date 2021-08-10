@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -79,6 +80,8 @@ public class NetworkClient implements KafkaClient {
         CLOSED
     }
 
+    private final LogContext logContext;
+
     private final Logger log;
 
     /* the selector used to perform network i/o */
@@ -118,6 +121,8 @@ public class NetworkClient implements KafkaClient {
     private final ClientDnsLookup clientDnsLookup;
 
     private final Time time;
+
+    private boolean enableClientResponseWithFinalize = false;
 
     /**
      * True if we should send an ApiVersionRequest when first connecting to a broker.
@@ -427,6 +432,7 @@ public class NetworkClient implements KafkaClient {
         this.discoverBrokerVersions = discoverBrokerVersions;
         this.apiVersions = apiVersions;
         this.throttleTimeSensor = throttleTimeSensor;
+        this.logContext = logContext;
         this.log = logContext.logger(NetworkClient.class);
         this.clientDnsLookup = clientDnsLookup;
         this.state = new AtomicReference<>(State.ACTIVE);
@@ -434,6 +440,10 @@ public class NetworkClient implements KafkaClient {
             throw new IllegalArgumentException("must specify leastLoadedNodeAlgorithm");
         }
         this.leastLoadedNodeAlgorithm = leastLoadedNodeAlgorithm;
+    }
+
+    public void setEnableClientResponseWithFinalize(boolean enableClientResponseWithFinalize) {
+        this.enableClientResponseWithFinalize = enableClientResponseWithFinalize;
     }
 
     /**
@@ -820,6 +830,8 @@ public class NetworkClient implements KafkaClient {
         if (state.compareAndSet(State.CLOSING, State.CLOSED)) {
             this.selector.close();
             this.metadataUpdater.close();
+            this.selector.completedReceives().forEach(NetworkReceive::close);
+            this.selector.completedReceives().clear();
         } else {
             log.warn("Attempting to close NetworkClient that has already been closed.");
         }
@@ -1205,8 +1217,16 @@ public class NetworkClient implements KafkaClient {
                 metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) body, req.destination);
             else if (req.isInternalRequest && body instanceof ApiVersionsResponse)
                 handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) body);
-            else
-                responses.add(req.completed(body, now));
+            else {
+                responses.add(req.completed(body, now, receive.memoryPool(), receive.payload(), this.logContext,
+                    this.enableClientResponseWithFinalize));
+            }
+
+            // If request is an internal request such as Metadata or ApiVersion, then close the network receive
+            // Otherwise, it's ClientResponse's responsibility to release the buffer to MemoryPool via ref counting
+            if (req.isInternalRequest) {
+                receive.close();
+            }
         }
     }
 
@@ -1585,9 +1605,19 @@ public class NetworkClient implements KafkaClient {
             this.sendTimeMs = sendTimeMs;
         }
 
+        public ClientResponse completed(AbstractResponse response, long timeMs, MemoryPool memoryPool,
+            ByteBuffer responsePayload, LogContext logContext, boolean enableClientResponseWithFinalize) {
+            if (enableClientResponseWithFinalize) {
+                return new ClientResponseWithFinalize(header, callback, destination, createdTimeMs, timeMs, false, null, null, response,
+                    memoryPool, responsePayload, logContext);
+            }
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, false, null, null, response,
+                memoryPool, responsePayload);
+        }
+
         public ClientResponse completed(AbstractResponse response, long timeMs) {
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs,
-                    false, null, null, response);
+                false, null, null, response);
         }
 
         public ClientResponse disconnected(long timeMs, AuthenticationException authenticationException) {

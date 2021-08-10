@@ -560,6 +560,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         new EnumValueValidator<>(LeastLoadedNodeAlgorithm.class),
                                         Importance.MEDIUM,
                                         LEAST_LOADED_NODE_ALGORITHM_DOC)
+                                .define(CommonClientConfigs.ENABLE_CLIENT_RESPONSE_LEAK_CHECK,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.MEDIUM,
+                                        CommonClientConfigs.ENABLE_CLIENT_RESPONSE_LEAK_CHECK_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
     }
