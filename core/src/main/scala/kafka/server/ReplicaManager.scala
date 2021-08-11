@@ -2148,8 +2148,8 @@ class ReplicaManager(val config: KafkaConfig,
           if (localLog(tp).isEmpty)
             markPartitionOffline(tp)
         }
-        newLocalLeaders.keySet.foreach(markPartitionOfflineIfNeeded(_))
-        newLocalFollowers.keySet.foreach(markPartitionOfflineIfNeeded(_))
+        newLocalLeaders.keySet.foreach(markPartitionOfflineIfNeeded)
+        newLocalFollowers.keySet.foreach(markPartitionOfflineIfNeeded)
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
@@ -2193,7 +2193,6 @@ class ReplicaManager(val config: KafkaConfig,
                                        newLocalFollowers: mutable.HashMap[TopicPartition, LocalLeaderInfo]): Unit = {
     stateChangeLogger.info(s"Transitioning ${newLocalFollowers.size} partition(s) to " +
       "local followers.")
-    replicaFetcherManager.removeFetcherForPartitions(newLocalFollowers.keySet)
     val shuttingDown = isShuttingDown.get()
     val partitionsToMakeFollower = new mutable.HashMap[TopicPartition, InitialFetchState]
     val newFollowerTopicSet = new mutable.HashSet[String]
@@ -2202,13 +2201,6 @@ class ReplicaManager(val config: KafkaConfig,
         try {
           newFollowerTopicSet.add(tp.topic())
 
-          completeDelayedFetchOrProduceRequests(tp)
-
-          // Create the local replica even if the leader is unavailable. This is required
-          // to ensure that we include the partition's high watermark in the checkpoint
-          // file (see KAFKA-1647)
-          partition.createLogIfNotExists(isNew, false, offsetCheckpoints, Some(info.topicId))
-
           if (shuttingDown) {
             stateChangeLogger.trace(s"Unable to start fetching ${tp} with topic " +
               s"ID ${info.topicId} because the replica manager is shutting down.")
@@ -2216,15 +2208,30 @@ class ReplicaManager(val config: KafkaConfig,
             val listenerName = config.interBrokerListenerName.value()
             val leader = info.partition.leader
             Option(newImage.cluster().broker(leader)).flatMap(_.node(listenerName).asScala) match {
-              case None => stateChangeLogger.trace(s"Unable to start fetching ${tp} " +
-                s"with topic ID ${info.topicId} from leader ${leader} because it is not " +
-                "alive.")
+              case None =>
+                stateChangeLogger.trace(
+                  s"Unable to start fetching ${tp} with topic ID ${info.topicId} from leader " +
+                  s"${leader} because it is not alive."
+                )
+
+                // Create the local replica even if the leader is unavailable. This is required
+                // to ensure that we include the partition's high watermark in the checkpoint
+                // file (see KAFKA-1647)
+                partition.createLogIfNotExists(isNew, false, offsetCheckpoints, Some(info.topicId))
               case Some(node) =>
-                val leaderEndPoint = new BrokerEndPoint(node.id(), node.host(), node.port())
-                val log = partition.localLogOrException
-                val fetchOffset = initialFetchOffset(log)
-                partitionsToMakeFollower.put(tp,
-                  InitialFetchState(leaderEndPoint, partition.getLeaderEpoch, fetchOffset))
+                val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
+                if (partition.makeFollower(state, offsetCheckpoints, Some(info.topicId))) {
+                  val leaderEndPoint = new BrokerEndPoint(node.id(), node.host(), node.port())
+                  val log = partition.localLogOrException
+                  val fetchOffset = initialFetchOffset(log)
+                  partitionsToMakeFollower.put(tp,
+                    InitialFetchState(leaderEndPoint, partition.getLeaderEpoch, fetchOffset))
+                } else {
+                  stateChangeLogger.info(
+                    s"Skipped the become-follower state change after marking its partition as " +
+                    s"follower for partition $tp with id ${info.topicId} and partition state $state."
+                  )
+                }
             }
           }
           changedPartitions.add(partition)
@@ -2235,8 +2242,16 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
     }
-    updateLeaderAndFollowerMetrics(newFollowerTopicSet)
+
+    replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeFollower.keySet)
+    stateChangeLogger.info(s"Stopped fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
+
     replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollower)
+    stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
+
+    partitionsToMakeFollower.keySet.foreach(completeDelayedFetchOrProduceRequests)
+
+    updateLeaderAndFollowerMetrics(newFollowerTopicSet)
   }
 
   def deleteStrayReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {

@@ -106,7 +106,7 @@ versions += [
   reflections: "0.9.12",
   rocksDB: "6.19.3",
   scalaCollectionCompat: "2.4.4",
-  scalafmt: "1.5.1",
+  scalafmt: "2.7.5",
   scalaJava8Compat : "1.0.0",
   scoverage: "1.4.1",
   slf4j: "1.7.30",

@@ -100,36 +100,44 @@ class StreamToTableJoinScalaIntegrationTestBase extends StreamToTableJoinTestDat
     p
   }
 
-  def produceNConsume(userClicksTopic: String,
-                      userRegionsTopic: String,
-                      outputTopic: String,
-                      waitTillRecordsReceived: Boolean = true): java.util.List[KeyValue[String, Long]] = {
+  def produceNConsume(
+    userClicksTopic: String,
+    userRegionsTopic: String,
+    outputTopic: String,
+    waitTillRecordsReceived: Boolean = true
+  ): java.util.List[KeyValue[String, Long]] = {
 
     import _root_.scala.jdk.CollectionConverters._
 
     // Publish user-region information.
     val userRegionsProducerConfig: Properties = getUserRegionsProducerConfig()
-    IntegrationTestUtils.produceKeyValuesSynchronously(userRegionsTopic,
-                                                       userRegions.asJava,
-                                                       userRegionsProducerConfig,
-                                                       mockTime,
-                                                       false)
+    IntegrationTestUtils.produceKeyValuesSynchronously(
+      userRegionsTopic,
+      userRegions.asJava,
+      userRegionsProducerConfig,
+      mockTime,
+      false
+    )
 
     // Publish user-click information.
     val userClicksProducerConfig: Properties = getUserClicksProducerConfig()
-    IntegrationTestUtils.produceKeyValuesSynchronously(userClicksTopic,
-                                                       userClicks.asJava,
-                                                       userClicksProducerConfig,
-                                                       mockTime,
-                                                       false)
+    IntegrationTestUtils.produceKeyValuesSynchronously(
+      userClicksTopic,
+      userClicks.asJava,
+      userClicksProducerConfig,
+      mockTime,
+      false
+    )
 
     if (waitTillRecordsReceived) {
       // consume and verify result
       val consumerConfig = getConsumerConfig()
 
-      IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerConfig,
-                                                                 outputTopic,
-                                                                 expectedClicksPerRegion.asJava)
+      IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+        consumerConfig,
+        outputTopic,
+        expectedClicksPerRegion.asJava
+      )
     } else {
       java.util.Collections.emptyList()
     }

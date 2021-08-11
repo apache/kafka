@@ -90,11 +90,11 @@ public class ProcessorStateManagerTest {
     private final String persistentStoreTwoName = "persistentStore2";
     private final String nonPersistentStoreName = "nonPersistentStore";
     private final String persistentStoreTopicName =
-        ProcessorStateManager.storeChangelogTopic(applicationId, persistentStoreName, taskId.namedTopology());
+        ProcessorStateManager.storeChangelogTopic(applicationId, persistentStoreName, taskId.topologyName());
     private final String persistentStoreTwoTopicName =
-        ProcessorStateManager.storeChangelogTopic(applicationId, persistentStoreTwoName, taskId.namedTopology());
+        ProcessorStateManager.storeChangelogTopic(applicationId, persistentStoreTwoName, taskId.topologyName());
     private final String nonPersistentStoreTopicName =
-        ProcessorStateManager.storeChangelogTopic(applicationId, nonPersistentStoreName, taskId.namedTopology());
+        ProcessorStateManager.storeChangelogTopic(applicationId, nonPersistentStoreName, taskId.topologyName());
     private final MockKeyValueStore persistentStore = new MockKeyValueStore(persistentStoreName, true);
     private final MockKeyValueStore persistentStoreTwo = new MockKeyValueStore(persistentStoreTwoName, true);
     private final MockKeyValueStore nonPersistentStore = new MockKeyValueStore(nonPersistentStoreName, false);
