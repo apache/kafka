@@ -22,13 +22,14 @@ import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -74,6 +75,21 @@ public class JmxReporterTest {
         } finally {
             metrics.close();
         }
+    }
+
+    @Test
+    public void testMbeanTagOrdering() {
+        Map<String, String> tags = new HashMap<>();
+        tags.put("tag_a", "x");
+        tags.put("tag_b", "y");
+        tags.put("tag_c", "z");
+        tags.put("tag_d", "1,2");
+        tags.put("tag_e", "");
+        tags.put("tag_f", "3");
+
+        final MetricName metricName = new MetricName("bean1", "grp1", "fancy description", tags);
+        final String expectedMbean = "prefix:type=grp1,tag_a=x,tag_b=y,tag_c=z,tag_d=\"1,2\",tag_f=3";
+        assertEquals(expectedMbean, JmxReporter.getMBeanName("prefix", metricName));
     }
 
     @Test

@@ -193,14 +193,19 @@ public class JmxReporter implements MetricsReporter {
         mBeanName.append(prefix);
         mBeanName.append(":type=");
         mBeanName.append(metricName.group());
-        for (Map.Entry<String, String> entry : metricName.tags().entrySet()) {
-            if (entry.getKey().length() <= 0 || entry.getValue().length() <= 0)
-                continue;
-            mBeanName.append(",");
-            mBeanName.append(entry.getKey());
-            mBeanName.append("=");
-            mBeanName.append(Sanitizer.jmxSanitize(entry.getValue()));
-        }
+        metricName.tags().entrySet().stream()
+            // use sorted tag entries to ensure the generated mBean name is always consistent
+            // when updating or removing mbeans in our mbeans map and in JMX.
+            .sorted(Map.Entry.comparingByKey())
+            .forEachOrdered(entry -> {
+                if (entry.getKey().length() <= 0 || entry.getValue().length() <= 0) {
+                    return;
+                }
+                mBeanName.append(",");
+                mBeanName.append(entry.getKey());
+                mBeanName.append("=");
+                mBeanName.append(Sanitizer.jmxSanitize(entry.getValue()));
+            });
         return mBeanName.toString();
     }
 
