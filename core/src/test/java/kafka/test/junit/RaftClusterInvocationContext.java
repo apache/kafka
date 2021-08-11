@@ -77,6 +77,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
     @Override
     public List<Extension> getAdditionalExtensions() {
+        RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterReference, clusterConfig);
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
                 TestKitNodes nodes = new TestKitNodes.Builder().
@@ -101,8 +102,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
                     100L);
             },
-            (AfterTestExecutionCallback) context -> clusterReference.get().close(),
-            new ClusterInstanceParameterResolver(new RaftClusterInstance(clusterReference, clusterConfig)),
+            (AfterTestExecutionCallback) context -> clusterInstance.stop(),
+            new ClusterInstanceParameterResolver(clusterInstance),
             new GenericParameterResolver<>(clusterConfig, ClusterConfig.class)
         );
     }
@@ -196,6 +197,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void stop() {
             if (stopped.compareAndSet(false, true)) {
+
                 Utils.closeQuietly(clusterReference.get(), "cluster");
                 admins.forEach(admin -> Utils.closeQuietly(admin, "admin"));
             }

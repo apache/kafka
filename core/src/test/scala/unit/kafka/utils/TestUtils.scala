@@ -26,12 +26,12 @@ import java.time.Duration
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
-import com.yammer.metrics.core.Meter
 
+import com.yammer.metrics.core.Meter
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
-import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.controller.{ControllerEventManager, LeaderIsrAndControllerEpoch}
 import kafka.log._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.network.RequestChannel
@@ -72,8 +72,9 @@ import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
 import org.mockito.Mockito
-
 import java.net.InetAddress
+
+import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 
 import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -1922,6 +1923,28 @@ object TestUtils extends Logging {
       metrics = requestChannelMetrics,
       envelope = envelope
     )
+  }
+
+  def verifyNoUnexpectedThreads(context: String): Unit = {
+    val unexpectedThreadNames = Set(
+      ControllerEventManager.ControllerEventThreadName,
+      KafkaProducer.NETWORK_THREAD_PREFIX,
+      AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
+      AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
+      ZooKeeperTestHarness.ZkClientEventThreadSuffix
+    )
+
+    def unexpectedThreads: Set[String] = {
+      val allThreads = Thread.getAllStackTraces.keySet.asScala.map(thread => thread.getName)
+      allThreads.filter(t => unexpectedThreadNames.exists(s => t.contains(s))).toSet
+    }
+
+    def printUnexpectedThreads: String = {
+      val unexpected = unexpectedThreads
+      s"Found ${unexpected.size} unexpected threads during $context: ${unexpected.mkString("`", ",", "`")}"
+    }
+
+    TestUtils.waitUntilTrue(() => unexpectedThreads.isEmpty, printUnexpectedThreads)
   }
 
 }

@@ -49,6 +49,7 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
 
   @BeforeEach
   def setup(clusterConfig: ClusterConfig): Unit = {
+    TestUtils.verifyNoUnexpectedThreads("@BeforeEach")
     clusterConfig.serverProperties().put(KafkaConfig.AutoLeaderRebalanceEnableProp, "false")
     clusterConfig.serverProperties().put(KafkaConfig.ControlledShutdownEnableProp, "true")
     clusterConfig.serverProperties().put(KafkaConfig.ControlledShutdownMaxRetriesProp, "1")
