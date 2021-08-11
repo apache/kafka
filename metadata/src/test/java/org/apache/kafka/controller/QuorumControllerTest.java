@@ -81,6 +81,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -180,12 +181,12 @@ public class QuorumControllerTest {
         int brokerCount = 5;
         int brokersToKeepUnfenced = 1;
         short replicationFactor = 5;
-        Long sessionTimeout = 1L;
-        Long sleepMillis = (sessionTimeout * 1000) / 2;
+        Long sessionTimeoutSec = 1L;
+        Long sleepMillis = (sessionTimeoutSec * 1000) / 2;
 
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv =
-                new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS), Optional.of(sessionTimeout))) {
+                new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS), Optional.of(sessionTimeoutSec))) {
                 ListenerCollection listeners = new ListenerCollection();
                 listeners.add(new Listener().setName("PLAINTEXT").
                     setHost("localhost").setPort(9092));
@@ -241,23 +242,17 @@ public class QuorumControllerTest {
                 Uuid topicIdBar = createTopicsResponseData.topics().find("bar").topicId();
 
                 // Fence some of the brokers
-                boolean fencingComplete;
-                Long waitIterations = 0L;
-                do {
-                    fencingComplete = true;
-                    sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
-                    for (int i = brokersToKeepUnfenced; i < brokerCount; i++) {
-                        if (active.replicationControl().isBrokerUnfenced(i)) {
-                            fencingComplete = false;
+                TestUtils.waitForCondition(() -> {
+                        sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+                        for (int i = brokersToKeepUnfenced; i < brokerCount; i++) {
+                            if (active.replicationControl().isBrokerUnfenced(i)) {
+                                return false;
+                            }
                         }
-                    }
-                    Thread.sleep(1000);
-                    waitIterations++;
-
-                    if (waitIterations >= sessionTimeout * 3) {
-                        assertTrue(false, "Fencing of brokers did not process within expected time");
-                    }
-                } while (!fencingComplete);
+                        return true;
+                    }, sessionTimeoutSec * 2 * 1000,
+                    "Fencing of brokers did not process within expected time"
+                );
 
                 // At this point the brokers we want fenced are fenced.
                 // Send another heartbeat to the brokers we want to keep alive

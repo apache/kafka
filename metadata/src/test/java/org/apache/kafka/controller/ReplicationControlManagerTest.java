@@ -99,6 +99,7 @@ import static org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -1061,12 +1062,24 @@ public class ReplicationControlManagerTest {
         Uuid fooId = ctx.createTestTopic("foo", new int[][]{
             new int[]{1, 2, 3}, new int[]{2, 3, 4}, new int[]{0, 2, 1}}).topicId();
 
+        assertTrue(ctx.clusterControl.fencedBrokerIds().isEmpty());
         ctx.fenceBrokers(Utils.mkSet(2, 3));
 
         PartitionRegistration partition0 = replication.getPartition(fooId, 0);
+        PartitionRegistration partition1 = replication.getPartition(fooId, 1);
+        PartitionRegistration partition2 = replication.getPartition(fooId, 2);
+
         assertArrayEquals(new int[]{1, 2, 3}, partition0.replicas);
         assertArrayEquals(new int[]{1}, partition0.isr);
         assertEquals(1, partition0.leader);
+
+        assertArrayEquals(new int[]{2, 3, 4}, partition1.replicas);
+        assertArrayEquals(new int[]{4}, partition1.isr);
+        assertEquals(4, partition1.leader);
+
+        assertArrayEquals(new int[]{0, 2, 1}, partition2.replicas);
+        assertArrayEquals(new int[]{0, 1}, partition2.isr);
+        assertNotEquals(2, partition2.leader);
     }
 
     @Test
