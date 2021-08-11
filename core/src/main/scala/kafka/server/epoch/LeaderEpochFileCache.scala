@@ -263,6 +263,12 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
+  def getEpochEntry(epoch: Int): Option[EpochEntry] = {
+    inReadLock(lock) {
+      Option.apply(epochs.get(epoch))
+    }
+  }
+
   /**
     * Clears old epoch entries. This method searches for the oldest epoch < offset, updates the saved epoch offset to
     * be offset, then clears any previous epoch entries.
