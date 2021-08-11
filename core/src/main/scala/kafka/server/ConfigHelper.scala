@@ -52,8 +52,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
   def validateBrokerConfigs(resource: ConfigResource, 
                             validateOnly: Boolean, 
-                            configProps: Properties, 
-                            configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
+                            configProps: Properties): (ConfigResource, ApiError) = {
     val brokerId = getAndValidateBrokerId(resource)
     val perBrokerConfig = brokerId.nonEmpty
     // Check that there are no static configs being altered

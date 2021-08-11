@@ -2642,12 +2642,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Validate per-broker dynamic configs
       val results = brokerConfigs.map { case (resource, config) =>
         try {
-          val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
           val configProps = new Properties
           config.entries.asScala.filter(_.value != null).foreach { configEntry =>
             configProps.setProperty(configEntry.name, configEntry.value)
           }
-          configHelper.validateBrokerConfigs(resource, alterConfigsRequest.validateOnly, configProps, configEntriesMap)
+          configHelper.validateBrokerConfigs(resource, alterConfigsRequest.validateOnly, configProps)
         } catch {
           case e @ (_: ConfigException | _: IllegalArgumentException) =>
             val message = s"Invalid config value for resource $resource: ${e.getMessage}"
@@ -2832,9 +2831,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             val dynamicConfigs = if (brokerId.nonEmpty) dynamicBrokerConfigs else dynamicDefaultConfigs
             val configProps = new Properties()
             configProps.putAll(dynamicConfigs.asJava)
-            val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry.name, entry.configEntry.value)).toMap
             configHelper.prepareIncrementalConfigs(alterConfigOps.toSeq, configProps, KafkaConfig.configKeys)
-            configHelper.validateBrokerConfigs(resource, alterConfigsRequest.data.validateOnly, configProps, configEntriesMap)
+            configHelper.validateBrokerConfigs(resource, alterConfigsRequest.data.validateOnly, configProps)
           } else if (resource.`type` == ConfigResource.Type.BROKER_LOGGER) {
             configHelper.validateLogLevelConfigs(alterConfigOps.toSeq)
             resource -> ApiError.NONE
