@@ -17,7 +17,6 @@
 
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 
@@ -73,11 +72,4 @@ public interface SnapshotWriter<T> extends AutoCloseable {
      * If close is called without first calling freeze the snapshot is aborted.
      */
     void close();
-
-    /**
-     * Adds a {@link SnapshotHeaderRecord} to snapshot
-     *
-     * @throws IllegalStateException if the snapshot is not empty
-     */
-    void initializeSnapshotWithHeader();
 }

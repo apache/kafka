@@ -74,6 +74,7 @@ final public class FileSnapshotWriter<T> implements SnapshotWriter<T> {
                 compressionType,
                 serde
         );
+        initializeSnapshotWithHeader();
     }
 
     /**
@@ -141,7 +142,6 @@ final public class FileSnapshotWriter<T> implements SnapshotWriter<T> {
                     CompressionType.NONE,
                     serde);
         });
-        writer.ifPresent(SnapshotWriter::initializeSnapshotWithHeader);
         return writer;
     }
 
