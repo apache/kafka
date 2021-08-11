@@ -35,8 +35,6 @@ import java.util.stream.StreamSupport;
 import java.util.stream.IntStream;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfigCollection;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -178,116 +176,102 @@ public class QuorumControllerTest {
 
     @Test
     public void testFenceMultipleBrokers() throws Throwable {
-        int brokerCount = 5;
-        int brokersToKeepUnfenced = 1;
+        List<Integer> allBrokers = Arrays.asList(1, 2, 3, 4, 5);
+        List<Integer> brokersToKeepUnfenced = Arrays.asList(1);
+        List<Integer> brokersToFence = Arrays.asList(2, 3, 4, 5);
         short replicationFactor = 5;
-        Long sessionTimeoutSec = 1L;
-        Long sleepMillis = (sessionTimeoutSec * 1000) / 2;
+        long sessionTimeoutMillis = 1000;
 
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv =
-                new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS), Optional.of(sessionTimeoutSec))) {
-                ListenerCollection listeners = new ListenerCollection();
-                listeners.add(new Listener().setName("PLAINTEXT").
-                    setHost("localhost").setPort(9092));
-                QuorumController active = controlEnv.activeController();
-                Map<Integer, Long> brokerEpochs = new HashMap<>();
-                for (int brokerId = 0; brokerId < brokerCount; brokerId++) {
-                    CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
-                        new BrokerRegistrationRequestData().
-                            setBrokerId(brokerId).
-                            setClusterId("06B-K3N1TBCNYFgruEVP0Q").
-                            setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
-                            setListeners(listeners));
-                    brokerEpochs.put(brokerId, reply.get().epoch());
-                }
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(
+                logEnv, b -> b.setConfigDefs(CONFIGS), Optional.of(sessionTimeoutMillis));
+        ) {
+            ListenerCollection listeners = new ListenerCollection();
+            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
+            QuorumController active = controlEnv.activeController();
+            Map<Integer, Long> brokerEpochs = new HashMap<>();
 
-                // Brokers are only registered but still fenced
-                // Topic creation with no available unfenced brokers should fail
-                CreateTopicsRequestData createTopicsRequestData =
-                    new CreateTopicsRequestData().setTopics(
-                        new CreatableTopicCollection(Collections.singleton(
-                            new CreatableTopic().setName("foo").setNumPartitions(1).
-                                setReplicationFactor(replicationFactor)).iterator()));
-                CreateTopicsResponseData createTopicsResponseData = active.createTopics(
-                    createTopicsRequestData).get();
-                assertEquals(Errors.INVALID_REPLICATION_FACTOR.code(),
-                    createTopicsResponseData.topics().find("foo").errorCode());
-                assertEquals("Unable to replicate the partition " + replicationFactor + " time(s): All brokers " +
-                    "are currently fenced.", createTopicsResponseData.topics().find("foo").errorMessage());
-
-                // Unfence all brokers
-                sendBrokerheartbeat(active, brokerCount, brokerEpochs);
-                createTopicsResponseData = active.createTopics(
-                    createTopicsRequestData).get();
-                assertEquals(Errors.NONE.code(), createTopicsResponseData.topics().find("foo").errorCode());
-                Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
-                sendBrokerheartbeat(active, brokerCount, brokerEpochs);
-                Thread.sleep(sleepMillis);
-
-                // All brokers should still be unfenced
-                for (int brokerId = 0; brokerId < brokerCount; brokerId++) {
-                    assertTrue(active.replicationControl().isBrokerUnfenced(brokerId),
-                        "Broker " + brokerId + " should have been unfenced");
-                }
-                createTopicsRequestData = new CreateTopicsRequestData().setTopics(
-                        new CreatableTopicCollection(Collections.singleton(
-                            new CreatableTopic().setName("bar").setNumPartitions(1).
-                                setConfigs(new CreateableTopicConfigCollection(Collections.
-                                    singleton(new CreateableTopicConfig().setName("min.insync.replicas").
-                                        setValue("2")).iterator())).
-                                setReplicationFactor(replicationFactor)).iterator()));
-                createTopicsResponseData = active.createTopics(createTopicsRequestData).get();
-                assertEquals(Errors.NONE.code(), createTopicsResponseData.topics().find("bar").errorCode());
-                Uuid topicIdBar = createTopicsResponseData.topics().find("bar").topicId();
-
-                // Fence some of the brokers
-                TestUtils.waitForCondition(() -> {
-                        sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
-                        for (int i = brokersToKeepUnfenced; i < brokerCount; i++) {
-                            if (active.replicationControl().isBrokerUnfenced(i)) {
-                                return false;
-                            }
-                        }
-                        return true;
-                    }, sessionTimeoutSec * 2 * 1000,
-                    "Fencing of brokers did not process within expected time"
-                );
-
-                // At this point the brokers we want fenced are fenced.
-                // Send another heartbeat to the brokers we want to keep alive
-                sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
-                int[] expectedIsr = new int[brokersToKeepUnfenced];
-                for (int brokerId = 0; brokerId < brokerCount; brokerId++) {
-                    if (brokerId < brokersToKeepUnfenced) {
-                        assertTrue(active.replicationControl().isBrokerUnfenced(brokerId),
-                            "Broker " + brokerId + " should have been unfenced");
-                        expectedIsr[brokerId] = brokerId;
-                    } else {
-                        assertFalse(active.replicationControl().isBrokerUnfenced(brokerId),
-                            "Broker " + brokerId + " should have been fenced");
-                    }
-                }
-
-                // Verify the isr and leaders for the topic partitions
-                int[] sortedIsrFoo = active.replicationControl().getPartition(topicIdFoo, 0).isr.clone();
-                int[] sortedIsrBar = active.replicationControl().getPartition(topicIdBar, 0).isr.clone();
-                Arrays.sort(sortedIsrFoo);
-                Arrays.sort(sortedIsrBar);
-                assertTrue(Arrays.equals(sortedIsrFoo, expectedIsr)
-                    && Arrays.equals(sortedIsrBar, expectedIsr),
-                    "The ISR for topic foo was " + Arrays.toString(sortedIsrFoo) +
-                    " and for topic bar was " + Arrays.toString(sortedIsrBar) +
-                        ". Both are expected to be " + Arrays.toString(expectedIsr));
-
-                int fooLeader = active.replicationControl().getPartition(topicIdFoo, 0).leader;
-                boolean leaderInIsr = IntStream.of(sortedIsrFoo).anyMatch(i -> i == fooLeader);
-                assertTrue(leaderInIsr, "Leader for topic foo not in isr");
-
-                int barLeader = active.replicationControl().getPartition(topicIdBar, 0).leader;
-                leaderInIsr = IntStream.of(sortedIsrFoo).anyMatch(i -> i == barLeader);
-                assertTrue(leaderInIsr, "Leader for topic bar not in isr");
+            for (Integer brokerId : allBrokers) {
+                CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
+                    new BrokerRegistrationRequestData().
+                        setBrokerId(brokerId).
+                        setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                        setIncarnationId(Uuid.randomUuid()).
+                        setListeners(listeners));
+                brokerEpochs.put(brokerId, reply.get().epoch());
             }
+
+            // Brokers are only registered but still fenced
+            // Topic creation with no available unfenced brokers should fail
+            CreateTopicsRequestData createTopicsRequestData =
+                new CreateTopicsRequestData().setTopics(
+                    new CreatableTopicCollection(Collections.singleton(
+                        new CreatableTopic().setName("foo").setNumPartitions(1).
+                            setReplicationFactor(replicationFactor)).iterator()));
+            CreateTopicsResponseData createTopicsResponseData = active.createTopics(
+                createTopicsRequestData).get();
+            assertEquals(Errors.INVALID_REPLICATION_FACTOR,
+                Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
+            assertEquals("Unable to replicate the partition " + replicationFactor + " time(s): All brokers " +
+                "are currently fenced.", createTopicsResponseData.topics().find("foo").errorMessage());
+
+            // Unfence all brokers and retry topic creation for foo
+            sendBrokerheartbeat(active, allBrokers, brokerEpochs);
+            createTopicsResponseData = active.createTopics(createTopicsRequestData).get();
+            assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
+            Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
+            // Create another topic - bar
+            createTopicsRequestData = new CreateTopicsRequestData().setTopics(
+                new CreatableTopicCollection(Collections.singleton(
+                    new CreatableTopic().setName("bar").setNumPartitions(1).
+                        setReplicationFactor(replicationFactor)).iterator()));
+            createTopicsResponseData = active.createTopics(createTopicsRequestData).get();
+            assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("bar").errorCode()));
+            Uuid topicIdBar = createTopicsResponseData.topics().find("bar").topicId();
+
+            // Fence some of the brokers
+            TestUtils.waitForCondition(() -> {
+                    sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+                    for (Integer brokerId : brokersToFence) {
+                        if (active.replicationControl().isBrokerUnfenced(brokerId)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }, sessionTimeoutMillis * 3,
+                "Fencing of brokers did not process within expected time"
+            );
+
+            // Send another heartbeat to the brokers we want to keep alive
+            sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+
+            // At this point only the brokers we want fenced should be fenced.
+            brokersToKeepUnfenced.forEach(brokerId -> {
+                assertTrue(active.replicationControl().isBrokerUnfenced(brokerId),
+                    "Broker " + brokerId + " should have been fenced");
+            });
+            brokersToFence.forEach(brokerId -> {
+                assertFalse(active.replicationControl().isBrokerUnfenced(brokerId),
+                    "Broker " + brokerId + " should have been unfenced");
+            });
+
+
+            // Verify the isr and leaders for the topic partitions
+            int[] expectedIsr = {1};
+            int[] isrFoo = active.replicationControl().getPartition(topicIdFoo, 0).isr;
+            int[] isrBar = active.replicationControl().getPartition(topicIdBar, 0).isr;
+
+            assertTrue(Arrays.equals(isrFoo, expectedIsr)
+                    && Arrays.equals(isrBar, expectedIsr),
+                "The ISR for topic foo was " + Arrays.toString(isrFoo) +
+                    " and for topic bar was " + Arrays.toString(isrBar) +
+                    ". Both are expected to be " + Arrays.toString(expectedIsr));
+
+            int fooLeader = active.replicationControl().getPartition(topicIdFoo, 0).leader;
+            assertEquals(expectedIsr[0], fooLeader);
+            int barLeader = active.replicationControl().getPartition(topicIdBar, 0).leader;
+            assertEquals(expectedIsr[0], barLeader);
         }
     }
 
@@ -879,12 +863,15 @@ public class QuorumControllerTest {
         return brokerEpochs;
     }
 
-    private void sendBrokerheartbeat(QuorumController controller, int numBrokers,
-        Map<Integer, Long> brokerEpochs) throws Exception {
-        if (numBrokers <= 0) {
+    private void sendBrokerheartbeat(
+        QuorumController controller,
+        List<Integer> brokers,
+        Map<Integer, Long> brokerEpochs
+    ) throws Exception {
+        if (brokers.isEmpty()) {
             return;
         }
-        for (int brokerId = 0; brokerId < numBrokers; brokerId++) {
+        for (Integer brokerId : brokers) {
             BrokerHeartbeatReply reply = controller.processBrokerHeartbeat(
                 new BrokerHeartbeatRequestData()
                     .setWantFence(false)

@@ -51,7 +51,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     public QuorumControllerTestEnv(
         LocalLogManagerTestEnv logEnv,
         Consumer<Builder> builderConsumer,
-        Optional<Long> sessionTimeoutSeconds
+        Optional<Long> sessionTimeoutMillis
     ) throws Exception {
         this.logEnv = logEnv;
         int numControllers = logEnv.logManagers().size();
@@ -60,9 +60,9 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             for (int i = 0; i < numControllers; i++) {
                 QuorumController.Builder builder = new QuorumController.Builder(i);
                 builder.setRaftClient(logEnv.logManagers().get(i));
-                if (sessionTimeoutSeconds.isPresent()) {
+                if (sessionTimeoutMillis.isPresent()) {
                     builder.setSessionTimeoutNs(NANOSECONDS.convert(
-                        sessionTimeoutSeconds.get(), TimeUnit.SECONDS));
+                        sessionTimeoutMillis.get(), TimeUnit.MILLISECONDS));
                 }
                 builderConsumer.accept(builder);
                 this.controllers.add(builder.build());
