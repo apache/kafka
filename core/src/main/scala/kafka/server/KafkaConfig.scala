@@ -1424,7 +1424,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     val nodeIdValue = props.get(KafkaConfig.NodeIdProp).asInstanceOf[Int]
     if (nodeIdValue >= 0) {
       val brokerIdValue = props.get(KafkaConfig.BrokerIdProp).asInstanceOf[Int]
-      if (!brokerIdValue.equals(Defaults.BrokerId) && !brokerIdValue.equals(nodeIdValue)) {
+      if (brokerIdValue != Defaults.BrokerId && brokerIdValue != nodeIdValue) {
         throw new ConfigException(s"The values for broker.id ($brokerIdValue) and node.id ($nodeIdValue) must be the same if both are specified")
       }
     }
