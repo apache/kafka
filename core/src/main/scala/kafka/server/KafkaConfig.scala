@@ -1420,6 +1420,17 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   override def get(key: String): AnyRef =
     if (this eq currentConfig) super.get(key) else currentConfig.get(key)
 
+  override def postProcessParsedConfig(props: java.util.Map[String,Object]): java.util.Map[String,Object] = {
+    val nodeIdValue = props.get(KafkaConfig.NodeIdProp).asInstanceOf[Int]
+    if (nodeIdValue >= 0) {
+      val brokerIdValue = props.get(KafkaConfig.BrokerIdProp).asInstanceOf[Int]
+      if (!brokerIdValue.equals(Defaults.BrokerId) && !brokerIdValue.equals(nodeIdValue)) {
+        throw new ConfigException(s"The values for broker.id ($brokerIdValue) and node.id ($nodeIdValue) must be the same if both are specified")
+      }
+    }
+    Collections.emptyMap()
+  }
+
   //  During dynamic update, we use the values from this config, these are only used in DynamicBrokerConfig
   private[server] def originalsFromThisConfig: util.Map[String, AnyRef] = super.originals
   private[server] def valuesFromThisConfig: util.Map[String, _] = super.values

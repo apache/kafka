@@ -1235,4 +1235,19 @@ class KafkaConfigTest {
     assertEquals(dataDir1, config.metadataLogDir)
     assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
   }
+
+  @Test
+  def testBrokerAndNodeIdInconsistent(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
+    props.put(KafkaConfig.NodeIdProp, "1") // set just node.id for KRaft -- should be legal
+    assertTrue(isValidKafkaConfig(props))
+    props.put(KafkaConfig.BrokerIdProp, "0") // explicitly set broker.id differently than node.id, should be illegal
+    assertFalse(isValidKafkaConfig(props))
+    props.put(KafkaConfig.BrokerIdProp, "-1") // explicitly set broker.id to the default, different than node.id, should be legal
+    assertTrue(isValidKafkaConfig(props))
+    props.put(KafkaConfig.BrokerIdProp, "1") // explicitly set broker.id to be the same as node.id -- should be legal
+    assertTrue(isValidKafkaConfig(props))
+  }
 }
