@@ -858,7 +858,9 @@ public final class QuorumController implements Controller {
             return;
         }
         scheduleDeferredWriteEvent(MAYBE_FENCE_REPLICAS, nextCheckTimeNs, () -> {
-            ControllerResult<Void> result = replicationControl.maybeFenceStaleBrokers();
+            ControllerResult<Void> result = replicationControl.maybeFenceOneStaleBroker();
+            // This following call ensures that if there are multiple brokers that
+            // are currently stale, then fencing for them is scheduled immediately
             rescheduleMaybeFenceStaleBrokers();
             return result;
         });
