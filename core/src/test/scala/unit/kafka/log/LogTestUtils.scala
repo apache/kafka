@@ -38,10 +38,10 @@ object LogTestUtils {
                     logDir: File,
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
-    val ms = FileRecords.open(Log.logFile(logDir, offset))
-    val idx = LazyIndex.forOffset(Log.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
-    val timeIdx = LazyIndex.forTime(Log.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
-    val txnIndex = new TransactionIndex(offset, Log.transactionIndexFile(logDir, offset))
+    val ms = FileRecords.open(UnifiedLog.logFile(logDir, offset))
+    val idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
+    val timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
+    val txnIndex = new TransactionIndex(offset, UnifiedLog.transactionIndexFile(logDir, offset))
 
     new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
   }
@@ -81,8 +81,8 @@ object LogTestUtils {
                 producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
-                keepPartitionMetadataFile: Boolean = true): Log = {
-    Log(dir = dir,
+                keepPartitionMetadataFile: Boolean = true): UnifiedLog = {
+    UnifiedLog(dir = dir,
       config = config,
       logStartOffset = logStartOffset,
       recoveryPoint = recoveryPoint,
@@ -102,9 +102,9 @@ object LogTestUtils {
    * @param log Log to check
    * @return true if log contains at least one segment with offset overflow; false otherwise
    */
-  def hasOffsetOverflow(log: Log): Boolean = firstOverflowSegment(log).isDefined
+  def hasOffsetOverflow(log: UnifiedLog): Boolean = firstOverflowSegment(log).isDefined
 
-  def firstOverflowSegment(log: Log): Option[LogSegment] = {
+  def firstOverflowSegment(log: UnifiedLog): Option[LogSegment] = {
     def hasOverflow(baseOffset: Long, batch: RecordBatch): Boolean =
       batch.lastOffset > baseOffset + Int.MaxValue || batch.baseOffset < baseOffset
 
@@ -117,7 +117,7 @@ object LogTestUtils {
   }
 
   def rawSegment(logDir: File, baseOffset: Long): FileRecords =
-    FileRecords.open(Log.logFile(logDir, baseOffset))
+    FileRecords.open(UnifiedLog.logFile(logDir, baseOffset))
 
   /**
    * Initialize the given log directory with a set of segments, one of which will have an
@@ -138,8 +138,8 @@ object LogTestUtils {
       segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
       // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
-      Log.offsetIndexFile(logDir, baseOffset).createNewFile()
-      Log.timeIndexFile(logDir, baseOffset).createNewFile()
+      UnifiedLog.offsetIndexFile(logDir, baseOffset).createNewFile()
+      UnifiedLog.timeIndexFile(logDir, baseOffset).createNewFile()
       baseOffset + Int.MaxValue
     }
 
@@ -165,29 +165,29 @@ object LogTestUtils {
   }
 
   /* extract all the keys from a log */
-  def keysInLog(log: Log): Iterable[Long] = {
+  def keysInLog(log: UnifiedLog): Iterable[Long] = {
     for (logSegment <- log.logSegments;
          batch <- logSegment.log.batches.asScala if !batch.isControlBatch;
          record <- batch.asScala if record.hasValue && record.hasKey)
       yield TestUtils.readString(record.key).toLong
   }
 
-  def recoverAndCheck(logDir: File, config: LogConfig, expectedKeys: Iterable[Long], brokerTopicStats: BrokerTopicStats, time: Time, scheduler: Scheduler): Log = {
+  def recoverAndCheck(logDir: File, config: LogConfig, expectedKeys: Iterable[Long], brokerTopicStats: BrokerTopicStats, time: Time, scheduler: Scheduler): UnifiedLog = {
     // Recover log file and check that after recovery, keys are as expected
     // and all temporary files have been deleted
     val recoveredLog = createLog(logDir, config, brokerTopicStats, scheduler, time, lastShutdownClean = false)
     time.sleep(config.fileDeleteDelayMs + 1)
     for (file <- logDir.listFiles) {
-      assertFalse(file.getName.endsWith(Log.DeletedFileSuffix), "Unexpected .deleted file after recovery")
-      assertFalse(file.getName.endsWith(Log.CleanedFileSuffix), "Unexpected .cleaned file after recovery")
-      assertFalse(file.getName.endsWith(Log.SwapFileSuffix), "Unexpected .swap file after recovery")
+      assertFalse(file.getName.endsWith(UnifiedLog.DeletedFileSuffix), "Unexpected .deleted file after recovery")
+      assertFalse(file.getName.endsWith(UnifiedLog.CleanedFileSuffix), "Unexpected .cleaned file after recovery")
+      assertFalse(file.getName.endsWith(UnifiedLog.SwapFileSuffix), "Unexpected .swap file after recovery")
     }
     assertEquals(expectedKeys, keysInLog(recoveredLog))
     assertFalse(hasOffsetOverflow(recoveredLog))
     recoveredLog
   }
 
-  def appendEndTxnMarkerAsLeader(log: Log,
+  def appendEndTxnMarkerAsLeader(log: UnifiedLog,
                                  producerId: Long,
                                  producerEpoch: Short,
                                  controlType: ControlRecordType,
@@ -210,31 +210,31 @@ object LogTestUtils {
     MemoryRecords.withEndTransactionMarker(offset, timestamp, partitionLeaderEpoch, producerId, epoch, marker)
   }
 
-  def readLog(log: Log,
-             startOffset: Long,
-             maxLength: Int,
-             isolation: FetchIsolation = FetchLogEnd,
-             minOneMessage: Boolean = true): FetchDataInfo = {
+  def readLog(log: UnifiedLog,
+              startOffset: Long,
+              maxLength: Int,
+              isolation: FetchIsolation = FetchLogEnd,
+              minOneMessage: Boolean = true): FetchDataInfo = {
     log.read(startOffset, maxLength, isolation, minOneMessage)
   }
 
-  def allAbortedTransactions(log: Log): Iterable[AbortedTxn] = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
+  def allAbortedTransactions(log: UnifiedLog): Iterable[AbortedTxn] = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
 
   def deleteProducerSnapshotFiles(logDir: File): Unit = {
-    val files = logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.ProducerSnapshotFileSuffix))
+    val files = logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(UnifiedLog.ProducerSnapshotFileSuffix))
     files.foreach(Utils.delete)
   }
 
   def listProducerSnapshotOffsets(logDir: File): Seq[Long] =
     ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted
 
-  def assertLeaderEpochCacheEmpty(log: Log): Unit = {
+  def assertLeaderEpochCacheEmpty(log: UnifiedLog): Unit = {
     assertEquals(None, log.leaderEpochCache)
     assertEquals(None, log.latestEpoch)
     assertFalse(LeaderEpochCheckpointFile.newFile(log.dir).exists())
   }
 
-  def appendNonTransactionalAsLeader(log: Log, numRecords: Int): Unit = {
+  def appendNonTransactionalAsLeader(log: UnifiedLog, numRecords: Int): Unit = {
     val simpleRecords = (0 until numRecords).map { seq =>
       new SimpleRecord(s"$seq".getBytes)
     }
@@ -242,14 +242,14 @@ object LogTestUtils {
     log.appendAsLeader(records, leaderEpoch = 0)
   }
 
-  def appendTransactionalAsLeader(log: Log,
+  def appendTransactionalAsLeader(log: UnifiedLog,
                                   producerId: Long,
                                   producerEpoch: Short,
                                   time: Time): Int => Unit = {
     appendIdempotentAsLeader(log, producerId, producerEpoch, time, isTransactional = true)
   }
 
-  def appendIdempotentAsLeader(log: Log,
+  def appendIdempotentAsLeader(log: UnifiedLog,
                                producerId: Long,
                                producerEpoch: Short,
                                time: Time,

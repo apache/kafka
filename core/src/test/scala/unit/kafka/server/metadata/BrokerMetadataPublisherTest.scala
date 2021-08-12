@@ -17,7 +17,7 @@
 
 package unit.kafka.server.metadata
 
-import kafka.log.Log
+import kafka.log.UnifiedLog
 import kafka.server.metadata.BrokerMetadataPublisher
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataImageTest, TopicImage, TopicsImage}
@@ -108,8 +108,8 @@ class BrokerMetadataPublisherTest {
   private def mockLog(
     topicId: Uuid,
     topicPartition: TopicPartition
-  ): Log = {
-    val log = Mockito.mock(classOf[Log])
+  ): UnifiedLog = {
+    val log = Mockito.mock(classOf[UnifiedLog])
     Mockito.when(log.topicId).thenReturn(Some(topicId))
     Mockito.when(log.topicPartition).thenReturn(topicPartition)
     log

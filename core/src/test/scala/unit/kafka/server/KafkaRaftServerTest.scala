@@ -20,7 +20,7 @@ import java.io.File
 import java.nio.file.Files
 import java.util.Properties
 import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdException, KafkaException}
-import kafka.log.Log
+import kafka.log.UnifiedLog
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
@@ -174,7 +174,7 @@ class KafkaRaftServerTest {
     }
 
     // Create the metadata dir in the data directory
-    Files.createDirectory(new File(dataDir, Log.logDirName(KafkaRaftServer.MetadataPartition)).toPath)
+    Files.createDirectory(new File(dataDir, UnifiedLog.logDirName(KafkaRaftServer.MetadataPartition)).toPath)
 
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
