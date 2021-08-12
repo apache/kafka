@@ -47,6 +47,7 @@ import java.util.OptionalLong;
 import java.util.OptionalInt;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -517,8 +518,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         context.client.poll();
 
-        FetchSnapshotResponseData.PartitionSnapshot response = context.assertSentFetchSnapshotResponse(topicPartition).get();
-        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forCode(response.errorCode()));
+        context.assertSentFetchSnapshotResponse(Errors.INVALID_REQUEST);
     }
 
     @Test
@@ -1616,6 +1616,46 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(3, endOffsetForEpoch.epoch);
         OffsetAndEpoch invalidSnapshotId4 = new OffsetAndEpoch(endOffsetForEpoch.offset + 1, epoch);
         assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId4.offset, invalidSnapshotId4.epoch, 0));
+    }
+
+    @Test
+    public void testInconsistentClusterIdInFetchSnapshotResponse() throws Exception {
+        int localId = 0;
+        int leaderId = localId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, leaderId);
+        int epoch = 2;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(100L, 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, leaderId)
+            .build();
+
+        // Send a request
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+
+        // Firstly receive a response with a valid cluster id
+        context.deliverResponse(
+            fetchRequest.correlationId,
+            fetchRequest.destinationId(),
+            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
+        );
+
+        // Send fetch snapshot request
+        context.pollUntilRequest();
+        RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
+
+        // Secondly receive a response with an inconsistent cluster id
+        context.deliverResponse(
+            snapshotRequest.correlationId,
+            snapshotRequest.destinationId(),
+            new FetchSnapshotResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code())
+        );
+
+        // Inconsistent cluster id are not fatal if a previous response contained a valid cluster id
+        assertDoesNotThrow(context.client::poll);
+
+        // It's impossible to receive a be begin quorum response before any other request so we don't test
     }
 
     private static FetchSnapshotRequestData fetchSnapshotRequest(

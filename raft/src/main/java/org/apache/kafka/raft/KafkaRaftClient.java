@@ -17,8 +17,8 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
@@ -93,6 +93,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -151,6 +152,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final Time time;
     private final int fetchMaxWaitMs;
     private final String clusterId;
+    private final AtomicBoolean clusterIdAcknowledged;
     private final NetworkChannel channel;
     private final ReplicatedLog log;
     private final Random random;
@@ -230,6 +232,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         this.appendPurgatory = new ThresholdPurgatory<>(expirationService);
         this.time = time;
         this.clusterId = clusterId;
+        this.clusterIdAcknowledged = new AtomicBoolean(false);
         this.fetchMaxWaitMs = fetchMaxWaitMs;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
@@ -592,6 +595,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return handleTopLevelError(topLevelError, responseMetadata);
         }
 
+        recordAcknowledgedClusterId();
+
         if (!hasValidTopicPartition(response, log.topicPartition())) {
             return false;
         }
@@ -721,6 +726,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return handleTopLevelError(topLevelError, responseMetadata);
         }
 
+        recordAcknowledgedClusterId();
+
         if (!hasValidTopicPartition(response, log.topicPartition())) {
             return false;
         }
@@ -833,6 +840,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return handleTopLevelError(topLevelError, responseMetadata);
         }
 
+        recordAcknowledgedClusterId();
+
         if (!hasValidTopicPartition(response, log.topicPartition())) {
             return false;
         }
@@ -910,6 +919,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return true;
         }
         return clusterId.equals(requestClusterId);
+    }
+
+    private void recordAcknowledgedClusterId() {
+        clusterIdAcknowledged.set(true);
     }
 
     /**
@@ -1046,6 +1059,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (topLevelError != Errors.NONE) {
             return handleTopLevelError(topLevelError, responseMetadata);
         }
+
+        recordAcknowledgedClusterId();
 
         if (!RaftUtil.hasValidTopicPartition(response, log.topicPartition(), log.topicId())) {
             return false;
@@ -1203,25 +1218,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return new FetchSnapshotResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
         }
 
-        if (data.topics().size() != 1 && data.topics().get(0).partitions().size() != 1) {
+        if (!RaftUtil.hasValidTopicPartition(data, log.topicPartition())) {
             return FetchSnapshotResponse.withTopLevelError(Errors.INVALID_REQUEST);
         }
 
         Optional<FetchSnapshotRequestData.PartitionSnapshot> partitionSnapshotOpt = FetchSnapshotRequest
             .forTopicPartition(data, log.topicPartition());
-        if (!partitionSnapshotOpt.isPresent()) {
-            // The Raft client assumes that there is only one topic partition.
-            TopicPartition unknownTopicPartition = new TopicPartition(
-                data.topics().get(0).name(),
-                data.topics().get(0).partitions().get(0).partition()
-            );
-
-            return FetchSnapshotResponse.singleton(
-                unknownTopicPartition,
-                responsePartitionSnapshot -> responsePartitionSnapshot
-                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-            );
-        }
 
         FetchSnapshotRequestData.PartitionSnapshot partitionSnapshot = partitionSnapshotOpt.get();
         Optional<Errors> leaderValidation = validateLeaderOnlyRequest(
@@ -1304,7 +1306,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return handleTopLevelError(topLevelError, responseMetadata);
         }
 
-        if (data.topics().size() != 1 && data.topics().get(0).partitions().size() != 1) {
+        recordAcknowledgedClusterId();
+
+        if (!RaftUtil.hasValidTopicPartition(data, log.topicPartition())) {
             return false;
         }
 
@@ -1526,6 +1530,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return false;
         } else if (error == Errors.CLUSTER_AUTHORIZATION_FAILED) {
             throw new ClusterAuthorizationException("Received cluster authorization error in response " + response);
+        } else if (error == Errors.INCONSISTENT_CLUSTER_ID && !clusterIdAcknowledged.get()) {
+            // When handling a response, invalid cluster id are fatal unless a previous response contained a valid cluster id.
+            throw new InconsistentClusterIdException("Received inconsistent clusterId error in response " + response);
         } else {
             return handleUnexpectedError(error, response);
         }
