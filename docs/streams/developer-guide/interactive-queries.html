@@ -153,17 +153,21 @@ ReadOnlyKeyValueStore&lt;String, Long&gt; keyValueStore =
 System.out.println(&quot;count for hello:&quot; + keyValueStore.get(&quot;hello&quot;));
 
 // Get the values for a range of keys available in this application instance
-KeyValueIterator&lt;String, Long&gt; range = keyValueStore.range(&quot;all&quot;, &quot;streams&quot;);
-while (range.hasNext()) {
-  KeyValue&lt;String, Long&gt; next = range.next();
-  System.out.println(&quot;count for &quot; + next.key + &quot;: &quot; + next.value);
+// Note: the KeyValueIterator instance should be closed explicitly to avoid resource leakage
+try (KeyValueIterator&lt;String, Long&gt; range = keyValueStore.range(&quot;all&quot;, &quot;streams&quot;)) {
+    while (range.hasNext()) {
+      KeyValue&lt;String, Long&gt; next = range.next();
+      System.out.println(&quot;count for &quot; + next.key + &quot;: &quot; + next.value);
+    }
 }
 
 // Get the values for all of the keys available in this application instance
-KeyValueIterator&lt;String, Long&gt; range = keyValueStore.all();
-while (range.hasNext()) {
-  KeyValue&lt;String, Long&gt; next = range.next();
-  System.out.println(&quot;count for &quot; + next.key + &quot;: &quot; + next.value);
+// Note: the KeyValueIterator instance should be closed explicitly to avoid resource leakage
+try (KeyValueIterator&lt;String, Long&gt; range = keyValueStore.all()) {
+    while (range.hasNext()) {
+      KeyValue&lt;String, Long&gt; next = range.next();
+      System.out.println(&quot;count for &quot; + next.key + &quot;: &quot; + next.value);
+}
 }</code></pre>
                 <p>You can also materialize the results of stateless operators by using the overloaded methods that take a <code class="docutils literal"><span class="pre">queryableStoreName</span></code>
                     as shown in the example below:</p>

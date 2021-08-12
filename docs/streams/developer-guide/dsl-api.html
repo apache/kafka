@@ -640,7 +640,7 @@ KGroupedTable&lt;String, Integer&gt; groupedTable = table.groupBy(
 
                             <p class="first">Cogroup does not cause a repartition as it has the prerequisite that the input streams are grouped. In the process of creating these groups they will have already been repartitioned if the stream was already marked for repartitioning.</p>
                             <pre class="line-numbers"><code class="language-java">KStream&lt;byte[], String&gt; stream = ...;
-                        KStream&lt;byte[], String&gt; stream2 = ...;
+KStream&lt;byte[], String&gt; stream2 = ...;
 
 // Group by the existing key, using the application&#39;s configured
 // default serdes for keys and values.
@@ -1385,7 +1385,7 @@ KTable&lt;String, Integer&gt; aggregated = groupedStream.aggregate(
                             <a class="reference internal" href="memory-mgmt.html#streams-developer-guide-memory-management-record-cache"><span class="std std-ref">record caches</span></a> are disabled (default: enabled).
                             When record caches are enabled, what might happen for example is that the output results of the rows with timestamps
                             4 and 5 would be <a class="reference internal" href="memory-mgmt.html#streams-developer-guide-memory-management-record-cache"><span class="std std-ref">compacted</span></a>, and there would only be
-                            a single state update for the key <code class="docutils literal"><span class="pre">kafka</span></code> in the KTable (here: from <code class="docutils literal"><span class="pre">(kafka</span> <span class="pre">1)</span></code> directly to <code class="docutils literal"><span class="pre">(kafka,</span> <span class="pre">3)</span></code>.
+                            a single state update for the key <code class="docutils literal"><span class="pre">kafka</span></code> in the KTable (here: from <code class="docutils literal"><span class="pre">(kafka,</span> <span class="pre">1)</span></code> directly to <code class="docutils literal"><span class="pre">(kafka,</span> <span class="pre">3)</span></code>.
                             Typically, you should only disable record caches for testing or debugging purposes &#8211; under normal circumstances it
                             is better to leave record caches enabled.</p>
                     </div>
@@ -1505,7 +1505,7 @@ KTable&lt;String, Integer&gt; aggregated = groupedTable.aggregate(
                             <a class="reference internal" href="memory-mgmt.html#streams-developer-guide-memory-management-record-cache"><span class="std std-ref">record caches</span></a> are disabled (default: enabled).
                             When record caches are enabled, what might happen for example is that the output results of the rows with timestamps
                             4 and 5 would be <a class="reference internal" href="memory-mgmt.html#streams-developer-guide-memory-management-record-cache"><span class="std std-ref">compacted</span></a>, and there would only be
-                            a single state update for the key <code class="docutils literal"><span class="pre">kafka</span></code> in the KTable (here: from <code class="docutils literal"><span class="pre">(kafka</span> <span class="pre">1)</span></code> directly to <code class="docutils literal"><span class="pre">(kafka,</span> <span class="pre">3)</span></code>.
+                            a single state update for the key <code class="docutils literal"><span class="pre">kafka</span></code> in the KTable (here: from <code class="docutils literal"><span class="pre">(kafka,</span> <span class="pre">1)</span></code> directly to <code class="docutils literal"><span class="pre">(kafka,</span> <span class="pre">3)</span></code>.
                             Typically, you should only disable record caches for testing or debugging purposes &#8211; under normal circumstances it
                             is better to leave record caches enabled.</p>
                     </div>
