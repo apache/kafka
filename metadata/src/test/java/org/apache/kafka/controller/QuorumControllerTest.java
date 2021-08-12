@@ -202,33 +202,22 @@ public class QuorumControllerTest {
                 brokerEpochs.put(brokerId, reply.get().epoch());
             }
 
-            // Brokers are only registered but still fenced
-            // Topic creation with no available unfenced brokers should fail
-            CreateTopicsRequestData createTopicsRequestData =
-                new CreateTopicsRequestData().setTopics(
-                    new CreatableTopicCollection(Collections.singleton(
-                        new CreatableTopic().setName("foo").setNumPartitions(1).
-                            setReplicationFactor(replicationFactor)).iterator()));
-            CreateTopicsResponseData createTopicsResponseData = active.createTopics(
-                createTopicsRequestData).get();
-            assertEquals(Errors.INVALID_REPLICATION_FACTOR,
-                Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
-            assertEquals("Unable to replicate the partition " + replicationFactor + " time(s): All brokers " +
-                "are currently fenced.", createTopicsResponseData.topics().find("foo").errorMessage());
+            // Brokers are only registered and should still be fenced
+            allBrokers.forEach(brokerId -> {
+                assertFalse(active.replicationControl().isBrokerUnfenced(brokerId),
+                    "Broker " + brokerId + " should have been fenced");
+            });
 
             // Unfence all brokers and retry topic creation for foo
             sendBrokerheartbeat(active, allBrokers, brokerEpochs);
-            createTopicsResponseData = active.createTopics(createTopicsRequestData).get();
+            // Create a topic foo
+            CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
+                new CreatableTopicCollection(Collections.singleton(
+                    new CreatableTopic().setName("foo").setNumPartitions(1).
+                        setReplicationFactor(replicationFactor)).iterator()));
+            CreateTopicsResponseData createTopicsResponseData = active.createTopics(createTopicsRequestData).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
-            // Create another topic - bar
-            createTopicsRequestData = new CreateTopicsRequestData().setTopics(
-                new CreatableTopicCollection(Collections.singleton(
-                    new CreatableTopic().setName("bar").setNumPartitions(1).
-                        setReplicationFactor(replicationFactor)).iterator()));
-            createTopicsResponseData = active.createTopics(createTopicsRequestData).get();
-            assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("bar").errorCode()));
-            Uuid topicIdBar = createTopicsResponseData.topics().find("bar").topicId();
 
             // Fence some of the brokers
             TestUtils.waitForCondition(() -> {
@@ -249,29 +238,23 @@ public class QuorumControllerTest {
             // At this point only the brokers we want fenced should be fenced.
             brokersToKeepUnfenced.forEach(brokerId -> {
                 assertTrue(active.replicationControl().isBrokerUnfenced(brokerId),
-                    "Broker " + brokerId + " should have been fenced");
+                    "Broker " + brokerId + " should have been unfenced");
             });
             brokersToFence.forEach(brokerId -> {
                 assertFalse(active.replicationControl().isBrokerUnfenced(brokerId),
-                    "Broker " + brokerId + " should have been unfenced");
+                    "Broker " + brokerId + " should have been fenced");
             });
 
-
-            // Verify the isr and leaders for the topic partitions
+            // Verify the isr and leaders for the topic partition
             int[] expectedIsr = {1};
             int[] isrFoo = active.replicationControl().getPartition(topicIdFoo, 0).isr;
-            int[] isrBar = active.replicationControl().getPartition(topicIdBar, 0).isr;
 
-            assertTrue(Arrays.equals(isrFoo, expectedIsr)
-                    && Arrays.equals(isrBar, expectedIsr),
+            assertTrue(Arrays.equals(isrFoo, expectedIsr),
                 "The ISR for topic foo was " + Arrays.toString(isrFoo) +
-                    " and for topic bar was " + Arrays.toString(isrBar) +
-                    ". Both are expected to be " + Arrays.toString(expectedIsr));
+                    ". It is expected to be " + Arrays.toString(expectedIsr));
 
             int fooLeader = active.replicationControl().getPartition(topicIdFoo, 0).leader;
             assertEquals(expectedIsr[0], fooLeader);
-            int barLeader = active.replicationControl().getPartition(topicIdBar, 0).leader;
-            assertEquals(expectedIsr[0], barLeader);
         }
     }
 
