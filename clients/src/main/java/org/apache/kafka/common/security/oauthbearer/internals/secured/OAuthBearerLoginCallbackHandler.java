@@ -30,6 +30,7 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.httpclient.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,8 +69,19 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         String scopeClaimName = conf.getScopeClaimName();
         String subClaimName = conf.getSubClaimName();
         String tokenEndpointUri = conf.getTokenEndpointUri();
-
-        client = new LoginTokenEndpointHttpClient(clientId, clientSecret, scope, tokenEndpointUri);
+        long loginConnectTimeoutMs = conf.getLoginConnectTimeoutMs();
+        long loginReadTimeoutMs = conf.getLoginReadTimeoutMs();
+        Retry<String> retry = new Retry<>(tokenEndpointUri,
+                conf.getLoginAttempts(),
+                conf.getLoginRetryWaitMs(),
+                conf.getLoginRetryMaxWaitMs());
+        client = new LoginTokenEndpointHttpClient(clientId,
+            clientSecret,
+            scope,
+            tokenEndpointUri,
+            loginConnectTimeoutMs,
+            loginReadTimeoutMs,
+            retry);
         accessTokenValidator = new LoginAccessTokenValidator(scopeClaimName, subClaimName);
     }
 
@@ -84,7 +96,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
             if (callback instanceof OAuthBearerTokenCallback) {
                 handle((OAuthBearerTokenCallback) callback);
             } else if (callback instanceof SaslExtensionsCallback) {
-                    handle((SaslExtensionsCallback) callback);
+                handle((SaslExtensionsCallback) callback);
             } else {
                 throw new UnsupportedCallbackException(callback);
             }
