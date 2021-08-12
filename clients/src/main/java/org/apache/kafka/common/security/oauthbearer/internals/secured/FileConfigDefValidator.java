@@ -1,19 +1,18 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.io.File;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 
-public class UriConfigDefValidator implements ConfigDef.Validator {
+public class FileConfigDefValidator implements ConfigDef.Validator {
 
     private final boolean isRequired;
 
-    public UriConfigDefValidator() {
+    public FileConfigDefValidator() {
         this(false);
     }
 
-    public UriConfigDefValidator(boolean isRequired) {
+    public FileConfigDefValidator(boolean isRequired) {
         this.isRequired = isRequired;
     }
 
@@ -26,11 +25,13 @@ public class UriConfigDefValidator implements ConfigDef.Validator {
                 return;
         }
 
-        try {
-            new URI(value.toString());
-        } catch (URISyntaxException e) {
-            throw new ConfigException(String.format("The OAuth configuration option %s contains a URI (%s) that is malformed", name, value));
-        }
+        File file = new File(value.toString().trim());
+
+        if (!file.exists())
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a file (%s) that doesn't exist", name, value));
+
+        if (!file.canRead())
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a file (%s) that doesn't have read permission", name, value));
     }
 
 }

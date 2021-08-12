@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import java.io.File;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -48,22 +47,11 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
 
     public static final String JWKS_ENDPOINT_URI_CONFIG = "jwksEndpointUri";
     private static final String JWKS_ENDPOINT_URI_DOC = "xxx";
-    private static final ConfigDef.Validator JWKS_ENDPOINT_URI_VALIDATOR = new UriConfigDefValidator("validator", false);
+    private static final ConfigDef.Validator JWKS_ENDPOINT_URI_VALIDATOR = new UriConfigDefValidator();
 
     public static final String JWKS_FILE_CONFIG = "jwksFile";
     private static final String JWKS_FILE_DOC = "xxx";
-    private static final ConfigDef.Validator JWKS_FILE_VALIDATOR = (name, value) -> {
-        if (value == null)
-            return;
-
-        File file = new File(value.toString().trim());
-
-        if (!file.exists())
-            throw new ConfigException(String.format("The OAuth validator configuration option %s contains a file (%s) that doesn't exist", name, value));
-
-        if (!file.canRead())
-            throw new ConfigException(String.format("The OAuth validator configuration option %s contains a file (%s) that doesn't have read permission", name, value));
-    };
+    private static final ConfigDef.Validator JWKS_FILE_VALIDATOR = new FileConfigDefValidator();
 
     public static final String SCOPE_CLAIM_NAME_CONFIG = "scopeClaimName";
     private static final String SCOPE_CLAIM_NAME_DEFAULT = "scope";

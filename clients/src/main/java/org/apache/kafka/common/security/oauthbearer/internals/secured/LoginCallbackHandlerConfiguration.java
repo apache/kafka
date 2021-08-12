@@ -48,7 +48,7 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
 
     public static final String TOKEN_ENDPOINT_URI_CONFIG = "tokenEndpointUri";
     private static final String TOKEN_ENDPOINT_URI_DOC = "xxx";
-    private static final ConfigDef.Validator TOKEN_ENDPOINT_URI_VALIDATOR = new UriConfigDefValidator("login", true);
+    private static final ConfigDef.Validator TOKEN_ENDPOINT_URI_VALIDATOR = new UriConfigDefValidator(true);
 
     private static final ConfigDef CONFIG = new ConfigDef()
         .define(CLIENT_ID_CONFIG,
@@ -83,7 +83,8 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
             NO_DEFAULT_VALUE,
             TOKEN_ENDPOINT_URI_VALIDATOR,
             Importance.MEDIUM,
-            TOKEN_ENDPOINT_URI_DOC);
+            TOKEN_ENDPOINT_URI_DOC)
+        ;
 
     public LoginCallbackHandlerConfiguration(Map<String, ?> options) {
         super(CONFIG, options);

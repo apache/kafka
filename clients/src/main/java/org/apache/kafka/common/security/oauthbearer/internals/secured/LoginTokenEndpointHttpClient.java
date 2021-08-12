@@ -31,9 +31,6 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Map.Entry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,11 +78,12 @@ public class LoginTokenEndpointHttpClient {
         return accessTokenNode.textValue();
     }
 
-    static HttpURLConnection writeRequest(String uri,
+    private HttpURLConnection writeRequest(String uri,
         String authorizationHeader,
         String requestBody)
         throws IOException {
-        HttpURLConnection con = (HttpURLConnection) new URL(uri).openConnection();
+        URL url = new URL(uri);
+        HttpURLConnection con = (HttpURLConnection)url.openConnection();
         con.setRequestMethod("POST");
         con.setRequestProperty("Accept", "application/json");
         con.setRequestProperty("Authorization", authorizationHeader);
@@ -143,31 +141,26 @@ public class LoginTokenEndpointHttpClient {
     }
 
     static String formatAuthorizationHeader(String clientId, String clientSecret) {
-        String encoded = encodeBase64(String.format("%s:%s", clientId, clientSecret));
+        String s = String.format("%s:%s", clientId, clientSecret);
+        String encoded = Base64.getUrlEncoder().encodeToString(s.getBytes(StandardCharsets.UTF_8));
         return String.format("Basic %s", encoded);
     }
 
     static String formatRequestBody(String scope) {
+        try {
         StringBuilder requestParameters = new StringBuilder();
         requestParameters.append("grant_type=client_credentials");
 
-        if (scope != null)
-            requestParameters.append(String.format("&scope=%s", encodeUrlSafe(scope)));
+        if (scope != null) {
+            String encodedScope = URLEncoder.encode(scope, StandardCharsets.UTF_8.name());
+            requestParameters.append("&scope=").append(encodedScope);
+        }
 
         return requestParameters.toString();
-    }
-
-    static String encodeUrlSafe(String s) {
-        try {
-            return URLEncoder.encode(s, StandardCharsets.UTF_8.name());
         } catch (UnsupportedEncodingException e) {
             // The world has gone crazy!
             throw new IllegalStateException(String.format("Encoding %s not supported", StandardCharsets.UTF_8.name()));
         }
-    }
-
-    static String encodeBase64(String s) {
-        return Base64.getUrlEncoder().encodeToString(s.getBytes(StandardCharsets.UTF_8));
     }
 
 }
