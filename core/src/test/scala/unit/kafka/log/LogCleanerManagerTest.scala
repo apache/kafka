@@ -546,7 +546,8 @@ class LogCleanerManagerTest extends Logging {
     val lastCleanOffset = Some(0L)
     val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
     assertEquals(0L, cleanableOffsets.firstDirtyOffset, "The first cleanable offset starts at the beginning of the log.")
-    assertEquals(log.highWatermark, cleanableOffsets.firstUncleanableDirtyOffset, "The first uncleanable offset is bounded by the hwm.")
+    assertEquals(log.highWatermark, log.lastStableOffset, "The high watermark equals the last stable offset as no transactions are in progress")
+    assertEquals(log.lastStableOffset, cleanableOffsets.firstUncleanableDirtyOffset, "The first uncleanable offset is bounded by the last stable offset.")
   }
 
   /**
