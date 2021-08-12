@@ -217,7 +217,7 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()), "The client should be ready");
         ProduceRequestData data = new ProduceRequestData()
-                .setAcks((short)1)
+                .setAcks((short) 1)
                 .setTimeoutMs(1000);
 
         ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(data);
@@ -246,7 +246,7 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()), "The client should be ready");
         ProduceRequestData data = new ProduceRequestData()
-                .setAcks((short)1)
+                .setAcks((short) 1)
                 .setTimeoutMs(1000);
 
         ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(data);
