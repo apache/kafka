@@ -208,9 +208,8 @@ public class QuorumControllerTest {
                     "Broker " + brokerId + " should have been fenced");
             });
 
-            // Unfence all brokers and retry topic creation for foo
+            // Unfence all brokers and create a topic foo
             sendBrokerheartbeat(active, allBrokers, brokerEpochs);
-            // Create a topic foo
             CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
                 new CreatableTopicCollection(Collections.singleton(
                     new CreatableTopic().setName("foo").setNumPartitions(1).
