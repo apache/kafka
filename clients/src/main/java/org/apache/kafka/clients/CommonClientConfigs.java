@@ -182,7 +182,7 @@ public class CommonClientConfigs {
     public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
             "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
 
-    public static final String ENABLE_CLIENT_RESPONSE_LEAK_CHECK = "linkedin.enable.client.resonse.leakcheck";
+    public static final String ENABLE_CLIENT_RESPONSE_LEAK_CHECK = "enable.client.response.leakcheck";
     public static final String ENABLE_CLIENT_RESPONSE_LEAK_CHECK_DOC = "Use ClientResponse with finalize method to check the release of NetworkReceive buffer.";
 
     /**
