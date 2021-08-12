@@ -386,6 +386,7 @@ public final class QuorumController implements Controller {
             log.error("Cancelling snapshot {}", generator.lastContainedLogOffset());
             generator.writer().close();
             generator = null;
+            startProcessingTimeNs.ifPresent(aLong -> controllerMetrics.updateGenSnapshotLatencyMs(time.nanoseconds() - aLong));
 
             // Delete every in-memory snapshot up to the committed offset. They are not needed since this
             // snapshot generation was canceled.
@@ -704,7 +705,7 @@ public final class QuorumController implements Controller {
         public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
             appendRaftEvent(String.format("handleSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
                 try {
-                    Optional<Long> startProcessingTimeNs = Optional.empty();
+                    Long startProcessingTimeNs = time.nanoseconds();
                     boolean isActiveController = curClaimEpoch != -1;
                     if (isActiveController) {
                         throw new IllegalStateException(
@@ -753,8 +754,9 @@ public final class QuorumController implements Controller {
                     lastCommittedOffset = reader.lastContainedLogOffset();
                     lastCommittedEpoch = reader.lastContainedLogEpoch();
                     lastCommittedTimestamp = reader.lastContainedLogTimestamp();
+                    controllerMetrics.updateLoadSnapshotLatencyMs(time.nanoseconds() - startProcessingTimeNs);
+
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
-                    controllerMetrics.updateLoadSnapshotLatencyMs(time.nanoseconds() - startProcessingTimeNs.get());
                 } finally {
                     reader.close();
                 }
@@ -1089,7 +1091,7 @@ public final class QuorumController implements Controller {
      */
     private long newBytesSinceLastSnapshot = 0;
 
-    private long snapshotLastCommittedOffset = -1;
+    private long snapshotLastCommittedOffset = 0;
 
     private QuorumController(LogContext logContext,
                              int nodeId,

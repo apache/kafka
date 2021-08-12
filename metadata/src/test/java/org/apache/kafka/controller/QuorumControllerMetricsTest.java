@@ -36,7 +36,11 @@ public class QuorumControllerMetricsTest {
             "GlobalTopicCount",
             "GlobalPartitionCount",
             "OfflinePartitionsCount",
-            "PreferredReplicaImbalanceCount");
+            "PreferredReplicaImbalanceCount",
+            "GenSnapshotLatencyMs",
+            "LoadSnapshotLatencyMs",
+            "SnapshotLag",
+            "SnapshotSizeBytes");
         assertMetricsCreatedAndRemovedUponClose(expectedType, expectedMetricNames);
     }
 

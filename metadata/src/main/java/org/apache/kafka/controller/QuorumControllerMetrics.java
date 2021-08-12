@@ -215,7 +215,11 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
             GLOBAL_TOPIC_COUNT,
             GLOBAL_PARTITION_COUNT,
             OFFLINE_PARTITION_COUNT,
-            PREFERRED_REPLICA_IMBALANCE_COUNT).forEach(this.registry::removeMetric);
+            PREFERRED_REPLICA_IMBALANCE_COUNT,
+            GEN_SNAPSHOT_LATENCY_MS,
+            LOAD_SNAPSHOT_LATENCY_MS,
+            SNAPSHOT_LAG,
+            SNAPSHOT_SIZE_BYTES).forEach(this.registry::removeMetric);
     }
 
     private static MetricName getMetricName(String type, String name) {
