@@ -24,6 +24,8 @@ public final class MockControllerMetrics implements ControllerMetrics {
     private volatile int offlinePartitions;
     private volatile int preferredReplicaImbalances;
     private volatile boolean closed = false;
+    private volatile long snapshotLagSize;
+    private volatile long snapshotSizeBytesSize;
 
     public MockControllerMetrics() {
         this.active = false;
@@ -31,6 +33,8 @@ public final class MockControllerMetrics implements ControllerMetrics {
         this.partitions = 0;
         this.offlinePartitions = 0;
         this.preferredReplicaImbalances = 0;
+        this.snapshotLagSize = 0;
+        this.snapshotSizeBytesSize = 0;
     }
 
     @Override
@@ -93,6 +97,26 @@ public final class MockControllerMetrics implements ControllerMetrics {
         return this.preferredReplicaImbalances;
     }
 
+
+    @Override
+    public void updateGenSnapshotLatencyMs(long genSnapshotLatencyMs) {
+        // nothing to do
+    }
+
+    @Override
+    public void updateLoadSnapshotLatencyMs(long loadSnapshotLatencyMs) {
+        // nothing to do
+    }
+
+    @Override
+    public void setSnapshotLagSize(long snapshotLagSize) {
+        this.snapshotLagSize = snapshotLagSize;
+    }
+
+    @Override
+    public void setSnapshotSizeBytesSize(long snapshotSizeBytesSize) {
+        this.snapshotSizeBytesSize = snapshotSizeBytesSize;
+    }
     @Override
     public void close() {
         closed = true;

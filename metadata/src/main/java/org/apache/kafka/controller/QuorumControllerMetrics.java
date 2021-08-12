@@ -41,12 +41,23 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
         "KafkaController", "PreferredReplicaImbalanceCount");
 
+    private final static MetricName GEN_SNAPSHOT_LATENCY_MS = getMetricName(
+            "KafkaController", "GenSnapshotLatencyMs");
+    private final static MetricName LOAD_SNAPSHOT_LATENCY_MS = getMetricName(
+            "KafkaController", "LoadSnapshotLatencyMs");
+    private final static MetricName SNAPSHOT_LAG = getMetricName(
+            "KafkaController", "SnapshotLag");
+    private final static MetricName SNAPSHOT_SIZE_BYTES = getMetricName(
+            "KafkaController", "SnapshotSizeBytes");
+
     private final MetricsRegistry registry;
     private volatile boolean active;
     private volatile int globalTopicCount;
     private volatile int globalPartitionCount;
     private volatile int offlinePartitionCount;
     private volatile int preferredReplicaImbalanceCount;
+    private volatile long snapshotLagSize;
+    private volatile long snapshotSizeBytesSize;
     private final Gauge<Integer> activeControllerCount;
     private final Gauge<Integer> globalPartitionCountGauge;
     private final Gauge<Integer> globalTopicCountGauge;
@@ -54,6 +65,8 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final Gauge<Integer> preferredReplicaImbalanceCountGauge;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
+    private final Histogram genSnapshotLatencyTime;
+    private final Histogram loadSnapshotLatencyTime;
 
     public QuorumControllerMetrics(MetricsRegistry registry) {
         this.registry = Objects.requireNonNull(registry);
@@ -92,6 +105,23 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
             @Override
             public Integer value() {
                 return preferredReplicaImbalanceCount;
+            }
+        });
+
+        this.genSnapshotLatencyTime = registry.newHistogram(GEN_SNAPSHOT_LATENCY_MS, true);
+        this.loadSnapshotLatencyTime = registry.newHistogram(LOAD_SNAPSHOT_LATENCY_MS, true);
+
+        registry.newGauge(SNAPSHOT_LAG, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return snapshotLagSize;
+            }
+        });
+
+        registry.newGauge(SNAPSHOT_SIZE_BYTES, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return snapshotSizeBytesSize;
             }
         });
     }
@@ -154,6 +184,26 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     @Override
     public int preferredReplicaImbalanceCount() {
         return this.preferredReplicaImbalanceCount;
+    }
+
+    @Override
+    public void updateGenSnapshotLatencyMs(long genSnapshotLatencyMs) {
+        this.genSnapshotLatencyTime.update(genSnapshotLatencyMs);
+    }
+
+    @Override
+    public void updateLoadSnapshotLatencyMs(long loadSnapshotLatencyMs) {
+        this.loadSnapshotLatencyTime.update(loadSnapshotLatencyMs);
+    }
+
+    @Override
+    public void setSnapshotLagSize(long snapshotLagSize) {
+        this.snapshotLagSize = snapshotLagSize;
+    }
+
+    @Override
+    public void setSnapshotSizeBytesSize(long snapshotSizeBytesSize) {
+        this.snapshotSizeBytesSize = snapshotSizeBytesSize;
     }
 
     @Override

@@ -43,5 +43,13 @@ public interface ControllerMetrics extends AutoCloseable {
 
     int preferredReplicaImbalanceCount();
 
+    void updateGenSnapshotLatencyMs(long genSnapshotLatencyMs);
+
+    void updateLoadSnapshotLatencyMs(long loadSnapshotLatencyMs);
+
+    void setSnapshotLagSize(long snapshotLagSize);
+
+    void setSnapshotSizeBytesSize(long snapshotSizeBytesSize);
+
     void close();
 }
