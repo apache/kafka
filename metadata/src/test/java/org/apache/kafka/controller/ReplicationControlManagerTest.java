@@ -94,12 +94,15 @@ import java.util.stream.IntStream;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.protocol.Errors.ELECTION_NOT_NEEDED;
+import static org.apache.kafka.common.protocol.Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.Errors.INVALID_PARTITIONS;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REPLICA_ASSIGNMENT;
 import static org.apache.kafka.common.protocol.Errors.INVALID_TOPIC_EXCEPTION;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
+import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
@@ -1153,7 +1156,24 @@ public class ReplicationControlManagerTest {
         );
 
         // No election can be done yet because no replicas are available for partition 0
-        assertEquals(Collections.emptyList(), replication.electLeaders(request).records());
+        ControllerResult<ElectLeadersResponseData> result1 = replication.electLeaders(request);
+        assertEquals(Collections.emptyList(), result1.records());
+
+        ElectLeadersResponseData expectedResponse1 = buildElectLeadersResponse(NONE, Utils.mkMap(
+            Utils.mkEntry(
+                new TopicPartition("foo", 0),
+                new ApiError(ELIGIBLE_LEADERS_NOT_AVAILABLE)
+            ),
+            Utils.mkEntry(
+                new TopicPartition("foo", 1),
+                new ApiError(ELECTION_NOT_NEEDED)
+            ),
+            Utils.mkEntry(
+                new TopicPartition("foo", 2),
+                new ApiError(ELECTION_NOT_NEEDED)
+            )
+        ));
+        assertElectLeadersResponse(expectedResponse1, result1.response());
 
         // Now we bring 2 back online which should allow the unclean election of partition 0
         ctx.unfenceBrokers(Utils.mkSet(2));
@@ -1177,6 +1197,22 @@ public class ReplicationControlManagerTest {
         assertLeaderAndIsr(replication, partition0, 2, new int[]{2});
         assertLeaderAndIsr(replication, partition1, 4, new int[]{2, 4});
         assertLeaderAndIsr(replication, partition2, 0, new int[]{0});
+
+        ElectLeadersResponseData expectedResponse = buildElectLeadersResponse(NONE, Utils.mkMap(
+            Utils.mkEntry(
+                new TopicPartition("foo", 0),
+                ApiError.NONE
+            ),
+            Utils.mkEntry(
+                new TopicPartition("foo", 1),
+                new ApiError(ELECTION_NOT_NEEDED)
+            ),
+            Utils.mkEntry(
+                new TopicPartition("foo", 2),
+                new ApiError(ELECTION_NOT_NEEDED)
+            )
+        ));
+        assertElectLeadersResponse(expectedResponse, result.response());
     }
 
     @Test
@@ -1191,18 +1227,25 @@ public class ReplicationControlManagerTest {
 
         ctx.fenceBrokers(Utils.mkSet(2, 3));
         ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
+        ctx.unfenceBrokers(Utils.mkSet(2));
 
         assertLeaderAndIsr(replication, partition, NO_LEADER, new int[]{1});
 
         ctx.alterTopicConfig("foo", "unclean.leader.election.enable", "true");
 
         ElectLeadersRequestData request = buildElectLeadersRequest(
-            ElectionType.UNCLEAN,
+            ElectionType.PREFERRED,
             singletonMap("foo", singletonList(0))
         );
 
         // No election should be done even though unclean election is available
-        assertEquals(Collections.emptyList(), replication.electLeaders(request).records());
+        ControllerResult<ElectLeadersResponseData> result = replication.electLeaders(request);
+        assertEquals(Collections.emptyList(), result.records());
+
+        ElectLeadersResponseData expectedResponse = buildElectLeadersResponse(NONE, singletonMap(
+            new TopicPartition("foo", 0), new ApiError(PREFERRED_LEADER_NOT_AVAILABLE)
+        ));
+        assertEquals(expectedResponse, result.response());
     }
 
     private ElectLeadersRequestData buildElectLeadersRequest(
@@ -1272,26 +1315,25 @@ public class ReplicationControlManagerTest {
                     setPartitions(asList(0, 1))).iterator()));
         ControllerResult<ElectLeadersResponseData> election1Result =
             replication.electLeaders(request1);
-        ElectLeadersResponseData expectedResponse1 = new ElectLeadersResponseData().
-            setErrorCode((short) 0).
-            setReplicaElectionResults(asList(
-                new ReplicaElectionResult().setTopic("foo").
-                    setPartitionResult(asList(
-                        new PartitionResult().setPartitionId(0).
-                            setErrorCode(NONE.code()).
-                            setErrorMessage(null),
-                        new PartitionResult().setPartitionId(1).
-                            setErrorCode(NONE.code()).
-                            setErrorMessage(null))),
-                new ReplicaElectionResult().setTopic("bar").
-                    setPartitionResult(asList(
-                        new PartitionResult().setPartitionId(0).
-                            setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()).
-                            setErrorMessage("No such topic as bar"),
-                        new PartitionResult().setPartitionId(1).
-                            setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()).
-                            setErrorMessage("No such topic as bar")))));
-        assertEquals(expectedResponse1, election1Result.response());
+        ElectLeadersResponseData expectedResponse1 = buildElectLeadersResponse(NONE, Utils.mkMap(
+            Utils.mkEntry(
+                new TopicPartition("foo", 0),
+                new ApiError(PREFERRED_LEADER_NOT_AVAILABLE)
+            ),
+            Utils.mkEntry(
+                new TopicPartition("foo", 1),
+                new ApiError(ELECTION_NOT_NEEDED)
+            ),
+            Utils.mkEntry(
+                new TopicPartition("bar", 0),
+                new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "No such topic as bar")
+            ),
+            Utils.mkEntry(
+                new TopicPartition("bar", 1),
+                new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "No such topic as bar")
+            )
+        ));
+        assertElectLeadersResponse(expectedResponse1, election1Result.response());
         assertEquals(Collections.emptyList(), election1Result.records());
         ctx.unfenceBrokers(0, 1);
 
@@ -1311,13 +1353,80 @@ public class ReplicationControlManagerTest {
                     setCurrentIsrVersion(1).
                     setErrorCode(NONE.code()))))),
             alterIsrResult.response());
+
+        ElectLeadersResponseData expectedResponse2 = buildElectLeadersResponse(NONE, Utils.mkMap(
+            Utils.mkEntry(
+                new TopicPartition("foo", 0),
+                ApiError.NONE
+            ),
+            Utils.mkEntry(
+                new TopicPartition("foo", 1),
+                new ApiError(ELECTION_NOT_NEEDED)
+            ),
+            Utils.mkEntry(
+                new TopicPartition("bar", 0),
+                new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "No such topic as bar")
+            ),
+            Utils.mkEntry(
+                new TopicPartition("bar", 1),
+                new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "No such topic as bar")
+            )
+        ));
+
         ctx.replay(alterIsrResult.records());
         ControllerResult<ElectLeadersResponseData> election2Result =
             replication.electLeaders(request1);
-        assertEquals(expectedResponse1, election2Result.response());
+        assertElectLeadersResponse(expectedResponse2, election2Result.response());
         assertEquals(asList(new ApiMessageAndVersion(new PartitionChangeRecord().
             setPartitionId(0).
             setTopicId(fooId).
             setLeader(1), (short) 0)), election2Result.records());
     }
+
+    private void assertElectLeadersResponse(
+        ElectLeadersResponseData expected,
+        ElectLeadersResponseData actual
+    ) {
+        assertEquals(Errors.forCode(expected.errorCode()), Errors.forCode(actual.errorCode()));
+        assertEquals(collectElectLeadersErrors(expected), collectElectLeadersErrors(actual));
+    }
+
+    private Map<TopicPartition, PartitionResult> collectElectLeadersErrors(ElectLeadersResponseData response) {
+        Map<TopicPartition, PartitionResult> res = new HashMap<>();
+        response.replicaElectionResults().forEach(topicResult -> {
+            String topic = topicResult.topic();
+            topicResult.partitionResult().forEach(partitionResult -> {
+                TopicPartition topicPartition = new TopicPartition(topic, partitionResult.partitionId());
+                res.put(topicPartition, partitionResult);
+            });
+        });
+        return res;
+    }
+
+    private ElectLeadersResponseData buildElectLeadersResponse(
+        Errors topLevelError,
+        Map<TopicPartition, ApiError> errors
+    ) {
+        Map<String, List<Map.Entry<TopicPartition, ApiError>>> errorsByTopic = errors.entrySet().stream()
+            .collect(Collectors.groupingBy(entry -> entry.getKey().topic()));
+
+        ElectLeadersResponseData response = new ElectLeadersResponseData()
+            .setErrorCode(topLevelError.code());
+
+        errorsByTopic.forEach((topic, partitionErrors) -> {
+            ReplicaElectionResult electionResult = new ReplicaElectionResult().setTopic(topic);
+            electionResult.setPartitionResult(partitionErrors.stream().map(entry -> {
+                TopicPartition topicPartition = entry.getKey();
+                ApiError error = entry.getValue();
+                return new PartitionResult()
+                    .setPartitionId(topicPartition.partition())
+                    .setErrorCode(error.error().code())
+                    .setErrorMessage(error.message());
+            }).collect(Collectors.toList()));
+            response.replicaElectionResults().add(electionResult);
+        });
+
+        return response;
+    }
+
 }

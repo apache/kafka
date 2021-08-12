@@ -859,6 +859,11 @@ public class ReplicationControlManager {
             return new ApiError(UNKNOWN_TOPIC_OR_PARTITION,
                 "No such partition as " + topic + "-" + partitionId);
         }
+        if ((electionType == ElectionType.PREFERRED && partition.hasPreferredLeader())
+            || (electionType == ElectionType.UNCLEAN && partition.hasLeader())) {
+            return new ApiError(Errors.ELECTION_NOT_NEEDED);
+        }
+
         PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
             topicId,
             partitionId,
@@ -868,13 +873,10 @@ public class ReplicationControlManager {
         builder.setAlwaysElectPreferredIfPossible(electionType == ElectionType.PREFERRED);
         Optional<ApiMessageAndVersion> record = builder.build();
         if (!record.isPresent()) {
-            if (partition.leader == NO_LEADER) {
-                // If we can't find any leader for the partition, return an error.
-                return new ApiError(Errors.LEADER_NOT_AVAILABLE,
-                    "Unable to find any leader for the partition.");
+            if (electionType == ElectionType.PREFERRED) {
+                return new ApiError(Errors.PREFERRED_LEADER_NOT_AVAILABLE);
             } else {
-                // There is nothing to do.
-                return ApiError.NONE;
+                return new ApiError(Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE);
             }
         }
         records.add(record.get());

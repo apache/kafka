@@ -197,7 +197,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void stop() {
             if (stopped.compareAndSet(false, true)) {
-
                 Utils.closeQuietly(clusterReference.get(), "cluster");
                 admins.forEach(admin -> Utils.closeQuietly(admin, "admin"));
             }

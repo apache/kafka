@@ -64,7 +64,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerd
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaFuture, TopicPartition}
+import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -82,6 +82,7 @@ import scala.collection.{Map, Seq, mutable}
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
+import scala.util.{Failure, Success, Try}
 
 /**
  * Utility functions to help with testing
@@ -1637,15 +1638,19 @@ object TestUtils extends Logging {
     val topic = topicPartition.topic
     val partition = topicPartition.partition
 
-    waitUntilTrue(() => {
-      try {
-        val topicResult = client.describeTopics(Arrays.asList(topic)).allTopicNames.get.get(topic)
-        val partitionResult = topicResult.partitions.get(partition)
-        Option(partitionResult.leader).map(_.id) == leader
-      } catch {
-        case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
-      }
-    }, "Timed out waiting for leader metadata")
+    def latestPartitionState: Try[TopicPartitionInfo] = Try {
+      val topicResult = client.describeTopics(List(topic).asJava).allTopicNames.get.get(topic)
+      topicResult.partitions.get(partition)
+    }
+
+    val (lastPartitionState, isLeaderElected) = computeUntilTrue(latestPartitionState) {
+      case Success(partitionResult) => Option(partitionResult.leader).map(_.id) == leader
+      case Failure(e: ExecutionException) if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
+      case Failure(e) => throw e
+    }
+
+    assertTrue(isLeaderElected, s"Timed out waiting for leader to become $leader. " +
+      s"Last metadata lookup returned ${lastPartitionState.map(st => Option(st.leader).map(_.id).getOrElse("none"))}")
   }
 
   def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
@@ -1660,7 +1665,7 @@ object TestUtils extends Logging {
 
         brokerIds.intersect(isr).isEmpty
       },
-      s"Expected brokers $brokerIds to no longer in the ISR for $partition"
+      s"Expected brokers $brokerIds to no longer be in the ISR for $partition"
     )
   }
 
