@@ -17,8 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
@@ -161,14 +159,6 @@ public class ClusterControlManager {
 
     Map<Integer, BrokerRegistration> brokerRegistrations() {
         return brokerRegistrations;
-    }
-
-    Set<Integer> fencedBrokerIds() {
-        return brokerRegistrations.values()
-            .stream()
-            .filter(BrokerRegistration::fenced)
-            .map(BrokerRegistration::id)
-            .collect(Collectors.toSet());
     }
 
     /**

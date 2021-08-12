@@ -200,6 +200,14 @@ public class ReplicationControlManagerTest {
             }
         }
 
+        Set<Integer> fencedBrokerIds() {
+            return clusterControl.brokerRegistrations().values()
+                .stream()
+                .filter(BrokerRegistration::fenced)
+                .map(BrokerRegistration::id)
+                .collect(Collectors.toSet());
+        }
+
         void unfenceBrokers(Integer... brokerIds) throws Exception {
             for (int brokerId : brokerIds) {
                 ControllerResult<BrokerHeartbeatReply> result = replicationControl.
@@ -228,7 +236,7 @@ public class ReplicationControlManagerTest {
                 staleBroker = clusterControl.heartbeatManager().findOneStaleBroker();
             }
 
-            assertEquals(brokerIds, clusterControl.fencedBrokerIds());
+            assertEquals(brokerIds, fencedBrokerIds());
         }
 
         long currentBrokerEpoch(int brokerId) {
@@ -1062,7 +1070,7 @@ public class ReplicationControlManagerTest {
         Uuid fooId = ctx.createTestTopic("foo", new int[][]{
             new int[]{1, 2, 3}, new int[]{2, 3, 4}, new int[]{0, 2, 1}}).topicId();
 
-        assertTrue(ctx.clusterControl.fencedBrokerIds().isEmpty());
+        assertEquals(Collections.emptySet(), ctx.fencedBrokerIds());
         ctx.fenceBrokers(Utils.mkSet(2, 3));
 
         PartitionRegistration partition0 = replication.getPartition(fooId, 0);

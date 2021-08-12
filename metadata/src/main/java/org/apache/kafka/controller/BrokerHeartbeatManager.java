@@ -425,11 +425,10 @@ public class BrokerHeartbeatManager {
      * @return      An Optional broker node id.
      */
     Optional<Integer> findOneStaleBroker() {
-        BrokerHeartbeatStateIterator iterator = unfenced.iterator();
-        if (iterator.hasNext()) {
-            BrokerHeartbeatState broker = iterator.next();
-            // The unfenced list is sorted on last contact time from each
-            // broker. If the first broker is not stale, then none is.
+        // The unfenced list is sorted on last contact time from each
+        // broker. If the first broker is not stale, then none is.
+        BrokerHeartbeatState broker = unfenced.first();
+        if (broker != null) {
             if (!hasValidSession(broker)) {
                 return Optional.of(broker.id);
             }
