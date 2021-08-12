@@ -295,7 +295,7 @@ class ReplicaManager(val config: KafkaConfig,
     replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
   }
 
-  def getLog(topicPartition: TopicPartition): Option[Log] = logManager.getLog(topicPartition)
+  def getLog(topicPartition: TopicPartition): Option[UnifiedLog] = logManager.getLog(topicPartition)
 
   def hasDelayedElectionOperations: Boolean = delayedElectLeaderPurgatory.numDelayed != 0
 
@@ -542,11 +542,11 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def localLogOrException(topicPartition: TopicPartition): Log = {
+  def localLogOrException(topicPartition: TopicPartition): UnifiedLog = {
     getPartitionOrException(topicPartition).localLogOrException
   }
 
-  def futureLocalLogOrException(topicPartition: TopicPartition): Log = {
+  def futureLocalLogOrException(topicPartition: TopicPartition): UnifiedLog = {
     getPartitionOrException(topicPartition).futureLocalLogOrException
   }
 
@@ -554,7 +554,7 @@ class ReplicaManager(val config: KafkaConfig,
     getPartitionOrException(topicPartition).futureLog.isDefined
   }
 
-  def localLog(topicPartition: TopicPartition): Option[Log] = {
+  def localLog(topicPartition: TopicPartition): Option[UnifiedLog] = {
     onlinePartition(topicPartition).flatMap(_.log)
   }
 
@@ -715,7 +715,7 @@ class ReplicaManager(val config: KafkaConfig,
           /* If the topic name is exceptionally long, we can't support altering the log directory.
            * See KAFKA-4893 for details.
            * TODO: fix this by implementing topic IDs. */
-          if (Log.logFutureDirName(topicPartition).size > 255)
+          if (UnifiedLog.logFutureDirName(topicPartition).size > 255)
             throw new InvalidTopicException("The topic name is too long.")
           if (!logManager.isLogDirOnline(destinationDir))
             throw new KafkaStorageException(s"Log directory $destinationDir is offline")
@@ -1190,10 +1190,10 @@ class ReplicaManager(val config: KafkaConfig,
                  _: InconsistentTopicIdException) =>
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
             divergingEpoch = None,
-            highWatermark = Log.UnknownOffset,
-            leaderLogStartOffset = Log.UnknownOffset,
-            leaderLogEndOffset = Log.UnknownOffset,
-            followerLogStartOffset = Log.UnknownOffset,
+            highWatermark = UnifiedLog.UnknownOffset,
+            leaderLogStartOffset = UnifiedLog.UnknownOffset,
+            leaderLogEndOffset = UnifiedLog.UnknownOffset,
+            followerLogStartOffset = UnifiedLog.UnknownOffset,
             fetchTimeMs = -1L,
             lastStableOffset = None,
             exception = Some(e))
@@ -1207,10 +1207,10 @@ class ReplicaManager(val config: KafkaConfig,
 
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
             divergingEpoch = None,
-            highWatermark = Log.UnknownOffset,
-            leaderLogStartOffset = Log.UnknownOffset,
-            leaderLogEndOffset = Log.UnknownOffset,
-            followerLogStartOffset = Log.UnknownOffset,
+            highWatermark = UnifiedLog.UnknownOffset,
+            leaderLogStartOffset = UnifiedLog.UnknownOffset,
+            leaderLogEndOffset = UnifiedLog.UnknownOffset,
+            followerLogStartOffset = UnifiedLog.UnknownOffset,
             fetchTimeMs = -1L,
             lastStableOffset = None,
             exception = Some(e))
@@ -1760,7 +1760,7 @@ class ReplicaManager(val config: KafkaConfig,
    * diverging epoch is returned in the response, avoiding the need for a separate
    * OffsetForLeaderEpoch request.
    */
-  protected def initialFetchOffset(log: Log): Long = {
+  protected def initialFetchOffset(log: UnifiedLog): Long = {
     if (ApiVersion.isTruncationOnFetchSupported(config.interBrokerProtocolVersion) && log.latestEpoch.nonEmpty)
       log.logEndOffset
     else
@@ -1831,7 +1831,7 @@ class ReplicaManager(val config: KafkaConfig,
   // Flushes the highwatermark value for all partitions to the highwatermark file
   def checkpointHighWatermarks(): Unit = {
     def putHw(logDirToCheckpoints: mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, Long]],
-              log: Log): Unit = {
+              log: UnifiedLog): Unit = {
       val checkpoints = logDirToCheckpoints.getOrElseUpdate(log.parentDir,
         new mutable.AnyRefMap[TopicPartition, Long]())
       checkpoints.put(log.topicPartition, log.highWatermark)

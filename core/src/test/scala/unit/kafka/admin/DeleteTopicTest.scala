@@ -21,7 +21,7 @@ import java.util.concurrent.ExecutionException
 import java.util.{Collections, Optional, Properties}
 
 import scala.collection.Seq
-import kafka.log.Log
+import kafka.log.UnifiedLog
 import kafka.zk.{TopicPartitionZNode, ZooKeeperTestHarness}
 import kafka.utils.TestUtils
 import kafka.server.{KafkaConfig, KafkaServer}
@@ -389,7 +389,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     servers
   }
 
-  private def writeDups(numKeys: Int, numDups: Int, log: Log): Seq[(Int, Int)] = {
+  private def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog): Seq[(Int, Int)] = {
     var counter = 0
     for (_ <- 0 until numDups; key <- 0 until numKeys) yield {
       val count = counter

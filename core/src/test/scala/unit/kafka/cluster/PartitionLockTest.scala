@@ -280,11 +280,11 @@ class PartitionLockTest extends Logging {
         }
       }
 
-      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Log = {
+      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): UnifiedLog = {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
+        val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxProducerIdExpirationMs = 60 * 60 * 1000
         val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, maxProducerIdExpirationMs)
         val offsets = LogLoader.load(LoadLogParams(
@@ -367,13 +367,13 @@ class PartitionLockTest extends Logging {
   }
 
   private class SlowLog(
-    log: Log,
+    log: UnifiedLog,
     logStartOffset: Long,
     localLog: LocalLog,
     leaderEpochCache: Option[LeaderEpochFileCache],
     producerStateManager: ProducerStateManager,
     appendSemaphore: Semaphore
-  ) extends Log(
+  ) extends UnifiedLog(
     logStartOffset,
     localLog,
     new BrokerTopicStats,

@@ -19,7 +19,7 @@ package kafka.server.epoch
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.log.{Log, LogManager}
+import kafka.log.{UnifiedLog, LogManager}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils.{MockTime, TestUtils}
@@ -58,7 +58,7 @@ class OffsetsForLeaderEpochTest {
     val request = Seq(newOffsetForLeaderTopic(tp, RecordBatch.NO_PARTITION_LEADER_EPOCH, epochRequested))
 
     //Stubs
-    val mockLog: Log = createNiceMock(classOf[Log])
+    val mockLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val logManager: LogManager = createNiceMock(classOf[LogManager])
     expect(mockLog.endOffsetForEpoch(epochRequested)).andReturn(Some(offsetAndEpoch))
     expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()

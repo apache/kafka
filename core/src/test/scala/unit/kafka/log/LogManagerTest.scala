@@ -497,7 +497,7 @@ class LogManagerTest {
     }
   }
 
-  private def readLog(log: Log, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
+  private def readLog(log: UnifiedLog, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
     log.read(offset, maxLength, isolation = FetchLogEnd, minOneMessage = true)
   }
 
@@ -511,7 +511,7 @@ class LogManagerTest {
     val spyConfigRepository = spy(new MockConfigRepository)
     logManager = createLogManager(configRepository = spyConfigRepository)
     val spyLogManager = spy(logManager)
-    val mockLog = mock(classOf[Log])
+    val mockLog = mock(classOf[UnifiedLog])
 
     val testTopicOne = "test-topic-one"
     val testTopicTwo = "test-topic-two"
@@ -566,7 +566,7 @@ class LogManagerTest {
     val spyConfigRepository = spy(new MockConfigRepository)
     logManager = createLogManager(configRepository = spyConfigRepository)
     val spyLogManager = spy(logManager)
-    val mockLog = mock(classOf[Log])
+    val mockLog = mock(classOf[UnifiedLog])
 
     val testTopicOne = "test-topic-one"
     val testTopicTwo = "test-topic-two"

@@ -61,7 +61,7 @@ class LogConcurrencyTest {
     testUncommittedDataNotConsumed(createLog(logConfig))
   }
 
-  def testUncommittedDataNotConsumed(log: Log): Unit = {
+  def testUncommittedDataNotConsumed(log: UnifiedLog): Unit = {
     val executor = Executors.newFixedThreadPool(2)
     try {
       val maxOffset = 5000
@@ -82,7 +82,7 @@ class LogConcurrencyTest {
    * Simple consumption task which reads the log in ascending order and collects
    * consumed batches for validation
    */
-  private class ConsumerTask(log: Log, lastOffset: Int) extends Callable[Unit] {
+  private class ConsumerTask(log: UnifiedLog, lastOffset: Int) extends Callable[Unit] {
     val consumedBatches = ListBuffer.empty[FetchedBatch]
 
     override def call(): Unit = {
@@ -105,7 +105,7 @@ class LogConcurrencyTest {
   /**
    * This class simulates basic leader/follower behavior.
    */
-  private class LogAppendTask(log: Log, lastOffset: Long) extends Callable[Unit] {
+  private class LogAppendTask(log: UnifiedLog, lastOffset: Long) extends Callable[Unit] {
     override def call(): Unit = {
       var leaderEpoch = 1
       var isLeader = true
@@ -140,8 +140,8 @@ class LogConcurrencyTest {
     }
   }
 
-  private def createLog(config: LogConfig = LogConfig(new Properties())): Log = {
-    Log(dir = logDir,
+  private def createLog(config: LogConfig = LogConfig(new Properties())): UnifiedLog = {
+    UnifiedLog(dir = logDir,
       config = config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
@@ -155,7 +155,7 @@ class LogConcurrencyTest {
       keepPartitionMetadataFile = true)
   }
 
-  private def validateConsumedData(log: Log, consumedBatches: Iterable[FetchedBatch]): Unit = {
+  private def validateConsumedData(log: UnifiedLog, consumedBatches: Iterable[FetchedBatch]): Unit = {
     val iter = consumedBatches.iterator
     log.logSegments.foreach { segment =>
       segment.log.batches.forEach { batch =>

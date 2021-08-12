@@ -21,7 +21,7 @@ import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 
 import kafka.common.LogSegmentOffsetOverflowException
-import kafka.log.Log.{CleanedFileSuffix, DeletedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
+import kafka.log.UnifiedLog.{CleanedFileSuffix, DeletedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
 import kafka.server.{LogDirFailureChannel, LogOffsetMetadata}
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.{CoreUtils, Logging, Scheduler}
@@ -111,14 +111,14 @@ object LogLoader extends Logging {
     // We store segments that require renaming in this code block, and do the actual renaming later.
     var minSwapFileOffset = Long.MaxValue
     var maxSwapFileOffset = Long.MinValue
-    swapFiles.filter(f => Log.isLogFile(new File(CoreUtils.replaceSuffix(f.getPath, SwapFileSuffix, "")))).foreach { f =>
+    swapFiles.filter(f => UnifiedLog.isLogFile(new File(CoreUtils.replaceSuffix(f.getPath, SwapFileSuffix, "")))).foreach { f =>
       val baseOffset = offsetFromFile(f)
       val segment = LogSegment.open(f.getParentFile,
         baseOffset = baseOffset,
         params.config,
         time = params.time,
-        fileSuffix = Log.SwapFileSuffix)
-      info(s"${params.logIdentifier}Found log file ${f.getPath} from interrupted swap operation, which is recoverable from ${Log.SwapFileSuffix} files by renaming.")
+        fileSuffix = UnifiedLog.SwapFileSuffix)
+      info(s"${params.logIdentifier}Found log file ${f.getPath} from interrupted swap operation, which is recoverable from ${UnifiedLog.SwapFileSuffix} files by renaming.")
       minSwapFileOffset = Math.min(segment.baseOffset, minSwapFileOffset)
       maxSwapFileOffset = Math.max(segment.readNextOffset, maxSwapFileOffset)
     }
@@ -145,8 +145,8 @@ object LogLoader extends Logging {
     // Third pass: rename all swap files.
     for (file <- params.dir.listFiles if file.isFile) {
       if (file.getName.endsWith(SwapFileSuffix)) {
-        info(s"${params.logIdentifier}Recovering file ${file.getName} by renaming from ${Log.SwapFileSuffix} files.")
-        file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, Log.SwapFileSuffix, "")))
+        info(s"${params.logIdentifier}Recovering file ${file.getName} by renaming from ${UnifiedLog.SwapFileSuffix} files.")
+        file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, UnifiedLog.SwapFileSuffix, "")))
       }
     }
 
@@ -163,7 +163,7 @@ object LogLoader extends Logging {
     })
 
     val (newRecoveryPoint: Long, nextOffset: Long) = {
-      if (!params.dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
+      if (!params.dir.getAbsolutePath.endsWith(UnifiedLog.DeleteDirSuffix)) {
         val (newRecoveryPoint, nextOffset) = retryOnOffsetOverflow(params, {
           recoverLog(params)
         })
@@ -199,7 +199,7 @@ object LogLoader extends Logging {
     // during log recovery may have deleted some files without the LogLoader.producerStateManager instance witnessing the
     // deletion.
     params.producerStateManager.removeStraySnapshots(params.segments.baseOffsets.toSeq)
-    Log.rebuildProducerState(
+    UnifiedLog.rebuildProducerState(
       params.producerStateManager,
       params.segments,
       newLogStartOffset,
@@ -281,7 +281,7 @@ object LogLoader extends Logging {
       } catch {
         case e: LogSegmentOffsetOverflowException =>
           info(s"${params.logIdentifier}Caught segment overflow error: ${e.getMessage}. Split segment and retry.")
-          val result = Log.splitOverflowedSegment(
+          val result = UnifiedLog.splitOverflowedSegment(
             e.segment,
             params.segments,
             params.dir,
@@ -314,7 +314,7 @@ object LogLoader extends Logging {
       if (isIndexFile(file)) {
         // if it is an index file, make sure it has a corresponding .log file
         val offset = offsetFromFile(file)
-        val logFile = Log.logFile(params.dir, offset)
+        val logFile = UnifiedLog.logFile(params.dir, offset)
         if (!logFile.exists) {
           warn(s"${params.logIdentifier}Found an orphaned index file ${file.getAbsolutePath}, with no corresponding log file.")
           Files.deleteIfExists(file.toPath)
@@ -322,7 +322,7 @@ object LogLoader extends Logging {
       } else if (isLogFile(file)) {
         // if it's a log file, load the corresponding log segment
         val baseOffset = offsetFromFile(file)
-        val timeIndexFileNewlyCreated = !Log.timeIndexFile(params.dir, baseOffset).exists()
+        val timeIndexFileNewlyCreated = !UnifiedLog.timeIndexFile(params.dir, baseOffset).exists()
         val segment = LogSegment.open(
           dir = params.dir,
           baseOffset = baseOffset,
@@ -363,7 +363,7 @@ object LogLoader extends Logging {
       params.dir,
       params.maxProducerIdExpirationMs,
       params.time)
-    Log.rebuildProducerState(
+    UnifiedLog.rebuildProducerState(
       producerStateManager,
       params.segments,
       params.logStartOffsetCheckpoint,
@@ -497,7 +497,7 @@ object LogLoader extends Logging {
       toDelete.foreach { segment =>
         params.segments.remove(segment.baseOffset)
       }
-      Log.deleteSegmentFiles(
+      UnifiedLog.deleteSegmentFiles(
         toDelete,
         asyncDelete = true,
         params.dir,
@@ -512,7 +512,7 @@ object LogLoader extends Logging {
 
   private def deleteProducerSnapshotsAsync(segments: Iterable[LogSegment],
                                            params: LoadLogParams): Unit = {
-    Log.deleteProducerSnapshots(segments,
+    UnifiedLog.deleteProducerSnapshots(segments,
       params.producerStateManager,
       asyncDelete = true,
       params.scheduler,

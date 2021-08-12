@@ -235,6 +235,6 @@ class LogSegmentsTest {
 
     assertEquals(Int.MaxValue, LogSegments.sizeInBytes(Seq(logSegment)))
     assertEquals(largeSize, LogSegments.sizeInBytes(Seq(logSegment, logSegment)))
-    assertTrue(Log.sizeInBytes(Seq(logSegment, logSegment)) > Int.MaxValue)
+    assertTrue(UnifiedLog.sizeInBytes(Seq(logSegment, logSegment)) > Int.MaxValue)
   }
 }

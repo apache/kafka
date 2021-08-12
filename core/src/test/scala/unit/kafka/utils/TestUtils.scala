@@ -1243,7 +1243,7 @@ object TestUtils extends Logging {
         topicPartitions.forall { tp =>
           !Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
             partitionDirectoryName.startsWith(tp.topic + "-" + tp.partition) &&
-              partitionDirectoryName.endsWith(Log.DeleteDirSuffix)
+              partitionDirectoryName.endsWith(UnifiedLog.DeleteDirSuffix)
           }
         }
       }

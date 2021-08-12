@@ -18,7 +18,7 @@ package kafka.server
 
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0}
 import kafka.cluster.{BrokerEndPoint, Partition}
-import kafka.log.{Log, LogAppendInfo, LogManager}
+import kafka.log.{UnifiedLog, LogAppendInfo, LogManager}
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils
@@ -119,7 +119,7 @@ class ReplicaFetcherThreadTest {
     val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
@@ -268,7 +268,7 @@ class ReplicaFetcherThreadTest {
     //Setup all dependencies
     val logManager: LogManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
@@ -332,7 +332,7 @@ class ReplicaFetcherThreadTest {
     val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
@@ -387,7 +387,7 @@ class ReplicaFetcherThreadTest {
     val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
@@ -444,7 +444,7 @@ class ReplicaFetcherThreadTest {
     val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
@@ -522,7 +522,7 @@ class ReplicaFetcherThreadTest {
     val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createNiceMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
@@ -631,7 +631,7 @@ class ReplicaFetcherThreadTest {
     val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
@@ -697,7 +697,7 @@ class ReplicaFetcherThreadTest {
     val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
@@ -742,7 +742,7 @@ class ReplicaFetcherThreadTest {
     val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
@@ -803,7 +803,7 @@ class ReplicaFetcherThreadTest {
     val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createNiceMock(classOf[LogManager])
     val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createNiceMock(classOf[ReplicaManager])
 
@@ -858,7 +858,7 @@ class ReplicaFetcherThreadTest {
     val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createNiceMock(classOf[LogManager])
     val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createNiceMock(classOf[ReplicaManager])
 
@@ -975,7 +975,7 @@ class ReplicaFetcherThreadTest {
 
     val mockBlockingSend: BlockingSend = createNiceMock(classOf[BlockingSend])
 
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
 
     val partition: Partition = createNiceMock(classOf[Partition])
     expect(partition.localLogOrException).andReturn(log)
@@ -1019,7 +1019,7 @@ class ReplicaFetcherThreadTest {
     assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesInRate.get.count())
   }
 
-  def stub(partition: Partition, replicaManager: ReplicaManager, log: Log): Unit = {
+  def stub(partition: Partition, replicaManager: ReplicaManager, log: UnifiedLog): Unit = {
     expect(replicaManager.localLogOrException(t1p0)).andReturn(log).anyTimes()
     expect(replicaManager.getPartitionOrException(t1p0)).andReturn(partition).anyTimes()
     expect(replicaManager.localLogOrException(t1p1)).andReturn(log).anyTimes()

@@ -45,7 +45,7 @@ import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 
-class LogTest {
+class UnifiedLogTest {
   var config: KafkaConfig = null
   val brokerTopicStats = new BrokerTopicStats
   val tmpDir = TestUtils.tempDir()
@@ -67,8 +67,8 @@ class LogTest {
 
   def createEmptyLogs(dir: File, offsets: Int*): Unit = {
     for(offset <- offsets) {
-      Log.logFile(dir, offset).createNewFile()
-      Log.offsetIndexFile(dir, offset).createNewFile()
+      UnifiedLog.logFile(dir, offset).createNewFile()
+      UnifiedLog.offsetIndexFile(dir, offset).createNewFile()
     }
   }
 
@@ -171,7 +171,7 @@ class LogTest {
   }
 
   private def testTruncateBelowFirstUnstableOffset(
-    truncateFunc: Log => (Long => Unit)
+    truncateFunc: UnifiedLog => (Long => Unit)
   ): Unit = {
     // Verify that truncation below the first unstable offset correctly
     // resets the producer state. Specifically we are testing the case when
@@ -266,7 +266,7 @@ class LogTest {
     assertHighWatermark(4L)
   }
 
-  private def assertNonEmptyFetch(log: Log, offset: Long, isolation: FetchIsolation): Unit = {
+  private def assertNonEmptyFetch(log: UnifiedLog, offset: Long, isolation: FetchIsolation): Unit = {
     val readInfo = log.read(startOffset = offset,
       maxLength = Int.MaxValue,
       isolation = isolation,
@@ -288,7 +288,7 @@ class LogTest {
     assertValidLogOffsetMetadata(log, readInfo.fetchOffsetMetadata)
   }
 
-  private def assertEmptyFetch(log: Log, offset: Long, isolation: FetchIsolation): Unit = {
+  private def assertEmptyFetch(log: UnifiedLog, offset: Long, isolation: FetchIsolation): Unit = {
     val readInfo = log.read(startOffset = offset,
       maxLength = Int.MaxValue,
       isolation = isolation,
@@ -463,8 +463,8 @@ class LogTest {
   @Test
   def testOffsetFromProducerSnapshotFile(): Unit = {
     val offset = 23423423L
-    val snapshotFile = Log.producerSnapshotFile(tmpDir, offset)
-    assertEquals(offset, Log.offsetFromFile(snapshotFile))
+    val snapshotFile = UnifiedLog.producerSnapshotFile(tmpDir, offset)
+    assertEquals(offset, UnifiedLog.offsetFromFile(snapshotFile))
   }
 
   /**
@@ -620,7 +620,7 @@ class LogTest {
   def testLogSegmentsCallCorrect(): Unit = {
     // Create 3 segments and make sure we get the right values from various logSegments calls.
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
-    def getSegmentOffsets(log :Log, from: Long, to: Long) = log.logSegments(from, to).map { _.baseOffset }
+    def getSegmentOffsets(log :UnifiedLog, from: Long, to: Long) = log.logSegments(from, to).map { _.baseOffset }
     val setSize = createRecords.sizeInBytes
     val msgPerSeg = 10
     val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
@@ -1017,7 +1017,7 @@ class LogTest {
    */
   @Test
   def testLoadingLogDeletesProducerStateSnapshotsPastLogEndOffset(): Unit = {
-    val straySnapshotFile = Log.producerSnapshotFile(logDir, 42).toPath
+    val straySnapshotFile = UnifiedLog.producerSnapshotFile(logDir, 42).toPath
     Files.createFile(straySnapshotFile)
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5, retentionBytes = -1, fileDeleteDelayMs = 0)
     createLog(logDir, logConfig)
@@ -2120,8 +2120,8 @@ class LogTest {
     log.deleteOldSegments()
 
     assertEquals(1, log.numberOfSegments, "Only one segment should remain.")
-    assertTrue(segments.forall(_.log.file.getName.endsWith(Log.DeletedFileSuffix)) &&
-      segments.forall(_.lazyOffsetIndex.file.getName.endsWith(Log.DeletedFileSuffix)),
+    assertTrue(segments.forall(_.log.file.getName.endsWith(UnifiedLog.DeletedFileSuffix)) &&
+      segments.forall(_.lazyOffsetIndex.file.getName.endsWith(UnifiedLog.DeletedFileSuffix)),
       "All log and index files should end in .deleted")
     assertTrue(segments.forall(_.log.file.exists) && segments.forall(_.lazyOffsetIndex.file.exists),
       "The .deleted files should still be there.")
@@ -2234,8 +2234,8 @@ class LogTest {
     assertEquals(Some(5), log.latestEpoch)
 
     // Ensure that after a directory rename, the epoch cache is written to the right location
-    val tp = Log.parseTopicPartitionName(log.dir)
-    log.renameDir(Log.logDeleteDirName(tp))
+    val tp = UnifiedLog.parseTopicPartitionName(log.dir)
+    log.renameDir(UnifiedLog.logDeleteDirName(tp))
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 10)
     assertEquals(Some(10), log.latestEpoch)
     assertTrue(LeaderEpochCheckpointFile.newFile(log.dir).exists())
@@ -2255,8 +2255,8 @@ class LogTest {
     assertEquals(Some(5), log.latestEpoch)
 
     // Ensure that after a directory rename, the partition metadata file is written to the right location.
-    val tp = Log.parseTopicPartitionName(log.dir)
-    log.renameDir(Log.logDeleteDirName(tp))
+    val tp = UnifiedLog.parseTopicPartitionName(log.dir)
+    log.renameDir(UnifiedLog.logDeleteDirName(tp))
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 10)
     assertEquals(Some(10), log.latestEpoch)
     assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
@@ -2278,8 +2278,8 @@ class LogTest {
     log.partitionMetadataFile.record(topicId)
 
     // Ensure that after a directory rename, the partition metadata file is written to the right location.
-    val tp = Log.parseTopicPartitionName(log.dir)
-    log.renameDir(Log.logDeleteDirName(tp))
+    val tp = UnifiedLog.parseTopicPartitionName(log.dir)
+    log.renameDir(UnifiedLog.logDeleteDirName(tp))
     assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
     assertFalse(PartitionMetadataFile.newFile(this.logDir).exists())
 
@@ -2351,14 +2351,14 @@ class LogTest {
     val (log, segmentWithOverflow) = createLogWithOffsetOverflow(logConfig)
     assertTrue(LogTestUtils.hasOffsetOverflow(log), "At least one segment must have offset overflow")
 
-    val allRecordsBeforeSplit = LogTest.allRecords(log)
+    val allRecordsBeforeSplit = UnifiedLogTest.allRecords(log)
 
     // split the segment with overflow
     log.splitOverflowedSegment(segmentWithOverflow)
 
     // assert we were successfully able to split the segment
     assertEquals(4, log.numberOfSegments)
-    LogTest.verifyRecordsInLog(log, allRecordsBeforeSplit)
+    UnifiedLogTest.verifyRecordsInLog(log, allRecordsBeforeSplit)
 
     // verify we do not have offset overflow anymore
     assertFalse(LogTestUtils.hasOffsetOverflow(log))
@@ -2395,8 +2395,8 @@ class LogTest {
   private def testDegenerateSplitSegmentWithOverflow(segmentBaseOffset: Long, records: List[MemoryRecords]): Unit = {
     val segment = LogTestUtils.rawSegment(logDir, segmentBaseOffset)
     // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
-    Log.offsetIndexFile(logDir, segmentBaseOffset).createNewFile()
-    Log.timeIndexFile(logDir, segmentBaseOffset).createNewFile()
+    UnifiedLog.offsetIndexFile(logDir, segmentBaseOffset).createNewFile()
+    UnifiedLog.timeIndexFile(logDir, segmentBaseOffset).createNewFile()
     records.foreach(segment.append _)
     segment.close()
 
@@ -2407,14 +2407,14 @@ class LogTest {
       throw new AssertionError("Failed to create log with a segment which has overflowed offsets")
     }
 
-    val allRecordsBeforeSplit = LogTest.allRecords(log)
+    val allRecordsBeforeSplit = UnifiedLogTest.allRecords(log)
     log.splitOverflowedSegment(segmentWithOverflow)
 
     assertEquals(1, log.numberOfSegments)
 
     val firstBatchBaseOffset = records.head.batches.asScala.head.baseOffset
     assertEquals(firstBatchBaseOffset, log.activeSegment.baseOffset)
-    LogTest.verifyRecordsInLog(log, allRecordsBeforeSplit)
+    UnifiedLogTest.verifyRecordsInLog(log, allRecordsBeforeSplit)
 
     assertFalse(LogTestUtils.hasOffsetOverflow(log))
   }
@@ -2515,7 +2515,7 @@ class LogTest {
     assertEquals(log.logStartOffset, 15)
   }
 
-  def epochCache(log: Log): LeaderEpochFileCache = {
+  def epochCache(log: UnifiedLog): LeaderEpochFileCache = {
     log.leaderEpochCache.get
   }
 
@@ -3004,7 +3004,7 @@ class LogTest {
     assertEquals(None, log.firstUnstableOffset)
   }
 
-  private def assertCachedFirstUnstableOffset(log: Log, expectedOffset: Long): Unit = {
+  private def assertCachedFirstUnstableOffset(log: UnifiedLog, expectedOffset: Long): Unit = {
     assertTrue(log.producerStateManager.firstUnstableOffset.isDefined)
     val firstUnstableOffset = log.producerStateManager.firstUnstableOffset.get
     assertEquals(expectedOffset, firstUnstableOffset.messageOffset)
@@ -3012,7 +3012,7 @@ class LogTest {
     assertValidLogOffsetMetadata(log, firstUnstableOffset)
   }
 
-  private def assertValidLogOffsetMetadata(log: Log, offsetMetadata: LogOffsetMetadata): Unit = {
+  private def assertValidLogOffsetMetadata(log: UnifiedLog, offsetMetadata: LogOffsetMetadata): Unit = {
     assertFalse(offsetMetadata.messageOffsetOnly)
 
     val segmentBaseOffset = offsetMetadata.segmentBaseOffset
@@ -3299,7 +3299,7 @@ class LogTest {
 
   @Test
   def testLoadPartitionDirWithNoSegmentsShouldNotThrow(): Unit = {
-    val dirName = Log.logDeleteDirName(new TopicPartition("foo", 3))
+    val dirName = UnifiedLog.logDeleteDirName(new TopicPartition("foo", 3))
     val logDir = new File(tmpDir, dirName)
     logDir.mkdirs()
     val logConfig = LogTestUtils.createLogConfig()
@@ -3344,7 +3344,7 @@ class LogTest {
     builder.close()
   }
 
-  private def appendAsFollower(log: Log, records: MemoryRecords, leaderEpoch: Int = 0): Unit = {
+  private def appendAsFollower(log: UnifiedLog, records: MemoryRecords, leaderEpoch: Int = 0): Unit = {
     records.batches.forEach(_.setPartitionLeaderEpoch(leaderEpoch))
     log.appendAsFollower(records)
   }
@@ -3360,12 +3360,12 @@ class LogTest {
                         producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                         lastShutdownClean: Boolean = true,
                         topicId: Option[Uuid] = None,
-                        keepPartitionMetadataFile: Boolean = true): Log = {
+                        keepPartitionMetadataFile: Boolean = true): UnifiedLog = {
     LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
       maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean, topicId = topicId, keepPartitionMetadataFile = keepPartitionMetadataFile)
   }
 
-  private def createLogWithOffsetOverflow(logConfig: LogConfig): (Log, LogSegment) = {
+  private def createLogWithOffsetOverflow(logConfig: LogConfig): (UnifiedLog, LogSegment) = {
     LogTestUtils.initializeLogDirWithOverflowedSegment(logDir)
 
     val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
@@ -3377,8 +3377,8 @@ class LogTest {
   }
 }
 
-object LogTest {
-  def allRecords(log: Log): List[Record] = {
+object UnifiedLogTest {
+  def allRecords(log: UnifiedLog): List[Record] = {
     val recordsFound = ListBuffer[Record]()
     for (logSegment <- log.logSegments) {
       for (batch <- logSegment.log.batches.asScala) {
@@ -3388,7 +3388,7 @@ object LogTest {
     recordsFound.toList
   }
 
-  def verifyRecordsInLog(log: Log, expectedRecords: List[Record]): Unit = {
+  def verifyRecordsInLog(log: UnifiedLog, expectedRecords: List[Record]): Unit = {
     assertEquals(expectedRecords, allRecords(log))
   }
 }

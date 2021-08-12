@@ -207,11 +207,11 @@ class PartitionTest extends AbstractPartitionTest {
       logManager,
       alterIsrManager) {
 
-      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Log = {
+      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): UnifiedLog = {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
+        val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxProducerIdExpirationMs = 60 * 60 * 1000
         val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, maxProducerIdExpirationMs)
         val offsets = LogLoader.load(LoadLogParams(
@@ -1042,7 +1042,7 @@ class PartitionTest extends AbstractPartitionTest {
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
+    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
 
     time.sleep(500)
 
@@ -1096,7 +1096,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
+    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
 
     partition.updateFollowerFetchState(remoteBrokerId,
       followerFetchOffsetMetadata = LogOffsetMetadata(3),
@@ -1157,7 +1157,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
+    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
 
     partition.updateFollowerFetchState(remoteBrokerId,
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
@@ -1214,7 +1214,7 @@ class PartitionTest extends AbstractPartitionTest {
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
+    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
 
     // On initialization, the replica is considered caught up and should not be removed
     partition.maybeShrinkIsr()
@@ -1261,7 +1261,7 @@ class PartitionTest extends AbstractPartitionTest {
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
+    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
 
     // Shrink the ISR
     time.sleep(partition.replicaLagTimeMaxMs + 1)
@@ -1321,7 +1321,7 @@ class PartitionTest extends AbstractPartitionTest {
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
+    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
 
     // There is a short delay before the first fetch. The follower is not yet caught up to the log end.
     time.sleep(5000)
@@ -1386,7 +1386,7 @@ class PartitionTest extends AbstractPartitionTest {
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
+    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
 
     // The follower catches up to the log end immediately.
     partition.updateFollowerFetchState(remoteBrokerId,
@@ -1437,7 +1437,7 @@ class PartitionTest extends AbstractPartitionTest {
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
+    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
 
     time.sleep(30001)
 
@@ -1513,7 +1513,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
+    assertEquals(UnifiedLog.UnknownOffset, remoteReplica.logStartOffset)
 
     // This will attempt to expand the ISR
     partition.updateFollowerFetchState(remoteBrokerId,
@@ -1960,7 +1960,7 @@ class PartitionTest extends AbstractPartitionTest {
     verify(spyConfigRepository, times(2)).topicConfig(topicPartition.topic())
   }
 
-  private def seedLogData(log: Log, numRecords: Int, leaderEpoch: Int): Unit = {
+  private def seedLogData(log: UnifiedLog, numRecords: Int, leaderEpoch: Int): Unit = {
     for (i <- 0 until numRecords) {
       val records = MemoryRecords.withRecords(0L, CompressionType.NONE, leaderEpoch,
         new SimpleRecord(s"k$i".getBytes, s"v$i".getBytes))
@@ -1969,13 +1969,13 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   private class SlowLog(
-    log: Log,
+    log: UnifiedLog,
     logStartOffset: Long,
     localLog: LocalLog,
     leaderEpochCache: Option[LeaderEpochFileCache],
     producerStateManager: ProducerStateManager,
     appendSemaphore: Semaphore
-  ) extends Log(
+  ) extends UnifiedLog(
     logStartOffset,
     localLog,
     new BrokerTopicStats,
