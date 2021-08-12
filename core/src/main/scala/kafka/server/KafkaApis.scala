@@ -2635,7 +2635,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
         requestHelper.sendResponseMaybeThrottle(request, responseCallback)
       }
-    } else if (!request.isForwarded) {
+    } else {
       // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller
       val brokerConfigs = alterConfigsRequest.configs.asScala.filter(entry => entry._1.`type` == ConfigResource.Type.BROKER)
 
@@ -2820,7 +2820,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
           requestThrottleMs, (authorizedResult ++ unauthorizedResult).asJava))
       }
-    } else if (!request.isForwarded) {
+    } else {
       // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller.
       val results = configs.map { case (resource, alterConfigOps) =>
         try {
