@@ -1905,9 +1905,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   @nowarn("cat=deprecation")
   private def validateValues(): Unit = {
-    val nodeIdValue = values.get(KafkaConfig.NodeIdProp).asInstanceOf[Int]
+    val nodeIdValue = getInt(KafkaConfig.NodeIdProp)
     if (nodeIdValue >= 0) {
-      val brokerIdValue = values.get(KafkaConfig.BrokerIdProp).asInstanceOf[Int]
+      val brokerIdValue = getInt(KafkaConfig.BrokerIdProp)
       if (brokerIdValue != Defaults.BrokerId && brokerIdValue != nodeIdValue) {
         throw new ConfigException(s"The values for broker.id ($brokerIdValue) and node.id ($nodeIdValue) must be the same if both are specified")
       }
