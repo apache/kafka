@@ -139,6 +139,8 @@ abstract class AbstractLogCleanerIntegrationTest {
       val value = counter.toString
       val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.toString.getBytes, codec = codec,
         key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)
+      // move LSO forward to increase compaction bound
+      log.updateHighWatermark(log.logEndOffset)
       incCounter()
       (key, value, appendInfo.firstOffset.get.messageOffset)
     }

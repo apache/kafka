@@ -590,13 +590,14 @@ private[log] object LogCleanerManager extends Logging {
 
     val minCompactionLagMs = math.max(log.config.compactionLagMs, 0L)
 
-    // find first segment that cannot be cleaned
-    // neither the active segment, nor segments with any messages closer to the head of the log than the minimum compaction lag time
-    // may be cleaned
+    // Find the first segment that cannot be cleaned. We cannot clean past:
+    // 1. The active segment
+    // 2. The last stable offset (including the high watermark)
+    // 3. Any segments closer to the head of the log than the minimum compaction lag time
     val firstUncleanableDirtyOffset: Long = Seq(
 
-      // we do not clean beyond the first unstable offset
-      log.firstUnstableOffset,
+      // we do not clean beyond the last stable offset
+      Some(log.lastStableOffset),
 
       // the active segment is always uncleanable
       Option(log.activeSegment.baseOffset),
