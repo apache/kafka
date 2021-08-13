@@ -56,6 +56,7 @@ public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowS
         return new MeteredWindowStore<>(
             maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
             storeSupplier.windowSize(),
+            storeSupplier.retentionPeriod(),
             storeSupplier.metricsScope(),
             time,
             keySerde,

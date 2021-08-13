@@ -25,17 +25,18 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.SessionStore;
-
 
 public class RocksDBSessionStore
     extends WrappedStateStore<SegmentedBytesStore, Object, Object>
-    implements SessionStore<Bytes, byte[]> {
+    implements PersistentSessionStore<Bytes, byte[]> {
+
+    private final SegmentedBytesStore bytesStore;
 
     private StateStoreContext stateStoreContext;
 
     RocksDBSessionStore(final SegmentedBytesStore bytesStore) {
         super(bytesStore);
+        this.bytesStore = bytesStore;
     }
 
     @Override
@@ -150,5 +151,10 @@ public class RocksDBSessionStore
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(SessionKeySchema.toBinary(sessionKey), aggregate);
+    }
+
+    @Override
+    public long getObservedStreamTime() {
+        return bytesStore.getObservedStreamTime();
     }
 }

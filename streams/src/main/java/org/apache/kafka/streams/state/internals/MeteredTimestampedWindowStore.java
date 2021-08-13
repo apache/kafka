@@ -39,11 +39,12 @@ class MeteredTimestampedWindowStore<K, V>
 
     MeteredTimestampedWindowStore(final WindowStore<Bytes, byte[]> inner,
                                   final long windowSizeMs,
+                                  final long retentionPeriod,
                                   final String metricScope,
                                   final Time time,
                                   final Serde<K> keySerde,
                                   final Serde<ValueAndTimestamp<V>> valueSerde) {
-        super(inner, windowSizeMs, metricScope, time, keySerde, valueSerde);
+        super(inner, windowSizeMs, retentionPeriod, metricScope, time, keySerde, valueSerde);
     }
 
     @SuppressWarnings("unchecked")
