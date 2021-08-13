@@ -33,6 +33,7 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -185,7 +186,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     @Override
     public String version() {
-        return "1";
+        return AppInfoParser.getVersion();
     }
 
     // visible for testing
