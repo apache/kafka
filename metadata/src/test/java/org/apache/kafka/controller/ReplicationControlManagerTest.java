@@ -200,7 +200,7 @@ public class ReplicationControlManagerTest {
             }
         }
 
-        Set<Integer> fencedBrokerIds() {
+        private Set<Integer> fencedBrokerIds() {
             return clusterControl.brokerRegistrations().values()
                 .stream()
                 .filter(BrokerRegistration::fenced)
