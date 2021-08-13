@@ -99,7 +99,7 @@ public class LoginTokenEndpointHttpClient {
         String requestBody)
         throws IOException {
         URL url = new URL(uri);
-        HttpURLConnection con = (HttpURLConnection)url.openConnection();
+        HttpURLConnection con = (HttpURLConnection) url.openConnection();
         con.setRequestMethod("POST");
         con.setRequestProperty("Accept", "application/json");
         con.setRequestProperty("Authorization", authorizationHeader);
@@ -107,8 +107,8 @@ public class LoginTokenEndpointHttpClient {
         con.setRequestProperty("Content-Length", String.valueOf(requestBody.length()));
         con.setUseCaches(false);
         con.setDoOutput(true);
-        con.setConnectTimeout((int)connectTimeoutMs);
-        con.setReadTimeout((int)readTimeoutMs);
+        con.setConnectTimeout((int) connectTimeoutMs);
+        con.setReadTimeout((int) readTimeoutMs);
 
         try {
             log.debug("writeRequest - preparing to connect to {}", uri);

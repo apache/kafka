@@ -63,8 +63,8 @@ public class Retry<T> {
                     throw e;
                 } else {
                     double jitterFactor = ThreadLocalRandom.current().nextDouble(0.0, 0.1);
-                    long waitMs = retryWaitMs * (long)Math.pow(2, attempt - 1);
-                    waitMs += (double)waitMs * jitterFactor;
+                    long waitMs = retryWaitMs * (long) Math.pow(2, attempt - 1);
+                    waitMs += (double) waitMs * jitterFactor;
                     waitMs = Math.min(waitMs, maxWaitMs);
 
                     String message = String.format("Attempt %s of %s to call HTTP URL %s resulted in an error; sleeping %s ms before retrying",

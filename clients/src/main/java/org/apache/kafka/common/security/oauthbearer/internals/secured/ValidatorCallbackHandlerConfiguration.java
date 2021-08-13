@@ -111,8 +111,7 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
             Type.STRING,
             SUB_CLAIM_NAME_DEFAULT,
             Importance.LOW,
-            SUB_CLAIM_NAME_DOC)
-        ;
+            SUB_CLAIM_NAME_DOC);
 
     private final Set<String> expectedAudiences;
 

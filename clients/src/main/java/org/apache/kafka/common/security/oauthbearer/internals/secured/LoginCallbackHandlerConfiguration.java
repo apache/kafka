@@ -140,8 +140,7 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
             NO_DEFAULT_VALUE,
             TOKEN_ENDPOINT_URI_VALIDATOR,
             Importance.MEDIUM,
-            TOKEN_ENDPOINT_URI_DOC)
-        ;
+            TOKEN_ENDPOINT_URI_DOC);
 
     public LoginCallbackHandlerConfiguration(Map<String, ?> options) {
         super(CONFIG, options);
