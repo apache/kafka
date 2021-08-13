@@ -139,6 +139,9 @@
       </subpackage>
       <subpackage name="oauthbearer">
         <allow pkg="com.fasterxml.jackson.databind" />
+        <subpackage name="internals.secured">
+          <allow pkg="org.jose4j" />
+        </subpackage>
       </subpackage>
     </subpackage>
 
