@@ -57,6 +57,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private ProcessorContext context;
     private StateStoreContext stateStoreContext;
     private Sensor expiredRecordSensor;
+
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private boolean consistencyEnabled = false;
     private Position position;
@@ -308,6 +309,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     @Override
     public boolean isOpen() {
         return open;
+    }
+
+    @Override
+    public long getObservedStreamTime() {
+        return observedStreamTime;
     }
 
     // Visible for testing
