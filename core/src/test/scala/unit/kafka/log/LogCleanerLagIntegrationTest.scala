@@ -106,6 +106,8 @@ class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest wit
       val count = counter
       log.appendAsLeader(TestUtils.singletonRecords(value = counter.toString.getBytes, codec = codec,
               key = key.toString.getBytes, timestamp = timestamp), leaderEpoch = 0)
+      // move LSO forward to increase compaction bound
+      log.updateHighWatermark(log.logEndOffset)
       incCounter()
       (key, count)
     }
