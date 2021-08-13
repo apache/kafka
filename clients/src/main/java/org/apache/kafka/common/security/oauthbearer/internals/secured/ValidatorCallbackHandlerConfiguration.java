@@ -25,6 +25,7 @@ import java.util.Set;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Range;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.jose4j.jwk.HttpsJwks;
@@ -35,15 +36,20 @@ import org.jose4j.keys.resolvers.VerificationKeyResolver;
 public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
 
     public static final String CLOCK_SKEW_CONFIG = "clockSkew";
-    private static final Integer CLOCK_SKEW_DEFAULT = 30;
+    private static final int CLOCK_SKEW_DEFAULT = 30;
     private static final String CLOCK_SKEW_DOC = "xxx";
-    private static final ConfigDef.Validator CLOCK_SKEW_VALIDATOR = ConfigDef.Range.atLeast(0);
+    private static final ConfigDef.Validator CLOCK_SKEW_VALIDATOR = Range.atLeast(0);
 
     public static final String EXPECTED_AUDIENCE_CONFIG = "expectedAudience";
     private static final String EXPECTED_AUDIENCE_DOC = "xxx";
 
     public static final String EXPECTED_ISSUER_CONFIG = "expectedIssuer";
     private static final String EXPECTED_ISSUER_DOC = "xxx";
+
+    public static final String JWKS_ENDPOINT_REFRESH_INTERVAL_MS_CONFIG = "jwksEndpointRefreshIntervalMs";
+    private static final long JWKS_ENDPOINT_REFRESH_INTERVAL_MS_DEFAULT = 60 * 60 * 1000;
+    private static final String JWKS_ENDPOINT_REFRESH_INTERVAL_MS_DOC = "xxx";
+    private static final ConfigDef.Validator JWKS_ENDPOINT_REFRESH_INTERVAL_MS_VALIDATOR = Range.atLeast(30 * 1000);
 
     public static final String JWKS_ENDPOINT_URI_CONFIG = "jwksEndpointUri";
     private static final String JWKS_ENDPOINT_URI_DOC = "xxx";
@@ -78,6 +84,12 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
             null,
             Importance.LOW,
             EXPECTED_ISSUER_DOC)
+        .define(JWKS_ENDPOINT_REFRESH_INTERVAL_MS_CONFIG,
+            Type.LONG,
+            JWKS_ENDPOINT_REFRESH_INTERVAL_MS_DEFAULT,
+            JWKS_ENDPOINT_REFRESH_INTERVAL_MS_VALIDATOR,
+            Importance.LOW,
+            JWKS_ENDPOINT_REFRESH_INTERVAL_MS_DOC)
         .define(JWKS_ENDPOINT_URI_CONFIG,
             Type.STRING,
             null,
@@ -130,7 +142,8 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
             // TODO
             verificationKeyResolver = null;
         } else if (jwksEndpointUri != null) {
-            HttpsJwks httpsJkws = new HttpsJwks(jwksEndpointUri);
+            long refreshIntervalMs = getLong(JWKS_ENDPOINT_REFRESH_INTERVAL_MS_CONFIG);
+            HttpsJwks httpsJkws = new RefreshingHttpsJwks(jwksEndpointUri, refreshIntervalMs);
             verificationKeyResolver = new HttpsJwksVerificationKeyResolver(httpsJkws);
         } else {
             throw new ConfigException(String.format("The OAuth validator configuration must include either %s or %s options", JWKS_FILE_CONFIG, JWKS_ENDPOINT_URI_CONFIG));

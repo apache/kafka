@@ -23,6 +23,7 @@ import java.util.Map;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.NonEmptyString;
 import org.apache.kafka.common.config.ConfigDef.Range;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
@@ -30,11 +31,11 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
 
     public static final String CLIENT_ID_CONFIG = "clientId";
     private static final String CLIENT_ID_DOC = "xxx";
-    private static final ConfigDef.Validator CLIENT_ID_VALIDATOR = new ConfigDef.NonEmptyString();
+    private static final ConfigDef.Validator CLIENT_ID_VALIDATOR = new NonEmptyString();
 
     public static final String CLIENT_SECRET_CONFIG = "clientSecret";
     private static final String CLIENT_SECRET_DOC = "xxx";
-    private static final ConfigDef.Validator CLIENT_SECRET_VALIDATOR = new ConfigDef.NonEmptyString();
+    private static final ConfigDef.Validator CLIENT_SECRET_VALIDATOR = new NonEmptyString();
 
     public static final String LOGIN_ATTEMPTS_CONFIG = "loginAttempts";
     private static final int LOGIN_ATTEMPTS_DEFAULT = 3;
