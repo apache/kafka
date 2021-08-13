@@ -29,9 +29,11 @@ import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
-import org.apache.kafka.test.MockInternalProcessorContext;
+import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -49,7 +51,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.core.Is.is;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KTableSuppressProcessorMetricsTest {
     private static final long ARBITRARY_LONG = 5L;
     private static final TaskId TASK_ID = new TaskId(0, 0);
@@ -134,7 +135,7 @@ public class KTableSuppressProcessorMetricsTest {
             .build();
 
         final KTableImpl<String, ?, Long> mock = EasyMock.mock(KTableImpl.class);
-        final org.apache.kafka.streams.processor.Processor<String, Change<Long>> processor =
+        final Processor<String, Change<Long>, String, Change<Long>> processor =
             new KTableSuppressProcessorSupplier<>(
                 (SuppressedInternal<String>) Suppressed.<String>untilTimeLimit(Duration.ofDays(100), maxRecords(1)),
                 storeName,
@@ -142,8 +143,8 @@ public class KTableSuppressProcessorMetricsTest {
             ).get();
 
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
-        final MockInternalProcessorContext context =
-            new MockInternalProcessorContext(streamsConfig, TASK_ID, TestUtils.tempDirectory());
+        final MockInternalNewProcessorContext<String, Change<Long>> context =
+            new MockInternalNewProcessorContext<>(streamsConfig, TASK_ID, TestUtils.tempDirectory());
         final Time time = new SystemTime();
         context.setCurrentNode(new ProcessorNode("testNode"));
         context.setSystemTimeMs(time.milliseconds());
@@ -155,7 +156,7 @@ public class KTableSuppressProcessorMetricsTest {
         context.setRecordMetadata("", 0, 0L, new RecordHeaders(), timestamp);
         final String key = "longKey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
-        processor.process(key, value);
+        processor.process(new Record<>(key, value, timestamp));
 
         final MetricName evictionRateMetric = evictionRateMetricLatest;
         final MetricName evictionTotalMetric = evictionTotalMetricLatest;
@@ -176,7 +177,7 @@ public class KTableSuppressProcessorMetricsTest {
         }
 
         context.setRecordMetadata("", 0, 1L, new RecordHeaders(), timestamp + 1);
-        processor.process("key", value);
+        processor.process(new Record<>("key", value, timestamp + 1));
 
         {
             final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();

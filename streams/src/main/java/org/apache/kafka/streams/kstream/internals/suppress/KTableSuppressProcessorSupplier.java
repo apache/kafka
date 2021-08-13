@@ -21,10 +21,14 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
-import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.KTableNewProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.TimeDefinitions.TimeDefinition;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
@@ -35,8 +39,7 @@ import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import static java.util.Objects.requireNonNull;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSupplier<K, V, V> {
+public class KTableSuppressProcessorSupplier<K, V> implements KTableNewProcessorSupplier<K, V, K, V> {
     private final SuppressedInternal<K> suppress;
     private final String storeName;
     private final KTableImpl<K, ?, V> parentKTable;
@@ -52,7 +55,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
     }
 
     @Override
-    public org.apache.kafka.streams.processor.Processor<K, Change<V>> get() {
+    public Processor<K, Change<V>, K, Change<V>> get() {
         return new KTableSuppressProcessor<>(suppress, storeName);
     }
 
@@ -109,7 +112,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         return parentKTable.enableSendingOldValues(forceMaterialization);
     }
 
-    private static final class KTableSuppressProcessor<K, V> extends org.apache.kafka.streams.processor.AbstractProcessor<K, Change<V>> {
+    private static final class KTableSuppressProcessor<K, V> extends ContextualProcessor<K, Change<V>, K, Change<V>> {
         private final long maxRecords;
         private final long maxBytes;
         private final long suppressDurationMillis;
@@ -135,7 +138,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         }
 
         @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        public void init(final ProcessorContext<K, Change<V>> context) {
             super.init(context);
             internalProcessorContext = (InternalProcessorContext) context;
             suppressionEmitSensor = ProcessorNodeMetrics.suppressionEmitSensor(
@@ -150,16 +153,16 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         }
 
         @Override
-        public void process(final K key, final Change<V> value) {
+        public void process(final Record<K, Change<V>> record) {
             observedStreamTime = Math.max(observedStreamTime, internalProcessorContext.timestamp());
-            buffer(key, value);
+            buffer(record);
             enforceConstraints();
         }
 
-        private void buffer(final K key, final Change<V> value) {
-            final long bufferTime = bufferTimeDefinition.time(internalProcessorContext, key);
+        private void buffer(final Record<K, Change<V>> record) {
+            final long bufferTime = bufferTimeDefinition.time(internalProcessorContext, record.key());
 
-            buffer.put(bufferTime, key, value, internalProcessorContext.recordContext());
+            buffer.put(bufferTime, record.key(), record.value(), internalProcessorContext.recordContext());
         }
 
         private void enforceConstraints() {
