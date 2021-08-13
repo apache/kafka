@@ -22,8 +22,10 @@ import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 import java.util.Map;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.CompositeValidator;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.NonEmptyString;
+import org.apache.kafka.common.config.ConfigDef.NonNullValidator;
 import org.apache.kafka.common.config.ConfigDef.Range;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
@@ -75,7 +77,7 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
 
     public static final String TOKEN_ENDPOINT_URI_CONFIG = "tokenEndpointUri";
     private static final String TOKEN_ENDPOINT_URI_DOC = "xxx";
-    private static final ConfigDef.Validator TOKEN_ENDPOINT_URI_VALIDATOR = new UriConfigDefValidator(true);
+    private static final ConfigDef.Validator TOKEN_ENDPOINT_URI_VALIDATOR = CompositeValidator.of(new NonEmptyString(), new UriConfigDefValidator());
 
     private static final ConfigDef CONFIG = new ConfigDef()
         .define(CLIENT_ID_CONFIG,

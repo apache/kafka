@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.httpclient.LoginTokenEndpointHttpClient;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.httpclient.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

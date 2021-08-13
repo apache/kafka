@@ -23,24 +23,10 @@ import org.apache.kafka.common.config.ConfigException;
 
 public class FileConfigDefValidator implements ConfigDef.Validator {
 
-    private final boolean isRequired;
-
-    public FileConfigDefValidator() {
-        this(false);
-    }
-
-    public FileConfigDefValidator(boolean isRequired) {
-        this.isRequired = isRequired;
-    }
-
     @Override
     public void ensureValid(final String name, final Object value) {
-        if (value == null) {
-            if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s is required", name));
-            else
-                return;
-        }
+        if (value == null || value.toString().trim().isEmpty())
+            return;
 
         File file = new File(value.toString().trim());
 
