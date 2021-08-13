@@ -56,10 +56,10 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
         }
 
         @SuppressWarnings("unchecked")
-        Collection<String> scopes = (Collection<String>)getClaim(payload, scopeClaimName);
-        Number expiration = (Number)getClaim(payload, "exp");
-        String sub = (String)getClaim(payload, subClaimName);
-        Number issuedAt = (Number)getClaim(payload, "iat");
+        Collection<String> scopes = (Collection<String>) getClaim(payload, scopeClaimName);
+        Number expiration = (Number) getClaim(payload, "exp");
+        String sub = (String) getClaim(payload, subClaimName);
+        Number issuedAt = (Number) getClaim(payload, "iat");
 
         OAuthBearerToken token = new BasicOAuthBearerToken(accessToken,
             scopes != null && !scopes.isEmpty() ? new HashSet<>(scopes) : Collections.emptySet(),
