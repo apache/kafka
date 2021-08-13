@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -210,6 +211,15 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void startBroker(int brokerId) {
             findBrokerOrThrow(brokerId).startup();
+        }
+
+        @Override
+        public void waitForReadyBrokers() throws InterruptedException {
+            try {
+                clusterReference.get().waitForReadyBrokers();
+            } catch (ExecutionException e) {
+                throw new AssertionError("Failed while waiting for brokers to become ready", e);
+            }
         }
 
         @Override

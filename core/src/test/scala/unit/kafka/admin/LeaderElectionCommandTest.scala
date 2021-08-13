@@ -64,6 +64,7 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
     val partition = 0
     val assignment = Seq(broker2, broker3)
 
+    cluster.waitForReadyBrokers()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -94,6 +95,7 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
     val partition = 0
     val assignment = Seq(broker2, broker3)
 
+    cluster.waitForReadyBrokers()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -126,6 +128,7 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
     val partition = 0
     val assignment = Seq(broker2, broker3)
 
+    cluster.waitForReadyBrokers()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -159,6 +162,7 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
     val partition = 0
     val assignment = Seq(broker2, broker3)
 
+    cluster.waitForReadyBrokers()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -203,6 +207,7 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
     val assignment0 = Seq(broker2, broker3)
     val assignment1 = Seq(broker3, broker2)
 
+    cluster.waitForReadyBrokers()
     createTopic(client, topic, Map(
       partition0 -> assignment0,
       partition1 -> assignment1

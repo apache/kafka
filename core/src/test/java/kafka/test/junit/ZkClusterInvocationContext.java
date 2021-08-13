@@ -284,6 +284,14 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
             clusterReference.get().restartDeadBrokers(true);
         }
 
+        @Override
+        public void waitForReadyBrokers() throws InterruptedException {
+            org.apache.kafka.test.TestUtils.waitForCondition(() -> {
+                int numRegisteredBrokers = clusterReference.get().zkClient().getAllBrokersInCluster().size();
+                return numRegisteredBrokers == config.numBrokers();
+            }, "Timed out while waiting for brokers to become ready");
+        }
+
         private KafkaServer findBrokerOrThrow(int brokerId) {
             return servers()
                 .filter(server -> server.config().brokerId() == brokerId)

@@ -17,6 +17,7 @@
 package kafka.utils
 
 import java.io._
+import java.net.InetAddress
 import java.nio._
 import java.nio.channels._
 import java.nio.charset.{Charset, StandardCharsets}
@@ -44,6 +45,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer._
+import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.ConfigResource
@@ -53,9 +55,9 @@ import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, Mode}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{AbstractRequest, EnvelopeRequest, RequestContext, RequestHeader}
@@ -64,7 +66,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerd
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionInfo}
+import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -72,9 +74,6 @@ import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
 import org.mockito.Mockito
-import java.net.InetAddress
-
-import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 
 import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -1634,23 +1633,30 @@ object TestUtils extends Logging {
     }, s"Timed out waiting for brokerId $brokerId to come online")
   }
 
-  def waitForLeaderToBecome(client: Admin, topicPartition: TopicPartition, leader: Option[Int]): Unit = {
+  def waitForLeaderToBecome(
+    client: Admin,
+    topicPartition: TopicPartition,
+    expectedLeaderOpt: Option[Int]
+  ): Unit = {
     val topic = topicPartition.topic
-    val partition = topicPartition.partition
+    val partitionId = topicPartition.partition
 
-    def latestPartitionState: Try[TopicPartitionInfo] = Try {
-      val topicResult = client.describeTopics(List(topic).asJava).allTopicNames.get.get(topic)
-      topicResult.partitions.get(partition)
+    def currentLeader: Try[Option[Int]] = Try {
+      val topicDescription = client.describeTopics(List(topic).asJava).allTopicNames.get.get(topic)
+      topicDescription.partitions.asScala
+        .find(_.partition == partitionId)
+        .flatMap(partitionState => Option(partitionState.leader))
+        .map(_.id)
     }
 
-    val (lastPartitionState, isLeaderElected) = computeUntilTrue(latestPartitionState) {
-      case Success(partitionResult) => Option(partitionResult.leader).map(_.id) == leader
+    val (lastLeaderCheck, isLeaderElected) = computeUntilTrue(currentLeader) {
+      case Success(leaderOpt) => leaderOpt == expectedLeaderOpt
       case Failure(e: ExecutionException) if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
       case Failure(e) => throw e
     }
 
-    assertTrue(isLeaderElected, s"Timed out waiting for leader to become $leader. " +
-      s"Last metadata lookup returned ${lastPartitionState.map(st => Option(st.leader).map(_.id).getOrElse("none"))}")
+    assertTrue(isLeaderElected, s"Timed out waiting for leader to become $expectedLeaderOpt. " +
+      s"Last metadata lookup returned leader = ${lastLeaderCheck.getOrElse("unknown")}")
   }
 
   def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
