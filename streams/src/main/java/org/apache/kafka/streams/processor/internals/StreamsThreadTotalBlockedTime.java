@@ -31,8 +31,7 @@ public class StreamsThreadTotalBlockedTime {
     StreamsThreadTotalBlockedTime(
         final Consumer<?, ?> consumer,
         final Consumer<?, ?> restoreConsumer,
-        final Supplier<Double> producerTotalBlockedTime
-    ) {
+        final Supplier<Double> producerTotalBlockedTime) {
         this.consumer = consumer;
         this.restoreConsumer = restoreConsumer;
         this.producerTotalBlockedTime = producerTotalBlockedTime;
@@ -40,8 +39,7 @@ public class StreamsThreadTotalBlockedTime {
 
     final double getMetricValue(
         final Map<MetricName, ? extends Metric> metrics,
-        final String name
-    ) {
+        final String name) {
         return metrics.keySet().stream()
             .filter(n -> n.name().equals(name))
             .findFirst()

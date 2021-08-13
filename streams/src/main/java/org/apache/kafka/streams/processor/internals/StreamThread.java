@@ -515,7 +515,7 @@ public class StreamThread extends Thread {
         ThreadMetrics.addThreadStartTimeMetric(
             threadId,
             streamsMetrics,
-            time.nanoseconds()
+            time.milliseconds()
         );
         ThreadMetrics.addThreadBlockedTimeMetric(
             threadId,

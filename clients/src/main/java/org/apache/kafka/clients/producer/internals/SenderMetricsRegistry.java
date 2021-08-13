@@ -153,7 +153,7 @@ public class SenderMetricsRegistry {
     }
 
     private MetricName createMetricName(String name, String description) {
-        return this.metrics.metricInstance(createTemplate(name, ProducerMetrics.GROUP, description, this.tags));
+        return this.metrics.metricInstance(createTemplate(name, KafkaProducerMetrics.GROUP, description, this.tags));
     }
 
     private MetricNameTemplate createTopicTemplate(String name, String description) {

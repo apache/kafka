@@ -1149,8 +1149,7 @@ public class StreamsProducerTest {
     private void addMetric(
         final MockProducer<?, ?> producer,
         final String name,
-        final double value
-    ) {
+        final double value) {
         final MetricName metricName = metricName(name);
         producer.setMockMetrics(metricName, new Metric() {
             @Override
@@ -1173,8 +1172,7 @@ public class StreamsProducerTest {
         final double txnBeginTime,
         final double txnSendOffsetsTime,
         final double txnCommitTime,
-        final double txnAbortTime
-    ) {
+        final double txnAbortTime) {
         addMetric(producer, "bufferpool-wait-time-total", bufferPoolWaitTime);
         addMetric(producer, "flush-time-total", flushTime);
         addMetric(producer, "txn-init-time-total", txnInitTime);

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -180,26 +181,35 @@ public class StreamsProducer {
             throw new IllegalStateException("Expected eos-v2 to be enabled, but the processing mode was " + processingMode);
         }
 
+        oldProducerTotalBlockedTime += totalBlockedTime(producer);
         final long start = Time.SYSTEM.nanoseconds();
         producer.close();
         final long closeTime = Time.SYSTEM.nanoseconds() - start;
-
-        oldProducerTotalBlockedTime += closeTime + totalBlockedTime(producer);
+        oldProducerTotalBlockedTime += closeTime;
 
         producer = clientSupplier.getProducer(eosV2ProducerConfigs);
         transactionInitialized = false;
     }
 
-    private static double getMetricValue(final Map<MetricName, ? extends Metric> metrics,
-                                         final String name) {
-        return metrics.keySet().stream()
+    private double getMetricValue(final Map<MetricName, ? extends Metric> metrics,
+                                  final String name) {
+        final List<MetricName> found = metrics.keySet().stream()
             .filter(n -> n.name().equals(name))
-            .findFirst()
-            .map(n -> (Double) metrics.get(n).metricValue())
-            .orElse(0.0);
+            .collect(Collectors.toList());
+        if (found.isEmpty()) {
+            return 0.0;
+        }
+        if (found.size() > 1) {
+            log.warn(
+                "found {} values for metric {}. total blocked time computation may be incorrect",
+                found.size(),
+                name
+            );
+        }
+        return (Double) metrics.get(found.get(0)).metricValue();
     }
 
-    private static double totalBlockedTime(final Producer<?, ?> producer) {
+    private double totalBlockedTime(final Producer<?, ?> producer) {
         return getMetricValue(producer.metrics(), "bufferpool-wait-time-total")
             + getMetricValue(producer.metrics(), "flush-time-total")
             + getMetricValue(producer.metrics(), "txn-init-time-total")

@@ -1878,9 +1878,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             final Map<TopicPartition, OffsetAndMetadata> offsets;
             long start = time.nanoseconds();
             try {
-              offsets = coordinator.fetchCommittedOffsets(partitions, time.timer(timeout));
+                offsets = coordinator.fetchCommittedOffsets(partitions, time.timer(timeout));
             } finally {
-              kafkaConsumerMetrics.recordCommitted(time.nanoseconds() - start);
+                kafkaConsumerMetrics.recordCommitted(time.nanoseconds() - start);
             }
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
