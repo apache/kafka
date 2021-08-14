@@ -17,16 +17,25 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import java.util.Collections;
 import java.util.Set;
 import java.util.StringJoiner;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
+/**
+ * An implementation of the {@link OAuthBearerToken} that fairly straightforwardly stores the values
+ * given to its constructor (except the scope set which is copied to avoid modifications).
+ *
+ * Very little validation is applied here with respect to the validity of the given values. All
+ * validation is assumed to happen by users of this class.
+ *
+ * @see <a href="https://tools.ietf.org/html/rfc7515">RFC 7515: JSON Web Signature (JWS)</a>
+ */
+
 public class BasicOAuthBearerToken implements OAuthBearerToken {
 
-    private final String value;
+    private final String token;
 
-    private final Set<String> scope;
+    private final Set<String> scopes;
 
     private final Long lifetimeMs;
 
@@ -34,25 +43,75 @@ public class BasicOAuthBearerToken implements OAuthBearerToken {
 
     private final Long startTimeMs;
 
-    public BasicOAuthBearerToken(final String value, final Set<String> scope, final Long lifetimeMs,
-        final String principalName,
-        final Long startTimeMs) {
-        this.value = value;
-        this.scope = Collections.unmodifiableSet(scope);
+    /**
+     *
+     * @param token         Value containing the compact serialization as a base 64 string that
+     *                      can be parsed, decoded, and validated as a well-formed JWS. Must be
+     *                      non-<code>null</code>, non-blank, and non-whitespace only.
+     * @param scopes        Set of non-<code>null</code> scopes. May contain case-sensitive
+     *                      "duplicates". The given set is copied and made unmodifiable so neither
+     *                      the caller of this constructor nor any downstream users can modify it.
+     * @param lifetimeMs
+     * @param principalName
+     * @param startTimeMs
+     */
+
+    public BasicOAuthBearerToken(String token,
+        Set<String> scopes,
+        Long lifetimeMs,
+        String principalName,
+        Long startTimeMs) {
+        this.token = OAuthBearerValidationUtils.validateToken(token);
+        this.scopes = OAuthBearerValidationUtils.validateScopes(scopes);
         this.lifetimeMs = lifetimeMs;
         this.principalName = principalName;
         this.startTimeMs = startTimeMs;
     }
 
+    /**
+     * The <code>b64token</code> value as defined in
+     * <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750 Section
+     * 2.1</a>
+     *
+     * @return <code>b64token</code> value as defined in
+     *         <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750
+     *         Section 2.1</a>
+     */
+
     @Override
     public String value() {
-        return value;
+        return token;
     }
+
+    /**
+     * The token's scope of access, as per
+     * <a href="https://tools.ietf.org/html/rfc6749#section-1.4">RFC 6749 Section
+     * 1.4</a>
+     *
+     * @return the token's (always non-null but potentially empty) scope of access,
+     *         as per <a href="https://tools.ietf.org/html/rfc6749#section-1.4">RFC
+     *         6749 Section 1.4</a>. Note that all values in the returned set will
+     *         be trimmed of preceding and trailing whitespace, and the result will
+     *         never contain the empty string.
+     */
 
     @Override
     public Set<String> scope() {
-        return scope;
+        // Immutability of the set is performed in the constructor/validation utils class, so
+        // we don't need to repeat it here.
+        return scopes;
     }
+
+    /**
+     * The token's lifetime, expressed as the number of milliseconds since the
+     * epoch, as per <a href="https://tools.ietf.org/html/rfc6749#section-1.4">RFC
+     * 6749 Section 1.4</a>
+     *
+     * @return the token'slifetime, expressed as the number of milliseconds since
+     *         the epoch, as per
+     *         <a href="https://tools.ietf.org/html/rfc6749#section-1.4">RFC 6749
+     *         Section 1.4</a>.
+     */
 
     @Override
     public long lifetimeMs() {
@@ -72,8 +131,8 @@ public class BasicOAuthBearerToken implements OAuthBearerToken {
     @Override
     public String toString() {
         return new StringJoiner(", ", BasicOAuthBearerToken.class.getSimpleName() + "[", "]")
-            .add("value='" + value + "'")
-            .add("scope=" + scope)
+            .add("token='" + token + "'")
+            .add("scopes=" + scopes)
             .add("lifetimeMs=" + lifetimeMs)
             .add("principalName='" + principalName + "'")
             .add("startTimeMs=" + startTimeMs)

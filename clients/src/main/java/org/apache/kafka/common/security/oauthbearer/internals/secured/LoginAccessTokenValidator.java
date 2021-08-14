@@ -44,8 +44,8 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
         String[] splits = accessToken.split("\\.");
         log.warn("validate - accessToken splits length: {}", splits.length);
 
-        if (splits.length < 2)
-            throw new ValidateException(String.format("Malformed JWT provided; expected at least two sections; %s provided", splits.length));
+        if (splits.length != 3)
+            throw new ValidateException(String.format("Malformed JWT provided; expected at least three sections (header, payload, and signature), but %s sections provided", splits.length));
 
         Map<String, Object> payload;
 

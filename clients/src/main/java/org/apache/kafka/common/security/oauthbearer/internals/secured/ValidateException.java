@@ -17,7 +17,9 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-public class ValidateException extends Exception {
+import org.apache.kafka.common.KafkaException;
+
+public class ValidateException extends KafkaException {
 
     public ValidateException(final String message) {
         super(message);

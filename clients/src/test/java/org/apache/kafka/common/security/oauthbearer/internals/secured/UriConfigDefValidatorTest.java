@@ -32,17 +32,12 @@ public class UriConfigDefValidatorTest {
         UriConfigDefValidator validator = new UriConfigDefValidator();
         validator.ensureValid(JWKS_ENDPOINT_URI_CONFIG, "http://www.example.com");
         validator.ensureValid(JWKS_ENDPOINT_URI_CONFIG, "HTTPS://WWW.EXAMPLE.COM");
-    }
-
-    @Test
-    public void caseInsensitive() {
-        UriConfigDefValidator validator = new UriConfigDefValidator();
+        validator.ensureValid(JWKS_ENDPOINT_URI_CONFIG, "https://myidp.example.com/oauth2/default/v1/token");
     }
 
     @Test
     public void missingValues() {
         UriConfigDefValidator validator = new UriConfigDefValidator();
-
         validator.ensureValid(JWKS_ENDPOINT_URI_CONFIG, null);
         validator.ensureValid(JWKS_ENDPOINT_URI_CONFIG, "");
         validator.ensureValid(JWKS_ENDPOINT_URI_CONFIG, "    ");
