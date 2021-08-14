@@ -20,7 +20,7 @@ import java.io.File
 import java.nio.file.Files
 import java.util.Properties
 import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdException, KafkaException}
-import kafka.log.Log
+import kafka.log.UnifiedLog
 import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.MockTime
 import org.apache.kafka.common.Uuid
@@ -49,6 +49,7 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker,controller")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9092")
     configProperties.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
 
     val (loadedMetaProperties, offlineDirs) =
@@ -69,6 +70,7 @@ class KafkaRaftServerTest {
 
     configProperties.put(KafkaConfig.ProcessRolesProp, "controller")
     configProperties.put(KafkaConfig.NodeIdProp, configNodeId.toString)
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"$configNodeId@localhost:9092")
     configProperties.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
 
     assertThrows(classOf[InconsistentNodeIdException], () =>
@@ -114,6 +116,7 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9092")
     configProperties.put(KafkaConfig.LogDirProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
     val config = KafkaConfig.fromProps(configProperties)
 
@@ -133,6 +136,7 @@ class KafkaRaftServerTest {
     val invalidDir = TestUtils.tempFile("blah")
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9092")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.MetadataLogDirProp, invalidDir.getAbsolutePath)
     configProperties.put(KafkaConfig.LogDirProp, validDir.getAbsolutePath)
@@ -155,6 +159,7 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9092")
     configProperties.put(KafkaConfig.MetadataLogDirProp, validDir.getAbsolutePath)
     configProperties.put(KafkaConfig.LogDirProp, invalidDir.getAbsolutePath)
     val config = KafkaConfig.fromProps(configProperties)
@@ -178,11 +183,12 @@ class KafkaRaftServerTest {
     }
 
     // Create the metadata dir in the data directory
-    Files.createDirectory(new File(dataDir, Log.logDirName(KafkaRaftServer.MetadataPartition)).toPath)
+    Files.createDirectory(new File(dataDir, UnifiedLog.logDirName(KafkaRaftServer.MetadataPartition)).toPath)
 
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9092")
     configProperties.put(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
     configProperties.put(KafkaConfig.LogDirProp, dataDir.getAbsolutePath)
     val config = KafkaConfig.fromProps(configProperties)
@@ -203,6 +209,7 @@ class KafkaRaftServerTest {
 
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9092")
     configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.LogDirProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
     val config = KafkaConfig.fromProps(configProperties)

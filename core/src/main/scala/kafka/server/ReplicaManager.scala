@@ -295,7 +295,7 @@ class ReplicaManager(val config: KafkaConfig,
     replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
   }
 
-  def getLog(topicPartition: TopicPartition): Option[Log] = logManager.getLog(topicPartition)
+  def getLog(topicPartition: TopicPartition): Option[UnifiedLog] = logManager.getLog(topicPartition)
 
   def hasDelayedElectionOperations: Boolean = delayedElectLeaderPurgatory.numDelayed != 0
 
@@ -542,11 +542,11 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def localLogOrException(topicPartition: TopicPartition): Log = {
+  def localLogOrException(topicPartition: TopicPartition): UnifiedLog = {
     getPartitionOrException(topicPartition).localLogOrException
   }
 
-  def futureLocalLogOrException(topicPartition: TopicPartition): Log = {
+  def futureLocalLogOrException(topicPartition: TopicPartition): UnifiedLog = {
     getPartitionOrException(topicPartition).futureLocalLogOrException
   }
 
@@ -554,7 +554,7 @@ class ReplicaManager(val config: KafkaConfig,
     getPartitionOrException(topicPartition).futureLog.isDefined
   }
 
-  def localLog(topicPartition: TopicPartition): Option[Log] = {
+  def localLog(topicPartition: TopicPartition): Option[UnifiedLog] = {
     onlinePartition(topicPartition).flatMap(_.log)
   }
 
@@ -715,7 +715,7 @@ class ReplicaManager(val config: KafkaConfig,
           /* If the topic name is exceptionally long, we can't support altering the log directory.
            * See KAFKA-4893 for details.
            * TODO: fix this by implementing topic IDs. */
-          if (Log.logFutureDirName(topicPartition).size > 255)
+          if (UnifiedLog.logFutureDirName(topicPartition).size > 255)
             throw new InvalidTopicException("The topic name is too long.")
           if (!logManager.isLogDirOnline(destinationDir))
             throw new KafkaStorageException(s"Log directory $destinationDir is offline")
@@ -1190,10 +1190,10 @@ class ReplicaManager(val config: KafkaConfig,
                  _: InconsistentTopicIdException) =>
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
             divergingEpoch = None,
-            highWatermark = Log.UnknownOffset,
-            leaderLogStartOffset = Log.UnknownOffset,
-            leaderLogEndOffset = Log.UnknownOffset,
-            followerLogStartOffset = Log.UnknownOffset,
+            highWatermark = UnifiedLog.UnknownOffset,
+            leaderLogStartOffset = UnifiedLog.UnknownOffset,
+            leaderLogEndOffset = UnifiedLog.UnknownOffset,
+            followerLogStartOffset = UnifiedLog.UnknownOffset,
             fetchTimeMs = -1L,
             lastStableOffset = None,
             exception = Some(e))
@@ -1207,10 +1207,10 @@ class ReplicaManager(val config: KafkaConfig,
 
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
             divergingEpoch = None,
-            highWatermark = Log.UnknownOffset,
-            leaderLogStartOffset = Log.UnknownOffset,
-            leaderLogEndOffset = Log.UnknownOffset,
-            followerLogStartOffset = Log.UnknownOffset,
+            highWatermark = UnifiedLog.UnknownOffset,
+            leaderLogStartOffset = UnifiedLog.UnknownOffset,
+            leaderLogEndOffset = UnifiedLog.UnknownOffset,
+            followerLogStartOffset = UnifiedLog.UnknownOffset,
             fetchTimeMs = -1L,
             lastStableOffset = None,
             exception = Some(e))
@@ -1760,7 +1760,7 @@ class ReplicaManager(val config: KafkaConfig,
    * diverging epoch is returned in the response, avoiding the need for a separate
    * OffsetForLeaderEpoch request.
    */
-  protected def initialFetchOffset(log: Log): Long = {
+  protected def initialFetchOffset(log: UnifiedLog): Long = {
     if (ApiVersion.isTruncationOnFetchSupported(config.interBrokerProtocolVersion) && log.latestEpoch.nonEmpty)
       log.logEndOffset
     else
@@ -1831,7 +1831,7 @@ class ReplicaManager(val config: KafkaConfig,
   // Flushes the highwatermark value for all partitions to the highwatermark file
   def checkpointHighWatermarks(): Unit = {
     def putHw(logDirToCheckpoints: mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, Long]],
-              log: Log): Unit = {
+              log: UnifiedLog): Unit = {
       val checkpoints = logDirToCheckpoints.getOrElseUpdate(log.parentDir,
         new mutable.AnyRefMap[TopicPartition, Long]())
       checkpoints.put(log.topicPartition, log.highWatermark)
@@ -2148,8 +2148,8 @@ class ReplicaManager(val config: KafkaConfig,
           if (localLog(tp).isEmpty)
             markPartitionOffline(tp)
         }
-        newLocalLeaders.keySet.foreach(markPartitionOfflineIfNeeded(_))
-        newLocalFollowers.keySet.foreach(markPartitionOfflineIfNeeded(_))
+        newLocalLeaders.keySet.foreach(markPartitionOfflineIfNeeded)
+        newLocalFollowers.keySet.foreach(markPartitionOfflineIfNeeded)
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
@@ -2193,7 +2193,6 @@ class ReplicaManager(val config: KafkaConfig,
                                        newLocalFollowers: mutable.HashMap[TopicPartition, LocalLeaderInfo]): Unit = {
     stateChangeLogger.info(s"Transitioning ${newLocalFollowers.size} partition(s) to " +
       "local followers.")
-    replicaFetcherManager.removeFetcherForPartitions(newLocalFollowers.keySet)
     val shuttingDown = isShuttingDown.get()
     val partitionsToMakeFollower = new mutable.HashMap[TopicPartition, InitialFetchState]
     val newFollowerTopicSet = new mutable.HashSet[String]
@@ -2202,13 +2201,6 @@ class ReplicaManager(val config: KafkaConfig,
         try {
           newFollowerTopicSet.add(tp.topic())
 
-          completeDelayedFetchOrProduceRequests(tp)
-
-          // Create the local replica even if the leader is unavailable. This is required
-          // to ensure that we include the partition's high watermark in the checkpoint
-          // file (see KAFKA-1647)
-          partition.createLogIfNotExists(isNew, false, offsetCheckpoints, Some(info.topicId))
-
           if (shuttingDown) {
             stateChangeLogger.trace(s"Unable to start fetching ${tp} with topic " +
               s"ID ${info.topicId} because the replica manager is shutting down.")
@@ -2216,15 +2208,30 @@ class ReplicaManager(val config: KafkaConfig,
             val listenerName = config.interBrokerListenerName.value()
             val leader = info.partition.leader
             Option(newImage.cluster().broker(leader)).flatMap(_.node(listenerName).asScala) match {
-              case None => stateChangeLogger.trace(s"Unable to start fetching ${tp} " +
-                s"with topic ID ${info.topicId} from leader ${leader} because it is not " +
-                "alive.")
+              case None =>
+                stateChangeLogger.trace(
+                  s"Unable to start fetching ${tp} with topic ID ${info.topicId} from leader " +
+                  s"${leader} because it is not alive."
+                )
+
+                // Create the local replica even if the leader is unavailable. This is required
+                // to ensure that we include the partition's high watermark in the checkpoint
+                // file (see KAFKA-1647)
+                partition.createLogIfNotExists(isNew, false, offsetCheckpoints, Some(info.topicId))
               case Some(node) =>
-                val leaderEndPoint = new BrokerEndPoint(node.id(), node.host(), node.port())
-                val log = partition.localLogOrException
-                val fetchOffset = initialFetchOffset(log)
-                partitionsToMakeFollower.put(tp,
-                  InitialFetchState(leaderEndPoint, partition.getLeaderEpoch, fetchOffset))
+                val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
+                if (partition.makeFollower(state, offsetCheckpoints, Some(info.topicId))) {
+                  val leaderEndPoint = new BrokerEndPoint(node.id(), node.host(), node.port())
+                  val log = partition.localLogOrException
+                  val fetchOffset = initialFetchOffset(log)
+                  partitionsToMakeFollower.put(tp,
+                    InitialFetchState(leaderEndPoint, partition.getLeaderEpoch, fetchOffset))
+                } else {
+                  stateChangeLogger.info(
+                    s"Skipped the become-follower state change after marking its partition as " +
+                    s"follower for partition $tp with id ${info.topicId} and partition state $state."
+                  )
+                }
             }
           }
           changedPartitions.add(partition)
@@ -2235,8 +2242,16 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
     }
-    updateLeaderAndFollowerMetrics(newFollowerTopicSet)
+
+    replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeFollower.keySet)
+    stateChangeLogger.info(s"Stopped fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
+
     replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollower)
+    stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
+
+    partitionsToMakeFollower.keySet.foreach(completeDelayedFetchOrProduceRequests)
+
+    updateLeaderAndFollowerMetrics(newFollowerTopicSet)
   }
 
   def deleteStrayReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {
