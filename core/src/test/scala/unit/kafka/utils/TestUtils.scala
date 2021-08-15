@@ -204,8 +204,9 @@ object TestUtils extends Logging {
     logDirCount: Int = 1,
     enableToken: Boolean = false,
     numPartitions: Int = 1,
-    defaultReplicationFactor: Short = 1): Seq[Properties] = {
-    (0 until numConfigs).map { node =>
+    defaultReplicationFactor: Short = 1,
+    startingIdNumber: Int = 0): Seq[Properties] = {
+    (startingIdNumber until numConfigs).map { node =>
       createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
         interBrokerSecurityProtocol, trustStoreFile, saslProperties, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
         enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node), logDirCount = logDirCount, enableToken = enableToken,
@@ -1242,7 +1243,7 @@ object TestUtils extends Logging {
         topicPartitions.forall { tp =>
           !Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
             partitionDirectoryName.startsWith(tp.topic + "-" + tp.partition) &&
-              partitionDirectoryName.endsWith(Log.DeleteDirSuffix)
+              partitionDirectoryName.endsWith(UnifiedLog.DeleteDirSuffix)
           }
         }
       }

@@ -243,9 +243,9 @@ class Partition(val topicPartition: TopicPartition,
   // is getting changed (as a result of ReplicaAlterLogDirs command), we may have two logs until copy
   // completes and a switch to new location is performed.
   // log and futureLog variables defined below are used to capture this
-  @volatile var log: Option[Log] = None
+  @volatile var log: Option[UnifiedLog] = None
   // If ReplicaAlterLogDir command is in progress, this is future location of the log
-  @volatile var futureLog: Option[Log] = None
+  @volatile var futureLog: Option[UnifiedLog] = None
 
   /* Epoch of the controller that last changed the leader. This needs to be initialized correctly upon broker startup.
    * One way of doing that is through the controller's start replica state change command. When a new broker starts up
@@ -313,20 +313,28 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def createLogIfNotExists(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Unit = {
-    isFutureReplica match {
-      case true if futureLog.isEmpty =>
-        val log = createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
-        this.futureLog = Option(log)
-      case false if log.isEmpty =>
-        val log = createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
-        this.log = Option(log)
-      case _ => trace(s"${if (isFutureReplica) "Future Log" else "Log"} already exists.")
+    def maybeCreate(logOpt: Option[UnifiedLog]): UnifiedLog = {
+      logOpt match {
+        case Some(log) =>
+          trace(s"${if (isFutureReplica) "Future UnifiedLog" else "UnifiedLog"} already exists.")
+          if (log.topicId.isEmpty)
+            topicId.foreach(log.assignTopicId)
+          log
+        case None =>
+          createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
+      }
+    }
+
+    if (isFutureReplica) {
+      this.futureLog = Some(maybeCreate(this.futureLog))
+    } else {
+      this.log = Some(maybeCreate(this.log))
     }
   }
 
   // Visible for testing
-  private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Log = {
-    def updateHighWatermark(log: Log) = {
+  private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): UnifiedLog = {
+    def updateHighWatermark(log: UnifiedLog) = {
       val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).getOrElse {
         info(s"No checkpointed highwatermark is found for partition $topicPartition")
         0L
@@ -336,7 +344,7 @@ class Partition(val topicPartition: TopicPartition,
     }
 
     logManager.initializingLog(topicPartition)
-    var maybeLog: Option[Log] = None
+    var maybeLog: Option[UnifiedLog] = None
     try {
       val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId)
       maybeLog = Some(log)
@@ -365,7 +373,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def getLocalLog(currentLeaderEpoch: Optional[Integer],
-                          requireLeader: Boolean): Either[Log, Errors] = {
+                          requireLeader: Boolean): Either[UnifiedLog, Errors] = {
     checkCurrentLeaderEpoch(currentLeaderEpoch) match {
       case Errors.NONE =>
         if (requireLeader && !isLeader) {
@@ -383,17 +391,17 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def localLogOrException: Log = log.getOrElse {
+  def localLogOrException: UnifiedLog = log.getOrElse {
     throw new NotLeaderOrFollowerException(s"Log for partition $topicPartition is not available " +
       s"on broker $localBrokerId")
   }
 
-  def futureLocalLogOrException: Log = futureLog.getOrElse {
+  def futureLocalLogOrException: UnifiedLog = futureLog.getOrElse {
     throw new NotLeaderOrFollowerException(s"Future log for partition $topicPartition is not available " +
       s"on broker $localBrokerId")
   }
 
-  def leaderLogIfLocal: Option[Log] = {
+  def leaderLogIfLocal: Option[UnifiedLog] = {
     log.filter(_ => isLeader)
   }
 
@@ -403,7 +411,7 @@ class Partition(val topicPartition: TopicPartition,
   def isLeader: Boolean = leaderReplicaIdOpt.contains(localBrokerId)
 
   private def localLogWithEpochOrException(currentLeaderEpoch: Optional[Integer],
-                                           requireLeader: Boolean): Log = {
+                                           requireLeader: Boolean): UnifiedLog = {
     getLocalLog(currentLeaderEpoch, requireLeader) match {
       case Left(localLog) => localLog
       case Right(error) =>
@@ -414,7 +422,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   // Visible for testing -- Used by unit tests to set log for this partition
-  def setLog(log: Log, isFutureLog: Boolean): Unit = {
+  def setLog(log: UnifiedLog, isFutureLog: Boolean): Unit = {
     if (isFutureLog)
       futureLog = Some(log)
     else
@@ -568,9 +576,9 @@ class Partition(val topicPartition: TopicPartition,
         remoteReplicas.foreach { replica =>
           replica.updateFetchState(
             followerFetchOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata,
-            followerStartOffset = Log.UnknownOffset,
+            followerStartOffset = UnifiedLog.UnknownOffset,
             followerFetchTimeMs = 0L,
-            leaderEndOffset = Log.UnknownOffset)
+            leaderEndOffset = UnifiedLog.UnknownOffset)
         }
       }
       // we may need to increment high watermark since ISR could be down to 1
@@ -835,7 +843,7 @@ class Partition(val topicPartition: TopicPartition,
    *
    * @return true if the HW was incremented, and false otherwise.
    */
-  private def maybeIncrementLeaderHW(leaderLog: Log, curTime: Long = time.milliseconds): Boolean = {
+  private def maybeIncrementLeaderHW(leaderLog: UnifiedLog, curTime: Long = time.milliseconds): Boolean = {
     // maybeIncrementLeaderHW is in the hot path, the following code is written to
     // avoid unnecessary collection generation
     var newHighWatermark = leaderLog.logEndOffsetMetadata
