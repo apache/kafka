@@ -232,13 +232,7 @@ abstract class AbstractFetcherThread(name: String,
   // Visibility for unit tests
   protected[server] def truncateOnFetchResponse(epochEndOffsets: Map[TopicPartition, EpochEndOffset]): Unit = {
     inLock(partitionMapLock) {
-      // Partitions may have been removed from the fetcher while the thread was waiting for fetch
-      // response. Filter out removed partitions while holding `partitionMapLock` to ensure that we
-      // don't update state for any partition that may have already been migrated to another thread.
-      val filteredEpochEndOffsets = epochEndOffsets.filter { case (tp, _) =>
-        partitionStates.contains(tp)
-      }
-      val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncateToEpochEndOffsets(filteredEpochEndOffsets, Map.empty)
+      val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncateToEpochEndOffsets(epochEndOffsets, Map.empty)
       handlePartitionsWithErrors(partitionsWithError, "truncateOnFetchResponse")
       updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
     }
@@ -268,7 +262,10 @@ abstract class AbstractFetcherThread(name: String,
     val fetchOffsets = mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
     val partitionsWithError = mutable.HashSet.empty[TopicPartition]
 
-    fetchedEpochs.forKeyValue { (tp, leaderEpochOffset) =>
+    // Partitions may have been removed from the fetcher while the thread was waiting for fetch
+    // response. Filter out removed partitions while holding `partitionMapLock` to ensure that we
+    // don't update state for any partition that may have already been migrated to another thread.
+    fetchedEpochs.filter { case (tp, _) => partitionStates.contains(tp) }.forKeyValue { (tp, leaderEpochOffset) =>
       Errors.forCode(leaderEpochOffset.errorCode) match {
         case Errors.NONE =>
           val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
