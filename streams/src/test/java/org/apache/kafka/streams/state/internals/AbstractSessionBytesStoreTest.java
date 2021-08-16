@@ -613,6 +613,8 @@ public abstract class AbstractSessionBytesStoreTest {
         context.setSystemTimeMs(time.milliseconds());
         sessionStore.init((StateStoreContext) context, sessionStore);
 
+        LogCaptureAppender.setClassLoggerToDebug(AbstractRocksDBSegmentedBytesStore.class);
+        LogCaptureAppender.setClassLoggerToDebug(InMemorySessionStore.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
             // Note that rocksdb will only expire segments at a time (where segment interval = 60,000 for this retention period)

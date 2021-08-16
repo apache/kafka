@@ -425,6 +425,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", new RecordHeaders()));
         processor.process("dummy", "dummy");
 
+        LogCaptureAppender.setClassLoggerToDebug(KStreamSessionWindowAggregate.class);
         try (final LogCaptureAppender appender =
                  LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
 
@@ -478,6 +479,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         ).get();
         processor.init(context);
 
+        LogCaptureAppender.setClassLoggerToDebug(KStreamSessionWindowAggregate.class);
         try (final LogCaptureAppender appender =
                  LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
 

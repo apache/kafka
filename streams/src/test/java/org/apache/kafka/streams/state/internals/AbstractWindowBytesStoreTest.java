@@ -1029,6 +1029,8 @@ public abstract class AbstractWindowBytesStoreTest {
         context.setTime(1L);
         windowStore.init((StateStoreContext) context, windowStore);
 
+        LogCaptureAppender.setClassLoggerToDebug(AbstractRocksDBSegmentedBytesStore.class);
+        LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
             windowStore.put(1, "initial record", 2 * RETENTION_PERIOD);

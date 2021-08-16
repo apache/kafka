@@ -745,6 +745,7 @@ public class KStreamSlidingWindowAggregateTest {
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
+        LogCaptureAppender.setClassLoggerToDebug(KStreamSlidingWindowAggregate.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamSlidingWindowAggregate.class);
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 

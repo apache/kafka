@@ -408,6 +408,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         context.setSystemTimeMs(time.milliseconds());
         bytesStore.init((StateStoreContext) context, bytesStore);
 
+        LogCaptureAppender.setClassLoggerToDebug(AbstractRocksDBSegmentedBytesStore.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             // write a record to advance stream time, with a high enough timestamp
             // that the subsequent record in windows[0] will already be expired.

@@ -310,6 +310,7 @@ public class KStreamWindowAggregateTest {
                .map((key, value) -> new KeyValue<>(key.toString(), value))
                .to("output");
 
+        LogCaptureAppender.setClassLoggerToDebug(KStreamWindowAggregate.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
@@ -369,6 +370,7 @@ public class KStreamWindowAggregateTest {
                .map((key, value) -> new KeyValue<>(key.toString(), value))
                .to("output");
 
+        LogCaptureAppender.setClassLoggerToDebug(KStreamWindowAggregate.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
