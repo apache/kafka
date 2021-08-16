@@ -28,6 +28,7 @@ import java.util.{Collections, Optional, Properties}
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
@@ -51,7 +52,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
-import org.apache.kafka.image.{ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, TopicImage, TopicsDelta, TopicsImage }
+import org.apache.kafka.image.{ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, TopicImage, TopicsDelta, TopicsImage}
 import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
@@ -59,6 +60,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentMatchers, Mockito}
+
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -3101,6 +3103,25 @@ class ReplicaManagerTest {
     }
 
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+  }
+
+  @Test
+  def testMetricNames(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
+    val config = KafkaConfig.fromProps(props)
+
+    val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)))
+    new ReplicaManager(config, metrics, time, None, new MockScheduler(time), logManager,
+      new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
+      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+    List("LeaderCount", "PartitionCount", "OfflineReplicaCount", "UnderReplicatedPartitions",
+      "UnderMinIsrPartitionCount", "AtMinIsrPartitionCount", "ReassigningPartitions", "IsrExpandsPerSec",
+      "IsrShrinksPerSec", "FailedIsrUpdatesPerSec").foreach {
+      metricName =>
+        val mbeanName = s"kafka.server:type=ReplicaManager,name=$metricName"
+        assertEquals(1, KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala.count(
+          _.getMBeanName == mbeanName), s"Incorrect count for metric with MBean Name $mbeanName")
+    }
   }
 
   private def topicsImage(replica: Int, isLeader: Boolean, epoch: Int): TopicsImage = {
