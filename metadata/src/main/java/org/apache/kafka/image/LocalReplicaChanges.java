@@ -24,7 +24,6 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import java.util.Set;
 import java.util.Map;
 
-// TODO: should we use TopicIdPartition?
 public final class LocalReplicaChanges {
     private final Set<TopicPartition> deletes;
     private final Map<TopicPartition, PartitionInfo> leaders;

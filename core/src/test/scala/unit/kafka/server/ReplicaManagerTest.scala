@@ -38,7 +38,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
-import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -2950,7 +2950,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testDeltaFollowerToRemoved(): Unit = {
+  def testDeltaFollowerToNotReplica(): Unit = {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
@@ -2987,7 +2987,44 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testDeltaLeaderToRemoved(): Unit = {
+  def testDeltaFollowerRemovedTopic(): Unit = {
+    val localId = 1
+    val otherId = localId + 1
+    val topicPartition = new TopicPartition("foo", 0)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+
+    try {
+      // Make the local replica the follower
+      val followerTopicsDelta = topicsCreateDelta(localId, false)
+      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      replicaManager.applyDelta(followerMetadataImage, followerTopicsDelta)
+
+      // Check the state of that partition and fetcher
+      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      assertFalse(followerPartition.isLeader)
+      assertEquals(0, followerPartition.getLeaderEpoch)
+
+      val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
+      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
+
+      // Apply changes that remove topic and replica
+      val removeTopicsDelta = topicsDeleteDelta(followerMetadataImage.topics())
+      val removeMetadataImage = imageFromTopics(removeTopicsDelta.apply())
+      replicaManager.applyDelta(removeMetadataImage, removeTopicsDelta)
+
+      // Check that the partition was removed
+      assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
+      assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+      assertEquals(None, replicaManager.logManager.getLog(topicPartition))
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+  }
+
+  @Test
+  def testDeltaLeaderToNotReplica(): Unit = {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
@@ -3011,6 +3048,43 @@ class ReplicaManagerTest {
       val notReplicaTopicsDelta = topicsChangeDelta(leaderMetadataImage.topics(), otherId, true)
       val notReplicaMetadataImage = imageFromTopics(notReplicaTopicsDelta.apply())
       replicaManager.applyDelta(notReplicaMetadataImage, notReplicaTopicsDelta)
+
+      // Check that the partition was removed
+      assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
+      assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+      assertEquals(None, replicaManager.logManager.getLog(topicPartition))
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+  }
+
+  @Test
+  def testDeltaLeaderToRemovedTopic(): Unit = {
+    val localId = 1
+    val otherId = localId + 1
+    val topicPartition = new TopicPartition("foo", 0)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+
+    try {
+      // Make the local replica the follower
+      val leaderTopicsDelta = topicsCreateDelta(localId, true)
+      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
+      replicaManager.applyDelta(leaderMetadataImage, leaderTopicsDelta)
+
+      // Check the state of that partition and fetcher
+      val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+      assertTrue(leaderPartition.isLeader)
+      assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
+      assertEquals(0, leaderPartition.getLeaderEpoch)
+
+      assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+
+      // Apply changes that remove topic and replica
+      val removeTopicsDelta = topicsDeleteDelta(leaderMetadataImage.topics())
+      val removeMetadataImage = imageFromTopics(removeTopicsDelta.apply())
+      replicaManager.applyDelta(removeMetadataImage, removeTopicsDelta)
 
       // Check that the partition was removed
       assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
@@ -3108,7 +3182,6 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  // TODO: Add test for delete topics
 
   private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean): TopicsDelta = {
     val leader = if (isStartIdLeader) startId else startId + 1
@@ -3124,7 +3197,8 @@ class ReplicaManagerTest {
         .setAddingReplicas(Collections.emptyList())
         .setLeader(leader)
         .setLeaderEpoch(0)
-        .setPartitionEpoch(0))
+        .setPartitionEpoch(0)
+    )
 
     delta
   }
@@ -3140,6 +3214,13 @@ class ReplicaManagerTest {
         .setIsr(util.Arrays.asList(startId, startId + 1))
         .setLeader(leader)
     )
+    delta
+  }
+
+  private def topicsDeleteDelta(topicsImage: TopicsImage): TopicsDelta = {
+    val delta = new TopicsDelta(topicsImage)
+    delta.replay(new RemoveTopicRecord().setTopicId(FOO_UUID))
+
     delta
   }
 

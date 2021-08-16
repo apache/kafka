@@ -176,7 +176,6 @@ public final class TopicsDelta {
      * @return the list of topic partitions which the broker should remove, become leader or become follower.
      */
     public LocalReplicaChanges localChanges(int brokerId) {
-        // TODO: need to include information about which topic id is getting deleted?
         Set<TopicPartition> deletes = new HashSet<>();
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> leaders = new HashMap<>();
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();

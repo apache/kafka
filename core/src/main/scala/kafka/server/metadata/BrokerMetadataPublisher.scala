@@ -154,13 +154,15 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         getTopicDelta(Topic.GROUP_METADATA_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
           val changes = topicDelta.localChanges(brokerId)
 
+          changes.deletes.forEach { topicPartition =>
+            groupCoordinator.onResignation(topicPartition.partition, None)
+          }
           changes.leaders.forEach { (topicPartition, partitionInfo) =>
             groupCoordinator.onElection(topicPartition.partition, partitionInfo.partition.leaderEpoch)
           }
           changes.followers.forEach { (topicPartition, partitionInfo) =>
             groupCoordinator.onResignation(topicPartition.partition, Some(partitionInfo.partition.leaderEpoch))
           }
-          // TODO: Do we need to handle deletion?
         }
 
         // Handle the case where the old transaction state topic was deleted.
@@ -177,13 +179,15 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         getTopicDelta(Topic.TRANSACTION_STATE_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
           val changes = topicDelta.localChanges(brokerId)
 
+          changes.deletes.forEach { topicPartition =>
+            txnCoordinator.onResignation(topicPartition.partition, None)
+          }
           changes.leaders.forEach { (topicPartition, partitionInfo) =>
             txnCoordinator.onElection(topicPartition.partition, partitionInfo.partition.leaderEpoch)
           }
           changes.followers.forEach { (topicPartition, partitionInfo) =>
             txnCoordinator.onResignation(topicPartition.partition, Some(partitionInfo.partition.leaderEpoch))
           }
-          // TODO: Do we need to handle deletion?
         }
 
         // Notify the group coordinator about deleted topics.
@@ -210,7 +214,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
           tag.foreach { t =>
             val newProperties = newImage.configs().configProperties(configResource)
             val maybeDefaultName = configResource.name() match {
-              case "" => ConfigEntityName.Default 
+              case "" => ConfigEntityName.Default
               case k => k
             }
             dynamicConfigHandlers(t).processConfigChanges(maybeDefaultName, newProperties)
