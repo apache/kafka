@@ -133,6 +133,20 @@ public class TopicsImageTest {
         IMAGE2 = new TopicsImage(newTopicsByIdMap(topics2), newTopicsByNameMap(topics2));
     }
 
+    private ApiMessageAndVersion newPartitionRecord(Uuid topicId, int partitionId, List<Integer> replicas) {
+        return new ApiMessageAndVersion(
+            new PartitionRecord()
+                .setPartitionId(partitionId)
+                .setTopicId(topicId)
+                .setReplicas(replicas)
+                .setIsr(replicas)
+                .setLeader(replicas.get(0))
+                .setLeaderEpoch(1)
+                .setPartitionEpoch(1),
+            PARTITION_RECORD.highestSupportedVersion()
+        );
+    }
+
     private PartitionRegistration newPartition(int[] replicas) {
         return new PartitionRegistration(replicas, replicas, Replicas.NONE, Replicas.NONE, replicas[0], 1, 1);
     }
@@ -140,13 +154,14 @@ public class TopicsImageTest {
     @Test
     public void testLocalReplicaChanges() {
         int localId = 3;
-        Uuid newFooId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");
+        Uuid zooId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");
+        Uuid newFooId = Uuid.fromString("b66ybsWIQoygs01vdjH07A");
 
         List<TopicImage> topics = new ArrayList<>(TOPIC_IMAGES1);
         topics.add(
             newTopicImage(
-                "foo",
-                newFooId,
+                "zoo",
+                zooId,
                 newPartition(new int[] {0, 1, 3}),
                 newPartition(new int[] {3, 1, 2}),
                 newPartition(new int[] {0, 1, 3}),
@@ -155,46 +170,55 @@ public class TopicsImageTest {
                 newPartition(new int[] {0, 1, 2})
             )
         );
-
         TopicsImage image = new TopicsImage(newTopicsByIdMap(topics), newTopicsByNameMap(topics));
 
+
+        /* Changes already include in DELTA1_RECORDS:
+         * foo - topic id deleted
+         * bar-0 - stay as follower with different partition epoch
+         * baz-0 - new topic to leader
+         */
         List<ApiMessageAndVersion> topicRecords = new ArrayList<>(DELTA1_RECORDS);
-        // foo-0 - follower to leader
+        // Create a new foo partition with a different id
         topicRecords.add(
             new ApiMessageAndVersion(
-                new PartitionChangeRecord()
-                  .setTopicId(newFooId)
-                  .setPartitionId(0)
-                  .setLeader(3),
+                new TopicRecord().setName("foo") .setTopicId(newFooId),
+                TOPIC_RECORD.highestSupportedVersion()
+            )
+        );
+        topicRecords.add(newPartitionRecord(newFooId, 0, Arrays.asList(0, 1, 2)));
+        topicRecords.add(newPartitionRecord(newFooId, 1, Arrays.asList(0, 1, 3)));
+
+        // zoo-0 - follower to leader
+        topicRecords.add(
+            new ApiMessageAndVersion(
+                new PartitionChangeRecord().setTopicId(zooId).setPartitionId(0).setLeader(3),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion()
             )
         );
-        // foo-1 - leader to follower
+        // zoo-1 - leader to follower
         topicRecords.add(
             new ApiMessageAndVersion(
-                new PartitionChangeRecord()
-                  .setTopicId(newFooId)
-                  .setPartitionId(1)
-                  .setLeader(1),
+                new PartitionChangeRecord().setTopicId(zooId).setPartitionId(1).setLeader(1),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion()
             )
         );
-        // foo-2 - follower to removed
+        // zoo-2 - follower to removed
         topicRecords.add(
             new ApiMessageAndVersion(
                 new PartitionChangeRecord()
-                  .setTopicId(newFooId)
+                  .setTopicId(zooId)
                   .setPartitionId(2)
                   .setIsr(Arrays.asList(0, 1, 2))
                   .setReplicas(Arrays.asList(0, 1, 2)),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion()
             )
         );
-        // foo-3 - leader to removed
+        // zoo-3 - leader to removed
         topicRecords.add(
             new ApiMessageAndVersion(
                 new PartitionChangeRecord()
-                  .setTopicId(newFooId)
+                  .setTopicId(zooId)
                   .setPartitionId(3)
                   .setLeader(0)
                   .setIsr(Arrays.asList(0, 1, 2))
@@ -202,11 +226,11 @@ public class TopicsImageTest {
                 PARTITION_CHANGE_RECORD.highestSupportedVersion()
             )
         );
-        // foo-4 - not replica to leader
+        // zoo-4 - not replica to leader
         topicRecords.add(
             new ApiMessageAndVersion(
                 new PartitionChangeRecord()
-                  .setTopicId(newFooId)
+                  .setTopicId(zooId)
                   .setPartitionId(4)
                   .setLeader(3)
                   .setIsr(Arrays.asList(3, 1, 2))
@@ -214,11 +238,11 @@ public class TopicsImageTest {
                 PARTITION_CHANGE_RECORD.highestSupportedVersion()
             )
         );
-        // foo-5 - not replica to follower
+        // zoo-5 - not replica to follower
         topicRecords.add(
             new ApiMessageAndVersion(
                 new PartitionChangeRecord()
-                  .setTopicId(newFooId)
+                  .setTopicId(zooId)
                   .setPartitionId(5)
                   .setIsr(Arrays.asList(0, 1, 3))
                   .setReplicas(Arrays.asList(0, 1, 3)),
@@ -226,13 +250,7 @@ public class TopicsImageTest {
             )
         );
 
-        /* Changes already include in DELTA1_RECORDS:
-         * foo - topic id deleted
-         * bar-0 - stay as follower with different partition epoch
-         * baz-0 - new topic to leader
-         */
-
-        // baz-1 - new topic to follower
+        // baz-1 - new partion to follower
         topicRecords.add(
             new ApiMessageAndVersion(
                 new PartitionRecord()
@@ -254,8 +272,8 @@ public class TopicsImageTest {
         assertEquals(
             new HashSet<>(
                 Arrays.asList(
-                    new TopicPartition("foo", 2),
-                    new TopicPartition("foo", 3),
+                    new TopicPartition("zoo", 2),
+                    new TopicPartition("zoo", 3),
                     new TopicPartition("foo", 0), // from remove topic of the old id
                     new TopicPartition("foo", 1)  // from remove topic of the old id
                 )
@@ -264,21 +282,18 @@ public class TopicsImageTest {
         );
         assertEquals(
             new HashSet<>(
-                Arrays.asList(
-                    new TopicPartition("foo", 0),
-                    new TopicPartition("foo", 4),
-                    new TopicPartition("baz", 0)
-                )
+                Arrays.asList(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4), new TopicPartition("baz", 0))
             ),
             changes.leaders().keySet()
         );
         assertEquals(
             new HashSet<>(
                 Arrays.asList(
-                    new TopicPartition("foo", 1),
-                    new TopicPartition("foo", 5),
+                    new TopicPartition("zoo", 1),
+                    new TopicPartition("zoo", 5),
                     new TopicPartition("baz", 1),
-                    new TopicPartition("bar", 0)
+                    new TopicPartition("bar", 0),
+                    new TopicPartition("foo", 1)
                 )
             ),
             changes.followers().keySet()
