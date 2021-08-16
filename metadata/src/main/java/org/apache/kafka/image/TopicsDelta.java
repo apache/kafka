@@ -23,6 +23,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.metadata.Replicas;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -165,7 +166,7 @@ public final class TopicsDelta {
     }
 
     /**
-     * Find the topic partitions that have change base on the replica given.
+     * Find the topic partitions that have change based on the replica given.
      *
      * The changes identified are:
      *   1. topic partitions for which the broker is not a replica anymore
@@ -188,11 +189,13 @@ public final class TopicsDelta {
             followers.putAll(changes.followers());
         }
 
-        // Add all of the deleted topic partitions to the map of locally removed partitions
+        // Add all of the removed topic partitions to the set of locally removed partitions
         deletedTopicIds().forEach(topicId -> {
             TopicImage topicImage = image().getTopic(topicId);
-            topicImage.partitions().keySet().forEach(partitionId -> {
-                deletes.add(new TopicPartition(topicImage.name(), partitionId));
+            topicImage.partitions().forEach((partitionId, prevPartition) -> {
+                if (Replicas.contains(prevPartition.replicas, brokerId)) {
+                    deletes.add(new TopicPartition(topicImage.name(), partitionId));
+                }
             });
         });
 

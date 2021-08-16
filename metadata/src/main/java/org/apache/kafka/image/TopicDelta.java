@@ -93,7 +93,7 @@ public final class TopicDelta {
     }
 
     /**
-     * Find the partitions that have change base on the replica given.
+     * Find the partitions that have change based on the replica given.
      *
      * The changes identified are:
      *   1. partitions for which the broker is not a replica anymore

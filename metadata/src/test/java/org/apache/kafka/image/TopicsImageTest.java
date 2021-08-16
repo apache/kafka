@@ -89,7 +89,9 @@ public class TopicsImageTest {
                 new PartitionRegistration(new int[] {2, 3, 4},
                     new int[] {2, 3}, Replicas.NONE, Replicas.NONE, 2, 1, 345),
                 new PartitionRegistration(new int[] {3, 4, 5},
-                    new int[] {3, 4, 5}, Replicas.NONE, Replicas.NONE, 3, 4, 684)),
+                    new int[] {3, 4, 5}, Replicas.NONE, Replicas.NONE, 3, 4, 684),
+                new PartitionRegistration(new int[] {2, 4, 5},
+                    new int[] {2, 4, 5}, Replicas.NONE, Replicas.NONE, 2, 10, 84)),
             newTopicImage("bar", Uuid.fromString("f62ptyETTjet8SL5ZeREiw"),
                 new PartitionRegistration(new int[] {0, 1, 2, 3, 4},
                     new int[] {0, 1, 2, 3}, new int[] {1}, new int[] {3, 4}, 0, 1, 345)));
