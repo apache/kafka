@@ -250,7 +250,7 @@ public class TopicsImageTest {
 
         // TODO: confirm that we are testing deleted topics with same name but different ids
 
-        TopicDelta.LocalReplicaChanges changes = delta.newLocalChanges(3);
+        LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(
             new HashSet<>(
                 Arrays.asList(

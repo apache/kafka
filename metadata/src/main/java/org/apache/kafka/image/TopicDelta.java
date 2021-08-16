@@ -93,118 +93,50 @@ public final class TopicDelta {
     }
 
     /**
-     * TODO: write documentation
-     * TODO
-     */
-    /**
-     * Find the partitions that we are now leading, whose partition epoch has changed.
+     * Find the partitions that have change base on the replica given.
      *
-     * @param replicaId The replica id.
-     * @return          A list of (partition ID, partition registration) entries.
-     */
-    /**
-     * Find the partitions that we are now following, whose partition epoch has changed.
+     * The changes identified are:
+     *   1. partitions for which the broker is not a replica anymore
+     *   2. partitions for which the broker is now the leader
+     *   3. partitions for which the broker is now a follower
      *
-     * @param replicaId The replica id.
-     * @return          A list of (partition ID, partition registration) entries.
+     * @param brokerId the broker id
+     * @return the list of partitions which the broker should remove, become leader or become follower.
      */
-    public LocalReplicaChanges newLocalChanges(int replicaId) {
+    public LocalReplicaChanges localChanges(int brokerId) {
+        // TODO: need to include information about which topic id is getting deleted?
         Set<TopicPartition> deletes = new HashSet<>();
-        Map<TopicPartition, PartitionInfo> leaders = new HashMap<>();
-        Map<TopicPartition, PartitionInfo> followers = new HashMap<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> leaders = new HashMap<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
 
         for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
-            if (!Replicas.contains(entry.getValue().replicas, replicaId)) {
+            if (!Replicas.contains(entry.getValue().replicas, brokerId)) {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
-                if (prevPartition != null && Replicas.contains(prevPartition.replicas, replicaId)) {
+                if (prevPartition != null && Replicas.contains(prevPartition.replicas, brokerId)) {
                     deletes.add(new TopicPartition(name(), entry.getKey()));
                 }
-            } else if (entry.getValue().leader == replicaId) {
+            } else if (entry.getValue().leader == brokerId) {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
                 if (prevPartition == null || prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
                     leaders.put(
                         new TopicPartition(name(), entry.getKey()),
-                        new PartitionInfo(id(), entry.getValue())
+                        new LocalReplicaChanges.PartitionInfo(id(), entry.getValue())
                     );
                 }
             } else if (
-                entry.getValue().leader != replicaId &&
-                Replicas.contains(entry.getValue().replicas, replicaId)
+                entry.getValue().leader != brokerId &&
+                Replicas.contains(entry.getValue().replicas, brokerId)
             ) {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
                 if (prevPartition == null || prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
                     followers.put(
                         new TopicPartition(name(), entry.getKey()),
-                        new PartitionInfo(id(), entry.getValue())
+                        new LocalReplicaChanges.PartitionInfo(id(), entry.getValue())
                     );
                 }
             }
         }
 
         return new LocalReplicaChanges(deletes, leaders, followers);
-    }
-
-    // TODO: move this class out of here.
-    public static final class PartitionInfo {
-        private final Uuid topicId;
-        private final PartitionRegistration partition;
-
-        public PartitionInfo(Uuid topicId, PartitionRegistration partition) {
-            this.topicId = topicId;
-            this.partition = partition;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("PartitionInfo(topicId = %s, partition = %s)", topicId, partition);
-        }
-
-        public Uuid topicId() {
-            return topicId;
-        }
-
-        public PartitionRegistration partition() {
-            return partition;
-        }
-    }
-
-    // TODO: should we use TopicIdPartition?
-    // TODO: move this class out of here.
-    public static final class LocalReplicaChanges {
-        private final Set<TopicPartition> deletes;
-        private final Map<TopicPartition, PartitionInfo> leaders;
-        private final Map<TopicPartition, PartitionInfo> followers;
-
-        LocalReplicaChanges(
-            Set<TopicPartition> deletes,
-            Map<TopicPartition, PartitionInfo> leaders,
-            Map<TopicPartition, PartitionInfo> followers
-        ) {
-            this.deletes = deletes;
-            this.leaders = leaders;
-            this.followers = followers;
-        }
-
-        public Set<TopicPartition> deletes() {
-            return deletes;
-        }
-
-        public Map<TopicPartition, PartitionInfo> leaders() {
-            return leaders;
-        }
-
-        public Map<TopicPartition, PartitionInfo> followers() {
-            return followers;
-        }
-
-        @Override
-        public String toString() {
-            return String.format(
-                "LocalReplicaChanges(deletes = %s, leaders = %s, followers = %s)",
-                deletes,
-                leaders,
-                followers
-            );
-        }
     }
 }

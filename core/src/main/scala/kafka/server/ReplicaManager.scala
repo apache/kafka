@@ -60,8 +60,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.image.{MetadataImage, TopicsDelta, TopicDelta}
-import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, Set, mutable}
@@ -83,8 +82,6 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
     case Some(e) => Errors.forException(e)
   }
 }
-
-case class LocalLeaderInfo(topicId: Uuid, partition: PartitionRegistration)
 
 /**
  * Result metadata of a log read operation on the log
@@ -2084,7 +2081,7 @@ class ReplicaManager(val config: KafkaConfig,
    */
   def applyDelta(newImage: MetadataImage, delta: TopicsDelta): Unit = {
     // Before taking the lock, compute the local changes
-    val localChanges = delta.newLocalChanges(config.nodeId)
+    val localChanges = delta.localChanges(config.nodeId)
 
     replicaStateChangeLock.synchronized {
       // Handle deleted partitions. We need to do this first because we might subsequently
@@ -2139,7 +2136,7 @@ class ReplicaManager(val config: KafkaConfig,
     changedPartitions: mutable.Set[Partition],
     delta: TopicsDelta,
     offsetCheckpoints: OffsetCheckpoints,
-    newLocalLeaders: mutable.Map[TopicPartition, TopicDelta.PartitionInfo]
+    newLocalLeaders: mutable.Map[TopicPartition, LocalReplicaChanges.PartitionInfo]
   ): Unit = {
     stateChangeLogger.info(s"Transitioning ${newLocalLeaders.size} partition(s) to " +
       "local leaders.")
@@ -2171,7 +2168,7 @@ class ReplicaManager(val config: KafkaConfig,
     newImage: MetadataImage,
     delta: TopicsDelta,
     offsetCheckpoints: OffsetCheckpoints,
-    newLocalFollowers: mutable.Map[TopicPartition, TopicDelta.PartitionInfo]
+    newLocalFollowers: mutable.Map[TopicPartition, LocalReplicaChanges.PartitionInfo]
   ): Unit = {
     stateChangeLogger.info(s"Transitioning ${newLocalFollowers.size} partition(s) to " +
       "local followers.")

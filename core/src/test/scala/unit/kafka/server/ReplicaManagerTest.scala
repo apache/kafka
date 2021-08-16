@@ -2933,7 +2933,7 @@ class ReplicaManagerTest {
       assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.sourceBroker))
 
       // Apply the same delta again
-      replicaManager.applyDelta(followerMetadataImage, topicsCreateDelta(localId, false))
+      replicaManager.applyDelta(followerMetadataImage, followerTopicsDelta)
 
       // Check that the state stays the same
       val HostedPartition.Online(noChangePartition) = replicaManager.getPartition(topicPartition)
@@ -3109,7 +3109,6 @@ class ReplicaManagerTest {
   }
 
   // TODO: Add test for delete topics
-  // TODO: Add tests for reassigned topic partition
 
   private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean): TopicsDelta = {
     val leader = if (isStartIdLeader) startId else startId + 1

@@ -164,14 +164,25 @@ public final class TopicsDelta {
         return deletedTopicIds;
     }
 
-    public TopicDelta.LocalReplicaChanges newLocalChanges(int replicaId) {
-        // TODO: need to include information about which topic id is getting deleted
+    /**
+     * Find the topic partitions that have change base on the replica given.
+     *
+     * The changes identified are:
+     *   1. topic partitions for which the broker is not a replica anymore
+     *   2. topic partitions for which the broker is now the leader
+     *   3. topic partitions for which the broker is now a follower
+     *
+     * @param brokerId the broker id
+     * @return the list of topic partitions which the broker should remove, become leader or become follower.
+     */
+    public LocalReplicaChanges localChanges(int brokerId) {
+        // TODO: need to include information about which topic id is getting deleted?
         Set<TopicPartition> deletes = new HashSet<>();
-        Map<TopicPartition, TopicDelta.PartitionInfo> leaders = new HashMap<>();
-        Map<TopicPartition, TopicDelta.PartitionInfo> followers = new HashMap<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> leaders = new HashMap<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
 
         for (TopicDelta delta : changedTopics.values()) {
-            TopicDelta.LocalReplicaChanges changes = delta.newLocalChanges(replicaId);
+            LocalReplicaChanges changes = delta.localChanges(brokerId);
 
             deletes.addAll(changes.deletes());
             leaders.putAll(changes.leaders());
@@ -186,6 +197,6 @@ public final class TopicsDelta {
             });
         });
 
-        return new TopicDelta.LocalReplicaChanges(deletes, leaders, followers);
+        return new LocalReplicaChanges(deletes, leaders, followers);
     }
 }

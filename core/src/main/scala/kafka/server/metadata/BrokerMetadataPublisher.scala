@@ -152,7 +152,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         // Handle the case where we have new local leaders or followers for the consumer
         // offsets topic.
         getTopicDelta(Topic.GROUP_METADATA_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
-          val changes = topicDelta.newLocalChanges(brokerId)
+          val changes = topicDelta.localChanges(brokerId)
 
           changes.leaders.forEach { (topicPartition, partitionInfo) =>
             groupCoordinator.onElection(topicPartition.partition, partitionInfo.partition.leaderEpoch)
@@ -175,7 +175,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         // If the transaction state topic changed in a way that's relevant to this broker,
         // notify the transaction coordinator.
         getTopicDelta(Topic.TRANSACTION_STATE_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
-          val changes = topicDelta.newLocalChanges(brokerId)
+          val changes = topicDelta.localChanges(brokerId)
 
           changes.leaders.forEach { (topicPartition, partitionInfo) =>
             txnCoordinator.onElection(topicPartition.partition, partitionInfo.partition.leaderEpoch)
