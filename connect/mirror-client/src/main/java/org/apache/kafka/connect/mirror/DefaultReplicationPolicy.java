@@ -70,4 +70,32 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
             return topic.substring(source.length() + separator.length());
         }
     }
+
+    private String internalSuffix() {
+        return separator + "internal";
+    }
+
+    private String checkpointsTopicSuffix() {
+        return separator + "checkpoints" + internalSuffix();
+    }
+
+    @Override
+    public String offsetSyncsTopic(String clusterAlias) {
+        return "mm2-offset-syncs" + separator + clusterAlias + internalSuffix();
+    }
+
+    @Override
+    public String checkpointsTopic(String clusterAlias) {
+        return clusterAlias + checkpointsTopicSuffix();
+    }
+
+    @Override
+    public boolean isCheckpointsTopic(String topic) {
+        return  topic.endsWith(checkpointsTopicSuffix());
+    }
+
+    @Override
+    public boolean isMM2InternalTopic(String topic) {
+        return  topic.endsWith(internalSuffix());
+    }
 }
