@@ -124,7 +124,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public String version() {
-        return "1";
+        return new MirrorCheckpointConnector().version();
     }
 
     @Override
