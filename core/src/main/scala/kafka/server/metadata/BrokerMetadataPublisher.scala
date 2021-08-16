@@ -152,12 +152,15 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         // Handle the case where we have new local leaders or followers for the consumer
         // offsets topic.
         getTopicDelta(Topic.GROUP_METADATA_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
-          topicDelta.newLocalLeaders(brokerId).forEach {
-            entry => groupCoordinator.onElection(entry.getKey(), entry.getValue().leaderEpoch)
+          val changes = topicDelta.newLocalChanges(brokerId)
+
+          changes.leaders.forEach { (topicPartition, partitionInfo) =>
+            groupCoordinator.onElection(topicPartition.partition, partitionInfo.partition.leaderEpoch)
           }
-          topicDelta.newLocalFollowers(brokerId).forEach {
-            entry => groupCoordinator.onResignation(entry.getKey(), Some(entry.getValue().leaderEpoch))
+          changes.followers.forEach { (topicPartition, partitionInfo) =>
+            groupCoordinator.onResignation(topicPartition.partition, Some(partitionInfo.partition.leaderEpoch))
           }
+          // TODO: Do we need to handle deletion?
         }
 
         // Handle the case where the old transaction state topic was deleted.
@@ -172,12 +175,15 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         // If the transaction state topic changed in a way that's relevant to this broker,
         // notify the transaction coordinator.
         getTopicDelta(Topic.TRANSACTION_STATE_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
-          topicDelta.newLocalLeaders(brokerId).forEach {
-            entry => txnCoordinator.onElection(entry.getKey(), entry.getValue().leaderEpoch)
+          val changes = topicDelta.newLocalChanges(brokerId)
+
+          changes.leaders.forEach { (topicPartition, partitionInfo) =>
+            txnCoordinator.onElection(topicPartition.partition, partitionInfo.partition.leaderEpoch)
           }
-          topicDelta.newLocalFollowers(brokerId).forEach {
-            entry => txnCoordinator.onResignation(entry.getKey(), Some(entry.getValue().leaderEpoch))
+          changes.followers.forEach { (topicPartition, partitionInfo) =>
+            txnCoordinator.onResignation(topicPartition.partition, Some(partitionInfo.partition.leaderEpoch))
           }
+          // TODO: Do we need to handle deletion?
         }
 
         // Notify the group coordinator about deleted topics.

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -161,5 +162,30 @@ public final class TopicsDelta {
 
     public Set<Uuid> deletedTopicIds() {
         return deletedTopicIds;
+    }
+
+    public TopicDelta.LocalReplicaChanges newLocalChanges(int replicaId) {
+        // TODO: need to include information about which topic id is getting deleted
+        Set<TopicPartition> deletes = new HashSet<>();
+        Map<TopicPartition, TopicDelta.PartitionInfo> leaders = new HashMap<>();
+        Map<TopicPartition, TopicDelta.PartitionInfo> followers = new HashMap<>();
+
+        for (TopicDelta delta : changedTopics.values()) {
+            TopicDelta.LocalReplicaChanges changes = delta.newLocalChanges(replicaId);
+
+            deletes.addAll(changes.deletes());
+            leaders.putAll(changes.leaders());
+            followers.putAll(changes.followers());
+        }
+
+        // Add all of the deleted topic partitions to the map of locally removed partitions
+        deletedTopicIds().forEach(topicId -> {
+            TopicImage topicImage = image().getTopic(topicId);
+            topicImage.partitions().keySet().forEach(partitionId -> {
+                deletes.add(new TopicPartition(topicImage.name(), partitionId));
+            });
+        });
+
+        return new TopicDelta.LocalReplicaChanges(deletes, leaders, followers);
     }
 }

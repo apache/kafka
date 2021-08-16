@@ -18,17 +18,17 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.HashSet;
 import java.util.Map.Entry;
-
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Represents changes to a topic in the metadata image.
@@ -93,43 +93,118 @@ public final class TopicDelta {
     }
 
     /**
+     * TODO: write documentation
+     * TODO
+     */
+    /**
      * Find the partitions that we are now leading, whose partition epoch has changed.
      *
-     * @param brokerId  The broker id.
+     * @param replicaId The replica id.
      * @return          A list of (partition ID, partition registration) entries.
      */
-    public List<Entry<Integer, PartitionRegistration>> newLocalLeaders(int brokerId) {
-        List<Entry<Integer, PartitionRegistration>> results = new ArrayList<>();
-        for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
-            if (entry.getValue().leader == brokerId) {
-                PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
-                if (prevPartition == null ||
-                        prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
-                    results.add(entry);
-                }
-            }
-        }
-        return results;
-    }
-
     /**
      * Find the partitions that we are now following, whose partition epoch has changed.
      *
-     * @param brokerId  The broker id.
+     * @param replicaId The replica id.
      * @return          A list of (partition ID, partition registration) entries.
      */
-    public List<Entry<Integer, PartitionRegistration>> newLocalFollowers(int brokerId) {
-        List<Entry<Integer, PartitionRegistration>> results = new ArrayList<>();
+    public LocalReplicaChanges newLocalChanges(int replicaId) {
+        Set<TopicPartition> deletes = new HashSet<>();
+        Map<TopicPartition, PartitionInfo> leaders = new HashMap<>();
+        Map<TopicPartition, PartitionInfo> followers = new HashMap<>();
+
         for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
-            if (entry.getValue().leader != brokerId &&
-                    Replicas.contains(entry.getValue().replicas, brokerId)) {
+            if (!Replicas.contains(entry.getValue().replicas, replicaId)) {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
-                if (prevPartition == null ||
-                        prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
-                    results.add(entry);
+                if (prevPartition != null && Replicas.contains(prevPartition.replicas, replicaId)) {
+                    deletes.add(new TopicPartition(name(), entry.getKey()));
+                }
+            } else if (entry.getValue().leader == replicaId) {
+                PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
+                if (prevPartition == null || prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
+                    leaders.put(
+                        new TopicPartition(name(), entry.getKey()),
+                        new PartitionInfo(id(), entry.getValue())
+                    );
+                }
+            } else if (
+                entry.getValue().leader != replicaId &&
+                Replicas.contains(entry.getValue().replicas, replicaId)
+            ) {
+                PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
+                if (prevPartition == null || prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
+                    followers.put(
+                        new TopicPartition(name(), entry.getKey()),
+                        new PartitionInfo(id(), entry.getValue())
+                    );
                 }
             }
         }
-        return results;
+
+        return new LocalReplicaChanges(deletes, leaders, followers);
+    }
+
+    // TODO: move this class out of here.
+    public static final class PartitionInfo {
+        private final Uuid topicId;
+        private final PartitionRegistration partition;
+
+        public PartitionInfo(Uuid topicId, PartitionRegistration partition) {
+            this.topicId = topicId;
+            this.partition = partition;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("PartitionInfo(topicId = %s, partition = %s)", topicId, partition);
+        }
+
+        public Uuid topicId() {
+            return topicId;
+        }
+
+        public PartitionRegistration partition() {
+            return partition;
+        }
+    }
+
+    // TODO: should we use TopicIdPartition?
+    // TODO: move this class out of here.
+    public static final class LocalReplicaChanges {
+        private final Set<TopicPartition> deletes;
+        private final Map<TopicPartition, PartitionInfo> leaders;
+        private final Map<TopicPartition, PartitionInfo> followers;
+
+        LocalReplicaChanges(
+            Set<TopicPartition> deletes,
+            Map<TopicPartition, PartitionInfo> leaders,
+            Map<TopicPartition, PartitionInfo> followers
+        ) {
+            this.deletes = deletes;
+            this.leaders = leaders;
+            this.followers = followers;
+        }
+
+        public Set<TopicPartition> deletes() {
+            return deletes;
+        }
+
+        public Map<TopicPartition, PartitionInfo> leaders() {
+            return leaders;
+        }
+
+        public Map<TopicPartition, PartitionInfo> followers() {
+            return followers;
+        }
+
+        @Override
+        public String toString() {
+            return String.format(
+                "LocalReplicaChanges(deletes = %s, leaders = %s, followers = %s)",
+                deletes,
+                leaders,
+                followers
+            );
+        }
     }
 }
