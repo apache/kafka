@@ -403,7 +403,6 @@ class KRaftClusterTest {
         }, "Timed out waiting for replica assignments for topic foo. " +
           s"Wanted: ${expectedMapping}. Got: ${currentMapping}")
 
-        // Check that the replicas for each broker
         checkReplicaManager(
           cluster,
           List(
@@ -424,9 +423,6 @@ class KRaftClusterTest {
   private def checkReplicaManager(cluster: KafkaClusterTestKit, expectedHosting: List[(Int, List[Boolean])]): Unit = {
     for ((brokerId, partitionsIsHosted) <- expectedHosting) {
       val broker = cluster.brokers().get(brokerId)
-      // lock and unlock so we can read the replica manager
-      broker.lock.lock()
-      broker.lock.unlock()
 
       for ((isHosted, partitionId) <- partitionsIsHosted.zipWithIndex) {
         val topicPartition = new TopicPartition("foo", partitionId)
