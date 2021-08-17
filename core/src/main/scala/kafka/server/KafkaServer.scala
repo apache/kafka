@@ -115,7 +115,7 @@ class KafkaServer(
   var logDirFailureChannel: LogDirFailureChannel = null
   var logManager: LogManager = null
 
-  var replicaManager: ReplicaManager = null
+  @volatile private[this] var _replicaManager: ReplicaManager = null
   var adminManager: ZkAdminManager = null
   var tokenManager: DelegationTokenManager = null
 
@@ -169,6 +169,8 @@ class KafkaServer(
   private[kafka] def brokerTopicStats = _brokerTopicStats
 
   private[kafka] def featureChangeListener = _featureChangeListener
+
+  def replicaManager: ReplicaManager = _replicaManager
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
@@ -308,7 +310,7 @@ class KafkaServer(
         }
         alterIsrManager.start()
 
-        replicaManager = createReplicaManager(isShuttingDown)
+        _replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 
         val brokerInfo = createBrokerInfo

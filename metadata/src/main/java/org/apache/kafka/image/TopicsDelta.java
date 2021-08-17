@@ -17,11 +17,13 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.metadata.Replicas;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -161,5 +163,42 @@ public final class TopicsDelta {
 
     public Set<Uuid> deletedTopicIds() {
         return deletedTopicIds;
+    }
+
+    /**
+     * Find the topic partitions that have change based on the replica given.
+     *
+     * The changes identified are:
+     *   1. topic partitions for which the broker is not a replica anymore
+     *   2. topic partitions for which the broker is now the leader
+     *   3. topic partitions for which the broker is now a follower
+     *
+     * @param brokerId the broker id
+     * @return the list of topic partitions which the broker should remove, become leader or become follower.
+     */
+    public LocalReplicaChanges localChanges(int brokerId) {
+        Set<TopicPartition> deletes = new HashSet<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> leaders = new HashMap<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
+
+        for (TopicDelta delta : changedTopics.values()) {
+            LocalReplicaChanges changes = delta.localChanges(brokerId);
+
+            deletes.addAll(changes.deletes());
+            leaders.putAll(changes.leaders());
+            followers.putAll(changes.followers());
+        }
+
+        // Add all of the removed topic partitions to the set of locally removed partitions
+        deletedTopicIds().forEach(topicId -> {
+            TopicImage topicImage = image().getTopic(topicId);
+            topicImage.partitions().forEach((partitionId, prevPartition) -> {
+                if (Replicas.contains(prevPartition.replicas, brokerId)) {
+                    deletes.add(new TopicPartition(topicImage.name(), partitionId));
+                }
+            });
+        });
+
+        return new LocalReplicaChanges(deletes, leaders, followers);
     }
 }

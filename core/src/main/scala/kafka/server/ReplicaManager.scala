@@ -60,8 +60,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.image.{MetadataImage, TopicsDelta}
-import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, Set, mutable}
@@ -83,8 +82,6 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
     case Some(e) => Errors.forException(e)
   }
 }
-
-case class LocalLeaderInfo(topicId: Uuid, partition: PartitionRegistration)
 
 /**
  * Result metadata of a log read operation on the log
@@ -434,7 +431,9 @@ class ReplicaManager(val config: KafkaConfig,
    * @return                    A map from partitions to exceptions which occurred.
    *                            If no errors occurred, the map will be empty.
    */
-  protected def stopPartitions(partitionsToStop: Map[TopicPartition, Boolean]): Map[TopicPartition, Throwable] = {
+  protected def stopPartitions(
+    partitionsToStop: Map[TopicPartition, Boolean]
+  ): Map[TopicPartition, Throwable] = {
     // First stop fetchers for all partitions.
     val partitions = partitionsToStop.keySet
     replicaFetcherManager.removeFetcherForPartitions(partitions)
@@ -2074,32 +2073,6 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  private[kafka] def calculateDeltaChanges(delta: TopicsDelta)
-    : (mutable.HashMap[TopicPartition, Boolean],
-       mutable.HashMap[TopicPartition, LocalLeaderInfo],
-       mutable.HashMap[TopicPartition, LocalLeaderInfo]) = {
-    val deleted = new mutable.HashMap[TopicPartition, Boolean]()
-    delta.deletedTopicIds().forEach { topicId =>
-      val topicImage = delta.image().getTopic(topicId)
-      topicImage.partitions().keySet().forEach { partitionId =>
-        deleted.put(new TopicPartition(topicImage.name(), partitionId), true)
-      }
-    }
-    val newLocalLeaders = new mutable.HashMap[TopicPartition, LocalLeaderInfo]()
-    val newLocalFollowers = new mutable.HashMap[TopicPartition, LocalLeaderInfo]()
-    delta.changedTopics().values().forEach { topicDelta =>
-      topicDelta.newLocalLeaders(config.nodeId).forEach { e =>
-        newLocalLeaders.put(new TopicPartition(topicDelta.name(), e.getKey),
-          LocalLeaderInfo(topicDelta.id(), e.getValue))
-      }
-      topicDelta.newLocalFollowers(config.nodeId).forEach { e =>
-        newLocalFollowers.put(new TopicPartition(topicDelta.name(), e.getKey),
-          LocalLeaderInfo(topicDelta.id(), e.getValue))
-      }
-    }
-    (deleted, newLocalLeaders, newLocalFollowers)
-  }
-
   /**
    * Apply a KRaft topic change delta.
    *
@@ -2107,15 +2080,16 @@ class ReplicaManager(val config: KafkaConfig,
    * @param delta           The delta to apply.
    */
   def applyDelta(newImage: MetadataImage, delta: TopicsDelta): Unit = {
-    // Before taking the lock, build some hash maps that we will need.
-    val (deleted, newLocalLeaders, newLocalFollowers) = calculateDeltaChanges(delta)
+    // Before taking the lock, compute the local changes
+    val localChanges = delta.localChanges(config.nodeId)
 
     replicaStateChangeLock.synchronized {
       // Handle deleted partitions. We need to do this first because we might subsequently
       // create new partitions with the same names as the ones we are deleting here.
-      if (!deleted.isEmpty) {
-        stateChangeLogger.info(s"Deleting ${deleted.size} partition(s).")
-        stopPartitions(deleted).foreach { case (topicPartition, e) =>
+      if (!localChanges.deletes.isEmpty) {
+        val deletes = localChanges.deletes.asScala.map(tp => (tp, true)).toMap
+        stateChangeLogger.info(s"Deleting ${deletes.size} partition(s).")
+        stopPartitions(deletes).foreach { case (topicPartition, e) =>
           if (e.isInstanceOf[KafkaStorageException]) {
             stateChangeLogger.error(s"Unable to delete replica ${topicPartition} because " +
               "the local replica for the partition is in an offline log directory")
@@ -2125,15 +2099,16 @@ class ReplicaManager(val config: KafkaConfig,
           }
         }
       }
+
       // Handle partitions which we are now the leader or follower for.
-      if (!newLocalLeaders.isEmpty || !newLocalFollowers.isEmpty) {
+      if (!localChanges.leaders.isEmpty || !localChanges.followers.isEmpty) {
         val lazyOffsetCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
         val changedPartitions = new mutable.HashSet[Partition]
-        if (!newLocalLeaders.isEmpty) {
-          applyLocalLeadersDelta(changedPartitions, delta, lazyOffsetCheckpoints, newLocalLeaders)
+        if (!localChanges.leaders.isEmpty) {
+          applyLocalLeadersDelta(changedPartitions, delta, lazyOffsetCheckpoints, localChanges.leaders.asScala)
         }
-        if (!newLocalFollowers.isEmpty) {
-          applyLocalFollowersDelta(changedPartitions, newImage, delta, lazyOffsetCheckpoints, newLocalFollowers)
+        if (!localChanges.followers.isEmpty) {
+          applyLocalFollowersDelta(changedPartitions, newImage, delta, lazyOffsetCheckpoints, localChanges.followers.asScala)
         }
         maybeAddLogDirFetchers(changedPartitions, lazyOffsetCheckpoints,
           name => Option(newImage.topics().getTopic(name)).map(_.id()))
@@ -2148,8 +2123,8 @@ class ReplicaManager(val config: KafkaConfig,
           if (localLog(tp).isEmpty)
             markPartitionOffline(tp)
         }
-        newLocalLeaders.keySet.foreach(markPartitionOfflineIfNeeded)
-        newLocalFollowers.keySet.foreach(markPartitionOfflineIfNeeded)
+        localChanges.leaders.keySet.forEach(markPartitionOfflineIfNeeded)
+        localChanges.followers.keySet.forEach(markPartitionOfflineIfNeeded)
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
@@ -2157,10 +2132,12 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  private def applyLocalLeadersDelta(changedPartitions: mutable.HashSet[Partition],
-                                     delta: TopicsDelta,
-                                     offsetCheckpoints: OffsetCheckpoints,
-                                     newLocalLeaders: mutable.HashMap[TopicPartition, LocalLeaderInfo]): Unit = {
+  private def applyLocalLeadersDelta(
+    changedPartitions: mutable.Set[Partition],
+    delta: TopicsDelta,
+    offsetCheckpoints: OffsetCheckpoints,
+    newLocalLeaders: mutable.Map[TopicPartition, LocalReplicaChanges.PartitionInfo]
+  ): Unit = {
     stateChangeLogger.info(s"Transitioning ${newLocalLeaders.size} partition(s) to " +
       "local leaders.")
     replicaFetcherManager.removeFetcherForPartitions(newLocalLeaders.keySet)
@@ -2186,11 +2163,13 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  private def applyLocalFollowersDelta(changedPartitions: mutable.HashSet[Partition],
-                                       newImage: MetadataImage,
-                                       delta: TopicsDelta,
-                                       offsetCheckpoints: OffsetCheckpoints,
-                                       newLocalFollowers: mutable.HashMap[TopicPartition, LocalLeaderInfo]): Unit = {
+  private def applyLocalFollowersDelta(
+    changedPartitions: mutable.Set[Partition],
+    newImage: MetadataImage,
+    delta: TopicsDelta,
+    offsetCheckpoints: OffsetCheckpoints,
+    newLocalFollowers: mutable.Map[TopicPartition, LocalReplicaChanges.PartitionInfo]
+  ): Unit = {
     stateChangeLogger.info(s"Transitioning ${newLocalFollowers.size} partition(s) to " +
       "local followers.")
     val shuttingDown = isShuttingDown.get()
