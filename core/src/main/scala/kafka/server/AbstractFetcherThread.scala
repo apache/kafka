@@ -285,7 +285,7 @@ abstract class AbstractFetcherThread(name: String,
         // Partitions may have been removed from the fetcher while the thread was waiting for fetch
         // response. Removed partitions are filtered out while holding `partitionMapLock` to ensure that we
         // don't update state for any partition that may have already been migrated to another thread.
-        trace(s"Ignoring epoch offsets for partition '$tp' since it has been removed from this fetcher thread.")
+        trace(s"Ignoring epoch offsets for partition $tp since it has been removed from this fetcher thread.")
       }
     }
 
