@@ -55,6 +55,9 @@ public class MetadataCacheBenchmark {
 
     @State(Scope.Thread)
     public static class BenchState {
+        public static final int BROKER_ID = 1;
+        public static final String TOPIC_NAME = "topic";
+        public static final String TOPIC1_NAME = "topic1";
 
         @Setup(Level.Iteration)
         public void setUp() {
@@ -100,7 +103,7 @@ public class MetadataCacheBenchmark {
             int controllerEpoch = 1;
             int zkVersion = 3;
 
-            result.add(new UpdateMetadataRequestData.UpdateMetadataPartitionState().setTopicName(topicName)
+            result.add(new UpdateMetadataRequestData.UpdateMetadataPartitionState().setTopicName(TOPIC_NAME)
                 .setPartitionIndex(0)
                 .setControllerEpoch(controllerEpoch)
                 .setLeader(0)
@@ -108,7 +111,7 @@ public class MetadataCacheBenchmark {
                 .setIsr(Arrays.asList(0, 1, 3))
                 .setZkVersion(zkVersion)
                 .setReplicas(Arrays.asList(0, 1, 3)));
-            result.add(new UpdateMetadataRequestData.UpdateMetadataPartitionState().setTopicName(topicName)
+            result.add(new UpdateMetadataRequestData.UpdateMetadataPartitionState().setTopicName(TOPIC_NAME)
                 .setPartitionIndex(1)
                 .setControllerEpoch(controllerEpoch)
                 .setLeader(1)
@@ -116,7 +119,7 @@ public class MetadataCacheBenchmark {
                 .setIsr(Arrays.asList(1, 0))
                 .setZkVersion(zkVersion)
                 .setReplicas(Arrays.asList(1, 2, 0, 4)));
-            result.add(new UpdateMetadataRequestData.UpdateMetadataPartitionState().setTopicName(topic1Name)
+            result.add(new UpdateMetadataRequestData.UpdateMetadataPartitionState().setTopicName(TOPIC1_NAME)
                 .setPartitionIndex(0)
                 .setControllerEpoch(controllerEpoch)
                 .setLeader(2)
@@ -127,13 +130,10 @@ public class MetadataCacheBenchmark {
             return result;
         }
 
-        public final int brokerId = 1;
-        public final MetadataCache metadataCache = new MetadataCache(brokerId);
-        public final String topicName = "topic";
-        public final String topic1Name = "topic1";
+        public final MetadataCache metadataCache = new MetadataCache(BROKER_ID);
         public final ListenerName listenerName = ListenerName.normalised("PLAINTEXT");
         public final scala.collection.Set<String> topicScalaSetInQuery =
-            JavaConverters.<String>asScalaSet(Collections.singleton(topicName));
+            JavaConverters.asScalaSet(Collections.singleton(TOPIC_NAME));
     }
 
     @Benchmark
