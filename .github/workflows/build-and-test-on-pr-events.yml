@@ -42,4 +42,4 @@ jobs:
           java-version: 1.8
       - name: Build with Gradle and run all unit tests
         # exclude the streams test and connect test
-        run: ./gradlew cleanTest rat checkstyleMain checkstyleTest :clients:unitTest :core:unitTest --no-daemon -PxmlFindBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed
+        run: ./gradlew cleanTest rat checkstyleMain checkstyleTest spotbugsMain spotbugsTest :clients:unitTest :core:unitTest --no-daemon -PxmlFindBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed

@@ -49,7 +49,7 @@ jobs:
           echo "Release version (tag name): ${{ env.RELEASE_VERSION }}"
       - name: Build with Gradle and run all tests
         # exclude the streams test and connect test
-        run: ./gradlew cleanTest rat checkstyleMain checkstyleTest :clients:test :core:test --no-daemon -PxmlFindBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed
+        run: ./gradlew cleanTest rat checkstyleMain checkstyleTest spotbugsMain spotbugsTest :clients:test :core:test --no-daemon -PxmlFindBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed
       - name: Upload archive
         env:
           JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
