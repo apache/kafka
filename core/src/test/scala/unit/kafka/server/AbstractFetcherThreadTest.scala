@@ -40,6 +40,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.Time
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
@@ -477,6 +478,48 @@ class AbstractFetcherThreadTest {
     // No truncations occurred and we have fetched another record
     assertEquals(1, truncations)
     assertEquals(2, replicaState.logEndOffset)
+  }
+
+  @Test
+  def testTruncationOnFetchSkippedIfPartitionRemoved(): Unit = {
+    assumeTrue(truncateOnFetch)
+    val partition = new TopicPartition("topic", 0)
+    var truncations = 0
+    val fetcher = new MockFetcherThread {
+      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+        truncations += 1
+        super.truncate(topicPartition, truncationState)
+      }
+    }
+    val replicaLog = Seq(
+      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
+      mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes)),
+      mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes)))
+
+    val replicaState = MockFetcherThread.PartitionState(replicaLog, leaderEpoch = 5, highWatermark = 2L)
+    fetcher.setReplicaState(partition, replicaState)
+
+    // Verify that truncation based on fetch response is performed if partition is owned by fetcher thread
+    fetcher.addPartitions(Map(partition -> initialFetchState(6L, leaderEpoch = 4)))
+    val endOffset = new EpochEndOffset()
+      .setPartition(partition.partition)
+      .setErrorCode(Errors.NONE.code)
+      .setLeaderEpoch(4)
+      .setEndOffset(3L)
+    fetcher.truncateOnFetchResponse(Map(partition -> endOffset))
+    assertEquals(1, truncations)
+
+    // Verify that truncation based on fetch response is not performed if partition is removed from fetcher thread
+    val offsets = fetcher.removePartitions(Set(partition))
+    assertEquals(Set(partition), offsets.keySet)
+    assertEquals(3L, offsets(partition).fetchOffset)
+    val newEndOffset = new EpochEndOffset()
+      .setPartition(partition.partition)
+      .setErrorCode(Errors.NONE.code)
+      .setLeaderEpoch(4)
+      .setEndOffset(2L)
+    fetcher.truncateOnFetchResponse(Map(partition -> newEndOffset))
+    assertEquals(1, truncations)
   }
 
   @Test
