@@ -42,7 +42,7 @@
       "about": "Whether to include cluster authorized operations." },
     { "name": "IncludeTopicAuthorizedOperations", "type": "bool", "versions": "8+",
       "about": "Whether to include topic authorized operations." },
-    { "name": "ExcludePartitions", "type": "bool", "versions": "9+", "default": "false",
+    { "name": "ExcludePartitions", "type": "bool", "tag": 0, "taggedVersions": "9+", "versions": "9+", "default": "false",
       "about": "Whether to exclude partitions in the MetadataResponse." }
   ]
 }
