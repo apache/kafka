@@ -402,11 +402,44 @@ class KRaftClusterTest {
           }
         }, "Timed out waiting for replica assignments for topic foo. " +
           s"Wanted: ${expectedMapping}. Got: ${currentMapping}")
+
+        checkReplicaManager(
+          cluster,
+          List(
+            (0, List(true, true, false, true)),
+            (1, List(true, true, false, true)),
+            (2, List(true, true, true, true)),
+            (3, List(false, false, true, true))
+          )
+        )
       } finally {
         admin.close()
       }
     } finally {
       cluster.close()
+    }
+  }
+
+  private def checkReplicaManager(cluster: KafkaClusterTestKit, expectedHosting: List[(Int, List[Boolean])]): Unit = {
+    for ((brokerId, partitionsIsHosted) <- expectedHosting) {
+      val broker = cluster.brokers().get(brokerId)
+
+      for ((isHosted, partitionId) <- partitionsIsHosted.zipWithIndex) {
+        val topicPartition = new TopicPartition("foo", partitionId)
+        if (isHosted) {
+          assertNotEquals(
+            HostedPartition.None,
+            broker.replicaManager.getPartition(topicPartition),
+            s"topicPartition = $topicPartition"
+          )
+        } else {
+          assertEquals(
+            HostedPartition.None,
+            broker.replicaManager.getPartition(topicPartition),
+            s"topicPartition = $topicPartition"
+          )
+        }
+      }
     }
   }
 
