@@ -119,7 +119,7 @@ versions += [
   spotlessPlugin: "5.8.2",
   testRetryPlugin: "1.2.0",
   zinc: "1.3.5",
-  zookeeper: "3.5.9",
+  zookeeper: "3.6.3",
   zstd: "1.4.9-1"
 ]
 libs += [
