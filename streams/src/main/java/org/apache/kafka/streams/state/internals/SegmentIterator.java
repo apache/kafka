@@ -74,7 +74,7 @@ class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte
             close();
             currentSegment = segments.next();
             try {
-                if (from == null || to == null) {
+                if (from == null && to == null) {
                     if (forward) {
                         currentIterator = currentSegment.all();
                     } else {
