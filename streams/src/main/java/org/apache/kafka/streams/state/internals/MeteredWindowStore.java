@@ -245,8 +245,6 @@ public class MeteredWindowStore<K, V>
                                                   final K keyTo,
                                                   final long timeFrom,
                                                   final long timeTo) {
-        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
-        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo), timeFrom, timeTo),
             fetchSensor,
@@ -260,8 +258,6 @@ public class MeteredWindowStore<K, V>
                                                           final K keyTo,
                                                           final long timeFrom,
                                                           final long timeTo) {
-        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
-        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo), timeFrom, timeTo),
             fetchSensor,

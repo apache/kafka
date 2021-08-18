@@ -283,7 +283,7 @@ public class CachingPersistentWindowStoreTest {
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
 
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                 cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(10), ofEpochMilli(10))) {
+                 cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP))) {
             verifyWindowedKeyValue(
                 iterator.next(),
                 new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
@@ -294,6 +294,186 @@ public class CachingPersistentWindowStoreTest {
                 "b");
             assertFalse(iterator.hasNext());
             assertEquals(2, cache.size());
+        }
+    }
+
+    @Test
+    public void shouldPutFetchRangeFromCacheForNullKeyFrom() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP + 10L);
+        cachingStore.put(bytesKey("d"), bytesValue("d"), DEFAULT_TIMESTAMP + 20L);
+        cachingStore.put(bytesKey("e"), bytesValue("e"), DEFAULT_TIMESTAMP + 20L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 cachingStore.fetch(null, bytesKey("d"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20L))) {
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+                "a");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+                "b");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE)),
+                "c");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("d"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
+                "d");
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldPutFetchRangeFromCacheForNullKeyTo() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP + 10L);
+        cachingStore.put(bytesKey("d"), bytesValue("d"), DEFAULT_TIMESTAMP + 20L);
+        cachingStore.put(bytesKey("e"), bytesValue("e"), DEFAULT_TIMESTAMP + 20L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 cachingStore.fetch(bytesKey("b"), null, ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20L))) {
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+                "b");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE)),
+                "c");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("d"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
+                "d");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("e"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
+                "e");
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldPutFetchRangeFromCacheForNullKeyFromKeyTo() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP + 10L);
+        cachingStore.put(bytesKey("d"), bytesValue("d"), DEFAULT_TIMESTAMP + 20L);
+        cachingStore.put(bytesKey("e"), bytesValue("e"), DEFAULT_TIMESTAMP + 20L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 cachingStore.fetch(null, null, ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20L))) {
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+                "a");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+                "b");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE)),
+                "c");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("d"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
+                "d");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("e"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
+                "e");
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldPutBackwardFetchRangeFromCacheForNullKeyFrom() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP + 10L);
+        cachingStore.put(bytesKey("d"), bytesValue("d"), DEFAULT_TIMESTAMP + 20L);
+        cachingStore.put(bytesKey("e"), bytesValue("e"), DEFAULT_TIMESTAMP + 20L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 cachingStore.backwardFetch(null, bytesKey("c"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20L))) {
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE)),
+                "c");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+                "b");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+                "a");
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldPutBackwardFetchRangeFromCacheForNullKeyTo() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP + 10L);
+        cachingStore.put(bytesKey("d"), bytesValue("d"), DEFAULT_TIMESTAMP + 20L);
+        cachingStore.put(bytesKey("e"), bytesValue("e"), DEFAULT_TIMESTAMP + 20L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 cachingStore.backwardFetch(bytesKey("c"), null, ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20L))) {
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("e"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
+                "e");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("d"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
+                "d");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE)),
+                "c");
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldPutBackwardFetchRangeFromCacheForNullKeyFromKeyTo() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP + 10L);
+        cachingStore.put(bytesKey("d"), bytesValue("d"), DEFAULT_TIMESTAMP + 20L);
+        cachingStore.put(bytesKey("e"), bytesValue("e"), DEFAULT_TIMESTAMP + 20L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 cachingStore.backwardFetch(null, null, ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20L))) {
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("e"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
+                "e");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("d"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
+                "d");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE)),
+                "c");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+                "b");
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+                "a");
+            assertFalse(iterator.hasNext());
         }
     }
 
@@ -811,16 +991,6 @@ public class CachingPersistentWindowStoreTest {
     @Test
     public void shouldThrowNullPointerExceptionOnFetchNullKey() {
         assertThrows(NullPointerException.class, () -> cachingStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L)));
-    }
-
-    @Test
-    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
-        assertThrows(NullPointerException.class, () -> cachingStore.fetch(null, bytesKey("anyTo"), ofEpochMilli(1L), ofEpochMilli(2L)));
-    }
-
-    @Test
-    public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
-        assertThrows(NullPointerException.class, () -> cachingStore.fetch(bytesKey("anyFrom"), null, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
     @Test
