@@ -460,6 +460,7 @@ object KafkaConfig {
   val NumRecoveryThreadsPerDataDirProp = "num.recovery.threads.per.data.dir"
   val AutoCreateTopicsEnableProp = "auto.create.topics.enable"
   val MinInSyncReplicasProp = "min.insync.replicas"
+  val CreateTopicBrokerFilterPolicyClassNameProp = "create.topic.broker.filter.policy.class.name"
   val CreateTopicPolicyClassNameProp = "create.topic.policy.class.name"
   val AlterConfigPolicyClassNameProp = "alter.config.policy.class.name"
   val LogMessageDownConversionEnableProp = LogConfigPrefix + "message.downconversion.enable"
@@ -832,6 +833,8 @@ object KafkaConfig {
     "produce with acks of \"all\". This will ensure that the producer raises an exception " +
     "if a majority of replicas do not receive a write."
 
+  val CreateTopicBrokerFilterPolicyClassNameDoc = "The class that determines which brokers partitions should be placed on when a " +
+    "new topic is created. The class should implement the <code>org.apache.kafka.server.policy.CreateTopicBrokerFilterPolicy</code> interface."
   val CreateTopicPolicyClassNameDoc = "The create topic policy class that should be used for validation. The class should " +
     "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface."
   val AlterConfigPolicyClassNameDoc = "The alter configs policy class that should be used for validation. The class should " +
@@ -1157,6 +1160,7 @@ object KafkaConfig {
       .define(LogMessageFormatVersionProp, STRING, Defaults.LogMessageFormatVersion, ApiVersionValidator, MEDIUM, LogMessageFormatVersionDoc)
       .define(LogMessageTimestampTypeProp, STRING, Defaults.LogMessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, LogMessageTimestampTypeDoc)
       .define(LogMessageTimestampDifferenceMaxMsProp, LONG, Defaults.LogMessageTimestampDifferenceMaxMs, MEDIUM, LogMessageTimestampDifferenceMaxMsDoc)
+      .define(CreateTopicBrokerFilterPolicyClassNameProp, CLASS, null, LOW, CreateTopicBrokerFilterPolicyClassNameDoc)
       .define(CreateTopicPolicyClassNameProp, CLASS, null, LOW, CreateTopicPolicyClassNameDoc)
       .define(AlterConfigPolicyClassNameProp, CLASS, null, LOW, AlterConfigPolicyClassNameDoc)
       .define(LogMessageDownConversionEnableProp, BOOLEAN, Defaults.MessageDownConversionEnable, LOW, LogMessageDownConversionEnableDoc)

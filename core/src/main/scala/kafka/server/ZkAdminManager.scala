@@ -19,7 +19,7 @@ package kafka.server
 import java.util
 import java.util.Properties
 
-import kafka.admin.{AdminOperationException, AdminUtils}
+import kafka.admin.{AdminOperationException, AdminUtils, BrokerMetadata}
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.utils.Log4jController
@@ -44,7 +44,7 @@ import org.apache.kafka.common.message.{AlterUserScramCredentialsRequestData, Al
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.{ScramMechanism => InternalScramMechanism}
-import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
+import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicBrokerFilterPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
@@ -66,6 +66,9 @@ class ZkAdminManager(val config: KafkaConfig,
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
   private val adminZkClient = new AdminZkClient(zkClient)
   private val configHelper = new ConfigHelper(metadataCache, config, new ZkConfigRepository(adminZkClient))
+
+  private val createTopicBrokerFilterPolicy =
+    Option(config.getConfiguredInstance(KafkaConfig.CreateTopicBrokerFilterPolicyClassNameProp, classOf[CreateTopicBrokerFilterPolicy]))
 
   private val createTopicPolicy =
     Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
@@ -140,6 +143,17 @@ class ZkAdminManager(val config: KafkaConfig,
     }
   }
 
+  private def filterBrokersForPartitionPlacement(allBrokers: Iterable[BrokerMetadata]): Iterable[BrokerMetadata] = {
+    createTopicBrokerFilterPolicy.map {
+      policy =>
+        allBrokers.filter { b =>
+          policy.isAllowedToHostPartitions(new CreateTopicBrokerFilterPolicy.Broker(
+            b.id,
+            b.rack.orNull))
+        }
+    }.getOrElse(allBrokers)
+  }
+
   /**
     * Create topics and wait until the topics have been completely created.
     * The callback function will be triggered either when timeout, error or the topics are created.
@@ -152,7 +166,7 @@ class ZkAdminManager(val config: KafkaConfig,
                    responseCallback: Map[String, ApiError] => Unit): Unit = {
 
     // 1. map over topics creating assignment and calling zookeeper
-    val brokers = metadataCache.getAliveBrokers()
+    val brokers = filterBrokersForPartitionPlacement(metadataCache.getAliveBrokers())
     val metadata = toCreate.values.map(topic =>
       try {
         if (metadataCache.contains(topic.name))
