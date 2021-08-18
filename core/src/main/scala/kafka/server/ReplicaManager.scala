@@ -1339,6 +1339,8 @@ class ReplicaManager(val config: KafkaConfig,
           controllerEpoch = leaderAndIsrRequest.controllerEpoch
 
           val partitionStates = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
+          val partitionsToBeLeader = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
+          val partitionsToBeFollower = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
 
           // First create the partition if it doesn't exist already
           requestPartitionStates.foreach { partitionState =>
@@ -1376,9 +1378,14 @@ class ReplicaManager(val config: KafkaConfig,
               } else if (requestLeaderEpoch > currentLeaderEpoch) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
-                if (partitionState.replicas.contains(localBrokerId))
+                if (partitionState.replicas.contains(localBrokerId)) {
                   partitionStates.put(partition, partitionState)
-                else {
+                  if (partitionState.leader == localBrokerId) {
+                    partitionsToBeLeader.put(partition, partitionState)
+                  } else {
+                    partitionsToBeFollower.put(partition, partitionState)
+                  }
+                } else {
                   stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from controller $controllerId with " +
                     s"correlation id $correlationId epoch $controllerEpoch for partition $topicPartition as itself is not " +
                     s"in assigned replica list ${partitionState.replicas.asScala.mkString(",")}")
@@ -1414,11 +1421,6 @@ class ReplicaManager(val config: KafkaConfig,
             }
           }
 
-          val partitionsToBeLeader = partitionStates.filter { case (_, partitionState) =>
-            partitionState.leader == localBrokerId
-          }
-          val partitionsToBeFollower = partitionStates.filter { case (k, _) => !partitionsToBeLeader.contains(k) }
-
           val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
           val partitionsBecomeLeader = if (partitionsToBeLeader.nonEmpty)
             makeLeaders(controllerId, controllerEpoch, partitionsToBeLeader, correlationId, responseMap,
@@ -1436,17 +1438,15 @@ class ReplicaManager(val config: KafkaConfig,
 
           leaderAndIsrRequest.partitionStates.forEach { partitionState =>
             val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
-            /*
-           * If there is offline log directory, a Partition object may have been created by getOrCreatePartition()
-           * before getOrCreateReplica() failed to create local replica due to KafkaStorageException.
-           * In this case ReplicaManager.allPartitions will map this topic-partition to an empty Partition object.
-           * we need to map this topic-partition to OfflinePartition instead.
-           */
+            // If there is offline log directory, a Partition object may have been created by getOrCreatePartition()
+            // before getOrCreateReplica() failed to create local replica due to KafkaStorageException.
+            // In this case ReplicaManager.allPartitions will map this topic-partition to an empty Partition object.
+            // we need to map this topic-partition to OfflinePartition instead.
             if (localLog(topicPartition).isEmpty)
               markPartitionOffline(topicPartition)
           }
 
-          // we initialize highwatermark thread after the first leaderisrrequest. This ensures that all the partitions
+          // We initialize highwatermark thread after the first LeaderAndIsr request. This ensures that all the partitions
           // have been completely populated before starting the checkpointing there by avoiding weird race conditions
           startHighWatermarkCheckPointThread()
 
