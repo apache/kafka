@@ -1354,11 +1354,12 @@ class GroupCoordinator(val brokerId: Int,
       new InitialDelayedJoin(this,
         rebalancePurgatory,
         group,
+        group.generationId,
         groupConfig.groupInitialRebalanceDelayMs,
         groupConfig.groupInitialRebalanceDelayMs,
         max(group.rebalanceTimeoutMs - groupConfig.groupInitialRebalanceDelayMs, 0))
     else
-      new DelayedJoin(this, group, group.rebalanceTimeoutMs)
+      new DelayedJoin(this, group, group.generationId, group.rebalanceTimeoutMs)
 
     group.transitionTo(PreparingRebalance)
 
@@ -1391,78 +1392,92 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def tryCompleteJoin(group: GroupMetadata, forceComplete: () => Boolean): Boolean = {
+  def tryCompleteJoin(
+    group: GroupMetadata,
+    generationId: Int,
+    forceComplete: () => Boolean
+  ): Boolean = {
     group.inLock {
-      if (group.hasAllMembersJoined)
+      if (generationId != group.generationId) {
         forceComplete()
-      else false
+      } else if (group.hasAllMembersJoined) {
+        forceComplete()
+      } else false
     }
   }
 
-  def onCompleteJoin(group: GroupMetadata): Unit = {
+  def onCompleteJoin(
+    group: GroupMetadata,
+    generationId: Int
+  ): Unit = {
     group.inLock {
-      val notYetRejoinedDynamicMembers = group.notYetRejoinedMembers.filterNot(_._2.isStaticMember)
-      if (notYetRejoinedDynamicMembers.nonEmpty) {
-        info(s"Group ${group.groupId} removed dynamic members " +
-          s"who haven't joined: ${notYetRejoinedDynamicMembers.keySet}")
-
-        notYetRejoinedDynamicMembers.values.foreach { failedMember =>
-          group.remove(failedMember.memberId)
-          removeHeartbeatForLeavingMember(group, failedMember.memberId)
-        }
-      }
-
-      if (group.is(Dead)) {
-        info(s"Group ${group.groupId} is dead, skipping rebalance stage")
-      } else if (!group.maybeElectNewJoinedLeader() && group.allMembers.nonEmpty) {
-        // If all members are not rejoining, we will postpone the completion
-        // of rebalance preparing stage, and send out another delayed operation
-        // until session timeout removes all the non-responsive members.
-        error(s"Group ${group.groupId} could not complete rebalance because no members rejoined")
-        rebalancePurgatory.tryCompleteElseWatch(
-          new DelayedJoin(this, group, group.rebalanceTimeoutMs),
-          Seq(GroupJoinKey(group.groupId)))
+      if (generationId != group.generationId) {
+        error(s"Received unexpected notification of join complete for ${group.groupId} " +
+          s"with an old generation $generationId while the group has ${group.generationId}.")
       } else {
-        group.initNextGeneration()
-        if (group.is(Empty)) {
-          info(s"Group ${group.groupId} with generation ${group.generationId} is now empty " +
-            s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)})")
+        val notYetRejoinedDynamicMembers = group.notYetRejoinedMembers.filterNot(_._2.isStaticMember)
+        if (notYetRejoinedDynamicMembers.nonEmpty) {
+          info(s"Group ${group.groupId} removed dynamic members " +
+            s"who haven't joined: ${notYetRejoinedDynamicMembers.keySet}")
 
-          groupManager.storeGroup(group, Map.empty, error => {
-            if (error != Errors.NONE) {
-              // we failed to write the empty group metadata. If the broker fails before another rebalance,
-              // the previous generation written to the log will become active again (and most likely timeout).
-              // This should be safe since there are no active members in an empty generation, so we just warn.
-              warn(s"Failed to write empty metadata for group ${group.groupId}: ${error.message}")
-            }
-          }, RequestLocal.NoCaching)
-        } else {
-          info(s"Stabilized group ${group.groupId} generation ${group.generationId} " +
-            s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) with ${group.size} members")
-
-          // trigger the awaiting join group response callback for all the members after rebalancing
-          for (member <- group.allMemberMetadata) {
-            val joinResult = JoinGroupResult(
-              members = if (group.isLeader(member.memberId)) {
-                group.currentMemberMetadata
-              } else {
-                List.empty
-              },
-              memberId = member.memberId,
-              generationId = group.generationId,
-              protocolType = group.protocolType,
-              protocolName = group.protocolName,
-              leaderId = group.leaderOrNull,
-              error = Errors.NONE)
-
-            group.maybeInvokeJoinCallback(member, joinResult)
-            completeAndScheduleNextHeartbeatExpiration(group, member)
-            member.isNew = false
-
-            group.addPendingSyncMember(member.memberId)
+          notYetRejoinedDynamicMembers.values.foreach { failedMember =>
+            group.remove(failedMember.memberId)
+            removeHeartbeatForLeavingMember(group, failedMember.memberId)
           }
+        }
 
-          schedulePendingSync(group)
+        if (group.is(Dead)) {
+          info(s"Group ${group.groupId} is dead, skipping rebalance stage")
+        } else if (!group.maybeElectNewJoinedLeader() && group.allMembers.nonEmpty) {
+          // If all members are not rejoining, we will postpone the completion
+          // of rebalance preparing stage, and send out another delayed operation
+          // until session timeout removes all the non-responsive members.
+          error(s"Group ${group.groupId} could not complete rebalance because no members rejoined")
+          rebalancePurgatory.tryCompleteElseWatch(
+            new DelayedJoin(this, group, group.generationId, group.rebalanceTimeoutMs),
+            Seq(GroupJoinKey(group.groupId)))
+        } else {
+          group.initNextGeneration()
+          if (group.is(Empty)) {
+            info(s"Group ${group.groupId} with generation ${group.generationId} is now empty " +
+              s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)})")
+
+            groupManager.storeGroup(group, Map.empty, error => {
+              if (error != Errors.NONE) {
+                // we failed to write the empty group metadata. If the broker fails before another rebalance,
+                // the previous generation written to the log will become active again (and most likely timeout).
+                // This should be safe since there are no active members in an empty generation, so we just warn.
+                warn(s"Failed to write empty metadata for group ${group.groupId}: ${error.message}")
+              }
+            }, RequestLocal.NoCaching)
+          } else {
+            info(s"Stabilized group ${group.groupId} generation ${group.generationId} " +
+              s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) with ${group.size} members")
+
+            // trigger the awaiting join group response callback for all the members after rebalancing
+            for (member <- group.allMemberMetadata) {
+              val joinResult = JoinGroupResult(
+                members = if (group.isLeader(member.memberId)) {
+                  group.currentMemberMetadata
+                } else {
+                  List.empty
+                },
+                memberId = member.memberId,
+                generationId = group.generationId,
+                protocolType = group.protocolType,
+                protocolName = group.protocolName,
+                leaderId = group.leaderOrNull,
+                error = Errors.NONE)
+
+              group.maybeInvokeJoinCallback(member, joinResult)
+              completeAndScheduleNextHeartbeatExpiration(group, member)
+              member.isNew = false
+
+              group.addPendingSyncMember(member.memberId)
+            }
+
+            schedulePendingSync(group)
+          }
         }
       }
     }

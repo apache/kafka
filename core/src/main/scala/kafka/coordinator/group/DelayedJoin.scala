@@ -34,18 +34,19 @@ import scala.math.{max, min}
 private[group] class DelayedJoin(
   coordinator: GroupCoordinator,
   group: GroupMetadata,
+  generationId: Int,
   rebalanceTimeout: Long
 ) extends DelayedRebalance(
   rebalanceTimeout,
   group.lock
 ) {
-  override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete _)
+  override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, generationId, forceComplete _)
 
   override def onExpiration(): Unit = {
     // try to complete delayed actions introduced by coordinator.onCompleteJoin
     tryToCompleteDelayedAction()
   }
-  override def onComplete(): Unit = coordinator.onCompleteJoin(group)
+  override def onComplete(): Unit = coordinator.onCompleteJoin(group, generationId)
 
   // TODO: remove this ugly chain after we move the action queue to handler thread
   private def tryToCompleteDelayedAction(): Unit = coordinator.groupManager.replicaManager.tryCompleteActions()
@@ -63,12 +64,14 @@ private[group] class InitialDelayedJoin(
   coordinator: GroupCoordinator,
   purgatory: DelayedOperationPurgatory[DelayedRebalance],
   group: GroupMetadata,
+  generationId: Int,
   configuredRebalanceDelay: Int,
   delayMs: Int,
   remainingMs: Int
 ) extends DelayedJoin(
   coordinator,
   group,
+  generationId,
   delayMs
 ) {
   override def tryComplete(): Boolean = false
@@ -82,6 +85,7 @@ private[group] class InitialDelayedJoin(
         purgatory.tryCompleteElseWatch(new InitialDelayedJoin(coordinator,
           purgatory,
           group,
+          generationId,
           configuredRebalanceDelay,
           delay,
           remaining
