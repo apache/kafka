@@ -125,8 +125,8 @@ class LogManagerTest {
 
       logManagerForTest.get.shutdown()
 
-      assertFalse(Files.exists(new File(logDir1, Log.CleanShutdownFile).toPath))
-      assertTrue(Files.exists(new File(logDir2, Log.CleanShutdownFile).toPath))
+      assertFalse(Files.exists(new File(logDir1, LogLoader.CleanShutdownFile).toPath))
+      assertTrue(Files.exists(new File(logDir2, LogLoader.CleanShutdownFile).toPath))
     } finally {
       logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
     }
@@ -497,7 +497,7 @@ class LogManagerTest {
     }
   }
 
-  private def readLog(log: Log, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
+  private def readLog(log: UnifiedLog, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
     log.read(offset, maxLength, isolation = FetchLogEnd, minOneMessage = true)
   }
 
@@ -511,7 +511,7 @@ class LogManagerTest {
     val spyConfigRepository = spy(new MockConfigRepository)
     logManager = createLogManager(configRepository = spyConfigRepository)
     val spyLogManager = spy(logManager)
-    val mockLog = mock(classOf[Log])
+    val mockLog = mock(classOf[UnifiedLog])
 
     val testTopicOne = "test-topic-one"
     val testTopicTwo = "test-topic-two"
@@ -566,7 +566,7 @@ class LogManagerTest {
     val spyConfigRepository = spy(new MockConfigRepository)
     logManager = createLogManager(configRepository = spyConfigRepository)
     val spyLogManager = spy(logManager)
-    val mockLog = mock(classOf[Log])
+    val mockLog = mock(classOf[UnifiedLog])
 
     val testTopicOne = "test-topic-one"
     val testTopicTwo = "test-topic-two"

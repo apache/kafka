@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, NoSuchFileException, StandardOpenOption}
 import java.util.concurrent.ConcurrentSkipListMap
-import kafka.log.Log.offsetFromFile
+import kafka.log.UnifiedLog.offsetFromFile
 import kafka.server.LogOffsetMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe, threadsafe}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -452,7 +452,7 @@ object ProducerStateManager {
     }
   }
 
-  private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(Log.ProducerSnapshotFileSuffix)
+  private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(UnifiedLog.ProducerSnapshotFileSuffix)
 
   // visible for testing
   private[log] def listSnapshotFiles(dir: File): Seq[SnapshotFile] = {
@@ -717,7 +717,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   def takeSnapshot(): Unit = {
     // If not a new offset, then it is not worth taking another snapshot
     if (lastMapOffset > lastSnapOffset) {
-      val snapshotFile = SnapshotFile(Log.producerSnapshotFile(_logDir, lastMapOffset))
+      val snapshotFile = SnapshotFile(UnifiedLog.producerSnapshotFile(_logDir, lastMapOffset))
       val start = time.hiResClockMs()
       writeSnapshot(snapshotFile.file, producers)
       info(s"Wrote producer snapshot at offset $lastMapOffset with ${producers.size} producer ids in ${time.hiResClockMs() - start} ms.")
@@ -857,7 +857,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       // deletion, so ignoring the exception here just means that the intended operation was
       // already completed.
       try {
-        snapshot.renameTo(Log.DeletedFileSuffix)
+        snapshot.renameTo(UnifiedLog.DeletedFileSuffix)
         Some(snapshot)
       } catch {
         case _: NoSuchFileException =>

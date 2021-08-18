@@ -23,7 +23,6 @@ import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Optional, Properties, Random}
-
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
@@ -133,13 +132,14 @@ class KafkaApisTest {
       val properties = TestUtils.createBrokerConfig(brokerId, "")
       properties.put(KafkaConfig.NodeIdProp, brokerId.toString)
       properties.put(KafkaConfig.ProcessRolesProp, "broker")
+      val voterId = (brokerId + 1)
+      properties.put(KafkaConfig.QuorumVotersProp, s"$voterId@localhost:9093")
       properties
     } else {
       TestUtils.createBrokerConfig(brokerId, "zk")
     }
     overrideProperties.foreach( p => properties.put(p._1, p._2))
-    properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
-    properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
+    TestUtils.setIbpAndMessageFormatVersions(properties, interBrokerProtocolVersion)
     val config = new KafkaConfig(properties)
 
     val forwardingManagerOpt = if (enableForwarding)
@@ -301,7 +301,9 @@ class KafkaApisTest {
         Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava))
     val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false).build(requestHeader.apiVersion)
 
-    val request = buildRequestWithEnvelope(alterConfigsRequest, fromPrivilegedListener = true)
+    val request = TestUtils.buildRequestWithEnvelope(
+      alterConfigsRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds())
+
     val capturedResponse = EasyMock.newCapture[AbstractResponse]()
     val capturedRequest = EasyMock.newCapture[RequestChannel.Request]()
 
@@ -335,7 +337,9 @@ class KafkaApisTest {
 
     EasyMock.expect(controller.isActive).andReturn(true)
 
-    val request = buildRequestWithEnvelope(leaveGroupRequest, fromPrivilegedListener = true)
+    val request = TestUtils.buildRequestWithEnvelope(
+      leaveGroupRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds())
+
     val capturedResponse = expectNoThrottling(request)
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, controller)
@@ -388,8 +392,8 @@ class KafkaApisTest {
     val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false)
       .build(requestHeader.apiVersion)
 
-    val request = buildRequestWithEnvelope(alterConfigsRequest,
-      fromPrivilegedListener = fromPrivilegedListener)
+    val request = TestUtils.buildRequestWithEnvelope(
+      alterConfigsRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds(), fromPrivilegedListener)
 
     val capturedResponse = EasyMock.newCapture[AbstractResponse]()
     if (shouldCloseConnection) {
@@ -3256,37 +3260,6 @@ class KafkaApisTest {
     (writeTxnMarkersRequest, buildRequest(writeTxnMarkersRequest))
   }
 
-  private def buildRequestWithEnvelope(
-    request: AbstractRequest,
-    fromPrivilegedListener: Boolean,
-    principalSerde: KafkaPrincipalSerde = kafkaPrincipalSerde
-  ): RequestChannel.Request = {
-    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-
-    val requestHeader = new RequestHeader(request.apiKey, request.version, clientId, 0)
-    val requestBuffer = request.serializeWithHeader(requestHeader)
-
-    val envelopeHeader = new RequestHeader(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion(), clientId, 0)
-    val envelopeBuffer = new EnvelopeRequest.Builder(
-      requestBuffer,
-      principalSerde.serialize(KafkaPrincipal.ANONYMOUS),
-      InetAddress.getLocalHost.getAddress
-    ).build().serializeWithHeader(envelopeHeader)
-    val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
-      KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
-      fromPrivilegedListener, Optional.of(principalSerde))
-
-    RequestHeader.parse(envelopeBuffer)
-    new RequestChannel.Request(
-      processor = 1,
-      context = envelopeContext,
-      startTimeNanos = time.nanoseconds(),
-      memoryPool = MemoryPool.NONE,
-      buffer = envelopeBuffer,
-      metrics = requestChannelMetrics
-    )
-  }
-
   private def buildRequest(request: AbstractRequest,
                            listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
                            fromPrivilegedListener: Boolean = false,
@@ -4026,5 +3999,11 @@ class KafkaApisTest {
   def testRaftShouldAlwaysForwardUpdateFeatures(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleUpdateFeatures)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardListPartitionReassignments(): Unit = {
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleListPartitionReassignmentsRequest)
   }
 }

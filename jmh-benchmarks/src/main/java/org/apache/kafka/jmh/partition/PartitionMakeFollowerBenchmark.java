@@ -17,6 +17,7 @@
 
 package org.apache.kafka.jmh.partition;
 
+import kafka.api.ApiVersion;
 import kafka.api.ApiVersion$;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.IsrChangeListener;
@@ -111,6 +112,7 @@ public class PartitionMakeFollowerBenchmark {
             10000L,
             1000L,
             60000,
+            ApiVersion.latestVersion(),
             scheduler,
             brokerTopicStats,
             logDirFailureChannel,
@@ -174,7 +176,6 @@ public class PartitionMakeFollowerBenchmark {
         logProps.put(LogConfig.MaxMessageBytesProp(), Defaults.MaxMessageSize());
         logProps.put(LogConfig.IndexIntervalBytesProp(), Defaults.IndexInterval());
         logProps.put(LogConfig.SegmentIndexBytesProp(), Defaults.MaxIndexSize());
-        logProps.put(LogConfig.MessageFormatVersionProp(), Defaults.MessageFormatVersion());
         logProps.put(LogConfig.FileDeleteDelayMsProp(), Defaults.FileDeleteDelayMs());
         return LogConfig.apply(logProps, new scala.collection.immutable.HashSet<>());
     }

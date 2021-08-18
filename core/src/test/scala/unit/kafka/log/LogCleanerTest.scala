@@ -103,11 +103,11 @@ class LogCleanerTest {
     logProps.put(LogConfig.SegmentBytesProp, 1024 : java.lang.Integer)
     logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete)
     val config = LogConfig.fromProps(logConfig.originals, logProps)
-    val topicPartition = Log.parseTopicPartitionName(dir)
+    val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val maxProducerIdExpirationMs = 60 * 60 * 1000
     val logSegments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs, time)
     val offsets = LogLoader.load(LoadLogParams(
       dir,
@@ -123,29 +123,22 @@ class LogCleanerTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager))
-
-    val log = new Log(dir,
-                      config = config,
-                      segments = logSegments,
-                      logStartOffset = offsets.logStartOffset,
-                      recoveryPoint = offsets.recoveryPoint,
-                      nextOffsetMetadata = offsets.nextOffsetMetadata,
-                      scheduler = time.scheduler,
+    val localLog = new LocalLog(dir, config, logSegments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, time.scheduler, time, topicPartition, logDirFailureChannel)
+    val log = new UnifiedLog(offsets.logStartOffset,
+                      localLog,
                       brokerTopicStats = new BrokerTopicStats,
-                      time,
                       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-                      topicPartition = topicPartition,
                       leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
-                      logDirFailureChannel = logDirFailureChannel,
                       _topicId = None,
                       keepPartitionMetadataFile = true) {
-      override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
+      override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment]): Unit = {
         deleteStartLatch.countDown()
         if (!deleteCompleteLatch.await(5000, TimeUnit.MILLISECONDS)) {
           throw new IllegalStateException("Log segment deletion timed out")
         }
-        super.replaceSegments(newSegments, oldSegments, isRecoveredSwapFile)
+        super.replaceSegments(newSegments, oldSegments)
       }
     }
 
@@ -171,7 +164,7 @@ class LogCleanerTest {
 
     // Remember reference to the first log and determine its file name expected for async deletion
     val firstLogFile = log.logSegments.head.log
-    val expectedFileName = CoreUtils.replaceSuffix(firstLogFile.file.getPath, "", Log.DeletedFileSuffix)
+    val expectedFileName = CoreUtils.replaceSuffix(firstLogFile.file.getPath, "", UnifiedLog.DeletedFileSuffix)
 
     // Clean the log. This should trigger replaceSegments() and deleteOldSegments();
     val offsetMap = new FakeOffsetMap(Int.MaxValue)
@@ -796,7 +789,7 @@ class LogCleanerTest {
     )
   }
 
-  def createLogWithMessagesLargerThanMaxSize(largeMessageSize: Int): (Log, FakeOffsetMap) = {
+  def createLogWithMessagesLargerThanMaxSize(largeMessageSize: Int): (UnifiedLog, FakeOffsetMap) = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, largeMessageSize * 16: java.lang.Integer)
     logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize * 2: java.lang.Integer)
@@ -810,7 +803,7 @@ class LogCleanerTest {
 
     // Decrease the log's max message size
     logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize / 2: java.lang.Integer)
-    log.config = LogConfig.fromProps(logConfig.originals, logProps)
+    log.updateConfig(LogConfig.fromProps(logConfig.originals, logProps))
 
     // pretend we have the following keys
     val keys = immutable.ListSet(1, 3, 5, 7, 9)
@@ -1085,22 +1078,22 @@ class LogCleanerTest {
     assertEquals(numInvalidMessages, stats.invalidMessagesRead, "Cleaner should have seen %d invalid messages.")
   }
 
-  def lastOffsetsPerBatchInLog(log: Log): Iterable[Long] = {
+  def lastOffsetsPerBatchInLog(log: UnifiedLog): Iterable[Long] = {
     for (segment <- log.logSegments; batch <- segment.log.batches.asScala)
       yield batch.lastOffset
   }
 
-  def lastSequencesInLog(log: Log): Map[Long, Int] = {
+  def lastSequencesInLog(log: UnifiedLog): Map[Long, Int] = {
     (for (segment <- log.logSegments;
           batch <- segment.log.batches.asScala if !batch.isControlBatch && batch.hasProducerId)
       yield batch.producerId -> batch.lastSequence).toMap
   }
 
   /* extract all the offsets from a log */
-  def offsetsInLog(log: Log): Iterable[Long] =
+  def offsetsInLog(log: UnifiedLog): Iterable[Long] =
     log.logSegments.flatMap(s => s.log.records.asScala.filter(_.hasValue).filter(_.hasKey).map(m => m.offset))
 
-  def unkeyedMessageCountInLog(log: Log) =
+  def unkeyedMessageCountInLog(log: UnifiedLog) =
     log.logSegments.map(s => s.log.records.asScala.filter(_.hasValue).count(m => !m.hasKey)).sum
 
   def abortCheckDone(topicPartition: TopicPartition): Unit = {
@@ -1445,9 +1438,9 @@ class LogCleanerTest {
 
     // 1) Simulate recovery just after .cleaned file is created, before rename to .swap
     //    On recovery, clean operation is aborted. All messages should be present in the log
-    log.logSegments.head.changeFileSuffixes("", Log.CleanedFileSuffix)
-    for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")), false)
+    log.logSegments.head.changeFileSuffixes("", UnifiedLog.CleanedFileSuffix)
+    for (file <- dir.listFiles if file.getName.endsWith(UnifiedLog.DeletedFileSuffix)) {
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, UnifiedLog.DeletedFileSuffix, "")), false)
     }
     log = recoverAndCheck(config, allKeys)
 
@@ -1461,10 +1454,10 @@ class LogCleanerTest {
 
     // 2) Simulate recovery just after .cleaned file is created, and a subset of them are renamed to .swap
     //    On recovery, clean operation is aborted. All messages should be present in the log
-    log.logSegments.head.changeFileSuffixes("", Log.CleanedFileSuffix)
-    log.logSegments.head.log.renameTo(new File(CoreUtils.replaceSuffix(log.logSegments.head.log.file.getPath, Log.CleanedFileSuffix, Log.SwapFileSuffix)))
-    for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")), false)
+    log.logSegments.head.changeFileSuffixes("", UnifiedLog.CleanedFileSuffix)
+    log.logSegments.head.log.renameTo(new File(CoreUtils.replaceSuffix(log.logSegments.head.log.file.getPath, UnifiedLog.CleanedFileSuffix, UnifiedLog.SwapFileSuffix)))
+    for (file <- dir.listFiles if file.getName.endsWith(UnifiedLog.DeletedFileSuffix)) {
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, UnifiedLog.DeletedFileSuffix, "")), false)
     }
     log = recoverAndCheck(config, allKeys)
 
@@ -1478,9 +1471,9 @@ class LogCleanerTest {
 
     // 3) Simulate recovery just after swap file is created, before old segment files are
     //    renamed to .deleted. Clean operation is resumed during recovery.
-    log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
-    for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")), false)
+    log.logSegments.head.changeFileSuffixes("", UnifiedLog.SwapFileSuffix)
+    for (file <- dir.listFiles if file.getName.endsWith(UnifiedLog.DeletedFileSuffix)) {
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, UnifiedLog.DeletedFileSuffix, "")), false)
     }
     log = recoverAndCheck(config, cleanedKeys)
 
@@ -1499,7 +1492,7 @@ class LogCleanerTest {
 
     // 4) Simulate recovery after swap file is created and old segments files are renamed
     //    to .deleted. Clean operation is resumed during recovery.
-    log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
+    log.logSegments.head.changeFileSuffixes("", UnifiedLog.SwapFileSuffix)
     log = recoverAndCheck(config, cleanedKeys)
 
     // add some more messages and clean the log again
@@ -1517,7 +1510,7 @@ class LogCleanerTest {
 
     // 5) Simulate recovery after a subset of swap files are renamed to regular files and old segments files are renamed
     //    to .deleted. Clean operation is resumed during recovery.
-    log.logSegments.head.timeIndex.file.renameTo(new File(CoreUtils.replaceSuffix(log.logSegments.head.timeIndex.file.getPath, "", Log.SwapFileSuffix)))
+    log.logSegments.head.timeIndex.file.renameTo(new File(CoreUtils.replaceSuffix(log.logSegments.head.timeIndex.file.getPath, "", UnifiedLog.SwapFileSuffix)))
     log = recoverAndCheck(config, cleanedKeys)
 
     // add some more messages and clean the log again
@@ -1732,7 +1725,7 @@ class LogCleanerTest {
   def testMaxCleanTimeSecs(): Unit = {
     val logCleaner = new LogCleaner(new CleanerConfig,
       logDirs = Array(TestUtils.tempDir()),
-      logs = new Pool[TopicPartition, Log](),
+      logs = new Pool[TopicPartition, UnifiedLog](),
       logDirFailureChannel = new LogDirFailureChannel(1),
       time = time)
 
@@ -1750,7 +1743,7 @@ class LogCleanerTest {
   }
 
 
-  private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
+  private def writeToLog(log: UnifiedLog, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.appendAsFollower(messageWithOffset(key, value, offset)).lastOffset
   }
@@ -1786,7 +1779,7 @@ class LogCleanerTest {
     messageWithOffset(key.toString.getBytes, value.toString.getBytes, offset)
 
   private def makeLog(dir: File = dir, config: LogConfig = logConfig, recoveryPoint: Long = 0L) =
-    Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = recoveryPoint, scheduler = time.scheduler,
+    UnifiedLog(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = recoveryPoint, scheduler = time.scheduler,
       time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
@@ -1801,7 +1794,7 @@ class LogCleanerTest {
                 time = time,
                 checkDone = checkDone)
 
-  private def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
+  private def writeToLog(log: UnifiedLog, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for ((key, value) <- seq)
       yield log.appendAsLeader(record(key, value), leaderEpoch = 0).firstOffset.get.messageOffset
   }
@@ -1817,7 +1810,7 @@ class LogCleanerTest {
       partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
   }
 
-  private def appendTransactionalAsLeader(log: Log,
+  private def appendTransactionalAsLeader(log: UnifiedLog,
                                           producerId: Long,
                                           producerEpoch: Short,
                                           leaderEpoch: Int = 0,
@@ -1825,7 +1818,7 @@ class LogCleanerTest {
     appendIdempotentAsLeader(log, producerId, producerEpoch, isTransactional = true, origin = origin)
   }
 
-  private def appendIdempotentAsLeader(log: Log,
+  private def appendIdempotentAsLeader(log: UnifiedLog,
                                        producerId: Long,
                                        producerEpoch: Short,
                                        isTransactional: Boolean = false,
@@ -1867,7 +1860,7 @@ class LogCleanerTest {
 
   private def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
 
-  private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long]): Log = {
+  private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long]): UnifiedLog = {
     LogTestUtils.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats(), time, time.scheduler)
   }
 

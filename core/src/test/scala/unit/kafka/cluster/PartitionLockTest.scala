@@ -280,11 +280,11 @@ class PartitionLockTest extends Logging {
         }
       }
 
-      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Log = {
+      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): UnifiedLog = {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.messageFormatVersion.recordVersion, "")
+        val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxProducerIdExpirationMs = 60 * 60 * 1000
         val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, maxProducerIdExpirationMs)
         val offsets = LogLoader.load(LoadLogParams(
@@ -301,7 +301,10 @@ class PartitionLockTest extends Logging {
           maxProducerIdExpirationMs,
           leaderEpochCache,
           producerStateManager))
-        new SlowLog(log, segments, offsets, leaderEpochCache, producerStateManager, mockTime, logDirFailureChannel, appendSemaphore)
+        val localLog = new LocalLog(log.dir, log.config, segments, offsets.recoveryPoint,
+          offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, log.topicPartition,
+          logDirFailureChannel)
+        new SlowLog(log, offsets.logStartOffset, localLog, leaderEpochCache, producerStateManager, appendSemaphore)
       }
     }
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
@@ -364,29 +367,19 @@ class PartitionLockTest extends Logging {
   }
 
   private class SlowLog(
-    log: Log,
-    segments: LogSegments,
-    offsets: LoadedLogOffsets,
+    log: UnifiedLog,
+    logStartOffset: Long,
+    localLog: LocalLog,
     leaderEpochCache: Option[LeaderEpochFileCache],
     producerStateManager: ProducerStateManager,
-    mockTime: MockTime,
-    logDirFailureChannel: LogDirFailureChannel,
     appendSemaphore: Semaphore
-  ) extends Log(
-    log.dir,
-    log.config,
-    segments,
-    offsets.logStartOffset,
-    offsets.recoveryPoint,
-    offsets.nextOffsetMetadata,
-    mockTime.scheduler,
+  ) extends UnifiedLog(
+    logStartOffset,
+    localLog,
     new BrokerTopicStats,
-    mockTime,
     log.producerIdExpirationCheckIntervalMs,
-    log.topicPartition,
     leaderEpochCache,
     producerStateManager,
-    logDirFailureChannel,
     _topicId = None,
     keepPartitionMetadataFile = true) {
 

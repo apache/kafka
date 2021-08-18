@@ -31,9 +31,10 @@ import kafka.metrics.KafkaYammerMetrics
 import kafka.network.SocketServer
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
-import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, ClientQuotaMetadataManager, KRaftMetadataCache}
+import kafka.server.KafkaRaftServer.ControllerRole
+import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, SnapshotWriterBuilder}
 import kafka.utils.{CoreUtils, KafkaScheduler}
-//import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
+import org.apache.kafka.snapshot.SnapshotWriter
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.metrics.Metrics
@@ -44,13 +45,29 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.{RaftClient, RaftConfig}
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
+import scala.compat.java8.OptionConverters._
+
+
+class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
+    extends SnapshotWriterBuilder {
+  override def build(committedOffset: Long,
+                     committedEpoch: Int,
+                     lastContainedLogTime: Long): SnapshotWriter[ApiMessageAndVersion] = {
+    raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime).
+        asScala.getOrElse(
+      throw new RuntimeException("A snapshot already exists with " +
+        s"committedOffset=${committedOffset}, committedEpoch=${committedEpoch}, " +
+        s"lastContainedLogTime=${lastContainedLogTime}")
+    )
+  }
+}
 
 /**
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
@@ -96,7 +113,7 @@ class BrokerServer(
 
   var dynamicConfigHandlers: Map[String, ConfigHandler] = null
 
-  var replicaManager: ReplicaManager = null
+  @volatile private[this] var _replicaManager: ReplicaManager = null
 
   var credentialProvider: CredentialProvider = null
   var tokenCache: DelegationTokenCache = null
@@ -129,6 +146,8 @@ class BrokerServer(
 
   val clusterId: String = metaProps.clusterId
 
+  var metadataSnapshotter: Option[BrokerMetadataSnapshotter] = None
+
   var metadataListener: BrokerMetadataListener = null
 
   var metadataPublisher: BrokerMetadataPublisher = null
@@ -153,6 +172,8 @@ class BrokerServer(
     }
     true
   }
+
+  def replicaManager: ReplicaManager = _replicaManager
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
@@ -231,7 +252,7 @@ class BrokerServer(
       )
       alterIsrManager.start()
 
-      this.replicaManager = new ReplicaManager(config, metrics, time, None,
+      this._replicaManager = new ReplicaManager(config, metrics, time, None,
         kafkaScheduler, logManager, isShuttingDown, quotaManagers,
         brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager,
         threadNamePrefix)
@@ -271,14 +292,28 @@ class BrokerServer(
         ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
 
-      metadataListener = new BrokerMetadataListener(config.nodeId, time, threadNamePrefix)
+      if (!config.processRoles.contains(ControllerRole)) {
+        // If no controller is defined, we rely on the broker to generate snapshots.
+        metadataSnapshotter = Some(new BrokerMetadataSnapshotter(
+          config.nodeId,
+          time,
+          threadNamePrefix,
+          new BrokerSnapshotWriterBuilder(raftManager.client)
+        ))
+      }
+
+      metadataListener = new BrokerMetadataListener(config.nodeId,
+                                                    time,
+                                                    threadNamePrefix,
+                                                    config.metadataSnapshotMaxNewRecordBytes,
+                                                    metadataSnapshotter)
 
       val networkListeners = new ListenerCollection()
       config.advertisedListeners.foreach { ep =>
         networkListeners.add(new Listener().
           setHost(if (Utils.isBlank(ep.host)) InetAddress.getLocalHost.getCanonicalHostName else ep.host).
           setName(ep.listenerName.value()).
-          setPort(socketServer.boundPort(ep.listenerName)).
+          setPort(if (ep.port == 0) socketServer.boundPort(ep.listenerName) else ep.port).
           setSecurityProtocol(ep.securityProtocol.id))
       }
       lifecycleManager.start(() => metadataListener.highestMetadataOffset(),
@@ -356,6 +391,9 @@ class BrokerServer(
       // a potentially lengthy recovery-from-unclean-shutdown operation here, if required.
       metadataListener.startPublishing(metadataPublisher).get()
 
+      // Log static broker configurations.
+      new KafkaConfig(config.originals(), true)
+
       // Enable inbound TCP connections.
       socketServer.startProcessingRequests(authorizerFutures)
 
@@ -408,10 +446,11 @@ class BrokerServer(
       if (controlPlaneRequestProcessor != null)
         CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
       CoreUtils.swallow(authorizer.foreach(_.close()), this)
-
       if (metadataListener !=  null) {
         CoreUtils.swallow(metadataListener.close(), this)
       }
+      metadataSnapshotter.foreach(snapshotter => CoreUtils.swallow(snapshotter.close(), this))
+
       if (transactionCoordinator != null)
         CoreUtils.swallow(transactionCoordinator.shutdown(), this)
       if (groupCoordinator != null)

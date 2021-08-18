@@ -210,7 +210,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     TestUtils.waitUntilTrue(() => log.size == 0, "Log should be empty")
   }
 
-  private def readFromLog(log: Log): Iterable[(Int, Int)] = {
+  private def readFromLog(log: UnifiedLog): Iterable[(Int, Int)] = {
     for (segment <- log.logSegments; record <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(record.key).toInt
       val value = TestUtils.readString(record.value).toInt
@@ -218,7 +218,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     }
   }
 
-  private def writeKeyDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionType, timestamp: Long, 
+  private def writeKeyDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType, timestamp: Long,
                            startValue: Int, step: Int, isRecordTombstone: Boolean = false): Seq[(Int, Int)] = {
     var valCounter = startValue
     for (_ <- 0 until numDups; key <- 0 until numKeys) yield {
@@ -229,6 +229,8 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
       else 
         log.appendAsLeader(TestUtils.singletonRecords(value = curValue.toString.getBytes, codec = codec,
           key = key.toString.getBytes, timestamp = timestamp), leaderEpoch = 0)
+
+      log.updateHighWatermark(log.logEndOffset)
       valCounter += step
       (key, curValue)
     }

@@ -90,7 +90,7 @@ import scala.util.control.ControlThrowable
  */
 class LogCleaner(initialConfig: CleanerConfig,
                  val logDirs: Seq[File],
-                 val logs: Pool[TopicPartition, Log],
+                 val logs: Pool[TopicPartition, UnifiedLog],
                  val logDirFailureChannel: LogDirFailureChannel,
                  time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup with BrokerReconfigurable
 {
@@ -272,7 +272,7 @@ class LogCleaner(initialConfig: CleanerConfig,
     * retention threads need to make this call to obtain:
     * @return A list of log partitions that retention threads can safely work on
     */
-  def pauseCleaningForNonCompactedPartitions(): Iterable[(TopicPartition, Log)] = {
+  def pauseCleaningForNonCompactedPartitions(): Iterable[(TopicPartition, UnifiedLog)] = {
     cleanerManager.pauseCleaningForNonCompactedPartitions()
   }
 
@@ -356,7 +356,7 @@ class LogCleaner(initialConfig: CleanerConfig,
             case e: Exception => throw new LogCleaningException(cleanable.log, e.getMessage, e)
           }
       }
-      val deletable: Iterable[(TopicPartition, Log)] = cleanerManager.deletableLogs()
+      val deletable: Iterable[(TopicPartition, UnifiedLog)] = cleanerManager.deletableLogs()
       try {
         deletable.foreach { case (_, log) =>
           try {
@@ -448,12 +448,6 @@ object LogCleaner {
       backOffMs = config.logCleanerBackoffMs,
       enableCleaner = config.logCleanerEnable)
 
-  }
-
-  def createNewCleanedSegment(dir: File, logConfig: LogConfig, baseOffset: Long): LogSegment = {
-    LogSegment.deleteIfExists(dir, baseOffset, fileSuffix = Log.CleanedFileSuffix)
-    LogSegment.open(dir, baseOffset, logConfig, Time.SYSTEM,
-      fileSuffix = Log.CleanedFileSuffix, initFileSize = logConfig.initFileSize, preallocate = logConfig.preallocate)
   }
 }
 
@@ -557,7 +551,7 @@ private[log] class Cleaner(val id: Int,
    *                            of the grouped segments
    * @param legacyDeleteHorizonMs The delete horizon used for tombstones whose version is less than 2
    */
-  private[log] def cleanSegments(log: Log,
+  private[log] def cleanSegments(log: UnifiedLog,
                                  segments: Seq[LogSegment],
                                  map: OffsetMap,
                                  currentTime: Long,
@@ -565,7 +559,7 @@ private[log] class Cleaner(val id: Int,
                                  transactionMetadata: CleanedTransactionMetadata,
                                  legacyDeleteHorizonMs: Long = -1L): Unit = {
     // create a new segment with a suffix appended to the name of the log and indexes
-    val cleaned = LogCleaner.createNewCleanedSegment(log.dir, log.config, segments.head.baseOffset)
+    val cleaned = UnifiedLog.createNewCleanedSegment(log.dir, log.config, segments.head.baseOffset)
     transactionMetadata.cleanedIndex = Some(cleaned.txnIndex)
 
     try {
@@ -913,7 +907,7 @@ private[log] class Cleaner(val id: Int,
    * @param map The map in which to store the mappings
    * @param stats Collector for cleaning statistics
    */
-  private[log] def buildOffsetMap(log: Log,
+  private[log] def buildOffsetMap(log: UnifiedLog,
                                   start: Long,
                                   end: Long,
                                   map: OffsetMap,
@@ -1100,7 +1094,7 @@ private class CleanerStats(time: Time = Time.SYSTEM) {
   * and whether it needs compaction immediately.
   */
 private case class LogToClean(topicPartition: TopicPartition,
-                              log: Log,
+                              log: UnifiedLog,
                               firstDirtyOffset: Long,
                               uncleanableOffset: Long,
                               needCompactionNow: Boolean = false) extends Ordered[LogToClean] {

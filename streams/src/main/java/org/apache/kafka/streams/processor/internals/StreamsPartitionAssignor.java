@@ -77,8 +77,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static java.util.Comparator.comparingLong;
 import static java.util.UUID.randomUUID;
+
+import static org.apache.kafka.common.utils.Utils.filterMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsFuture;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
@@ -248,12 +249,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         handleRebalanceStart(topics);
         uniqueField++;
 
+        final Set<String> currentNamedTopologies = taskManager.topologyMetadata().namedTopologiesView();
+
+        // If using NamedTopologies, filter out any that are no longer recognized/have been removed
+        final Map<TaskId, Long> taskOffsetSums = taskManager.topologyMetadata().hasNamedTopologies() ?
+            filterMap(taskManager.getTaskOffsetSums(), t -> currentNamedTopologies.contains(t.getKey().topologyName())) :
+            taskManager.getTaskOffsetSums();
+
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
             LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
             userEndPoint,
-            taskManager.getTaskOffsetSums(),
+            taskOffsetSums,
             uniqueField,
             assignmentErrorCode.get()
         ).encode();
@@ -370,7 +378,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // construct the assignment of tasks to clients
 
-            final Map<Subtopology, TopicsInfo> topicGroups = taskManager.builder().topicGroups();
+            final Map<Subtopology, TopicsInfo> topicGroups = taskManager.topologyMetadata().topicGroups();
+
             final Set<String> allSourceTopics = new HashSet<>();
             final Map<Subtopology, Set<String>> sourceTopicsByGroup = new HashMap<>();
             for (final Map.Entry<Subtopology, TopicsInfo> entry : topicGroups.entrySet()) {
@@ -476,7 +485,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private Map<TopicPartition, PartitionInfo> prepareRepartitionTopics(final Cluster metadata) {
 
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            taskManager.builder(),
+            taskManager.topologyMetadata(),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             metadata,
@@ -515,7 +524,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
             allAssignedPartitions.addAll(partitions);
 
-            tasksForTopicGroup.computeIfAbsent(new Subtopology(id.subtopology(), id.namedTopology()), k -> new HashSet<>()).add(id);
+            tasksForTopicGroup.computeIfAbsent(new Subtopology(id.subtopology(), id.topologyName()), k -> new HashSet<>()).add(id);
         }
 
         checkAllPartitions(allSourceTopics, partitionsForTask, allAssignedPartitions, fullMetadata);
@@ -578,11 +587,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean lagComputationSuccessful =
             populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogTopics);
 
+        log.info("All members participating in this rebalance: \n{}.",
+                 clientStates.entrySet().stream()
+                     .map(entry -> entry.getKey() + ": " + entry.getValue().consumers())
+                     .collect(Collectors.joining(Utils.NL)));
+
         final Set<TaskId> allTasks = partitionsForTask.keySet();
         statefulTasks.addAll(changelogTopics.statefulTaskIds());
 
-        log.debug("Assigning tasks {} to clients {} with number of replicas {}",
-            allTasks, clientStates, numStandbyReplicas());
+        log.debug("Assigning tasks {} including stateful {} to clients {} with number of replicas {}",
+            allTasks, statefulTasks, clientStates, numStandbyReplicas());
 
         final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
 
@@ -661,6 +675,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             state.computeTaskLags(uuid, allTaskEndOffsetSums);
             clientStates.put(uuid, state);
         }
+
         return fetchEndOffsetsSuccessful;
     }
 
@@ -1034,7 +1049,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             for (final String consumer : consumers) {
                 final List<TaskId> threadAssignment = assignment.get(consumer);
 
-                for (final TaskId task : getPreviousTasksByLag(state, consumer)) {
+                for (final TaskId task : state.prevTasksByLag(consumer)) {
                     if (unassignedStatefulTasks.contains(task)) {
                         if (threadAssignment.size() < minStatefulTasksPerThread) {
                             threadAssignment.add(task);
@@ -1116,12 +1131,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         return assignment;
-    }
-
-    private static SortedSet<TaskId> getPreviousTasksByLag(final ClientState state, final String consumer) {
-        final SortedSet<TaskId> prevTasksByLag = new TreeSet<>(comparingLong(state::lagFor).thenComparing(TaskId::compareTo));
-        prevTasksByLag.addAll(state.prevOwnedStatefulTasksByConsumer(consumer));
-        return prevTasksByLag;
     }
 
     private void validateMetadataVersions(final int receivedAssignmentMetadataVersion,

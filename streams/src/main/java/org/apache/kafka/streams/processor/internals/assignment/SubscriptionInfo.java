@@ -136,7 +136,7 @@ public class SubscriptionInfo {
             final TaskId task = t.getKey();
             taskOffsetSum.setTopicGroupId(task.subtopology());
             taskOffsetSum.setPartition(task.partition());
-            taskOffsetSum.setNamedTopology(task.namedTopology());
+            taskOffsetSum.setNamedTopology(task.topologyName());
             taskOffsetSum.setOffsetSum(t.getValue());
             return taskOffsetSum;
         }).collect(Collectors.toList()));
@@ -147,7 +147,7 @@ public class SubscriptionInfo {
         final Map<Integer, List<SubscriptionInfoData.PartitionToOffsetSum>> topicGroupIdToPartitionOffsetSum = new HashMap<>();
         for (final Map.Entry<TaskId, Long> taskEntry : taskOffsetSums.entrySet()) {
             final TaskId task = taskEntry.getKey();
-            if (task.namedTopology() != null) {
+            if (task.topologyName() != null) {
                 throw new TaskAssignmentException("Named topologies are not compatible with older protocol versions");
             }
             topicGroupIdToPartitionOffsetSum.computeIfAbsent(task.subtopology(), t -> new ArrayList<>()).add(
@@ -170,7 +170,7 @@ public class SubscriptionInfo {
         final Set<TaskId> standbyTasks = new HashSet<>();
 
         for (final Map.Entry<TaskId, Long> taskOffsetSum : taskOffsetSums.entrySet()) {
-            if (taskOffsetSum.getKey().namedTopology() != null) {
+            if (taskOffsetSum.getKey().topologyName() != null) {
                 throw new TaskAssignmentException("Named topologies are not compatible with older protocol versions");
             }
             if (taskOffsetSum.getValue() == Task.LATEST_OFFSET) {

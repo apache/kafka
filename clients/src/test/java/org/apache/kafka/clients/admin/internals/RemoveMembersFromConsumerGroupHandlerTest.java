@@ -63,43 +63,69 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
     @Test
     public void testSuccessfulHandleResponse() {
         Map<MemberIdentity, Errors> responseData = Collections.singletonMap(m1, Errors.NONE);
-        assertCompleted(handleWithError(Errors.NONE), responseData);
+        assertCompleted(handleWithGroupError(Errors.NONE), responseData);
     }
 
     @Test
     public void testUnmappedHandleResponse() {
-        assertUnmapped(handleWithError(Errors.NOT_COORDINATOR));
+        assertUnmapped(handleWithGroupError(Errors.COORDINATOR_NOT_AVAILABLE));
+        assertUnmapped(handleWithGroupError(Errors.NOT_COORDINATOR));
     }
 
     @Test
     public void testRetriableHandleResponse() {
-        assertRetriable(handleWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
-        assertRetriable(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE));
+        assertRetriable(handleWithGroupError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
     }
 
     @Test
     public void testFailedHandleResponse() {
-        assertFailed(GroupAuthorizationException.class, handleWithError(Errors.GROUP_AUTHORIZATION_FAILED));
-        assertFailed(UnknownServerException.class, handleWithError(Errors.UNKNOWN_SERVER_ERROR));
+        assertFailed(GroupAuthorizationException.class, handleWithGroupError(Errors.GROUP_AUTHORIZATION_FAILED));
+        assertFailed(UnknownServerException.class, handleWithGroupError(Errors.UNKNOWN_SERVER_ERROR));
+    }
+
+    @Test
+    public void testFailedHandleResponseInMemberLevel() {
+        assertMemberFailed(Errors.FENCED_INSTANCE_ID, handleWithMemberError(Errors.FENCED_INSTANCE_ID));
+        assertMemberFailed(Errors.UNKNOWN_MEMBER_ID, handleWithMemberError(Errors.UNKNOWN_MEMBER_ID));
     }
 
     private LeaveGroupResponse buildResponse(Errors error) {
         LeaveGroupResponse response = new LeaveGroupResponse(
-                new LeaveGroupResponseData()
-                    .setErrorCode(error.code())
-                    .setMembers(singletonList(
-                            new MemberResponse()
-                                .setErrorCode(error.code())
-                                .setMemberId("m1")
-                                .setGroupInstanceId("m1-gii"))));
+            new LeaveGroupResponseData()
+                .setErrorCode(error.code())
+                .setMembers(singletonList(
+                    new MemberResponse()
+                        .setErrorCode(Errors.NONE.code())
+                        .setMemberId("m1")
+                        .setGroupInstanceId("m1-gii"))));
         return response;
     }
 
-    private AdminApiHandler.ApiResult<CoordinatorKey, Map<MemberIdentity, Errors>> handleWithError(
+    private LeaveGroupResponse buildResponseWithMemberError(Errors error) {
+        LeaveGroupResponse response = new LeaveGroupResponse(
+            new LeaveGroupResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMembers(singletonList(
+                    new MemberResponse()
+                        .setErrorCode(error.code())
+                        .setMemberId("m1")
+                        .setGroupInstanceId("m1-gii"))));
+        return response;
+    }
+
+    private AdminApiHandler.ApiResult<CoordinatorKey, Map<MemberIdentity, Errors>> handleWithGroupError(
         Errors error
     ) {
         RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
         LeaveGroupResponse response = buildResponse(error);
+        return handler.handleResponse(new Node(1, "host", 1234), singleton(CoordinatorKey.byGroupId(groupId)), response);
+    }
+
+    private AdminApiHandler.ApiResult<CoordinatorKey, Map<MemberIdentity, Errors>> handleWithMemberError(
+        Errors error
+    ) {
+        RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
+        LeaveGroupResponse response = buildResponseWithMemberError(error);
         return handler.handleResponse(new Node(1, "host", 1234), singleton(CoordinatorKey.byGroupId(groupId)), response);
     }
 
@@ -139,5 +165,17 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(singleton(key), result.failedKeys.keySet());
         assertTrue(expectedExceptionType.isInstance(result.failedKeys.get(key)));
+    }
+
+    private void assertMemberFailed(
+        Errors expectedError,
+        AdminApiHandler.ApiResult<CoordinatorKey, Map<MemberIdentity, Errors>> result
+    ) {
+        Map<MemberIdentity, Errors> expectedResponseData = Collections.singletonMap(m1, expectedError);
+        CoordinatorKey key = CoordinatorKey.byGroupId(groupId);
+        assertEquals(emptySet(), result.failedKeys.keySet());
+        assertEquals(emptyList(), result.unmappedKeys);
+        assertEquals(singleton(key), result.completedKeys.keySet());
+        assertEquals(expectedResponseData, result.completedKeys.get(key));
     }
 }
