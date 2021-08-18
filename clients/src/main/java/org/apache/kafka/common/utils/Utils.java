@@ -47,7 +47,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -908,19 +907,6 @@ public final class Utils {
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
                 throw inner;
-            }
-        }
-    }
-
-    /**
-     * Flushes dirty directories to guarantee crash consistency.
-     *
-     * @throws IOException if flushing the directory fails.
-     */
-    public static void flushDir(Path path) throws IOException {
-        if (path != null) {
-            try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
-                dir.force(true);
             }
         }
     }
