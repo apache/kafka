@@ -724,6 +724,16 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
+   * Abort cleaning of the provided partition and log a message about it.
+   */
+  def abortCleaning(topicPartition: TopicPartition): Unit = {
+    if (cleaner != null) {
+      cleaner.abortCleaning(topicPartition)
+      info(s"The cleaning for partition $topicPartition is aborted")
+    }
+  }
+
+  /**
    * Resume cleaning of the provided partition and log a message about it.
    */
   private def resumeCleaning(topicPartition: TopicPartition): Unit = {

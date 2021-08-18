@@ -66,8 +66,13 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
       topicConfig.asScala.forKeyValue { (key, value) =>
         if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
-      val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
-      logs.foreach(_.updateConfig(logConfig))
+      val newLogConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
+      logs.foreach { log =>
+        val oldLogConfig = log.updateConfig(newLogConfig)
+        if (oldLogConfig.compact && !newLogConfig.compact) {
+          logManager.abortCleaning(log.topicPartition)
+        }
+      }
     }
   }
 
@@ -78,7 +83,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     updateLogConfig(topic, topicConfig, configNamesToExclude)
 
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager) = {
-      if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).length > 0) {
+      if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).nonEmpty) {
         val partitions = parseThrottledPartitions(topicConfig, kafkaConfig.brokerId, prop)
         quotaManager.markThrottled(topic, partitions)
         debug(s"Setting $prop on broker ${kafkaConfig.brokerId} for topic: $topic and partitions $partitions")

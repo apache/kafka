@@ -353,13 +353,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def logDirFailureChannel: LogDirFailureChannel = localLog.logDirFailureChannel
 
-  def updateConfig(newConfig: LogConfig): Unit = {
+  def updateConfig(newConfig: LogConfig): LogConfig = {
     val oldConfig = localLog.config
     localLog.updateConfig(newConfig)
     val oldRecordVersion = oldConfig.recordVersion
     val newRecordVersion = newConfig.recordVersion
     if (newRecordVersion != oldRecordVersion)
       initializeLeaderEpochCache()
+    oldConfig
   }
 
   def highWatermark: Long = highWatermarkMetadata.messageOffset

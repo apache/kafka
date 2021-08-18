@@ -23,9 +23,13 @@ import java.nio.charset.StandardCharsets
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 import kafka.integration.KafkaServerTestHarness
+import kafka.log.LogConfig
 import kafka.log.LogConfig._
+import kafka.log.LogManager
+import kafka.log.UnifiedLog
 import kafka.utils._
 import kafka.server.Constants._
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
@@ -38,6 +42,10 @@ import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mock
+import org.mockito.Mockito.times
+import org.mockito.Mockito.verify
+import org.mockito.Mockito.when
 
 import scala.annotation.nowarn
 import scala.collection.{Map, Seq}
@@ -93,6 +101,51 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     (1 to 50).foreach(i => TestUtils.produceMessage(servers, tp.topic, i.toString))
     // Verify that the new config is used for all segments
     assertTrue(log.logSegments.forall(_.size > 1000), "Log segment size change not applied")
+  }
+
+  @Test
+  def testDynamicTopicConfigChangeStopCleaningIfCompactIsRemoved(): Unit = {
+    val topic = "topic"
+    val tp0 = new TopicPartition(topic, 0)
+    val tp1 = new TopicPartition(topic, 1)
+
+    val logManager = mock(classOf[LogManager])
+    val replicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val quotaManagers = mock(classOf[QuotaManagers])
+    val kafkaConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect))
+    val logConfig = new LogConfig(new Properties)
+    val topicConfigHandler = new TopicConfigHandler(
+      logManager,
+      kafkaConfig,
+      quotaManagers,
+      None
+    )
+
+    val oldProperties = new Properties()
+    oldProperties.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    val oldLogConfig = LogConfig.fromProps(logConfig.originals, oldProperties)
+
+    val newProperties = new Properties()
+    newProperties.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
+    val newLogConfig = LogConfig.fromProps(logConfig.originals, newProperties)
+
+    val log0 = mock(classOf[UnifiedLog])
+    when(log0.topicPartition).thenReturn(tp0)
+    when(log0.updateConfig(newLogConfig)).thenReturn(oldLogConfig)
+
+    val log1 = mock(classOf[UnifiedLog])
+    when(log1.topicPartition).thenReturn(tp1)
+    when(log1.updateConfig(newLogConfig)).thenReturn(oldLogConfig)
+
+    when(logManager.logsByTopic(topic)).thenReturn(Seq(log0, log1))
+    when(logManager.currentDefaultConfig).thenReturn(logConfig)
+    when(quotaManagers.leader).thenReturn(replicationQuotaManager)
+    when(quotaManagers.follower).thenReturn(replicationQuotaManager)
+
+    topicConfigHandler.processConfigChanges(topic, newProperties)
+
+    verify(logManager, times(1)).abortCleaning(tp0)
+    verify(logManager, times(1)).abortCleaning(tp1)
   }
 
   @nowarn("cat=deprecation")
