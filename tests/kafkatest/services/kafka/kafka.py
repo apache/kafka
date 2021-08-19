@@ -858,12 +858,27 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         leader = self.leader(topic, partition)
         self.signal_node(leader, sig)
 
+    def controllers_required_for_quorum(self):
+        """
+        Assume N = the total number of controller nodes in the cluster, and positive
+        For N=1, we need 1 controller to be running to have a quorum
+        For N=2, we need 2 controllers
+        For N=3, we need 2 controllers
+        For N=4, we need 3 controllers
+        For N=5, we need 3 controllers
+
+        :return: the number of controller nodes that must be started for there to be a quorum
+        """
+        # Note that we need to add 0.1 to avoid floating point rounding issues.
+        # For example, round(5/2) yields 2 instead of 3
+        return round(0.1 + (1 + self.num_nodes_controller_role) / 2)
+
     def stop_node(self, node, clean_shutdown=True, timeout_sec=60):
         pids = self.pids(node)
         cluster_has_colocated_controllers = self.quorum_info.has_brokers and self.quorum_info.has_controllers
         force_sigkill_due_to_too_few_colocated_controllers =\
             clean_shutdown and cluster_has_colocated_controllers\
-            and self.colocated_nodes_started < round(self.num_nodes_controller_role / 2)
+            and self.colocated_nodes_started < self.controllers_required_for_quorum()
         if force_sigkill_due_to_too_few_colocated_controllers:
             self.logger.info("Forcing node to stop via SIGKILL due to too few co-located KRaft controllers: %i/%i" %\
                              (self.colocated_nodes_started, self.num_nodes_controller_role))
