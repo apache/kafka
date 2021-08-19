@@ -30,9 +30,9 @@ import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeCluster
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
+
 import java.util
 import java.util.{Arrays, Collections, Optional}
-
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
@@ -48,8 +48,12 @@ class KRaftClusterTest {
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
+      // check the gauge in this test to make sure it is working; other tests introspect via the currentState() method
+      assertEquals(BrokerState.NOT_RUNNING.value(), cluster.brokers().get(0).brokerStateGauge.value())
       cluster.format()
       cluster.startup()
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerStateGauge.value() == BrokerState.RUNNING.value(),
+        "Broker never made it to RUNNING state.")
     } finally {
       cluster.close()
     }

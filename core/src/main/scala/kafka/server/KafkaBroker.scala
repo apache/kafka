@@ -85,7 +85,8 @@ trait KafkaBroker extends KafkaMetricsGroup {
     explicitMetricName(Server.MetricsPrefix, KafkaBroker.MetricsTypeName, name, metricTags)
   }
 
-  newGauge("BrokerState", () => brokerState.value)
+  // visible for testing
+  private[server] val brokerStateGauge = newGauge("BrokerState", () => brokerState.value)
   newGauge("ClusterId", () => clusterId)
   newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
