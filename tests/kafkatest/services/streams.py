@@ -671,7 +671,6 @@ class StreamsNamedRepartitionTopicService(StreamsTestBaseService):
                       "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
                       }
 
-        # Long.MAX_VALUE lets us do the assignment without a warmup
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
@@ -697,7 +696,6 @@ class StaticMemberTestService(StreamsTestBaseService):
                       "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
                       }
 
-        # Long.MAX_VALUE lets us do the assignment without a warmup
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
