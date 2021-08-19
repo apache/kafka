@@ -14,15 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
+package org.apache.kafka.streams.state.internals.metrics;
 
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import java.util.Collection;
+import org.apache.kafka.common.utils.Bytes;
 
-public class MockValueJoiner {
-
-    public final static ValueJoiner<Object, Object, String> TOSTRING_JOINER = instance("+");
-
-    public static <V1, V2> ValueJoiner<V1, V2, String> instance(final String separator) {
-        return (value1, value2) -> value1 + separator + value2;
-    }
+public interface RawKeyAccessor {
+    Collection<Bytes> keys(final Bytes key, final long windowStartTimestampMs);
 }

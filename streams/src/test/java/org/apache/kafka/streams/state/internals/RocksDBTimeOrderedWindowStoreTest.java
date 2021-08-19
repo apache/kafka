@@ -49,7 +49,7 @@ public class RocksDBTimeOrderedWindowStoreTest {
     private static final String STORE_NAME = "rocksDB time-ordered window store";
 
     WindowStore<Integer, String> windowStore;
-    InternalMockProcessorContext context;
+    InternalMockProcessorContext<Integer, String> context;
     MockRecordCollector recordCollector;
 
     final File baseDir = TestUtils.tempDirectory("test");
@@ -61,8 +61,8 @@ public class RocksDBTimeOrderedWindowStoreTest {
         recordCollector = new MockRecordCollector();
         context = new InternalMockProcessorContext<>(
             baseDir,
-            Serdes.String(),
             Serdes.Integer(),
+            Serdes.String(),
             recordCollector,
             new ThreadCache(
                 new LogContext("testCache"),
@@ -164,18 +164,30 @@ public class RocksDBTimeOrderedWindowStoreTest {
         final long startTime = SEGMENT_INTERVAL - 4L;
 
         windowStore.put(0, "zero1", startTime + 0);
-        windowStore.put(0, "zero2", startTime + 0);
-        windowStore.put(0, "zero3", startTime + 0);
+        windowStore.put(0, "zero2", startTime + 1);
+        windowStore.put(0, "zero3", startTime + 1);
+        windowStore.put(0, "zero4", startTime + 1);
+        windowStore.put(0, "zero5", startTime + 2);
         windowStore.put(1, "one1", startTime + 1);
         windowStore.put(1, "one2", startTime + 1);
 
-        windowStore.put(0, null, startTime + 0);
-
+        final KeyValue<Windowed<Integer>, String> zero1 = windowedPair(0, "zero1", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> zero2 = windowedPair(0, "zero2", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> zero3 = windowedPair(0, "zero3", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> zero4 = windowedPair(0, "zero4", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> zero5 = windowedPair(0, "zero5", startTime + 2);
         final KeyValue<Windowed<Integer>, String> one1 = windowedPair(1, "one1", startTime + 1);
         final KeyValue<Windowed<Integer>, String> one2 = windowedPair(1, "one2", startTime + 1);
 
         assertEquals(
-            asList(one1, one2),
+            asList(zero1, zero2, zero3, zero4, one1, one2, zero5),
+            toList(windowStore.all())
+        );
+
+        windowStore.put(0, null, startTime + 1);
+
+        assertEquals(
+            asList(zero1, one1, one2, zero5),
             toList(windowStore.all())
         );
     }

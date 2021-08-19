@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Collection;
+import java.util.Collections;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -25,6 +27,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.metrics.RawKeyAccessor;
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
@@ -132,8 +135,18 @@ class ChangeLoggingWindowBytesStore
     public void put(final Bytes key,
                     final byte[] value,
                     final long windowStartTimestamp) {
+        final Collection<Bytes> rawKeys;
+        final WindowStore<Bytes, byte[]> windowStore = wrapped();
+
+        if (value == null && windowStore instanceof RawKeyAccessor) {
+            rawKeys = ((RawKeyAccessor) windowStore).keys(key, windowStartTimestamp);
+        } else {
+            rawKeys = Collections.singleton(keySerializer.serialize(key, windowStartTimestamp, maybeUpdateSeqnumForDups()));
+        }
+
         wrapped().put(key, value, windowStartTimestamp);
-        log(keySerializer.serialize(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
+
+        rawKeys.forEach(k -> log(k, value));
     }
 
     void log(final Bytes key,

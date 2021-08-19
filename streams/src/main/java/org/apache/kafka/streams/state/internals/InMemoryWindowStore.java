@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -30,6 +33,7 @@ import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.metrics.RawKeyAccessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,13 +51,13 @@ import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractSt
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreTimestamp;
 
 
-public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
+public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, RawKeyAccessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemoryWindowStore.class);
+    private static final int TIMESTAMP_SIZE = 8;
     private static final int SEQNUM_SIZE = 4;
 
     private final String name;
-    private final String metricScope;
     private final long retentionPeriod;
     private final long windowSize;
     private final boolean retainDuplicates;
@@ -77,7 +81,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         this.retentionPeriod = retentionPeriod;
         this.windowSize = windowSize;
         this.retainDuplicates = retainDuplicates;
-        this.metricScope = metricScope;
     }
 
     @Override
@@ -107,6 +110,22 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     @Override
+    public Collection<Bytes> keys(final Bytes key, final long windowStartTimestampMs) {
+        final ConcurrentNavigableMap<Bytes, byte[]> map = segmentMap.get(windowStartTimestampMs);
+        return map == null
+            ? Collections.emptySet()
+            : map.subMap(key, Bytes.increment(key)).keySet().stream().map(
+                serializedKey -> {
+                    final ByteBuffer buf = ByteBuffer.allocate(serializedKey.get().length + TIMESTAMP_SIZE);
+                    buf.put(serializedKey.get(), 0, serializedKey.get().length - SEQNUM_SIZE);
+                    buf.putLong(windowStartTimestampMs);
+                    buf.put(serializedKey.get(), serializedKey.get().length - SEQNUM_SIZE, SEQNUM_SIZE);
+                    return Bytes.wrap(buf.array());
+                }
+            ).collect(Collectors.toSet());
+    }
+
+    @Override
     public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
         removeExpiredSegments();
         observedStreamTime = Math.max(observedStreamTime, windowStartTimestamp);
@@ -124,6 +143,14 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                 // Skip if value is null and duplicates are allowed since this delete is a no-op
                 segmentMap.computeIfPresent(windowStartTimestamp, (t, kvMap) -> {
                     kvMap.remove(key);
+                    if (kvMap.isEmpty()) {
+                        segmentMap.remove(windowStartTimestamp);
+                    }
+                    return kvMap;
+                });
+            } else {
+                segmentMap.computeIfPresent(windowStartTimestamp, (t, kvMap) -> {
+                    kvMap.subMap(key, Bytes.increment(key)).keySet().forEach(kvMap::remove);
                     if (kvMap.isEmpty()) {
                         segmentMap.remove(windowStartTimestamp);
                     }

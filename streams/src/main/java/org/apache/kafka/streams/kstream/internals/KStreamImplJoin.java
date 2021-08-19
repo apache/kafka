@@ -308,7 +308,7 @@ class KStreamImplJoin {
                     storeName + "-store",
                     Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
                     Duration.ofMillis(windows.size()),
-                    false
+                    true
                 ),
                 keyAndJoinSideSerde,
                 leftOrRightValueSerde

@@ -16,11 +16,17 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.BytesDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -45,7 +51,10 @@ import java.util.Properties;
 import java.util.Set;
 
 import static java.time.Duration.ofMillis;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 
 @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
@@ -211,6 +220,128 @@ public class KStreamKStreamLeftJoinTest {
             inputTopic2.pipeInput(3, "a3", 315L);
 
             processor.checkAndClearProcessResult();
+        }
+    }
+
+    @Test
+    public void shouldSendTombstoneForLeftJoinCandidatesRocksDb() {
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "rocksdb");
+
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(0L));
+
+        final WindowBytesStoreSupplier thisStoreSupplier = Stores.persistentWindowStore("rocksdb-join-store",
+            Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+            Duration.ofMillis(joinWindows.size()), true);
+
+        final WindowBytesStoreSupplier otherStoreSupplier = Stores.persistentWindowStore("rocksdb-join-store-other",
+            Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+            Duration.ofMillis(joinWindows.size()), true);
+
+        final StreamJoined<Integer, String, String> streamJoined =
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+                .withThisStoreSupplier(thisStoreSupplier)
+                .withOtherStoreSupplier(otherStoreSupplier);
+
+        shouldSendTombstoneForLeftJoinCandidates(joinWindows, streamJoined);
+    }
+
+    @Test
+    public void shouldSendTombstoneForLeftJoinCandidatesInMemory() {
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "in-memory");
+
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(0L));
+
+        final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store",
+            Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+            Duration.ofMillis(joinWindows.size()), true);
+
+        final WindowBytesStoreSupplier otherStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store-other",
+            Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+            Duration.ofMillis(joinWindows.size()), true);
+
+        final StreamJoined<Integer, String, String> streamJoined =
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+                .withThisStoreSupplier(thisStoreSupplier)
+                .withOtherStoreSupplier(otherStoreSupplier);
+
+        shouldSendTombstoneForLeftJoinCandidates(joinWindows, streamJoined);
+    }
+
+    public void shouldSendTombstoneForLeftJoinCandidates(final JoinWindows window,
+                                                         final StreamJoined<Integer, String, String> joinConfig) {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+
+        stream1.leftJoin(stream2, MockValueJoiner.TOSTRING_JOINER, window, joinConfig);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+
+            final TestOutputTopic<Bytes, String> sharedChangelog = driver.createOutputTopic(
+                props.get(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + props.get(StreamsConfig.APPLICATION_ID_CONFIG) + "-join-store-left-shared-join-store-changelog",
+                new BytesDeserializer(),
+                new StringDeserializer()
+            );
+
+            inputTopic1.pipeInput(0, "A0", 0L);
+
+            final Bytes key = sharedChangelog.readKeyValue().key;
+            assertTrue(sharedChangelog.isEmpty());
+
+            inputTopic2.pipeInput(0, "a0", 0L);
+
+            final KeyValue<Bytes, String> tombstone = sharedChangelog.readKeyValue();
+            assertThat(tombstone, equalTo(KeyValue.pair(key, null)));
+            assertTrue(sharedChangelog.isEmpty());
+
+
+            inputTopic1.pipeInput(0, "A10", 500L);
+            inputTopic1.pipeInput(0, "A11", 501L);
+            inputTopic1.pipeInput(0, "A12", 502L);
+
+            final Bytes key1 = sharedChangelog.readKeyValue().key;
+            final Bytes key2 = sharedChangelog.readKeyValue().key;
+            final Bytes key3 = sharedChangelog.readKeyValue().key;
+            assertTrue(sharedChangelog.isEmpty());
+
+            inputTopic2.pipeInput(0, "a10", 501L);
+
+            final KeyValue<Bytes, String> tombstone1 = sharedChangelog.readKeyValue();
+            final KeyValue<Bytes, String> tombstone2 = sharedChangelog.readKeyValue();
+            final KeyValue<Bytes, String> tombstone3 = sharedChangelog.readKeyValue();
+            assertThat(tombstone1, equalTo(KeyValue.pair(key1, null)));
+            assertThat(tombstone2, equalTo(KeyValue.pair(key2, null)));
+            assertThat(tombstone3, equalTo(KeyValue.pair(key3, null)));
+            assertTrue(sharedChangelog.isEmpty());
+
+
+            inputTopic1.pipeInput(1, "A110", 500L);
+            inputTopic1.pipeInput(1, "A111", 501L);
+            inputTopic1.pipeInput(1, "A112", 502L);
+
+            final Bytes key11 = sharedChangelog.readKeyValue().key;
+            final Bytes key12 = sharedChangelog.readKeyValue().key;
+            final Bytes key13 = sharedChangelog.readKeyValue().key;
+            assertTrue(sharedChangelog.isEmpty());
+
+            driver.advanceWallClockTime(Duration.ofSeconds(1L));
+            inputTopic2.pipeInput(1, "dummy", 2000L);
+
+            final KeyValue<Bytes, String> tombstone11 = sharedChangelog.readKeyValue();
+            final KeyValue<Bytes, String> tombstone12 = sharedChangelog.readKeyValue();
+            final KeyValue<Bytes, String> tombstone13 = sharedChangelog.readKeyValue();
+            assertThat(tombstone11, equalTo(KeyValue.pair(key11, null)));
+            assertThat(tombstone12, equalTo(KeyValue.pair(key12, null)));
+            assertThat(tombstone13, equalTo(KeyValue.pair(key13, null)));
+            assertTrue(sharedChangelog.isEmpty());
         }
     }
 

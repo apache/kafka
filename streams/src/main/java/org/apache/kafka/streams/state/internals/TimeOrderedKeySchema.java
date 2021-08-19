@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Collections;
+import java.util.Iterator;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
@@ -43,12 +45,12 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
 
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
-        throw new UnsupportedOperationException();
+        return null;
     }
 
     @Override
     public Bytes lowerRange(final Bytes key, final long from) {
-        throw new UnsupportedOperationException();
+        return null;
     }
 
     @Override
@@ -72,27 +74,47 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
     }
 
     /**
-     * {@inheritdoc}
+     * {@inheritDoc}
      *
      * This method is optimized for {@link RocksDBTimeOrderedWindowStore#all()} only. Key and time
      * range queries are not supported.
      */
     @Override
     public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to) {
-        if (binaryKeyFrom != null || binaryKeyTo != null) {
-            throw new IllegalArgumentException("binaryKeyFrom/binaryKeyTo keys cannot be non-null. Key and time range queries are not supported.");
+        if (binaryKeyFrom == null && binaryKeyTo == null && from == 0 && to == Long.MAX_VALUE) {
+            return Iterator::hasNext;
         }
 
-        if (from != 0 && to != Long.MAX_VALUE) {
-            throw new IllegalArgumentException("from/to time ranges should be 0 to Long.MAX_VALUE. Key and time range queries are not supported.");
+        if (binaryKeyFrom != null && binaryKeyFrom.equals(binaryKeyTo) && from == to) {
+
+            return iterator -> {
+                while (iterator.hasNext()) {
+                    final Bytes bytes = iterator.peekNextKey();
+                    final Bytes keyBytes = Bytes
+                        .wrap(TimeOrderedKeySchema.extractStoreKeyBytes(bytes.get()));
+                    final long time = TimeOrderedKeySchema.extractStoreTimestamp(bytes.get());
+                    if (keyBytes.compareTo(binaryKeyFrom) >= 0
+                        && keyBytes.compareTo(binaryKeyTo) <= 0
+                        && time >= from
+                        && time <= to) {
+                        return true;
+                    }
+                    iterator.next();
+                }
+                return false;
+            };
         }
 
-        return iterator -> iterator.hasNext();
+        throw new IllegalArgumentException("Key and time range queries are not supported.");
     }
 
     @Override
     public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments, final long from, final long to, final boolean forward) {
-        throw new UnsupportedOperationException();
+        if (from != to) {
+            throw new IllegalArgumentException("");
+        }
+        final S segment = segments.getSegmentForTimestamp(from);
+        return segment == null ? Collections.emptyList() : Collections.singletonList(segment);
     }
 
     public static Bytes toStoreKeyBinaryPrefix(final Bytes key,

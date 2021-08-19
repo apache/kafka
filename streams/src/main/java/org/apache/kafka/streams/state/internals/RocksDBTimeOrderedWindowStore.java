@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.metrics.RawKeyAccessor;
 
 /**
  * A persistent (time-key)-value store based on RocksDB.
@@ -35,7 +39,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
  */
 public class RocksDBTimeOrderedWindowStore
     extends WrappedStateStore<SegmentedBytesStore, Object, Object>
-    implements WindowStore<Bytes, byte[]> {
+    implements WindowStore<Bytes, byte[]>, RawKeyAccessor {
 
     private final boolean retainDuplicates;
     private final long windowSize;
@@ -48,6 +52,18 @@ public class RocksDBTimeOrderedWindowStore
         super(bytesStore);
         this.retainDuplicates = retainDuplicates;
         this.windowSize = windowSize;
+    }
+
+    @Override
+    public Collection<Bytes> keys(final Bytes key, final long windowStartTimestampMs) {
+        final Set<Bytes> keys = new HashSet<>();
+
+        try (final KeyValueIterator<Bytes, byte[]> it =
+            wrapped().fetch(key, key, windowStartTimestampMs, windowStartTimestampMs)) {
+            it.forEachRemaining(bytesKeyValue -> keys.add(bytesKeyValue.key));
+        }
+
+        return keys;
     }
 
     @Override
