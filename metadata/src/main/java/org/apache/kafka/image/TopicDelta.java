@@ -141,8 +141,8 @@ public final class TopicDelta {
 
     @Override
     public String toString() {
-        return "TopicDelta{" +
+        return "TopicDelta(" +
             "partitionChanges=" + partitionChanges +
-            '}';
+            ')';
     }
 }
