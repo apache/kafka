@@ -18,18 +18,18 @@
  */
 package kafka.tools
 
-import java.util.Properties
 import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, IncludeList, ToolsUtils}
 import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, OffsetSpec}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.requests.ListOffsetsRequest
-import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 
+import java.util.Properties
 import java.util.regex.Pattern
-import scala.jdk.CollectionConverters._
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 import scala.math.Ordering.Implicits.infixOrderingOps
 
 object GetOffsetShell {
@@ -105,7 +105,7 @@ object GetOffsetShell {
 
     val listOffsetsTimestamp = options.valueOf(timeOpt).longValue
 
-    val topicPartitionFilter = if (options.has(topicPartitionsOpt)) {
+    val (topicFilter, topicPartitionFilter) = if (options.has(topicPartitionsOpt)) {
       createTopicPartitionFilterWithPatternList(options.valueOf(topicPartitionsOpt), excludeInternalTopics)
     } else {
       val partitionIdsRequested = createPartitionSet(options.valueOf(partitionsOpt))
@@ -126,7 +126,7 @@ object GetOffsetShell {
     val client = Admin.create(config)
 
     try {
-      val partitionInfos = listPartitionInfos(client, topicPartitionFilter, !excludeInternalTopics)
+      val partitionInfos = listPartitionInfos(client, topicFilter, topicPartitionFilter, excludeInternalTopics)
 
       if (partitionInfos.isEmpty) {
         throw new IllegalArgumentException("Could not match any topic-partitions with the specified filters")
@@ -167,20 +167,27 @@ object GetOffsetShell {
   }
 
   /**
-   * Creates a topic-partition filter based on a list of patterns.
+   * Creates a topic filter and a topic-partition filter based on a list of patterns.
    * Expected format:
    * List: TopicPartitionPattern(, TopicPartitionPattern)*
    * TopicPartitionPattern: TopicPattern(:PartitionPattern)? | :PartitionPattern
    * TopicPattern: REGEX
    * PartitionPattern: NUMBER | NUMBER-(NUMBER)? | -NUMBER
    */
-  def createTopicPartitionFilterWithPatternList(topicPartitions: String, excludeInternalTopics: Boolean): PartitionInfo => Boolean = {
+  def createTopicPartitionFilterWithPatternList(topicPartitions: String,
+                                                excludeInternalTopics: Boolean
+                                               ): (String => Boolean, PartitionInfo => Boolean) = {
     val ruleSpecs = topicPartitions.split(",")
     val rules = ruleSpecs.map(ruleSpec => parseRuleSpec(ruleSpec, excludeInternalTopics))
-    tp => rules.exists { rule => rule.apply(tp) }
+    (
+      topic => rules.map(_._1).exists { rule => rule.apply(topic) },
+      tp => rules.map(_._2).exists { rule => rule.apply(tp) }
+    )
   }
 
-  def parseRuleSpec(ruleSpec: String, excludeInternalTopics: Boolean): PartitionInfo => Boolean = {
+  def parseRuleSpec(ruleSpec: String,
+                    excludeInternalTopics: Boolean
+                   ): (String => Boolean, PartitionInfo => Boolean) = {
     val matcher = TopicPartitionPattern.matcher(ruleSpec)
     if (!matcher.matches())
       throw new IllegalArgumentException(s"Invalid rule specification: $ruleSpec")
@@ -198,16 +205,24 @@ object GetOffsetShell {
         val upperRange = group(4).map(_.toInt).getOrElse(Int.MaxValue)
         (p: Int) => p >= lowerRange && p < upperRange
     }
-
-    tp => topicFilter.isTopicAllowed(tp.topic, excludeInternalTopics) && partitionFilter(tp.partition)
+    (
+      topic => topicFilter.isTopicAllowed(topic, excludeInternalTopics),
+      tp => topicFilter.isTopicAllowed(tp.topic, excludeInternalTopics) && partitionFilter(tp.partition)
+    )
   }
 
   /**
-   * Creates a topic-partition filter based on a topic pattern and a set of partition ids.
+   * Creates a topic filter and a topic-partition filter based on a topic pattern and a set of partition ids.
    */
-  def createTopicPartitionFilterWithTopicAndPartitionPattern(topicOpt: Option[String], excludeInternalTopics: Boolean, partitionIds: Set[Int]): PartitionInfo => Boolean = {
+  def createTopicPartitionFilterWithTopicAndPartitionPattern(topicOpt: Option[String],
+                                                             excludeInternalTopics: Boolean,
+                                                             partitionIds: Set[Int]
+                                                            ): (String => Boolean, PartitionInfo => Boolean) = {
     val topicsFilter = IncludeList(topicOpt.getOrElse(".*"))
-    t => topicsFilter.isTopicAllowed(t.topic, excludeInternalTopics) && (partitionIds.isEmpty || partitionIds.contains(t.partition))
+    (
+      topic => topicsFilter.isTopicAllowed(topic, excludeInternalTopics),
+      t => topicsFilter.isTopicAllowed(t.topic, excludeInternalTopics) && (partitionIds.isEmpty || partitionIds.contains(t.partition))
+    )
   }
 
   def createPartitionSet(partitionsString: String): Set[Int] = {
@@ -225,10 +240,13 @@ object GetOffsetShell {
   }
 
   /**
-   * Return the partition infos. Filter them with topicPartitionFilter.
+   * Return the partition infos. Filter them with topicFilter and topicPartitionFilter.
    */
-  private def listPartitionInfos(client: Admin, topicPartitionFilter: PartitionInfo => Boolean, listInternal: Boolean): Seq[PartitionInfo] = {
-    val topics = client.listTopics(new ListTopicsOptions().listInternal(listInternal)).names().get().asScala
+  private def listPartitionInfos(client: Admin,
+                                 topicFilter: String => Boolean,
+                                 topicPartitionFilter: PartitionInfo => Boolean,
+                                 excludeInternalTopics: Boolean): Seq[PartitionInfo] = {
+    val topics = client.listTopics(new ListTopicsOptions().listInternal(!excludeInternalTopics)).names().get().asScala.filter(topicFilter)
     client.describeTopics(topics.asJavaCollection).all().get().asScala.flatMap { case (topic, description) =>
       description
         .partitions()
