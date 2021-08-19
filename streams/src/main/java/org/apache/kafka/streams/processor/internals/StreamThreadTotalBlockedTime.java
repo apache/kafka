@@ -23,12 +23,12 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 
-public class StreamsThreadTotalBlockedTime {
-    final Consumer<?, ?> consumer;
-    final Consumer<?, ?> restoreConsumer;
-    final Supplier<Double> producerTotalBlockedTime;
+public class StreamThreadTotalBlockedTime {
+    private final Consumer<?, ?> consumer;
+    private final Consumer<?, ?> restoreConsumer;
+    private final Supplier<Double> producerTotalBlockedTime;
 
-    StreamsThreadTotalBlockedTime(
+    StreamThreadTotalBlockedTime(
         final Consumer<?, ?> consumer,
         final Consumer<?, ?> restoreConsumer,
         final Supplier<Double> producerTotalBlockedTime) {
@@ -37,7 +37,7 @@ public class StreamsThreadTotalBlockedTime {
         this.producerTotalBlockedTime = producerTotalBlockedTime;
     }
 
-    final double getMetricValue(
+    private double metricValue(
         final Map<MetricName, ? extends Metric> metrics,
         final String name) {
         return metrics.keySet().stream()
@@ -47,13 +47,13 @@ public class StreamsThreadTotalBlockedTime {
             .orElse(0.0);
     }
 
-    public double getTotalBlockedTime() {
-        return getMetricValue(consumer.metrics(), "io-waittime-total")
-            + getMetricValue(consumer.metrics(), "iotime-total")
-            + getMetricValue(consumer.metrics(), "committed-time-total")
-            + getMetricValue(consumer.metrics(), "commit-sync-time-total")
-            + getMetricValue(restoreConsumer.metrics(), "io-waittime-total")
-            + getMetricValue(restoreConsumer.metrics(), "iotime-total")
+    public double compute() {
+        return metricValue(consumer.metrics(), "io-waittime-total")
+            + metricValue(consumer.metrics(), "iotime-total")
+            + metricValue(consumer.metrics(), "committed-time-total")
+            + metricValue(consumer.metrics(), "commit-sync-time-total")
+            + metricValue(restoreConsumer.metrics(), "io-waittime-total")
+            + metricValue(restoreConsumer.metrics(), "iotime-total")
             + producerTotalBlockedTime.get();
     }
 }

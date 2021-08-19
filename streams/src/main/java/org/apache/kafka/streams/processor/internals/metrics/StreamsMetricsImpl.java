@@ -208,7 +208,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final MetricName metricName = metrics.metricName(
             name, THREAD_LEVEL_GROUP, description, threadLevelTagMap(threadId));
         synchronized (threadLevelMetrics) {
-            threadLevelMetrics.computeIfAbsent(threadId, tid -> new LinkedList<>()).add(metricName);
+            threadLevelMetrics.computeIfAbsent(
+                threadSensorPrefix(threadId),
+                tid -> new LinkedList<>()
+            ).add(metricName);
             metrics.addMetric(metricName, new ImmutableMetricValue<>(value));
         }
     }
@@ -220,7 +223,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final MetricName metricName = metrics.metricName(
             name, THREAD_LEVEL_GROUP, description, threadLevelTagMap(threadId));
         synchronized (threadLevelMetrics) {
-            threadLevelMetrics.computeIfAbsent(threadId, tid -> new LinkedList<>()).add(metricName);
+            threadLevelMetrics.computeIfAbsent(
+                threadSensorPrefix(threadId),
+                tid -> new LinkedList<>()
+            ).add(metricName);
             metrics.addMetric(metricName, valueProvider);
         }
     }
@@ -295,7 +301,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             }
         }
         synchronized (threadLevelMetrics) {
-            final Deque<MetricName> names = threadLevelMetrics.remove(threadId);
+            final Deque<MetricName> names = threadLevelMetrics.remove(threadSensorPrefix(threadId));
             while (names != null && !names.isEmpty()) {
                 metrics.removeMetric(names.pop());
             }

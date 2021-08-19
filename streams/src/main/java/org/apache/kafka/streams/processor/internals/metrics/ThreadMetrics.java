@@ -18,9 +18,9 @@ package org.apache.kafka.streams.processor.internals.metrics;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.streams.processor.internals.StreamThreadTotalBlockedTime;
 
 import java.util.Map;
-import org.apache.kafka.streams.processor.internals.StreamsThreadTotalBlockedTime;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_DESCRIPTION;
@@ -329,13 +329,13 @@ public class ThreadMetrics {
     }
 
     public static void addThreadBlockedTimeMetric(final String threadId,
-                                                  final StreamsThreadTotalBlockedTime blockedTime,
+                                                  final StreamThreadTotalBlockedTime blockedTime,
                                                   final StreamsMetricsImpl streamsMetrics) {
         streamsMetrics.addThreadLevelMutableMetric(
             BLOCKED_TIME,
             BLOCKED_TIME_DESCRIPTION,
             threadId,
-            (config, now) -> blockedTime.getTotalBlockedTime()
+            (config, now) -> blockedTime.compute()
         );
     }
 

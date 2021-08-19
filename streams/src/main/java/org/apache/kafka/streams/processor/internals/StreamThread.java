@@ -519,7 +519,7 @@ public class StreamThread extends Thread {
         );
         ThreadMetrics.addThreadBlockedTimeMetric(
             threadId,
-            new StreamsThreadTotalBlockedTime(
+            new StreamThreadTotalBlockedTime(
                 mainConsumer,
                 restoreConsumer,
                 taskManager::totalProducerBlockedTime

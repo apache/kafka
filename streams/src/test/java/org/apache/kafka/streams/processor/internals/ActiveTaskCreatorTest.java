@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -34,6 +35,7 @@ import org.apache.kafka.test.MockClientSupplier;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
+import org.hamcrest.Matchers;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -55,6 +57,7 @@ import static org.easymock.EasyMock.reset;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.core.IsNot.not;
 import static org.junit.Assert.assertThrows;
 
@@ -115,6 +118,15 @@ public class ActiveTaskCreatorTest {
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 1));
 
         assertThat(mockClientSupplier.producers.get(0).closed(), is(false));
+    }
+
+    @Test
+    public void shouldReturnBlockedTimeWhenThreadProducer() {
+        createTasks();
+        final MockProducer<?, ?> producer = mockClientSupplier.producers.get(0);
+        addMetric(producer, "flush-time-total", 123.0);
+
+        assertThat(activeTaskCreator.totalProducerBlockedTime(), closeTo(123.0, 0.01));
     }
 
     // error handling
@@ -224,6 +236,23 @@ public class ActiveTaskCreatorTest {
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
     }
 
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldReturnBlockedTimeWhenTaskProducers() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        createTasks();
+        double total = 0.0;
+        double blocked = 1.0;
+        for (final MockProducer<?, ?> producer : mockClientSupplier.producers) {
+            addMetric(producer, "flush-time-total", blocked);
+            total += blocked;
+            blocked += 1.0;
+        }
+
+        assertThat(activeTaskCreator.totalProducerBlockedTime(), closeTo(total, 0.01));
+    }
+
     // error handling
 
     @SuppressWarnings("deprecation")
@@ -287,7 +316,6 @@ public class ActiveTaskCreatorTest {
         // should not throw again because producer should be removed
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
     }
-
 
 
     // eos-v2 test
@@ -487,5 +515,27 @@ public class ActiveTaskCreatorTest {
             ).stream().map(Task::id).collect(Collectors.toSet()),
             equalTo(mkSet(task00, task01))
         );
+    }
+
+    private void addMetric(
+        final MockProducer<?, ?> producer,
+        final String name,
+        final double value) {
+        final MetricName metricName = metricName(name);
+        producer.setMockMetrics(metricName, new Metric() {
+            @Override
+            public MetricName metricName() {
+                return metricName;
+            }
+
+            @Override
+            public Object metricValue() {
+                return value;
+            }
+        });
+    }
+
+    private MetricName metricName(final String name) {
+        return new MetricName(name, "", "", Collections.emptyMap());
     }
 }

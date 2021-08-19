@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -59,8 +60,8 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.sameInstance;
 import static org.junit.Assert.assertSame;
@@ -121,6 +122,8 @@ public class StreamsProducerTest {
         logContext
     );
 
+    private final Time mockTime = mock(Time.class);
+
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
     private StreamsProducer nonEosStreamsProducer;
     private MockProducer<byte[], byte[]> nonEosMockProducer;
@@ -139,8 +142,6 @@ public class StreamsProducerTest {
     private final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = mkMap(
         mkEntry(new TopicPartition(topic, 0), new OffsetAndMetadata(0L, null))
     );
-
-
 
     @Before
     public void before() {
@@ -179,10 +180,13 @@ public class StreamsProducerTest {
                 eosBetaMockClientSupplier,
                 null,
                 UUID.randomUUID(),
-                logContext
+                logContext,
+                mockTime
             );
         eosBetaStreamsProducer.initTransaction();
         eosBetaMockProducer = eosBetaMockClientSupplier.producers.get(0);
+        expect(mockTime.nanoseconds()).andAnswer(Time.SYSTEM::nanoseconds).anyTimes();
+        replay(mockTime);
     }
 
 
@@ -1117,6 +1121,7 @@ public class StreamsProducerTest {
         mockedProducer.close();
         mockedProducer.initTransactions();
         expectLastCall();
+        expect(mockedProducer.metrics()).andReturn(Collections.emptyMap()).anyTimes();
         replay(mockedProducer);
 
         streamsProducer.resetProducer();
@@ -1130,16 +1135,21 @@ public class StreamsProducerTest {
         setProducerMetrics(nonEosMockProducer, 1, 2, 3, 4, 5, 6, 7);
 
         final double expectedTotalBlocked = 1 + 2 + 3 + 4 + 5 + 6 + 7;
-        assertThat(nonEosStreamsProducer.totalBlockedTime(), equalTo(expectedTotalBlocked));
+        assertThat(nonEosStreamsProducer.totalBlockedTime(), closeTo(expectedTotalBlocked, 0.01));
     }
 
     @Test
     public void shouldComputeTotalBlockedTimeAfterReset() {
         setProducerMetrics(eosBetaMockProducer, 1, 2, 3, 4, 5, 6, 7);
-        eosBetaStreamsProducer.resetProducer();
-
         final double expectedTotalBlocked = 1 + 2 + 3 + 4 + 5 + 6 + 7;
-        assertThat(eosBetaStreamsProducer.totalBlockedTime(), greaterThan(2 * expectedTotalBlocked));
+        assertThat(eosBetaStreamsProducer.totalBlockedTime(), equalTo(expectedTotalBlocked));
+        reset(mockTime);
+        expect(mockTime.nanoseconds()).andReturn(1L).andReturn(2L);
+        replay(mockTime);
+        eosBetaStreamsProducer.resetProducer();
+        setProducerMetrics(eosBetaMockClientSupplier.producers.get(1), 1, 2, 3, 4, 5, 6, 7);
+
+        assertThat(eosBetaStreamsProducer.totalBlockedTime(), closeTo(2 * expectedTotalBlocked + 1, 0.01));
     }
 
     private MetricName metricName(final String name) {

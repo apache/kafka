@@ -16,14 +16,20 @@
  */
 package org.apache.kafka.streams.processor.internals.metrics;
 
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.streams.processor.internals.StreamThreadTotalBlockedTime;
 import org.junit.Test;
+
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 import java.util.Map;
+import org.mockito.ArgumentCaptor;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
@@ -386,5 +392,52 @@ public class ThreadMetricsTest {
         final Sensor sensor = ThreadMetrics.closeTaskSensor(THREAD_ID, streamsMetrics);
 
         assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
+    public void shouldAddThreadStartTimeMetric() {
+        // When:
+        ThreadMetrics.addThreadStartTimeMetric(
+            "bongo",
+            streamsMetrics,
+            123L
+        );
+
+        // Then:
+        verify(streamsMetrics).addThreadLevelImmutableMetric(
+            "thread-start-time",
+            "The time that the thread was started",
+            "bongo",
+            123L
+        );
+    }
+
+    @Test
+    public void shouldAddTotalBlockedTimeMetric() {
+        // Given:
+        final StreamThreadTotalBlockedTime blockedTime = mock(StreamThreadTotalBlockedTime.class);
+        when(blockedTime.compute()).thenReturn(123.45);
+
+        // When:
+        ThreadMetrics.addThreadBlockedTimeMetric(
+            "burger",
+            blockedTime,
+            streamsMetrics
+        );
+
+        // Then:
+        final ArgumentCaptor<Gauge<Double>> captor = gaugeCaptor();
+        verify(streamsMetrics).addThreadLevelMutableMetric(
+            eq("blocked-time-total"),
+            eq("The total time the thread spent blocked on kafka"),
+            eq("burger"),
+            captor.capture()
+        );
+        assertThat(captor.getValue().value(null, 678L), is(123.45));
+    }
+
+    @SuppressWarnings("unchecked")
+    private ArgumentCaptor<Gauge<Double>> gaugeCaptor() {
+        return ArgumentCaptor.forClass(Gauge.class);
     }
 }

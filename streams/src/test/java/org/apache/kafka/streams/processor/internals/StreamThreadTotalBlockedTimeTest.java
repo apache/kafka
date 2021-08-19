@@ -35,7 +35,7 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-public class StreamsThreadTotalBlockedTimeTest {
+public class StreamThreadTotalBlockedTimeTest {
     @Mock
     Consumer<?, ?> consumer;
     @Mock
@@ -43,14 +43,14 @@ public class StreamsThreadTotalBlockedTimeTest {
     @Mock
     Supplier<Double> producerBlocked;
 
-    private StreamsThreadTotalBlockedTime blockedTime;
+    private StreamThreadTotalBlockedTime blockedTime;
 
     @Rule
     public final MockitoRule mockitoRule = MockitoJUnit.rule();
 
     @Before
     public void setup() {
-        blockedTime = new StreamsThreadTotalBlockedTime(consumer, restoreConsumer, producerBlocked);
+        blockedTime = new StreamThreadTotalBlockedTime(consumer, restoreConsumer, producerBlocked);
         when(consumer.metrics()).thenAnswer(a -> new MetricsBuilder()
             .addMetric("iotime-total", 1)
             .addMetric("io-waittime-total", 2)
@@ -69,7 +69,7 @@ public class StreamsThreadTotalBlockedTimeTest {
     @Test
     public void shouldComputeTotalBlockedTime() {
         assertThat(
-            blockedTime.getTotalBlockedTime(),
+            blockedTime.compute(),
             equalTo(1.0 + 2.0 + 3.0 + 4.0 + 5.0 + 6.0 + 7.0)
         );
     }

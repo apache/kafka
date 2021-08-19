@@ -69,6 +69,7 @@ public class StreamsProducer {
     private final Map<String, Object> eosV2ProducerConfigs;
     private final KafkaClientSupplier clientSupplier;
     private final StreamThread.ProcessingMode processingMode;
+    private final Time time;
 
     private Producer<byte[], byte[]> producer;
     private boolean transactionInFlight = false;
@@ -81,11 +82,22 @@ public class StreamsProducer {
                            final TaskId taskId,
                            final UUID processId,
                            final LogContext logContext) {
+        this(config, threadId, clientSupplier, taskId, processId, logContext, Time.SYSTEM);
+    }
+
+    public StreamsProducer(final StreamsConfig config,
+                           final String threadId,
+                           final KafkaClientSupplier clientSupplier,
+                           final TaskId taskId,
+                           final UUID processId,
+                           final LogContext logContext,
+                           final Time time) {
         Objects.requireNonNull(config, "config cannot be null");
         Objects.requireNonNull(threadId, "threadId cannot be null");
         this.clientSupplier = Objects.requireNonNull(clientSupplier, "clientSupplier cannot be null");
         log = Objects.requireNonNull(logContext, "logContext cannot be null").logger(getClass());
         logPrefix = logContext.logPrefix().trim();
+        this.time = Objects.requireNonNull(time, "time");
 
         processingMode = StreamThread.processingMode(config);
 
@@ -182,9 +194,9 @@ public class StreamsProducer {
         }
 
         oldProducerTotalBlockedTime += totalBlockedTime(producer);
-        final long start = Time.SYSTEM.nanoseconds();
+        final long start = time.nanoseconds();
         producer.close();
-        final long closeTime = Time.SYSTEM.nanoseconds() - start;
+        final long closeTime = time.nanoseconds() - start;
         oldProducerTotalBlockedTime += closeTime;
 
         producer = clientSupplier.getProducer(eosV2ProducerConfigs);
