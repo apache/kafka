@@ -201,7 +201,7 @@ class KStreamTest extends TestDriver {
     val stream1 = builder.stream[String, String](sourceTopic1)
     val stream2 = builder.stream[String, String](sourceTopic2)
     stream1
-      .join(stream2)((a, b) => s"$a-$b", JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(1), Duration.ofHours(24)))
+      .join(stream2)((a, b) => s"$a-$b", JoinWindows.of(ofSeconds(1)).grace(Duration.ofHours(24)))
       .to(sinkTopic)
 
     val now = Instant.now()

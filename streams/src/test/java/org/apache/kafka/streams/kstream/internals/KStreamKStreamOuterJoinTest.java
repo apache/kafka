@@ -113,7 +113,7 @@ public class KStreamKStreamOuterJoinTest {
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(10L)),
+            JoinWindows.of(ofMillis(100L)).grace(ofMillis(10L)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -125,20 +125,19 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
-            // verifies non-joined duplicates are emitted when window has closed
+            // verifies non-joined duplicates are emitted
             inputTopic1.pipeInput(0, "A0", 0L);
             inputTopic1.pipeInput(0, "A0-0", 0L);
             inputTopic2.pipeInput(1, "a1", 0L);
             inputTopic2.pipeInput(1, "a1-0", 0L);
             inputTopic2.pipeInput(1, "a0", 111L);
-            // bump stream-time to trigger outer-join results
-            inputTopic2.pipeInput(3, "dummy", 211);
 
             processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "A0+null", 0L),
+                new KeyValueTimestamp<>(0, "A0-0+null", 0L),
                 new KeyValueTimestamp<>(1, "null+a1", 0L),
                 new KeyValueTimestamp<>(1, "null+a1-0", 0L),
-                new KeyValueTimestamp<>(0, "A0+null", 0L),
-                new KeyValueTimestamp<>(0, "A0-0+null", 0L)
+                new KeyValueTimestamp<>(1, "null+a0", 111L)
             );
 
             // verifies joined duplicates are emitted
@@ -148,20 +147,12 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic2.pipeInput(2, "a2-0", 201L);
 
             processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(2, "A2+null", 200L),
+                new KeyValueTimestamp<>(2, "A2-0+null", 200L),
                 new KeyValueTimestamp<>(2, "A2+a2", 201L),
                 new KeyValueTimestamp<>(2, "A2-0+a2", 201L),
                 new KeyValueTimestamp<>(2, "A2+a2-0", 201L),
                 new KeyValueTimestamp<>(2, "A2-0+a2-0", 201L)
-            );
-
-            // this record should expired non-joined records; only null+a0 will be emitted because
-            // it did not have a join
-            driver.advanceWallClockTime(Duration.ofMillis(1000L));
-            inputTopic2.pipeInput(3, "dummy", 1500L);
-
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "null+a0", 111L),
-                new KeyValueTimestamp<>(3, "null+dummy", 211)
             );
         }
     }
@@ -180,7 +171,7 @@ public class KStreamKStreamOuterJoinTest {
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L)),
+            JoinWindows.of(ofMillis(100L)).grace(Duration.ZERO),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -194,29 +185,20 @@ public class KStreamKStreamOuterJoinTest {
 
             final long windowStart = 0L;
 
-            // No joins detected; No null-joins emitted
+            // No joins detected; three spurious item emitted
             inputTopic1.pipeInput(0, "A0", windowStart + 1L);
             inputTopic1.pipeInput(1, "A1", windowStart + 2L);
             inputTopic1.pipeInput(0, "A0-0", windowStart + 3L);
-            processor.checkAndClearProcessResult();
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "A0+null", windowStart + 1L),
+                new KeyValueTimestamp<>(1, "A1+null", windowStart + 2L),
+                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 3L)
+            );
 
             // Join detected; No null-joins emitted
             inputTopic2.pipeInput(1, "a1", windowStart + 3L);
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(1, "A1+a1", windowStart + 3L)
-            );
-
-            // Dummy record in left topic will emit expired non-joined records from the left topic
-            inputTopic1.pipeInput(2, "dummy", windowStart + 401L);
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+null", windowStart + 1L),
-                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 3L)
-            );
-
-            // Flush internal non-joined state store by joining the dummy record
-            inputTopic2.pipeInput(2, "dummy", windowStart + 401L);
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(2, "dummy+dummy", windowStart + 401L)
             );
         }
     }
@@ -235,7 +217,7 @@ public class KStreamKStreamOuterJoinTest {
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(0L)),
+            JoinWindows.of(ofMillis(100L)).grace(ofMillis(0L)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -253,25 +235,16 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic1.pipeInput(0, "A0", windowStart + 1L);
             inputTopic1.pipeInput(1, "A1", windowStart + 2L);
             inputTopic1.pipeInput(0, "A0-0", windowStart + 3L);
-            processor.checkAndClearProcessResult();
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "A0+null", windowStart + 1L),
+                new KeyValueTimestamp<>(1, "A1+null", windowStart + 2L),
+                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 3L)
+            );
 
             // Join detected; No null-joins emitted
             inputTopic2.pipeInput(1, "a1", windowStart + 3L);
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(1, "A1+a1", windowStart + 3L)
-            );
-
-            // Dummy record in right topic will emit expired non-joined records from the left topic
-            inputTopic2.pipeInput(2, "dummy", windowStart + 401L);
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+null", windowStart + 1L),
-                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 3L)
-            );
-
-            // Flush internal non-joined state store by joining the dummy record
-            inputTopic1.pipeInput(2, "dummy", windowStart + 402L);
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(2, "dummy+dummy", windowStart + 402L)
             );
         }
     }
@@ -290,7 +263,7 @@ public class KStreamKStreamOuterJoinTest {
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L)),
+            JoinWindows.of(ofMillis(100L)).grace(Duration.ZERO),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -304,29 +277,20 @@ public class KStreamKStreamOuterJoinTest {
 
             final long windowStart = 0L;
 
-            // No joins detected; No null-joins emitted
+            // No joins detectedl; only spurious resulst
             inputTopic2.pipeInput(0, "A0", windowStart + 1L);
             inputTopic2.pipeInput(1, "A1", windowStart + 2L);
             inputTopic2.pipeInput(0, "A0-0", windowStart + 3L);
-            processor.checkAndClearProcessResult();
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "null+A0", windowStart + 1L),
+                new KeyValueTimestamp<>(1, "null+A1", windowStart + 2L),
+                new KeyValueTimestamp<>(0, "null+A0-0", windowStart + 3L)
+            );
 
             // Join detected; No null-joins emitted
             inputTopic1.pipeInput(1, "a1", windowStart + 3L);
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(1, "a1+A1", windowStart + 3L)
-            );
-
-            // Dummy record in left topic will emit expired non-joined records from the right topic
-            inputTopic1.pipeInput(2, "dummy", windowStart + 401L);
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "null+A0", windowStart + 1L),
-                new KeyValueTimestamp<>(0, "null+A0-0", windowStart + 3L)
-            );
-
-            // Process the dummy joined record
-            inputTopic2.pipeInput(2, "dummy", windowStart + 402L);
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(2, "dummy+dummy", windowStart + 402L)
             );
         }
     }
@@ -345,7 +309,7 @@ public class KStreamKStreamOuterJoinTest {
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(0L)),
+            JoinWindows.of(ofMillis(100L)).grace(ofMillis(0L)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -363,25 +327,16 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic2.pipeInput(0, "A0", windowStart + 1L);
             inputTopic2.pipeInput(1, "A1", windowStart + 2L);
             inputTopic2.pipeInput(0, "A0-0", windowStart + 3L);
-            processor.checkAndClearProcessResult();
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "null+A0", windowStart + 1L),
+                new KeyValueTimestamp<>(1, "null+A1", windowStart + 2L),
+                new KeyValueTimestamp<>(0, "null+A0-0", windowStart + 3L)
+            );
 
             // Join detected; No null-joins emitted
             inputTopic1.pipeInput(1, "a1", windowStart + 3L);
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(1, "a1+A1", windowStart + 3L)
-            );
-
-            // Dummy record in right topic will emit expired non-joined records from the right topic
-            inputTopic2.pipeInput(2, "dummy", windowStart + 401L);
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "null+A0", windowStart + 1L),
-                new KeyValueTimestamp<>(0, "null+A0-0", windowStart + 3L)
-            );
-
-            // Process the dummy joined record
-            inputTopic1.pipeInput(2, "dummy", windowStart + 402L);
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(2, "dummy+dummy", windowStart + 402L)
             );
         }
     }
@@ -400,7 +355,7 @@ public class KStreamKStreamOuterJoinTest {
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
+            JoinWindows.of(ofMillis(100)).grace(Duration.ZERO),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -412,17 +367,19 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
-            // push two items to the primary stream; the other window is empty; this should not produce any item yet
+            // push two items to the primary stream; the other window is empty; this should produce two spurious resulst
             // w1 = {}
             // w2 = {}
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100) }
             // --> w2 = {}
             inputTopic1.pipeInput(0, "A0", 0L);
             inputTopic1.pipeInput(1, "A1", 100L);
-            processor.checkAndClearProcessResult();
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "A0+null", 0L),
+                new KeyValueTimestamp<>(1, "A1+null", 100L)
+            );
 
-            // push one item to the other window that has a join; this should produce non-joined records with a closed window first, then
-            // the joined records
+            // push one item to the other window that has a join; this should produce the joined records
             // by the time they were produced before
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100) }
             // w2 = { }
@@ -430,7 +387,6 @@ public class KStreamKStreamOuterJoinTest {
             // --> w2 = { 0:a0 (ts: 110) }
             inputTopic2.pipeInput(1, "a1", 110L);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+null", 0L),
                 new KeyValueTimestamp<>(1, "A1+a1", 110L)
             );
         }
@@ -450,7 +406,7 @@ public class KStreamKStreamOuterJoinTest {
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100), ofMillis(10)),
+            JoinWindows.of(ofMillis(100)).grace(ofMillis(10)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -468,43 +424,36 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
-            // push one item to the primary stream; and one item in other stream; this should not produce items because there are no joins
-            // and window has not ended
+            // push one item to the primary stream; and one item in other stream; this should produce two spurious items
             // w1 = {}
             // w2 = {}
             // --> w1 = { 0:A0 (ts: 0) }
             // --> w2 = { 1:a1 (ts: 0) }
             inputTopic1.pipeInput(0, "A0", 0L);
             inputTopic2.pipeInput(1, "a1", 0L);
-            processor.checkAndClearProcessResult();
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "A0+null", 0L),
+                new KeyValueTimestamp<>(1, "null+a1", 0L)
+            );
 
-            // push one item on each stream with a window time after the previous window ended (not closed); this should not produce
-            // joined records because the window has ended, but will not produce non-joined records because the window has not closed.
+            // push one item on each stream with a window time after the previous window ended;
+            // this should produce two spurious items
             // w1 = { 0:A0 (ts: 0) }
             // w2 = { 1:a1 (ts: 0) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
             // --> w2 = { 0:a0 (ts: 101), 1:a1 (ts: 101) }
             inputTopic2.pipeInput(0, "a0", 101L);
             inputTopic1.pipeInput(1, "A1", 101L);
-            processor.checkAndClearProcessResult();
-
-            // push a dummy item to the any stream after the window is closed; this should produced all expired non-joined records because
-            // the window has closed
-            // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
-            // w2 = { 0:a0 (ts: 101), 1:a1 (ts: 101) }
-            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
-            // --> w2 = { 0:a0 (ts: 101), 1:a1 (ts: 101), 0:dummy (ts: 112) }
-            inputTopic2.pipeInput(0, "dummy", 211);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "null+a1", 0L),
-                new KeyValueTimestamp<>(0, "A0+null", 0L)
+                new KeyValueTimestamp<>(0, "null+a0", 101L),
+                new KeyValueTimestamp<>(1, "A1+null", 101L)
             );
         }
     }
 
     @Test
     public void testOuterJoinWithInMemoryCustomSuppliers() {
-        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100L)).grace(Duration.ZERO);
 
         final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore(
             "in-memory-join-store",
@@ -527,7 +476,7 @@ public class KStreamKStreamOuterJoinTest {
 
     @Test
     public void testOuterJoinWithDefaultSuppliers() {
-        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100L)).grace(Duration.ZERO);
         final StreamJoined<Integer, String, String> streamJoined = StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String());
 
         runOuterJoin(streamJoined, joinWindows);
@@ -567,11 +516,11 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
-            // 2 window stores + 1 shared window store should be available
-            assertEquals(3, driver.getAllStateStores().size());
+            // 2 window stores should be available
+            assertEquals(2, driver.getAllStateStores().size());
 
-            // push two items to the primary stream; the other window is empty; this should not
-            // produce any items because window has not expired
+            // push two items to the primary stream; the other window is empty; this should
+            // produce two spurious items
             // w1 {}
             // w2 {}
             // --> w1 = { 0:A0, 1:A1 }
@@ -579,7 +528,10 @@ public class KStreamKStreamOuterJoinTest {
             for (int i = 0; i < 2; i++) {
                 inputTopic1.pipeInput(expectedKeys[i], "A" + expectedKeys[i]);
             }
-            processor.checkAndClearProcessResult();
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "A0+null", 0L),
+                new KeyValueTimestamp<>(1, "A1+null", 0L)
+            );
 
             // push two items to the other stream; this should produce two full-joined items
             // w1 = { 0:A0, 1:A1 }
@@ -594,7 +546,7 @@ public class KStreamKStreamOuterJoinTest {
                 new KeyValueTimestamp<>(1, "A1+a1", 0L)
             );
 
-            // push three items to the primary stream; this should produce two full-joined items
+            // push three items to the primary stream; this should produce threeitems
             // w1 = { 0:A0, 1:A1 }
             // w2 = { 0:a0, 1:a1 }
             // --> w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2 }
@@ -604,10 +556,11 @@ public class KStreamKStreamOuterJoinTest {
             }
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(0, "B0+a0", 0L),
-                new KeyValueTimestamp<>(1, "B1+a1", 0L)
+                new KeyValueTimestamp<>(1, "B1+a1", 0L),
+                new KeyValueTimestamp<>(2, "B2+null", 0L)
             );
 
-            // push all items to the other stream; this should produce five full-joined items
+            // push all items to the other stream; this should produce six items
             // w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2 }
             // w2 = { 0:a0, 1:a1 }
             // --> w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2 }
@@ -620,7 +573,8 @@ public class KStreamKStreamOuterJoinTest {
                 new KeyValueTimestamp<>(0, "B0+b0", 0L),
                 new KeyValueTimestamp<>(1, "A1+b1", 0L),
                 new KeyValueTimestamp<>(1, "B1+b1", 0L),
-                new KeyValueTimestamp<>(2, "B2+b2", 0L)
+                new KeyValueTimestamp<>(2, "B2+b2", 0L),
+                new KeyValueTimestamp<>(3, "null+b3", 0L)
             );
 
             // push all four items to the primary stream; this should produce six full-joined items
@@ -639,11 +593,6 @@ public class KStreamKStreamOuterJoinTest {
                 new KeyValueTimestamp<>(2, "C2+b2", 0L),
                 new KeyValueTimestamp<>(3, "C3+b3", 0L)
             );
-
-            // push a dummy record that should expire non-joined items; it should not produce any items because
-            // all of them are joined
-            inputTopic1.pipeInput(0, "dummy", 400L);
-            processor.checkAndClearProcessResult();
         }
     }
 
@@ -662,7 +611,7 @@ public class KStreamKStreamOuterJoinTest {
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
+            JoinWindows.of(ofMillis(100)).grace(Duration.ZERO),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -681,7 +630,7 @@ public class KStreamKStreamOuterJoinTest {
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
             final long time = 0L;
 
-            // push two items to the primary stream; the other window is empty; this should not produce items because window has not closed
+            // push two items to the primary stream; the other window is empty; this should produce two spurious items
             // w1 = {}
             // w2 = {}
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
@@ -689,9 +638,12 @@ public class KStreamKStreamOuterJoinTest {
             for (int i = 0; i < 2; i++) {
                 inputTopic1.pipeInput(expectedKeys[i], "A" + expectedKeys[i], time);
             }
-            processor.checkAndClearProcessResult();
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "A0+null", 0L),
+                new KeyValueTimestamp<>(1, "A1+null", 0L)
+            );
 
-            // push four items to the other stream; this should produce two full-join items
+            // push four items to the other stream; this should produce four full-join items
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
             // w2 = {}
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
@@ -701,7 +653,9 @@ public class KStreamKStreamOuterJoinTest {
             }
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(0, "A0+a0", 0L),
-                new KeyValueTimestamp<>(1, "A1+a1", 0L)
+                new KeyValueTimestamp<>(1, "A1+a1", 0L),
+                new KeyValueTimestamp<>(2, "null+a2", 0L),
+                new KeyValueTimestamp<>(3, "null+a3", 0L)
             );
 
             testUpperWindowBound(expectedKeys, driver, processor);
@@ -730,8 +684,10 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic2.pipeInput(expectedKeys[i], "b" + expectedKeys[i], time + i);
         }
         processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(2, "null+a2", 0L),
-            new KeyValueTimestamp<>(3, "null+a3", 0L)
+            new KeyValueTimestamp<>(0, "null+b0", 1000L),
+            new KeyValueTimestamp<>(1, "null+b1", 1001L),
+            new KeyValueTimestamp<>(2, "null+b2", 1002L),
+            new KeyValueTimestamp<>(3, "null+b3", 1003L)
         );
 
         // push four items with larger timestamp to the primary stream; this should produce four full-join items
@@ -753,7 +709,7 @@ public class KStreamKStreamOuterJoinTest {
             new KeyValueTimestamp<>(3, "B3+b3", 1100L)
         );
 
-        // push four items with increased timestamp to the primary stream; this should produce three full-join items (non-joined item is not produced yet)
+        // push four items with increased timestamp to the primary stream; this should produce three full-join items plus one spurious item
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //        0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100) }
         // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
@@ -768,12 +724,13 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic1.pipeInput(expectedKey, "C" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "C0+null", 1101L),
             new KeyValueTimestamp<>(1, "C1+b1", 1101L),
             new KeyValueTimestamp<>(2, "C2+b2", 1101L),
             new KeyValueTimestamp<>(3, "C3+b3", 1101L)
         );
 
-        // push four items with increased timestamp to the primary stream; this should produce two full-join items (non-joined items are not produced yet)
+        // push four items with increased timestamp to the primary stream; this should produce two full-join items plus two spurious items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //        0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //        0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101) }
@@ -790,11 +747,13 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic1.pipeInput(expectedKey, "D" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "D0+null", 1102L),
+            new KeyValueTimestamp<>(1, "D1+null", 1102L),
             new KeyValueTimestamp<>(2, "D2+b2", 1102L),
             new KeyValueTimestamp<>(3, "D3+b3", 1102L)
         );
 
-        // push four items with increased timestamp to the primary stream; this should produce one full-join items (three non-joined left-join are not produced yet)
+        // push four items with increased timestamp to the primary stream; this should produce one full-join items plus three spurious itmes
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //        0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //        0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101),
@@ -813,10 +772,13 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic1.pipeInput(expectedKey, "E" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "E0+null", 1103L),
+            new KeyValueTimestamp<>(1, "E1+null", 1103L),
+            new KeyValueTimestamp<>(2, "E2+null", 1103L),
             new KeyValueTimestamp<>(3, "E3+b3", 1103L)
         );
 
-        // push four items with increased timestamp to the primary stream; this should produce no full-join items (four non-joined left-join are not produced yet)
+        // push four items with increased timestamp to the primary stream; this should produce four spurious items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //        0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //        0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101),
@@ -836,23 +798,12 @@ public class KStreamKStreamOuterJoinTest {
         for (final int expectedKey : expectedKeys) {
             inputTopic1.pipeInput(expectedKey, "F" + expectedKey, time);
         }
-        processor.checkAndClearProcessResult();
-
-        // push a dummy record to produce all left-join non-joined items
-        time += 301L;
-        driver.advanceWallClockTime(Duration.ofMillis(1000L));
-        inputTopic1.pipeInput(0, "dummy", time);
         processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(0, "C0+null", 1101L),
-            new KeyValueTimestamp<>(0, "D0+null", 1102L),
-            new KeyValueTimestamp<>(1, "D1+null", 1102L),
-            new KeyValueTimestamp<>(0, "E0+null", 1103L),
-            new KeyValueTimestamp<>(1, "E1+null", 1103L),
-            new KeyValueTimestamp<>(2, "E2+null", 1103L),
             new KeyValueTimestamp<>(0, "F0+null", 1104L),
             new KeyValueTimestamp<>(1, "F1+null", 1104L),
             new KeyValueTimestamp<>(2, "F2+null", 1104L),
             new KeyValueTimestamp<>(3, "F3+null", 1104L)
+
         );
     }
 

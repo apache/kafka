@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.Arrays;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -64,7 +65,7 @@ public class KStreamImplValueJoinerWithKeyTest {
 
     private final ValueJoinerWithKey<String, Integer, Integer, String> valueJoinerWithKey =
         (key, lv, rv) -> key + ":" + (lv + (rv == null ? 0 : rv));
-    private final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100), ofHours(24L));
+    private final JoinWindows joinWindows = JoinWindows.of(ofMillis(100)).grace(ofHours(24L));
     private final StreamJoined<String, Integer, Integer> streamJoined =
             StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
     private final Joined<String, Integer, Integer> joined =
@@ -108,7 +109,8 @@ public class KStreamImplValueJoinerWithKeyTest {
         ).to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
         // Left KV A, 3, Right KV A, 5
         // TTD pipes records to left stream first, then right
-        final List<KeyValue<String, String>> expectedResults = Collections.singletonList(KeyValue.pair("A", "A:5"));
+        final List<KeyValue<String, String>> expectedResults =
+            Arrays.asList(KeyValue.pair("A", "A:3"), KeyValue.pair("A", "A:5"));
         runJoinTopology(
             builder,
             expectedResults,
@@ -128,7 +130,8 @@ public class KStreamImplValueJoinerWithKeyTest {
 
         // Left KV A, 3, Right KV A, 5
         // TTD pipes records to left stream first, then right
-        final List<KeyValue<String, String>> expectedResults = Collections.singletonList(KeyValue.pair("A", "A:5"));
+        final List<KeyValue<String, String>> expectedResults =
+            Arrays.asList(KeyValue.pair("A", "A:3"), KeyValue.pair("A", "A:5"));
         runJoinTopology(
             builder,
             expectedResults,
