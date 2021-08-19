@@ -162,7 +162,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableNewProcessor
         private void buffer(final Record<K, Change<V>> record) {
             final long bufferTime = bufferTimeDefinition.time(internalProcessorContext, record.key());
 
-            buffer.put(bufferTime, record.key(), record.value(), internalProcessorContext.recordContext());
+            buffer.put(bufferTime, record, internalProcessorContext.recordContext());
         }
 
         private void enforceConstraints() {
