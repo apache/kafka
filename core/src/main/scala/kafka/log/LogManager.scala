@@ -786,6 +786,25 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
+   * Update the configuration of the provided topic.
+   */
+  def updateTopicConfig(topic: String,
+                        newTopicConfig: Properties): Unit = {
+    topicConfigUpdated(topic)
+    val logs = logsByTopic(topic)
+    if (logs.nonEmpty) {
+      // Combine the default properties with the overrides in zk to create the new LogConfig
+      val newLogConfig = LogConfig.fromProps(currentDefaultConfig.originals, newTopicConfig)
+      logs.foreach { log =>
+        val oldLogConfig = log.updateConfig(newLogConfig)
+        if (oldLogConfig.compact && !newLogConfig.compact) {
+          abortCleaning(log.topicPartition)
+        }
+      }
+    }
+  }
+
+  /**
    * Mark all in progress partitions having dirty configuration if broker configuration is updated.
    */
   def brokerConfigUpdated(): Unit = {

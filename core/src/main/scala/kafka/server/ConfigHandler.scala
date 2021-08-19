@@ -55,32 +55,14 @@ trait ConfigHandler {
 class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig,
                          val quotas: QuotaManagers, kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
 
-  private def updateLogConfig(topic: String,
-                              topicConfig: Properties,
-                              configNamesToExclude: Set[String]): Unit = {
-    logManager.topicConfigUpdated(topic)
-    val logs = logManager.logsByTopic(topic)
-    if (logs.nonEmpty) {
-      /* combine the default properties with the overrides in zk to create the new LogConfig */
-      val props = new Properties()
-      topicConfig.asScala.forKeyValue { (key, value) =>
-        if (!configNamesToExclude.contains(key)) props.put(key, value)
-      }
-      val newLogConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
-      logs.foreach { log =>
-        val oldLogConfig = log.updateConfig(newLogConfig)
-        if (oldLogConfig.compact && !newLogConfig.compact) {
-          logManager.abortCleaning(log.topicPartition)
-        }
-      }
-    }
-  }
-
   def processConfigChanges(topic: String, topicConfig: Properties): Unit = {
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
-
-    updateLogConfig(topic, topicConfig, configNamesToExclude)
+    val props = new Properties()
+    topicConfig.asScala.forKeyValue { (key, value) =>
+      if (!configNamesToExclude.contains(key)) props.put(key, value)
+    }
+    logManager.updateTopicConfig(topic, props)
 
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager) = {
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).nonEmpty) {
