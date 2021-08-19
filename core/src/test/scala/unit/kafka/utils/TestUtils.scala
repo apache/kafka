@@ -189,7 +189,8 @@ object TestUtils extends Logging {
    *
    * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
    */
-  def createBrokerConfigs(numConfigs: Int,
+  def createBrokerConfigs(
+    numConfigs: Int,
     zkConnect: String,
     enableControlledShutdown: Boolean = true,
     enableDeleteTopic: Boolean = true,
@@ -205,8 +206,10 @@ object TestUtils extends Logging {
     enableToken: Boolean = false,
     numPartitions: Int = 1,
     defaultReplicationFactor: Short = 1,
-    startingIdNumber: Int = 0): Seq[Properties] = {
-    (startingIdNumber until numConfigs).map { node =>
+    startingIdNumber: Int = 0
+  ): Seq[Properties] = {
+    val endingIdNumber = startingIdNumber + numConfigs - 1
+    (startingIdNumber to endingIdNumber).map { node =>
       createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
         interBrokerSecurityProtocol, trustStoreFile, saslProperties, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
         enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node), logDirCount = logDirCount, enableToken = enableToken,
