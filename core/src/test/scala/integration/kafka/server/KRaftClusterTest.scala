@@ -48,12 +48,13 @@ class KRaftClusterTest {
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
-      // check the gauge in this test to make sure it is working; other tests introspect via the currentState() method
-      assertEquals(BrokerState.NOT_RUNNING.value(), cluster.brokers().get(0).brokerStateGauge.value())
+      // check via brokerState in this test to make sure it is working since that is what defines the gauge value
+      // (other tests introspect via the currentState() method)
+      assertEquals(BrokerState.NOT_RUNNING, cluster.brokers().get(0).brokerState)
       cluster.format()
       cluster.startup()
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerStateGauge.value() == BrokerState.RUNNING.value(),
-        "Broker never made it to RUNNING state.")
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
+        "waiting for the broker state to become RUNNING")
     } finally {
       cluster.close()
     }

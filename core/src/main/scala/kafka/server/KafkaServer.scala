@@ -91,6 +91,10 @@ class KafkaServer(
   threadNamePrefix: Option[String] = None,
   enableForwarding: Boolean = false
 ) extends KafkaBroker with Server {
+  @volatile private var _brokerState: BrokerState = BrokerState.NOT_RUNNING
+
+  override def brokerState: BrokerState = _brokerState
+  def brokerState_= (brokerState: BrokerState): Unit = _brokerState = brokerState
 
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
