@@ -122,7 +122,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableNewProcessor
         private final String storeName;
 
         private TimeOrderedKeyValueBuffer<K, V> buffer;
-        private InternalProcessorContext internalProcessorContext;
+        private InternalProcessorContext<K, Change<V>> internalProcessorContext;
         private Sensor suppressionEmitSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
@@ -140,7 +140,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableNewProcessor
         @Override
         public void init(final ProcessorContext<K, Change<V>> context) {
             super.init(context);
-            internalProcessorContext = (InternalProcessorContext) context;
+            internalProcessorContext = (InternalProcessorContext<K, Change<V>>) context;
             suppressionEmitSensor = ProcessorNodeMetrics.suppressionEmitSensor(
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
@@ -154,7 +154,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableNewProcessor
 
         @Override
         public void process(final Record<K, Change<V>> record) {
-            observedStreamTime = Math.max(observedStreamTime, internalProcessorContext.timestamp());
+            observedStreamTime = Math.max(observedStreamTime, record.timestamp());
             buffer(record);
             enforceConstraints();
         }
@@ -201,7 +201,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableNewProcessor
                 final ProcessorRecordContext prevRecordContext = internalProcessorContext.recordContext();
                 internalProcessorContext.setRecordContext(toEmit.recordContext());
                 try {
-                    internalProcessorContext.forward(toEmit.key(), toEmit.value());
+                    internalProcessorContext.forward(toEmit.record());
                     suppressionEmitSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
                 } finally {
                     internalProcessorContext.setRecordContext(prevRecordContext);
