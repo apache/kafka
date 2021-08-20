@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
@@ -75,27 +73,33 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
     }
 
     public OAuthBearerToken validate(String accessToken) throws ValidateException {
-        log.debug("validate - accessToken: {}", accessToken);
+        log.warn("validate - accessToken: {}", accessToken);
+        accessToken = OAuthBearerValidationUtils.validateAccessToken(accessToken);
 
         JwtContext jwt;
 
         try {
             jwt = jwtConsumer.process(accessToken);
         } catch (InvalidJwtException e) {
-            throw new ValidateException("Could not process the access token", e);
+            throw new ValidateException(String.format("Could not process the access token: %s", e.getMessage()), e);
         }
 
         JwtClaims claims = jwt.getJwtClaims();
-        List<String> scopes = getClaim(() -> claims.getStringListClaimValue(scopeClaimName), scopeClaimName);
+        List<String> scopeList = getClaim(() -> claims.getStringListClaimValue(scopeClaimName), scopeClaimName);
         NumericDate expiration = getClaim(claims::getExpirationTime, ReservedClaimNames.EXPIRATION_TIME);
         String sub = getClaim(() -> claims.getStringClaimValue(subClaimName), subClaimName);
         NumericDate issuedAt = getClaim(claims::getIssuedAt, ReservedClaimNames.ISSUED_AT);
 
+        Set<String> scopes = OAuthBearerValidationUtils.validateScopes(scopeList);
+        long lifetimeMs = OAuthBearerValidationUtils.validateLifetimeMs(expiration != null ? expiration.getValueInMillis() : null);
+        String principalName = OAuthBearerValidationUtils.validatePrincipalName(sub);
+        Long startTimeMs = OAuthBearerValidationUtils.validateStartTimeMs(issuedAt != null ? issuedAt.getValueInMillis() : null);
+
         OAuthBearerToken token = new BasicOAuthBearerToken(accessToken,
-            scopes != null && !scopes.isEmpty() ? new HashSet<>(scopes) : Collections.emptySet(),
-            expiration != null ? expiration.getValueInMillis() : null,
-            sub,
-            issuedAt != null ? issuedAt.getValueInMillis() : null);
+            scopes,
+            lifetimeMs,
+            principalName,
+            startTimeMs);
 
         log.debug("validate - token: {}", token);
 

@@ -18,13 +18,27 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import java.io.File;
-import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigException;
 
-public class FileConfigDefValidator implements ConfigDef.Validator {
+/**
+ * An implementation of {@link org.apache.kafka.common.config.ConfigDef.Validator} that, if a value
+ * is supplied, is assumed to:
+ *
+ * <li>
+ *     <ul>exist</ul>
+ *     <ul>have read permission</ul>
+ *     <ul>point to a file</ul>
+ * </li>
+ *
+ * If the value is null or an empty string, it is assumed to be an "empty" value and thus ignored.
+ * Any whitespace is trimmed off of the beginning and end.
+ */
+
+public class FileConfigDefValidator implements Validator {
 
     @Override
-    public void ensureValid(final String name, final Object value) {
+    public void ensureValid(String name, Object value) {
         if (value == null || value.toString().trim().isEmpty())
             return;
 
@@ -35,6 +49,9 @@ public class FileConfigDefValidator implements ConfigDef.Validator {
 
         if (!file.canRead())
             throw new ConfigException(String.format("The OAuth configuration option %s contains a file (%s) that doesn't have read permission", name, value));
+
+        if (file.isDirectory())
+            throw new ConfigException(String.format("The OAuth configuration option %s references a directory (%s), not a file", name, value));
     }
 
 }

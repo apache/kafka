@@ -18,9 +18,11 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerIllegalTokenException;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
@@ -36,17 +38,14 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
     private final String subClaimName;
 
     public LoginAccessTokenValidator(String scopeClaimName, String subClaimName) {
-        this.scopeClaimName = scopeClaimName;
-        this.subClaimName = subClaimName;
+        this.scopeClaimName = OAuthBearerValidationUtils.validateClaimName(scopeClaimName, "scope");
+        this.subClaimName = OAuthBearerValidationUtils.validateClaimName(subClaimName, "sub");
     }
 
     public OAuthBearerToken validate(String accessToken) throws ValidateException {
-        String[] splits = accessToken.split("\\.");
-        log.warn("validate - accessToken splits length: {}", splits.length);
-
-        if (splits.length != 3)
-            throw new ValidateException(String.format("Malformed JWT provided; expected at least three sections (header, payload, and signature), but %s sections provided", splits.length));
-
+        log.debug("validate - accessToken: {}", accessToken);
+        accessToken = OAuthBearerValidationUtils.validateAccessToken(accessToken);
+        String[] splits = OAuthBearerValidationUtils.validateAccessTokenSplits(accessToken);
         Map<String, Object> payload;
 
         try {
@@ -56,16 +55,21 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
         }
 
         @SuppressWarnings("unchecked")
-        Collection<String> scopes = (Collection<String>) getClaim(payload, scopeClaimName);
+        Collection<String> scopeCollection = (Collection<String>) getClaim(payload, scopeClaimName);
         Number expiration = (Number) getClaim(payload, "exp");
         String sub = (String) getClaim(payload, subClaimName);
         Number issuedAt = (Number) getClaim(payload, "iat");
 
+        Set<String> scopes = OAuthBearerValidationUtils.validateScopes(scopeCollection);
+        long lifetimeMs = OAuthBearerValidationUtils.validateLifetimeMs(expiration != null ? expiration.longValue() * 1000L : null);
+        String principalName = OAuthBearerValidationUtils.validatePrincipalName(sub);
+        Long startTimeMs = OAuthBearerValidationUtils.validateStartTimeMs(issuedAt != null ? issuedAt.longValue() * 1000L : null);
+
         OAuthBearerToken token = new BasicOAuthBearerToken(accessToken,
-            scopes != null && !scopes.isEmpty() ? new HashSet<>(scopes) : Collections.emptySet(),
-            expiration != null ? expiration.longValue() * 1000L : null,
-            sub,
-            issuedAt != null ? issuedAt.longValue() * 1000L : null);
+            scopes,
+            lifetimeMs,
+            principalName,
+            startTimeMs);
 
         log.debug("validate - token: {}", token);
 

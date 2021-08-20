@@ -44,6 +44,8 @@ public class BasicOAuthBearerToken implements OAuthBearerToken {
     private final Long startTimeMs;
 
     /**
+     * Creates a new OAuthBearerToken instance that performs validation of the given values with the
+     * {@link OAuthBearerValidationUtils} class.
      *
      * @param token         Value containing the compact serialization as a base 64 string that
      *                      can be parsed, decoded, and validated as a well-formed JWS. Must be
@@ -51,21 +53,30 @@ public class BasicOAuthBearerToken implements OAuthBearerToken {
      * @param scopes        Set of non-<code>null</code> scopes. May contain case-sensitive
      *                      "duplicates". The given set is copied and made unmodifiable so neither
      *                      the caller of this constructor nor any downstream users can modify it.
-     * @param lifetimeMs
-     * @param principalName
-     * @param startTimeMs
+     * @param lifetimeMs    The token's lifetime, expressed as the number of milliseconds since the
+     *                      epoch. Must be non-negative.
+     * @param principalName The name of the principal to which this credential applies. Must be
+     *                      non-<code>null</code>, non-blank, and non-whitespace only.
+     * @param startTimeMs   The token's start time, expressed as the number of milliseconds since
+     *                      the epoch, if available, otherwise <code>null</code>. Must be
+     *                      non-negative if a non-<code>null</code> value is provided.
+     *
+     * @see OAuthBearerValidationUtils
+     *
+     * @throws ValidateException If the provided values do not conform to the expected values per
+     *                           the validation logic in {@link OAuthBearerValidationUtils}
      */
 
     public BasicOAuthBearerToken(String token,
         Set<String> scopes,
-        Long lifetimeMs,
+        long lifetimeMs,
         String principalName,
         Long startTimeMs) {
-        this.token = OAuthBearerValidationUtils.validateToken(token);
+        this.token = OAuthBearerValidationUtils.validateAccessToken(token);
         this.scopes = OAuthBearerValidationUtils.validateScopes(scopes);
-        this.lifetimeMs = lifetimeMs;
-        this.principalName = principalName;
-        this.startTimeMs = startTimeMs;
+        this.lifetimeMs = OAuthBearerValidationUtils.validateLifetimeMs(lifetimeMs);
+        this.principalName = OAuthBearerValidationUtils.validatePrincipalName(principalName);
+        this.startTimeMs = OAuthBearerValidationUtils.validateStartTimeMs(startTimeMs);
     }
 
     /**
@@ -118,10 +129,26 @@ public class BasicOAuthBearerToken implements OAuthBearerToken {
         return lifetimeMs;
     }
 
+    /**
+     * The name of the principal to which this credential applies
+     *
+     * @return the always non-null/non-empty principal name
+     */
+
     @Override
     public String principalName() {
         return principalName;
     }
+
+    /**
+     * When the credential became valid, in terms of the number of milliseconds
+     * since the epoch, if known, otherwise null. An expiring credential may not
+     * necessarily indicate when it was created -- just when it expires -- so we
+     * need to support a null return value here.
+     *
+     * @return the time when the credential became valid, in terms of the number of
+     *         milliseconds since the epoch, if known, otherwise null
+     */
 
     @Override
     public Long startTimeMs() {

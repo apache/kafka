@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Test;
 public class BasicOAuthBearerTokenTest {
 
     @Test
-    public void smoke() {
+    public void basic() {
         OAuthBearerToken token = new BasicOAuthBearerToken("not.valid.token",
             Collections.emptySet(),
             0L,
@@ -44,6 +44,15 @@ public class BasicOAuthBearerTokenTest {
         assertEquals(0L, token.lifetimeMs());
         assertEquals("jdoe", token.principalName());
         assertEquals(0L, token.startTimeMs());
+    }
+
+    @Test
+    public void negativeLifetime() {
+        assertThrows(ValidateException.class, () -> new BasicOAuthBearerToken("not.valid.token",
+            Collections.emptySet(),
+            -1L,
+            "jdoe",
+            0L));
     }
 
     @Test
