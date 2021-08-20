@@ -24,10 +24,12 @@ import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
@@ -267,5 +269,26 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
     public String getFullTopologyDescription() {
         return topologyMetadata.topologyDescriptionString();
+    }
+
+    /**
+     * See {@link KafkaStreams#store(StoreQueryParameters)}
+     */
+    public <T> T store(final NamedTopologyStoreQueryParameters<T> storeQueryParameters) {
+        final String topologyName = storeQueryParameters.topologyName;
+        final String storeName = storeQueryParameters.storeName();
+        final InternalTopologyBuilder builder = topologyMetadata.lookupBuilderForNamedTopology(topologyName);
+        if (builder == null) {
+            throw new UnknownStateStoreException(
+                "Cannot get state store " + storeName + " from NamedTopology " + topologyName +
+                    " because no such topology exists."
+            );
+        } else if (!builder.hasStore(storeName)) {
+            throw new UnknownStateStoreException(
+                "Cannot get state store " + storeName + " from NamedTopology " + topologyName +
+                    " because no such state store exists in this topology."
+            );
+        }
+        return super.store(storeQueryParameters);
     }
 }

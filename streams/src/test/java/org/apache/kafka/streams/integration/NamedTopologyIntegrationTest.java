@@ -38,8 +38,11 @@ import org.apache.kafka.streams.processor.internals.namedtopology.AddNamedTopolo
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStoreQueryParameters;
 import org.apache.kafka.streams.processor.internals.namedtopology.RemoveNamedTopologyResult;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
@@ -340,6 +343,10 @@ public class NamedTopologyIntegrationTest {
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
+
+        final ReadOnlyKeyValueStore<String, Long> store =
+            streams.store(NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType("topology-1", "store", QueryableStoreTypes.keyValueStore()));
+        assertThat(store.get("A"), equalTo(2L));
     }
 
     @Test
