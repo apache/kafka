@@ -23,6 +23,7 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.StoreImplementation;
 import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
@@ -64,6 +65,7 @@ public class Materialized<K, V, S extends StateStore> {
     protected boolean cachingEnabled = true;
     protected Map<String, String> topicConfig = new HashMap<>();
     protected Duration retention;
+    protected StoreImplementation storeImplementation;
 
     private Materialized(final StoreSupplier<S> storeSupplier) {
         this.storeSupplier = storeSupplier;
@@ -71,6 +73,10 @@ public class Materialized<K, V, S extends StateStore> {
 
     private Materialized(final String storeName) {
         this.storeName = storeName;
+    }
+
+    private Materialized(final StoreImplementation storeImplementation) {
+        this.storeImplementation = storeImplementation;
     }
 
     /**
@@ -86,6 +92,7 @@ public class Materialized<K, V, S extends StateStore> {
         this.cachingEnabled = materialized.cachingEnabled;
         this.topicConfig = materialized.topicConfig;
         this.retention = materialized.retention;
+        this.storeImplementation = materialized.storeImplementation;
     }
 
     /**
@@ -101,6 +108,21 @@ public class Materialized<K, V, S extends StateStore> {
     public static <K, V, S extends StateStore> Materialized<K, V, S> as(final String storeName) {
         Named.validate(storeName);
         return new Materialized<>(storeName);
+    }
+
+    /**
+     * Materialize a {@link StateStore} with the given name.
+     *
+     * @param storeImplementation  the name of the underlying {@link KTable} state store; valid characters are ASCII
+     * alphanumerics, '.', '_' and '-'.
+     * @param <K>       key type of the store
+     * @param <V>       value type of the store
+     * @param <S>       type of the {@link StateStore}
+     * @return a new {@link Materialized} instance with the given storeName
+     */
+    public static <K, V, S extends StateStore> Materialized<K, V, S> as(final StoreImplementation storeImplementation) {
+        Objects.requireNonNull(storeImplementation, "storeImplementation can't be null");
+        return new Materialized<>(storeImplementation);
     }
 
     /**

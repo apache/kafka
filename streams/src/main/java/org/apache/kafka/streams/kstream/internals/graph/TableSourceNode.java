@@ -97,6 +97,7 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
 
         // TODO: we assume source KTables can only be timestamped-key-value stores for now.
         // should be expanded for other types of stores as well.
+        // Luke
         final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder =
             new TimestampedKeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
 

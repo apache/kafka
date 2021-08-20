@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
+import org.apache.kafka.streams.state.RocksDBStoreImplementation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -387,6 +388,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.production.exception.handler";
     private static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
 
+    /** {@code default.store.impl.class} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String DEFAULT_STORE_IMPLEMENTATION_CLASS_CONFIG = "default.store.impl.class";
+    private static final String DEFAULT_STORE_IMPLEMENTATION_CLASS_DOC = "Store supplier implementation class to use. Default is set as RocksDBStoreImplementation. " +
+        "It can be overwritten dynamically during streaming operation.";
+
     /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
@@ -685,6 +692,11 @@ public class StreamsConfig extends AbstractConfig {
                     FailOnInvalidTimestamp.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
+            .define(DEFAULT_STORE_IMPLEMENTATION_CLASS_CONFIG,
+                    Type.CLASS,
+                    RocksDBStoreImplementation.class.getName(),
+                    Importance.MEDIUM,
+                    DEFAULT_STORE_IMPLEMENTATION_CLASS_DOC)
             .define(DEFAULT_VALUE_SERDE_CLASS_CONFIG,
                     Type.CLASS,
                     null,
