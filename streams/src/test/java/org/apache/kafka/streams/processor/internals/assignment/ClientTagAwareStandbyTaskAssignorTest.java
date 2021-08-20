@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -50,7 +49,6 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     private static final String ZONE_1 = "zone1";
     private static final String ZONE_2 = "zone2";
     private static final String ZONE_3 = "zone3";
-    private static final String ZONE_4 = "zone4";
 
     private static final String CLUSTER_1 = "cluster1";
     private static final String CLUSTER_2 = "cluster2";
@@ -68,27 +66,21 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldPermitTaskMovementWhenClientTagsMatch() {
-        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
-        final ClientTagAwareStandbyTaskAssignor standbyTaskAssignor = new ClientTagAwareStandbyTaskAssignor(assignmentConfigs);
-        final TaskMovementAttempt taskMovementAttempt = new TaskMovementAttempt(
-            TASK_0_0,
-            createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1))),
-            createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)))
-        );
-        assertTrue(standbyTaskAssignor.isValidTaskMovement(taskMovementAttempt));
+        final ClientTagAwareStandbyTaskAssignor standbyTaskAssignor = new ClientTagAwareStandbyTaskAssignor();
+        final ClientState source = createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState destination = createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+
+        assertTrue(standbyTaskAssignor.isAllowedTaskMovement(source, destination));
     }
 
     @Test
     public void shouldDeclineTaskMovementWhenClientTagsMatch() {
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
-        final ClientTagAwareStandbyTaskAssignor standbyTaskAssignor = new ClientTagAwareStandbyTaskAssignor(assignmentConfigs);
-        final TaskMovementAttempt taskMovementAttempt = new TaskMovementAttempt(
-            TASK_0_0,
-            createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1))),
-            createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)))
-        );
+        final ClientTagAwareStandbyTaskAssignor standbyTaskAssignor = new ClientTagAwareStandbyTaskAssignor();
+        final ClientState source = createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState destination = createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)));
 
-        assertFalse(standbyTaskAssignor.isValidTaskMovement(taskMovementAttempt));
+        assertFalse(standbyTaskAssignor.isAllowedTaskMovement(source, destination));
     }
 
     @Test
@@ -110,10 +102,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
 
-        new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
-            new TreeMap<>(clientStates),
-            allActiveTasks
-        );
+        new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
         assertTrue(clientStates.values().stream().allMatch(ClientState::reachedCapacity));
 
@@ -194,10 +183,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
 
-        new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
-            new TreeMap<>(clientStates),
-            allActiveTasks
-        );
+        new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
         assertTrue(clientStates.values().stream().allMatch(ClientState::reachedCapacity));
 
@@ -275,10 +261,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, ZONE_TAG, CLUSTER_TAG);
 
-        new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
-            new TreeMap<>(clientStates),
-            allActiveTasks
-        );
+        new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
         assertTrue(
             standbyClientsHonorRackAwareness(
@@ -351,10 +334,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, CLUSTER_TAG);
 
-        new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
-            new TreeMap<>(clientStates),
-            allActiveTasks
-        );
+        new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
         assertEquals(3, clientStates.get(UUID_3).standbyTaskCount());
         assertEquals(3, clientStates.get(UUID_4).standbyTaskCount());
@@ -372,10 +352,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, CLUSTER_TAG);
 
-        new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
-            new TreeMap<>(clientStates),
-            allActiveTasks
-        );
+        new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
         assertEquals(1, clientStates.get(UUID_3).standbyTaskCount());
     }
@@ -409,8 +386,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     private static ClientState createClientStateWithCapacity(final int capacity,
                                                              final Map<String, String> clientTags,
                                                              final TaskId... tasks) {
-        final ClientState clientState = new ClientState(capacity);
-        clientState.assignClientTags(clientTags);
+        final ClientState clientState = new ClientState(capacity, clientTags);
 
         Optional.ofNullable(tasks).ifPresent(t -> clientState.assignActiveTasks(asList(t)));
 

@@ -105,6 +105,7 @@ public final class AssignmentTestUtils {
     public static final Set<TaskId> EMPTY_TASKS = emptySet();
     public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
     public static final List<String> EMPTY_RACK_AWARE_ASSIGNMENT_TAGS = Collections.emptyList();
+    public static final Map<String, String> EMPTY_CLIENT_TAGS = Collections.emptyMap();
 
     private AssignmentTestUtils() {}
 

@@ -29,6 +29,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.appendClientStates;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedActiveAssignment;
@@ -103,7 +104,7 @@ public class TaskAssignorConvergenceTest {
         }
 
         private static ClientState emptyInstance(final UUID uuid, final Map<TaskId, Long> allTaskEndOffsetSums) {
-            final ClientState clientState = new ClientState(1);
+            final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
             clientState.computeTaskLags(uuid, allTaskEndOffsetSums);
             return clientState;
         }
@@ -171,7 +172,7 @@ public class TaskAssignorConvergenceTest {
             final Map<UUID, ClientState> newClientStates = new TreeMap<>();
             for (final Map.Entry<UUID, ClientState> entry : clientStates.entrySet()) {
                 final UUID uuid = entry.getKey();
-                final ClientState newClientState = new ClientState(1);
+                final ClientState newClientState = new ClientState(1, EMPTY_CLIENT_TAGS);
                 final ClientState clientState = entry.getValue();
                 final Map<TaskId, Long> taskOffsetSums = new TreeMap<>();
                 for (final TaskId taskId : clientState.activeTasks()) {

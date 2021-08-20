@@ -138,7 +138,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             consumers = new TreeSet<>();
 
             // initialize the client state
-            state = new ClientState();
+            state = new ClientState(Collections.emptyMap());
         }
 
         void addConsumer(final String consumerMemberId, final List<TopicPartition> ownedPartitions) {

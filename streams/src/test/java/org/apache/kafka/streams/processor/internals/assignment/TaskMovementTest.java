@@ -36,6 +36,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
@@ -216,7 +217,7 @@ public class TaskMovementTest {
     }
 
     private static ClientState getClientStateWithActiveAssignment(final Collection<TaskId> activeTasks) {
-        final ClientState client1 = new ClientState(1);
+        final ClientState client1 = new ClientState(1, EMPTY_CLIENT_TAGS);
         client1.assignActiveTasks(activeTasks);
         return client1;
     }

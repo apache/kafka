@@ -33,8 +33,8 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
 import static org.apache.kafka.common.utils.Utils.diff;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
@@ -56,6 +56,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         assignStandbyReplicaTasks(
             clientStates,
             statefulTasks,
+            allTaskIds,
             configs
         );
 
@@ -116,35 +117,45 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             ClientState::activeTasks,
             ClientState::unassignActive,
             ClientState::assignActive,
-            taskMovementAttempt -> true
+            (source, destination) -> true
         );
     }
 
     private void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
                                            final Set<TaskId> statefulTasks,
+                                           final Set<TaskId> allTaskIds,
                                            final AssignmentConfigs configs) {
         if (configs.numStandbyReplicas == 0) {
             return;
         }
 
-        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignor.init(configs);
+        final StandbyTaskAssignor standbyTaskAssignor = createStandbyTaskAssignor(configs);
 
-        standbyTaskAssignor.assignStandbyTasks(clientStates, statefulTasks);
+        standbyTaskAssignor.assign(clientStates, statefulTasks, allTaskIds, configs);
 
         balanceTasksOverThreads(
             clientStates,
             ClientState::standbyTasks,
             ClientState::unassignStandby,
             ClientState::assignStandby,
-            standbyTaskAssignor::isValidTaskMovement
+            standbyTaskAssignor::isAllowedTaskMovement
         );
+    }
+
+    // Visible for testing
+    static StandbyTaskAssignor createStandbyTaskAssignor(final AssignmentConfigs configs) {
+        if (!configs.rackAwareAssignmentTags.isEmpty()) {
+            return new ClientTagAwareStandbyTaskAssignor();
+        } else {
+            return new DefaultStandbyTaskAssignor();
+        }
     }
 
     private static void balanceTasksOverThreads(final SortedMap<UUID, ClientState> clientStates,
                                                 final Function<ClientState, Set<TaskId>> currentAssignmentAccessor,
                                                 final BiConsumer<ClientState, TaskId> taskUnassignor,
                                                 final BiConsumer<ClientState, TaskId> taskAssignor,
-                                                final Predicate<TaskMovementAttempt> taskMovementAttemptPredicate) {
+                                                final BiPredicate<ClientState, ClientState> taskMovementAttemptPredicate) {
         boolean keepBalancing = true;
         while (keepBalancing) {
             keepBalancing = false;
@@ -163,8 +174,9 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                     final Iterator<TaskId> sourceIterator = sourceTasks.iterator();
                     while (shouldMoveATask(sourceClientState, destinationClientState) && sourceIterator.hasNext()) {
                         final TaskId taskToMove = sourceIterator.next();
-                        final boolean canMove = !destinationClientState.hasAssignedTask(taskToMove);
-                        if (canMove && taskMovementAttemptPredicate.test(new TaskMovementAttempt(taskToMove, sourceClientState, destinationClientState))) {
+                        final boolean canMove = !destinationClientState.hasAssignedTask(taskToMove)
+                                                && taskMovementAttemptPredicate.test(sourceClientState, destinationClientState);
+                        if (canMove) {
                             taskUnassignor.accept(sourceClientState, taskToMove);
                             taskAssignor.accept(destinationClientState, taskToMove);
                             keepBalancing = true;

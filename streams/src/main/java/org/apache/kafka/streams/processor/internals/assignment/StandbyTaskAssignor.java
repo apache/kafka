@@ -16,26 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
-
-import java.util.Set;
-import java.util.SortedMap;
-import java.util.UUID;
-
-interface StandbyTaskAssignor {
-
-    void assignStandbyTasks(final SortedMap<UUID, ClientState> clientStates, final Set<TaskId> statefulTasks);
-
-    default boolean isValidTaskMovement(final TaskMovementAttempt taskMovementAttempt) {
+interface StandbyTaskAssignor extends TaskAssignor {
+    default boolean isAllowedTaskMovement(final ClientState source, final ClientState destination) {
         return true;
-    }
-
-    static StandbyTaskAssignor init(final AssignmentConfigs configs) {
-        if (!configs.rackAwareAssignmentTags.isEmpty()) {
-            return new ClientTagAwareStandbyTaskAssignor(configs);
-        } else {
-            return new DefaultStandbyTaskAssignor(configs);
-        }
     }
 }

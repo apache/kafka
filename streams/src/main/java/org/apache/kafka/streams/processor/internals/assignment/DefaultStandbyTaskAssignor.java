@@ -22,7 +22,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.UUID;
 
 import static java.util.stream.Collectors.toMap;
@@ -30,33 +29,30 @@ import static java.util.stream.Collectors.toMap;
 class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(DefaultStandbyTaskAssignor.class);
 
-    private final AssignorConfiguration.AssignmentConfigs configs;
-
-    public DefaultStandbyTaskAssignor(final AssignorConfiguration.AssignmentConfigs configs) {
-        this.configs = configs;
-    }
-
     @Override
-    public void assignStandbyTasks(final SortedMap<UUID, ClientState> clientStates, final Set<TaskId> statefulTasks) {
+    public boolean assign(final Map<UUID, ClientState> clients,
+                          final Set<TaskId> allTaskIds,
+                          final Set<TaskId> statefulTaskIds,
+                          final AssignorConfiguration.AssignmentConfigs configs) {
         final int numStandbyReplicas = configs.numStandbyReplicas;
         final Map<TaskId, Integer> tasksToRemainingStandbys =
-            statefulTasks.stream().collect(toMap(task -> task, t -> numStandbyReplicas));
+            statefulTaskIds.stream().collect(toMap(task -> task, t -> numStandbyReplicas));
 
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
-            (client, task) -> !clientStates.get(client).hasAssignedTask(task),
-            client -> clientStates.get(client).assignedTaskLoad()
+            (client, task) -> !clients.get(client).hasAssignedTask(task),
+            client -> clients.get(client).assignedTaskLoad()
         );
 
-        standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
+        standbyTaskClientsByTaskLoad.offerAll(clients.keySet());
 
-        for (final TaskId task : statefulTasks) {
+        for (final TaskId task : statefulTaskIds) {
             int numRemainingStandbys = tasksToRemainingStandbys.get(task);
             while (numRemainingStandbys > 0) {
                 final UUID client = standbyTaskClientsByTaskLoad.poll(task);
                 if (client == null) {
                     break;
                 }
-                clientStates.get(client).assignStandby(task);
+                clients.get(client).assignStandby(task);
                 numRemainingStandbys--;
                 standbyTaskClientsByTaskLoad.offer(client);
             }
@@ -69,5 +65,7 @@ class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
                          numRemainingStandbys, numStandbyReplicas, task);
             }
         }
+
+        return true;
     }
 }

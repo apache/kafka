@@ -28,6 +28,7 @@ import java.util.UUID;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
@@ -67,7 +68,7 @@ public class FallbackPriorTaskAssignorTest {
     }
 
     private ClientState createClientWithPreviousActiveTasks(final UUID processId, final int capacity, final TaskId... taskIds) {
-        final ClientState clientState = new ClientState(capacity);
+        final ClientState clientState = new ClientState(capacity, EMPTY_CLIENT_TAGS);
         clientState.addPreviousActiveTasks(mkSet(taskIds));
         clients.put(processId, clientState);
         return clientState;

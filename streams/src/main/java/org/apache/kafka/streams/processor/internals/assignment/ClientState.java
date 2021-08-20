@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -61,31 +60,31 @@ public class ClientState {
 
     private int capacity;
 
-    public ClientState() {
-        this(0);
+    public ClientState(final Map<String, String> clientTags) {
+        this(0, clientTags);
     }
 
-    ClientState(final int capacity) {
+    ClientState(final int capacity, final Map<String, String> clientTags) {
         previousStandbyTasks.taskIds(new TreeSet<>());
         previousActiveTasks.taskIds(new TreeSet<>());
-
-        clientTags = new HashMap<>();
         taskOffsetSums = new TreeMap<>();
         taskLagTotals = new TreeMap<>();
         this.capacity = capacity;
+        this.clientTags = unmodifiableMap(clientTags);
     }
 
     // For testing only
     public ClientState(final Set<TaskId> previousActiveTasks,
                        final Set<TaskId> previousStandbyTasks,
                        final Map<TaskId, Long> taskLagTotals,
+                       final Map<String, String> clientTags,
                        final int capacity) {
         this.previousStandbyTasks.taskIds(unmodifiableSet(new TreeSet<>(previousStandbyTasks)));
         this.previousActiveTasks.taskIds(unmodifiableSet(new TreeSet<>(previousActiveTasks)));
         taskOffsetSums = emptyMap();
         this.taskLagTotals = unmodifiableMap(taskLagTotals);
         this.capacity = capacity;
-        clientTags = new HashMap<>();
+        this.clientTags = unmodifiableMap(clientTags);
     }
 
     int capacity() {
@@ -204,10 +203,6 @@ public class ClientState {
             throw new IllegalArgumentException("Tried to unassign standby task " + task + ", but it is not currently assigned: " + this);
         }
         taskIds.remove(task);
-    }
-
-    public void assignClientTags(final Map<String, String> clientTags) {
-        this.clientTags.putAll(clientTags);
     }
 
     Set<TaskId> assignedTasks() {
