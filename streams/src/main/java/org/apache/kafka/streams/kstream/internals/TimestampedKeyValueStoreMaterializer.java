@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.StoreImplementation;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
@@ -36,9 +37,17 @@ public class TimestampedKeyValueStoreMaterializer<K, V> {
     public StoreBuilder<TimestampedKeyValueStore<K, V>> materialize() {
         KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
+            // get from default store implementation
             final String name = materialized.storeName();
-            supplier = Stores.persistentTimestampedKeyValueStore(name);
+            StoreImplementation storeImplementation = materialized.storeImplementation();
+            if (storeImplementation != null) {
+                supplier = storeImplementation.keyValueSupplier(name);
+            } else {
+                // fall back to use Rocks Db by default if no store implementation provided
+                supplier = Stores.persistentTimestampedKeyValueStore(name);
+            }
         }
+
         final StoreBuilder<TimestampedKeyValueStore<K, V>> builder = Stores.timestampedKeyValueStoreBuilder(
             supplier,
             materialized.keySerde(),

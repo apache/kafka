@@ -35,6 +35,7 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
+import org.apache.kafka.streams.state.InMemoryStoreImplementation;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -1168,7 +1169,10 @@ public class TopologyTest {
 
     @Test
     public void kGroupedStreamNamedMaterializedCountShouldPreserveTopologyStructure() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        Properties streamsProp = new Properties();
+        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
+        streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        final StreamsBuilder builder = new StreamsBuilder(streamsProp);
         builder.stream("input-topic")
             .groupByKey()
             .count(Materialized.as("count-store"));
@@ -1179,6 +1183,51 @@ public class TopologyTest {
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
                 "      --> KSTREAM-AGGREGATE-0000000001\n" +
                 "    Processor: KSTREAM-AGGREGATE-0000000001 (stores: [count-store])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+    }
+
+    @Test
+    public void kGroupedStreamNamedMaterializedCountWithDefaultStoreImplementation() {
+        Properties streamsProp = new Properties();
+        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
+        streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        final StreamsBuilder builder = new StreamsBuilder(streamsProp);
+        builder.stream("input-topic")
+            .groupByKey()
+            .count(Materialized.as("count-store"));
+        final TopologyDescription describe = builder.build().describe();
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000001\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000001 (stores: [count-store])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+    }
+
+    @Test
+    public void kGroupedStreamNamedMaterializedCountWithCustomStoreImplementation() {
+        Properties streamsProp = new Properties();
+        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
+        streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        final StreamsBuilder builder = new StreamsBuilder(streamsProp);
+        builder.stream("input-topic")
+            .groupByKey()
+            .count(Materialized.as(new InMemoryStoreImplementation()));
+        final TopologyDescription describe = builder.build().describe();
+        System.out.println("describe:" + describe);
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000003\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -1206,7 +1255,33 @@ public class TopologyTest {
 
     @Test
     public void timeWindowZeroArgCountShouldPreserveTopologyStructure() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        Properties streamsProp = new Properties();
+        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
+        streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        final StreamsBuilder builder = new StreamsBuilder(streamsProp);
+        builder.stream("input-topic")
+            .groupByKey()
+            .windowedBy(TimeWindows.of(ofMillis(1)))
+            .count();
+        final TopologyDescription describe = builder.build().describe();
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+    }
+
+    @Test
+    public void timeWindowZeroArgCountWithDefaultStoreImplementation() {
+        Properties streamsProp = new Properties();
+        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
+        streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        final StreamsBuilder builder = new StreamsBuilder(streamsProp);
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(TimeWindows.of(ofMillis(1)))
@@ -1267,6 +1342,29 @@ public class TopologyTest {
     @Test
     public void sessionWindowZeroArgCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic")
+            .groupByKey()
+            .windowedBy(SessionWindows.with(ofMillis(1)))
+            .count();
+        final TopologyDescription describe = builder.build().describe();
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000002\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+            describe.toString()
+        );
+    }
+
+    @Test
+    public void sessionWindowZeroArgCountDefaultCustomStoreImplementation() {
+        Properties streamsProp = new Properties();
+        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
+        streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        final StreamsBuilder builder = new StreamsBuilder(streamsProp);
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(SessionWindows.with(ofMillis(1)))

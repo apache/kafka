@@ -17,8 +17,10 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.StoreImplementation;
 import org.apache.kafka.streams.state.StoreSupplier;
 
 import java.time.Duration;
@@ -29,13 +31,25 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
     private final boolean queryable;
 
     public MaterializedInternal(final Materialized<K, V, S> materialized) {
-        this(materialized, null, null);
+        this(materialized, null, null, null);
     }
 
     public MaterializedInternal(final Materialized<K, V, S> materialized,
                                 final InternalNameProvider nameProvider,
                                 final String generatedStorePrefix) {
+        this(materialized, nameProvider, generatedStorePrefix, null);
+    }
+
+    public MaterializedInternal(final Materialized<K, V, S> materialized,
+                                final InternalNameProvider nameProvider,
+                                final String generatedStorePrefix,
+                                final StreamsConfig config) {
         super(materialized);
+
+        if (config != null && this.storeSupplier == null && this.storeImplementation != null) {
+            // get default store implementation
+            this.storeImplementation = config.defaultStoreImplementation();
+        }
 
         // if storeName is not provided, the corresponding KTable would never be queryable;
         // but we still need to provide an internal name for it in case we materialize.
@@ -58,6 +72,10 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
 
     public StoreSupplier<S> storeSupplier() {
         return storeSupplier;
+    }
+
+    public StoreImplementation storeImplementation() {
+        return storeImplementation;
     }
 
     public Serde<K> keySerde() {

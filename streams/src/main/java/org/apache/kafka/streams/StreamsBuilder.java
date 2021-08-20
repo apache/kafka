@@ -74,10 +74,18 @@ public class StreamsBuilder {
 
     protected final InternalStreamsBuilder internalStreamsBuilder;
 
+    protected final StreamsConfig config;
+
     public StreamsBuilder() {
+        this(null);
+    }
+
+    // new constructor
+    public StreamsBuilder(Properties props) {
         topology = getNewTopology();
         internalTopologyBuilder = topology.internalTopologyBuilder;
-        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+        config = props == null ? null : new StreamsConfig(props);
+        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder, config);
     }
 
     protected Topology getNewTopology() {
@@ -255,6 +263,7 @@ public class StreamsBuilder {
 
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
+
 
         return internalStreamsBuilder.table(topic, consumedInternal, materializedInternal);
     }

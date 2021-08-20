@@ -172,7 +172,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
 
     private KTable<K, Long> doCount(final Named named, final Materialized<K, Long, KeyValueStore<Bytes, byte[]>> materialized) {
         final MaterializedInternal<K, Long, KeyValueStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
+            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME, builder.config());
 
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);

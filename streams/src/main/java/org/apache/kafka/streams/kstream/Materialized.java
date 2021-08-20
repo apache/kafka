@@ -111,9 +111,9 @@ public class Materialized<K, V, S extends StateStore> {
     }
 
     /**
-     * Materialize a {@link StateStore} with the given name.
+     * Materialize a {@link StateStore} with the store implementation.
      *
-     * @param storeImplementation  the name of the underlying {@link KTable} state store; valid characters are ASCII
+     * @param storeImplementation  store implementation used to materialize the store
      * alphanumerics, '.', '_' and '-'.
      * @param <K>       key type of the store
      * @param <V>       value type of the store

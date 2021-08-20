@@ -30,7 +30,9 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.StoreImplementation;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -93,7 +95,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
     private KTable<Windowed<K>, Long> doCount(final Named named,
                                               final Materialized<K, Long, WindowStore<Bytes, byte[]>> materialized) {
         final MaterializedInternal<K, Long, WindowStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
+            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME, builder.config());
 
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
@@ -224,12 +226,25 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                         + " retention=[" + retentionPeriod + "]");
             }
 
-            supplier = Stores.persistentTimestampedWindowStore(
+            // get from default store implementation
+            StoreImplementation storeImplementation = materialized.storeImplementation();
+            if (storeImplementation != null) {
+                supplier = storeImplementation.windowBytesStoreSupplier(
+                    materialized.storeName(),
+                    Duration.ofMillis(retentionPeriod),
+                    Duration.ofMillis(windows.size()),
+                    false);
+            } else {
+                // fall back to use Rocks Db by default if no store implementation provided
+                supplier = Stores.persistentTimestampedWindowStore(
                     materialized.storeName(),
                     Duration.ofMillis(retentionPeriod),
                     Duration.ofMillis(windows.size()),
                     false
-            );
+                );
+            }
+
+
         }
 
         final StoreBuilder<TimestampedWindowStore<K, VR>> builder = Stores.timestampedWindowStoreBuilder(

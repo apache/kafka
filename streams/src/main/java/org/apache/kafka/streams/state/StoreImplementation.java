@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import java.time.Duration;
 
 /**
- * A state store supplier Implementation interface which can create one or more {@link StateStore} instances.
+ * A state store supplier Implementation interface which can create one or more 3 types of {@link StateStore} instances.
  *
  */
 public interface StoreImplementation {

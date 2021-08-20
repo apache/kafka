@@ -34,6 +34,7 @@ import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.StoreImplementation;
 import org.apache.kafka.streams.state.Stores;
 
 import java.time.Duration;
@@ -93,7 +94,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
     private KTable<Windowed<K>, Long> doCount(final Named named,
                                               final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized) {
         final MaterializedInternal<K, Long, SessionStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
+            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME, builder.config());
 
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
@@ -237,10 +238,21 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                                                        + " grace=[" + windows.gracePeriodMs() + "],"
                                                        + " retention=[" + retentionPeriod + "]");
             }
-            supplier = Stores.persistentSessionStore(
-                materialized.storeName(),
-                Duration.ofMillis(retentionPeriod)
-            );
+
+            // get from default store implementation
+            StoreImplementation storeImplementation = materialized.storeImplementation();
+            if (storeImplementation != null) {
+                supplier = storeImplementation.sessionBytesStoreSupplier(
+                    materialized.storeName(),
+                    Duration.ofMillis(retentionPeriod));
+            } else {
+                // fall back to use Rocks Db by default if no store implementation provided
+                supplier = Stores.persistentSessionStore(
+                    materialized.storeName(),
+                    Duration.ofMillis(retentionPeriod)
+                );
+            }
+
         }
         final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(
             supplier,

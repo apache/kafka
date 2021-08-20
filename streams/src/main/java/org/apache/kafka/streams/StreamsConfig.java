@@ -42,6 +42,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.state.RocksDBStoreImplementation;
+import org.apache.kafka.streams.state.StoreImplementation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1505,6 +1506,10 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public ProductionExceptionHandler defaultProductionExceptionHandler() {
         return getConfiguredInstance(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
+    }
+
+    public StoreImplementation defaultStoreImplementation() {
+        return getConfiguredInstance(DEFAULT_STORE_IMPLEMENTATION_CLASS_CONFIG, StoreImplementation.class);
     }
 
     /**

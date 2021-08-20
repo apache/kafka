@@ -68,6 +68,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final LinkedHashMap<GraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>> keyChangingOperationsToOptimizableRepartitionNodes = new LinkedHashMap<>();
     private final LinkedHashSet<GraphNode> mergeNodes = new LinkedHashSet<>();
     private final LinkedHashSet<GraphNode> tableSourceNodes = new LinkedHashSet<>();
+    private final StreamsConfig config;
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
@@ -80,7 +81,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     };
 
     public InternalStreamsBuilder(final InternalTopologyBuilder internalTopologyBuilder) {
+        this(internalTopologyBuilder, null);
+    }
+
+    public InternalStreamsBuilder(final InternalTopologyBuilder internalTopologyBuilder, StreamsConfig config) {
         this.internalTopologyBuilder = internalTopologyBuilder;
+        this.config = config;
     }
 
     public <K, V> KStream<K, V> stream(final Collection<String> topics,
@@ -127,6 +133,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         final String tableSourceName = named
             .orElseGenerateWithPrefix(this, KTableImpl.SOURCE_NAME);
+
 
         final KTableSource<K, V> tableSource = new KTableSource<>(materialized.storeName(), materialized.queryableStoreName());
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(tableSource, tableSourceName);
@@ -546,5 +553,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     public GraphNode root() {
         return root;
+    }
+
+    public StreamsConfig config() {
+        return config;
     }
 }
