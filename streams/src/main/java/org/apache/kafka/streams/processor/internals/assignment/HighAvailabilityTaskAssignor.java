@@ -55,8 +55,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         assignStandbyReplicaTasks(
             clientStates,
-            statefulTasks,
             allTaskIds,
+            statefulTasks,
             configs
         );
 
@@ -122,8 +122,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     }
 
     private void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
-                                           final Set<TaskId> statefulTasks,
                                            final Set<TaskId> allTaskIds,
+                                           final Set<TaskId> statefulTasks,
                                            final AssignmentConfigs configs) {
         if (configs.numStandbyReplicas == 0) {
             return;
@@ -131,7 +131,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         final StandbyTaskAssignor standbyTaskAssignor = createStandbyTaskAssignor(configs);
 
-        standbyTaskAssignor.assign(clientStates, statefulTasks, allTaskIds, configs);
+        standbyTaskAssignor.assign(clientStates, allTaskIds, statefulTasks, configs);
 
         balanceTasksOverThreads(
             clientStates,
