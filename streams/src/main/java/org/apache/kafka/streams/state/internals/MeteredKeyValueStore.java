@@ -150,7 +150,7 @@ public class MeteredKeyValueStore<K, V>
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.namedTopology()),
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
         );
@@ -162,7 +162,7 @@ public class MeteredKeyValueStore<K, V>
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.namedTopology()),
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
         );

@@ -21,7 +21,7 @@ import java.nio.file.Files
 import java.util
 import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
-import kafka.log.Log
+import kafka.log.UnifiedLog
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.server.KafkaRaftServer.ControllerRole
@@ -210,7 +210,7 @@ class KafkaRaftManager[T](
   }
 
   private def createDataDir(): File = {
-    val logDirName = Log.logDirName(topicPartition)
+    val logDirName = UnifiedLog.logDirName(topicPartition)
     KafkaRaftManager.createLogDirectory(new File(config.metadataLogDir), logDirName)
   }
 

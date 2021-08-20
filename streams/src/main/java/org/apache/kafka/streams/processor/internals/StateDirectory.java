@@ -253,7 +253,7 @@ public class StateDirectory {
     }
 
     private File getTaskDirectoryParentName(final TaskId taskId) {
-        final String namedTopology = taskId.namedTopology();
+        final String namedTopology = taskId.topologyName();
         if (namedTopology != null) {
             if (!hasNamedTopologies) {
                 throw new IllegalStateException("Tried to lookup taskId with named topology, but StateDirectory thinks hasNamedTopologies = false");

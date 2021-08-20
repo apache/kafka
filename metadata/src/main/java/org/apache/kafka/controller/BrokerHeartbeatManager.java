@@ -24,7 +24,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.UsableBroker;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -420,22 +419,22 @@ public class BrokerHeartbeatManager {
     }
 
     /**
-     * Find the stale brokers which haven't heartbeated in a long time, and which need to
-     * be fenced.
+     * Check if the oldest broker to have hearbeated has already violated the
+     * sessionTimeoutNs timeout and needs to be fenced.
      *
-     * @return      A list of node IDs.
+     * @return      An Optional broker node id.
      */
-    List<Integer> findStaleBrokers() {
-        List<Integer> nodes = new ArrayList<>();
+    Optional<Integer> findOneStaleBroker() {
         BrokerHeartbeatStateIterator iterator = unfenced.iterator();
-        while (iterator.hasNext()) {
+        if (iterator.hasNext()) {
             BrokerHeartbeatState broker = iterator.next();
-            if (hasValidSession(broker)) {
-                break;
+            // The unfenced list is sorted on last contact time from each
+            // broker. If the first broker is not stale, then none is.
+            if (!hasValidSession(broker)) {
+                return Optional.of(broker.id);
             }
-            nodes.add(broker.id);
         }
-        return nodes;
+        return Optional.empty();
     }
 
     /**
