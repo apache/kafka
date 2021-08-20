@@ -390,7 +390,7 @@ public class TopologyMetadata {
     }
 
     private InternalTopologyBuilder lookupBuilderForTask(final TaskId task) {
-        return task.namedTopology() == null ? builders.get(UNNAMED_TOPOLOGY) : builders.get(task.namedTopology());
+        return task.topologyName() == null ? builders.get(UNNAMED_TOPOLOGY) : builders.get(task.topologyName());
     }
 
     /**

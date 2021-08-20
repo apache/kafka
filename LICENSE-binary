@@ -208,52 +208,52 @@ License Version 2.0:
 audience-annotations-0.5.0
 commons-cli-1.4
 commons-lang3-3.8.1
-jackson-annotations-2.10.5
-jackson-core-2.10.5
-jackson-databind-2.10.5.1
-jackson-dataformat-csv-2.10.5
-jackson-datatype-jdk8-2.10.5
-jackson-jaxrs-base-2.10.5
-jackson-jaxrs-json-provider-2.10.5
-jackson-module-jaxb-annotations-2.10.5
+jackson-annotations-2.12.3
+jackson-core-2.12.3
+jackson-databind-2.12.3
+jackson-dataformat-csv-2.12.3
+jackson-datatype-jdk8-2.12.3
+jackson-jaxrs-base-2.12.3
+jackson-jaxrs-json-provider-2.12.3
+jackson-module-jaxb-annotations-2.12.3
 jackson-module-paranamer-2.10.5
-jackson-module-scala_2.13-2.10.5
+jackson-module-scala_2.13-2.12.3
 jakarta.validation-api-2.0.2
 javassist-3.27.0-GA
-jetty-client-9.4.38.v20210224
-jetty-continuation-9.4.38.v20210224
-jetty-http-9.4.38.v20210224
-jetty-io-9.4.38.v20210224
-jetty-security-9.4.38.v20210224
-jetty-server-9.4.38.v20210224
-jetty-servlet-9.4.38.v20210224
-jetty-servlets-9.4.38.v20210224
-jetty-util-9.4.38.v20210224
-jetty-util-ajax-9.4.38.v20210224
-jersey-common-2.31
-jersey-server-2.31
+jetty-client-9.4.43.v20210629
+jetty-continuation-9.4.43.v20210629
+jetty-http-9.4.43.v20210629
+jetty-io-9.4.43.v20210629
+jetty-security-9.4.43.v20210629
+jetty-server-9.4.43.v20210629
+jetty-servlet-9.4.43.v20210629
+jetty-servlets-9.4.43.v20210629
+jetty-util-9.4.43.v20210629
+jetty-util-ajax-9.4.43.v20210629
+jersey-common-2.34
+jersey-server-2.34
 log4j-1.2.17
 lz4-java-1.7.1
-maven-artifact-3.6.3
-metrics-core-2.2.0
-netty-buffer-4.1.59.Final
-netty-codec-4.1.59.Final
-netty-common-4.1.59.Final
-netty-handler-4.1.59.Final
-netty-resolver-4.1.59.Final
-netty-transport-4.1.59.Final
-netty-transport-native-epoll-4.1.59.Final
-netty-transport-native-unix-common-4.1.59.Final
+maven-artifact-3.8.1
+metrics-core-4.1.12.1
+netty-buffer-4.1.62.Final
+netty-codec-4.1.62.Final
+netty-common-4.1.62.Final
+netty-handler-4.1.62.Final
+netty-resolver-4.1.62.Final
+netty-transport-4.1.62.Final
+netty-transport-native-epoll-4.1.62.Final
+netty-transport-native-unix-common-4.1.62.Final
 plexus-utils-3.2.1
-rocksdbjni-5.18.4
-scala-collection-compat_2.13-2.3.0
+rocksdbjni-6.19.3
+scala-collection-compat_2.13-2.4.4
 scala-library-2.13.6
-scala-logging_2.13-3.9.2
+scala-logging_2.13-3.9.3
 scala-reflect-2.13.6
-scala-java8-compat_2.13-0.9.1
+scala-java8-compat_2.13-1.0.0
 snappy-java-1.1.8.1
-zookeeper-3.5.9
-zookeeper-jute-3.5.9
+zookeeper-3.6.3
+zookeeper-jute-3.6.3
 
 ===============================================================================
 This product bundles various third-party components under other open source
@@ -280,10 +280,10 @@ hk2-utils-2.6.1
 osgi-resource-locator-1.0.3
 aopalliance-repackaged-2.6.1
 jakarta.inject-2.6.1
-jersey-container-servlet-2.31
-jersey-container-servlet-core-2.31
-jersey-client-2.31
-jersey-hk2-2.31
+jersey-container-servlet-2.34
+jersey-container-servlet-core-2.34
+jersey-client-2.34
+jersey-hk2-2.34
 jersey-media-jaxb-2.31
 
 ---------------------------------------
@@ -305,7 +305,7 @@ slf4j-log4j12-1.7.30, see: licenses/slf4j-MIT
 ---------------------------------------
 BSD 2-Clause
 
-zstd-jni-1.4.9-1, see: licenses/zstd-jni-BSD-2-clause
+zstd-jni-1.5.0-2 see: licenses/zstd-jni-BSD-2-clause
 
 ---------------------------------------
 BSD 3-Clause
