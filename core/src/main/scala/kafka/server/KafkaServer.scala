@@ -91,15 +91,12 @@ class KafkaServer(
   threadNamePrefix: Option[String] = None,
   enableForwarding: Boolean = false
 ) extends KafkaBroker with Server {
-  @volatile private var _brokerState: BrokerState = BrokerState.NOT_RUNNING
-
-  override def brokerState: BrokerState = _brokerState
-  def brokerState_= (brokerState: BrokerState): Unit = _brokerState = brokerState
 
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
 
+  @volatile private var _brokerState: BrokerState = BrokerState.NOT_RUNNING
   private var shutdownLatch = new CountDownLatch(1)
   private var logContext: LogContext = null
 
@@ -165,6 +162,8 @@ class KafkaServer(
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
   val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 
+  override def brokerState: BrokerState = _brokerState
+  def brokerState_= (brokerState: BrokerState): Unit = _brokerState = brokerState
   def clusterId: String = _clusterId
 
   // Visible for testing
