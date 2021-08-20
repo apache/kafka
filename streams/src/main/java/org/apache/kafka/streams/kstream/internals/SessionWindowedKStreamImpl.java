@@ -240,7 +240,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             }
 
             // get from default store implementation
-            StoreImplementation storeImplementation = materialized.storeImplementation();
+            final StoreImplementation storeImplementation = materialized.storeImplementation();
             if (storeImplementation != null) {
                 supplier = storeImplementation.sessionBytesStoreSupplier(
                     materialized.storeName(),

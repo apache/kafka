@@ -30,7 +30,6 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
-import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.StoreImplementation;
 import org.apache.kafka.streams.state.Stores;
@@ -227,7 +226,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             }
 
             // get from default store implementation
-            StoreImplementation storeImplementation = materialized.storeImplementation();
+            final StoreImplementation storeImplementation = materialized.storeImplementation();
             if (storeImplementation != null) {
                 supplier = storeImplementation.windowBytesStoreSupplier(
                     materialized.storeName(),

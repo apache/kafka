@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import java.util.Iterator;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
@@ -28,7 +27,6 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.StoreImplementation;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 import java.util.Collections;

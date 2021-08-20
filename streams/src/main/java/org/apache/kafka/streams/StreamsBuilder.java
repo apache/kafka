@@ -81,7 +81,7 @@ public class StreamsBuilder {
     }
 
     // new constructor
-    public StreamsBuilder(Properties props) {
+    public StreamsBuilder(final Properties props) {
         topology = getNewTopology();
         internalTopologyBuilder = topology.internalTopologyBuilder;
         config = props == null ? null : new StreamsConfig(props);

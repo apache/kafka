@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.streams.processor.StateStore;
-
 import java.time.Duration;
 
 /**

@@ -39,7 +39,7 @@ public class TimestampedKeyValueStoreMaterializer<K, V> {
         if (supplier == null) {
             // get from default store implementation
             final String name = materialized.storeName();
-            StoreImplementation storeImplementation = materialized.storeImplementation();
+            final StoreImplementation storeImplementation = materialized.storeImplementation();
             if (storeImplementation != null) {
                 supplier = storeImplementation.keyValueSupplier(name);
             } else {

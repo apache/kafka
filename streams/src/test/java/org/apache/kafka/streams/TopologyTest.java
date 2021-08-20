@@ -1169,7 +1169,7 @@ public class TopologyTest {
 
     @Test
     public void kGroupedStreamNamedMaterializedCountShouldPreserveTopologyStructure() {
-        Properties streamsProp = new Properties();
+        final Properties streamsProp = new Properties();
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
         streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final StreamsBuilder builder = new StreamsBuilder(streamsProp);
@@ -1191,7 +1191,7 @@ public class TopologyTest {
 
     @Test
     public void kGroupedStreamNamedMaterializedCountWithDefaultStoreImplementation() {
-        Properties streamsProp = new Properties();
+        final Properties streamsProp = new Properties();
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
         streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final StreamsBuilder builder = new StreamsBuilder(streamsProp);
@@ -1213,10 +1213,7 @@ public class TopologyTest {
 
     @Test
     public void kGroupedStreamNamedMaterializedCountWithCustomStoreImplementation() {
-        Properties streamsProp = new Properties();
-        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
-        streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        final StreamsBuilder builder = new StreamsBuilder(streamsProp);
+        final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .count(Materialized.as(new InMemoryStoreImplementation()));
@@ -1255,7 +1252,7 @@ public class TopologyTest {
 
     @Test
     public void timeWindowZeroArgCountShouldPreserveTopologyStructure() {
-        Properties streamsProp = new Properties();
+        final Properties streamsProp = new Properties();
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
         streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final StreamsBuilder builder = new StreamsBuilder(streamsProp);
@@ -1278,7 +1275,7 @@ public class TopologyTest {
 
     @Test
     public void timeWindowZeroArgCountWithDefaultStoreImplementation() {
-        Properties streamsProp = new Properties();
+        final Properties streamsProp = new Properties();
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
         streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final StreamsBuilder builder = new StreamsBuilder(streamsProp);
@@ -1361,7 +1358,7 @@ public class TopologyTest {
 
     @Test
     public void sessionWindowZeroArgCountDefaultCustomStoreImplementation() {
-        Properties streamsProp = new Properties();
+        final Properties streamsProp = new Properties();
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
         streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final StreamsBuilder builder = new StreamsBuilder(streamsProp);

@@ -84,7 +84,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         this(internalTopologyBuilder, null);
     }
 
-    public InternalStreamsBuilder(final InternalTopologyBuilder internalTopologyBuilder, StreamsConfig config) {
+    public InternalStreamsBuilder(final InternalTopologyBuilder internalTopologyBuilder, final StreamsConfig config) {
         this.internalTopologyBuilder = internalTopologyBuilder;
         this.config = config;
     }
