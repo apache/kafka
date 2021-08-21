@@ -84,7 +84,7 @@ class BrokerServer(
   val supportedFeatures: util.Map[String, VersionRange]
 ) extends KafkaBroker {
 
-  override def brokerState: BrokerState = currentState()
+  override def brokerState: BrokerState = lifecycleManager.state
 
   import kafka.server.Server._
 
@@ -250,7 +250,7 @@ class BrokerServer(
         scheduler = kafkaScheduler,
         time = time,
         brokerId = config.nodeId,
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch()
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch
       )
       alterIsrManager.start()
 
@@ -272,7 +272,7 @@ class BrokerServer(
 
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
         config.brokerId,
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch(),
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
         clientToControllerChannelManager,
         config.requestTimeoutMs
       )
@@ -517,7 +517,5 @@ class BrokerServer(
   }
 
   def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
-
-  def currentState(): BrokerState = lifecycleManager.state()
 
 }
