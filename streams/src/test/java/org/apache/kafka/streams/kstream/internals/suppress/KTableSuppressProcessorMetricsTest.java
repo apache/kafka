@@ -153,6 +153,7 @@ public class KTableSuppressProcessorMetricsTest {
 
         final long timestamp = 100L;
         context.setRecordMetadata("", 0, 0L);
+        context.setTimestamp(timestamp);
         final String key = "longKey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         processor.process(new Record<>(key, value, timestamp));
@@ -176,6 +177,7 @@ public class KTableSuppressProcessorMetricsTest {
         }
 
         context.setRecordMetadata("", 0, 1L);
+        context.setTimestamp(timestamp + 1);
         processor.process(new Record<>("key", value, timestamp + 1));
 
         {
@@ -183,7 +185,7 @@ public class KTableSuppressProcessorMetricsTest {
 
             verifyMetric(metrics, evictionRateMetric, greaterThan(0.0));
             verifyMetric(metrics, evictionTotalMetric, is(1.0));
-            verifyMetric(metrics, bufferSizeAvgMetric, is(42.0)); // check why this need to change from 41 to 42
+            verifyMetric(metrics, bufferSizeAvgMetric, is(41.0));
             verifyMetric(metrics, bufferSizeMaxMetric, is(82.0));
             verifyMetric(metrics, bufferCountAvgMetric, is(1.0));
             verifyMetric(metrics, bufferCountMaxMetric, is(2.0));
