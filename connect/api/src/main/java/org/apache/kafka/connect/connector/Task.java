@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.connector;
 
+import org.apache.kafka.connect.components.Versioned;
+
 import java.util.Map;
 
 /**
@@ -31,14 +33,7 @@ import java.util.Map;
  * {@link org.apache.kafka.connect.sink.SinkTask}.
  * </p>
  */
-public interface Task {
-    /**
-     * Get the version of this task. Usually this should be the same as the corresponding {@link Connector} class's version.
-     *
-     * @return the version, formatted as a String
-     */
-    String version();
-
+public interface Task extends Versioned {
     /**
      * Start the Task
      * @param props initial configuration
