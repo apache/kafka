@@ -121,7 +121,6 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
 
     @Override
     public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
-//        restoreCallbacks.put(store.name(), stateRestoreCallback);
         addStateStore(store);
     }
 
