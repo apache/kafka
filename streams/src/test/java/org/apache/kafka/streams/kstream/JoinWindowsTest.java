@@ -18,10 +18,13 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
+import java.time.Duration;
+
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
+import static org.apache.kafka.streams.kstream.Windows.DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -93,6 +96,14 @@ public class JoinWindowsTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
+    @Test
+    public void untilShouldSetGraceDuration() {
+        final JoinWindows windowSpec = JoinWindows.of(ofMillis(ANY_SIZE));
+        final long windowSize = windowSpec.size();
+        assertEquals(windowSize, windowSpec.grace(ofMillis(windowSize)).gracePeriodMs());
+    }
+
     @Test
     public void gracePeriodShouldEnforceBoundaries() {
         JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3L), ofMillis(0L));
@@ -103,6 +114,15 @@ public class JoinWindowsTest {
         } catch (final IllegalArgumentException e) {
             //expected
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void oldAPIShouldSetDefaultGracePeriod() {
+        assertEquals(Duration.ofDays(1).toMillis(), DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD);
+        assertEquals(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD - 6L, JoinWindows.of(ofMillis(3L)).gracePeriodMs());
+        assertEquals(0L, JoinWindows.of(ofMillis(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD)).gracePeriodMs());
+        assertEquals(0L, JoinWindows.of(ofMillis(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD + 1L)).gracePeriodMs());
     }
 
     @Test
