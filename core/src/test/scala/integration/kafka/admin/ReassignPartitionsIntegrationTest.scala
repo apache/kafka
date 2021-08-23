@@ -127,7 +127,6 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     )
 
     val verifyAssignmentResult = runVerifyAssignment(cluster.adminClient, assignment, false)
-    assertTrue(verifyAssignmentResult.partsOngoing)
     assertFalse(verifyAssignmentResult.movesOngoing)
 
     // Wait for the assignment to complete
