@@ -37,7 +37,7 @@ import org.rocksdb.DBOptions;
 import org.rocksdb.DbPath;
 import org.rocksdb.Env;
 import org.rocksdb.InfoLogLevel;
-import org.rocksdb.Logger;
+
 import org.rocksdb.MemTableConfig;
 import org.rocksdb.MergeOperator;
 import org.rocksdb.Options;
@@ -49,6 +49,7 @@ import org.rocksdb.TableFormatConfig;
 import org.rocksdb.WALRecoveryMode;
 import org.rocksdb.WalFilter;
 import org.rocksdb.WriteBufferManager;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
@@ -61,11 +62,12 @@ import java.util.List;
  *
  * This class do the translation between generic {@link Options} into {@link DBOptions} and {@link ColumnFamilyOptions}.
  */
-public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options {
+class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
+
     private final DBOptions dbOptions;
     private final ColumnFamilyOptions columnFamilyOptions;
-
-    private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
 
     RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(final DBOptions dbOptions,
                                                                final ColumnFamilyOptions columnFamilyOptions) {
@@ -249,7 +251,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setMaxTotalWalSize(final long maxTotalWalSize) {
-        dbOptions.setMaxTotalWalSize(maxTotalWalSize);
+        LOGGER.warn("WAL is explicitly disabled by Streams in RocksDB. 'maxTotalWalSize' will be ignored");
         return this;
     }
 
@@ -304,7 +306,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalDir(final String walDir) {
-        dbOptions.setWalDir(walDir);
+        LOGGER.warn("WAL is explicitly disabled by Streams in RocksDB. 'WalDir' will be ignored");
         return this;
     }
 
@@ -473,7 +475,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalTtlSeconds(final long walTtlSeconds) {
-        LOG.warn("option walTtlSeconds will be ignored: Streams does not expose RocksDB ttl functionality");
+        LOGGER.warn("option walTtlSeconds will be ignored: Streams does not expose RocksDB ttl functionality");
         dbOptions.setWalTtlSeconds(walTtlSeconds);
         return this;
     }
@@ -485,7 +487,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalSizeLimitMB(final long sizeLimitMB) {
-        dbOptions.setWalSizeLimitMB(sizeLimitMB);
+        LOGGER.warn("WAL is explicitly disabled by Streams in RocksDB. 'WalSizeLimitMB' will be ignored");
         return this;
     }
 
@@ -678,7 +680,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalBytesPerSync(final long walBytesPerSync) {
-        dbOptions.setWalBytesPerSync(walBytesPerSync);
+        LOGGER.warn("WAL is explicitly disabled by Streams in RocksDB. 'WalBytesPerSync' will be ignored");
         return this;
     }
 
@@ -766,7 +768,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalRecoveryMode(final WALRecoveryMode walRecoveryMode) {
-        dbOptions.setWalRecoveryMode(walRecoveryMode);
+        LOGGER.warn("WAL is explicitly disabled by Streams in RocksDB. 'WalRecoveryMode' will be ignored");
         return this;
     }
 
@@ -865,7 +867,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Override
-    public Options setLogger(final Logger logger) {
+    public Options setLogger(final org.rocksdb.Logger logger) {
         dbOptions.setLogger(logger);
         return this;
     }
@@ -1466,7 +1468,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalFilter(final AbstractWalFilter walFilter) {
-        dbOptions.setWalFilter(walFilter);
+        LOGGER.warn("WAL is explicitly disabled by Streams in RocksDB. 'WalFilter' will be ignored");
         return this;
     }
 
@@ -1510,7 +1512,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setManualWalFlush(final boolean manualWalFlush) {
-        dbOptions.setManualWalFlush(manualWalFlush);
+        LOGGER.warn("WAL is explicitly disabled by Streams in RocksDB. 'ManualWalFlush' will be ignored");
         return this;
     }
 
