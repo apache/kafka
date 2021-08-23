@@ -158,9 +158,6 @@ public class CommonClientConfigs {
                                                                  + "of 3 lowest-expected-latency nodes)";
     public static final String DEFAULT_LEAST_LOADED_NODE_ALGORITHM = LeastLoadedNodeAlgorithm.VANILLA.name();
 
-    public static final String ENABLE_CLIENT_RESPONSE_LEAK_CHECK = "linkedin.enable.client.resonse.leakcheck";
-    public static final String ENABLE_CLIENT_RESPONSE_LEAK_CHECK_DOC = "Use ClientResponse with finalize method to check the release of NetworkReceive buffer.";
-
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
      * is explicitly configured but the maximum reconnect backoff is not explicitly configured.

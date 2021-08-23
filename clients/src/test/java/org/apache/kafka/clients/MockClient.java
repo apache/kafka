@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.clients;
 
+import java.nio.ByteBuffer;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -39,6 +41,8 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.stream.Collectors;
+import org.mockito.Mockito;
+
 
 /**
  * A mock network client for use testing code
@@ -229,9 +233,11 @@ public class MockClient implements KafkaClient {
                 unsupportedVersionException = new UnsupportedVersionException("Api " +
                         request.apiKey() + " with version " + version);
 
+            MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
             ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                     request.createdTimeMs(), time.milliseconds(), futureResp.disconnected,
-                    unsupportedVersionException, null, futureResp.responseBody);
+                    unsupportedVersionException, null, futureResp.responseBody, memoryPool,
+                ByteBuffer.allocate(0));
             responses.add(resp);
             iterator.remove();
             return;

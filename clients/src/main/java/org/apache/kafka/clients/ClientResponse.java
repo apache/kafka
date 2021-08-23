@@ -150,7 +150,11 @@ public class ClientResponse {
     }
 
     public void incRefCount() {
-        if (bufferReleased && usingMemoryPool()) {
+        if (!usingMemoryPool()) {
+            return;
+        }
+
+        if (bufferReleased) {
             // If somebody tried to call incRefCount after buffer has been released. This shouldn't happen
             throw new IllegalStateException(
                 "Ref count being incremented again after buffer release. This should never happen.");
@@ -159,8 +163,12 @@ public class ClientResponse {
     }
 
     public void decRefCount() {
+        if (!usingMemoryPool()) {
+            return;
+        }
+
         long value = refCount.decrementAndGet();
-        if (value < 0 && usingMemoryPool()) {
+        if (value < 0) {
             // Oops! This seems to be a place where we shouldn't get to.
             // However, to save users from exceptions, who don't use pooling, don't throw an exception.
             throw new IllegalStateException("Ref count decremented below zero. This should never happen.");
