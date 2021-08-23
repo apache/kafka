@@ -379,7 +379,7 @@ class TopologyTest {
       mappedStream
         .filter((k: String, _: String) => k == "A")
         .join(stream2)((v1: String, v2: Int) => v1 + ":" + v2.toString,
-                       JoinWindows.ofTimeDifferenceAndGrace(Duration.ofMillis(5000), Duration.ofHours(24)))(
+                       JoinWindows.of(Duration.ofMillis(5000)).grace(Duration.ofHours(24)))(
           StreamJoined.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde, NewSerdes.intSerde)
         )
         .to(JOINED_TOPIC)
@@ -387,7 +387,7 @@ class TopologyTest {
       mappedStream
         .filter((k: String, _: String) => k == "A")
         .join(stream3)((v1: String, v2: String) => v1 + ":" + v2.toString,
-                       JoinWindows.ofTimeDifferenceAndGrace(Duration.ofMillis(5000), Duration.ofHours(24)))(
+                       JoinWindows.of(Duration.ofMillis(5000)).grace(Duration.ofHours(24)))(
           StreamJoined.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde, NewSerdes.stringSerde)
         )
         .to(JOINED_TOPIC)
@@ -439,7 +439,7 @@ class TopologyTest {
         .join[Integer, String](
           stream2,
           valueJoiner2,
-          JoinWindows.ofTimeDifferenceAndGrace(Duration.ofMillis(5000), Duration.ofHours(24)),
+          JoinWindows.of(Duration.ofMillis(5000)).grace(Duration.ofHours(24)),
           StreamJoinedJ.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde, SerdesJ.Integer)
         )
         .to(JOINED_TOPIC)
@@ -449,7 +449,7 @@ class TopologyTest {
         .join(
           stream3,
           valueJoiner3,
-          JoinWindows.ofTimeDifferenceAndGrace(Duration.ofMillis(5000), Duration.ofHours(24)),
+          JoinWindows.of(Duration.ofMillis(5000)).grace(Duration.ofHours(24)),
           StreamJoinedJ.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde, SerdesJ.String)
         )
         .to(JOINED_TOPIC)

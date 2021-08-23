@@ -853,7 +853,7 @@ public class TopologyTest {
         stream1.leftJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
+            JoinWindows.of(ofMillis(100)).grace(Duration.ZERO),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
 
         final TopologyDescription describe = builder.build().describe();
@@ -871,10 +871,10 @@ public class TopologyTest {
                 "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [KSTREAM-OUTEROTHER-0000000005-store])\n" +
                 "      --> KSTREAM-OUTEROTHER-0000000005\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [KSTREAM-OUTEROTHER-0000000005-store, KSTREAM-OUTERSHARED-0000000004-store])\n" +
+                "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [KSTREAM-OUTEROTHER-0000000005-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000002\n" +
-                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [KSTREAM-JOINTHIS-0000000004-store, KSTREAM-OUTERSHARED-0000000004-store])\n" +
+                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000003\n" +
                 "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
@@ -895,7 +895,7 @@ public class TopologyTest {
         stream1.leftJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
+            JoinWindows.of(ofMillis(100)).grace(Duration.ZERO),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
                 .withStoreName("custom-name"));
 
@@ -914,10 +914,10 @@ public class TopologyTest {
                 "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [custom-name-outer-other-join-store])\n" +
                 "      --> KSTREAM-OUTEROTHER-0000000005\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [custom-name-outer-other-join-store, custom-name-left-shared-join-store])\n" +
+                "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [custom-name-outer-other-join-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000002\n" +
-                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [custom-name-this-join-store, custom-name-left-shared-join-store])\n" +
+                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [custom-name-this-join-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000003\n" +
                 "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
@@ -935,7 +935,7 @@ public class TopologyTest {
         stream1 = builder.stream("input-topic1");
         stream2 = builder.stream("input-topic2");
 
-        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100));
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100)).grace(Duration.ZERO);
 
         final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store",
             Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
@@ -968,10 +968,10 @@ public class TopologyTest {
                 "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [in-memory-join-store-other])\n" +
                 "      --> KSTREAM-OUTEROTHER-0000000005\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [in-memory-join-store-other, in-memory-join-store-left-shared-join-store])\n" +
+                "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [in-memory-join-store-other])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000002\n" +
-                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [in-memory-join-store, in-memory-join-store-left-shared-join-store])\n" +
+                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [in-memory-join-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000003\n" +
                 "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
@@ -992,7 +992,7 @@ public class TopologyTest {
         stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
+            JoinWindows.of(ofMillis(100)).grace(Duration.ZERO),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
 
         final TopologyDescription describe = builder.build().describe();
@@ -1010,10 +1010,10 @@ public class TopologyTest {
                 "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [KSTREAM-OUTEROTHER-0000000005-store])\n" +
                 "      --> KSTREAM-OUTEROTHER-0000000005\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [KSTREAM-OUTERTHIS-0000000004-store, KSTREAM-OUTERSHARED-0000000004-store])\n" +
+                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [KSTREAM-OUTERTHIS-0000000004-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000003\n" +
-                "    Processor: KSTREAM-OUTERTHIS-0000000004 (stores: [KSTREAM-OUTEROTHER-0000000005-store, KSTREAM-OUTERSHARED-0000000004-store])\n" +
+                "    Processor: KSTREAM-OUTERTHIS-0000000004 (stores: [KSTREAM-OUTEROTHER-0000000005-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000002\n" +
                 "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
@@ -1034,7 +1034,7 @@ public class TopologyTest {
         stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
+            JoinWindows.of(ofMillis(100)).grace(Duration.ZERO),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
                 .withStoreName("custom-name"));
 
@@ -1053,10 +1053,10 @@ public class TopologyTest {
                 "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [custom-name-outer-other-join-store])\n" +
                 "      --> KSTREAM-OUTEROTHER-0000000005\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [custom-name-outer-this-join-store, custom-name-outer-shared-join-store])\n" +
+                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [custom-name-outer-this-join-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000003\n" +
-                "    Processor: KSTREAM-OUTERTHIS-0000000004 (stores: [custom-name-outer-other-join-store, custom-name-outer-shared-join-store])\n" +
+                "    Processor: KSTREAM-OUTERTHIS-0000000004 (stores: [custom-name-outer-other-join-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000002\n" +
                 "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
@@ -1074,7 +1074,7 @@ public class TopologyTest {
         stream1 = builder.stream("input-topic1");
         stream2 = builder.stream("input-topic2");
 
-        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100));
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100)).grace(Duration.ZERO);
 
         final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store",
             Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
@@ -1107,10 +1107,10 @@ public class TopologyTest {
                 "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [in-memory-join-store-other])\n" +
                 "      --> KSTREAM-OUTEROTHER-0000000005\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [in-memory-join-store-outer-shared-join-store, in-memory-join-store])\n" +
+                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [in-memory-join-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000003\n" +
-                "    Processor: KSTREAM-OUTERTHIS-0000000004 (stores: [in-memory-join-store-other, in-memory-join-store-outer-shared-join-store])\n" +
+                "    Processor: KSTREAM-OUTERTHIS-0000000004 (stores: [in-memory-join-store-other])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000002\n" +
                 "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
