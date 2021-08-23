@@ -1130,7 +1130,7 @@ object TestUtils extends Logging {
 
     def completeIsrUpdate(newZkVersion: Int): Unit = {
       if (inFlight.compareAndSet(true, false)) {
-        val item = isrUpdates.head
+        val item = isrUpdates.dequeue()
         item.callback.apply(Right(item.leaderAndIsr.withZkVersion(newZkVersion)))
       } else {
         fail("Expected an in-flight ISR update, but there was none")
