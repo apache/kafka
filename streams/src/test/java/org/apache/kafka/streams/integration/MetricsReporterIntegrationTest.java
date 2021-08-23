@@ -39,7 +39,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -78,29 +77,27 @@ public class MetricsReporterIntegrationTest {
         streamsConfiguration.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricReporterImpl.class.getName());
     }
 
-    final static Map<String, Object> metricNameToInitialValue = new HashMap<>();
-    final static Map<String, Supplier<Object>> metricNameToValueGetter = new HashMap<>();
+    final static Map<String, Object> METRIC_NAME_TO_INITIAL_VALUE = new HashMap<>();
 
     public static class MetricReporterImpl implements MetricsReporter {
 
 
         @Override
-        public void configure(Map<String, ?> configs) {
+        public void configure(final Map<String, ?> configs) {
         }
 
         @Override
-        public void init(List<KafkaMetric> metrics) {
+        public void init(final List<KafkaMetric> metrics) {
         }
 
         @Override
-        public void metricChange(KafkaMetric metric) {
+        public void metricChange(final KafkaMetric metric) {
             // get value of metric, e.g. if you wanted checking the type of the value
-            metricNameToInitialValue.put(metric.metricName().name(), metric.metricValue());
-            metricNameToValueGetter.put(metric.metricName().name(), metric::metricValue);
+            METRIC_NAME_TO_INITIAL_VALUE.put(metric.metricName().name(), metric.metricValue());
         }
 
         @Override
-        public void metricRemoval(KafkaMetric metric) {
+        public void metricRemoval(final KafkaMetric metric) {
         }
 
         @Override
@@ -119,7 +116,7 @@ public class MetricsReporterIntegrationTest {
         final KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
 
         kafkaStreams.metrics().keySet().forEach(metricName -> {
-            final Object initialMetricValue = metricNameToInitialValue.get(metricName.name());
+            final Object initialMetricValue = METRIC_NAME_TO_INITIAL_VALUE.get(metricName.name());
             assertThat(initialMetricValue, notNullValue());
         });
     }
