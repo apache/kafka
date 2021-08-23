@@ -31,51 +31,92 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 public class LoginCallbackHandlerConfiguration extends AbstractConfig {
 
     public static final String CLIENT_ID_CONFIG = "clientId";
-    private static final String CLIENT_ID_DOC = "xxx";
+    public static final String CLIENT_SECRET_CONFIG = "clientSecret";
+    public static final String LOGIN_ATTEMPTS_CONFIG = "loginAttempts";
+    public static final String LOGIN_CONNECT_TIMEOUT_MS_CONFIG = "loginConnectTimeoutMs";
+    public static final String LOGIN_READ_TIMEOUT_MS_CONFIG = "loginReadTimeoutMs";
+    public static final String LOGIN_RETRY_MAX_WAIT_MS_CONFIG = "loginRetryMaxWaitMs";
+    public static final String LOGIN_RETRY_WAIT_MS_CONFIG = "loginRetryWaitMs";
+    public static final String SCOPE_CONFIG = "scope";
+    public static final String SCOPE_CLAIM_NAME_CONFIG = "scopeClaimName";
+    public static final String SUB_CLAIM_NAME_CONFIG = "subClaimName";
+    public static final String TOKEN_ENDPOINT_URI_CONFIG = "tokenEndpointUri";
+
+    private static final String CLIENT_ID_DOC = "The OAuth/OIDC identity provider-issued " +
+        "client ID to uniquely identify the service account to use for authentication for " +
+        "this client. The value must be paired with a corresponding " + CLIENT_SECRET_CONFIG + " " +
+        "value and is provided to the OAuth provider using the OAuth " +
+        "clientcredentials grant type.";
     private static final ConfigDef.Validator CLIENT_ID_VALIDATOR = new NonEmptyString();
 
-    public static final String CLIENT_SECRET_CONFIG = "clientSecret";
-    private static final String CLIENT_SECRET_DOC = "xxx";
+    private static final String CLIENT_SECRET_DOC = "The OAuth/OIDC identity provider-issued " +
+        "client secret serves a similar function as a password to the " + CLIENT_ID_CONFIG + " " +
+        "account and identifies the service account to use for authentication for " +
+        "this client. The value must be paired with a corresponding " + CLIENT_ID_CONFIG + " " +
+        "value and is provided to the OAuth provider using the OAuth " +
+        "clientcredentials grant type.";
     private static final ConfigDef.Validator CLIENT_SECRET_VALIDATOR = new NonEmptyString();
 
-    public static final String LOGIN_ATTEMPTS_CONFIG = "loginAttempts";
     private static final int LOGIN_ATTEMPTS_DEFAULT = 3;
-    private static final String LOGIN_ATTEMPTS_DOC = "xxx";
+    private static final String LOGIN_ATTEMPTS_DOC = "The (optional) number of attempts to " +
+        "connect to the OAuth/OIDC identity provider to log in this client. " +
+        "The login attempts use an exponential backoff algorithm with an initial " +
+        "wait based on the " + LOGIN_RETRY_WAIT_MS_CONFIG + " setting and will double in wait " +
+        "length between attempts up to a maximum wait length specified by " +
+        LOGIN_RETRY_MAX_WAIT_MS_CONFIG + ".";
     private static final ConfigDef.Validator LOGIN_ATTEMPTS_VALIDATOR = Range.atLeast(1);
 
-    public static final String LOGIN_CONNECT_TIMEOUT_MS_CONFIG = "loginConnectTimeoutMs";
     private static final long LOGIN_CONNECT_TIMEOUT_MS_DEFAULT = 10000;
-    private static final String LOGIN_CONNECT_TIMEOUT_MS_DOC = "xxx";
+    private static final String LOGIN_CONNECT_TIMEOUT_MS_DOC = "The (optional) value in " +
+        "milliseconds for the OAuth/OIDC identity provider HTTP/HTTPS connection timeout.";
     private static final ConfigDef.Validator LOGIN_CONNECT_TIMEOUT_MS_VALIDATOR = Range.atLeast(0);
 
-    public static final String LOGIN_READ_TIMEOUT_MS_CONFIG = "loginReadTimeoutMs";
     private static final long LOGIN_READ_TIMEOUT_MS_DEFAULT = 10000;
-    private static final String LOGIN_READ_TIMEOUT_MS_DOC = "xxx";
+    private static final String LOGIN_READ_TIMEOUT_MS_DOC = "The (optional) value in " +
+        "milliseconds for the OAuth/OIDC identity provider HTTP/HTTPS read timeout.";
     private static final ConfigDef.Validator LOGIN_READ_TIMEOUT_MS_VALIDATOR = Range.atLeast(0);
 
-    public static final String LOGIN_RETRY_MAX_WAIT_MS_CONFIG = "loginRetryMaxWaitMs";
     private static final long LOGIN_RETRY_MAX_WAIT_MS_DEFAULT = 10000;
-    private static final String LOGIN_RETRY_MAX_WAIT_MS_DOC = "xxx";
+    private static final String LOGIN_RETRY_MAX_WAIT_MS_DOC = "The (optional) value in " +
+        "milliseconds for the maximum wait between OAuth/OIDC identity provider HTTP/HTTPS " +
+        "login attempts. " +
+        "The login attempts use an exponential backoff algorithm with an initial " +
+        "wait based on the " + LOGIN_RETRY_WAIT_MS_CONFIG + " setting and will double in wait " +
+        "length between attempts up to a maximum wait length specified by " +
+        LOGIN_RETRY_MAX_WAIT_MS_CONFIG + ".";
+
     private static final ConfigDef.Validator LOGIN_RETRY_MAX_WAIT_MS_VALIDATOR = Range.atLeast(0);
 
-    public static final String LOGIN_RETRY_WAIT_MS_CONFIG = "loginRetryWaitMs";
     private static final long LOGIN_RETRY_WAIT_MS_DEFAULT = 250;
-    private static final String LOGIN_RETRY_WAIT_MS_DOC = "xxx";
+    private static final String LOGIN_RETRY_WAIT_MS_DOC = "The (optional) value in " +
+        "milliseconds for the initial wait between OAuth/OIDC identity provider HTTP/HTTPS " +
+        "login attempts. " +
+        "The login attempts use an exponential backoff algorithm with an initial " +
+        "wait based on the " + LOGIN_RETRY_WAIT_MS_CONFIG + " setting and will double in wait " +
+        "length between attempts up to a maximum wait length specified by " +
+        LOGIN_RETRY_MAX_WAIT_MS_CONFIG + ".";
     private static final ConfigDef.Validator LOGIN_RETRY_WAIT_MS_VALIDATOR = Range.atLeast(0);
 
-    public static final String SCOPE_CONFIG = "scope";
-    private static final String SCOPE_DOC = "xxx";
+    private static final String SCOPE_DOC = "The HTTP/HTTPS login request to the token endpoint " +
+        "(" + TOKEN_ENDPOINT_URI_CONFIG + ") may need to specify an OAuth \"scope\". If so, " +
+        "the " + SCOPE_CONFIG + " is used to provide the value to include with the login request.";
 
-    public static final String SCOPE_CLAIM_NAME_CONFIG = "scopeClaimName";
     private static final String SCOPE_CLAIM_NAME_DEFAULT = "scope";
-    private static final String SCOPE_CLAIM_NAME_DOC = "xxx";
+    private static final String SCOPE_CLAIM_NAME_DOC = "The OAuth claim for the scope is often " +
+        "named \"" + SCOPE_CLAIM_NAME_DEFAULT + "\", but this setting can provide a different " +
+        "name to use for the scope included in the JWT payload's claims if the OAuth/OIDC " +
+        "provider uses a different name for that claim.";
 
-    public static final String SUB_CLAIM_NAME_CONFIG = "subClaimName";
     private static final String SUB_CLAIM_NAME_DEFAULT = "sub";
-    private static final String SUB_CLAIM_NAME_DOC = "xxx";
+    private static final String SUB_CLAIM_NAME_DOC = "The OAuth claim for the subject is often " +
+        "named \"" + SUB_CLAIM_NAME_DEFAULT + "\", but this setting can provide a different " +
+        "name to use for the subject included in the JWT payload's claims if the OAuth/OIDC " +
+        "provider uses a different name for that claim.";
 
-    public static final String TOKEN_ENDPOINT_URI_CONFIG = "tokenEndpointUri";
-    private static final String TOKEN_ENDPOINT_URI_DOC = "xxx";
+    private static final String TOKEN_ENDPOINT_URI_DOC = "The OAuth/OIDC identity provider " +
+        "HTTP/HTTPS issuer token endpoint URI to which requests will be made to login based " +
+        "on the " + CLIENT_ID_CONFIG + ", " + CLIENT_SECRET_CONFIG + ", and optionally the " +
+        SCOPE_CONFIG + ".";
     private static final ConfigDef.Validator TOKEN_ENDPOINT_URI_VALIDATOR = CompositeValidator.of(new NonEmptyString(), new UriConfigDefValidator());
 
     private static final ConfigDef CONFIG = new ConfigDef()

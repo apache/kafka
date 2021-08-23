@@ -18,7 +18,6 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured.httpclient;
 
 import java.io.IOException;
-import java.util.concurrent.ThreadLocalRandom;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,9 +61,7 @@ public class Retry<T> {
                 if (attempt >= attempts) {
                     throw e;
                 } else {
-                    double jitterFactor = ThreadLocalRandom.current().nextDouble(0.0, 0.1);
                     long waitMs = retryWaitMs * (long) Math.pow(2, attempt - 1);
-                    waitMs += (double) waitMs * jitterFactor;
                     waitMs = Math.min(waitMs, maxWaitMs);
 
                     String message = String.format("Attempt %s of %s to call HTTP URL %s resulted in an error; sleeping %s ms before retrying",
