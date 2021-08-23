@@ -2604,6 +2604,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (config.requiresZookeeper) {
       val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
       if (!request.isForwarded && isForwardingEnabled(request) && !zkSupport.controller.isActive) {
+        // Should validate the configs here before forwarding once request forwarding is enabled for zk mutation protocols.
         forwardToControllerOrFail(request)
       } else {
         val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.toMap.partition { case (resource, _) =>
@@ -2636,7 +2637,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestHelper.sendResponseMaybeThrottle(request, responseCallback)
       }
     } else {
-      // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller
+      // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for 
+      // before forwarding them to the controller
       val brokerConfigs = alterConfigsRequest.configs.asScala.filter(entry => entry._1.`type` == ConfigResource.Type.BROKER)
 
       // Validate per-broker dynamic configs
@@ -2668,7 +2670,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }.toMap
 
       if (results.filterNot(_._2 == ApiError.NONE).nonEmpty || alterConfigsRequest.validateOnly) {
-        // If validation fails for any reason or if validateOnly is true, send response back to the client and don't forward the request to the controller.
+        // If validation fails for any reason or if validateOnly is true, send response back to the client 
+        // and don't forward the request to the controller.
         def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
           val data = new AlterConfigsResponseData()
             .setThrottleTimeMs(requestThrottleMs)
@@ -2800,6 +2803,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (config.requiresZookeeper) {
       val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
       if (!request.isForwarded && isForwardingEnabled(request) && !zkSupport.controller.isActive) {
+        // Should validate the configs before forwarding once request forwarding is enabled for zk mutation protocols
         forwardToControllerOrFail(request)
       } else {
         val (authorizedResources, unauthorizedResources) = configs.partition { case (resource, _) =>
@@ -2821,14 +2825,14 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestThrottleMs, (authorizedResult ++ unauthorizedResult).asJava))
       }
     } else {
-      // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller.
+      // If using KRaft, per broker config alterations should be validated on the broker that the 
+      // config(s) is for before forwarding them to the controller.
       val results = configs.map { case (resource, alterConfigOps) =>
         try {
           val brokerId = configHelper.getAndValidateBrokerId(resource)
           if (resource.`type` == ConfigResource.Type.BROKER) {
-            val dynamicDefaultConfigs = config.dynamicConfig.currentDynamicDefaultConfigs
-            val dynamicBrokerConfigs = config.dynamicConfig.overrideDynamicDefaultWithBrokerConfigs
-            val dynamicConfigs = if (brokerId.nonEmpty) dynamicBrokerConfigs else dynamicDefaultConfigs
+            val dynamicConfigs = if (brokerId.nonEmpty) config.dynamicConfig.overrideDynamicDefaultWithBrokerConfigs 
+            else config.dynamicConfig.currentDynamicDefaultConfigs
             val configProps = new Properties()
             configProps.putAll(dynamicConfigs.asJava)
             configHelper.prepareIncrementalConfigs(alterConfigOps.toSeq, configProps, KafkaConfig.configKeys)
@@ -2856,7 +2860,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }.toMap
 
       if (results.filterNot(_._2 == ApiError.NONE).nonEmpty || alterConfigsRequest.data.validateOnly) {
-        // If validation fails for any reason or if validateOnly is true, send response back to the client and don't forward the request to the controller.
+        // If validation fails for any reason or if validateOnly is true, send response back to the client and 
+        // don't forward the request to the controller.
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
           requestThrottleMs, results.asJava))
       } else {
