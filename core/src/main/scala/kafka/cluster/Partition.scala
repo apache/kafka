@@ -591,9 +591,9 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   /**
-   *  Make the local replica the follower by setting the new leader and ISR to empty
-   *  If the leader replica id does not change and the new epoch is equal or one
-   *  greater (that is, no updates have been missed), return false to indicate to the
+   * Make the local replica the follower by setting the new leader and ISR to empty
+   * If the leader replica id does not change and the new epoch is equal or one
+   * greater (that is, no updates have been missed), return false to indicate to the
    * replica manager that state is already correct and the become-follower steps can be skipped
    */
   def makeFollower(partitionState: LeaderAndIsrPartitionState,

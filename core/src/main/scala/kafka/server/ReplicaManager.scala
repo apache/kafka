@@ -1338,7 +1338,7 @@ class ReplicaManager(val config: KafkaConfig,
           val responseMap = new mutable.HashMap[TopicPartition, Errors]
           controllerEpoch = leaderAndIsrRequest.controllerEpoch
 
-          val partitionStates = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
+          val partitions = new mutable.HashSet[Partition]()
           val partitionsToBeLeader = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
           val partitionsToBeFollower = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
 
@@ -1379,7 +1379,7 @@ class ReplicaManager(val config: KafkaConfig,
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
                 if (partitionState.replicas.contains(localBrokerId)) {
-                  partitionStates.put(partition, partitionState)
+                  partitions += partition
                   if (partitionState.leader == localBrokerId) {
                     partitionsToBeLeader.put(partition, partitionState)
                   } else {
@@ -1436,21 +1436,11 @@ class ReplicaManager(val config: KafkaConfig,
           val followerTopicSet = partitionsBecomeFollower.map(_.topic).toSet
           updateLeaderAndFollowerMetrics(followerTopicSet)
 
-          leaderAndIsrRequest.partitionStates.forEach { partitionState =>
-            val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
-            // If there is offline log directory, a Partition object may have been created by getOrCreatePartition()
-            // before getOrCreateReplica() failed to create local replica due to KafkaStorageException.
-            // In this case ReplicaManager.allPartitions will map this topic-partition to an empty Partition object.
-            // we need to map this topic-partition to OfflinePartition instead.
-            if (localLog(topicPartition).isEmpty)
-              markPartitionOffline(topicPartition)
-          }
-
           // We initialize highwatermark thread after the first LeaderAndIsr request. This ensures that all the partitions
           // have been completely populated before starting the checkpointing there by avoiding weird race conditions
           startHighWatermarkCheckPointThread()
 
-          maybeAddLogDirFetchers(partitionStates.keySet, highWatermarkCheckpoints, topicIdFromRequest)
+          maybeAddLogDirFetchers(partitions, highWatermarkCheckpoints, topicIdFromRequest)
 
           replicaFetcherManager.shutdownIdleFetcherThreads()
           replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
@@ -1602,6 +1592,11 @@ class ReplicaManager(val config: KafkaConfig,
               s"since it is already the leader for the partition.")
         } catch {
           case e: KafkaStorageException =>
+            // If there is an offline log directory, a Partition object may have been created and have been added
+            // to `ReplicaManager.allPartitions` before `createLogIfNotExists()` failed to create local replica due
+            // to KafkaStorageException. In this case `ReplicaManager.allPartitions` will map this topic-partition
+            // to an empty Partition object. We need to map this topic-partition to OfflinePartition instead.
+            markPartitionOffline(partition.topicPartition)
             stateChangeLogger.error(s"Skipped the become-leader state change with " +
               s"correlation id $correlationId from controller $controllerId epoch $controllerEpoch for partition ${partition.topicPartition} " +
               s"(last update controller epoch ${partitionState.controllerEpoch}) since " +
@@ -1695,6 +1690,11 @@ class ReplicaManager(val config: KafkaConfig,
           }
         } catch {
           case e: KafkaStorageException =>
+            // If there is an offline log directory, a Partition object may have been created and have been added
+            // to `ReplicaManager.allPartitions` before `createLogIfNotExists()` failed to create local replica due
+            // to KafkaStorageException. In this case `ReplicaManager.allPartitions` will map this topic-partition
+            // to an empty Partition object. We need to map this topic-partition to OfflinePartition instead.
+            markPartitionOffline(partition.topicPartition)
             stateChangeLogger.error(s"Skipped the become-follower state change with correlation id $correlationId from " +
               s"controller $controllerId epoch $controllerEpoch for partition ${partition.topicPartition} " +
               s"(last update controller epoch ${partitionState.controllerEpoch}) with leader " +
@@ -2089,7 +2089,7 @@ class ReplicaManager(val config: KafkaConfig,
       if (!localChanges.deletes.isEmpty) {
         val deletes = localChanges.deletes.asScala.map(tp => (tp, true)).toMap
         stateChangeLogger.info(s"Deleting ${deletes.size} partition(s).")
-        stopPartitions(deletes).foreach { case (topicPartition, e) =>
+        stopPartitions(deletes).forKeyValue { (topicPartition, e) =>
           if (e.isInstanceOf[KafkaStorageException]) {
             stateChangeLogger.error(s"Unable to delete replica ${topicPartition} because " +
               "the local replica for the partition is in an offline log directory")
@@ -2113,19 +2113,6 @@ class ReplicaManager(val config: KafkaConfig,
         maybeAddLogDirFetchers(changedPartitions, lazyOffsetCheckpoints,
           name => Option(newImage.topics().getTopic(name)).map(_.id()))
 
-        def markPartitionOfflineIfNeeded(tp: TopicPartition): Unit = {
-          /*
-           * If there is offline log directory, a Partition object may have been created by getOrCreatePartition()
-           * before getOrCreateReplica() failed to create local replica due to KafkaStorageException.
-           * In this case ReplicaManager.allPartitions will map this topic-partition to an empty Partition object.
-           * we need to map this topic-partition to OfflinePartition instead.
-           */
-          if (localLog(tp).isEmpty)
-            markPartitionOffline(tp)
-        }
-        localChanges.leaders.keySet.forEach(markPartitionOfflineIfNeeded)
-        localChanges.followers.keySet.forEach(markPartitionOfflineIfNeeded)
-
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
       }
@@ -2141,23 +2128,27 @@ class ReplicaManager(val config: KafkaConfig,
     stateChangeLogger.info(s"Transitioning ${newLocalLeaders.size} partition(s) to " +
       "local leaders.")
     replicaFetcherManager.removeFetcherForPartitions(newLocalLeaders.keySet)
-    newLocalLeaders.forKeyValue { case (tp, info) =>
+    newLocalLeaders.forKeyValue { (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
           val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
           if (!partition.makeLeader(state, offsetCheckpoints, Some(info.topicId))) {
             stateChangeLogger.info("Skipped the become-leader state change for " +
-              s"${tp} with topic id ${info.topicId} because this partition is " +
+              s"$tp with topic id ${info.topicId} because this partition is " +
               "already a local leader.")
           }
           changedPartitions.add(partition)
         } catch {
           case e: KafkaStorageException =>
-            stateChangeLogger.info(s"Skipped the become-leader state change for ${tp} " +
-              s"with topic id ${info.topicId} due to disk error ${e}")
-            val dirOpt = getLogDir(tp)
-            error(s"Error while making broker the leader for partition ${tp} in dir " +
-              s"${dirOpt}", e)
+            // If there is an offline log directory, a Partition object may have been created by
+            // `getOrCreatePartition()` before `createLogIfNotExists()` failed to create local replica due
+            // to KafkaStorageException. In this case `ReplicaManager.allPartitions` will map this topic-partition
+            // to an empty Partition object. We need to map this topic-partition to OfflinePartition instead.
+            markPartitionOffline(tp)
+            stateChangeLogger.info(s"Skipped the become-leader state change for $tp " +
+              s"with topic id ${info.topicId} due to a storage error ${e.getMessage}")
+            error(s"Error while making broker the leader for partition $tp in dir " +
+              s"${getLogDir(tp)}", e)
         }
       }
     }
@@ -2175,13 +2166,13 @@ class ReplicaManager(val config: KafkaConfig,
     val shuttingDown = isShuttingDown.get()
     val partitionsToMakeFollower = new mutable.HashMap[TopicPartition, InitialFetchState]
     val newFollowerTopicSet = new mutable.HashSet[String]
-    newLocalFollowers.forKeyValue { case (tp, info) =>
+    newLocalFollowers.forKeyValue { (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
           newFollowerTopicSet.add(tp.topic())
 
           if (shuttingDown) {
-            stateChangeLogger.trace(s"Unable to start fetching ${tp} with topic " +
+            stateChangeLogger.trace(s"Unable to start fetching $tp with topic " +
               s"ID ${info.topicId} because the replica manager is shutting down.")
           } else {
             val listenerName = config.interBrokerListenerName.value()
@@ -2189,8 +2180,8 @@ class ReplicaManager(val config: KafkaConfig,
             Option(newImage.cluster().broker(leader)).flatMap(_.node(listenerName).asScala) match {
               case None =>
                 stateChangeLogger.trace(
-                  s"Unable to start fetching ${tp} with topic ID ${info.topicId} from leader " +
-                  s"${leader} because it is not alive."
+                  s"Unable to start fetching $tp with topic ID ${info.topicId} from leader " +
+                  s"$leader because it is not alive."
                 )
 
                 // Create the local replica even if the leader is unavailable. This is required
@@ -2207,7 +2198,7 @@ class ReplicaManager(val config: KafkaConfig,
                     InitialFetchState(leaderEndPoint, partition.getLeaderEpoch, fetchOffset))
                 } else {
                   stateChangeLogger.info(
-                    s"Skipped the become-follower state change after marking its partition as " +
+                    "Skipped the become-follower state change after marking its partition as " +
                     s"follower for partition $tp with id ${info.topicId} and partition state $state."
                   )
                 }
@@ -2215,7 +2206,20 @@ class ReplicaManager(val config: KafkaConfig,
           }
           changedPartitions.add(partition)
         } catch {
-          case e: Throwable => stateChangeLogger.error(s"Unable to start fetching ${tp} " +
+          case e: KafkaStorageException =>
+            // If there is an offline log directory, a Partition object may have been created by
+            // `getOrCreatePartition()` before `createLogIfNotExists()` failed to create local replica due
+            // to KafkaStorageException. In this case `ReplicaManager.allPartitions` will map this topic-partition
+            // to an empty Partition object. We need to map this topic-partition to OfflinePartition instead.
+            markPartitionOffline(tp)
+            stateChangeLogger.error(s"Unable to start fetching $tp " +
+              s"with topic ID ${info.topicId} due to a storage error ${e.getMessage}", e)
+            replicaFetcherManager.addFailedPartition(tp)
+            error(s"Error while making broker the follower for partition $tp in dir " +
+              s"${getLogDir(tp)}", e)
+
+          case e: Throwable =>
+            stateChangeLogger.error(s"Unable to start fetching $tp " +
               s"with topic ID ${info.topicId} due to ${e.getClass.getSimpleName}", e)
             replicaFetcherManager.addFailedPartition(tp)
         }
