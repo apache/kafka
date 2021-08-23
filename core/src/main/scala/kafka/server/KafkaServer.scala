@@ -606,7 +606,7 @@ class KafkaServer(
                   s"with ${shutdownResponse.data.remainingPartitions.size} partitions remaining to move")
 
                 if (isDebugEnabled) {
-                  debug(s"Remaining partitions to move during controlled shutdown: " +
+                  debug("Remaining partitions to move during controlled shutdown: " +
                     s"${shutdownResponse.data.remainingPartitions}")
                 }
               }
@@ -621,7 +621,7 @@ class KafkaServer(
           }
           if (!shutdownSucceeded && remainingRetries > 0) {
             Thread.sleep(config.controlledShutdownRetryBackoffMs)
-            warn("Retrying controlled shutdown after the previous attempt failed...")
+            info(s"Retrying controlled shutdown ($remainingRetries retries remaining)")
           }
         }
       }
