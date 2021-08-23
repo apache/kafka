@@ -166,12 +166,12 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * The channel manager, or null if this manager has not been started yet.  This variable
    * can only be read or written from the event queue thread.
    */
-  var _channelManager: BrokerToControllerChannelManager = _
+  private var _channelManager: BrokerToControllerChannelManager = _
 
   /**
    * The event queue.
    */
-  val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
+  private[server] val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
 
   /**
    * Start the BrokerLifecycleManager.
@@ -193,9 +193,9 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     eventQueue.append(new SetReadyToUnfenceEvent())
   }
 
-  def brokerEpoch(): Long = _brokerEpoch
+  def brokerEpoch: Long = _brokerEpoch
 
-  def state(): BrokerState = _state
+  def state: BrokerState = _state
 
   private class BeginControlledShutdownEvent extends EventQueue.Event {
     override def run(): Unit = {

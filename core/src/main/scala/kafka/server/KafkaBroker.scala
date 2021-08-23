@@ -63,11 +63,9 @@ object KafkaBroker {
 }
 
 trait KafkaBroker extends KafkaMetricsGroup {
-  @volatile private var _brokerState: BrokerState = BrokerState.NOT_RUNNING
 
   def authorizer: Option[Authorizer]
-  def brokerState: BrokerState = _brokerState
-  protected def brokerState_= (brokerState: BrokerState): Unit = _brokerState = brokerState
+  def brokerState: BrokerState
   def clusterId: String
   def config: KafkaConfig
   def dataPlaneRequestHandlerPool: KafkaRequestHandlerPool
