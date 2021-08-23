@@ -2837,6 +2837,17 @@ public class KafkaConsumerTest {
         }
     }
 
+    @Test
+    public void testAssignorNameConflict() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+            Arrays.asList(RangeAssignor.class.getName(), ConsumerPartitionAssignorTest.TestConsumerPartitionAssignor.class.getName()));
+
+        assertThrows(KafkaException.class,
+            () -> new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
+    }
+
     private static final List<String> CLIENT_IDS = new ArrayList<>();
     public static class DeserializerForClientId implements Deserializer<byte[]> {
         @Override
