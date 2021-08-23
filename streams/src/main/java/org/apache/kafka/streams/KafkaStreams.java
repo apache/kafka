@@ -861,6 +861,7 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addApplicationIdMetric(streamsMetrics, config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, internalTopologyBuilder.describe().toString());
         ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
+        threads = Collections.synchronizedList(new LinkedList<>());
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) -> getNumLiveStreamThreads());
 
         streamsMetadataState = new StreamsMetadataState(
@@ -893,7 +894,6 @@ public class KafkaStreams implements AutoCloseable {
             globalThreadState = globalStreamThread.state();
         }
 
-        threads = Collections.synchronizedList(new LinkedList<>());
         threadState = new HashMap<>(numStreamThreads);
         streamStateListener = new StreamStateListener(threadState, globalThreadState);
 
