@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.easymock.EasyMockRunner;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -55,11 +56,13 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.matchesPattern;
@@ -85,6 +88,14 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             add("notifyAll");
             add("toString");
             add("getOptionStringFromProps");
+            add("setManualWalFlush");
+            add("setMaxTotalWalSize");
+            add("setWalBytesPerSync");
+            add("setWalDir");
+            add("setWalFilter");
+            add("setWalRecoveryMode");
+            add("setWalSizeLimitMB");
+            add("setWalTtlSeconds");
         }
     };
 
@@ -305,5 +316,25 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         }
 
         return parameters;
+    }
+
+    @Test
+    public void shouldLogWarningWhenSettingWalOptions() {
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
+
+            final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter
+                    = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions());
+
+            adapter.setWalDir("walDir");
+
+            assertThat(
+                    appender.getEvents().stream()
+                            .filter(e -> e.getLevel().equals("WARN"))
+                            .map(LogCaptureAppender.Event::getMessage)
+                            .collect(Collectors.toList()),
+                    hasItem("WAL is explicitly disabled by Streams in RocksDB. Setting option 'walDir' will be ignored")
+            );
+        }
     }
 }
