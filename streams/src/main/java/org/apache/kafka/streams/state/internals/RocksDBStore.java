@@ -178,7 +178,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         // Setup statistics before the database is opened, otherwise the statistics are not updated
         // with the measurements from Rocks DB
-        setStatisticsIfNeeded(configs);
+        maybeSetUpStatistics(configs);
 
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
@@ -186,7 +186,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         addValueProvidersToMetricsRecorder();
     }
 
-    private void setStatisticsIfNeeded(final Map<String, Object> configs) {
+    private void maybeSetUpStatistics(final Map<String, Object> configs) {
         if (userSpecifiedOptions.statistics() != null) {
             userSpecifiedStatistics = true;
         }
