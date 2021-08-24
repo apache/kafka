@@ -36,6 +36,14 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 public class StreamThreadTotalBlockedTimeTest {
+    private static final int IOTIME_TOTAL = 1;
+    private static final int IO_WATTIME_TOTAL = 2;
+    private static final int COMMITTED_TIME_TOTAL = 3;
+    private static final int COMMIT_SYNC_TIME_TOTAL = 4;
+    private static final int RESTORE_IOTIME_TOTAL = 5;
+    private static final int RESTORE_IO_WAITTIME_TOTAL = 6;
+    private static final double PRODUCER_BLOCKED_TIME = 7.0;
+
     @Mock
     Consumer<?, ?> consumer;
     @Mock
@@ -52,25 +60,27 @@ public class StreamThreadTotalBlockedTimeTest {
     public void setup() {
         blockedTime = new StreamThreadTotalBlockedTime(consumer, restoreConsumer, producerBlocked);
         when(consumer.metrics()).thenAnswer(a -> new MetricsBuilder()
-            .addMetric("iotime-total", 1)
-            .addMetric("io-waittime-total", 2)
-            .addMetric("committed-time-total", 3)
-            .addMetric("commit-sync-time-total", 4)
+            .addMetric("iotime-total", IOTIME_TOTAL)
+            .addMetric("io-waittime-total", IO_WATTIME_TOTAL)
+            .addMetric("committed-time-total", COMMITTED_TIME_TOTAL)
+            .addMetric("commit-sync-time-total", COMMIT_SYNC_TIME_TOTAL)
             .build()
         );
         when(restoreConsumer.metrics()).thenAnswer(a -> new MetricsBuilder()
-            .addMetric("iotime-total", 5)
-            .addMetric("io-waittime-total", 6)
+            .addMetric("iotime-total", RESTORE_IOTIME_TOTAL)
+            .addMetric("io-waittime-total", RESTORE_IO_WAITTIME_TOTAL)
             .build()
         );
-        when(producerBlocked.get()).thenReturn(7.0);
+        when(producerBlocked.get()).thenReturn(PRODUCER_BLOCKED_TIME);
     }
 
     @Test
     public void shouldComputeTotalBlockedTime() {
         assertThat(
             blockedTime.compute(),
-            equalTo(1.0 + 2.0 + 3.0 + 4.0 + 5.0 + 6.0 + 7.0)
+            equalTo(IOTIME_TOTAL + IO_WATTIME_TOTAL + COMMITTED_TIME_TOTAL
+                + COMMIT_SYNC_TIME_TOTAL + RESTORE_IOTIME_TOTAL + RESTORE_IO_WAITTIME_TOTAL
+                + PRODUCER_BLOCKED_TIME)
         );
     }
 

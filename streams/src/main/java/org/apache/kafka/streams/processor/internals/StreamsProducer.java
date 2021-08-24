@@ -85,13 +85,14 @@ public class StreamsProducer {
         this(config, threadId, clientSupplier, taskId, processId, logContext, Time.SYSTEM);
     }
 
-    public StreamsProducer(final StreamsConfig config,
-                           final String threadId,
-                           final KafkaClientSupplier clientSupplier,
-                           final TaskId taskId,
-                           final UUID processId,
-                           final LogContext logContext,
-                           final Time time) {
+    // VisibleForTesting
+    StreamsProducer(final StreamsConfig config,
+                    final String threadId,
+                    final KafkaClientSupplier clientSupplier,
+                    final TaskId taskId,
+                    final UUID processId,
+                    final LogContext logContext,
+                    final Time time) {
         Objects.requireNonNull(config, "config cannot be null");
         Objects.requireNonNull(threadId, "threadId cannot be null");
         this.clientSupplier = Objects.requireNonNull(clientSupplier, "clientSupplier cannot be null");

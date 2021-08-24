@@ -35,7 +35,6 @@ import org.apache.kafka.test.MockClientSupplier;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
-import org.hamcrest.Matchers;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -122,11 +121,12 @@ public class ActiveTaskCreatorTest {
 
     @Test
     public void shouldReturnBlockedTimeWhenThreadProducer() {
+        final double blockedTime = 123.0;
         createTasks();
         final MockProducer<?, ?> producer = mockClientSupplier.producers.get(0);
-        addMetric(producer, "flush-time-total", 123.0);
+        addMetric(producer, "flush-time-total", blockedTime);
 
-        assertThat(activeTaskCreator.totalProducerBlockedTime(), closeTo(123.0, 0.01));
+        assertThat(activeTaskCreator.totalProducerBlockedTime(), closeTo(blockedTime, 0.01));
     }
 
     // error handling

@@ -396,11 +396,14 @@ public class ThreadMetricsTest {
 
     @Test
     public void shouldAddThreadStartTimeMetric() {
+        // Given:
+        final long startTime = 123L;
+
         // When:
         ThreadMetrics.addThreadStartTimeMetric(
             "bongo",
             streamsMetrics,
-            123L
+            startTime
         );
 
         // Then:
@@ -408,15 +411,16 @@ public class ThreadMetricsTest {
             "thread-start-time",
             "The time that the thread was started",
             "bongo",
-            123L
+            startTime
         );
     }
 
     @Test
     public void shouldAddTotalBlockedTimeMetric() {
         // Given:
+        final double startTime = 123.45;
         final StreamThreadTotalBlockedTime blockedTime = mock(StreamThreadTotalBlockedTime.class);
-        when(blockedTime.compute()).thenReturn(123.45);
+        when(blockedTime.compute()).thenReturn(startTime);
 
         // When:
         ThreadMetrics.addThreadBlockedTimeMetric(
@@ -433,7 +437,7 @@ public class ThreadMetricsTest {
             eq("burger"),
             captor.capture()
         );
-        assertThat(captor.getValue().value(null, 678L), is(123.45));
+        assertThat(captor.getValue().value(null, 678L), is(startTime));
     }
 
     @SuppressWarnings("unchecked")
