@@ -1048,7 +1048,14 @@ public class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(0));
         assertTrue(coordinator.rejoinNeededOrPending());
 
-        client.respond(joinGroupLeaderResponse(2, consumerId, initialSubscription, Errors.NONE));
+        client.respond(request -> {
+            if (!(request instanceof JoinGroupRequest)) {
+                return false;
+            } else {
+                JoinGroupRequest joinRequest = (JoinGroupRequest) request;
+                return consumerId.equals(joinRequest.data().memberId());
+            }
+        }, joinGroupLeaderResponse(2, consumerId, initialSubscription, Errors.NONE));
         client.prepareResponse(syncGroupResponse(partitions, Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
@@ -1056,8 +1063,13 @@ public class ConsumerCoordinatorTest {
         Collection<TopicPartition> revoked = getRevoked(partitions, partitions);
         assertEquals(revoked.isEmpty() ? 0 : 1, rebalanceListener.revokedCount);
         assertEquals(revoked.isEmpty() ? null : revoked, rebalanceListener.revoked);
+        // No partitions have been lost since the rebalance failure was not fatal
+        assertEquals(0, rebalanceListener.lostCount);
+        assertNull(rebalanceListener.lost);
+
+        Collection<TopicPartition> added = getAdded(partitions, partitions);
         assertEquals(2, rebalanceListener.assignedCount);
-        assertEquals(getAdded(partitions, partitions), rebalanceListener.assigned);
+        assertEquals(added.isEmpty() ? Collections.emptySet() : toSet(partitions), rebalanceListener.assigned);
         assertEquals(toSet(partitions), subscriptions.assignedPartitions());
     }
 
