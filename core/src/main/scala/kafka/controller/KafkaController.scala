@@ -630,7 +630,7 @@ class KafkaController(val config: KafkaConfig,
 
     // If replica failure did not require leader re-election, inform brokers of the offline brokers
     // Note that during leader re-election, brokers update their metadata
-    if (partitionsWithOfflineLeader.isEmpty) {
+    if (newOfflineReplicas.isEmpty) {
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set.empty)
     }
   }
