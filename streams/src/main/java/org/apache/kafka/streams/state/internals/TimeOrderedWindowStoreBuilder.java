@@ -19,19 +19,15 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.WindowStore;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Objects;
 
-public class TimeOrderedWindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowStore<K, V>> {
-    private final Logger log = LoggerFactory.getLogger(WindowStoreBuilder.class);
+public class TimeOrderedWindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyValueStore<K, V>> {
+    private final KeyValueBytesStoreSupplier storeSupplier;
 
-    private final WindowBytesStoreSupplier storeSupplier;
-
-    public TimeOrderedWindowStoreBuilder(final WindowBytesStoreSupplier storeSupplier,
+    public TimeOrderedWindowStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
                                          final Serde<K> keySerde,
                                          final Serde<V> valueSerde,
                                          final Time time) {
@@ -42,39 +38,26 @@ public class TimeOrderedWindowStoreBuilder<K, V> extends AbstractStoreBuilder<K,
     }
 
     @Override
-    public WindowStore<K, V> build() {
-        if (storeSupplier.retainDuplicates() && enableCaching) {
-            log.warn("Disabling caching for {} since store was configured to retain duplicates", storeSupplier.name());
-            enableCaching = false;
-        }
-
-        return new MeteredWindowStore<>(
-            maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
-            storeSupplier.windowSize(),
-            storeSupplier.metricsScope(),
-            time,
-            keySerde,
-            valueSerde);
+    public KeyValueStore<K, V> build() {
+        return new MeteredKeyValueStore<>(
+                maybeWrapCaching(maybeWrapLogging(new RocksDBTimeOrderedWindowStore(storeSupplier.get()))),
+                storeSupplier.metricsScope(),
+                time,
+                keySerde,
+                valueSerde);
     }
 
-    private WindowStore<Bytes, byte[]> maybeWrapCaching(final WindowStore<Bytes, byte[]> inner) {
+    private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> inner) {
         if (!enableCaching) {
             return inner;
         }
-        return new CachingWindowStore(
-            inner,
-            storeSupplier.windowSize(),
-            storeSupplier.segmentIntervalMs());
+        return new CachingKeyValueStore(inner);
     }
 
-    private WindowStore<Bytes, byte[]> maybeWrapLogging(final WindowStore<Bytes, byte[]> inner) {
+    private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {
         if (!enableLogging) {
             return inner;
         }
-        return new ChangeLoggingWindowBytesStore(
-            inner,
-            storeSupplier.retainDuplicates(),
-            TimeOrderedKeySchema::toStoreKeyBinary
-        );
+        return new ChangeLoggingTimeOrderedKeyValueBytesStore(inner);
     }
 }

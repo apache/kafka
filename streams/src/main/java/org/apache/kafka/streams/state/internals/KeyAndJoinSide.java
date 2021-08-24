@@ -28,11 +28,13 @@ import java.util.Objects;
  */
 public class KeyAndJoinSide<K> {
     private final K key;
+    private final long timestamp;
     private final boolean leftSide;
 
-    private KeyAndJoinSide(final boolean leftSide, final K key) {
+    private KeyAndJoinSide(final boolean leftSide, final K key, final long timestamp) {
         this.key = Objects.requireNonNull(key, "key cannot be null");
         this.leftSide = leftSide;
+        this.timestamp = timestamp;
     }
 
     /**
@@ -43,8 +45,8 @@ public class KeyAndJoinSide<K> {
      * @param <K>      the type of the key
      * @return a new {@link KeyAndJoinSide} instance if the provide {@code key} is not {@code null}
      */
-    public static <K> KeyAndJoinSide<K> make(final boolean leftSide, final K key) {
-        return new KeyAndJoinSide<>(leftSide, key);
+    public static <K> KeyAndJoinSide<K> make(final boolean leftSide, final K key, final long timestamp) {
+        return new KeyAndJoinSide<>(leftSide, key, timestamp);
     }
 
     public boolean isLeftSide() {
@@ -55,10 +57,14 @@ public class KeyAndJoinSide<K> {
         return key;
     }
 
+    public long getTimestamp() {
+        return timestamp;
+    }
+
     @Override
     public String toString() {
         final String joinSide = leftSide ? "left" : "right";
-        return "<" + joinSide + "," + key + ">";
+        return "<" + joinSide + "," + key + ":" + timestamp + ">";
     }
 
     @Override
@@ -71,11 +77,12 @@ public class KeyAndJoinSide<K> {
         }
         final KeyAndJoinSide<?> that = (KeyAndJoinSide<?>) o;
         return leftSide == that.leftSide &&
-            Objects.equals(key, that.key);
+            Objects.equals(key, that.key) &&
+            timestamp == that.timestamp;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(leftSide, key);
+        return Objects.hash(leftSide, key, timestamp);
     }
 }

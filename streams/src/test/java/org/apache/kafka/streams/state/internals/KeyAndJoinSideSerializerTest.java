@@ -34,7 +34,7 @@ public class KeyAndJoinSideSerializerTest {
     public void shouldSerializeKeyWithJoinSideAsTrue() {
         final String value = "some-string";
 
-        final KeyAndJoinSide<String> keyAndJoinSide = KeyAndJoinSide.make(true, value);
+        final KeyAndJoinSide<String> keyAndJoinSide = KeyAndJoinSide.make(true, value, 10);
 
         final byte[] serialized =
             STRING_SERDE.serializer().serialize(TOPIC, keyAndJoinSide);
@@ -51,7 +51,7 @@ public class KeyAndJoinSideSerializerTest {
     public void shouldSerializeKeyWithJoinSideAsFalse() {
         final String value = "some-string";
 
-        final KeyAndJoinSide<String> keyAndJoinSide = KeyAndJoinSide.make(false, value);
+        final KeyAndJoinSide<String> keyAndJoinSide = KeyAndJoinSide.make(false, value, 20);
 
         final byte[] serialized =
             STRING_SERDE.serializer().serialize(TOPIC, keyAndJoinSide);
@@ -67,6 +67,6 @@ public class KeyAndJoinSideSerializerTest {
     @Test
     public void shouldThrowIfSerializeNullData() {
         assertThrows(NullPointerException.class,
-            () -> STRING_SERDE.serializer().serialize(TOPIC, KeyAndJoinSide.make(true, null)));
+            () -> STRING_SERDE.serializer().serialize(TOPIC, KeyAndJoinSide.make(true, null, 0)));
     }
 }

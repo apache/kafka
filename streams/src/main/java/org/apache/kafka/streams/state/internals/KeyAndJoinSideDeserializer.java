@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
@@ -26,6 +27,7 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
 
 public class KeyAndJoinSideDeserializer<K> implements WrappingNullableDeserializer<KeyAndJoinSide<K>, K, Void> {
     private Deserializer<K> keyDeserializer;
+    private final Deserializer<Long> timestampDeserializer = new LongDeserializer();
 
     KeyAndJoinSideDeserializer(final Deserializer<K> keyDeserializer) {
         this.keyDeserializer = keyDeserializer;
@@ -48,15 +50,22 @@ public class KeyAndJoinSideDeserializer<K> implements WrappingNullableDeserializ
 
     @Override
     public KeyAndJoinSide<K> deserialize(final String topic, final byte[] data) {
-        final boolean bool = data[0] == 1;
+        final boolean bool = data[8] == 1;
         final K key = keyDeserializer.deserialize(topic, rawKey(data));
+        final long timestamp = timestampDeserializer.deserialize(topic, rawTimestamp(data));
 
-        return KeyAndJoinSide.make(bool, key);
+        return KeyAndJoinSide.make(bool, key, timestamp);
+    }
+
+    private byte[] rawTimestamp(final byte[] data) {
+        final byte[] rawTimestamp = new byte[8];
+        System.arraycopy(data, 0, rawTimestamp, 0, 8);
+        return rawTimestamp;
     }
 
     private byte[] rawKey(final byte[] data) {
-        final byte[] rawKey = new byte[data.length - 1];
-        System.arraycopy(data, 1, rawKey, 0, rawKey.length);
+        final byte[] rawKey = new byte[data.length - 9];
+        System.arraycopy(data, 9, rawKey, 0, rawKey.length);
         return rawKey;
     }
 
