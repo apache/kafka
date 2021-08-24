@@ -577,14 +577,6 @@ class Log(@volatile private var _dir: File,
     partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, logDirFailureChannel)
   }
 
-  /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
-  def assignTopicId(topicId: Uuid): Unit = {
-    if (keepPartitionMetadataFile) {
-      partitionMetadataFile.write(topicId)
-      this.topicId = topicId
-    }
-  }
-
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
     val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)
 
