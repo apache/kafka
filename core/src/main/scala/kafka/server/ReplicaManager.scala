@@ -1592,17 +1592,15 @@ class ReplicaManager(val config: KafkaConfig,
               s"since it is already the leader for the partition.")
         } catch {
           case e: KafkaStorageException =>
+            stateChangeLogger.error(s"Skipped the become-leader state change with " +
+              s"correlation id $correlationId from controller $controllerId epoch $controllerEpoch for partition ${partition.topicPartition} " +
+              s"(last update controller epoch ${partitionState.controllerEpoch}) since " +
+              s"the replica for the partition is offline due to storage error $e")
             // If there is an offline log directory, a Partition object may have been created and have been added
             // to `ReplicaManager.allPartitions` before `createLogIfNotExists()` failed to create local replica due
             // to KafkaStorageException. In this case `ReplicaManager.allPartitions` will map this topic-partition
             // to an empty Partition object. We need to map this topic-partition to OfflinePartition instead.
             markPartitionOffline(partition.topicPartition)
-            stateChangeLogger.error(s"Skipped the become-leader state change with " +
-              s"correlation id $correlationId from controller $controllerId epoch $controllerEpoch for partition ${partition.topicPartition} " +
-              s"(last update controller epoch ${partitionState.controllerEpoch}) since " +
-              s"the replica for the partition is offline due to disk error $e")
-            val dirOpt = getLogDir(partition.topicPartition)
-            error(s"Error while making broker the leader for partition $partition in dir $dirOpt", e)
             responseMap.put(partition.topicPartition, Errors.KAFKA_STORAGE_ERROR)
         }
       }
@@ -1690,18 +1688,15 @@ class ReplicaManager(val config: KafkaConfig,
           }
         } catch {
           case e: KafkaStorageException =>
+            stateChangeLogger.error(s"Skipped the become-follower state change with correlation id $correlationId from " +
+              s"controller $controllerId epoch $controllerEpoch for partition ${partition.topicPartition} " +
+              s"(last update controller epoch ${partitionState.controllerEpoch}) with leader " +
+              s"$newLeaderBrokerId since the replica for the partition is offline due to storage error $e")
             // If there is an offline log directory, a Partition object may have been created and have been added
             // to `ReplicaManager.allPartitions` before `createLogIfNotExists()` failed to create local replica due
             // to KafkaStorageException. In this case `ReplicaManager.allPartitions` will map this topic-partition
             // to an empty Partition object. We need to map this topic-partition to OfflinePartition instead.
             markPartitionOffline(partition.topicPartition)
-            stateChangeLogger.error(s"Skipped the become-follower state change with correlation id $correlationId from " +
-              s"controller $controllerId epoch $controllerEpoch for partition ${partition.topicPartition} " +
-              s"(last update controller epoch ${partitionState.controllerEpoch}) with leader " +
-              s"$newLeaderBrokerId since the replica for the partition is offline due to disk error $e")
-            val dirOpt = getLogDir(partition.topicPartition)
-            error(s"Error while making broker the follower for partition $partition with leader " +
-              s"$newLeaderBrokerId in dir $dirOpt", e)
             responseMap.put(partition.topicPartition, Errors.KAFKA_STORAGE_ERROR)
         }
       }
@@ -2140,15 +2135,13 @@ class ReplicaManager(val config: KafkaConfig,
           changedPartitions.add(partition)
         } catch {
           case e: KafkaStorageException =>
+            stateChangeLogger.info(s"Skipped the become-leader state change for $tp " +
+              s"with topic id ${info.topicId} due to a storage error ${e.getMessage}")
             // If there is an offline log directory, a Partition object may have been created by
             // `getOrCreatePartition()` before `createLogIfNotExists()` failed to create local replica due
             // to KafkaStorageException. In this case `ReplicaManager.allPartitions` will map this topic-partition
             // to an empty Partition object. We need to map this topic-partition to OfflinePartition instead.
             markPartitionOffline(tp)
-            stateChangeLogger.info(s"Skipped the become-leader state change for $tp " +
-              s"with topic id ${info.topicId} due to a storage error ${e.getMessage}")
-            error(s"Error while making broker the leader for partition $tp in dir " +
-              s"${getLogDir(tp)}", e)
         }
       }
     }
@@ -2207,16 +2200,15 @@ class ReplicaManager(val config: KafkaConfig,
           changedPartitions.add(partition)
         } catch {
           case e: KafkaStorageException =>
+            stateChangeLogger.error(s"Unable to start fetching $tp " +
+              s"with topic ID ${info.topicId} due to a storage error ${e.getMessage}", e)
+            replicaFetcherManager.addFailedPartition(tp)
             // If there is an offline log directory, a Partition object may have been created by
             // `getOrCreatePartition()` before `createLogIfNotExists()` failed to create local replica due
             // to KafkaStorageException. In this case `ReplicaManager.allPartitions` will map this topic-partition
             // to an empty Partition object. We need to map this topic-partition to OfflinePartition instead.
             markPartitionOffline(tp)
-            stateChangeLogger.error(s"Unable to start fetching $tp " +
-              s"with topic ID ${info.topicId} due to a storage error ${e.getMessage}", e)
-            replicaFetcherManager.addFailedPartition(tp)
-            error(s"Error while making broker the follower for partition $tp in dir " +
-              s"${getLogDir(tp)}", e)
+
 
           case e: Throwable =>
             stateChangeLogger.error(s"Unable to start fetching $tp " +
