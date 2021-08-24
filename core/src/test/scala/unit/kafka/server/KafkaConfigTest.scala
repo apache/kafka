@@ -1261,7 +1261,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.BrokerIdProp, "0") // explicitly set broker.id differently than node.id, should be illegal
     assertFalse(isValidKafkaConfig(props))
     props.put(KafkaConfig.BrokerIdProp, "-1") // explicitly set broker.id to the default, different than node.id, should be legal
-    assertTrue(isValidKafkaConfig(props))
+    ensureValidWithConsistentNodeAndBrokerIds(props)
     props.put(KafkaConfig.BrokerIdProp, expectedId.toString) // explicitly set broker.id to be the same as node.id -- should be legal
     ensureValidWithConsistentNodeAndBrokerIds(props)
 
@@ -1274,7 +1274,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.NodeIdProp, "0") // explicitly set node.id differently than broker.id, should be illegal
     assertFalse(isValidKafkaConfig(props))
     props.put(KafkaConfig.NodeIdProp, "-1") // explicitly set node.id to the default, different than broker.id, should be legal
-    assertTrue(isValidKafkaConfig(props))
+    ensureValidWithConsistentNodeAndBrokerIds(props)
     props.put(KafkaConfig.NodeIdProp, expectedId.toString) // explicitly set node.id to be the same as broker.id -- should be legal
     ensureValidWithConsistentNodeAndBrokerIds(props)
   }
