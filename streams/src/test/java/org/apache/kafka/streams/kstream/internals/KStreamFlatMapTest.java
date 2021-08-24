@@ -93,7 +93,7 @@ public class KStreamFlatMapTest {
     public void testKeyValueMapperResultNotNull() {
         final KStreamFlatMap<String, Integer, String, Integer> supplier = new KStreamFlatMap<>((key, value) -> null);
         final Record<String, Integer> record = new Record<>("K", 0, 0L);
-        assertThrows(String.format("KeyValueMapper can't return null from mapping the record: %s", record),
-                NullPointerException.class, () -> supplier.get().process(record));
+        final Throwable throwable = assertThrows(NullPointerException.class, () -> supplier.get().process(record));
+        assertEquals(throwable.getMessage(), String.format("KeyValueMapper can't return null from mapping the record: %s", record));
     }
 }
