@@ -158,20 +158,19 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
         Set<CoordinatorKey> groupsToUnmap,
         Set<CoordinatorKey> groupsToRetry
     ) {
+        final String requestErrorMsg = "OffsetCommit request for group id {} returned error {}. Will retry.";
         switch (error) {
             // If the coordinator is in the middle of loading, or rebalance is in progress, then we just need to retry.
             case COORDINATOR_LOAD_IN_PROGRESS:
             case REBALANCE_IN_PROGRESS:
-                log.debug("OffsetCommit request for group id {} failed because the coordinator" +
-                    " is still in the process of loading state or the group is rebalancing. Will retry.", groupId.idValue);
+                log.debug(requestErrorMsg, groupId.idValue, error);
                 groupsToRetry.add(groupId);
                 break;
 
             // If the coordinator is not available, then we unmap and retry.
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
-                log.debug("OffsetCommit request for group id {} returned error {}. Will retry.",
-                    groupId.idValue, error);
+                log.debug(requestErrorMsg, groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
 
