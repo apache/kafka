@@ -64,7 +64,7 @@ import java.util.List;
  */
 public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
+    private static final Logger log = LoggerFactory.getLogger(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
 
     private final DBOptions dbOptions;
     private final ColumnFamilyOptions columnFamilyOptions;
@@ -1683,6 +1683,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     private void logIgnoreWalOption(final String option) {
-        LOGGER.warn("WAL is explicitly disabled by Streams in RocksDB. Setting option '{}' will be ignored", option);
+        log.warn("WAL is explicitly disabled by Streams in RocksDB. Setting option '{}' will be ignored", option);
     }
 }
