@@ -62,7 +62,7 @@ import java.util.List;
  *
  * This class do the translation between generic {@link Options} into {@link DBOptions} and {@link ColumnFamilyOptions}.
  */
-class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options {
+public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
 
