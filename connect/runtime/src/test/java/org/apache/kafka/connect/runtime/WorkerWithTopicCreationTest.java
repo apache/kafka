@@ -673,16 +673,17 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
         assertEquals(Collections.emptySet(), worker.taskIds());
         worker.startTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
         assertStatistics(worker, 0, 1);
-        assertStartupStatistics(worker, 0, 0, 1, 0);
+        // no task starts because we've mocked out the executor that starts the task and updates the stats
+        assertStartupStatistics(worker, 0, 0, 0, 0);
         assertEquals(new HashSet<>(Arrays.asList(TASK_ID)), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
         assertStatistics(worker, 0, 0);
-        assertStartupStatistics(worker, 0, 0, 1, 0);
+        assertStartupStatistics(worker, 0, 0, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
         // Nothing should be left, so this should effectively be a nop
         worker.stop();
         assertStatistics(worker, 0, 0);
-        assertStartupStatistics(worker, 0, 0, 1, 0);
+        assertStartupStatistics(worker, 0, 0, 0, 0);
 
         PowerMock.verifyAll();
     }

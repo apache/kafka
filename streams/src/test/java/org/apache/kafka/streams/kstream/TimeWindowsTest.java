@@ -31,7 +31,6 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
-@SuppressWarnings("deprecation")
 public class TimeWindowsTest {
 
     private static final long ANY_SIZE = 123L;
@@ -60,11 +59,21 @@ public class TimeWindowsTest {
         assertEquals(windowSize, TimeWindows.of(ofMillis(windowSize)).maintainMs());
     }
 
+    @SuppressWarnings("deprecation")  // specifically testing deprecated APIs
     @Test
     public void shouldUseWindowSizeAndGraceAsRetentionTimeIfBothCombinedAreLargerThanDefaultRetentionTime() {
         final Duration windowsSize = ofDays(1).minus(ofMillis(1));
         final Duration gracePeriod = ofMillis(2);
         assertEquals(windowsSize.toMillis() + gracePeriod.toMillis(), TimeWindows.of(windowsSize).grace(gracePeriod).maintainMs());
+    }
+
+    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
+    @Test
+    public void shouldUseDefaultRetentionTimeWithDefaultGracePeriod() {
+        final long windowSize1 = TimeWindows.of(ofMillis(1)).maintainMs();
+        final long windowSize2 = TimeWindows.of(ofMillis(12 * 60 * 60 * 1000L)).maintainMs();
+        assertEquals(windowSize1, 24 * 60 * 60 * 1000L);
+        assertEquals(windowSize2, 24 * 60 * 60 * 1000L);
     }
 
     @Test
@@ -133,6 +142,14 @@ public class TimeWindowsTest {
         } catch (final IllegalArgumentException e) {
             //expected
         }
+    }
+
+    @Test
+    public void gracePeriodShouldBeDefaultRetentionTimeMinusWindowSize() {
+        final long expectedDefaultRetentionTime = 24 * 60 * 60 * 1000L;
+        assertEquals(expectedDefaultRetentionTime - 3L, TimeWindows.of(ofMillis(3L)).gracePeriodMs());
+        assertEquals(0L, TimeWindows.of(ofMillis(expectedDefaultRetentionTime)).gracePeriodMs());
+        assertEquals(0L, TimeWindows.of(ofMillis(expectedDefaultRetentionTime + 1L)).gracePeriodMs());
     }
 
     @Test

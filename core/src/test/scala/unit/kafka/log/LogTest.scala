@@ -2528,6 +2528,20 @@ class LogTest {
   }
 
   @Test
+  def testNoOpWhenKeepPartitionMetadataFileIsFalse(): Unit = {
+    val logConfig = LogTest.createLogConfig()
+    val log = createLog(logDir, logConfig, keepPartitionMetadataFile = false)
+
+    val topicId = Uuid.randomUuid()
+    log.assignTopicId(topicId)
+
+    // We should not write to this file or set the topic ID
+    assertFalse(log.partitionMetadataFile.exists())
+    assertEquals(Uuid.ZERO_UUID, log.topicId)
+    log.close()
+  }
+
+  @Test
   def testLogRecoversTopicId(): Unit = {
     val logConfig = LogTest.createLogConfig()
     var log = createLog(logDir, logConfig)
@@ -4882,9 +4896,10 @@ class LogTest {
                         time: Time = mockTime,
                         maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                         producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
-                        lastShutdownClean: Boolean = true): Log = {
+                        lastShutdownClean: Boolean = true,
+                        keepPartitionMetadataFile: Boolean = true): Log = {
     LogTest.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
-      maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean)
+      maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean, keepPartitionMetadataFile)
   }
 
   private def createLogWithOffsetOverflow(logConfig: LogConfig): (Log, LogSegment) = {
@@ -4950,7 +4965,8 @@ object LogTest {
                 recoveryPoint: Long = 0L,
                 maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                 producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
-                lastShutdownClean: Boolean = true): Log = {
+                lastShutdownClean: Boolean = true,
+                keepPartitionMetadataFile: Boolean = true): Log = {
     Log(dir = dir,
       config = config,
       logStartOffset = logStartOffset,
@@ -4961,7 +4977,8 @@ object LogTest {
       maxProducerIdExpirationMs = maxProducerIdExpirationMs,
       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      lastShutdownClean = lastShutdownClean)
+      lastShutdownClean = lastShutdownClean,
+      keepPartitionMetadataFile = keepPartitionMetadataFile)
   }
 
   /**

@@ -22,7 +22,7 @@ import java.util.Map;
  * Branches the records in the original stream based on the predicates supplied for the branch definitions.
  * <p>
  * Branches are defined with {@link BranchedKStream#branch(Predicate, Branched)} or
- * {@link BranchedKStream#defaultBranch(Branched)} methods. Each record is evaluated against the predicates
+ * {@link BranchedKStream#defaultBranch(Branched)} methods. Each record is evaluated against the {@code predicate}
  * supplied via {@link Branched} parameters, and is routed to the first branch for which its respective predicate
  * evaluates to {@code true}. If a record does not match any predicates, it will be routed to the default branch,
  * or dropped if no default branch is created.
@@ -50,7 +50,7 @@ import java.util.Map;
  *     {@link Branched} parameter, its value is appended to the prefix to form the {@code Map} key
  *     <li>If a name is not provided for the branch, then the key defaults to {@code prefix + position} of the branch
  *     as a decimal number, starting from {@code "1"}
- *     <li>If a name is not provided for the {@link BranchedKStream#defaultBranch()} call, then the key defaults
+ *     <li>If a name is not provided for the {@link BranchedKStream#defaultBranch()}, then the key defaults
  *     to {@code prefix + "0"}
  * </ul>
  * The values of the respective {@code Map<Stream, KStream<K, V>>} entries are formed as following:
@@ -69,7 +69,8 @@ import java.util.Map;
  *     .branch(predicate1, Branched.as("bar"))                    // "foo-bar"
  *     .branch(predicate2, Branched.withConsumer(ks->ks.to("A"))  // no entry: a Consumer is provided
  *     .branch(predicate3, Branched.withFunction(ks->null))       // no entry: chain function returns null
- *     .branch(predicate4)                                        // "foo-4": name defaults to the branch position
+ *     .branch(predicate4, Branched.withFunction(ks->ks))         // "foo-4": chain function returns non-null value
+ *     .branch(predicate5)                                        // "foo-5": name defaults to the branch position
  *     .defaultBranch()                                           // "foo-0": "0" is the default name for the default branch
  * }</pre>
  *

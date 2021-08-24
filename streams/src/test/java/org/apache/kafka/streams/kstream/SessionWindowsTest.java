@@ -53,6 +53,23 @@ public class SessionWindowsTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
+    @Test
+    public void shouldUseDefaultRetentionTimeWithDefaultGracePeriod() {
+        final long windowSize1 = SessionWindows.with(ofMillis(1)).maintainMs();
+        final long windowSize2 = SessionWindows.with(ofMillis(12 * 60 * 60 * 1000L)).maintainMs();
+        assertEquals(windowSize1, 24 * 60 * 60 * 1000L);
+        assertEquals(windowSize2, 24 * 60 * 60 * 1000L);
+    }
+
+    @Test
+    public void gracePeriodShouldBeDefaultRetentionTimeMinusGap() {
+        final long expectedDefaultRetentionTime = 24 * 60 * 60 * 1000L;
+        assertEquals(expectedDefaultRetentionTime - 3L, SessionWindows.with(ofMillis(3L)).gracePeriodMs());
+        assertEquals(0L, SessionWindows.with(ofMillis(expectedDefaultRetentionTime)).gracePeriodMs());
+        assertEquals(0L, SessionWindows.with(ofMillis(expectedDefaultRetentionTime + 1L)).gracePeriodMs());
+    }
+
     @Test
     public void windowSizeMustNotBeNegative() {
         assertThrows(IllegalArgumentException.class, () -> SessionWindows.with(ofMillis(-1)));
