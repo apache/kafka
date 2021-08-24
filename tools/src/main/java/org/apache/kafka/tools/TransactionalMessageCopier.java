@@ -35,7 +35,9 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -325,11 +327,7 @@ public class TransactionalMessageCopier {
 
         Exit.addShutdownHook("transactional-message-copier-shutdown-hook", () -> {
             isShuttingDown.set(true);
-            // Flush any remaining messages
-            producer.close();
-            synchronized (consumer) {
-                consumer.close();
-            }
+            consumer.wakeup();
             System.out.println(shutDownString(totalMessageProcessed.get(),
                 numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId));
         });
@@ -337,11 +335,9 @@ public class TransactionalMessageCopier {
         final boolean useGroupMetadata = parsedArgs.getBoolean("useGroupMetadata");
         try {
             Random random = new Random();
-            while (remainingMessages.get() > 0) {
+            while (!isShuttingDown.get() && remainingMessages.get() > 0) {
                 System.out.println(statusAsJson(totalMessageProcessed.get(),
                     numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId, "ProcessLoop"));
-                if (isShuttingDown.get())
-                    break;
 
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
                 if (records.count() > 0) {
@@ -374,11 +370,15 @@ public class TransactionalMessageCopier {
                     }
                 }
             }
-        } finally {
-            producer.close();
-            synchronized (consumer) {
-                consumer.close();
+        } catch (WakeupException e) {
+            if (!isShuttingDown.get()) {
+                // Let the exception propagate if the exception was not raised
+                // as part of shutdown.
+                throw e;
             }
+        } finally {
+            Utils.closeQuietly(producer, "producer");
+            Utils.closeQuietly(consumer, "consumer");
         }
         Exit.exit(0);
     }

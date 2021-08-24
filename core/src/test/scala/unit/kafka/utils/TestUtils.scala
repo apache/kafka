@@ -189,7 +189,8 @@ object TestUtils extends Logging {
    *
    * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
    */
-  def createBrokerConfigs(numConfigs: Int,
+  def createBrokerConfigs(
+    numConfigs: Int,
     zkConnect: String,
     enableControlledShutdown: Boolean = true,
     enableDeleteTopic: Boolean = true,
@@ -204,8 +205,11 @@ object TestUtils extends Logging {
     logDirCount: Int = 1,
     enableToken: Boolean = false,
     numPartitions: Int = 1,
-    defaultReplicationFactor: Short = 1): Seq[Properties] = {
-    (0 until numConfigs).map { node =>
+    defaultReplicationFactor: Short = 1,
+    startingIdNumber: Int = 0
+  ): Seq[Properties] = {
+    val endingIdNumber = startingIdNumber + numConfigs - 1
+    (startingIdNumber to endingIdNumber).map { node =>
       createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
         interBrokerSecurityProtocol, trustStoreFile, saslProperties, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
         enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node), logDirCount = logDirCount, enableToken = enableToken,
@@ -1126,7 +1130,7 @@ object TestUtils extends Logging {
 
     def completeIsrUpdate(newZkVersion: Int): Unit = {
       if (inFlight.compareAndSet(true, false)) {
-        val item = isrUpdates.head
+        val item = isrUpdates.dequeue()
         item.callback.apply(Right(item.leaderAndIsr.withZkVersion(newZkVersion)))
       } else {
         fail("Expected an in-flight ISR update, but there was none")
@@ -1242,7 +1246,7 @@ object TestUtils extends Logging {
         topicPartitions.forall { tp =>
           !Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
             partitionDirectoryName.startsWith(tp.topic + "-" + tp.partition) &&
-              partitionDirectoryName.endsWith(Log.DeleteDirSuffix)
+              partitionDirectoryName.endsWith(UnifiedLog.DeleteDirSuffix)
           }
         }
       }

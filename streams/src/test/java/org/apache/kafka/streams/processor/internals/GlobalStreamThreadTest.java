@@ -30,10 +30,12 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
-import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -90,6 +92,13 @@ public class GlobalStreamThreadTest {
                 "store-"
             );
 
+        final ProcessorSupplier<Object, Object, Void, Void> processorSupplier = () ->
+            new ContextualProcessor<Object, Object, Void, Void>() {
+                @Override
+                public void process(final Record<Object, Object> record) {
+                }
+            };
+
         builder.addGlobalStore(
             new TimestampedKeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
             "sourceName",
@@ -98,7 +107,7 @@ public class GlobalStreamThreadTest {
             null,
             GLOBAL_STORE_TOPIC_NAME,
             "processorName",
-            () -> ProcessorAdapter.adapt(new KTableSource<>(GLOBAL_STORE_NAME, GLOBAL_STORE_NAME).get()));
+            processorSupplier);
 
         baseDirectoryName = TestUtils.tempDirectory().getAbsolutePath();
         final HashMap<String, Object> properties = new HashMap<>();
@@ -112,7 +121,7 @@ public class GlobalStreamThreadTest {
             builder.rewriteTopology(config).buildGlobalStateTopology(),
             config,
             mockConsumer,
-            new StateDirectory(config, time, true),
+            new StateDirectory(config, time, true, false),
             0,
             new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, time),
             time,
@@ -151,7 +160,7 @@ public class GlobalStreamThreadTest {
             builder.buildGlobalStateTopology(),
             config,
             mockConsumer,
-            new StateDirectory(config, time, true),
+            new StateDirectory(config, time, true, false),
             0,
             new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, time),
             time,

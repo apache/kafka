@@ -96,6 +96,7 @@ class KafkaServer(
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
 
+  @volatile private var _brokerState: BrokerState = BrokerState.NOT_RUNNING
   private var shutdownLatch = new CountDownLatch(1)
   private var logContext: LogContext = null
 
@@ -115,7 +116,7 @@ class KafkaServer(
   var logDirFailureChannel: LogDirFailureChannel = null
   var logManager: LogManager = null
 
-  var replicaManager: ReplicaManager = null
+  @volatile private[this] var _replicaManager: ReplicaManager = null
   var adminManager: ZkAdminManager = null
   var tokenManager: DelegationTokenManager = null
 
@@ -161,6 +162,8 @@ class KafkaServer(
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
   val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 
+  override def brokerState: BrokerState = _brokerState
+
   def clusterId: String = _clusterId
 
   // Visible for testing
@@ -169,6 +172,8 @@ class KafkaServer(
   private[kafka] def brokerTopicStats = _brokerTopicStats
 
   private[kafka] def featureChangeListener = _featureChangeListener
+
+  def replicaManager: ReplicaManager = _replicaManager
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
@@ -186,7 +191,7 @@ class KafkaServer(
 
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
-        brokerState = BrokerState.STARTING
+        _brokerState = BrokerState.STARTING
 
         /* setup zookeeper */
         initZkClient(time)
@@ -248,7 +253,7 @@ class KafkaServer(
         logManager = LogManager(config, initialOfflineDirs,
           new ZkConfigRepository(new AdminZkClient(zkClient)),
           kafkaScheduler, time, brokerTopicStats, logDirFailureChannel, config.usesTopicId)
-        brokerState = BrokerState.RECOVERY
+        _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 
         metadataCache = MetadataCache.zkMetadataCache(config.brokerId)
@@ -308,7 +313,7 @@ class KafkaServer(
         }
         alterIsrManager.start()
 
-        replicaManager = createReplicaManager(isShuttingDown)
+        _replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 
         val brokerInfo = createBrokerInfo
@@ -416,7 +421,7 @@ class KafkaServer(
 
         socketServer.startProcessingRequests(authorizerFutures)
 
-        brokerState = BrokerState.RUNNING
+        _brokerState = BrokerState.RUNNING
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
         isStartingUp.set(false)
@@ -629,7 +634,7 @@ class KafkaServer(
       // the shutdown.
       info("Starting controlled shutdown")
 
-      brokerState = BrokerState.PENDING_CONTROLLED_SHUTDOWN
+      _brokerState = BrokerState.PENDING_CONTROLLED_SHUTDOWN
 
       val shutdownSucceeded = doControlledShutdown(config.controlledShutdownMaxRetries.intValue)
 
@@ -654,7 +659,7 @@ class KafkaServer(
       // `true` at the end of this method.
       if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
         CoreUtils.swallow(controlledShutdown(), this)
-        brokerState = BrokerState.SHUTTING_DOWN
+        _brokerState = BrokerState.SHUTTING_DOWN
 
         if (dynamicConfigManager != null)
           CoreUtils.swallow(dynamicConfigManager.shutdown(), this)
@@ -724,7 +729,7 @@ class KafkaServer(
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()
 
-        brokerState = BrokerState.NOT_RUNNING
+        _brokerState = BrokerState.NOT_RUNNING
 
         startupComplete.set(false)
         isShuttingDown.set(false)
