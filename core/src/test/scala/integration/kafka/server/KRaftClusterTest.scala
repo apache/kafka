@@ -30,9 +30,9 @@ import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeCluster
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
+
 import java.util
 import java.util.{Arrays, Collections, Optional}
-
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
@@ -64,7 +64,7 @@ class KRaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
@@ -90,7 +90,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
@@ -127,7 +127,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
@@ -160,7 +160,7 @@ class KRaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       val admin = Admin.create(cluster.clientProperties())
       try {
@@ -317,7 +317,7 @@ class KRaftClusterTest {
   private def waitForRunningBrokers(count: Int, waitTime: FiniteDuration)
                                    (implicit cluster: KafkaClusterTestKit): Seq[BrokerServer] = {
     def getRunningBrokerServers: Seq[BrokerServer] = cluster.brokers.values.asScala.toSeq
-      .filter(brokerServer => brokerServer.currentState() == BrokerState.RUNNING)
+      .filter(brokerServer => brokerServer.brokerState == BrokerState.RUNNING)
 
     val (runningBrokerServers, hasRunningBrokers) = TestUtils.computeUntilTrue(getRunningBrokerServers, waitTime.toMillis)(_.nonEmpty)
     assertTrue(hasRunningBrokers,
