@@ -45,8 +45,8 @@ import scala.compat.java8.OptionConverters._
  */
 @Timeout(120)
 abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logging {
-  def brokerCount = 3
-  override def logDirCount = 2
+  def brokerCount: Int = 3
+  override def logDirCount: Int = 2
 
   var client: Admin = _
 

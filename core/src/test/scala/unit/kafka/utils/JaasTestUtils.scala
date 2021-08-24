@@ -33,7 +33,7 @@ object JaasTestUtils {
                              debug: Boolean,
                              serviceName: Option[String]) extends JaasModule {
 
-    def name =
+    def name: String =
       if (Java.isIbmJdk)
         "com.ibm.security.auth.module.Krb5LoginModule"
       else
@@ -59,7 +59,7 @@ object JaasTestUtils {
                               debug: Boolean = false,
                               validUsers: Map[String, String] = Map.empty) extends JaasModule {
 
-    def name = "org.apache.kafka.common.security.plain.PlainLoginModule"
+    def name: String = "org.apache.kafka.common.security.plain.PlainLoginModule"
 
     def entries: Map[String, String] = Map(
       "username" -> username,
@@ -70,7 +70,7 @@ object JaasTestUtils {
 
   case class ZkDigestModule(debug: Boolean = false,
                             entries: Map[String, String] = Map.empty) extends JaasModule {
-    def name = "org.apache.zookeeper.server.auth.DigestLoginModule"
+    def name: String = "org.apache.zookeeper.server.auth.DigestLoginModule"
   }
 
   case class ScramLoginModule(username: String,
@@ -78,7 +78,7 @@ object JaasTestUtils {
                               debug: Boolean = false,
                               tokenProps: Map[String, String] = Map.empty) extends JaasModule {
 
-    def name = "org.apache.kafka.common.security.scram.ScramLoginModule"
+    def name: String = "org.apache.kafka.common.security.scram.ScramLoginModule"
 
     def entries: Map[String, String] = Map(
       "username" -> username,
@@ -89,7 +89,7 @@ object JaasTestUtils {
   case class OAuthBearerLoginModule(username: String,
                               debug: Boolean = false) extends JaasModule {
 
-    def name = "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule"
+    def name: String = "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule"
 
     def entries: Map[String, String] = Map(
       "unsecuredLoginStringClaim_sub" -> username

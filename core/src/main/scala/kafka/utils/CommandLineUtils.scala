@@ -52,7 +52,7 @@ object CommandLineUtils extends Logging {
     * @param commandOpts Acceptable options for a command
     * @param message     Message to display on successful check
     */
-  def printHelpAndExitIfNeeded(commandOpts: CommandDefaultOptions, message: String) = {
+  def printHelpAndExitIfNeeded(commandOpts: CommandDefaultOptions, message: String): Unit = {
     if (isPrintHelpNeeded(commandOpts))
       printUsageAndDie(commandOpts.parser, message)
     if (isPrintVersionNeeded(commandOpts))

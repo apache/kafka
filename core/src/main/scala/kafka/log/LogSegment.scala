@@ -648,7 +648,7 @@ class LogSegment private[log] (val log: FileRecords,
   /**
    * The largest timestamp this segment contains.
    */
-  def largestTimestamp = if (maxTimestampSoFar >= 0) maxTimestampSoFar else lastModified
+  def largestTimestamp: Long = if (maxTimestampSoFar >= 0) maxTimestampSoFar else lastModified
 
   /**
    * Change the last modified time for this log segment

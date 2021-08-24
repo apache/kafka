@@ -183,7 +183,7 @@ class DelegationTokenManager(val config: KafkaConfig,
   private val lock = new Object()
   private var tokenChangeListener: ZkNodeChangeNotificationListener = null
 
-  def startup() = {
+  def startup(): Unit = {
     if (config.tokenAuthEnabled) {
       zkClient.createDelegationTokenPaths()
       loadCache()
@@ -192,7 +192,7 @@ class DelegationTokenManager(val config: KafkaConfig,
     }
   }
 
-  def shutdown() = {
+  def shutdown(): Unit = {
     if (config.tokenAuthEnabled) {
       if (tokenChangeListener != null) tokenChangeListener.close()
     }

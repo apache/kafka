@@ -217,7 +217,19 @@ You can run spotbugs using:
     ./gradlew spotbugsMain spotbugsTest -x test
 
 The spotbugs warnings will be found in `reports/spotbugs/main.html` and `reports/spotbugs/test.html` files in the subproject build
-directories.  Use -PxmlSpotBugsReport=true to generate an XML report instead of an HTML one.
+directories. Use `-PxmlSpotBugsReport=true` to generate an XML report instead of an HTML one.
+
+#### Scalafix ####
+Scalafix is a refactoring and linting tool for Scala.
+By running the following command, you will get a report of files that broke the predefined rules:
+
+    ./gradlew checkScalafix
+
+Scalafix can fix some those problems, to do so, you can run:
+
+    ./gradlew scalafix
+
+Make sure to check and supervise the changes Scalafix is doing. It's an automatic tool and sometimes might not infer the right return types for example.
 
 ### JMH microbenchmarks ###
 We use [JMH](https://openjdk.java.net/projects/code-tools/jmh/) to write microbenchmarks that produce reliable results in the JVM.

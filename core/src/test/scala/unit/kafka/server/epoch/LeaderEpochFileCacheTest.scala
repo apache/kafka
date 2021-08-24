@@ -59,7 +59,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldAddEpochAndMessageOffsetToCache() = {
+  def shouldAddEpochAndMessageOffsetToCache(): Unit = {
     //When
     cache.assign(epoch = 2, startOffset = 10)
     val logEndOffset = 11
@@ -71,7 +71,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnLogEndOffsetIfLatestEpochRequested() = {
+  def shouldReturnLogEndOffsetIfLatestEpochRequested(): Unit = {
     //When just one epoch
     cache.assign(epoch = 2, startOffset = 11)
     cache.assign(epoch = 2, startOffset = 12)
@@ -82,7 +82,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnUndefinedOffsetIfUndefinedEpochRequested() = {
+  def shouldReturnUndefinedOffsetIfUndefinedEpochRequested(): Unit = {
     val expectedEpochEndOffset = (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
 
     // assign couple of epochs
@@ -98,7 +98,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldNotOverwriteLogEndOffsetForALeaderEpochOnceItHasBeenAssigned() = {
+  def shouldNotOverwriteLogEndOffsetForALeaderEpochOnceItHasBeenAssigned(): Unit = {
     //Given
     val logEndOffset = 9
 
@@ -113,7 +113,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldEnforceMonotonicallyIncreasingStartOffsets() = {
+  def shouldEnforceMonotonicallyIncreasingStartOffsets(): Unit = {
     //Given
     cache.assign(2, 9)
 
@@ -125,7 +125,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldNotOverwriteOffsetForALeaderEpochOnceItHasBeenAssigned() = {
+  def shouldNotOverwriteOffsetForALeaderEpochOnceItHasBeenAssigned(): Unit = {
     cache.assign(2, 6)
 
     //When called again later with a greater offset
@@ -178,7 +178,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldGetFirstOffsetOfSubsequentEpochWhenOffsetRequestedForPreviousEpoch() = {
+  def shouldGetFirstOffsetOfSubsequentEpochWhenOffsetRequestedForPreviousEpoch(): Unit = {
     //When several epochs
     cache.assign(epoch = 1, startOffset = 11)
     cache.assign(epoch = 1, startOffset = 12)
@@ -205,7 +205,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldNotUpdateEpochAndStartOffsetIfItDidNotChange() = {
+  def shouldNotUpdateEpochAndStartOffsetIfItDidNotChange(): Unit = {
     //When
     cache.assign(epoch = 2, startOffset = 6)
     cache.assign(epoch = 2, startOffset = 7)
@@ -282,7 +282,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldEnforceOffsetsIncreaseMonotonically() = {
+  def shouldEnforceOffsetsIncreaseMonotonically(): Unit = {
     //When epoch goes forward but offset goes backwards
     cache.assign(epoch = 2, startOffset = 6)
     cache.assign(epoch = 3, startOffset = 5)

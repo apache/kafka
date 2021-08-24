@@ -52,7 +52,7 @@ case class FetchMetadata(fetchMinBytes: Int,
                          topicIds: util.Map[String, Uuid],
                          fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
 
-  override def toString = "FetchMetadata(minBytes=" + fetchMinBytes + ", " +
+  override def toString: String = "FetchMetadata(minBytes=" + fetchMinBytes + ", " +
     "maxBytes=" + fetchMaxBytes + ", " +
     "onlyLeader=" + fetchOnlyLeader + ", " +
     "fetchIsolation=" + fetchIsolation + ", " +

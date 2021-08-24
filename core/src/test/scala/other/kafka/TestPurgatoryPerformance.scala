@@ -201,7 +201,7 @@ object TestPurgatoryPerformance {
       val dist = new LogNormalDistribution(normalMean, normalStDev)
       (0 until sampleSize).map { _ => dist.next().toLong }.toArray
     }
-    def next() = samples(rand.nextInt(sampleSize))
+    def next(): Long = samples(rand.nextInt(sampleSize))
 
     def printStats(): Unit = {
       val p75 = samples.sorted.apply((sampleSize.toDouble * 0.75d).toInt)
@@ -227,7 +227,7 @@ object TestPurgatoryPerformance {
       }.toArray
     }
 
-    def next() = samples(rand.nextInt(sampleSize))
+    def next(): Long = samples(rand.nextInt(sampleSize))
 
     def printStats(): Unit = {
       println(
@@ -270,7 +270,7 @@ object TestPurgatoryPerformance {
       delayQueue.offer(new Scheduled(operation))
     }
 
-    def shutdown() = {
+    def shutdown(): Unit = {
       thread.shutdown()
     }
 

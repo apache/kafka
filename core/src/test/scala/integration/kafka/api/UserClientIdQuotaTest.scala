@@ -26,8 +26,8 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
   override protected def securityProtocol = SecurityProtocol.SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
-  override def producerClientId = "QuotasTestProducer-!@#$%^&*()"
-  override def consumerClientId = "QuotasTestConsumer-!@#$%^&*()"
+  override def producerClientId: String = "QuotasTestProducer-!@#$%^&*()"
+  override def consumerClientId: String = "QuotasTestConsumer-!@#$%^&*()"
 
   @BeforeEach
   override def setUp(): Unit = {

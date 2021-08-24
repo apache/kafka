@@ -489,7 +489,7 @@ class IncrementalFetchContext(private val time: Time,
       element
     }
 
-    override def remove() = throw new UnsupportedOperationException
+    override def remove(): Unit = throw new UnsupportedOperationException
   }
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {

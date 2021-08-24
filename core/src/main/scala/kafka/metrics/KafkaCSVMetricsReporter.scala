@@ -41,7 +41,7 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
   private var initialized = false
 
 
-  override def getMBeanName = "kafka:type=kafka.metrics.KafkaCSVMetricsReporter"
+  override def getMBeanName: String = "kafka:type=kafka.metrics.KafkaCSVMetricsReporter"
 
 
   override def init(props: VerifiableProperties): Unit = {

@@ -31,9 +31,9 @@ class SaslGssapiSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTe
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE,
     JaasTestUtils.KafkaServerPrincipalUnqualifiedName)
 
-  override protected def kafkaClientSaslMechanism = "GSSAPI"
-  override protected def kafkaServerSaslMechanisms = List("GSSAPI")
-  override protected def authorizerClass = classOf[AclAuthorizer]
+  override protected def kafkaClientSaslMechanism: String = "GSSAPI"
+  override protected def kafkaServerSaslMechanisms: List[String] = List("GSSAPI")
+  override protected def authorizerClass: Class[AclAuthorizer] = classOf[AclAuthorizer]
 
   // Configure brokers to require SSL client authentication in order to verify that SASL_SSL works correctly even if the
   // client doesn't have a keystore. We want to cover the scenario where a broker requires either SSL client

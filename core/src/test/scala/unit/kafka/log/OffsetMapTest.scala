@@ -57,7 +57,7 @@ class OffsetMapTest {
     assertEquals(map.get(key(i-1L)), i-1L)
   }
 
-  def key(key: Long) = ByteBuffer.wrap(key.toString.getBytes)
+  def key(key: Long): ByteBuffer = ByteBuffer.wrap(key.toString.getBytes)
   
   def validateMap(items: Int, loadFactor: Double = 0.5): SkimpyOffsetMap = {
     val map = new SkimpyOffsetMap((items/loadFactor * 24).toInt)

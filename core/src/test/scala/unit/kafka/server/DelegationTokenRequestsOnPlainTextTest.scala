@@ -29,7 +29,7 @@ import scala.concurrent.ExecutionException
 class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
   var adminClient: Admin = null
 
-  override def brokerCount = 1
+  override def brokerCount: Int = 1
 
   @BeforeEach
   override def setUp(): Unit = {

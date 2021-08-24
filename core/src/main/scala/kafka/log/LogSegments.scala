@@ -237,7 +237,7 @@ class LogSegments(topicPartition: TopicPartition) {
   /**
    * The active segment that is currently taking appends
    */
-  def activeSegment = lastSegment.get
+  def activeSegment: LogSegment = lastSegment.get
 
   def sizeInBytes: Long = LogSegments.sizeInBytes(values)
 

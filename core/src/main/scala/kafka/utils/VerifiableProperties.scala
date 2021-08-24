@@ -167,7 +167,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
     }
   }
 
-  def getBoolean(name: String) = getString(name).toBoolean
+  def getBoolean(name: String): Boolean = getString(name).toBoolean
 
   /**
    * Get a string property, or, if no such property is defined, return the given default value
@@ -211,7 +211,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @param default Default compression codec
    * @return compression codec
    */
-  def getCompressionCodec(name: String, default: CompressionCodec) = {
+  def getCompressionCodec(name: String, default: CompressionCodec): CompressionCodec = {
     val prop = getString(name, NoCompressionCodec.name)
     try {
       CompressionCodec.getCompressionCodec(prop.toInt)

@@ -61,7 +61,7 @@ private[log] case class TxnMetadata(
 private[log] object ProducerStateEntry {
   private[log] val NumBatchesToRetain = 5
 
-  def empty(producerId: Long) = new ProducerStateEntry(producerId,
+  def empty(producerId: Long): ProducerStateEntry = new ProducerStateEntry(producerId,
     batchMetadata = mutable.Queue[BatchMetadata](),
     producerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
     coordinatorEpoch = -1,

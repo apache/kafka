@@ -20,8 +20,8 @@ import org.junit.jupiter.api.BeforeEach
 
 class ClientIdQuotaTest extends BaseQuotaTest {
 
-  override def producerClientId = "QuotasTestProducer-!@#$%^&*()"
-  override def consumerClientId = "QuotasTestConsumer-!@#$%^&*()"
+  override def producerClientId: String = "QuotasTestProducer-!@#$%^&*()"
+  override def consumerClientId: String = "QuotasTestConsumer-!@#$%^&*()"
 
   @BeforeEach
   override def setUp(): Unit = {

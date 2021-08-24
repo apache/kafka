@@ -130,7 +130,7 @@ object ReassignPartitionsCommand extends Logging {
    */
   sealed case class MissingReplicaMoveState(targetLogDir: String)
       extends LogDirMoveState {
-    override def done = false
+    override def done: Boolean = false
   }
 
   /**
@@ -140,7 +140,7 @@ object ReassignPartitionsCommand extends Logging {
    */
   sealed case class MissingLogDirMoveState(targetLogDir: String)
       extends LogDirMoveState {
-    override def done = false
+    override def done: Boolean = false
   }
 
   /**
@@ -154,7 +154,7 @@ object ReassignPartitionsCommand extends Logging {
                                     targetLogDir: String,
                                     futureLogDir: String)
       extends LogDirMoveState {
-    override def done = false
+    override def done: Boolean = false
   }
 
   /**
@@ -167,7 +167,7 @@ object ReassignPartitionsCommand extends Logging {
   sealed case class CancelledMoveState(currentLogDir: String,
                                        targetLogDir: String)
       extends LogDirMoveState {
-    override def done = true
+    override def done: Boolean = true
   }
 
   /**
@@ -177,7 +177,7 @@ object ReassignPartitionsCommand extends Logging {
    */
   sealed case class CompletedMoveState(targetLogDir: String)
       extends LogDirMoveState {
-    override def done = true
+    override def done: Boolean = true
   }
 
   /**

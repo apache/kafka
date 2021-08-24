@@ -123,8 +123,8 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   this.consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
   this.adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
 
-  override protected def kafkaClientSaslMechanism = "PLAIN"
-  override protected def kafkaServerSaslMechanisms = List("PLAIN")
+  override protected def kafkaClientSaslMechanism: String = "PLAIN"
+  override protected def kafkaServerSaslMechanisms: List[String] = List("PLAIN")
 
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")

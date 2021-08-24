@@ -52,8 +52,8 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   var server1: KafkaServer = null
   var server2: KafkaServer = null
 
-  def configProps1 = configs.head
-  def configProps2 = configs.last
+  def configProps1: KafkaConfig = configs.head
+  def configProps2: KafkaConfig = configs.last
 
   val message = "hello"
 
@@ -64,7 +64,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
 
   // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
   // to use a new producer that knows the new ports
-  def updateProducer() = {
+  def updateProducer(): Unit = {
     if (producer != null)
       producer.close()
     producer = TestUtils.createProducer(

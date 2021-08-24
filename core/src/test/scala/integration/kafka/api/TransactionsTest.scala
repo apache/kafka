@@ -83,7 +83,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testBasicTransactions() = {
+  def testBasicTransactions(): Unit = {
     val producer = transactionalProducers.head
     val consumer = transactionalConsumers.head
     val unCommittedConsumer = nonTransactionalConsumers.head
@@ -229,19 +229,19 @@ class TransactionsTest extends KafkaServerTestHarness {
 
   @nowarn("cat=deprecation")
   @Test
-  def testSendOffsetsWithGroupId() = {
+  def testSendOffsetsWithGroupId(): Unit = {
     sendOffset((producer, groupId, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
   }
 
   @Test
-  def testSendOffsetsWithGroupMetadata() = {
+  def testSendOffsetsWithGroupMetadata(): Unit = {
     sendOffset((producer, _, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
   }
 
   private def sendOffset(commit: (KafkaProducer[Array[Byte], Array[Byte]],
-    String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit) = {
+    String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
 
     // The basic plan for the test is as follows:
     //  1. Seed topic1 with 1000 unique, numbered, messages.
@@ -308,7 +308,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testFencingOnCommit() = {
+  def testFencingOnCommit(): Unit = {
     val producer1 = transactionalProducers(0)
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
@@ -337,7 +337,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testFencingOnSendOffsets() = {
+  def testFencingOnSendOffsets(): Unit = {
     val producer1 = transactionalProducers(0)
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
@@ -368,7 +368,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testOffsetMetadataInSendOffsetsToTransaction() = {
+  def testOffsetMetadataInSendOffsetsToTransaction(): Unit = {
     val tp = new TopicPartition(topic1, 0)
     val groupId = "group"
 

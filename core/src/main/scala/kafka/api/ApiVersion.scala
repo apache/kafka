@@ -216,7 +216,7 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
  * For versions before 0.10.0, `version` and `shortVersion` were the same.
  */
 sealed trait LegacyApiVersion extends ApiVersion {
-  def version = shortVersion
+  def version: String = shortVersion
 }
 
 /**

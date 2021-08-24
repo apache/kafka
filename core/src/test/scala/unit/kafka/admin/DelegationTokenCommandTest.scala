@@ -38,7 +38,7 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
   protected override val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
   var adminClient: Admin = null
 
-  override def brokerCount = 1
+  override def brokerCount: Int = 1
 
   @BeforeEach
   override def setUp(): Unit = {
@@ -46,7 +46,7 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
     super.setUp()
   }
 
-  override def generateConfigs = {
+  override def generateConfigs: collection.Seq[KafkaConfig] = {
     val props = TestUtils.createBrokerConfigs(brokerCount, zkConnect,
       enableControlledShutdown = false,
       interBrokerSecurityProtocol = Some(securityProtocol),

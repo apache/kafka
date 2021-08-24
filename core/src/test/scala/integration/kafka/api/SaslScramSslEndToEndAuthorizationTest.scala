@@ -17,9 +17,9 @@
 package kafka.api
 
 import java.util.Properties
-
 import kafka.utils.JaasTestUtils
 import kafka.zk.ConfigEntityChangeNotificationZNode
+import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.test.TestSslUtils
@@ -28,8 +28,8 @@ import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.BeforeEach
 
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
-  override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"
-  override protected def kafkaServerSaslMechanisms = ScramMechanism.mechanismNames.asScala.toList
+  override protected def kafkaClientSaslMechanism: String = "SCRAM-SHA-256"
+  override protected def kafkaServerSaslMechanisms: List[String] = ScramMechanism.mechanismNames.asScala.toList
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramUser)
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramAdmin)
   private val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
@@ -49,7 +49,7 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
     super.configureListeners(props)
   }
 
-  override def createPrivilegedAdminClient() = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
+  override def createPrivilegedAdminClient(): Admin = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
 
   @BeforeEach
   override def setUp(): Unit = {

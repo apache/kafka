@@ -39,7 +39,7 @@ class MockScheduler(val time: Time) extends Scheduler {
   /* a priority queue of tasks ordered by next execution time */
   private val tasks = new PriorityQueue[MockTask]()
   
-  def isStarted = true
+  def isStarted: Boolean = true
 
   def startup(): Unit = {}
   
@@ -103,7 +103,7 @@ class MockScheduler(val time: Time) extends Scheduler {
 }
 
 case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long, time: Time) extends ScheduledFuture[Unit] {
-  def periodic = period >= 0
+  def periodic: Boolean = period >= 0
   def compare(t: MockTask): Int = {
     if(t.nextExecution == nextExecution)
       0

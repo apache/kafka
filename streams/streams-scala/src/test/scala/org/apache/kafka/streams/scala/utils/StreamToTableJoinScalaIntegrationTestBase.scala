@@ -37,7 +37,7 @@ class StreamToTableJoinScalaIntegrationTestBase extends StreamToTableJoinTestDat
 
   private val cluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
 
-  final private val alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000
+  private val alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000
   private val mockTime: MockTime = cluster.time
   mockTime.setCurrentTimeMs(alignedTime)
 

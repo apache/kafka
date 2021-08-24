@@ -17,12 +17,13 @@
 
 package kafka.server
 
-import kafka.log.{ClientRecordDeletion, UnifiedLog, LogSegment}
+import kafka.log.{ClientRecordDeletion, LogSegment, UnifiedLog}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.jupiter.api.Assertions._
@@ -38,9 +39,9 @@ class LogOffsetTest extends BaseRequestTest {
 
   private lazy val time = new MockTime
 
-  override def brokerCount = 1
+  override def brokerCount: Int = 1
 
-  protected override def brokerTime(brokerId: Int) = time
+  protected override def brokerTime(brokerId: Int): Time = time
 
   protected override def brokerPropertyOverrides(props: Properties): Unit = {
     props.put("log.flush.interval.messages", "1")

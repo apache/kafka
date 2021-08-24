@@ -41,6 +41,7 @@ import scala.reflect.ClassTag
 import org.apache.kafka.common.ConsumerGroupState
 import joptsimple.OptionException
 import org.apache.kafka.common.requests.ListOffsetsResponse
+import com.fasterxml.jackson.databind.{ ObjectReader, ObjectWriter }
 
 object ConsumerGroupCommand extends Logging {
 
@@ -147,12 +148,12 @@ object ConsumerGroupCommand extends Logging {
   private[admin] case class CsvUtils() {
     val mapper = new CsvMapper
     mapper.registerModule(DefaultScalaModule)
-    def readerFor[T <: CsvRecord : ClassTag] = {
+    def readerFor[T <: CsvRecord : ClassTag]: ObjectReader = {
       val schema = getSchema[T]
       val clazz = implicitly[ClassTag[T]].runtimeClass
       mapper.readerFor(clazz).`with`(schema)
     }
-    def writerFor[T <: CsvRecord : ClassTag] = {
+    def writerFor[T <: CsvRecord : ClassTag]: ObjectWriter = {
       val schema = getSchema[T]
       val clazz = implicitly[ClassTag[T]].runtimeClass
       mapper.writerFor(clazz).`with`(schema)

@@ -73,7 +73,7 @@ class ZkAdminManager(val config: KafkaConfig,
   private val alterConfigPolicy =
     Option(config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-  def hasDelayedTopicOperations = topicPurgatory.numDelayed != 0
+  def hasDelayedTopicOperations: Boolean = topicPurgatory.numDelayed != 0
 
   private val defaultNumPartitions = config.numPartitions.intValue()
   private val defaultReplicationFactor = config.defaultReplicationFactor.shortValue()

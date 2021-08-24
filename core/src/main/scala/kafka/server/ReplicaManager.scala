@@ -127,7 +127,7 @@ case class LogReadResult(info: FetchDataInfo,
   def withEmptyFetchInfo: LogReadResult =
     copy(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY))
 
-  override def toString = {
+  override def toString: String = {
     "LogReadResult(" +
       s"info=$info, " +
       s"divergingEpoch=$divergingEpoch, " +
@@ -1929,7 +1929,7 @@ class ReplicaManager(val config: KafkaConfig,
     new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager)
   }
 
-  protected def createReplicaAlterLogDirsManager(quotaManager: ReplicationQuotaManager, brokerTopicStats: BrokerTopicStats) = {
+  protected def createReplicaAlterLogDirsManager(quotaManager: ReplicationQuotaManager, brokerTopicStats: BrokerTopicStats): ReplicaAlterLogDirsManager = {
     new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats)
   }
 

@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 class UserScramCredentialsCommandTest extends BaseRequestTest {
-  override def brokerCount = 1
+  override def brokerCount: Int = 1
   var exitStatus: Option[Int] = None
   var exitMessage: Option[String] = None
 

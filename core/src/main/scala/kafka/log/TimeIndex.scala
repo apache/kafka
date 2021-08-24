@@ -56,7 +56,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
 
   @volatile private var _lastEntry = lastEntryFromIndexFile
 
-  override def entrySize = 12
+  override def entrySize: Int = 12
 
   debug(s"Loaded index file ${file.getAbsolutePath} with maxEntries = $maxEntries, maxIndexSize = $maxIndexSize," +
     s" entries = ${_entries}, lastOffset = ${_lastEntry}, file position = ${mmap.position()}")
@@ -159,7 +159,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     }
   }
 
-  override def truncate() = truncateToEntries(0)
+  override def truncate(): Unit = truncateToEntries(0)
 
   /**
    * Remove all entries from the index which have an offset greater than or equal to the given offset.

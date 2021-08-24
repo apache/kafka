@@ -42,7 +42,7 @@ import scala.util.matching.Regex
 
 class UpdateFeaturesTest extends BaseRequestTest {
 
-  override def brokerCount = 3
+  override def brokerCount: Int = 3
 
   override def brokerPropertyOverrides(props: Properties): Unit = {
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_2_7_IV0.toString)

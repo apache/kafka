@@ -64,7 +64,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   import LogCleanerManager._
 
 
-  protected override def loggerName = classOf[LogCleaner].getName
+  protected override def loggerName: String = classOf[LogCleaner].getName
 
   // package-private for testing
   private[log] val offsetCheckpointFile = "cleaner-offset-checkpoint"

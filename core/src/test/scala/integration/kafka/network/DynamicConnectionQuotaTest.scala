@@ -41,7 +41,7 @@ import scala.jdk.CollectionConverters._
 
 class DynamicConnectionQuotaTest extends BaseRequestTest {
 
-  override def brokerCount = 1
+  override def brokerCount: Int = 1
 
   val topic = "test"
   val listener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)

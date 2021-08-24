@@ -52,7 +52,7 @@ import scala.util.{Failure, Success, Try}
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
 
 object ControllerZNode {
-  def path = "/controller"
+  def path: String = "/controller"
   def encode(brokerId: Int, timestamp: Long): Array[Byte] = {
     Json.encodeAsBytes(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString).asJava)
   }
@@ -62,21 +62,21 @@ object ControllerZNode {
 }
 
 object ControllerEpochZNode {
-  def path = "/controller_epoch"
+  def path: String = "/controller_epoch"
   def encode(epoch: Int): Array[Byte] = epoch.toString.getBytes(UTF_8)
   def decode(bytes: Array[Byte]): Int = new String(bytes, UTF_8).toInt
 }
 
 object ConfigZNode {
-  def path = "/config"
+  def path: String = "/config"
 }
 
 object BrokersZNode {
-  def path = "/brokers"
+  def path: String = "/brokers"
 }
 
 object BrokerIdsZNode {
-  def path = s"${BrokersZNode.path}/ids"
+  def path: String = s"${BrokersZNode.path}/ids"
   def encode: Array[Byte] = null
 }
 
@@ -124,7 +124,7 @@ object BrokerIdZNode {
   private val TimestampKey = "timestamp"
   private val FeaturesKey = "features"
 
-  def path(id: Int) = s"${BrokerIdsZNode.path}/$id"
+  def path(id: Int): String = s"${BrokerIdsZNode.path}/$id"
 
   /**
    * Encode to JSON bytes.
@@ -275,14 +275,14 @@ object BrokerIdZNode {
 }
 
 object TopicsZNode {
-  def path = s"${BrokersZNode.path}/topics"
+  def path: String = s"${BrokersZNode.path}/topics"
 }
 
 object TopicZNode {
   case class TopicIdReplicaAssignment(topic: String,
                                       topicId: Option[Uuid],
                                       assignment: Map[TopicPartition, ReplicaAssignment])
-  def path(topic: String) = s"${TopicsZNode.path}/$topic"
+  def path(topic: String): String = s"${TopicsZNode.path}/$topic"
   def encode(topicId: Option[Uuid],
              assignment: collection.Map[TopicPartition, ReplicaAssignment]): Array[Byte] = {
     val replicaAssignmentJson = mutable.Map[String, util.List[Int]]()
@@ -340,7 +340,7 @@ object TopicZNode {
 }
 
 object TopicPartitionsZNode {
-  def path(topic: String) = s"${TopicZNode.path(topic)}/partitions"
+  def path(topic: String): String = s"${TopicZNode.path(topic)}/partitions"
 }
 
 object TopicPartitionZNode {
@@ -369,11 +369,11 @@ object TopicPartitionStateZNode {
 }
 
 object ConfigEntityTypeZNode {
-  def path(entityType: String) = s"${ConfigZNode.path}/$entityType"
+  def path(entityType: String): String = s"${ConfigZNode.path}/$entityType"
 }
 
 object ConfigEntityZNode {
-  def path(entityType: String, entityName: String) = s"${ConfigEntityTypeZNode.path(entityType)}/$entityName"
+  def path(entityType: String, entityName: String): String = s"${ConfigEntityTypeZNode.path(entityType)}/$entityName"
   def encode(config: Properties): Array[Byte] = {
     Json.encodeAsBytes(Map("version" -> 1, "config" -> config).asJava)
   }
@@ -390,23 +390,23 @@ object ConfigEntityZNode {
 }
 
 object ConfigEntityChangeNotificationZNode {
-  def path = s"${ConfigZNode.path}/changes"
+  def path: String = s"${ConfigZNode.path}/changes"
 }
 
 object ConfigEntityChangeNotificationSequenceZNode {
   val SequenceNumberPrefix = "config_change_"
-  def createPath = s"${ConfigEntityChangeNotificationZNode.path}/$SequenceNumberPrefix"
+  def createPath: String = s"${ConfigEntityChangeNotificationZNode.path}/$SequenceNumberPrefix"
   def encode(sanitizedEntityPath: String): Array[Byte] = Json.encodeAsBytes(
     Map("version" -> 2, "entity_path" -> sanitizedEntityPath).asJava)
 }
 
 object IsrChangeNotificationZNode {
-  def path = "/isr_change_notification"
+  def path: String = "/isr_change_notification"
 }
 
 object IsrChangeNotificationSequenceZNode {
   val SequenceNumberPrefix = "isr_change_"
-  def path(sequenceNumber: String = "") = s"${IsrChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
+  def path(sequenceNumber: String = ""): String = s"${IsrChangeNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
   def encode(partitions: collection.Set[TopicPartition]): Array[Byte] = {
     val partitionsJson = partitions.map(partition => Map("topic" -> partition.topic, "partition" -> partition.partition).asJava)
     Json.encodeAsBytes(Map("version" -> IsrChangeNotificationHandler.Version, "partitions" -> partitionsJson.asJava).asJava)
@@ -423,36 +423,36 @@ object IsrChangeNotificationSequenceZNode {
       }
     }
   }.map(_.toSet).getOrElse(Set.empty)
-  def sequenceNumber(path: String) = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
+  def sequenceNumber(path: String): String = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
 }
 
 object LogDirEventNotificationZNode {
-  def path = "/log_dir_event_notification"
+  def path: String = "/log_dir_event_notification"
 }
 
 object LogDirEventNotificationSequenceZNode {
   val SequenceNumberPrefix = "log_dir_event_"
   val LogDirFailureEvent = 1
-  def path(sequenceNumber: String) = s"${LogDirEventNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
-  def encode(brokerId: Int) = {
+  def path(sequenceNumber: String): String = s"${LogDirEventNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
+  def encode(brokerId: Int): Array[Byte] = {
     Json.encodeAsBytes(Map("version" -> 1, "broker" -> brokerId, "event" -> LogDirFailureEvent).asJava)
   }
   def decode(bytes: Array[Byte]): Option[Int] = Json.parseBytes(bytes).map { js =>
     js.asJsonObject("broker").to[Int]
   }
-  def sequenceNumber(path: String) = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
+  def sequenceNumber(path: String): String = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
 }
 
 object AdminZNode {
-  def path = "/admin"
+  def path: String = "/admin"
 }
 
 object DeleteTopicsZNode {
-  def path = s"${AdminZNode.path}/delete_topics"
+  def path: String = s"${AdminZNode.path}/delete_topics"
 }
 
 object DeleteTopicsTopicZNode {
-  def path(topic: String) = s"${DeleteTopicsZNode.path}/$topic"
+  def path(topic: String): String = s"${DeleteTopicsZNode.path}/$topic"
 }
 
 /**
@@ -480,7 +480,7 @@ object ReassignPartitionsZNode {
   case class LegacyPartitionAssignment(@BeanProperty @JsonProperty("version") version: Int,
                                        @BeanProperty @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
 
-  def path = s"${AdminZNode.path}/reassign_partitions"
+  def path: String = s"${AdminZNode.path}/reassign_partitions"
 
   def encode(reassignmentMap: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
     val reassignment = LegacyPartitionAssignment(1,
@@ -500,7 +500,7 @@ object ReassignPartitionsZNode {
 }
 
 object PreferredReplicaElectionZNode {
-  def path = s"${AdminZNode.path}/preferred_replica_election"
+  def path: String = s"${AdminZNode.path}/preferred_replica_election"
   def encode(partitions: Set[TopicPartition]): Array[Byte] = {
     val jsonMap = Map("version" -> 1,
       "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition).asJava).asJava)
@@ -519,11 +519,11 @@ object PreferredReplicaElectionZNode {
 
 //old consumer path znode
 object ConsumerPathZNode {
-  def path = "/consumers"
+  def path: String = "/consumers"
 }
 
 object ConsumerOffset {
-  def path(group: String, topic: String, partition: Integer) = s"${ConsumerPathZNode.path}/${group}/offsets/${topic}/${partition}"
+  def path(group: String, topic: String, partition: Integer): String = s"${ConsumerPathZNode.path}/${group}/offsets/${topic}/${partition}"
   def encode(offset: Long): Array[Byte] = offset.toString.getBytes(UTF_8)
   def decode(bytes: Array[Byte]): Option[Long] = Option(bytes).map(new String(_, UTF_8).toLong)
 }
@@ -539,7 +539,7 @@ object ZkStat {
 
 object StateChangeHandlers {
   val ControllerHandler = "controller-state-change-handler"
-  def zkNodeChangeListenerHandler(seqNodeRoot: String) = s"change-notification-$seqNodeRoot"
+  def zkNodeChangeListenerHandler(seqNodeRoot: String): String = s"change-notification-$seqNodeRoot"
 }
 
 /**
@@ -626,7 +626,7 @@ class ExtendedAclStore(val patternType: PatternType) extends ZkAclStore {
 }
 
 object ExtendedAclZNode {
-  def path = "/kafka-acl-extended"
+  def path: String = "/kafka-acl-extended"
 }
 
 trait AclChangeNotificationHandler {
@@ -664,7 +664,7 @@ sealed trait ZkAclChangeStore {
 object ZkAclChangeStore {
   val stores: Iterable[ZkAclChangeStore] = List(LiteralAclChangeStore, ExtendedAclChangeStore)
 
-  def SequenceNumberPrefix = "acl_changes_"
+  def SequenceNumberPrefix: String = "acl_changes_"
 }
 
 case object LiteralAclChangeStore extends ZkAclChangeStore {
@@ -744,11 +744,11 @@ case class ExtendedAclChangeEvent(@BeanProperty @JsonProperty("version") version
 }
 
 object ClusterZNode {
-  def path = "/cluster"
+  def path: String = "/cluster"
 }
 
 object ClusterIdZNode {
-  def path = s"${ClusterZNode.path}/id"
+  def path: String = s"${ClusterZNode.path}/id"
 
   def toJson(id: String): Array[Byte] = {
     Json.encodeAsBytes(Map("version" -> "1", "id" -> id).asJava)
@@ -762,13 +762,13 @@ object ClusterIdZNode {
 }
 
 object BrokerSequenceIdZNode {
-  def path = s"${BrokersZNode.path}/seqid"
+  def path: String = s"${BrokersZNode.path}/seqid"
 }
 
 object ProducerIdBlockZNode {
   val CurrentVersion: Long = 1L
 
-  def path = "/latest_producer_id_block"
+  def path: String = "/latest_producer_id_block"
 
   def generateProducerIdBlockJson(producerIdBlock: ProducerIdsBlock): Array[Byte] = {
     Json.encodeAsBytes(Map("version" -> CurrentVersion,
@@ -796,27 +796,27 @@ object ProducerIdBlockZNode {
 }
 
 object DelegationTokenAuthZNode {
-  def path = "/delegation_token"
+  def path: String = "/delegation_token"
 }
 
 object DelegationTokenChangeNotificationZNode {
-  def path =  s"${DelegationTokenAuthZNode.path}/token_changes"
+  def path: String =  s"${DelegationTokenAuthZNode.path}/token_changes"
 }
 
 object DelegationTokenChangeNotificationSequenceZNode {
   val SequenceNumberPrefix = "token_change_"
-  def createPath = s"${DelegationTokenChangeNotificationZNode.path}/$SequenceNumberPrefix"
-  def deletePath(sequenceNode: String) = s"${DelegationTokenChangeNotificationZNode.path}/${sequenceNode}"
+  def createPath: String = s"${DelegationTokenChangeNotificationZNode.path}/$SequenceNumberPrefix"
+  def deletePath(sequenceNode: String): String = s"${DelegationTokenChangeNotificationZNode.path}/${sequenceNode}"
   def encode(tokenId : String): Array[Byte] = tokenId.getBytes(UTF_8)
   def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
 }
 
 object DelegationTokensZNode {
-  def path = s"${DelegationTokenAuthZNode.path}/tokens"
+  def path: String = s"${DelegationTokenAuthZNode.path}/tokens"
 }
 
 object DelegationTokenInfoZNode {
-  def path(tokenId: String) =  s"${DelegationTokensZNode.path}/$tokenId"
+  def path(tokenId: String): String =  s"${DelegationTokensZNode.path}/$tokenId"
   def encode(token: DelegationToken): Array[Byte] =  Json.encodeAsBytes(DelegationTokenManager.toJsonCompatibleMap(token).asJava)
   def decode(bytes: Array[Byte]): Option[TokenInformation] = DelegationTokenManager.fromBytes(bytes)
 }
@@ -874,7 +874,7 @@ object FeatureZNode {
   val V1 = 1
   val CurrentVersion = V1
 
-  def path = "/feature"
+  def path: String = "/feature"
 
   def asJavaMap(scalaMap: Map[String, Map[String, Short]]): util.Map[String, util.Map[String, java.lang.Short]] = {
     scalaMap

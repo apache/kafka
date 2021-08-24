@@ -506,7 +506,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     options = parser.parse(args: _*)
 
-    def checkArgs() = {
+    def checkArgs(): Unit = {
       CommandLineUtils.checkRequiredArgs(parser, options, consumerConfigOpt, producerConfigOpt)
       val consumerProps = Utils.loadProps(options.valueOf(consumerConfigOpt))
 

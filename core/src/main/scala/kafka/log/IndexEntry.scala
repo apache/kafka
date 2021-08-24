@@ -31,8 +31,8 @@ sealed trait IndexEntry {
  * given offset.
  */
 case class OffsetPosition(offset: Long, position: Int) extends IndexEntry {
-  override def indexKey = offset
-  override def indexValue = position.toLong
+  override def indexKey: Long = offset
+  override def indexValue: Long = position.toLong
 }
 
 
@@ -43,8 +43,8 @@ case class OffsetPosition(offset: Long, position: Int) extends IndexEntry {
  * @param offset The message offset.
  */
 case class TimestampOffset(timestamp: Long, offset: Long) extends IndexEntry {
-  override def indexKey = timestamp
-  override def indexValue = offset
+  override def indexKey: Long = timestamp
+  override def indexValue: Long = offset
 }
 
 object TimestampOffset {

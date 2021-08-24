@@ -35,7 +35,7 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
   protected override val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
   var adminClient: Admin = null
 
-  override def brokerCount = 1
+  override def brokerCount: Int = 1
 
   @BeforeEach
   override def setUp(): Unit = {

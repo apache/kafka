@@ -231,7 +231,7 @@ object LogCompactionTester {
     null
   }
 
-  def peekLine(reader: BufferedReader) = {
+  def peekLine(reader: BufferedReader): String = {
     reader.mark(ReadAheadLimit)
     val line = reader.readLine
     reader.reset()
@@ -336,8 +336,8 @@ object LogCompactionTester {
 }
 
 case class TestRecord(topic: String, key: Int, value: Long, delete: Boolean) {
-  override def toString = topic + "\t" + key + "\t" + value + "\t" + (if (delete) "d" else "u")
-  def topicAndKey = topic + key
+  override def toString: String = topic + "\t" + key + "\t" + value + "\t" + (if (delete) "d" else "u")
+  def topicAndKey: String = topic + key
 }
 
 object TestRecord {

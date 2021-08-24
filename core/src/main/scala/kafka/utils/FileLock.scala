@@ -73,7 +73,7 @@ class FileLock(val file: File) extends Logging {
   /**
    * Destroy this lock, closing the associated FileChannel
    */
-  def destroy() = {
+  def destroy(): Unit = {
     this synchronized {
       unlock()
       channel.close()

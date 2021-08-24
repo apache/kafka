@@ -182,11 +182,11 @@ object StateChangeLogMerger extends Logging {
 
   class LineIterator(val line: String, val itr: Iterator[String]) {
     def this() = this("", null)
-    def isEmpty = line == "" && itr == null
+    def isEmpty: Boolean = line == "" && itr == null
   }
 
   implicit object dateBasedOrdering extends Ordering[LineIterator] {
-    def compare(first: LineIterator, second: LineIterator) = {
+    def compare(first: LineIterator, second: LineIterator): Int = {
       val firstDate = dateRegex.findFirstIn(first.line).get
       val secondDate = dateRegex.findFirstIn(second.line).get
       secondDate.compareTo(firstDate)

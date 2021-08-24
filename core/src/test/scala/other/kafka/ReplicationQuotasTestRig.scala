@@ -257,7 +257,7 @@ object ReplicationQuotasTestRig {
       dataset
     }
 
-    def record(rates: mutable.Map[Int, Array[Double]], brokerId: Int, currentRate: Double) = {
+    def record(rates: mutable.Map[Int, Array[Double]], brokerId: Int, currentRate: Double): Option[Array[Double]] = {
       var leaderRatesBroker: Array[Double] = rates.getOrElse(brokerId, Array[Double]())
       leaderRatesBroker = leaderRatesBroker ++ Array(currentRate)
       rates.put(brokerId, leaderRatesBroker)

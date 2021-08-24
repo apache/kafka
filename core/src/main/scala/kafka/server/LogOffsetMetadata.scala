@@ -79,6 +79,6 @@ case class LogOffsetMetadata(messageOffset: Long,
     segmentBaseOffset == UnifiedLog.UnknownOffset && relativePositionInSegment == LogOffsetMetadata.UnknownFilePosition
   }
 
-  override def toString = s"(offset=$messageOffset segment=[$segmentBaseOffset:$relativePositionInSegment])"
+  override def toString: String = s"(offset=$messageOffset segment=[$segmentBaseOffset:$relativePositionInSegment])"
 
 }

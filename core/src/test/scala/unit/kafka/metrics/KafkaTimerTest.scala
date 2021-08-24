@@ -44,11 +44,11 @@ class KafkaTimerTest {
 
     private var ticksInNanos = 0L
 
-    override def tick() = {
+    override def tick(): Long = {
       ticksInNanos
     }
 
-    override def time() = {
+    override def time(): Long = {
       TimeUnit.NANOSECONDS.toMillis(ticksInNanos)
     }
 

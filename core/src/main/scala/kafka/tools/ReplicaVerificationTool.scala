@@ -284,13 +284,13 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[To
     fetcherBarrier.set(new CountDownLatch(expectedNumFetchers))
   }
 
-  def getFetcherBarrier() = fetcherBarrier.get
+  def getFetcherBarrier(): CountDownLatch = fetcherBarrier.get
 
   def createNewVerificationBarrier(): Unit = {
     verificationBarrier.set(new CountDownLatch(1))
   }
 
-  def getVerificationBarrier() = verificationBarrier.get
+  def getVerificationBarrier(): CountDownLatch = verificationBarrier.get
 
   private def initialize(): Unit = {
     for (topicPartition <- expectedReplicasPerTopicPartition.keySet)

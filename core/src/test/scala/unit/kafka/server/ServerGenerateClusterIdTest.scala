@@ -147,7 +147,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testConsistentClusterIdFromZookeeperAndFromMetaProps() = {
+  def testConsistentClusterIdFromZookeeperAndFromMetaProps(): Unit = {
     // Check at the first boot
     val server = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
     val clusterId = server.clusterId
@@ -168,7 +168,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testInconsistentClusterIdFromZookeeperAndFromMetaProps() = {
+  def testInconsistentClusterIdFromZookeeperAndFromMetaProps(): Unit = {
     forgeBrokerMetadata(config1.logDirs, config1.brokerId, "aclusterid")
 
     val server = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))

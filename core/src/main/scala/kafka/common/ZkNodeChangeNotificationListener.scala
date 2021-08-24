@@ -67,7 +67,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
     thread.start()
   }
 
-  def close() = {
+  def close(): Unit = {
     isClosed.set(true)
     zkClient.unregisterStateChangeHandler(ZkStateChangeHandler.name)
     zkClient.unregisterZNodeChildChangeHandler(ChangeNotificationHandler.path)

@@ -35,83 +35,83 @@ object ControllerState {
   // unless `rateAndTimeMetricName` is overridden.
 
   case object Idle extends ControllerState {
-    def value = 0
+    def value: Byte = 0
     override protected def hasRateAndTimeMetric: Boolean = false
   }
 
   case object ControllerChange extends ControllerState {
-    def value = 1
+    def value: Byte = 1
   }
 
   case object BrokerChange extends ControllerState {
-    def value = 2
+    def value: Byte = 2
     // The LeaderElectionRateAndTimeMs metric existed before `ControllerState` was introduced and we keep the name
     // for backwards compatibility. The alternative would be to have the same metric under two different names.
-    override def rateAndTimeMetricName = Some("LeaderElectionRateAndTimeMs")
+    override def rateAndTimeMetricName: Some[String] = Some("LeaderElectionRateAndTimeMs")
   }
 
   case object TopicChange extends ControllerState {
-    def value = 3
+    def value: Byte = 3
   }
 
   case object TopicDeletion extends ControllerState {
-    def value = 4
+    def value: Byte = 4
   }
 
   case object AlterPartitionReassignment extends ControllerState {
-    def value = 5
+    def value: Byte = 5
 
     override def rateAndTimeMetricName: Option[String] = Some("PartitionReassignmentRateAndTimeMs")
   }
 
   case object AutoLeaderBalance extends ControllerState {
-    def value = 6
+    def value: Byte = 6
   }
 
   case object ManualLeaderBalance extends ControllerState {
-    def value = 7
+    def value: Byte = 7
   }
 
   case object ControlledShutdown extends ControllerState {
-    def value = 8
+    def value: Byte = 8
   }
 
   case object IsrChange extends ControllerState {
-    def value = 9
+    def value: Byte = 9
   }
 
   case object LeaderAndIsrResponseReceived extends ControllerState {
-    def value = 10
+    def value: Byte = 10
   }
 
   case object LogDirChange extends ControllerState {
-    def value = 11
+    def value: Byte = 11
   }
 
   case object ControllerShutdown extends ControllerState {
-    def value = 12
+    def value: Byte = 12
   }
 
   case object UncleanLeaderElectionEnable extends ControllerState {
-    def value = 13
+    def value: Byte = 13
   }
 
   case object TopicUncleanLeaderElectionEnable extends ControllerState {
-    def value = 14
+    def value: Byte = 14
   }
 
   case object ListPartitionReassignment extends ControllerState {
-    def value = 15
+    def value: Byte = 15
   }
 
   case object UpdateMetadataResponseReceived extends ControllerState {
-    def value = 16
+    def value: Byte = 16
 
     override protected def hasRateAndTimeMetric: Boolean = false
   }
 
   case object UpdateFeatures extends ControllerState {
-    def value = 17
+    def value: Byte = 17
   }
 
   val values: Seq[ControllerState] = Seq(Idle, ControllerChange, BrokerChange, TopicChange, TopicDeletion,

@@ -43,8 +43,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
   override val brokerCount = 2
 
-  protected def producerClientId = "QuotasTestProducer-1"
-  protected def consumerClientId = "QuotasTestConsumer-1"
+  protected def producerClientId: String = "QuotasTestProducer-1"
+  protected def consumerClientId: String = "QuotasTestConsumer-1"
   protected def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients
 
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")

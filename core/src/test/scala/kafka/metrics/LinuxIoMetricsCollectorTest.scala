@@ -23,6 +23,7 @@ import kafka.utils.{Logging, MockTime}
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
+import java.nio.file.Path
 
 @Timeout(120)
 class LinuxIoMetricsCollectorTest extends Logging {
@@ -31,7 +32,7 @@ class LinuxIoMetricsCollectorTest extends Logging {
     val baseDir = TestUtils.tempDirectory()
     val selfDir = Files.createDirectories(baseDir.toPath.resolve("self"))
 
-    def writeProcFile(readBytes: Long, writeBytes: Long) = {
+    def writeProcFile(readBytes: Long, writeBytes: Long): Path = {
       val bld = new StringBuilder()
       bld.append("rchar: 0%n".format())
       bld.append("wchar: 0%n".format())

@@ -34,13 +34,13 @@ case class LeaderAndIsr(leader: Int,
                         leaderEpoch: Int,
                         isr: List[Int],
                         zkVersion: Int) {
-  def withZkVersion(zkVersion: Int) = copy(zkVersion = zkVersion)
+  def withZkVersion(zkVersion: Int): LeaderAndIsr = copy(zkVersion = zkVersion)
 
-  def newLeader(leader: Int) = newLeaderAndIsr(leader, isr)
+  def newLeader(leader: Int): LeaderAndIsr = newLeaderAndIsr(leader, isr)
 
-  def newLeaderAndIsr(leader: Int, isr: List[Int]) = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion)
+  def newLeaderAndIsr(leader: Int, isr: List[Int]): LeaderAndIsr = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion)
 
-  def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
+  def newEpochAndZkVersion: LeaderAndIsr = newLeaderAndIsr(leader, isr)
 
   def leaderOpt: Option[Int] = {
     if (leader == LeaderAndIsr.NoLeader) None else Some(leader)

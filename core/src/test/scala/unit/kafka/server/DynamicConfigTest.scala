@@ -25,8 +25,8 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 class DynamicConfigTest extends ZooKeeperTestHarness {
-  private final val nonExistentConfig: String = "some.config.that.does.not.exist"
-  private final val someValue: String = "some interesting value"
+  private val nonExistentConfig: String = "some.config.that.does.not.exist"
+  private val someValue: String = "some interesting value"
 
   @Test
   def shouldFailWhenChangingClientIdUnknownConfig(): Unit = {

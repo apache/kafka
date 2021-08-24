@@ -37,6 +37,7 @@ plugins {
   id 'org.owasp.dependencycheck' version '6.1.6'
   id 'org.nosphere.apache.rat' version "0.7.0"
 
+  id 'io.github.cosmicsilence.scalafix' version '0.1.11' apply false
   id "com.github.spotbugs" version '4.7.1' apply false
   id 'org.gradle.test-retry' version '1.3.1' apply false
   id 'org.scoverage' version '5.0.0' apply false
@@ -800,6 +801,7 @@ tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" 
 
 project(':core') {
   apply plugin: 'scala'
+  apply plugin: 'io.github.cosmicsilence.scalafix'
 
   // scaladoc generation is configured at the sub-module level with an artifacts
   // block (cf. see streams-scala). If scaladoc generation is invoked explicitly
@@ -1863,6 +1865,8 @@ project(':streams') {
 
 project(':streams:streams-scala') {
   apply plugin: 'scala'
+  apply plugin: 'io.github.cosmicsilence.scalafix'
+
   archivesBaseName = "kafka-streams-scala_${versions.baseScala}"
   dependencies {
     api project(':streams')

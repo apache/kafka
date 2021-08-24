@@ -32,6 +32,7 @@ import java.util.{Collections, Locale, Properties}
 import scala.annotation.nowarn
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
+import java.{util => ju}
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
@@ -151,7 +152,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   }
 
   private val _remoteLogConfig = new RemoteLogConfig()
-  def remoteLogConfig = _remoteLogConfig
+  def remoteLogConfig: RemoteLogConfig = _remoteLogConfig
 
   @nowarn("cat=deprecation")
   def recordVersion = messageFormatVersion.recordVersion
@@ -271,7 +272,7 @@ object LogConfig {
   private[log] class LogConfigDef(base: ConfigDef) extends ConfigDef(base) {
     def this() = this(new ConfigDef)
 
-    private final val serverDefaultConfigNames = mutable.Map[String, String]()
+    private val serverDefaultConfigNames = mutable.Map[String, String]()
     base match {
       case b: LogConfigDef => serverDefaultConfigNames ++= b.serverDefaultConfigNames
       case _ =>
@@ -298,7 +299,7 @@ object LogConfig {
       this
     }
 
-    override def headers = List("Name", "Description", "Type", "Default", "Valid Values", ServerDefaultHeaderName,
+    override def headers: ju.List[String] = List("Name", "Description", "Type", "Default", "Valid Values", ServerDefaultHeaderName,
       "Importance").asJava
 
     override def getConfigValue(key: ConfigKey, headerName: String): String = {

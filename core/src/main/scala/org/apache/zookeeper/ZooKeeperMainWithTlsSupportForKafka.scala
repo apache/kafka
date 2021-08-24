@@ -74,7 +74,7 @@ class ZooKeeperMainWithTlsSupportForKafka(args: Array[String], val zkClientConfi
       System.err.println(s"\t$cmd ${ZooKeeperMain.commandMap.get(cmd)}"))
   }
 
-  override def connectToZK(newHost: String) = {
+  override def connectToZK(newHost: String): Unit = {
     // ZooKeeperAdmin has no constructor that supports passing in both readOnly and ZkClientConfig,
     // and readOnly ends up being set to false when passing in a ZkClientConfig instance;
     // therefore it is currently not possible for us to construct a ZooKeeperAdmin instance with

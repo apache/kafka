@@ -38,7 +38,7 @@ sealed abstract class TopicFilter(rawRegex: String) extends Logging {
       throw new RuntimeException(regex + " is an invalid regex.")
   }
 
-  override def toString = regex
+  override def toString: String = regex
 
   def isTopicAllowed(topic: String, excludeInternalTopics: Boolean): Boolean
 }

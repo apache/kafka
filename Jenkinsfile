@@ -20,7 +20,7 @@
 def doValidation() {
   sh """
     ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
-        spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
+        spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain checkScalafix rat \
         --profile --no-daemon --continue -PxmlSpotBugsReport=true
   """
 }
