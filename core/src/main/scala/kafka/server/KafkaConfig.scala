@@ -1405,20 +1405,94 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   // We make it part of each instance rather than the object to facilitate testing.
   private val zkClientConfigViaSystemProperties = new ZKClientConfig()
 
-  override def originals: util.Map[String, AnyRef] =
-    if (this eq currentConfig) super.originals else currentConfig.originals
+  private def maybeMutateOriginalsToMakeBrokerIdAndNodeIdMatch(map: util.Map[String, AnyRef]): util.Map[String, AnyRef] = {
+    val nodeIdOriginal = map.get(KafkaConfig.NodeIdProp)
+    val nodeIdAsIntOpt = nodeIdOriginal match {
+      case null => None
+      case i => Some(i.toString.toInt)
+    }
+    if (nodeIdAsIntOpt.getOrElse(Defaults.EmptyNodeId) >= 0) {
+      // it had a non-negative node.id, so ensure it has the same for broker.id as well
+      map.put(KafkaConfig.BrokerIdProp, nodeIdOriginal)
+    } else {
+      val brokerIdOriginal = map.get(KafkaConfig.BrokerIdProp)
+      val brokerIdAsIntOpt = brokerIdOriginal match {
+        case null => None
+        case i => Some(i.toString.toInt)
+      }
+      if (brokerIdAsIntOpt.getOrElse(Defaults.BrokerId) >= 0) {
+        // it had a non-negative broker.id, so ensure it has the same for node.id as well
+        map.put(KafkaConfig.NodeIdProp, brokerIdOriginal)
+      }
+    }
+    map
+  }
+
+  private def maybeMutateOriginalsStringsToMakeBrokerIdAndNodeIdMatch(map: util.Map[String, String]) = {
+    val nodeIdOriginal = map.get(KafkaConfig.NodeIdProp)
+    val nodeIdAsIntOpt = nodeIdOriginal match {
+      case null => None
+      case i => Some(i.toInt)
+    }
+    if (nodeIdAsIntOpt.getOrElse(Defaults.EmptyNodeId) >= 0) {
+      // it had a non-negative node.id, so ensure it has the same for broker.id as well
+      map.put(KafkaConfig.BrokerIdProp, nodeIdOriginal)
+    } else {
+      val brokerIdOriginal = map.get(KafkaConfig.BrokerIdProp)
+      val brokerIdAsIntOpt = brokerIdOriginal match {
+        case null => None
+        case i => Some(i.toInt)
+      }
+      if (brokerIdAsIntOpt.getOrElse(Defaults.BrokerId) >= 0) {
+        // it had a non-negative broker.id, so ensure it has the same for node.id as well
+        map.put(KafkaConfig.NodeIdProp, brokerIdOriginal)
+      }
+    }
+    map
+  }
+
+  override def originals: util.Map[String, AnyRef] = {
+    if (this eq currentConfig) {
+      maybeMutateOriginalsToMakeBrokerIdAndNodeIdMatch(super.originals)
+    } else {
+      currentConfig.originals
+    }
+  }
+
   override def values: util.Map[String, _] =
     if (this eq currentConfig) super.values else currentConfig.values
   override def nonInternalValues: util.Map[String, _] =
     if (this eq currentConfig) super.nonInternalValues else currentConfig.values
-  override def originalsStrings: util.Map[String, String] =
-    if (this eq currentConfig) super.originalsStrings else currentConfig.originalsStrings
+  override def originalsStrings: util.Map[String, String] = {
+    if (this eq currentConfig) {
+      maybeMutateOriginalsStringsToMakeBrokerIdAndNodeIdMatch(super.originalsStrings)
+    } else {
+      currentConfig.originalsStrings
+    }
+  }
+
   override def originalsWithPrefix(prefix: String): util.Map[String, AnyRef] =
     if (this eq currentConfig) super.originalsWithPrefix(prefix) else currentConfig.originalsWithPrefix(prefix)
   override def valuesWithPrefixOverride(prefix: String): util.Map[String, AnyRef] =
     if (this eq currentConfig) super.valuesWithPrefixOverride(prefix) else currentConfig.valuesWithPrefixOverride(prefix)
   override def get(key: String): AnyRef =
     if (this eq currentConfig) super.get(key) else currentConfig.get(key)
+
+  // Ensure the values map has the same value for broker.id and node.id if only one of them is specified
+  override def postProcessParsedConfig(props: java.util.Map[String,Object]): java.util.Map[String,Object] = {
+    val nodeIdValue = Option(props.get(KafkaConfig.NodeIdProp)).getOrElse(Defaults.EmptyNodeId).asInstanceOf[Int]
+    val brokerIdValue = Option(props.get(KafkaConfig.BrokerIdProp)).getOrElse(Defaults.BrokerId).asInstanceOf[Int]
+    if (nodeIdValue < 0 && brokerIdValue < 0 || nodeIdValue >= 0 && brokerIdValue >= 0) {
+      //  either neither is specified or both are specified, so no need to add either value
+      Collections.emptyMap()
+    } else if (brokerIdValue < 0) {
+      // broker.id is not specified but node.id is, so add a broker.id value
+      Collections.singletonMap(KafkaConfig.BrokerIdProp, nodeIdValue.asInstanceOf[Object])
+    } else {
+      // node.id is not specified but broker.id is, so add a node.id value
+      Collections.singletonMap(KafkaConfig.NodeIdProp, brokerIdValue.asInstanceOf[Object])
+    }
+  }
 
   //  During dynamic update, we use the values from this config, these are only used in DynamicBrokerConfig
   private[server] def originalsFromThisConfig: util.Map[String, AnyRef] = super.originals
@@ -1905,6 +1979,20 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   @nowarn("cat=deprecation")
   private def validateValues(): Unit = {
+    val nodeIdValue = getInt(KafkaConfig.NodeIdProp)
+    val brokerIdValue = getInt(KafkaConfig.BrokerIdProp)
+    if (nodeIdValue >= 0 || brokerIdValue >= 0) {
+      // at least one was specified, so they should be equal due to post-processing unless
+      // 1) they were both specified; and 2) they were specified inconsistently
+      if (nodeIdValue < 0 || brokerIdValue < 0) {
+        throw new IllegalStateException(s"The values for broker.id ($brokerIdValue) and node.id ($nodeIdValue) should have both been positive "
+          + "since only one was specified (this should not happen)")
+      }
+      if (brokerIdValue != nodeIdValue) {
+        // they were specified inconsistently
+        throw new ConfigException(s"The values for broker.id ($brokerIdValue) and node.id ($nodeIdValue) must be the same")
+      }
+    }
     if (requiresZookeeper) {
       if (zkConnect == null) {
         throw new ConfigException(s"Missing required configuration `${KafkaConfig.ZkConnectProp}` which has no default value.")

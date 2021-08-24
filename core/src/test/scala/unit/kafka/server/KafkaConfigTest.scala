@@ -1235,4 +1235,47 @@ class KafkaConfigTest {
     assertEquals(dataDir1, config.metadataLogDir)
     assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
   }
+
+  @Test
+  def testBrokerAndNodeIdConsistency(): Unit = {
+    val expectedId = 1
+
+    def ensureValidWithConsistentNodeAndBrokerIds(props: Properties): Unit = {
+      assertTrue(isValidKafkaConfig(props))
+      val config = KafkaConfig.fromProps(props)
+      assertEquals(expectedId, config.brokerId)
+      assertEquals(expectedId, config.nodeId)
+      assertEquals(expectedId.toString, config.originals.get(KafkaConfig.BrokerIdProp))
+      assertEquals(expectedId.toString, config.originals.get(KafkaConfig.NodeIdProp))
+      assertEquals(expectedId.toString, config.originalsStrings.get(KafkaConfig.BrokerIdProp))
+      assertEquals(expectedId.toString, config.originalsStrings.get(KafkaConfig.NodeIdProp))
+      assertEquals(expectedId, config.values.get(KafkaConfig.BrokerIdProp))
+      assertEquals(expectedId, config.values.get(KafkaConfig.NodeIdProp))
+    }
+
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
+    props.put(KafkaConfig.NodeIdProp, expectedId.toString) // set just node.id for KRaft -- should be legal
+    ensureValidWithConsistentNodeAndBrokerIds(props)
+    props.put(KafkaConfig.BrokerIdProp, "0") // explicitly set broker.id differently than node.id, should be illegal
+    assertFalse(isValidKafkaConfig(props))
+    props.put(KafkaConfig.BrokerIdProp, "-1") // explicitly set broker.id to the default, different than node.id, should be legal
+    assertTrue(isValidKafkaConfig(props))
+    props.put(KafkaConfig.BrokerIdProp, expectedId.toString) // explicitly set broker.id to be the same as node.id -- should be legal
+    ensureValidWithConsistentNodeAndBrokerIds(props)
+
+    // now do the same thing for the ZooKeeper case
+    props.clear()
+    props.putAll(TestUtils.createBrokerConfig(expectedId, TestUtils.MockZkConnect, port = 8181))
+    assertEquals(expectedId.toString, props.get(KafkaConfig.BrokerIdProp))
+    assertFalse(props.containsKey(KafkaConfig.NodeIdProp))
+    ensureValidWithConsistentNodeAndBrokerIds(props)
+    props.put(KafkaConfig.NodeIdProp, "0") // explicitly set node.id differently than broker.id, should be illegal
+    assertFalse(isValidKafkaConfig(props))
+    props.put(KafkaConfig.NodeIdProp, "-1") // explicitly set node.id to the default, different than broker.id, should be legal
+    assertTrue(isValidKafkaConfig(props))
+    props.put(KafkaConfig.NodeIdProp, expectedId.toString) // explicitly set node.id to be the same as broker.id -- should be legal
+    ensureValidWithConsistentNodeAndBrokerIds(props)
+  }
 }
