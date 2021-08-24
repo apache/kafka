@@ -77,6 +77,8 @@ class JmxMixin(object):
         cmd = "%s %s " % (self.path.script("kafka-run-class.sh", use_jmxtool_version), self.jmx_class_name())
         cmd += "--reporting-interval %d --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % (self.jmx_poll_ms, self.jmx_port)
         cmd += " --wait"
+        cmd += " --wait-timeout %d" % 60000
+        cmd += " --wait-backoff %d" % 5000
         for jmx_object_name in self.jmx_object_names:
             cmd += " --object-name %s" % jmx_object_name
         cmd += " --attributes "
