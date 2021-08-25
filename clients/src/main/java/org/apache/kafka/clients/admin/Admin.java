@@ -81,7 +81,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  *   // Create a compacted topic
  *   CreateTopicsResult result = admin.createTopics(Collections.singleton(
  *     new NewTopic(topicName, partitions, replicationFactor)
- *       .configs(Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)));
+ *       .configs(Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT))));
  *
  *   // Call values() to get the result for a specific topic
  *   KafkaFuture<Void> future = result.values().get(topicName);
