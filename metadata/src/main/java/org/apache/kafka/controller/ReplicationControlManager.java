@@ -123,14 +123,22 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 public class ReplicationControlManager {
 
     static class TopicControlInfo {
-        final String name;
-        final Uuid id;
+        private final String name;
+        private final Uuid id;
         private final TimelineHashMap<Integer, PartitionRegistration> parts;
 
         TopicControlInfo(String name, SnapshotRegistry snapshotRegistry, Uuid id) {
             this.name = name;
             this.id = id;
             this.parts = new TimelineHashMap<>(snapshotRegistry, 0);
+        }
+
+        public String name() {
+            return name;
+        }
+
+        public Uuid topicId() {
+            return id;
         }
     }
 

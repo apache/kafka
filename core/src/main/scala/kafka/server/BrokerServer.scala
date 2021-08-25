@@ -92,7 +92,7 @@ class BrokerServer(
 
   this.logIdent = logContext.logPrefix
 
-  private var lifecycleManager: BrokerLifecycleManager = null
+  @volatile private var lifecycleManager: BrokerLifecycleManager = null
 
   private val isShuttingDown = new AtomicBoolean(false)
 
@@ -104,7 +104,7 @@ class BrokerServer(
   var controlPlaneRequestProcessor: KafkaApis = null
 
   var authorizer: Option[Authorizer] = None
-  var socketServer: SocketServer = null
+  @volatile var socketServer: SocketServer = null
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
 
   var logDirFailureChannel: LogDirFailureChannel = null

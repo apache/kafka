@@ -1937,6 +1937,10 @@ object TestUtils extends Logging {
   }
 
   def verifyNoUnexpectedThreads(context: String): Unit = {
+    // Threads which may cause transient failures in subsequent tests if not shutdown.
+    // These include threads which make connections to brokers and may cause issues
+    // when broker ports are reused (e.g. auto-create topics) as well as threads
+    // which reset static JAAS configuration.
     val unexpectedThreadNames = Set(
       ControllerEventManager.ControllerEventThreadName,
       KafkaProducer.NETWORK_THREAD_PREFIX,
@@ -1950,12 +1954,10 @@ object TestUtils extends Logging {
       allThreads.filter(t => unexpectedThreadNames.exists(s => t.contains(s))).toSet
     }
 
-    def printUnexpectedThreads: String = {
-      val unexpected = unexpectedThreads
-      s"Found ${unexpected.size} unexpected threads during $context: ${unexpected.mkString("`", ",", "`")}"
-    }
-
-    TestUtils.waitUntilTrue(() => unexpectedThreads.isEmpty, printUnexpectedThreads)
+    val (unexpected, _) = TestUtils.computeUntilTrue(unexpectedThreads)(_.isEmpty)
+    assertTrue(unexpected.isEmpty,
+      s"Found ${unexpected.size} unexpected threads during $context: " +
+        s"${unexpected.mkString("`", ",", "`")}")
   }
 
 }

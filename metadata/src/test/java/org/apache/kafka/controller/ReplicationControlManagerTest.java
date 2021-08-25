@@ -232,7 +232,7 @@ public class ReplicationControlManagerTest {
                 .setLeaderEpoch(partition.leaderEpoch)
                 .setNewIsr(isr);
 
-            String topicName = replicationControl.getTopic(topicIdPartition.topicId()).name;
+            String topicName = replicationControl.getTopic(topicIdPartition.topicId()).name();
             TopicData topicData = new TopicData()
                 .setName(topicName)
                 .setPartitions(singletonList(partitionData));
