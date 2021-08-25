@@ -62,12 +62,14 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             statefulTasksWithClients
         );
 
-        statefulTasksWithClients.forEach((taskId, clientId) -> assignStandbyTasksForActiveTask(numStandbyReplicas,
-                                                                                               taskId,
-                                                                                               clientId,
-                                                                                               rackAwareAssignmentTags,
-                                                                                               clients,
-                                                                                               tasksToRemainingStandbys));
+        statefulTasksWithClients.forEach((taskId, clientId) -> assignStandbyTasksForActiveTask(
+            numStandbyReplicas,
+            taskId,
+            clientId,
+            rackAwareAssignmentTags,
+            clients,
+            tasksToRemainingStandbys
+        ));
 
         return true;
     }
