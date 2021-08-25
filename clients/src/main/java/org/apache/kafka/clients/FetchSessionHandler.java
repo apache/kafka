@@ -329,8 +329,8 @@ public class FetchSessionHandler {
                     iter.remove();
                     // Indicate that we no longer want to listen to this partition.
                     removed.add(topicPartition);
-                    // If we do not have this topic ID in the session, we can not use topic IDs.
-                    if (canUseTopicIds && !sessionTopicIds.containsKey(topicPartition.topic()))
+                    // If we do not have this topic ID in the builder or the session, we can not use topic IDs.
+                    if (canUseTopicIds && !topicIds.containsKey(topicPartition.topic()) && !sessionTopicIds.containsKey(topicPartition.topic()))
                         canUseTopicIds = false;
                 }
             }
