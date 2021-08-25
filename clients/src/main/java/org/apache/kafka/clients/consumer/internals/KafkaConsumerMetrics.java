@@ -106,5 +106,7 @@ public class KafkaConsumerMetrics implements AutoCloseable {
         metrics.removeMetric(lastPollMetricName);
         metrics.removeSensor(timeBetweenPollSensor.name());
         metrics.removeSensor(pollIdleSensor.name());
+        metrics.removeSensor(commitSyncSensor.name());
+        metrics.removeSensor(committedSensor.name());
     }
 }

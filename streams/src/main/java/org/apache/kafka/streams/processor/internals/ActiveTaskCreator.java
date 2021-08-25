@@ -110,7 +110,8 @@ class ActiveTaskCreator {
                 clientSupplier,
                 null,
                 processId,
-                logContext);
+                logContext,
+                time);
             taskProducers = Collections.emptyMap();
         }
     }
@@ -243,7 +244,8 @@ class ActiveTaskCreator {
                 clientSupplier,
                 taskId,
                 null,
-                logContext);
+                logContext,
+                time);
             taskProducers.put(taskId, streamsProducer);
         } else {
             streamsProducer = threadProducer;

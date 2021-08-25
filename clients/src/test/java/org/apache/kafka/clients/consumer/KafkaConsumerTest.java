@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -1923,6 +1924,56 @@ public class KafkaConsumerTest {
     public void testCommittedAuthenticationFailure() {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
         assertThrows(AuthenticationException.class, () -> consumer.committed(Collections.singleton(tp0)).get(tp0));
+    }
+
+    @Test
+    public void testMeasureCommitSyncDuration() {
+        // use a consumer that will throw to ensure we return quickly
+        Time time = new MockTime(Duration.ofSeconds(1).toMillis());
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, singletonMap(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
+        ConsumerPartitionAssignor assignor = new RangeAssignor();
+        client.createPendingAuthenticationError(node, 0);
+        final KafkaConsumer<String, String> consumer
+            = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp0, new OffsetAndMetadata(10L));
+
+        try {
+            consumer.commitSync(offsets);
+        } catch (final RuntimeException e) {
+        }
+
+        final Metric metric = consumer.metrics()
+            .get(consumer.metrics.metricName("commit-sync-time-total", "consumer-metrics"));
+        assertTrue((Double)metric.metricValue() >= Duration.ofMillis(999).toNanos());
+    }
+
+    @Test
+    public void testMeasureCommittedDuration() {
+        // use a consumer that will throw to ensure we return quickly
+        Time time = new MockTime(Duration.ofSeconds(1).toMillis());
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, singletonMap(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
+        ConsumerPartitionAssignor assignor = new RangeAssignor();
+        client.createPendingAuthenticationError(node, 0);
+        final KafkaConsumer<String, String> consumer
+            = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+
+        try {
+            consumer.committed(Collections.singleton(tp0));
+        } catch (final RuntimeException e) {
+        }
+
+        final Metric metric = consumer.metrics()
+            .get(consumer.metrics.metricName("committed-time-total", "consumer-metrics"));
+        assertTrue((Double)metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
     @Test

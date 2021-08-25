@@ -17,11 +17,12 @@
 
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.Map;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
+
+import java.util.Map;
 
 public class KafkaProducerMetrics implements AutoCloseable {
 
@@ -34,24 +35,24 @@ public class KafkaProducerMetrics implements AutoCloseable {
     private static final String TXN_ABORT = "txn-abort";
     private static final String TOTAL_TIME_SUFFIX = "-time-total";
 
-    final Map<String, String> tags;
-    final Metrics metrics;
-    final Sensor initTimeSensor;
-    final Sensor beginTxnTimeSensor;
-    final Sensor flushTimeSensor;
-    final Sensor sendOffsetsSensor;
-    final Sensor commitTxnSensor;
-    final Sensor abortTxnSensor;
+    private final Map<String, String> tags;
+    private final Metrics metrics;
+    private final Sensor initTimeSensor;
+    private final Sensor beginTxnTimeSensor;
+    private final Sensor flushTimeSensor;
+    private final Sensor sendOffsetsSensor;
+    private final Sensor commitTxnSensor;
+    private final Sensor abortTxnSensor;
 
     public KafkaProducerMetrics(Metrics metrics) {
         this.metrics = metrics;
-        this.tags = this.metrics.config().tags();
-        this.flushTimeSensor = newLatencySensor(FLUSH);
-        this.initTimeSensor = newLatencySensor(TXN_INIT);
-        this.beginTxnTimeSensor = newLatencySensor(TXN_BEGIN);
-        this.sendOffsetsSensor = newLatencySensor(TXN_SEND_OFFSETS);
-        this.commitTxnSensor = newLatencySensor(TXN_COMMIT);
-        this.abortTxnSensor = newLatencySensor(TXN_ABORT);
+        tags = this.metrics.config().tags();
+        flushTimeSensor = newLatencySensor(FLUSH);
+        initTimeSensor = newLatencySensor(TXN_INIT);
+        beginTxnTimeSensor = newLatencySensor(TXN_BEGIN);
+        sendOffsetsSensor = newLatencySensor(TXN_SEND_OFFSETS);
+        commitTxnSensor = newLatencySensor(TXN_COMMIT);
+        abortTxnSensor = newLatencySensor(TXN_ABORT);
     }
 
     @Override

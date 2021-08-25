@@ -704,11 +704,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfInvalidGroupMetadata(groupMetadata);
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        long start = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
         sender.wakeup();
-        long awaitStart = time.nanoseconds();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
-        producerMetrics.recordSendOffsets(time.nanoseconds() - awaitStart);
+        producerMetrics.recordSendOffsets(time.nanoseconds() - start);
     }
 
     /**
@@ -1138,9 +1138,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void flush() {
         log.trace("Flushing accumulated records in producer.");
 
+        long start = time.nanoseconds();
         this.accumulator.beginFlush();
         this.sender.wakeup();
-        long start = time.nanoseconds();
         try {
             this.accumulator.awaitFlushCompletion();
         } catch (InterruptedException e) {

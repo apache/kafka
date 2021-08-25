@@ -1873,15 +1873,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions, final Duration timeout) {
         acquireAndEnsureOpen();
+        long start = time.nanoseconds();
         try {
             maybeThrowInvalidGroupIdException();
             final Map<TopicPartition, OffsetAndMetadata> offsets;
-            long start = time.nanoseconds();
-            try {
-                offsets = coordinator.fetchCommittedOffsets(partitions, time.timer(timeout));
-            } finally {
-                kafkaConsumerMetrics.recordCommitted(time.nanoseconds() - start);
-            }
+            offsets = coordinator.fetchCommittedOffsets(partitions, time.timer(timeout));
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
                     "committed offset for partitions " + partitions + " could be determined. Try tuning default.api.timeout.ms " +
@@ -1891,6 +1887,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 return offsets;
             }
         } finally {
+            kafkaConsumerMetrics.recordCommitted(time.nanoseconds() - start);
             release();
         }
     }
