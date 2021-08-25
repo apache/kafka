@@ -57,8 +57,10 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             }
         }));
 
-        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(numStandbyReplicas,
-                                                                                              statefulTasksWithClients);
+        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(
+            numStandbyReplicas,
+            statefulTasksWithClients
+        );
 
         statefulTasksWithClients.forEach((taskId, clientId) -> assignStandbyTasksForActiveTask(numStandbyReplicas,
                                                                                                taskId,
