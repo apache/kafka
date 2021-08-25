@@ -31,7 +31,6 @@ import org.apache.kafka.test.IntegrationTest;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -52,7 +51,6 @@ public class MetricsReporterIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     // topic names
@@ -64,6 +62,16 @@ public class MetricsReporterIntegrationTest {
 
     @Rule
     public TestName testName = new TestName();
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
 
     @Before
     public void before() throws InterruptedException {
