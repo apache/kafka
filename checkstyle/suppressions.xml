@@ -160,9 +160,6 @@
     <suppress checks="ParameterNumber"
               files="StreamThread.java"/>
 
-    <suppress checks="BooleanExpressionComplexity"
-              files="InMemoryWindowStore.java"/>
-
     <suppress checks="ClassDataAbstractionCoupling"
               files="(KafkaStreams|KStreamImpl|KTableImpl).java"/>
 

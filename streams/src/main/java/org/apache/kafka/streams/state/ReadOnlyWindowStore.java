@@ -128,9 +128,9 @@ public interface ReadOnlyWindowStore<K, V> {
      * This iterator must be closed after use.
      *
      * @param keyFrom     the first key in the range
-     * A null value indicates a starting position from the first element in the store.
+     *                    A null value indicates a starting position from the first element in the store.
      * @param keyTo       the last key in the range
-     * A null value indicates that the range ends with the last element in the store.
+     *                    A null value indicates that the range ends with the last element in the store.
      * @param timeFrom time range start (inclusive), where iteration starts.
      * @param timeTo   time range end (inclusive), where iteration ends.
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
@@ -147,9 +147,9 @@ public interface ReadOnlyWindowStore<K, V> {
      * This iterator must be closed after use.
      *
      * @param keyFrom     the first key in the range
-     * A null value indicates a starting position from the first element in the store.
+     *                    A null value indicates a starting position from the first element in the store.
      * @param keyTo       the last key in the range
-     * A null value indicates that the range ends with the last element in the store.
+     *                    A null value indicates that the range ends with the last element in the store.
      * @param timeFrom time range start (inclusive), where iteration ends.
      * @param timeTo   time range end (inclusive), where iteration starts.
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from end to beginning of time.

@@ -117,9 +117,9 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * This iterator must be closed after use.
      *
      * @param keyFrom     the first key in the range
-     * A null value indicates a starting position from the first element in the store.
+     *                    A null value indicates a starting position from the first element in the store.
      * @param keyTo       the last key in the range
-     * A null value indicates that the range ends with the last element in the store.
+     *                    A null value indicates that the range ends with the last element in the store.
      * @param timeFrom time range start (inclusive)
      * @param timeTo   time range end (inclusive)
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}

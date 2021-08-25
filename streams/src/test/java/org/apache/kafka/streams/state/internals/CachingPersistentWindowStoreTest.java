@@ -54,6 +54,7 @@ import org.junit.Test;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -64,6 +65,7 @@ import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.verifyAllWindowedKeyValues;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -284,15 +286,14 @@ public class CachingPersistentWindowStoreTest {
 
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
                  cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP))) {
-            verifyWindowedKeyValue(
-                iterator.next(),
+            final List<Windowed<Bytes>> expectedKeys = Arrays.asList(
                 new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-                "a");
-            verifyWindowedKeyValue(
-                iterator.next(),
-                new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-                "b");
-            assertFalse(iterator.hasNext());
+                new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE))
+            );
+
+            final List<String> expectedValues = Arrays.asList("a", "b");
+
+            verifyAllWindowedKeyValues(iterator, expectedKeys, expectedValues);
             assertEquals(2, cache.size());
         }
     }
@@ -307,23 +308,16 @@ public class CachingPersistentWindowStoreTest {
 
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
                  cachingStore.fetch(null, bytesKey("d"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20L))) {
-            verifyWindowedKeyValue(
-                iterator.next(),
+            final List<Windowed<Bytes>> expectedKeys = Arrays.asList(
                 new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-                "a");
-            verifyWindowedKeyValue(
-                iterator.next(),
                 new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-                "b");
-            verifyWindowedKeyValue(
-                iterator.next(),
                 new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE)),
-                "c");
-            verifyWindowedKeyValue(
-                iterator.next(),
-                new Windowed<>(bytesKey("d"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
-                "d");
-            assertFalse(iterator.hasNext());
+                new Windowed<>(bytesKey("d"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE))
+            );
+
+            final List<String> expectedValues = Arrays.asList("a", "b", "c", "d");
+
+            verifyAllWindowedKeyValues(iterator, expectedKeys, expectedValues);
         }
     }
 
@@ -337,23 +331,16 @@ public class CachingPersistentWindowStoreTest {
 
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
                  cachingStore.fetch(bytesKey("b"), null, ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20L))) {
-            verifyWindowedKeyValue(
-                iterator.next(),
+            final List<Windowed<Bytes>> expectedKeys = Arrays.asList(
                 new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-                "b");
-            verifyWindowedKeyValue(
-                iterator.next(),
                 new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE)),
-                "c");
-            verifyWindowedKeyValue(
-                iterator.next(),
                 new Windowed<>(bytesKey("d"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
-                "d");
-            verifyWindowedKeyValue(
-                iterator.next(),
-                new Windowed<>(bytesKey("e"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
-                "e");
-            assertFalse(iterator.hasNext());
+                new Windowed<>(bytesKey("e"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE))
+            );
+
+            final List<String> expectedValues = Arrays.asList("b", "c", "d", "e");
+
+            verifyAllWindowedKeyValues(iterator, expectedKeys, expectedValues);
         }
     }
 
@@ -367,27 +354,17 @@ public class CachingPersistentWindowStoreTest {
 
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
                  cachingStore.fetch(null, null, ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20L))) {
-            verifyWindowedKeyValue(
-                iterator.next(),
+            final List<Windowed<Bytes>> expectedKeys = Arrays.asList(
                 new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-                "a");
-            verifyWindowedKeyValue(
-                iterator.next(),
                 new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-                "b");
-            verifyWindowedKeyValue(
-                iterator.next(),
                 new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE)),
-                "c");
-            verifyWindowedKeyValue(
-                iterator.next(),
                 new Windowed<>(bytesKey("d"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
-                "d");
-            verifyWindowedKeyValue(
-                iterator.next(),
-                new Windowed<>(bytesKey("e"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
-                "e");
-            assertFalse(iterator.hasNext());
+                new Windowed<>(bytesKey("e"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE))
+            );
+
+            final List<String> expectedValues = Arrays.asList("a", "b", "c", "d", "e");
+
+            verifyAllWindowedKeyValues(iterator, expectedKeys, expectedValues);
         }
     }
 
@@ -401,19 +378,15 @@ public class CachingPersistentWindowStoreTest {
 
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
                  cachingStore.backwardFetch(null, bytesKey("c"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20L))) {
-            verifyWindowedKeyValue(
-                iterator.next(),
+            final List<Windowed<Bytes>> expectedKeys = Arrays.asList(
                 new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE)),
-                "c");
-            verifyWindowedKeyValue(
-                iterator.next(),
                 new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-                "b");
-            verifyWindowedKeyValue(
-                iterator.next(),
-                new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-                "a");
-            assertFalse(iterator.hasNext());
+                new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE))
+            );
+
+            final List<String> expectedValues = Arrays.asList("c", "b", "a");
+
+            verifyAllWindowedKeyValues(iterator, expectedKeys, expectedValues);
         }
     }
 
@@ -427,19 +400,15 @@ public class CachingPersistentWindowStoreTest {
 
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
                  cachingStore.backwardFetch(bytesKey("c"), null, ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20L))) {
-            verifyWindowedKeyValue(
-                iterator.next(),
+            final List<Windowed<Bytes>> expectedKeys = Arrays.asList(
                 new Windowed<>(bytesKey("e"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
-                "e");
-            verifyWindowedKeyValue(
-                iterator.next(),
                 new Windowed<>(bytesKey("d"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
-                "d");
-            verifyWindowedKeyValue(
-                iterator.next(),
-                new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE)),
-                "c");
-            assertFalse(iterator.hasNext());
+                new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE))
+            );
+
+            final List<String> expectedValues = Arrays.asList("e", "d", "c");
+
+            verifyAllWindowedKeyValues(iterator, expectedKeys, expectedValues);
         }
     }
 
@@ -453,27 +422,17 @@ public class CachingPersistentWindowStoreTest {
 
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
                  cachingStore.backwardFetch(null, null, ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20L))) {
-            verifyWindowedKeyValue(
-                iterator.next(),
+            final List<Windowed<Bytes>> expectedKeys = Arrays.asList(
                 new Windowed<>(bytesKey("e"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
-                "e");
-            verifyWindowedKeyValue(
-                iterator.next(),
                 new Windowed<>(bytesKey("d"), new TimeWindow(DEFAULT_TIMESTAMP + 20L, DEFAULT_TIMESTAMP + 20L + WINDOW_SIZE)),
-                "d");
-            verifyWindowedKeyValue(
-                iterator.next(),
                 new Windowed<>(bytesKey("c"), new TimeWindow(DEFAULT_TIMESTAMP + 10L, DEFAULT_TIMESTAMP + 10L + WINDOW_SIZE)),
-                "c");
-            verifyWindowedKeyValue(
-                iterator.next(),
                 new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-                "b");
-            verifyWindowedKeyValue(
-                iterator.next(),
-                new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-                "a");
-            assertFalse(iterator.hasNext());
+                new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE))
+            );
+
+            final List<String> expectedValues = Arrays.asList("e", "d", "c", "b", "a");
+
+            verifyAllWindowedKeyValues(iterator, expectedKeys, expectedValues);
         }
     }
 
