@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import static java.util.stream.Collectors.toMap;
+import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.computeTasksToRemainingStandbys;
 
 class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(DefaultStandbyTaskAssignor.class);
@@ -35,8 +35,8 @@ class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
                           final Set<TaskId> statefulTaskIds,
                           final AssignorConfiguration.AssignmentConfigs configs) {
         final int numStandbyReplicas = configs.numStandbyReplicas;
-        final Map<TaskId, Integer> tasksToRemainingStandbys =
-            statefulTaskIds.stream().collect(toMap(task -> task, t -> numStandbyReplicas));
+        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(numStandbyReplicas,
+                                                                                              statefulTaskIds);
 
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
             (client, task) -> !clients.get(client).hasAssignedTask(task),
