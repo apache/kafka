@@ -397,6 +397,34 @@ public class NamedTopologyIntegrationTest {
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
         CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
     }
+
+    @Test
+    public void shouldAddToEmptyInitialTopologyRemoveThenAddNewNamedTopology() throws Exception {
+        CLUSTER.createTopics(SUM_OUTPUT, COUNT_OUTPUT);
+        // Build up named topology with two stateful subtopologies
+        final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
+        inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
+        inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+        streams = new KafkaStreamsNamedTopologyWrapper(props, clientSupplier);
+        streams.start();
+        streams.addNamedTopology(topology1Builder.buildNamedTopology(props));
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+        streams.removeNamedTopology("topology-1");
+        streams.cleanUpNamedTopology("topology-1");
+
+        final KStream<String, Long> inputStream2 = topology1Builder2.stream(INPUT_STREAM_1);
+        inputStream2.groupByKey().count().toStream().to(COUNT_OUTPUT);
+        inputStream2.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+
+        produceToInputTopics(DELAYED_INPUT_STREAM_1, STANDARD_INPUT_DATA);
+        streams.addNamedTopology(topology1Builder2.buildNamedTopology(props));
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+        CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
+    }
     
     @Test
     public void shouldAllowPatternSubscriptionWithMultipleNamedTopologies() throws Exception {
