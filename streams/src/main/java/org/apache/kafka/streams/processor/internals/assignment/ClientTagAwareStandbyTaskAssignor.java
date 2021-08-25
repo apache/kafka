@@ -140,11 +140,13 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         usedClients.add(activeTaskClient);
 
         while (numRemainingStandbys > 0) {
-            final Set<UUID> clientsOnAlreadyUsedTagDimensions = findClientsOnUsedTagDimensions(usedClients,
-                                                                                               rackAwareAssignmentTags,
-                                                                                               clientStates,
-                                                                                               clientsPerTagValue,
-                                                                                               tagKeyToTagValuesMapping);
+            final Set<UUID> clientsOnAlreadyUsedTagDimensions = findClientsOnUsedTagDimensions(
+                usedClients,
+                rackAwareAssignmentTags,
+                clientStates,
+                clientsPerTagValue,
+                tagKeyToTagValuesMapping
+            );
 
             final UUID polledClient = standbyTaskClientsByTaskLoad.poll(
                 activeTaskId, uuid -> !clientsOnAlreadyUsedTagDimensions.contains(uuid)
