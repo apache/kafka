@@ -2344,17 +2344,17 @@ class KafkaController(val config: KafkaConfig,
               debug(s"ISR for partition $partition updated to [${updatedIsr.isr.mkString(",")}] and zkVersion updated to [${updatedIsr.zkVersion}]")
               partitionResponses(partition) = Right(updatedIsr)
               Some(partition -> updatedIsr)
-            case Left(error) =>
-              this.error(s"Failed to update ISR for partition $partition", error)
-              partitionResponses(partition) = Left(Errors.forException(error))
+            case Left(err) =>
+              error(s"Failed to update ISR for partition $partition", err)
+              partitionResponses(partition) = Left(Errors.forException(err))
               None
           }
       }
 
-      badVersionUpdates.foreach(partition => {
+      badVersionUpdates.foreach { partition =>
         info(s"Failed to update ISR to ${adjustedIsrs(partition)} for partition $partition, bad ZK version.")
         partitionResponses(partition) = Left(Errors.INVALID_UPDATE_VERSION)
-      })
+      }
 
       def processUpdateNotifications(partitions: Seq[TopicPartition]): Unit = {
         val liveBrokers: Seq[Int] = controllerContext.liveOrShuttingDownBrokerIds.toSeq
