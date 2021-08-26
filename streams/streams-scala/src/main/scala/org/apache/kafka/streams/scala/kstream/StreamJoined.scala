@@ -35,9 +35,11 @@ object StreamJoined {
    * @param otherValueSerde the otherValue serde to use. If `null` the default value serde from config will be used
    * @return new [[StreamJoined]] instance with the provided serdes
    */
-  def `with`[K, V, VO](implicit keySerde: Serde[K],
-                       valueSerde: Serde[V],
-                       otherValueSerde: Serde[VO]): StreamJoinedJ[K, V, VO] =
+  def `with`[K, V, VO](implicit
+    keySerde: Serde[K],
+    valueSerde: Serde[V],
+    otherValueSerde: Serde[VO]
+  ): StreamJoinedJ[K, V, VO] =
     StreamJoinedJ.`with`(keySerde, valueSerde, otherValueSerde)
 
   /**

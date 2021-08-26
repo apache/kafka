@@ -19,9 +19,8 @@ package kafka.server.epoch
 
 import java.io.{File, RandomAccessFile}
 import java.util.Properties
-
 import kafka.api.ApiVersion
-import kafka.log.Log
+import kafka.log.{UnifiedLog, LogLoader}
 import kafka.server.KafkaConfig._
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.tools.DumpLogSegments
@@ -153,7 +152,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     broker100.shutdown()
 
     //Delete the clean shutdown file to simulate crash
-    new File(broker100.config.logDirs.head, Log.CleanShutdownFile).delete()
+    new File(broker100.config.logDirs.head, LogLoader.CleanShutdownFile).delete()
 
     //Delete 5 messages from the leader's log on 100
     deleteMessagesFromLogFile(5 * msg.length, broker100, 0)
@@ -200,7 +199,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers.foreach { b => b.shutdown() }
 
     //Delete the clean shutdown file to simulate crash
-    new File(brokers(0).config.logDirs(0), Log.CleanShutdownFile).delete()
+    new File(brokers(0).config.logDirs(0), LogLoader.CleanShutdownFile).delete()
 
     //Delete half the messages from the log file
     deleteMessagesFromLogFile(getLogFile(brokers(0), 0).length() / 2, brokers(0), 0)
@@ -419,12 +418,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   }
 
   private def getLogFile(broker: KafkaServer, partition: Int): File = {
-    val log: Log = getLog(broker, partition)
+    val log: UnifiedLog = getLog(broker, partition)
     log.flush()
     log.dir.listFiles.filter(_.getName.endsWith(".log"))(0)
   }
 
-  private def getLog(broker: KafkaServer, partition: Int): Log = {
+  private def getLog(broker: KafkaServer, partition: Int): UnifiedLog = {
     broker.logManager.getLog(new TopicPartition(topic, partition)).orNull
   }
 
@@ -466,8 +465,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
   private def createBroker(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
     val config = createBrokerConfig(id, zkConnect)
-    config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, apiVersion.version)
-    config.setProperty(KafkaConfig.LogMessageFormatVersionProp, apiVersion.version)
+    TestUtils.setIbpAndMessageFormatVersions(config, apiVersion)
     config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
     createServer(fromProps(config))
   }

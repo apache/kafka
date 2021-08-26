@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Collection;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V> {
+public class KTablePassThrough<KIn, VIn> implements KTableNewProcessorSupplier<KIn, VIn, KIn, VIn> {
     private final Collection<KStreamAggProcessorSupplier> parents;
     private final String storeName;
 
@@ -33,7 +35,7 @@ public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V>
     }
 
     @Override
-    public org.apache.kafka.streams.processor.Processor<K, Change<V>> get() {
+    public Processor<KIn, Change<VIn>, KIn, Change<VIn>> get() {
         return new KTablePassThroughProcessor();
     }
 
@@ -47,11 +49,11 @@ public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V>
     }
 
     @Override
-    public KTableValueGetterSupplier<K, V> view() {
+    public KTableValueGetterSupplier<KIn, VIn> view() {
 
-        return new KTableValueGetterSupplier<K, V>() {
+        return new KTableValueGetterSupplier<KIn, VIn>() {
 
-            public KTableValueGetter<K, V> get() {
+            public KTableValueGetter<KIn, VIn> get() {
                 return new KTablePassThroughValueGetter();
             }
 
@@ -62,15 +64,22 @@ public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V>
         };
     }
 
-    private class KTablePassThroughProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, Change<V>> {
+    private class KTablePassThroughProcessor implements Processor<KIn, Change<VIn>, KIn, Change<VIn>> {
+        private ProcessorContext<KIn, Change<VIn>> context;
+
         @Override
-        public void process(final K key, final Change<V> value) {
-            context().forward(key, value);
+        public void init(final ProcessorContext<KIn, Change<VIn>> context) {
+            this.context = context;
+        }
+
+        @Override
+        public void process(final Record<KIn, Change<VIn>> record) {
+            context.forward(record);
         }
     }
 
-    private class KTablePassThroughValueGetter implements KTableValueGetter<K, V> {
-        private TimestampedKeyValueStore<K, V> store;
+    private class KTablePassThroughValueGetter implements KTableValueGetter<KIn, VIn> {
+        private TimestampedKeyValueStore<KIn, VIn> store;
 
         @Override
         public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
@@ -78,7 +87,7 @@ public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V>
         }
 
         @Override
-        public ValueAndTimestamp<V> get(final K key) {
+        public ValueAndTimestamp<VIn> get(final KIn key) {
             return store.get(key);
         }
 

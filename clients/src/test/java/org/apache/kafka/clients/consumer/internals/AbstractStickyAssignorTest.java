@@ -34,10 +34,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import static java.util.Collections.emptyList;
+import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public abstract class AbstractStickyAssignorTest {
@@ -56,6 +59,8 @@ public abstract class AbstractStickyAssignorTest {
     protected abstract AbstractStickyAssignor createAssignor();
 
     protected abstract Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions);
+
+    protected abstract Subscription buildSubscriptionWithGeneration(List<String> topics, List<TopicPartition> partitions, int generation);
 
     @BeforeEach
     public void setUp() {
@@ -76,6 +81,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -91,6 +97,7 @@ public abstract class AbstractStickyAssignorTest {
 
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -104,6 +111,7 @@ public abstract class AbstractStickyAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -124,6 +132,7 @@ public abstract class AbstractStickyAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 0), tp(topic, 1)), assignment.get(consumerId));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -138,6 +147,7 @@ public abstract class AbstractStickyAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic1, 0), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumerId));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -152,6 +162,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer2, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -168,6 +179,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 0)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic, 1)), assignment.get(consumer2));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -187,6 +199,7 @@ public abstract class AbstractStickyAssignorTest {
         assertEquals(partitions(tp(topic1, 0), tp(topic1, 2)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic2, 0), tp(topic2, 1)), assignment.get(consumer2));
         assertEquals(partitions(tp(topic1, 1)), assignment.get(consumer3));
+        assertNull(assignor.partitionsTransferringOwnership);
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -204,6 +217,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic1, 0), tp(topic1, 2), tp(topic2, 1)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic1, 1), tp(topic2, 0), tp(topic2, 2)), assignment.get(consumer2));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -228,6 +242,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic1, 0), tp(topic2, 1), tp(topic2, 0)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic1, 1), tp(topic2, 2)), assignment.get(consumer2));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -251,6 +266,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer3, buildSubscription(subscribedTopics, Collections.emptyList()));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(Collections.singletonMap(tp(topic2, 0), consumer3), assignor.partitionsTransferringOwnership);
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertEquals(partitions(tp(topic1, 0)), assignment.get(consumer1));
@@ -264,7 +280,7 @@ public abstract class AbstractStickyAssignorTest {
      * This unit test is testing all consumers owned less than minQuota partitions situation
      */
     @Test
-    public void testAllConsumerAreUnderMinQuota() {
+    public void testAllConsumersAreUnderMinQuota() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 2);
         partitionsPerTopic.put(topic2, 3);
@@ -278,11 +294,12 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer3, buildSubscription(subscribedTopics, Collections.emptyList()));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
-        assertEquals(partitions(tp(topic1, 0), tp(topic2, 0)), assignment.get(consumer1));
-        assertEquals(partitions(tp(topic1, 1), tp(topic2, 1)), assignment.get(consumer2));
-        assertEquals(partitions(tp(topic2, 2)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic1, 0), tp(topic2, 1)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, 1), tp(topic2, 2)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic2, 0)), assignment.get(consumer3));
 
         assertTrue(isFullyBalanced(assignment));
     }
@@ -302,6 +319,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer1, buildSubscription(topics(topic), assignment.get(consumer1)));
         subscriptions.put(consumer2, buildSubscription(topics(topic), Collections.emptyList()));
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(Collections.singletonMap(tp(topic, 2), consumer2), assignor.partitionsTransferringOwnership);
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertEquals(partitions(tp(topic, 0), tp(topic, 1)), assignment.get(consumer1));
@@ -313,6 +331,7 @@ public abstract class AbstractStickyAssignorTest {
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(new HashSet<>(partitions(tp(topic, 2), tp(topic, 1), tp(topic, 0))),
             new HashSet<>(assignment.get(consumer2)));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -331,6 +350,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic1, 0), tp(topic1, 2), tp(topic2, 1), tp(topic2, 3)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic1, 1), tp(topic2, 0), tp(topic2, 2)), assignment.get(consumer2));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -341,6 +361,12 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer3, buildSubscription(allTopics, Collections.emptyList()));
         subscriptions.put(consumer4, buildSubscription(allTopics, Collections.emptyList()));
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
+
+        Map<TopicPartition, String> expectedPartitionsTransferringOwnership = new HashMap<>();
+        expectedPartitionsTransferringOwnership.put(tp(topic2, 1), consumer3);
+        expectedPartitionsTransferringOwnership.put(tp(topic2, 3), consumer3);
+        expectedPartitionsTransferringOwnership.put(tp(topic2, 2), consumer4);
+        assertEquals(expectedPartitionsTransferringOwnership, assignor.partitionsTransferringOwnership);
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertEquals(partitions(tp(topic1, 0), tp(topic1, 2)), assignment.get(consumer1));
@@ -355,8 +381,10 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer3, buildSubscription(allTopics, assignment.get(consumer3)));
         subscriptions.put(consumer4, buildSubscription(allTopics, assignment.get(consumer4)));
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp(topic2, 1), tp(topic2, 3), tp(topic1, 0), tp(topic1, 2)), assignment.get(consumer3));
-        assertEquals(partitions(tp(topic2, 2), tp(topic1, 1), tp(topic2, 0)), assignment.get(consumer4));
+        assertEquals(partitions(tp(topic2, 1), tp(topic2, 3), tp(topic1, 0), tp(topic2, 0)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic2, 2), tp(topic1, 1), tp(topic1, 2)), assignment.get(consumer4));
+
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -408,6 +436,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer2, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         // verify balance
         assertTrue(isFullyBalanced(assignment));
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
@@ -422,6 +451,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer2, buildSubscription(topics(topic, topic2), assignment.get(consumer2)));
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         // verify balance
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -437,6 +467,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer2, buildSubscription(topics(topic2), assignment.get(consumer2)));
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         // verify balance
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -448,7 +479,6 @@ public abstract class AbstractStickyAssignorTest {
         assertTrue(consumer1assignment.containsAll(consumer1Assignment3));
         assertTrue(consumer2assignment.containsAll(consumer2Assignment3));
     }
-
 
     @Test
     public void testReassignmentAfterOneConsumerLeaves() {
@@ -489,12 +519,14 @@ public abstract class AbstractStickyAssignorTest {
                 new Subscription(topics("topic")));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
         // add a new consumer
         subscriptions.put(getConsumerName(10, 10), new Subscription(topics("topic")));
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
     }
 
@@ -512,6 +544,7 @@ public abstract class AbstractStickyAssignorTest {
         }
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
         for (int i = 1; i < 9; i++) {
@@ -522,6 +555,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.remove(getConsumerName(5, 9));
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
     }
 
@@ -555,7 +589,7 @@ public abstract class AbstractStickyAssignorTest {
         assignor.assign(partitionsPerTopic, subscriptions);
     }
 
-    @Timeout(40)
+    @Timeout(60)
     @Test
     public void testLargeAssignmentAndGroupWithNonEqualSubscription() {
         // 1 million partitions!
@@ -671,6 +705,7 @@ public abstract class AbstractStickyAssignorTest {
                 partitions(tp(topic4, 0), tp(topic5, 0), tp(topic6, 0))));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertNull(assignor.partitionsTransferringOwnership);
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
     }
 
@@ -685,6 +720,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer4, new Subscription(topics(topic1)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         Map<String, TopicPartition> partitionsAssigned = new HashMap<>();
 
@@ -709,6 +745,7 @@ public abstract class AbstractStickyAssignorTest {
 
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
         assignments = assignment.entrySet();
@@ -729,6 +766,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic1, topic2, topic3)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         assertEquals(assignment.values().stream().mapToInt(List::size).sum(), 1 + 100);
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(isFullyBalanced(assignment));
@@ -740,9 +778,11 @@ public abstract class AbstractStickyAssignorTest {
         partitionsPerTopic.put(topic, 3);
         subscriptions.put(consumerId, new Subscription(topics(topic)));
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         subscriptions.put(consumerId, buildSubscription(topics(topic), assignment.get(consumerId)));
 
         assignment = assignor.assign(Collections.emptyMap(), subscriptions);
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         assertEquals(assignment.size(), 1);
         assertTrue(assignment.get(consumerId).isEmpty());
     }
@@ -788,6 +828,86 @@ public abstract class AbstractStickyAssignorTest {
             verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
             assertTrue(assignor.isSticky());
         }
+    }
+
+    @Test
+    public void testAllConsumersReachExpectedQuotaAndAreConsideredFilled() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 4);
+
+        subscriptions.put(consumer1, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 1))));
+        subscriptions.put(consumer2, buildSubscription(topics(topic), partitions(tp(topic, 2))));
+        subscriptions.put(consumer3, buildSubscription(topics(topic), Collections.emptyList()));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(partitions(tp(topic, 0), tp(topic, 1)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic, 2)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic, 3)), assignment.get(consumer3));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    @Test
+    public void testOwnedPartitionsAreInvalidatedForConsumerWithStaleGeneration() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 3);
+        partitionsPerTopic.put(topic2, 3);
+
+        int currentGeneration = 10;
+
+        subscriptions.put(consumer1, buildSubscriptionWithGeneration(topics(topic, topic2), partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1)), currentGeneration));
+        subscriptions.put(consumer2, buildSubscriptionWithGeneration(topics(topic, topic2), partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1)), currentGeneration - 1));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(new HashSet<>(partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1))), new HashSet<>(assignment.get(consumer1)));
+        assertEquals(new HashSet<>(partitions(tp(topic, 1), tp(topic2, 0), tp(topic2, 2))), new HashSet<>(assignment.get(consumer2)));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    @Test
+    public void testOwnedPartitionsAreInvalidatedForConsumerWithNoGeneration() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 3);
+        partitionsPerTopic.put(topic2, 3);
+
+        int currentGeneration = 10;
+
+        subscriptions.put(consumer1, buildSubscriptionWithGeneration(topics(topic, topic2), partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1)), currentGeneration));
+        subscriptions.put(consumer2, buildSubscriptionWithGeneration(topics(topic, topic2), partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1)), DEFAULT_GENERATION));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(new HashSet<>(partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1))), new HashSet<>(assignment.get(consumer1)));
+        assertEquals(new HashSet<>(partitions(tp(topic, 1), tp(topic2, 0), tp(topic2, 2))), new HashSet<>(assignment.get(consumer2)));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    @Test
+    public void testPartitionsTransferringOwnershipIncludeThePartitionClaimedByMultipleConsumersInSameGeneration() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 3);
+
+        // partition topic-0 is owned by multiple consumer
+        subscriptions.put(consumer1, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 1))));
+        subscriptions.put(consumer2, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 2))));
+        subscriptions.put(consumer3, buildSubscription(topics(topic), emptyList()));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        // we should include the partitions claimed by multiple consumers in partitionsTransferringOwnership
+        assertEquals(Collections.singletonMap(tp(topic, 0), consumer3), assignor.partitionsTransferringOwnership);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertEquals(partitions(tp(topic, 1)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic, 2)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic, 0)), assignment.get(consumer3));
+        assertTrue(isFullyBalanced(assignment));
     }
 
     private String getTopicName(int i, int maxNum) {
