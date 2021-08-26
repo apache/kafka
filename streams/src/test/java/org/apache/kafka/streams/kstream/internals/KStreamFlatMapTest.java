@@ -37,6 +37,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Properties;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
@@ -92,8 +94,8 @@ public class KStreamFlatMapTest {
     @Test
     public void testKeyValueMapperResultNotNull() {
         final KStreamFlatMap<String, Integer, String, Integer> supplier = new KStreamFlatMap<>((key, value) -> null);
-        final Record<String, Integer> record = new Record<>("K", 0, 0L);
-        final Throwable throwable = assertThrows(NullPointerException.class, () -> supplier.get().process(record));
-        assertEquals(throwable.getMessage(), String.format("KeyValueMapper can't return null from mapping the record: %s", record));
+        final Throwable throwable = assertThrows(NullPointerException.class,
+                () -> supplier.get().process(new Record<>("K", 0, 0L)));
+        assertThat(throwable.getMessage(), is("The provided KeyValueMapper returned null which is not allowed."));
     }
 }
