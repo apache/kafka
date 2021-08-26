@@ -361,7 +361,7 @@ public class TransactionalMessageCopier {
                             numMessagesProcessedSinceLastRebalance.getAndAdd(messagesSentWithinCurrentTxn);
                             totalMessageProcessed.getAndAdd(messagesSentWithinCurrentTxn);
                         }
-                    } catch (ProducerFencedException | FencedInstanceIdException e) {
+                    } catch (ProducerFencedException e) {
                         // We cannot recover from these errors, so just rethrow them and let the process fail
                         throw e;
                     } catch (KafkaException e) {
