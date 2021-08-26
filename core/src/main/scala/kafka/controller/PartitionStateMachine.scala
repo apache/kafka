@@ -437,6 +437,11 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       }
     }
 
+    updatesToRetry.foreach { partition =>
+      debug(s"Controller failed to elect leader for partition $partition. " +
+        s"Attempted to write state ${adjustedLeaderAndIsrs(partition)}, but failed with bad ZK version. This will be retried.")
+    }
+
     (finishedUpdates ++ failedElections, updatesToRetry)
   }
 
