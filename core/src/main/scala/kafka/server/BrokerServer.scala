@@ -218,7 +218,8 @@ class BrokerServer(
         config,
         channelName = "forwarding",
         threadNamePrefix,
-        retryTimeoutMs = 60000
+        retryTimeoutMs = 60000,
+        ListenerType.BROKER
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
@@ -246,7 +247,8 @@ class BrokerServer(
         config,
         channelName = "alterIsr",
         threadNamePrefix,
-        retryTimeoutMs = Long.MaxValue
+        retryTimeoutMs = Long.MaxValue,
+        ListenerType.BROKER
       )
       alterIsrManager = new DefaultAlterIsrManager(
         controllerChannelManager = alterIsrChannelManager,
@@ -333,7 +335,7 @@ class BrokerServer(
       }
       lifecycleManager.start(() => metadataListener.highestMetadataOffset,
         BrokerToControllerChannelManager(controllerNodeProvider, time, metrics, config,
-          "heartbeat", threadNamePrefix, config.brokerSessionTimeoutMs.toLong),
+          "heartbeat", threadNamePrefix, config.brokerSessionTimeoutMs.toLong, ListenerType.BROKER),
         metaProps.clusterId, networkListeners, supportedFeatures)
 
       // Register a listener with the Raft layer to receive metadata event notifications

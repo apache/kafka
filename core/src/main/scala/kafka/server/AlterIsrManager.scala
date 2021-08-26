@@ -27,7 +27,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OperationNotAttemptedException
-import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
+import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData, ApiMessageType}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterIsrRequest, AlterIsrResponse}
@@ -86,7 +86,8 @@ object AlterIsrManager {
       config = config,
       channelName = "alterIsr",
       threadNamePrefix = threadNamePrefix,
-      retryTimeoutMs = Long.MaxValue
+      retryTimeoutMs = Long.MaxValue,
+      ApiMessageType.ListenerType.ZK_BROKER
     )
     new DefaultAlterIsrManager(
       controllerChannelManager = channelManager,

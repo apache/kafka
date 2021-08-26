@@ -19,16 +19,16 @@ package kafka.server
 
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.atomic.AtomicReference
-
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.raft.RaftManager
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.message.ApiMessageType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.AbstractRequest
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{AbstractRequest, ApiVersionsResponse}
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
@@ -119,7 +119,8 @@ object BrokerToControllerChannelManager {
     config: KafkaConfig,
     channelName: String,
     threadNamePrefix: Option[String],
-    retryTimeoutMs: Long
+    retryTimeoutMs: Long,
+    controllerBrokerType: ApiMessageType.ListenerType
   ): BrokerToControllerChannelManager = {
     new BrokerToControllerChannelManagerImpl(
       controllerNodeProvider,
@@ -128,7 +129,8 @@ object BrokerToControllerChannelManager {
       config,
       channelName,
       threadNamePrefix,
-      retryTimeoutMs
+      retryTimeoutMs,
+      controllerBrokerType
     )
   }
 }
@@ -159,12 +161,13 @@ class BrokerToControllerChannelManagerImpl(
   config: KafkaConfig,
   channelName: String,
   threadNamePrefix: Option[String],
-  retryTimeoutMs: Long
+  retryTimeoutMs: Long,
+  controllerBrokerType: ApiMessageType.ListenerType
 ) extends BrokerToControllerChannelManager with Logging {
   private val logContext = new LogContext(s"[BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
-  private val currentNodeApiVersions = NodeApiVersions.create()
+  private val currentNodeControllerApiVersions = new NodeApiVersions(ApiKeys.apisForListener(controllerBrokerType).asScala.map(ApiVersionsResponse.toApiVersion).asJava)
   private val requestThread = newRequestThread
 
   def start(): Unit = {
@@ -253,7 +256,7 @@ class BrokerToControllerChannelManagerImpl(
   def controllerApiVersions(): Option[NodeApiVersions] =
     requestThread.activeControllerAddress().flatMap(
       activeController => if (activeController.id() == config.brokerId)
-        Some(currentNodeApiVersions)
+        Some(currentNodeControllerApiVersions)
       else
         Option(apiVersions.get(activeController.idString()))
   )
