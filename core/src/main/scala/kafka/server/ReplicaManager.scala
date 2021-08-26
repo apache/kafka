@@ -587,10 +587,10 @@ class ReplicaManager(val config: KafkaConfig,
                     recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
-      val sTime = time.milliseconds
+      val currentTimeMs = time.milliseconds
       val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
         origin, entriesPerPartition, requiredAcks, requestLocal)
-      debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
+      debug("Produce to local log in %d ms".format(time.milliseconds - currentTimeMs))
 
       val produceStatus = localProduceResults.map { case (topicPartition, result) =>
         topicPartition -> ProducePartitionStatus(
