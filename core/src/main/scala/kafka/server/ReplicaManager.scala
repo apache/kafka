@@ -2209,7 +2209,6 @@ class ReplicaManager(val config: KafkaConfig,
             // to an empty Partition object. We need to map this topic-partition to OfflinePartition instead.
             markPartitionOffline(tp)
 
-
           case e: Throwable =>
             stateChangeLogger.error(s"Unable to start fetching $tp " +
               s"with topic ID ${info.topicId} due to ${e.getClass.getSimpleName}", e)
