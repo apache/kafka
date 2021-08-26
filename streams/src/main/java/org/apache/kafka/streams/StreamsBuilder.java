@@ -610,7 +610,9 @@ public class StreamsBuilder {
      * @return the {@link Topology} that represents the specified processing logic
      */
     public synchronized Topology build(final Properties props) {
-        internalStreamsBuilder.buildAndOptimizeTopology(props);
+        final boolean optimize = props != null &&
+                                 StreamsConfig.OPTIMIZE.equals(props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG));
+        internalStreamsBuilder.buildAndOptimizeTopology(optimize);
         return topology;
     }
 }
