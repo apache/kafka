@@ -382,6 +382,30 @@ public final class Stores {
     }
 
     /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link KeyValueStore}.
+     * <p>
+     * The provided supplier should <strong>not</strong> be a supplier for
+     * {@link TimestampedKeyValueStore TimestampedKeyValueStores}.
+     *
+     * @param storeImplementation      a {@link StoreImplementation} (cannot be {@code null})
+     * @param storeName     the store name
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is {@code null} for put operations,
+     *                      it is treated as delete
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of a {@link StoreBuilder} that can build a {@link KeyValueStore}
+     */
+    public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(final StoreImplementation storeImplementation,
+                                                                                final String storeName,
+                                                                                final Serde<K> keySerde,
+                                                                                final Serde<V> valueSerde) {
+        Objects.requireNonNull(storeImplementation, "storeImplementation cannot be null");
+        Objects.requireNonNull(storeName, "storeName cannot be null");
+        return new KeyValueStoreBuilder<>(storeImplementation, storeName, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
      * Creates a {@link StoreBuilder} that can be used to build a {@link TimestampedKeyValueStore}.
      * <p>
      * The provided supplier should <strong>not</strong> be a supplier for

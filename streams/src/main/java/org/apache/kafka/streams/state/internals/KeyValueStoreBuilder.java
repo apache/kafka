@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreImplementation;
 
 import java.util.Objects;
 
@@ -36,6 +37,15 @@ public class KeyValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyVa
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");
         this.storeSupplier = storeSupplier;
+    }
+
+    public KeyValueStoreBuilder(final StoreImplementation storeImplementation,
+                                final String storeName,
+                                final Serde<K> keySerde,
+                                final Serde<V> valueSerde,
+                                final Time time) {
+        super(storeName, keySerde, valueSerde, time);
+        this.storeSupplier = storeImplementation.keyValueSupplier(storeName);
     }
 
     @Override

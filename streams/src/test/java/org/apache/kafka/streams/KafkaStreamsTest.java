@@ -53,7 +53,9 @@ import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.ThreadMetadataImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.InMemoryStoreImplementation;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.RocksDBStoreImplementation;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
@@ -1066,12 +1068,22 @@ public class KafkaStreamsTest {
                                          final String storeName,
                                          final String globalStoreName,
                                          final boolean isPersistentStore) {
+//        final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(
+//            isPersistentStore ?
+//                Stores.persistentKeyValueStore(storeName)
+//                : Stores.inMemoryKeyValueStore(storeName),
+//            Serdes.String(),
+//            Serdes.Long());
+
+        // an example to use store implementation to create the store builder for processor API
         final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(
             isPersistentStore ?
-                Stores.persistentKeyValueStore(storeName)
-                : Stores.inMemoryKeyValueStore(storeName),
+                new RocksDBStoreImplementation()
+                : new InMemoryStoreImplementation(),
+            storeName,
             Serdes.String(),
             Serdes.Long());
+
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
             .addProcessor("process", () -> new Processor<String, String, String, String>() {
