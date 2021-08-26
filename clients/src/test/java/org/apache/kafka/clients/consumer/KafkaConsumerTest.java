@@ -1927,23 +1927,12 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void testMeasureCommitSyncDuration() {
-        // use a consumer that will throw to ensure we return quickly
-        Time time = new MockTime(Duration.ofSeconds(1).toMillis());
-        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
-        ConsumerMetadata metadata = createMetadata(subscription);
-        MockClient client = new MockClient(time, metadata);
-        initMetadata(client, singletonMap(topic, 1));
-        Node node = metadata.fetch().nodes().get(0);
-        ConsumerPartitionAssignor assignor = new RangeAssignor();
-        client.createPendingAuthenticationError(node, 0);
+    public void testMeasureCommitSyncDurationOnFailure() {
         final KafkaConsumer<String, String> consumer
-            = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
-        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(tp0, new OffsetAndMetadata(10L));
+            = consumerWithPendingError(new MockTime(Duration.ofSeconds(1).toMillis()));
 
         try {
-            consumer.commitSync(offsets);
+            consumer.commitSync(Collections.singletonMap(tp0, new OffsetAndMetadata(10L)));
         } catch (final RuntimeException e) {
         }
 
@@ -1953,23 +1942,74 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void testMeasureCommittedDuration() {
-        // use a consumer that will throw to ensure we return quickly
+    public void testMeasureCommitSyncDuration() {
         Time time = new MockTime(Duration.ofSeconds(1).toMillis());
-        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        SubscriptionState subscription = new SubscriptionState(new LogContext(),
+            OffsetResetStrategy.EARLIEST);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
-        initMetadata(client, singletonMap(topic, 1));
+        initMetadata(client, Collections.singletonMap(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
-        ConsumerPartitionAssignor assignor = new RangeAssignor();
-        client.createPendingAuthenticationError(node, 0);
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+            assignor, true, groupInstanceId);
+        consumer.assign(singletonList(tp0));
+
+        client.prepareResponseFrom(
+            FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        client.prepareResponseFrom(
+            offsetCommitResponse(Collections.singletonMap(tp0, Errors.NONE)),
+            coordinator
+        );
+
+        consumer.commitSync(Collections.singletonMap(tp0, new OffsetAndMetadata(10L)));
+
+        final Metric metric = consumer.metrics()
+            .get(consumer.metrics.metricName("commit-sync-time-total", "consumer-metrics"));
+        assertTrue((Double)metric.metricValue() >= Duration.ofMillis(999).toNanos());
+    }
+
+    @Test
+    public void testMeasureCommittedDurationOnFailure() {
         final KafkaConsumer<String, String> consumer
-            = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+            = consumerWithPendingError(new MockTime(Duration.ofSeconds(1).toMillis()));
 
         try {
             consumer.committed(Collections.singleton(tp0));
         } catch (final RuntimeException e) {
         }
+
+        final Metric metric = consumer.metrics()
+            .get(consumer.metrics.metricName("committed-time-total", "consumer-metrics"));
+        assertTrue((Double)metric.metricValue() >= Duration.ofMillis(999).toNanos());
+    }
+
+    @Test
+    public void testMeasureCommittedDuration() {
+        long offset1 = 10000;
+        Time time = new MockTime(Duration.ofSeconds(1).toMillis());
+        SubscriptionState subscription = new SubscriptionState(new LogContext(),
+            OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 2));
+        Node node = metadata.fetch().nodes().get(0);
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+            assignor, true, groupInstanceId);
+        consumer.assign(singletonList(tp0));
+
+        // lookup coordinator
+        client.prepareResponseFrom(
+            FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+
+        // fetch offset for one topic
+        client.prepareResponseFrom(
+            offsetResponse(Collections.singletonMap(tp0, offset1), Errors.NONE), coordinator);
+
+        consumer.committed(Collections.singleton(tp0)).get(tp0).offset();
 
         final Metric metric = consumer.metrics()
             .get(consumer.metrics.metricName("committed-time-total", "consumer-metrics"));
@@ -2298,8 +2338,7 @@ public class KafkaConsumerTest {
         consumer.close(Duration.ZERO);
     }
 
-    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
-        Time time = new MockTime();
+    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError(final Time time) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -2311,6 +2350,14 @@ public class KafkaConsumerTest {
 
         client.createPendingAuthenticationError(node, 0);
         return newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+    }
+
+    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
+        return consumerWithPendingAuthenticationError(new MockTime());
+    }
+
+    private KafkaConsumer<String, String> consumerWithPendingError(final Time time) {
+        return consumerWithPendingAuthenticationError(time);
     }
 
     private ConsumerRebalanceListener getConsumerRebalanceListener(final KafkaConsumer<String, String> consumer) {

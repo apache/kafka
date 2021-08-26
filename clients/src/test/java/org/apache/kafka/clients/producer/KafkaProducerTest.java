@@ -1054,7 +1054,11 @@ public class KafkaProducerTest {
         }
     }
 
-    private double getAndAssertDuration(KafkaProducer<?, ?> producer, String name, double floor) {
+    private void assertDurationAtLeast(KafkaProducer<?, ?> producer, String name, double floor) {
+        getAndAssertDurationAtLeast(producer, name, floor);
+    }
+
+    private double getAndAssertDurationAtLeast(KafkaProducer<?, ?> producer, String name, double floor) {
         double value = getMetricValue(producer, name);
         assertTrue(value > floor);
         return value;
@@ -1066,7 +1070,8 @@ public class KafkaProducerTest {
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        Time time = new MockTime(1);
+        Duration tick = Duration.ofSeconds(1);
+        Time time = new MockTime(tick.toMillis());
         MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
         ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
 
@@ -1078,7 +1083,7 @@ public class KafkaProducerTest {
         try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
             new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions();
-            assertTrue(getMetricValue(producer, "txn-init-time-total") > 999999);
+            assertDurationAtLeast(producer, "txn-init-time-total", tick.toNanos());
 
             client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
             client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
@@ -1086,22 +1091,22 @@ public class KafkaProducerTest {
                 new TopicPartition("topic", 0), Errors.NONE)));
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
-            double beginFirst = getAndAssertDuration(producer, "txn-begin-time-total", 999999);
+            double beginFirst = getAndAssertDurationAtLeast(producer, "txn-begin-time-total", tick.toNanos());
             producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("group"));
-            double sendOffFirst = getAndAssertDuration(producer, "txn-send-offsets-time-total", 999999);
+            double sendOffFirst = getAndAssertDurationAtLeast(producer, "txn-send-offsets-time-total", tick.toNanos());
             producer.commitTransaction();
-            double commitFirst = getAndAssertDuration(producer, "txn-commit-time-total", 999999);
+            double commitFirst = getAndAssertDurationAtLeast(producer, "txn-commit-time-total", tick.toNanos());
 
             client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
             client.prepareResponse(txnOffsetsCommitResponse(Collections.singletonMap(
                 new TopicPartition("topic", 0), Errors.NONE)));
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
-            assertTrue(getMetricValue(producer, "txn-begin-time-total") > beginFirst + 999999);
+            assertDurationAtLeast(producer, "txn-begin-time-total", beginFirst + tick.toNanos());
             producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("group"));
-            assertTrue(getMetricValue(producer, "txn-send-offsets-time-total") > sendOffFirst + 999999);
+            assertDurationAtLeast(producer, "txn-send-offsets-time-total", sendOffFirst + tick.toNanos());
             producer.commitTransaction();
-            assertTrue(getMetricValue(producer, "txn-commit-time-total") > commitFirst + 999999);
+            assertDurationAtLeast(producer, "txn-commit-time-total", commitFirst + tick.toNanos());
         }
     }
 

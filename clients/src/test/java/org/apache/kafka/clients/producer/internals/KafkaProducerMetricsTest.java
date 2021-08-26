@@ -17,10 +17,11 @@
 
 package org.apache.kafka.clients.producer.internals;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import org.apache.kafka.common.metrics.Metrics;
+
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class KafkaProducerMetricsTest {
   private static final long METRIC_VALUE = 123L;
